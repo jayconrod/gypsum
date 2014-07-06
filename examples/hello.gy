@@ -1,0 +1,31 @@
+// This is a simple Gypsum program.
+// You can compile it with this command:
+//   ../compiler/compiler hello.gy -o hello.csp
+// You can run it with this command:
+//   ../vm/out/driver hello.csp
+// (If you haven't build the VM yet, run this first):
+//   (cd ../vm; make -j)
+
+// All programs must have a `main` function, which takes no arguments. This is called
+// automatically when the program is run. We don't have to specify a return type for main,
+// since it is inferred automatically from the last statement in the body.
+
+def main =
+  // Functions can use any expression as their body. This one has a block expression, which
+  // contains a list of statements (which can be definitions or expressions). Block expressions
+  // can be delimited by opening and closing braces ({, }), but the compiler can infer these
+  // automatically from indentation. Statements can be terminated with semicolons (;), but
+  // again, the compiler can infer these automatically.
+
+  // `print` writes a string to stdout.
+  print("Hello, world!\n")
+  print("What is your name?\n> ")
+
+  // `read` reads a line from stdin. It is a nullary function, i.e., it has no parameters. To
+  // call a nullary function, we can just name it; we don't need to write an empty argument
+  // list. Here, we store the result of `read` in a new variable. The type of `name` is
+  // inferred automatically.
+  var name = read
+
+  // String concatentation is done with the + operator.
+  print("Hello, " + name + ". Nice to meet you.\n")

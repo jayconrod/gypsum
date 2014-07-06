@@ -1,0 +1,55 @@
+// This is a simple Gypsum program.
+// You can compile it with this command:
+//   ../compiler/compiler list.gy -o list.csp
+// You can run it with this command:
+//   ../vm/out/driver list.csp
+// (If you haven't build the VM yet, run this first):
+//   (cd ../vm; make -j)
+
+// This program demonstrates the use of classes by building and summing a linked of integers.
+// Gypsum supports supports classes with single-inheritance (although we don't need
+// inheritance in this example).
+
+// A class may be defined with an argument list, which defines its main constructor.
+// Variables in the argument list are also defined as fields. Fields may also be defined in the
+// body of the class. Constructors may be defined in the body of the class, too, with
+// `def this` (instead of a function name).
+//
+// Note that the type of the second field here is `List?`. The ? indicates the value may be
+// `null`. Deferencing a `null` value will throw a `NullPointerException`.
+class List(n: i64, next: List?)
+  def sum =
+    // This variable has the same name as the method. Gypsum is lexically scoped, so this
+    // shadows the method definition. You could still call it with `this.sum`.
+    var sum = 0
+
+    // We need to specify the type of `current` here, since `this` has type `List`, and we
+    // want `current` to be `null` later. If unspecified, the type of a variable is determined
+    // by its initializing expression. It doesn't matter how it's used later.
+    var current: List? = this
+
+    // The `===` and `!==` operators compare two objects for identity, not equality. They are
+    // like `is` and `is not` in Python. `==` and `!=` compare for equality. They are expected
+    // to be implemented as normal methods (although we don't implement them for this class).
+    while (current !== null)
+      sum += current.n
+      current = current.next
+
+    sum
+
+
+// This function constructs a list of the given length.
+def make-list(n: i64) =
+  var list: List? = null
+  while (n > 0)
+    // We allocate a `List` object and call its constructor using its class name. No need to
+    // distinguish an allocation with `new`.
+    list = List(n, list)
+    n -= 1
+  list
+
+
+def main =
+  var list = make-list(7)
+  var sum = list.sum
+  print("The sum of the list is " + sum.to-string + "\n")

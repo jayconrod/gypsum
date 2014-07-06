@@ -1,0 +1,47 @@
+// Copyright 2014 Jay Conrod. All rights reserved.
+
+// This file is part of CodeSwitch. Use of this source code is governed by
+// the 3-clause BSD license that can be found in the LICENSE.txt file.
+
+
+// This program approximates the value of pi by numerically measuring the area of a
+// quarter-circle of radius 2 (1/4 area = 1/4 * pi * r^2 = pi).
+def main =
+  var pi = integrate-circle
+  var expected = 3.141592653589793
+  if (abs(pi - expected) >= 1e4)
+    throw Exception
+  0.
+
+
+// This function measures the area of the quarter circle by integrating the function
+// sqrt(4 - x^2) between 0..2. Adjust dx for more/less accuracy.
+def integrate-circle =
+  var begin = 0.
+  var end = 2.
+  var dx = 1e-3
+  var sum = 0.
+  var x = begin
+  while (x < end)
+    var yl = sqrt(4. - x * x)
+    x += dx
+    var yh = sqrt(4. - x * x)
+    var y = .5 * (yl + yh)
+    sum += y * dx
+  sum
+
+
+// We don't have access to a real square root function yet. This implements Newton's iteration,
+// which gets us pretty close.
+def sqrt(n: f64) =
+  if (n < -1e4)
+    throw Exception
+  var x = 1.
+  var i = 0
+  while (i < 10)
+    x = .5 * (x + n/x)
+    i += 1
+  x
+
+
+def abs(n: f64) = if (n < 0.) -1.0 * n else n

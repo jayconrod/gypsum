@@ -1,0 +1,84 @@
+#!/usr/bin/env python2.7
+# -*- mode: python; -*-
+
+# Copyright 2014, Jay Conrod. All rights reserved.
+#
+# This file is part of Gypsum. Use of this source code is governed by
+# the GPL license that can be found in the LICENSE.txt file.
+
+
+import sys
+import os.path
+import argparse
+
+from lexer import *
+from layout import *
+from parser import *
+from scope_analysis import *
+from type_analysis import *
+from compiler import compile
+from serialize import serialize
+
+sys.setrecursionlimit(10000)
+
+cmdline = argparse.ArgumentParser(description="Compile source files into CodeSwitch packages")
+cmdline.add_argument("sources", metavar="source", type=str, nargs="+",
+                     help="Source file names")
+cmdline.add_argument("-o", "--output", action="store",
+                     default="out.csp",
+                     help="Name of the output file")
+cmdline.add_argument("--print-tokens", action="store_true",
+                     help="Print raw tokens after lexical analysis")
+cmdline.add_argument("--no-layout", action="store_true",
+                     help="Disable layout analysis")
+cmdline.add_argument("--print-layout", action="store_true",
+                     help="Print layout tokens after layout analysis")
+cmdline.add_argument("--print-ast", action="store_true",
+                     help="Print abstract syntax tree after syntax analysis")
+cmdline.add_argument("--print-scope", action="store_true",
+                     help="Print scope info after scope analysis")
+cmdline.add_argument("--print-types", action="store_true",
+                     help="Print types after type analysis")
+cmdline.add_argument("--print-ir", action="store_true",
+                     help="Print intermediate representation after compilation")
+args = cmdline.parse_args()
+
+for sourceFilename in args.sources:
+    try:
+        with open(sourceFilename) as in_file:
+            source = in_file.read()
+        rawTokens = lex(sourceFilename, source)
+        if args.print_tokens:
+            for tok in rawTokens:
+                sys.stdout.write(str(tok) + "\n")
+        if args.no_layout:
+            layoutTokens = filter(lambda tok: tok.tag not in [NEWLINE, SPACE, COMMENT], rawTokens)
+        else:
+            layoutTokens = layout(rawTokens)
+        if args.print_layout:
+            for tok in layoutTokens:
+                sys.stdout.write(str(tok) + "\n")
+        ast = parse(sourceFilename, layoutTokens)
+        if args.print_ast:
+            printer = AstPrinter(sys.stdout)
+            printer.visit(ast)
+        info = CompileInfo(ast)
+        analyzeDeclarations(info)
+        analyzeInheritance(info)
+        if args.print_scope:
+            printer = InfoPrinter(sys.stdout, info)
+            printer.visit(ast)
+        analyzeTypes(info)
+        if args.print_types:
+            printer = InfoPrinter(sys.stdout, info)
+            printer.visit(ast)
+        convertClosures(info)
+        flattenClasses(info)
+        compile(info)
+        package = info.package
+        if args.print_ir:
+            sys.stdout.write("%s\n" % str(package))
+        serialize(package, args.output)
+    except IOError, err:
+        sys.stderr.write("%s: error: %s\n" % (sourceFilename, str(err)))
+        sys.exit(1)

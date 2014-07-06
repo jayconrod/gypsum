@@ -1,0 +1,48 @@
+// This is a simple Gypsum program.
+// You can compile it with this command:
+//   ../compiler/compiler factorial.gy -o factorial.csp
+// You can run it with this command:
+//   ../vm/out/driver factorial.csp
+// (If you haven't build the VM yet, run this first):
+//   (cd ../vm; make -j)
+
+// This program demonstrates two functions which calculate a factorial.
+
+// This function uses an iterative method.
+def factorial-iterative(n: i64) =
+  var p = 1
+
+  // `while` loops are currently the only kind of loop Gypsum supports. A `while` loop has
+  // a condition expression and a body expression. In this case, the body is a block expression,
+  // which is denoted by indentation.
+  while (n > 0)
+    // Gypsum supports compound assignment to variables. Since the `*=` method is not defined
+    // for the i64 type (64-bit signed integers), the `*` method is called instead, and the
+    // result is assigned to left side.
+    p *= n
+    n -= 1
+
+  // The last statement in a block expression determines the result of the whole expression.
+  // So we return p just by naming it. `return` expressions are also allowed anywhere.
+  p
+
+
+// This function uses a recursive method. Recursive functions must have an explicit return
+// type. The compiler will complain if you don't write one.
+def factorial-recursive(n: i64): i64 =
+  if (n == 0)
+    1
+  else
+    // Gypsum doesn't support tail recursion yet, but will eventually.
+    n * factorial-recursive(n - 1)
+
+
+def main =
+  var n = 5
+  var p-iter = factorial-iterative(n)
+  var p-rec = factorial-recursive(n)
+
+  // Numbers and other primitive values can be formatted as strings by calling the to-string
+  // method. This can be called on literals too, e.g., `5.to-string`.
+  print(n.to-string + "! is " + p-iter.to-string + " (computed iteratively)\n")
+  print(n.to-string + "! is " + p-rec.to-string + " (computed recursively)\n")

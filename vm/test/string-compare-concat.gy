@@ -1,0 +1,27 @@
+// Copyright 2014 Jay Conrod. All rights reserved.
+
+// This file is part of CodeSwitch. Use of this source code is governed by
+// the 3-clause BSD license that can be found in the LICENSE.txt file.
+
+
+def check-eq(left: String, right: String) =
+  if (left != right)
+    throw Exception
+
+def check-true(expr: boolean) =
+  if (!expr)
+    throw Exception
+
+def main =
+  check-eq("foobar", "foo" + "bar")
+  check-true("foo" == "foo")
+  check-true("foo" != "foob")
+  check-true("foob" != "foo")
+  check-true("foo" < "foob")
+  check-true("foo" <= "foob")
+  check-true("foob" > "foo")
+  check-true("foob" >= "foo")
+  check-true("foo" > "bar")
+  check-true("foo" >= "bar")
+  check-true("bar" < "foo")
+  check-true("bar" <= "foo")

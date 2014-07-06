@@ -1,0 +1,56 @@
+// Copyright 2014 Jay Conrod. All rights reserved.
+
+// This file is part of CodeSwitch. Use of this source code is governed by
+// the 3-clause BSD license that can be found in the LICENSE.txt file.
+
+
+def test-trunc =
+  var n = (1 << 32) | (2 << 16) | (3 << 8) | 4;
+  check-i32((2i32 << 16i32) | (3i32 << 8i32) | 4i32, n.to-i32)
+  check-i16((3i16 << 8i16) | 4i16, n.to-i16)
+  check-i8(4i8, n.to-i8)
+
+
+def test-sext =
+  var positive = 127i8
+  check-i16(127i16, positive.to-i16)
+  check-i32(127i32, positive.to-i32)
+  check-i64(127i64, positive.to-i64)
+
+  var negative = -128i8
+  check-i16(-128i16, negative.to-i16)
+  check-i32(-128i32, negative.to-i32)
+  check-i64(-128i64, negative.to-i64)
+
+  check-i64(1, negative.to-i64 >>> 63)
+
+
+def test-zext =
+  var n = -1i8
+  check-i16(255i16, n.to-u16)
+  check-i32(255i32, n.to-u32)
+  check-i64(255, n.to-u64)
+
+
+def main =
+  test-trunc
+  test-sext
+  test-zext
+  0
+
+
+def check-i8(expected: i8, actual: i8) =
+  if (expected != actual)
+    throw Exception
+
+def check-i16(expected: i16, actual: i16) =
+  if (expected != actual)
+    throw Exception
+
+def check-i32(expected: i32, actual: i32) =
+  if (expected != actual)
+    throw Exception
+
+def check-i64(expected: i64, actual: i64) =
+  if (expected != actual)
+    throw Exception

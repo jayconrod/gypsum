@@ -1,0 +1,53 @@
+// This is a simple Gypsum program.
+// You can compile it with this command:
+//   ../compiler/compiler pi.gy -o pi.csp
+// You can run it with this command:
+//   ../vm/out/driver pi.csp
+// (If you haven't build the VM yet, run this first):
+//   (cd ../vm; make -j)
+
+// This program approximates the value of pi by numerically measuring the area of a
+// quarter-circle of radius 2 (1/4 area = 1/4 * pi * r^2 = pi).
+
+// This function measures the area of the quarter circle by integrating the function
+// sqrt(4 - x^2) between 0..2. Adjust dx for more/less accuracy.
+def integrate-circle =
+  var begin = 0.
+  var end = 2.
+  var dx = 1e-3
+  var sum = 0.
+  var x = begin
+  while (x < end)
+    var yl = sqrt(4. - x * x)
+    x += dx
+    var yh = sqrt(4. - x * x)
+    var y = .5 * (yl + yh)
+    sum += y * dx
+  sum
+
+
+// The Gypsum standard library is, er, rather non-existant right now. So we have to implement
+// `sqrt` ourselves. This function implements us Newton's iteration, which gives a reasonable
+// approximation.
+def sqrt(n: f64) =
+  if (n < -1e4)
+    throw Exception
+  var x = 1.
+  var i = 0
+  while (i < 10)
+    x = .5 * (x + n/x)
+    i += 1
+  x
+
+
+// Here's our implementation of `abs`. Short functions can be written on one line like this,
+// without using a block expression.
+def abs(n: f64) = if (n < 0.) -1.0 * n else n
+
+
+def main =
+  var pi = integrate-circle
+
+  // We write the Greek letter pi with a unicode escape code. These are written as
+  // \xNN, \uNNNN, or \UNNNNNNNN, depending on how many hex digits you need.
+  print("The value of \u03c0 is approximately " + pi.to-string + "\n")
