@@ -83,12 +83,12 @@ class IrDefinition(Data):
 
 
 class Global(IrDefinition):
-    propertyNames = ("name", "type", "value")
+    propertyNames = ("name", "type", "value", "flags")
 
 
 class Function(IrDefinition):
     propertyNames = ("name", "returnType", "typeParameters", "parameterTypes",
-                     "variables", "blocks")
+                     "variables", "blocks", "flags")
 
     def canCallWith(self, argTypes):
         if len(self.parameterTypes) != len(argTypes):
@@ -115,13 +115,14 @@ class Function(IrDefinition):
                hasattr(self.clas, "isPrimitive") and self.clas.isPrimitive
 
     def __repr__(self):
-        return "Function(%s, %s, %s, %s, %s, %s)" % \
+        return "Function(%s, %s, %s, %s, %s, %s, %s)" % \
             (self.name, repr(self.returnType), repr(self.typeParameters),
-             repr(self.parameterTypes), repr(self.variables), repr(self.blocks))
+             repr(self.parameterTypes), repr(self.variables), repr(self.blocks),
+             repr(self.flags))
 
     def __str__(self):
         buf = StringIO.StringIO()
-        buf.write("def %s#%d" % (self.name, self.id))
+        buf.write("%s def %s#%d" % (" ".join(self.flags), self.name, self.id))
         if self.typeParameters is not None and len(self.typeParameters) > 0:
             buf.write("[%s]" % ", ".join([str(tp) for tp in self.typeParameters]))
         if self.parameterTypes is not None and len(self.parameterTypes) > 0:
@@ -144,7 +145,7 @@ class Function(IrDefinition):
 
 class Class(IrDefinition):
     propertyNames = ("name", "typeParameters", "supertypes", \
-                     "initializer", "constructors", "fields", "methods")
+                     "initializer", "constructors", "fields", "methods", "flags")
 
     def superclass(self):
         assert self is not getNothingClass()
@@ -233,14 +234,14 @@ class Class(IrDefinition):
         raise KeyError("method does not belong to this class")
 
     def __repr__(self):
-        return "Class(%s, %s, %s, %s, %s, %s, %s)" % \
+        return "Class(%s, %s, %s, %s, %s, %s, %s, %s)" % \
             (self.name, repr(self.typeParameters), repr(self.supertypes),
              repr(self.initializer), repr(self.constructors),
-             repr(self.fields), repr(self.methods))
+             repr(self.fields), repr(self.methods), repr(self.flags))
 
     def __str__(self):
         buf = StringIO.StringIO()
-        buf.write("class %s#%d" % (self.name, self.id))
+        buf.write("%s class %s#%d" % (" ".join(self.flags), self.name, self.id))
         buf.write("\n")
         for field in self.fields:
             buf.write("  %s\n" % str(field))
@@ -257,6 +258,6 @@ class Class(IrDefinition):
 LOCAL = "local"
 PARAMETER = "parameter"
 
-TypeParameter = Data.makeClass("TypeParameter", ("name", "upperBound", "lowerBound"))
-Variable = Data.makeClass("Variable", ("name", "type", "kind"))
-Field = Data.makeClass("Field", ("name", "type"))
+TypeParameter = Data.makeClass("TypeParameter", ("name", "upperBound", "lowerBound", "flags"))
+Variable = Data.makeClass("Variable", ("name", "type", "kind", "flags"))
+Field = Data.makeClass("Field", ("name", "type", "flags"))

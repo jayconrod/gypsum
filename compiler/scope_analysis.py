@@ -477,10 +477,10 @@ class Scope(AstNodeVisitor):
 
     def createIrClassDefn(self, astDefn):
         """Convenience method for creating a class definition."""
-        irDefn = Class(astDefn.name, None, None, None, [], [], [])
+        irDefn = Class(astDefn.name, None, None, None, [], [], [], frozenset())
         self.info.package.addClass(irDefn)
 
-        irInitializer = Function("$initializer", None, None, None, [], None)
+        irInitializer = Function("$initializer", None, None, None, [], None, frozenset())
         irInitializer.astDefn = astDefn
         self.makeMethod(irInitializer, irDefn)
         self.info.package.addFunction(irInitializer)
@@ -489,7 +489,7 @@ class Scope(AstNodeVisitor):
         if astDefn.hasConstructors():
             irDefaultCtor = None
         else:
-            irDefaultCtor = Function("$constructor", None, None, None, [], None)
+            irDefaultCtor = Function("$constructor", None, None, None, [], None, frozenset())
             irDefaultCtor.astDefn = astDefn
             self.makeMethod(irDefaultCtor, irDefn)
             self.info.package.addFunction(irDefaultCtor)
@@ -504,7 +504,7 @@ class Scope(AstNodeVisitor):
         Note that this does not add the function to the class's methods or constructors lists.
         """
         function.clas= clas
-        this = Variable("$this", None, PARAMETER)
+        this = Variable("$this", None, PARAMETER, frozenset())
         function.variables.insert(0, this)
 
     def isDefinedAutomatically(self, astDefn):
@@ -630,7 +630,7 @@ class Scope(AstNodeVisitor):
             irClosureClass = closureInfo.irClosureClass
             irContextClass = self.info.getContextInfo(scopeId).irContextClass
             irContextType = ClassType(irContextClass)
-            irContextField = Field("$context", irContextType)
+            irContextField = Field("$context", irContextType, frozenset())
             irClosureClass.fields.append(irContextField)
             irClosureClass.constructors[0].parameterTypes.append(irContextType)
             closureInfo.irClosureContexts[scopeId] = irContextField
@@ -688,10 +688,10 @@ class GlobalScope(Scope):
 
     def createIrDefn(self, astDefn, astVarDefn):
         if isinstance(astDefn, AstVariablePattern):
-            irDefn = Global(astDefn.name, None, None)
+            irDefn = Global(astDefn.name, None, None, frozenset())
             self.info.package.addGlobal(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
-            irDefn = Function(astDefn.name, None, None, None, [], None)
+            irDefn = Function(astDefn.name, None, None, None, [], None, frozenset())
             self.info.package.addFunction(irDefn)
             if astDefn.name == "main":
                 assert self.info.package.entryFunction == -1
@@ -756,14 +756,14 @@ class FunctionScope(Scope):
                 # need to create a separate definition here.
                 irDefn = None
             else:
-                irDefn = Variable("$parameter", None, PARAMETER)
+                irDefn = Variable("$parameter", None, PARAMETER, frozenset())
                 irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, AstVariablePattern):
             kind = PARAMETER if isinstance(astVarDefn, AstParameter) else LOCAL
-            irDefn = Variable(astDefn.name, None, kind)
+            irDefn = Variable(astDefn.name, None, kind, frozenset())
             irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
-            irDefn = Function(astDefn.name, None, None, None, [], None)
+            irDefn = Function(astDefn.name, None, None, None, [], None, frozenset())
             self.info.package.addFunction(irDefn)
         elif isinstance(astDefn, AstClassDefinition):
             irDefn = self.createIrClassDefn(astDefn)
@@ -781,18 +781,20 @@ class FunctionScope(Scope):
             return
 
         # Create the context class.
-        irContextClass = Class("$context", [], [getRootClassType()], None, [], [], [])
+        irContextClass = Class("$context", [], [getRootClassType()], None,
+                               [], [], [], frozenset())
         self.info.package.addClass(irContextClass)
         irContextType = ClassType(irContextClass, ())
         ctor = Function("$contextCtor", UnitType, [], [irContextType],
-                        [Variable("$this", irContextType, PARAMETER)], [])
+                        [Variable("$this", irContextType, PARAMETER, frozenset())],
+                        [], frozenset())
         ctor.compileHint = CONTEXT_CONSTRUCTOR_HINT
         self.info.package.addFunction(ctor)
         irContextClass.constructors.append(ctor)
         contextInfo.irContextClass = irContextClass
 
         # Create a variable to hold an instance of it.
-        irContextVar = Variable("$context", irContextType, LOCAL)
+        irContextVar = Variable("$context", irContextType, LOCAL, frozenset())
         self.getIrDefn().variables.append(irContextVar)
         closureInfo = self.info.getClosureInfo(self.getAstDefn())
         closureInfo.irClosureContexts[self.scopeId] = irContextVar
@@ -802,7 +804,7 @@ class FunctionScope(Scope):
         irDefn = defnInfo.irDefn
         if isinstance(irDefn, Variable):
             defnInfo.irDefn.kind = None  # finish() will delete this
-            irCaptureField = Field(defnInfo.irDefn.name, irDefn.type)
+            irCaptureField = Field(defnInfo.irDefn.name, irDefn.type, frozenset())
             if hasattr(defnInfo.irDefn, "astDefn"):
                 irCaptureField.astDefn = defnInfo.irDefn.astDefn
             if hasattr(defnInfo.irDefn, "astVarDefn"):
@@ -826,12 +828,14 @@ class FunctionScope(Scope):
             return
 
         # Create a closure class to hold this method and its contexts.
-        irClosureClass = Class("$closure", None, [getRootClassType()], None, [], [], [])
+        irClosureClass = Class("$closure", None, [getRootClassType()], None,
+                               [], [], [], frozenset())
         self.info.package.addClass(irClosureClass)
         closureInfo.irClosureClass = irClosureClass
         irClosureType = ClassType(irClosureClass)
         irClosureCtor = Function("$closureCtor", UnitType, None, [irClosureType],
-                                 [Variable("$this", irClosureType, PARAMETER)], None)
+                                 [Variable("$this", irClosureType, PARAMETER, frozenset())],
+                                 None, frozenset())
         irClosureCtor.clas = irClosureClass
         irClosureCtor.compileHint = CLOSURE_CONSTRUCTOR_HINT
         irClosureClass.constructors.append(irClosureCtor)
@@ -841,13 +845,13 @@ class FunctionScope(Scope):
         irDefn = self.getIrDefn()
         assert not irDefn.isMethod()
         irDefn.clas = irClosureClass
-        irDefn.variables.insert(0, Variable("$this", irClosureType, PARAMETER))
+        irDefn.variables.insert(0, Variable("$this", irClosureType, PARAMETER, frozenset()))
         irDefn.parameterTypes.insert(0, irClosureType)
         irClosureClass.methods.append(irDefn)
 
         # If the parent is a function scope, define a local variable to hold the closure.
         if isinstance(self.parent, FunctionScope):
-            irClosureVar = Variable(irDefn.name, irClosureType, LOCAL)
+            irClosureVar = Variable(irDefn.name, irClosureType, LOCAL, frozenset())
             self.parent.getIrDefn().variables.append(irClosureVar)
             closureInfo.irClosureVar = irClosureVar
 
@@ -896,19 +900,19 @@ class ClassScope(Scope):
     def createIrDefn(self, astDefn, astVarDefn):
         irScopeDefn = self.getIrDefn()
         if isinstance(astDefn, AstVariablePattern):
-            irDefn = Field(astDefn.name, None, id=len(irScopeDefn.fields))
+            irDefn = Field(astDefn.name, None, frozenset(), id=len(irScopeDefn.fields,))
             irScopeDefn.fields.append(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
             if astDefn.name == "this":
-                irDefn = Function("$constructor", None, None, None, [], None)
+                irDefn = Function("$constructor", None, None, None, [], None, frozenset())
                 irScopeDefn.constructors.append(irDefn)
             else:
-                irDefn = Function(astDefn.name, None, None, None, [], None)
+                irDefn = Function(astDefn.name, None, None, None, [], None, frozenset())
                 irScopeDefn.methods.append(irDefn)
             # We don't need to call makeMethod here because the inner FunctionScope will do it.
             self.info.package.addFunction(irDefn)
         elif isinstance(astDefn, AstPrimaryConstructorDefinition):
-            irDefn = Function("$constructor", None, None, None, [], None)
+            irDefn = Function("$constructor", None, None, None, [], None, frozenset())
             irScopeDefn.constructors.append(irDefn)
             self.makeMethod(irDefn, irScopeDefn)
             self.info.package.addFunction(irDefn)

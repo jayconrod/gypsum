@@ -75,5 +75,6 @@ class TestUseAnalysis(unittest.TestCase):
         info = self.analyzeFromSource("class Foo { var x = this; };")
         classScope = info.getScope(info.ast.definitions[0])
         thisNameInfo = classScope.lookup("this", False, False)
-        self.assertEquals(DefnInfo(Variable("$this", None, PARAMETER), classScope.scopeId),
+        self.assertEquals(DefnInfo(Variable("$this", None, PARAMETER, frozenset()),
+                                   classScope.scopeId),
                           thisNameInfo.getDefnInfo())
