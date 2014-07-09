@@ -26,23 +26,21 @@ word_t Function::sizeOfFunction() {
 
 
 bool Function::hasBuiltinId() {
-  auto raw = bitExtract(bitField(), kBuiltinIdWidth, kBuiltinIdShift);
-  return raw != 0;
+  return mem<i8>(this, kBuiltinIdOffset) != 0;
 }
 
 
 BuiltinId Function::builtinId() {
   ASSERT(hasBuiltinId());
-  auto bits = bitExtract(bitField(), kBuiltinIdWidth, kBuiltinIdShift);
+  auto bits = mem<i8>(this, kBuiltinIdOffset);
   auto decoded = static_cast<BuiltinId>(-bits);
   return decoded;
 }
 
 
 void Function::setBuiltinId(BuiltinId id) {
-  auto encoded = -static_cast<word_t>(id);
-  auto bits = bitInsert(bitField(), encoded, kBuiltinIdWidth, kBuiltinIdShift);
-  setBitField(bits);
+  auto encoded = -static_cast<i8>(id);
+  mem<i8>(this, kBuiltinIdOffset) = encoded;
 }
 
 

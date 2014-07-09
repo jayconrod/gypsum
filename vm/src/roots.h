@@ -39,6 +39,7 @@ class Roots {
     F(Meta, stackMeta, STACK_META)                                    \
     F(Meta, functionMeta, FUNCTION_META)                              \
     F(Meta, classMeta, CLASS_META)                                    \
+    F(Meta, fieldMeta, FIELD_META)                                    \
     F(Meta, i8ArrayMeta, I8_ARRAY_META)                               \
     F(Meta, i32ArrayMeta, I32_ARRAY_META)                             \
     F(Meta, i64ArrayMeta, I64_ARRAY_META)                             \

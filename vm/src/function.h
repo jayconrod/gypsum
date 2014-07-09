@@ -23,7 +23,8 @@ class Function: public Block {
  public:
   static Function* tryAllocate(Heap* heap, word_t instructionsSize);
   static Handle<Function> allocate(Heap* heap, word_t instructionsSize);
-  void initialize(BlockArray* types,
+  void initialize(u32 flags,
+                  BlockArray* types,
                   word_t localsSize,
                   const vector<u8>& instructions,
                   WordArray* blockOffsets,
@@ -35,10 +36,10 @@ class Function: public Block {
   void printFunction(FILE* out);
   DEFINE_CAST(Function)
 
-  DEFINE_INL_ACCESSORS(word_t, bitField, setBitField, kBitFieldOffset)
-  inline bool hasBuiltinId();
+  DEFINE_INL_ACCESSORS(u32, flags, setFlags, kFlagsOffset)
   inline BuiltinId builtinId();
   inline void setBuiltinId(BuiltinId id);
+  inline bool hasBuiltinId();
 
   DEFINE_INL_PTR_ACCESSORS(BlockArray*, types, setTypes, kTypesOffset)
   inline Type* returnType();
@@ -58,17 +59,15 @@ class Function: public Block {
   DEFINE_INL_PTR_ACCESSORS(StackPointerMap*, stackPointerMap,
                            setStackPointerMap, kStackPointerMapOffset)
 
-  static const int kBitFieldOffset = kBlockHeaderSize;
-  static const int kTypesOffset = kBitFieldOffset + kWordSize;
+  static const int kFlagsOffset = kBlockHeaderSize;
+  static const int kBuiltinIdOffset = kFlagsOffset + sizeof(u32);
+  static const int kTypesOffset = kBuiltinIdOffset + sizeof(u8) + 3;
   static const int kLocalsSizeOffset = kTypesOffset + kWordSize;
   static const int kInstructionsSizeOffset = kLocalsSizeOffset + kWordSize;
   static const int kBlockOffsetsOffset = kInstructionsSizeOffset + kWordSize;
   static const int kPackageOffset = kBlockOffsetsOffset + kWordSize;
   static const int kStackPointerMapOffset = kPackageOffset + kWordSize;
   static const int kHeaderSize = kStackPointerMapOffset + kWordSize;
-
-  static const int kBuiltinIdShift = 0;
-  static const int kBuiltinIdWidth = 8;
 
   static const word_t kPointerMap = 0xe4;
 };

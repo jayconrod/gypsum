@@ -11,6 +11,7 @@
 #include "block-inl.h"
 #include "bytecode.h"
 #include "class-inl.h"
+#include "field.h"
 #include "package-inl.h"
 #include "type.h"
 #include "utils.h"
@@ -36,13 +37,14 @@ Handle<Function> Function::allocate(Heap* heap, word_t instructionsSize) {
 }
 
 
-void Function::initialize(BlockArray* types,
+void Function::initialize(u32 flags,
+                          BlockArray* types,
                           word_t localsSize,
                           const vector<u8>& instructions,
                           WordArray* blockOffsets,
                           Package* package,
                           StackPointerMap* stackPointerMap) {
-  setBitField(0);
+  setFlags(flags);
   setTypes(types);
   setLocalsSize(localsSize);
   setInstructionsSize(instructions.size());
@@ -306,7 +308,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
           i64 offset = readVbn(bytecode, &pcOffset);
           auto clas = currentMap.pop()->asClass();
           auto fieldIndex = clas->findFieldIndex(static_cast<word_t>(offset));
-          currentMap.push(clas->getFieldType(fieldIndex));
+          currentMap.push(Field::cast(clas->fields()->get(fieldIndex))->type());
           break;
         }
 

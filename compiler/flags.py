@@ -7,11 +7,17 @@
 import os.path
 import yaml
 
+
+def flagSetToFlagBits(flagSet):
+    return reduce(lambda bits, flag: bits | _flagCodes[flag], flagSet, 0)
+
+
 _flagCodes = {}
 
 _initialized = False
 
 def _initialize():
+    global _initialized
     if _initialized:
         return
     _initialized = True

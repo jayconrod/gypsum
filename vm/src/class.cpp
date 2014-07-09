@@ -7,6 +7,7 @@
 #include "class-inl.h"
 
 #include "block-inl.h"
+#include "field.h"
 #include "type-inl.h"
 
 namespace codeswitch {
@@ -27,15 +28,17 @@ Handle<Class> Class::allocate(Heap* heap) {
 }
 
 
-void Class::initialize(Type* supertype,
-                       BlockArray* fieldTypes,
+void Class::initialize(u32 flags,
+                       Type* supertype,
+                       BlockArray* fields,
                        Type* elementType,
                        WordArray* constructors,
                        WordArray* methods,
                        Package* package,
                        Meta* instanceMeta) {
+  setFlags(flags);
   setSupertype(supertype);
-  setFieldTypes(fieldTypes);
+  setFields(fields);
   setElementType(elementType);
   setConstructors(constructors);
   setMethods(methods);
@@ -51,9 +54,8 @@ void Class::printClass(FILE* out) {
 
 word_t Class::findFieldIndex(word_t offset) {
   word_t currentOffset = kWordSize;
-  auto types = fieldTypes();
-  for (word_t i = 0, n = types->length(); i < n; i++) {
-    auto type = Type::cast(types->get(i));
+  for (word_t i = 0, n = fields()->length(); i < n; i++) {
+    auto type = Field::cast(fields()->get(i))->type();
     currentOffset = align(currentOffset, type->alignment());
     if (currentOffset == offset)
       return i;
@@ -69,8 +71,7 @@ Meta* Class::tryBuildInstanceMeta(Heap* heap) {
   u32 objectSize = kWordSize, elementSize = 0;
   bool hasObjectPointers = false, hasElementPointers = false;
   BitSet objectPointerMap(1), elementPointerMap;
-  computeSizeAndPointerMap(fieldTypes(), &objectSize,
-                           &hasObjectPointers, &objectPointerMap);
+  computeSizeAndPointerMap(&objectSize, &hasObjectPointers, &objectPointerMap);
   if (elementType() != nullptr) {
     computeSizeAndPointerMapForType(elementType(), &elementSize,
                                     &hasElementPointers, &elementPointerMap);
@@ -104,10 +105,9 @@ bool Class::isSubclassOf(Class* other) {
 }
 
 
-void Class::computeSizeAndPointerMap(BlockArray* types, u32* size,
-                                     bool* hasPointers, BitSet* pointerMap) {
-  for (word_t i = 0; i < types->length(); i++) {
-    auto type = Type::cast(types->get(i));
+void Class::computeSizeAndPointerMap(u32* size, bool* hasPointers, BitSet* pointerMap) {
+  for (word_t i = 0, n = fields()->length(); i < n; i++) {
+    auto type = Field::cast(fields()->get(i))->type();
     computeSizeAndPointerMapForType(type, size, hasPointers, pointerMap);
   }
 }
