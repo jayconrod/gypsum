@@ -45,8 +45,8 @@ class TestParser(unittest.TestCase):
                         varDefn(),
                         "var x = y;")
 
-    def testVarDefnWithFlags(self):
-        self.checkParse(AstVariableDefinition([AstFlag("public")],
+    def testVarDefnWithAttribs(self):
+        self.checkParse(AstVariableDefinition([AstAttribute("public")],
                                               AstVariablePattern("x", None),
                                               None),
                         varDefn(),
@@ -68,8 +68,8 @@ class TestParser(unittest.TestCase):
                         functionDefn(),
                         "def f[S, T](x: S, y: T): A = x;")
 
-    def testFunctionDefnWithFlags(self):
-        self.checkParse(AstFunctionDefinition([AstFlag("public")],
+    def testFunctionDefnWithAttribs(self):
+        self.checkParse(AstFunctionDefinition([AstAttribute("public")],
                                               "f", [], [], None, None),
                         functionDefn(),
                         "public def f;")
@@ -85,8 +85,8 @@ class TestParser(unittest.TestCase):
         ast = AstClassDefinition([], "C", [], None, [], [ctorAst])
         self.checkParse(ast, classDefn(), "class C { def this = 12; };")
 
-    def testClassDefnWithFlags(self):
-        self.checkParse(AstClassDefinition([AstFlag("public")], "C", [], None, [], []),
+    def testClassDefnWithAttribs(self):
+        self.checkParse(AstClassDefinition([AstAttribute("public")], "C", [], None, [], []),
                         classDefn(),
                         "public class C;")
 
@@ -115,9 +115,9 @@ class TestParser(unittest.TestCase):
                                  [], [])
         self.checkParse(ast, classDefn(), "class C(x: i32, y: i32);")
 
-    def testClassWithCtorWithFlags(self):
+    def testClassWithCtorWithAttribs(self):
         self.checkParse(AstClassDefinition([], "C", [],
-                                           AstPrimaryConstructorDefinition([AstFlag("public")], []),
+                                           AstPrimaryConstructorDefinition([AstAttribute("public")], []),
                                            [], []),
                         classDefn(),
                         "class C public ();")

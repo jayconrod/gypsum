@@ -48,13 +48,13 @@ class TestCompile(unittest.TestCase):
             return self.compileFromSource(input)
 
     def makeSimpleFunction(self, name, retTy, blocks,
-                           parameterTypes=None, variables=None, flags=frozenset()):
+                           parameterTypes=None, variables=None, attribs=frozenset()):
         if variables is None:
             variables = []
         if parameterTypes is None:
             parameterTypes = [v.type for v in variables if v.kind is PARAMETER]
         blockList = [BasicBlock(i, insts) for i, insts in enumerate(blocks)]
-        function = Function(name, retTy, None, parameterTypes, variables, blockList, flags)
+        function = Function(name, retTy, None, parameterTypes, variables, blockList, attribs)
         return function
 
     def checkFunction(self, input, expected):

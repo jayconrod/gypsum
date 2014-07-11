@@ -39,28 +39,28 @@ class AstModule(AstNode):
         return self.definitions
 
 
-class AstFlag(AstNode):
+class AstAttribute(AstNode):
     def __init__(self, name):
         self.name = name
 
     def __repr__(self):
-        return "AstFlag(%s)" % self.name
+        return "AstAttribute(%s)" % self.name
 
     def tag(self):
-        return "Flag"
+        return "Attribute"
 
     def data(self):
         return self.name
 
 
 class AstDefinition(AstNode):
-    def __init__(self, flags):
-        self.flags = flags
+    def __init__(self, attribs):
+        self.attribs = attribs
 
 
 class AstVariableDefinition(AstDefinition):
-    def __init__(self, flags, pattern, expression):
-        super(AstVariableDefinition, self).__init__(flags)
+    def __init__(self, attribs, pattern, expression):
+        super(AstVariableDefinition, self).__init__(attribs)
         self.pattern = pattern
         self.expression = expression
 
@@ -71,12 +71,12 @@ class AstVariableDefinition(AstDefinition):
         return "VariableDefinition"
 
     def children(self):
-        return self.flags + [self.pattern, self.expression]
+        return self.attribs + [self.pattern, self.expression]
 
 
 class AstFunctionDefinition(AstDefinition):
-    def __init__(self, flags, name, typeParameters, parameters, returnType, body):
-        super(AstFunctionDefinition, self).__init__(flags)
+    def __init__(self, attribs, name, typeParameters, parameters, returnType, body):
+        super(AstFunctionDefinition, self).__init__(attribs)
         self.name = name
         self.typeParameters = typeParameters
         self.parameters = parameters
@@ -95,15 +95,16 @@ class AstFunctionDefinition(AstDefinition):
         return self.name
 
     def children(self):
-        return self.flags + self.typeParameters + self.parameters + [self.returnType, self.body]
+        return self.attribs + self.typeParameters + self.parameters + \
+               [self.returnType, self.body]
 
     def isConstructor(self):
         return self.name == "this"
 
 
 class AstClassDefinition(AstDefinition):
-    def __init__(self, flags, name, typeParameters, constructor, supertypes, members):
-        super(AstClassDefinition, self).__init__(flags)
+    def __init__(self, attribs, name, typeParameters, constructor, supertypes, members):
+        super(AstClassDefinition, self).__init__(attribs)
         self.name = name
         self.typeParameters = typeParameters
         self.constructor = constructor
@@ -122,7 +123,7 @@ class AstClassDefinition(AstDefinition):
         return self.name
 
     def children(self):
-        children = self.flags + self.typeParameters + self.supertypes
+        children = self.attribs + self.typeParameters + self.supertypes
         if self.constructor is not None:
             children.append(self.constructor)
         children.extend(self.members)
@@ -135,8 +136,8 @@ class AstClassDefinition(AstDefinition):
 
 
 class AstPrimaryConstructorDefinition(AstDefinition):
-    def __init__(self, flags, parameters):
-        super(AstPrimaryConstructorDefinition, self).__init__(flags)
+    def __init__(self, attribs, parameters):
+        super(AstPrimaryConstructorDefinition, self).__init__(attribs)
         self.parameters = parameters
 
     def __repr__(self):
@@ -146,7 +147,7 @@ class AstPrimaryConstructorDefinition(AstDefinition):
         return "PrimaryConstructorDefinition"
 
     def children(self):
-        return self.flags + self.parameters
+        return self.attribs + self.parameters
 
 
 class AstTypeParameter(AstNode):
@@ -170,8 +171,8 @@ class AstTypeParameter(AstNode):
 
 
 class AstParameter(AstDefinition):
-    def __init__(self, flags, pattern):
-        super(AstParameter, self).__init__(flags)
+    def __init__(self, attribs, pattern):
+        super(AstParameter, self).__init__(attribs)
         self.pattern = pattern
 
     def __repr__(self):
@@ -181,7 +182,7 @@ class AstParameter(AstDefinition):
         return "Parameter"
 
     def children(self):
-        return self.flags + [self.pattern]
+        return self.attribs + [self.pattern]
 
 
 class AstPattern(AstNode):

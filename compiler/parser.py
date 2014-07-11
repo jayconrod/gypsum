@@ -45,49 +45,49 @@ def definition():
     return varDefn() | functionDefn() | classDefn()
 
 
-def flags():
-    return Rep(flag())
+def attribs():
+    return Rep(attrib())
 
 
-def flag():
+def attrib():
     return (keyword("public") |
             keyword("protected") |
-            keyword("private")) ^ AstFlag
+            keyword("private")) ^ AstAttribute
 
 
 def varDefn():
     def process(parsed):
-        [flags, _, pat, expr, _] = untangle(parsed)
-        return AstVariableDefinition(flags, pat, expr)
+        [ats, _, pat, expr, _] = untangle(parsed)
+        return AstVariableDefinition(ats, pat, expr)
     exprOpt = Opt(keyword("=") + expression() ^ (lambda p: p[1]))
-    return flags() + keyword("var") + Commit(pattern() + exprOpt + semi) ^ process
+    return attribs() + keyword("var") + Commit(pattern() + exprOpt + semi) ^ process
 
 
 def functionDefn():
     def process(parsed):
-        [flags, _, name, tps, ps, rty, body, _] = untangle(parsed)
-        return AstFunctionDefinition(flags, name, tps, ps, rty, body)
+        [ats, _, name, tps, ps, rty, body, _] = untangle(parsed)
+        return AstFunctionDefinition(ats, name, tps, ps, rty, body)
     functionName = keyword("this") | symbol
     bodyOpt = Opt(keyword("=") + expression() ^ (lambda p: p[1]))
-    return flags() + keyword("def") + Commit(functionName + typeParameters() + parameters() +
+    return attribs() + keyword("def") + Commit(functionName + typeParameters() + parameters() +
         tyOpt() + bodyOpt + semi) ^ process
 
 
 def classDefn():
     def process(parsed):
-        [flags, _, name, tps, ctor, stys, ms, _] = untangle(parsed)
-        return AstClassDefinition(flags, name, tps, ctor, stys, ms)
+        [ats, _, name, tps, ctor, stys, ms, _] = untangle(parsed)
+        return AstClassDefinition(ats, name, tps, ctor, stys, ms)
     classBodyOpt = Opt(layoutBlock(Rep(Lazy(definition)))) ^ \
                    (lambda p: p if p is not None else [])
-    return flags() + keyword("class") + Commit(symbol + typeParameters() + Opt(constructor()) +
-                                     supertypes() + classBodyOpt + semi) ^ process
+    return attribs() + keyword("class") + Commit(symbol + typeParameters() +
+           Opt(constructor()) + supertypes() + classBodyOpt + semi) ^ process
 
 
 def constructor():
     def process(parsed):
-        [flags, _, params, _] = untangle(parsed)
-        return AstPrimaryConstructorDefinition(flags, params)
-    return flags() + keyword("(") + \
+        [ats, _, params, _] = untangle(parsed)
+        return AstPrimaryConstructorDefinition(ats, params)
+    return attribs() + keyword("(") + \
            Commit(RepSep(parameter(), keyword(",")) + keyword(")")) ^ process
 
 
@@ -120,9 +120,9 @@ def parameters():
 
 def parameter():
     def process(parsed):
-        [flags, pat] = untangle(parsed)
-        return AstParameter(flags, pat)
-    return flags() + pattern() ^ process
+        [ats, pat] = untangle(parsed)
+        return AstParameter(ats, pat)
+    return attribs() + pattern() ^ process
 
 
 # Patterns
