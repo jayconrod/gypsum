@@ -48,13 +48,13 @@ class TestCompile(unittest.TestCase):
             return self.compileFromSource(input)
 
     def makeSimpleFunction(self, name, retTy, blocks,
-                           parameterTypes=None, variables=None):
+                           parameterTypes=None, variables=None, attribs=frozenset()):
         if variables is None:
             variables = []
         if parameterTypes is None:
             parameterTypes = [v.type for v in variables if v.kind is PARAMETER]
         blockList = [BasicBlock(i, insts) for i, insts in enumerate(blocks)]
-        function = Function(name, retTy, None, parameterTypes, variables, blockList)
+        function = Function(name, retTy, None, parameterTypes, variables, blockList, attribs)
         return function
 
     def checkFunction(self, input, expected):
@@ -107,7 +107,7 @@ class TestCompile(unittest.TestCase):
                                stlocal(-8),
                                unit(),
                                ret()]],
-                             variables=[Variable("x", I64Type, LOCAL)]))
+                             variables=[Variable("x", I64Type, LOCAL, frozenset())]))
 
     def testSimpleVar(self):
         self.checkFunction("def f = { var x = 12; x; }",
@@ -116,14 +116,14 @@ class TestCompile(unittest.TestCase):
                                stlocal(-8),
                                ldlocal(-8),
                                ret()]],
-                             variables=[Variable("x", I64Type, LOCAL)]))
+                             variables=[Variable("x", I64Type, LOCAL, frozenset())]))
 
     def testSimpleParameter(self):
         self.checkFunction("def f(x: i64) = x",
                            self.makeSimpleFunction("f", I64Type, [[
                                ldlocal(0),
                                ret()]],
-                             variables=[Variable("x", I64Type, PARAMETER)]))
+                             variables=[Variable("x", I64Type, PARAMETER, frozenset())]))
 
     def testSeveralParameters(self):
         self.checkFunction("def f(a: i32, b: boolean, c: boolean, d: i32) =\n" + \
@@ -141,10 +141,10 @@ class TestCompile(unittest.TestCase):
                                ldlocal(0),
                                ret()]],
                              variables=[
-                               Variable("a", I32Type, PARAMETER),
-                               Variable("b", BooleanType, PARAMETER),
-                               Variable("c", BooleanType, PARAMETER),
-                               Variable("d", I32Type, PARAMETER)]))
+                               Variable("a", I32Type, PARAMETER, frozenset()),
+                               Variable("b", BooleanType, PARAMETER, frozenset()),
+                               Variable("c", BooleanType, PARAMETER, frozenset()),
+                               Variable("d", I32Type, PARAMETER, frozenset())]))
 
     def testAssign(self):
         self.checkFunction("def f =\n" + \
@@ -157,7 +157,7 @@ class TestCompile(unittest.TestCase):
                                dup(),
                                stlocal(-8),
                                ret()]],
-                             variables=[Variable("x", I64Type, LOCAL)]))
+                             variables=[Variable("x", I64Type, LOCAL, frozenset())]))
 
     def testAssignShortProps(self):
         package = self.compileFromSource("class Foo\n" +
@@ -168,7 +168,7 @@ class TestCompile(unittest.TestCase):
                                          "  foo.y = 12\n")
         clasTy = ClassType(package.classes[0], ())
         expected = Function("f", I64Type, None, [clasTy], [
-                                Variable("foo", clasTy, PARAMETER)],
+                                Variable("foo", clasTy, PARAMETER, frozenset())],
                               [BasicBlock(0, [
                                 ldlocal(0),
                                 false(),
@@ -179,7 +179,8 @@ class TestCompile(unittest.TestCase):
                                 dup(),
                                 swap2(),
                                 st64(WORDSIZE + 8),
-                                ret()])])
+                                ret()])],
+                              frozenset())
         self.assertEquals(expected, package.findFunction(name="f"))
 
     def testAssignPtrField(self):
@@ -204,7 +205,7 @@ class TestCompile(unittest.TestCase):
                        stp(WORDSIZE),
                        ret()]],
                      parameterTypes=[clasTy],
-                     variables=[Variable("$this", clasTy, PARAMETER)])
+                     variables=[Variable("$this", clasTy, PARAMETER, frozenset())])
         self.assertEquals(expected, clas.constructors[0])
 
     def testLoadPtrField(self):
@@ -218,7 +219,7 @@ class TestCompile(unittest.TestCase):
                        ldp(WORDSIZE),
                        ret()]],
                      parameterTypes=[clasTy],
-                     variables=[Variable("foo", clasTy, PARAMETER)])
+                     variables=[Variable("foo", clasTy, PARAMETER, frozenset())])
 
     def testAccumShortPropForEffect(self):
         package = self.compileFromSource("class Foo\n" +
@@ -228,7 +229,7 @@ class TestCompile(unittest.TestCase):
                                          "  34")
         clasTy = ClassType(package.classes[0], ())
         expected = Function("f", I64Type, None, [clasTy], [
-                              Variable("foo", clasTy, PARAMETER)],
+                              Variable("foo", clasTy, PARAMETER, frozenset())],
                             [BasicBlock(0, [
                               ldlocal(0),
                               dup(),
@@ -238,7 +239,8 @@ class TestCompile(unittest.TestCase):
                               swap(),
                               st64(WORDSIZE),
                               i64(34),
-                              ret()])])
+                              ret()])],
+                            frozenset())
         self.assertEquals(expected, package.findFunction(name="f"))
 
     def testAccumShortPropForValue(self):
@@ -248,7 +250,7 @@ class TestCompile(unittest.TestCase):
                                          "  foo.x += 12\n")
         clasTy = ClassType(package.classes[0], ())
         expected = Function("f", I64Type, None, [clasTy], [
-                              Variable("foo", clasTy, PARAMETER)],
+                              Variable("foo", clasTy, PARAMETER, frozenset())],
                             [BasicBlock(0, [
                               ldlocal(0),
                               dup(),
@@ -258,7 +260,8 @@ class TestCompile(unittest.TestCase):
                               dup(),
                               swap2(),
                               st64(WORDSIZE),
-                              ret()])])
+                              ret()])],
+                            frozenset())
         self.assertEquals(expected, package.findFunction(name="f"))
 
     def testLoadNonNullableObject(self):
@@ -297,8 +300,8 @@ class TestCompile(unittest.TestCase):
                                ldlocal(0),
                                eqp(),
                                ret()]],
-                             variables=[Variable("foo", ty, PARAMETER),
-                                        Variable("bar", ty, PARAMETER)]))
+                             variables=[Variable("foo", ty, PARAMETER, frozenset()),
+                                        Variable("bar", ty, PARAMETER, frozenset())]))
 
     def testNullableNe(self):
         ty = ClassType(getRootClass(), (), NULLABLE_TYPE_FLAG)
@@ -308,8 +311,8 @@ class TestCompile(unittest.TestCase):
                                ldlocal(0),
                                nep(),
                                ret()]],
-                             variables=[Variable("foo", ty, PARAMETER),
-                                        Variable("bar", ty, PARAMETER)]))
+                             variables=[Variable("foo", ty, PARAMETER, frozenset()),
+                                        Variable("bar", ty, PARAMETER, frozenset())]))
 
     def testTruncI32(self):
         self.checkFunction("def f(n: i64) = n.to-i32",
@@ -317,7 +320,7 @@ class TestCompile(unittest.TestCase):
                                ldlocal(0),
                                trunci32(),
                                ret()]],
-                             variables=[Variable("n", I64Type, PARAMETER)]))
+                             variables=[Variable("n", I64Type, PARAMETER, frozenset())]))
 
     def testSext16(self):
         self.checkFunction("def f(n: i8) = n.to-i16",
@@ -325,7 +328,7 @@ class TestCompile(unittest.TestCase):
                                ldlocal(0),
                                sexti16_8(),
                                ret()]],
-                             variables=[Variable("n", I8Type, PARAMETER)]))
+                             variables=[Variable("n", I8Type, PARAMETER, frozenset())]))
 
     def testF32ToI64(self):
         self.checkFunction("def f(n: f32) = n.to-i64",
@@ -334,7 +337,7 @@ class TestCompile(unittest.TestCase):
                                fcvti32(),
                                sexti64_32(),
                                ret()]],
-                             variables=[Variable("n", F32Type, PARAMETER)]))
+                             variables=[Variable("n", F32Type, PARAMETER, frozenset())]))
 
     def testNeg(self):
         self.checkFunction("def f = - 12",
@@ -366,7 +369,7 @@ class TestCompile(unittest.TestCase):
                                dup(),
                                stlocal(-8),
                                ret()]],
-                             variables=[Variable("x", I64Type, LOCAL)]))
+                             variables=[Variable("x", I64Type, LOCAL, frozenset())]))
 
     def testAddFloat(self):
         self.checkFunction("def f = 1.2 + 3.4",
@@ -566,7 +569,7 @@ class TestCompile(unittest.TestCase):
                                drop(),
                                throw(),
                              ]],
-                             variables=[Variable("exn", exnTy, LOCAL)]))
+                             variables=[Variable("exn", exnTy, LOCAL, frozenset())]))
 
     def testTryWithMatchAndFinally(self):
         exnClass = getExceptionClass()
@@ -632,7 +635,7 @@ class TestCompile(unittest.TestCase):
                                # block 8
                                throw(),
                              ]],
-                             variables=[Variable("exn", exnTy, LOCAL)]))
+                             variables=[Variable("exn", exnTy, LOCAL, frozenset())]))
 
     def testThrow(self):
         exnTy = ClassType(getExceptionClass())
@@ -641,7 +644,7 @@ class TestCompile(unittest.TestCase):
                                ldlocal(0),
                                throw(),
                              ]],
-                             variables=[Variable("exn", exnTy, PARAMETER)]))
+                             variables=[Variable("exn", exnTy, PARAMETER, frozenset())]))
 
     def testThrowInIfBody(self):
         exnTy = ClassType(getExceptionClass())
@@ -658,7 +661,7 @@ class TestCompile(unittest.TestCase):
                              ], [
                                ret(),
                              ]],
-                             variables=[Variable("exn", exnTy, PARAMETER)]))
+                             variables=[Variable("exn", exnTy, PARAMETER, frozenset())]))
 
     def testThrowInIfCondition(self):
         exnTy = ClassType(getExceptionClass())
@@ -667,7 +670,7 @@ class TestCompile(unittest.TestCase):
                                ldlocal(0),
                                throw(),
                              ]],
-                             variables=[Variable("exn", exnTy, PARAMETER)]))
+                             variables=[Variable("exn", exnTy, PARAMETER, frozenset())]))
 
     def testThrowInWhileBody(self):
         exnTy = ClassType(getExceptionClass())
@@ -684,7 +687,7 @@ class TestCompile(unittest.TestCase):
                                unit(),
                                ret(),
                              ]],
-                             variables=[Variable("exn", exnTy, PARAMETER)]))
+                             variables=[Variable("exn", exnTy, PARAMETER, frozenset())]))
 
     def testThrowInTry(self):
         exnTy = ClassType(getExceptionClass())
@@ -721,7 +724,7 @@ class TestCompile(unittest.TestCase):
                                drop(),
                                throw(),
                              ]],
-                             variables=[Variable("exn", exnTy, LOCAL)]))
+                             variables=[Variable("exn", exnTy, LOCAL, frozenset())]))
 
     def testTryFinallyExpr(self):
         self.checkFunction("def f = try 12 finally 34",
@@ -796,7 +799,7 @@ class TestCompile(unittest.TestCase):
                                i64(1),
                                ret(),
                              ]],
-                             variables=[Variable("exn", exnTy, LOCAL)]))
+                             variables=[Variable("exn", exnTy, LOCAL, frozenset())]))
 
     def testFactorial(self):
         self.checkFunction("def f(n: i64): i64 = {\n" +
@@ -831,8 +834,8 @@ class TestCompile(unittest.TestCase):
                                ret(),
                              ]],
                            variables=[
-                             Variable("n", I64Type, PARAMETER),
-                             Variable("p", I64Type, LOCAL)]))
+                             Variable("n", I64Type, PARAMETER, frozenset()),
+                             Variable("p", I64Type, LOCAL, frozenset())]))
 
     def testRequireParameterTypes(self):
         self.assertRaises(TypeException, self.compileFromSource, "def f(x) = 12")
@@ -878,7 +881,7 @@ class TestCompile(unittest.TestCase):
                                unit(),
                                ret()]],
                              parameterTypes=[thisType],
-                             variables=[Variable("$this", thisType, PARAMETER)]))
+                             variables=[Variable("$this", thisType, PARAMETER, frozenset())]))
 
     def testDefaultCtorCallsInitializer(self):
         source = "class Foo"
@@ -897,7 +900,7 @@ class TestCompile(unittest.TestCase):
                               unit(),
                               ret()]],
                             parameterTypes=[thisType],
-                            variables=[Variable("$this", thisType, PARAMETER)]),
+                            variables=[Variable("$this", thisType, PARAMETER, frozenset())]),
                           ctor)
 
     def testPrimaryAndSecondaryCtorsCallInitializer(self):
@@ -963,7 +966,7 @@ class TestCompile(unittest.TestCase):
                               unit(),
                               ret()]],
                             parameterTypes=[thisType, I32Type],
-                            variables=[Variable("$this", thisType, PARAMETER)]),
+                            variables=[Variable("$this", thisType, PARAMETER, frozenset())]),
                           ctor)
 
     def testCtorWithArgs(self):
@@ -998,7 +1001,7 @@ class TestCompile(unittest.TestCase):
                                callv(1, 3),
                                ret()
                              ]],
-                             variables=[Variable("foo", objType, PARAMETER)]))
+                             variables=[Variable("foo", objType, PARAMETER, frozenset())]))
 
     def testCaptureThis(self):
         source = "class Foo\n" + \
@@ -1016,7 +1019,7 @@ class TestCompile(unittest.TestCase):
                                ld64(WORDSIZE),
                                ret()
                              ]],
-                             variables=[Variable("$this", closureType, PARAMETER)],
+                             variables=[Variable("$this", closureType, PARAMETER, frozenset())],
                              parameterTypes=[closureType]))
 
     def testCallAlternateCtor(self):
@@ -1032,7 +1035,7 @@ class TestCompile(unittest.TestCase):
                                                drop(),
                                                unit(),
                                                ret()]],
-                                             variables=[Variable("$this", ty, PARAMETER)],
+                                             variables=[Variable("$this", ty, PARAMETER, frozenset())],
                                              parameterTypes=[ty])
         self.assertEquals(expected, clas.constructors[1])
 
@@ -1061,7 +1064,7 @@ class TestCompile(unittest.TestCase):
                                                drop(),
                                                unit(),
                                                ret()]],
-                                             variables=[Variable("$this", barTy, PARAMETER)],
+                                             variables=[Variable("$this", barTy, PARAMETER, frozenset())],
                                              parameterTypes=[barTy])
         self.assertEquals(expected, bar.constructors[0])
 
@@ -1081,7 +1084,7 @@ class TestCompile(unittest.TestCase):
                                                drop(),
                                                unit(),
                                                ret()]],
-                                             variables=[Variable("$this", barTy, PARAMETER)],
+                                             variables=[Variable("$this", barTy, PARAMETER, frozenset())],
                                              parameterTypes=[barTy])
 
     def testNoDefaultSuperCtor(self):

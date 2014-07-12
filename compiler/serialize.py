@@ -9,6 +9,7 @@ import sys
 import os
 
 from builtins import *
+from flags import *
 from ir import *
 from ir_instructions import *
 from ir_types import *
@@ -68,6 +69,7 @@ class Serializer(object):
         self.outFile.write(encoded)
 
     def writeFunction(self, function):
+        self.writeFlags(function.flags)
         self.writeType(function.returnType)
         self.writeVbn(len(function.parameterTypes))
         for ty in function.parameterTypes:
@@ -100,6 +102,7 @@ class Serializer(object):
         return buf, blockOffsetTable
 
     def writeClass(self, clas):
+        self.writeFlags(clas.flags)
         self.writeType(clas.supertypes[0])
         self.writeVbn(len(clas.fields))
         for field in clas.fields:
@@ -112,6 +115,7 @@ class Serializer(object):
             self.writeVbn(method.id)
 
     def writeField(self, field):
+        self.writeFlags(field.flags)
         self.writeType(field.type)
 
     def writeType(self, type):
@@ -122,6 +126,10 @@ class Serializer(object):
         clas = getClassFromType(type)
         code = clas.id
         self.writeVbn(code)
+
+    def writeFlags(self, flags):
+        bits = flagSetToFlagBits(flags)
+        self.outFile.write(struct.pack("<I", bits))
 
     def writeVbn(self, value):
         buf = bytearray()

@@ -22,8 +22,9 @@ class Class: public Block {
  public:
   static Class* tryAllocate(Heap* heap);
   static Handle<Class> allocate(Heap* heap);
-  void initialize(Type* supertype,
-                  BlockArray* fieldTypes,
+  void initialize(u32 flags,
+                  Type* supertype,
+                  BlockArray* fields,
                   Type* elementType,
                   WordArray* constructors,
                   WordArray* methods,
@@ -33,9 +34,9 @@ class Class: public Block {
   void printClass(FILE* out);
   DEFINE_CAST(Class)
 
+  DEFINE_INL_ACCESSORS(u32, flags, setFlags, kFlagsOffset)
   DEFINE_INL_PTR_ACCESSORS(Type*, supertype, setSupertype, kSupertypeOffset)
-  DEFINE_INL_PTR_ACCESSORS(BlockArray*, fieldTypes, setFieldTypes, kFieldTypesOffset)
-  inline Type* getFieldType(word_t index);
+  DEFINE_INL_PTR_ACCESSORS(BlockArray*, fields, setFields, kFieldsOffset)
   word_t findFieldIndex(word_t offset);
   DEFINE_INL_PTR_ACCESSORS(Type*, elementType, setElementType, kElementTypeOffset)
   DEFINE_INL_PTR_ACCESSORS(WordArray*, constructors, setConstructors, kConstructorsOffset)
@@ -51,20 +52,20 @@ class Class: public Block {
 
   bool isSubclassOf(Class* other);
 
-  static const int kSupertypeOffset = kBlockHeaderSize;
-  static const int kFieldTypesOffset = kSupertypeOffset + kWordSize;
-  static const int kElementTypeOffset = kFieldTypesOffset + kWordSize;
+  static const int kFlagsOffset = kBlockHeaderSize;
+  static const int kSupertypeOffset = kFlagsOffset + kWordSize;
+  static const int kFieldsOffset = kSupertypeOffset + kWordSize;
+  static const int kElementTypeOffset = kFieldsOffset + kWordSize;
   static const int kConstructorsOffset = kElementTypeOffset + kWordSize;
   static const int kMethodsOffset = kConstructorsOffset + kWordSize;
   static const int kPackageOffset = kMethodsOffset + kWordSize;
   static const int kInstanceMetaOffset = kPackageOffset + kWordSize;
   static const int kSize = kInstanceMetaOffset + kWordSize;
 
-  static const word_t kPointerMap = 0xFE;
+  static const word_t kPointerMap = 0x1FC;
 
  private:
-  void computeSizeAndPointerMap(BlockArray* types, u32* size,
-                                bool* hasPointers, BitSet* pointerMap);
+  void computeSizeAndPointerMap(u32* size, bool* hasPointers, BitSet* pointerMap);
   void computeSizeAndPointerMapForType(Type* type, u32* size,
                                        bool* hasPointers, BitSet* pointerMap);
 };

@@ -16,11 +16,6 @@
 namespace codeswitch {
 namespace internal {
 
-Type* Class::getFieldType(word_t index) {
-  return Type::cast(fieldTypes()->get(index));
-}
-
-
 Function* Class::getConstructor(word_t index) {
   word_t id = constructors()->get(index);
   Function* ctor = package()->getFunction(id);

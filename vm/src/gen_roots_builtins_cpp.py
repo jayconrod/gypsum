@@ -60,13 +60,15 @@ def initClass(out, classData):
     else:
         out.write("    auto supertype = %s;\n" % getTypeFromName(classData["supertype"]))
     if len(classData["fields"]) == 0:
-        out.write("    auto fieldTypes = emptyBlockArray();\n")
+        out.write("    auto fields = emptyBlockArray();\n")
     else:
-        out.write("    auto fieldTypes = BlockArray::tryAllocate(heap, %d);\n" %
+        out.write("    auto fields = BlockArray::tryAllocate(heap, %d);\n" %
                   len(classData["fields"]))
         for i, fieldData in enumerate(classData["fields"]):
             typeName = fieldData["type"]
-            out.write("    fieldTypes->set(%d, %s);\n" % (i, getTypeFromName(typeName)))
+            out.write("    auto field%d = Field::tryAllocate(heap);\n" % i)
+            out.write("    field%d->initialize(0, %s);\n" % (i, getTypeFromName(typeName)))
+            out.write("    fields->set(%d, field%d);\n" % (i, i))
     if "elements" not in classData:
         out.write("    Type* elementType = nullptr;\n")
     else:
@@ -86,7 +88,7 @@ def initClass(out, classData):
         out.write("    auto methods = I64Array::tryAllocate(heap, %d);\n" % len(allMethodIds))
         for i, id in enumerate(allMethodIds):
             out.write("    methods->set(%d, %s);\n" % (i, id))
-    out.write("    clas->initialize(supertype, fieldTypes, elementType, constructors, " +
+    out.write("    clas->initialize(0, supertype, fields, elementType, constructors, " +
               "methods, nullptr, nullptr);\n")
     out.write("    auto meta = clas->tryBuildInstanceMeta(heap);\n")
     out.write("    builtinMetas_.push_back(meta);\n  }")
@@ -99,7 +101,7 @@ def initFunction(out, functionData):
     out.write("    auto types = BlockArray::tryAllocate(heap, %s);\n" % len(typeNames))
     for i, name in enumerate(typeNames):
         out.write("    types->set(%d, %s);\n" % (i, getTypeFromName(name)))
-    out.write("    function->initialize(types, 0, emptyInstructions, nullptr, " +
+    out.write("    function->initialize(0, types, 0, emptyInstructions, nullptr, " +
               "nullptr, nullptr);\n")
     out.write("    function->setBuiltinId(%s);\n" % functionData["id"])
     out.write("  }")
@@ -143,6 +145,7 @@ with open(rootsBuiltinsName, "w") as rootsBuiltinsFile:
 #include "builtins.h"
 #include "block-inl.h"
 #include "class-inl.h"
+#include "field.h"
 #include "function-inl.h"
 #include "type-inl.h"
 

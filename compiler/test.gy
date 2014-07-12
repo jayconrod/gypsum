@@ -1,2 +1,2 @@
-def main =
-  print("hello, world!\n")
+class C
+  private private def f = {}

@@ -38,15 +38,16 @@ class TestClosureConversion(unittest.TestCase):
 
         fContextInfo = info.getContextInfo(fAst)
         fContextClass = fContextInfo.irContextClass
-        self.assertEquals([Field("x", I64Type)], fContextClass.fields)
+        self.assertEquals([Field("x", I64Type, frozenset())], fContextClass.fields)
         xDefnInfo = info.getDefnInfo(fAst.body.statements[0].pattern)
-        self.assertEquals(Field("x", I64Type), xDefnInfo.irDefn)
+        self.assertEquals(Field("x", I64Type, frozenset()), xDefnInfo.irDefn)
         self.assertIs(xDefnInfo, info.getUseInfo(gAst.body).defnInfo)
         gClosureInfo = info.getClosureInfo(gAst)
         gClosureClass = gClosureInfo.irClosureClass
-        self.assertEquals([Field("$context", ClassType(fContextClass))], gClosureClass.fields)
+        self.assertEquals([Field("$context", ClassType(fContextClass), frozenset())],
+                          gClosureClass.fields)
         self.assertEquals({fAst.id: gClosureClass.fields[0]}, gClosureInfo.irClosureContexts)
-        self.assertEquals(Variable("g", ClassType(gClosureClass), LOCAL),
+        self.assertEquals(Variable("g", ClassType(gClosureClass), LOCAL, frozenset()),
                           gClosureInfo.irClosureVar)
 
     def testUseFieldInMethod(self):
@@ -90,7 +91,7 @@ class TestClosureConversion(unittest.TestCase):
         f = info.package.findFunction(name="f")
         self.assertIs(fContextClass, fContextInfo.irContextClass)
         self.assertEquals(1, len(fContextClass.constructors))
-        self.assertEquals([Field("$this", CType)], fContextClass.fields)
+        self.assertEquals([Field("$this", CType, frozenset())], fContextClass.fields)
         gClosureInfo = info.getClosureInfo(cAst.members[0].body.statements[0])
         gClosureClass = info.package.findClass(name="$closure")
         self.assertIs(gClosureClass, gClosureInfo.irClosureClass)
@@ -101,4 +102,5 @@ class TestClosureConversion(unittest.TestCase):
         self.assertEquals(1, len(gClosureClass.constructors))
         self.assertEquals([ClassType(gClosureClass), ClassType(fContextClass)],
                           gClosureClass.constructors[0].parameterTypes)
-        self.assertEquals([Field("$context", ClassType(fContextClass))], gClosureClass.fields)
+        self.assertEquals([Field("$context", ClassType(fContextClass), frozenset())],
+                          gClosureClass.fields)

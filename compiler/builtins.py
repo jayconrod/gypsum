@@ -107,7 +107,7 @@ def _initialize():
                             buildType(functionData["returnType"]),
                             [],
                             map(buildType, functionData["parameterTypes"]),
-                            [], [])
+                            [], [], frozenset())
         function.id = globals()[functionData["id"]]
         if "insts" in functionData:
             function.insts = functionData["insts"]
@@ -116,10 +116,10 @@ def _initialize():
     def buildField(fieldData):
         name = fieldData["name"]
         ty = buildType(fieldData["type"])
-        return Field(name, ty)
+        return Field(name, ty, frozenset())
 
     def declareClass(classData):
-        clas = Class(classData["name"], [], None, None, None, None, None)
+        clas = Class(classData["name"], [], None, None, None, None, None, frozenset())
         _builtinClassNameMap[classData["name"]] = clas
 
     def defineClass(classData):

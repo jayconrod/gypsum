@@ -34,65 +34,93 @@ class TestParser(unittest.TestCase):
 
     # Definitions
     def testVarDefnEmpty(self):
-        self.checkParse(AstVariableDefinition(AstVariablePattern("x", None), None),
+        self.checkParse(AstVariableDefinition([], AstVariablePattern("x", None), None),
                         varDefn(),
                         "var x;")
 
     def testVarDefn(self):
-        self.checkParse(AstVariableDefinition(AstVariablePattern("x", None),
+        self.checkParse(AstVariableDefinition([],
+                                              AstVariablePattern("x", None),
                                               AstVariableExpression("y")),
                         varDefn(),
                         "var x = y;")
 
+    def testVarDefnWithAttribs(self):
+        self.checkParse(AstVariableDefinition([AstAttribute("public")],
+                                              AstVariablePattern("x", None),
+                                              None),
+                        varDefn(),
+                        "public var x;")
+
     def testFunctionDefnSimple(self):
-        self.checkParse(AstFunctionDefinition("f", [], [], None, None),
+        self.checkParse(AstFunctionDefinition([], "f", [], [], None, None),
                         functionDefn(),
                         "def f;")
 
     def testFunctionDefn(self):
-        self.checkParse(AstFunctionDefinition("f",
+        self.checkParse(AstFunctionDefinition([], "f",
                                               [AstTypeParameter("S", None, None),
                                                AstTypeParameter("T", None, None)],
-                                              [AstParameter(AstVariablePattern("x", AstClassType("S", []))),
-                                               AstParameter(AstVariablePattern("y", AstClassType("T", [])))],
+                                              [AstParameter([], AstVariablePattern("x", AstClassType("S", []))),
+                                               AstParameter([], AstVariablePattern("y", AstClassType("T", [])))],
                                               AstClassType("A", []),
                                               AstVariableExpression("x")),
                         functionDefn(),
                         "def f[S, T](x: S, y: T): A = x;")
 
+    def testFunctionDefnWithAttribs(self):
+        self.checkParse(AstFunctionDefinition([AstAttribute("public")],
+                                              "f", [], [], None, None),
+                        functionDefn(),
+                        "public def f;")
+
     def testClassDefnSimple(self):
-        self.checkParse(AstClassDefinition("C", [], None, [], []),
+        self.checkParse(AstClassDefinition([], "C", [], None, [], []),
                         classDefn(),
                         "class C;")
 
     def testClassDefnSimpleWithBody(self):
-        ctorAst = AstFunctionDefinition("this", [], [], None,
+        ctorAst = AstFunctionDefinition([], "this", [], [], None,
                                         AstLiteralExpression(AstIntegerLiteral(12)))
-        ast = AstClassDefinition("C", [], None, [], [ctorAst])
+        ast = AstClassDefinition([], "C", [], None, [], [ctorAst])
         self.checkParse(ast, classDefn(), "class C { def this = 12; };")
 
+    def testClassDefnWithAttribs(self):
+        self.checkParse(AstClassDefinition([AstAttribute("public")], "C", [], None, [], []),
+                        classDefn(),
+                        "public class C;")
+
     def testSubclass(self):
-        ast = AstClassDefinition("Sub", [], None, [AstClassType("Base", [])], [])
+        ast = AstClassDefinition([], "Sub", [], None, [AstClassType("Base", [])], [])
         self.checkParse(ast, classDefn(), "class Sub <: Base;")
 
     def testClassWithNullaryCtor(self):
-        ast = AstClassDefinition("C", [],
-                                 AstPrimaryConstructorDefinition([]),
+        ast = AstClassDefinition([], "C", [],
+                                 AstPrimaryConstructorDefinition([], []),
                                  [], [])
         self.checkParse(ast, classDefn(), "class C();")
 
     def testClassWithUnaryCtor(self):
-        ast = AstClassDefinition("C", [],
-                                 AstPrimaryConstructorDefinition([AstParameter(AstVariablePattern("x", AstI32Type()))]),
+        ast = AstClassDefinition([], "C", [],
+                                 AstPrimaryConstructorDefinition([],
+                                                                 [AstParameter([], AstVariablePattern("x", AstI32Type()))]),
                                  [], [])
         self.checkParse(ast, classDefn(), "class C(x: i32);")
 
     def testClassWithBinaryCtor(self):
-        ast = AstClassDefinition("C", [],
-                                 AstPrimaryConstructorDefinition([AstParameter(AstVariablePattern("x", AstI32Type())),
-                                                                  AstParameter(AstVariablePattern("y", AstI32Type()))]),
+        ast = AstClassDefinition([], "C", [],
+                                 AstPrimaryConstructorDefinition([],
+                                                                 [AstParameter([], AstVariablePattern("x", AstI32Type())),
+                                                                  AstParameter([], AstVariablePattern("y", AstI32Type()))]),
                                  [], [])
         self.checkParse(ast, classDefn(), "class C(x: i32, y: i32);")
+
+    def testClassWithCtorWithAttribs(self):
+        self.checkParse(AstClassDefinition([], "C", [],
+                                           AstPrimaryConstructorDefinition([AstAttribute("public")], []),
+                                           [], []),
+                        classDefn(),
+                        "class C public ();")
 
     def testTypeParametersEmpty(self):
         self.checkParse([], typeParameters(), "")
@@ -116,8 +144,8 @@ class TestParser(unittest.TestCase):
         self.checkParse([], parameters(), "")
 
     def testParameters(self):
-        self.checkParse([AstParameter(AstVariablePattern("x", None)),
-                         AstParameter(AstVariablePattern("y", None))],
+        self.checkParse([AstParameter([], AstVariablePattern("x", None)),
+                         AstParameter([], AstVariablePattern("y", None))],
                         parameters(),
                         "(x, y)")
 

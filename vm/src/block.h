@@ -22,6 +22,7 @@ V(Package, PACKAGE)                    \
 V(Stack, STACK)                        \
 V(Function, FUNCTION)                  \
 V(Class, CLASS)                        \
+V(Field, FIELD)                        \
 V(I8Array, I8_ARRAY)                   \
 V(I32Array, I32_ARRAY)                 \
 V(I64Array, I64_ARRAY)                 \

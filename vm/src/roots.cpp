@@ -7,6 +7,7 @@
 #include "roots.h"
 
 #include "block-inl.h"
+#include "field.h"
 #include "package-inl.h"
 #include "stack-inl.h"
 #include "type-inl.h"
@@ -47,6 +48,12 @@ void Roots::initialize(Heap* heap) {
   classMeta->setHasPointers(true);
   classMeta->objectPointerMap().setWord(0, Class::kPointerMap);
   basicRoots_[CLASS_META_ROOT_INDEX] = classMeta;
+
+  Meta* fieldMeta = Meta::tryAllocate(heap, 0, Field::kSize, 0);
+  fieldMeta->initialize(FIELD_BLOCK_TYPE, nullptr, Field::kSize, 0);
+  fieldMeta->setHasPointers(true);
+  fieldMeta->objectPointerMap().setWord(0, Field::kPointerMap);
+  basicRoots_[FIELD_META_ROOT_INDEX] = fieldMeta;
 
   Meta* i8ArrayMeta = Meta::tryAllocate(heap, 0, I8Array::kHeaderSize, sizeof(i8));
   i8ArrayMeta->initialize(I8_ARRAY_BLOCK_TYPE, nullptr, I8Array::kHeaderSize, sizeof(i8));

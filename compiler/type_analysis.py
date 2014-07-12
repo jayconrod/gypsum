@@ -456,10 +456,10 @@ class TypeVisitor(AstNodeVisitor):
             receiverType = ClassType(irClass)
             receiverIsExplicit = True
             useKind = USE_AS_CONSTRUCTOR
-        for overload in nameInfo.iterDefnInfos():
+        for overload in nameInfo.iterOverloads():
             self.ensureParamTypeInfoForDefn(overload.irDefn)
         defnInfo = nameInfo.findDefnInfoWithArgTypes(receiverType, receiverIsExplicit, argTypes)
-        scope.use(defnInfo, useAstId, useKind)
+        self.scope().use(defnInfo, useAstId, useKind)
         irDefn = defnInfo.irDefn
         self.ensureTypeInfoForDefn(irDefn)
         if isinstance(irDefn, Function):

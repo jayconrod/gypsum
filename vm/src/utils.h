@@ -113,8 +113,7 @@ inline word_t isPowerOf2(word_t n) {
 }
 
 
-inline word_t align(word_t n, word_t alignment) {
-  ASSERT(isPowerOf2(alignment));
+constexpr inline word_t align(word_t n, word_t alignment) {
   return (n + alignment - 1UL) & ~(alignment - 1UL);
 }
 
@@ -184,6 +183,11 @@ void utf8Encode(u32 codePoint, u8** bytes);
     *p = _newValue; \
     Heap::recordWrite(p, _newValue); \
   }
+
+
+#define DEFINE_INL_CAST_ACCESSORS(type, rawType, getter, setter, offset) \
+  type getter() { return static_cast<type>(mem<rawType>(this, offset); } \
+  void setter(type _newValue) { mem<rawType>(this, offset) = static_cast<rawType>(_newValue); }
 
 
 #define DEFINE_INL_BIT_ACCESSORS(type, getter, setter, offset, width, shift) \

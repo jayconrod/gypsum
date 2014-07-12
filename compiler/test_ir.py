@@ -16,12 +16,12 @@ class TestIntermediateRepresentation(unittest.TestCase):
 
     def testFindCommonBaseClass(self):
         package = Package()
-        baseClass = Class("Base", [], [getRootClassType()], None, [], [], [])
+        baseClass = Class("Base", [], [getRootClassType()], None, [], [], [], frozenset())
         package.addClass(baseClass)
         baseTy = ClassType(baseClass)
-        aClass = Class("A", [], [baseTy], None, [], [], [])
+        aClass = Class("A", [], [baseTy], None, [], [], [], frozenset())
         package.addClass(aClass)
-        bClass = Class("B", [], [baseTy], None, [], [], [])
+        bClass = Class("B", [], [baseTy], None, [], [], [], frozenset())
         package.addClass(bClass)
         commonClass = aClass.findCommonBaseClass(bClass)
         self.assertIs(baseClass, commonClass)

@@ -143,7 +143,8 @@ static Package* createTestPackage(Heap* heap) {
   package->setFlags(0);
   auto functions = BlockArray::tryAllocate(heap, 1);
   auto function = Function::tryAllocate(heap, ARRAY_LENGTH(instList));
-  function->initialize(*typeList, 2 * kWordSize, instList, blockOffsetList, package, nullptr);
+  function->initialize(0, *typeList, 2 * kWordSize, instList,
+                       blockOffsetList, package, nullptr);
   functions->set(0, function);
   package->setFunctions(functions);
   package->setEntryFunctionIndex(0);

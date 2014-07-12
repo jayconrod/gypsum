@@ -17,6 +17,7 @@
 #include "block-inl.h"
 #include "bytecode.h"
 #include "error.h"
+#include "field.h"
 #include "function-inl.h"
 #include "handle-inl.h"
 #include "heap-inl.h"
@@ -30,6 +31,7 @@ namespace internal {
 static Handle<String> readString(VM* vm, istream& stream);
 static Handle<Function> readFunction(VM* vm, istream& stream, Handle<Package> package);
 static void readClass(VM* vm, istream& stream, Handle<Package> package, Handle<Class> clas);
+static Handle<Field> readField(VM* vm, istream& stream, Handle<BlockArray> classes);
 static Handle<Type> readType(VM* vm, istream& stream, Handle<BlockArray> classes);
 template <typename T>
 static T readValue(istream& stream);
@@ -159,6 +161,8 @@ static Handle<String> readString(VM* vm, istream& stream) {
 
 static Handle<Function> readFunction(VM* vm, istream& stream, Handle<Package> package) {
   auto classes = handle(package->classes());
+  u32 flags;
+  stream.read(reinterpret_cast<char*>(&flags), sizeof(flags));
   auto returnType = readType(vm, stream, classes);
   auto parameterCount = readWordVbn(stream);
   auto types = BlockArray::allocate(vm->heap(), parameterCount + 1);
@@ -180,19 +184,23 @@ static Handle<Function> readFunction(VM* vm, istream& stream, Handle<Package> pa
   }
 
   auto function = Function::allocate(vm->heap(), instructionsSize);
-  function->initialize(*types, localsSize, instructions, *blockOffsets, *package, nullptr);
+  function->initialize(flags, *types, localsSize, instructions,
+                       *blockOffsets, *package, nullptr);
   return function;
 }
 
 
 static void readClass(VM* vm, istream& stream, Handle<Package> package, Handle<Class> clas) {
-  auto supertype = readType(vm, stream, handle(package->classes()));
+  auto classes = handle(package->classes());
+  u32 flags;
+  stream.read(reinterpret_cast<char*>(&flags), sizeof(flags));
+  auto supertype = readType(vm, stream, classes);
 
   auto fieldCount = readWordVbn(stream);
-  auto fieldTypes = BlockArray::allocate(vm->heap(), fieldCount);
+  auto fields = BlockArray::allocate(vm->heap(), fieldCount);
   for (word_t i = 0; i < fieldCount; i++) {
-    auto ty = readType(vm, stream, handle(package->classes()));
-    fieldTypes->set(i, *ty);
+    auto field = readField(vm, stream, classes);
+    fields->set(i, *field);
   }
 
   auto constructorCount = readWordVbn(stream);
@@ -209,8 +217,18 @@ static void readClass(VM* vm, istream& stream, Handle<Package> package, Handle<C
     methods->set(i, id);
   }
 
-  clas->initialize(*supertype, *fieldTypes, nullptr,
+  clas->initialize(flags, *supertype, *fields, nullptr,
                    *constructors, *methods, *package, nullptr);
+}
+
+
+static Handle<Field> readField(VM* vm, istream& stream, Handle<BlockArray> classes) {
+  u32 flags;
+  stream.read(reinterpret_cast<char*>(&flags), sizeof(flags));
+  auto type = readType(vm, stream, classes);
+  auto field = Field::allocate(vm->heap());
+  field->initialize(flags, *type);
+  return field;
 }
 
 
