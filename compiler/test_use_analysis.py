@@ -81,7 +81,7 @@ class TestUseAnalysis(unittest.TestCase):
         classScope = info.getScope(info.ast.definitions[0])
         thisNameInfo = classScope.lookup("this", False, False)
         self.assertEquals(DefnInfo(Variable("$this", None, PARAMETER, frozenset()),
-                                   classScope.scopeId),
+                                   classScope.scopeId, classScope.scopeId, NOT_HERITABLE),
                           thisNameInfo.getDefnInfo())
 
     def testUsePrivateOuter(self):

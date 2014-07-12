@@ -96,11 +96,11 @@ def analyzeInheritance(info):
     # to ensure we don't miss anything, i.e., if S <: T, we must ensure all bindings have been
     # copied to T before copying from T to S. Builtin classes are already flattened, so this
     # is not necessary for them.
-    def bind(scope, name, defnInfo, inheritanceDepth):
+    def bind(scope, name, defnInfo):
         if scope.isBound(name) and \
            not scope.getDefinition(name).isOverloadable(defnInfo):
             raise ScopeException("%s: conflicts with inherited definition" % name)
-        scope.bind(name, defnInfo, inheritanceDepth)
+        scope.bind(name, defnInfo)
         scope.define(name)
 
     topologicalClassIds = inheritanceGraph.reverseEdges().topologicalSort()
@@ -112,10 +112,10 @@ def analyzeInheritance(info):
         if classInfo.superclassInfo is None:
             continue
         superclassScope = info.getScope(classInfo.superclassInfo.irDefn)
-        for name, defnInfo, inheritanceDepth in superclassScope.getBindings():
-            if inheritanceDepth == NOT_HERITABLE:
+        for name, defnInfo in superclassScope.getBindings():
+            if defnInfo.inheritanceDepth == NOT_HERITABLE:
                 continue
-            bind(scope, name, defnInfo, inheritanceDepth + 1)
+            bind(scope, name, defnInfo.inherit(scope.scopeId))
 
 
 def convertClosures(info):
@@ -248,30 +248,30 @@ class NameInfo(object):
         # A str for the name being tracked.
         self.name = name
 
-        # A list of (DefnInfo, int) pairs that may be referenced by this symbol. Each element
-        # of this list contains DefnInfo for the referenced definition and how many classes or
-        # traits this definition was inherited through. If the inheritance depth is -1 for an
-        # element, then that element is not inheritable. In most cases, this list will contain
-        # just one element.
+        # A list of DefnInfo pairs that may be referenced by this symbol. In most cases, this
+        # list will contain just one element.
         self.overloads = []
 
         # A map from function ids of overriden functions to ids of the overriding functions.
         # Only defined after `resolveOverrides` is called and only if `isOverloaded` is true.
         self.overrides = None
 
+    def addOverload(self, defnInfo):
+        self.overloads.append(defnInfo)
+
     def isOverloadable(self, otherDefnInfo):
         return isinstance(otherDefnInfo.irDefn, Function) and \
-               isinstance(self.overloads[0][0].irDefn, Function)
+               isinstance(self.overloads[0].irDefn, Function)
 
     def isOverloaded(self):
         return len(self.overloads) > 1
 
     def getDefnInfo(self):
         assert not self.isOverloaded()
-        return self.overloads[0][0]
+        return self.overloads[0]
 
-    def iterDefnInfos(self):
-        return (overload[0] for overload in self.overloads)
+    def iterOverloads(self):
+        return iter(self.overloads)
 
     def isClass(self):
         return not self.isOverloaded() and isinstance(self.getDefnInfo().irDefn, Class)
@@ -280,7 +280,7 @@ class NameInfo(object):
         assert self.isClass()
         irClass = self.getDefnInfo().irDefn
         ctorNameInfo = NameInfo(self.name)
-        ctorNameInfo.overloads = [(info.getDefnInfo(ctor), 0) for ctor in irClass.constructors]
+        ctorNameInfo.overloads = [info.getDefnInfo(ctor) for ctor in irClass.constructors]
         return ctorNameInfo
 
     def didResolveOverrides(self):
@@ -319,12 +319,15 @@ class NameInfo(object):
 
         # Sort overloads by depth to simplify the loop and avoid the last condition
         # mentioned above.
-        overloadsByDepth = sorted(self.overloads, key=lambda (_, depth): depth)
+        overloadsByDepth = sorted(self.overloads,
+                                  key=lambda defnInfo: defnInfo.inheritanceDepth)
 
         # Compare each function with each other function with greater depth.
-        for (aIndex, (aDefnInfo, aDepth)) in enumerate(overloadsByDepth):
+        for (aIndex, aDefnInfo) in enumerate(overloadsByDepth):
+            aDepth = aDefnInfo.inheritanceDepth
             overrideIndex = None
-            for (bIndex, (bDefnInfo, bDepth)) in enumerate(overloadsByDepth[aIndex + 1:]):
+            for (bIndex, bDefnInfo) in enumerate(overloadsByDepth[aIndex + 1:]):
+                bDepth = bDefnInfo.inheritanceDepth
                 bIndex += aIndex + 1
                 assert aDepth <= bDepth
                 if aDepth == bDepth:
@@ -347,8 +350,9 @@ class NameInfo(object):
             # If we found an override, check that there aren't other functions we could
             # override.
             if overrideIndex is not None:
-                overrideDepth = overloadsByDepth[overrideIndex][1]
-                for bDefnInfo, bDepth in overloadsByDepth[overrideIndex + 1:]:
+                overrideDepth = overloadsByDepth[overrideIndex].inheritanceDepth
+                for bDefnInfo in overloadsByDepth[overrideIndex + 1:]:
+                    bDepth = bDefnInfo.inheritanceDepth
                     if bDepth > overrideDepth:
                         break
                     if self.mayOverride(aDefnInfo.irDefn, bDefnInfo.irDefn):
@@ -364,7 +368,7 @@ class NameInfo(object):
         multiple matches."""
         self.resolveOverrides()
         candidate = None
-        for (defnInfo, _) in self.overloads:
+        for defnInfo in self.overloads:
             irDefn = defnInfo.irDefn
             if isinstance(irDefn, Function) and irDefn.id in self.overrides:
                 continue
@@ -452,7 +456,7 @@ class Scope(AstNodeVisitor):
         if self.isDefinedAutomatically(astDefn):
             self.define(name)
 
-    def bind(self, name, defnInfo, inheritanceDepth=0):
+    def bind(self, name, defnInfo):
         """Binds a name in this scope.
 
         For non-function defintions, this requires the name is not already bound. For function
@@ -460,7 +464,7 @@ class Scope(AstNodeVisitor):
         OverloadInfo."""
         if name not in self.bindings:
             self.bindings[name] = NameInfo(name)
-        self.bindings[name].overloads.append((defnInfo, inheritanceDepth))
+        self.bindings[name].addOverload(defnInfo)
 
     def getBindings(self):
         """Returns a iterator, which returns (str, DefnInfo, int) pairs for each binding.
@@ -469,8 +473,8 @@ class Scope(AstNodeVisitor):
         through (0 indicates it was inherited from this class). For overloaded functions, this
         will return the same name more than once."""
         for name, nameInfo in self.bindings.iteritems():
-            for defnInfo, inheritanceDepth in nameInfo.overloads:
-                yield (name, defnInfo, inheritanceDepth)
+            for defnInfo in nameInfo.overloads:
+                yield (name, defnInfo)
 
     def createIrDefn(self, astDefn, astVarDefn):
         """Creates an IR definition and adds it to the package."""
@@ -918,7 +922,7 @@ class ClassScope(Scope):
         contextInfo.irContextClass = irDefn
         this = irDefn.initializer.variables[0]
         assert this.name == "$this"
-        self.bind("this", DefnInfo(this, self.scopeId), NOT_HERITABLE)
+        self.bind("this", DefnInfo(this, self.scopeId, self.scopeId, NOT_HERITABLE))
         self.define("this")
         closureInfo = self.info.getClosureInfo(self.scopeId)
         closureInfo.irClosureContexts[self.scopeId] = this

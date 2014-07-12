@@ -142,6 +142,8 @@ class ClosureInfo(Data):
         return sorted(self.irClosureContexts.keys())
 
 
+NOT_HERITABLE = -1
+
 # DefnInfo is available for every AST node which defines something, such as classes, functions,
 # parameters, and individual variables. This is used to map AST definitions to their
 # IR definition stubs.
@@ -149,35 +151,47 @@ class DefnInfo(Data):
     """Created for every AST node which defines something.
 
     This includes classes, functions, and individual variables. This is used to map AST
-    definitions to their IR definition stubs."""
+    definitions to their IR definition stubs. This is also created for inherited definitions,
+    so multiple DefnInfo objects can point to the same irDefn."""
 
     propertyNames = [
         # the IR definition created from this node
         "irDefn",
 
-        # int: the AST id of the scope which contains this definition.
+        # int: the id of the scope which contains this definition. If this definition is
+        # inherited, this is the scope id of the inheriting class (the subclass).
         "scopeId",
+
+        # int: the id of the scope which contains this definition in source. If this definition
+        # is inherited, this will be the id of the superclass containing the original
+        # definition. If this definition is not inherited, this will be the same as `scopeId`.
+        "inheritedScopeId",
+
+        # int: how many scopes this definition was inherited through. 0 means this is the
+        # original definition. NOT_HERITABLE (-1) indicates this is the original definition and
+        # it is not heritable.
+        "inheritanceDepth",
     ]
 
-    def __init__(self, irDefn, scopeId,
-                 irClosureClass=None, irClosureContexts=None, irClosureVar=None):
+    def __init__(self, irDefn, scopeId, inheritedScopeId=None, inheritanceDepth=0):
+        if inheritedScopeId is None:
+            inheritedScopeId = scopeId
         self.irDefn = irDefn
         self.scopeId = scopeId
-        self.irClosureClass = irClosureClass
-        self.irClosureContexts = irClosureContexts if irClosureContexts else {}
-        self.irClosureVar = irClosureVar
+        self.inheritedScopeId = inheritedScopeId
+        self.inheritanceDepth = inheritanceDepth
 
     def __repr__(self):
         irDefnStr = repr(self.irDefn)
-        irClosureClassStr = self.irClosureClass.name if self.irClosureClass else None
-        irClosureContextsStr = \
-            ", ".join("%d: %s" % kv for kv in self.irClosureContexts.iteritems())
-        irClosureVarStr = self.irClosureVar.name if self.irClosureVar else "None"
-        return "DefnInfo(%s, %d, %s, {%s}, %s)" % \
-            (irDefnStr, self.scopeId, irClosureClassStr, irClosureContextsStr, irClosureVarStr)
+        return "DefnInfo(%s, %d, %d, %d)" % \
+            (irDefnStr, self.scopeId, self.inheritedScopeId, self.inheritanceDepth)
 
     def isMethod(self):
         return isinstance(self.irDefn, Function) and self.irDefn.isMethod()
+
+    def inherit(self, scopeId):
+        assert self.inheritanceDepth != NOT_HERITABLE
+        return DefnInfo(self.irDefn, scopeId, self.inheritedScopeId, self.inheritanceDepth + 1)
 
 
 USE_AS_VALUE = "USE_AS_VALUE"
