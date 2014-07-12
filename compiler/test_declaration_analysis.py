@@ -187,3 +187,22 @@ class TestDeclarations(unittest.TestCase):
 
     def testRedefinedVar(self):
         self.assertRaises(ScopeException, self.analyzeFromSource, "var x = 12; var x = 34;")
+
+    def testDuplicateAttribute(self):
+        self.assertRaises(ScopeException, self.analyzeFromSource,
+                          "class C\n" +
+                          "  private private def f = {}")
+
+    def testConflictingAttributes(self):
+        self.assertRaises(ScopeException, self.analyzeFromSource,
+                          "class C\n" +
+                          "  private protected def f = {}")
+
+    def testPrivateGlobalFunction(self):
+        self.assertRaises(ScopeException, self.analyzeFromSource, "private def f = {}")
+
+    def testPrivateClassFunction(self):
+        info = self.analyzeFromSource("class C\n" +
+                                      "  private def f = {}")
+        f = info.package.findFunction(name="f")
+        self.assertEquals(frozenset([PRIVATE]), f.flags)

@@ -459,7 +459,7 @@ class TypeVisitor(AstNodeVisitor):
         for overload in nameInfo.iterDefnInfos():
             self.ensureParamTypeInfoForDefn(overload.irDefn)
         defnInfo = nameInfo.findDefnInfoWithArgTypes(receiverType, receiverIsExplicit, argTypes)
-        scope.use(defnInfo, useAstId, useKind)
+        self.scope().use(defnInfo, useAstId, useKind)
         irDefn = defnInfo.irDefn
         self.ensureTypeInfoForDefn(irDefn)
         if isinstance(irDefn, Function):

@@ -30,6 +30,11 @@ class TestUseAnalysis(unittest.TestCase):
         analyzeInheritance(info)
         return info
 
+    def analyzeFromSourceWithTypes(self, source):
+        info = self.analyzeFromSource(source)
+        analyzeTypes(info)
+        return info
+
     def testUndefinedReference(self):
         info = self.analyzeFromSource("var x = y")
         self.assertRaises(ScopeException,
@@ -78,3 +83,68 @@ class TestUseAnalysis(unittest.TestCase):
         self.assertEquals(DefnInfo(Variable("$this", None, PARAMETER, frozenset()),
                                    classScope.scopeId),
                           thisNameInfo.getDefnInfo())
+
+    def testUsePrivateOuter(self):
+        source = "class C\n" + \
+                 "  private def f = {}\n" + \
+                 "def g(o: C) = o.f"
+        self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
+
+    def testUsePrivateSibling(self):
+        source = "class C\n" + \
+                 "  private def f = {}\n" + \
+                 "  def g = f\n"
+        info = self.analyzeFromSourceWithTypes(source)
+        use = info.getUseInfo(info.ast.definitions[0].members[1].body)
+        self.assertEquals(info.getScope(info.ast.definitions[0].members[1]).scopeId,
+                          use.useScopeId)
+        self.assertEquals(USE_AS_VALUE, use.kind)
+
+    def testUseProtectedChild(self):
+        source = "class C\n" + \
+                 "  private def f = {}\n" + \
+                 "  def g =\n" + \
+                 "    def h = f"
+        info = self.analyzeFromSourceWithTypes(source)
+        useScopeAst = info.ast.definitions[0].members[1].body.statements[0]
+        use = info.getUseInfo(useScopeAst.body)
+        self.assertEquals(info.getScope(useScopeAst).scopeId, use.useScopeId)
+        self.assertEquals(USE_AS_VALUE, use.kind)
+
+    def testUsePrivateInnerWithReceiver(self):
+        source = "class C\n" + \
+                 "  private var x: i64\n" + \
+                 "  def f(other: C) = other.x"
+        info = self.analyzeFromSourceWithTypes(source)
+        use = info.getUseInfo(info.ast.definitions[0].members[1].body)
+        self.assertEquals(info.getScope(info.ast.definitions[0].members[1]).scopeId,
+                          use.useScopeId)
+        self.assertEquals(USE_AS_PROPERTY, use.kind)
+
+    def testUseProtectedOuter(self):
+        source = "class C\n" + \
+                 "  protected def f = {}\n" + \
+                 "def g(o: C) = o.f"
+        self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
+
+    def testUseProtectedSibling(self):
+        source = "class C\n" + \
+                 "  protected def f = {}\n" + \
+                 "  def g = f\n"
+        info = self.analyzeFromSourceWithTypes(source)
+        useScopeAst = info.ast.definitions[0].members[1]
+        use = info.getUseInfo(useScopeAst.body)
+        self.assertEquals(info.getScope(useScopeAst).scopeId, use.useScopeId)
+        self.assertEquals(USE_AS_VALUE, use.kind)
+
+    @unittest.skip("protected not supported yet")
+    def testUseProtectedInherited(self):
+        source = "class A\n" + \
+                 "  protected def f = {}\n" + \
+                 "class B <: A\n" + \
+                 "  def g = f\n"
+        info = self.analyzeFromSourceWithTypes(source)
+        useScopeAst = info.ast.definitions[1].members[0]
+        use = info.getUseInfo(useScopeAst.body)
+        self.assertEquals(info.getScope(useScopeAst).scopeId, use.useScopeId)
+        self.assertEquals(USE_AS_VALUE, use.kind)

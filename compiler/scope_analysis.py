@@ -23,6 +23,7 @@ from ast import *
 from compile_info import *
 from data import *
 from errors import *
+from flags import *
 from graph import *
 from ir import *
 from ir_types import *
@@ -477,7 +478,9 @@ class Scope(AstNodeVisitor):
 
     def createIrClassDefn(self, astDefn):
         """Convenience method for creating a class definition."""
-        irDefn = Class(astDefn.name, None, None, None, [], [], [], frozenset())
+        flags = getFlagsFromAstDefn(astDefn, None)
+        checkFlags(flags, frozenset())
+        irDefn = Class(astDefn.name, None, None, None, [], [], [], flags)
         self.info.package.addClass(irDefn)
 
         irInitializer = Function("$initializer", None, None, None, [], None, frozenset())
@@ -547,7 +550,18 @@ class Scope(AstNodeVisitor):
         self.defined.add(name)
 
     def use(self, defnInfo, useAstId, useKind):
-        """Creates, registers, and returns UseInfo for a given definition."""
+        """Creates, registers, and returns UseInfo for a given definition.
+
+        Also checks whether the definition is allowed to be used in this scope and raises an
+        Exception if not."""
+        if (PRIVATE in defnInfo.irDefn.flags and \
+            not self.isWithin(defnInfo.scopeId)) or \
+           (PROTECTED in defnInfo.irDefn.flags and \
+            (not self.isWithin(defnInfo.scopeId) and \
+             not self.isInheritedFrom(defnInfo.scopeId))):
+            raise ScopeException("%s: not allowed to be used in this scope" %
+                                 defnInfo.irDefn.name)
+
         useInfo = UseInfo(defnInfo, self.scopeId, useKind)
         self.info.useInfo[useAstId] = useInfo
         return useInfo
@@ -574,6 +588,17 @@ class Scope(AstNodeVisitor):
             if not current.isLocal():
                 return False
             current = current.parent
+
+    def isWithin(self, scopeOrId):
+        id = scopeOrId.scopeId if isinstance(scopeOrId, Scope) else scopeOrId
+        current = self
+        while current is not None and current.scopeId != id:
+            current = current.parent
+        return current is not None
+
+    def isInheritedFrom(self, scopeOrId):
+        id = scopeOrId.scopeId if isinstance(scopeOrId, Scope) else scopeOrId
+        return False
 
     def topLocalScope(self, defnScope=None):
         """Returns the top-most local scope which is still below defnScope."""
@@ -687,11 +712,14 @@ class GlobalScope(Scope):
         assert astModule.id == GLOBAL_SCOPE_ID
 
     def createIrDefn(self, astDefn, astVarDefn):
+        flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         if isinstance(astDefn, AstVariablePattern):
-            irDefn = Global(astDefn.name, None, None, frozenset())
+            checkFlags(flags, frozenset())
+            irDefn = Global(astDefn.name, None, None, flags)
             self.info.package.addGlobal(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
-            irDefn = Function(astDefn.name, None, None, None, [], None, frozenset())
+            checkFlags(flags, frozenset())
+            irDefn = Function(astDefn.name, None, None, None, [], None, flags)
             self.info.package.addFunction(irDefn)
             if astDefn.name == "main":
                 assert self.info.package.entryFunction == -1
@@ -750,20 +778,24 @@ class FunctionScope(Scope):
             irScopeDefn = irScopeDefn.initializer
         assert isinstance(irScopeDefn, Function)
 
+        flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         if isinstance(astDefn, AstParameter):
+            checkFlags(flags, frozenset())
             if isinstance(astDefn.pattern, AstVariablePattern):
                 # If the parameter is a simple variable which doesn't need unpacking, we don't
                 # need to create a separate definition here.
                 irDefn = None
             else:
-                irDefn = Variable("$parameter", None, PARAMETER, frozenset())
+                irDefn = Variable("$parameter", None, PARAMETER, flags)
                 irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, AstVariablePattern):
+            checkFlags(flags, frozenset())
             kind = PARAMETER if isinstance(astVarDefn, AstParameter) else LOCAL
-            irDefn = Variable(astDefn.name, None, kind, frozenset())
+            irDefn = Variable(astDefn.name, None, kind, flags)
             irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
-            irDefn = Function(astDefn.name, None, None, None, [], None, frozenset())
+            checkFlags(flags, frozenset())
+            irDefn = Function(astDefn.name, None, None, None, [], None, flags)
             self.info.package.addFunction(irDefn)
         elif isinstance(astDefn, AstClassDefinition):
             irDefn = self.createIrClassDefn(astDefn)
@@ -899,20 +931,24 @@ class ClassScope(Scope):
 
     def createIrDefn(self, astDefn, astVarDefn):
         irScopeDefn = self.getIrDefn()
+        flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         if isinstance(astDefn, AstVariablePattern):
-            irDefn = Field(astDefn.name, None, frozenset(), id=len(irScopeDefn.fields,))
+            checkFlags(flags, frozenset([PROTECTED, PRIVATE]))
+            irDefn = Field(astDefn.name, None, flags, id=len(irScopeDefn.fields,))
             irScopeDefn.fields.append(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
+            checkFlags(flags, frozenset([PROTECTED, PRIVATE]))
             if astDefn.name == "this":
-                irDefn = Function("$constructor", None, None, None, [], None, frozenset())
+                irDefn = Function("$constructor", None, None, None, [], None, flags)
                 irScopeDefn.constructors.append(irDefn)
             else:
-                irDefn = Function(astDefn.name, None, None, None, [], None, frozenset())
+                irDefn = Function(astDefn.name, None, None, None, [], None, flags)
                 irScopeDefn.methods.append(irDefn)
             # We don't need to call makeMethod here because the inner FunctionScope will do it.
             self.info.package.addFunction(irDefn)
         elif isinstance(astDefn, AstPrimaryConstructorDefinition):
-            irDefn = Function("$constructor", None, None, None, [], None, frozenset())
+            checkFlags(flags, frozenset([PROTECTED, PRIVATE]))
+            irDefn = Function("$constructor", None, None, None, [], None, flags)
             irScopeDefn.constructors.append(irDefn)
             self.makeMethod(irDefn, irScopeDefn)
             self.info.package.addFunction(irDefn)
@@ -1092,6 +1128,32 @@ class InheritanceVisitor(ScopeVisitor):
                 classInfo.superclassInfo = superclassInfo
                 self.graph.addEdge(node.id, superclassAst.id)
         super(InheritanceVisitor, self).visitAstClassDefinition(node)
+
+
+def getFlagsFromAstDefn(astDefn, astVarDefn):
+    if isinstance(astDefn, AstDefinition):
+        attribs = astDefn.attribs
+    elif isinstance(astVarDefn, AstDefinition):
+        attribs = astVarDefn.attribs
+    else:
+        attribs = []
+
+    flags = set()
+    for attrib in attribs:
+        flag = getFlagByName(attrib.name)
+        if flag in flags:
+            raise ScopeException("duplicate flag: %s" % attrib.name)
+        flags.add(flag)
+    return frozenset(flags)
+
+
+def checkFlags(flags, mask):
+    conflict = checkFlagConflicts(flags)
+    if conflict is not None:
+        raise ScopeException("flags cannot be used together: %s" % ", ".join(conflict))
+    diff = flags - mask
+    if len(diff) > 0:
+        raise ScopeException("invalid flags: %s" % ", ".join(diff))
 
 
 def isInternalName(name):
