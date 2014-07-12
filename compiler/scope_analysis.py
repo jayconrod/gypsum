@@ -559,10 +559,9 @@ class Scope(AstNodeVisitor):
         Also checks whether the definition is allowed to be used in this scope and raises an
         Exception if not."""
         if (PRIVATE in defnInfo.irDefn.flags and \
-            not self.isWithin(defnInfo.scopeId)) or \
+            not self.isWithin(defnInfo.inheritedScopeId)) or \
            (PROTECTED in defnInfo.irDefn.flags and \
-            (not self.isWithin(defnInfo.scopeId) and \
-             not self.isInheritedFrom(defnInfo.scopeId))):
+            not self.isWithin(defnInfo.scopeId)):
             raise ScopeException("%s: not allowed to be used in this scope" %
                                  defnInfo.irDefn.name)
 
@@ -599,10 +598,6 @@ class Scope(AstNodeVisitor):
         while current is not None and current.scopeId != id:
             current = current.parent
         return current is not None
-
-    def isInheritedFrom(self, scopeOrId):
-        id = scopeOrId.scopeId if isinstance(scopeOrId, Scope) else scopeOrId
-        return False
 
     def topLocalScope(self, defnScope=None):
         """Returns the top-most local scope which is still below defnScope."""

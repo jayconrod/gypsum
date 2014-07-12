@@ -90,6 +90,13 @@ class TestUseAnalysis(unittest.TestCase):
                  "def g(o: C) = o.f"
         self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
 
+    def testUsePrivateSubclass(self):
+        source = "class A\n" + \
+                 "  private def f = {}\n" + \
+                 "class B <: A\n" + \
+                 "  def g = f"
+        self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
+
     def testUsePrivateSibling(self):
         source = "class C\n" + \
                  "  private def f = {}\n" + \
@@ -100,7 +107,7 @@ class TestUseAnalysis(unittest.TestCase):
                           use.useScopeId)
         self.assertEquals(USE_AS_VALUE, use.kind)
 
-    def testUseProtectedChild(self):
+    def testUsePrivateChild(self):
         source = "class C\n" + \
                  "  private def f = {}\n" + \
                  "  def g =\n" + \
@@ -137,7 +144,6 @@ class TestUseAnalysis(unittest.TestCase):
         self.assertEquals(info.getScope(useScopeAst).scopeId, use.useScopeId)
         self.assertEquals(USE_AS_VALUE, use.kind)
 
-    @unittest.skip("protected not supported yet")
     def testUseProtectedInherited(self):
         source = "class A\n" + \
                  "  protected def f = {}\n" + \
