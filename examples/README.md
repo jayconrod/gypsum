@@ -15,7 +15,7 @@ Before you can run any examples, you need to compile the VM driver.
 
 ```
 cd ../vm
-make -j
+make -j8
 ```
 
 You can compile an example like this:

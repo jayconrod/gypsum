@@ -54,7 +54,7 @@ To build and test the VM:
 
 ```
 cd vm
-make -j
+make -j8
 ```
 
 To run a package:
