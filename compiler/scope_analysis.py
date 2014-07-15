@@ -718,7 +718,7 @@ class GlobalScope(Scope):
             self.info.package.addGlobal(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
             checkFlags(flags, frozenset())
-            irDefn = Function(astDefn.name, None, None, None, [], None, flags)
+            irDefn = Function(astDefn.name, None, [], None, [], None, flags)
             self.info.package.addFunction(irDefn)
             if astDefn.name == "main":
                 assert self.info.package.entryFunction == -1
@@ -784,6 +784,7 @@ class FunctionScope(Scope):
                 raise NotImplementedError
             irDefn = TypeParameter(astDefn.name, None, None, flags)
             self.info.package.addTypeParameter(irDefn)
+            irScopeDefn.typeParameters.append(irDefn)
         elif isinstance(astDefn, AstParameter):
             checkFlags(flags, frozenset())
             if isinstance(astDefn.pattern, AstVariablePattern):
@@ -800,7 +801,7 @@ class FunctionScope(Scope):
             irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
             checkFlags(flags, frozenset())
-            irDefn = Function(astDefn.name, None, None, None, [], None, flags)
+            irDefn = Function(astDefn.name, None, [], None, [], None, flags)
             self.info.package.addFunction(irDefn)
         elif isinstance(astDefn, AstClassDefinition):
             irDefn = self.createIrClassDefn(astDefn)
@@ -870,7 +871,7 @@ class FunctionScope(Scope):
         self.info.package.addClass(irClosureClass)
         closureInfo.irClosureClass = irClosureClass
         irClosureType = ClassType(irClosureClass)
-        irClosureCtor = Function("$closureCtor", UnitType, None, [irClosureType],
+        irClosureCtor = Function("$closureCtor", UnitType, [], [irClosureType],
                                  [Variable("$this", irClosureType, PARAMETER, frozenset())],
                                  None, frozenset())
         irClosureCtor.clas = irClosureClass
@@ -944,16 +945,16 @@ class ClassScope(Scope):
         elif isinstance(astDefn, AstFunctionDefinition):
             checkFlags(flags, frozenset([PROTECTED, PRIVATE]))
             if astDefn.name == "this":
-                irDefn = Function("$constructor", None, None, None, [], None, flags)
+                irDefn = Function("$constructor", None, [], None, [], None, flags)
                 irScopeDefn.constructors.append(irDefn)
             else:
-                irDefn = Function(astDefn.name, None, None, None, [], None, flags)
+                irDefn = Function(astDefn.name, None, [], None, [], None, flags)
                 irScopeDefn.methods.append(irDefn)
             # We don't need to call makeMethod here because the inner FunctionScope will do it.
             self.info.package.addFunction(irDefn)
         elif isinstance(astDefn, AstPrimaryConstructorDefinition):
             checkFlags(flags, frozenset([PROTECTED, PRIVATE]))
-            irDefn = Function("$constructor", None, None, None, [], None, flags)
+            irDefn = Function("$constructor", None, [], None, [], None, flags)
             irScopeDefn.constructors.append(irDefn)
             self.makeMethod(irDefn, irScopeDefn)
             self.info.package.addFunction(irDefn)
