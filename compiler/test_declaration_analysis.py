@@ -206,3 +206,9 @@ class TestDeclarations(unittest.TestCase):
                                       "  private def f = {}")
         f = info.package.findFunction(name="f")
         self.assertEquals(frozenset([PRIVATE]), f.flags)
+
+    def testFunctionTypeParameterStatic(self):
+        info = self.analyzeFromSource("def f[static T] = {}")
+        T = info.package.findTypeParameter(name="T")
+        self.assertEquals("T", T.name)
+        self.assertEquals(frozenset([STATIC]), T.flags)

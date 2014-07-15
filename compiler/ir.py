@@ -15,6 +15,7 @@ class Package(object):
         self.globals = []
         self.functions = []
         self.classes = []
+        self.typeParameters = []
         self.strings = []
         self.entryFunction = -1
 
@@ -26,6 +27,8 @@ class Package(object):
             buf.write("%s\n\n" % f)
         for c in self.classes:
             buf.write("%s\n\n" % c)
+        for p in self.typeParameters:
+            buf.write("%s\n\n" % p)
         buf.write("entry function: %d\n" % self.entryFunction)
         return buf.getvalue()
 
@@ -47,6 +50,12 @@ class Package(object):
         self.globals.append(gbl)
         return gbl.id
 
+    def addTypeParameter(self, tp):
+        assert not hasattr(tp, "id")
+        tp.id = len(self.typeParameters)
+        self.typeParameters.append(tp)
+        return tp.id
+
     def findOrAddString(self, s):
         assert type(s) == unicode
         for i in xrange(0, len(self.strings)):
@@ -63,6 +72,9 @@ class Package(object):
 
     def findGlobal(self, **kwargs):
         return next(self.find(self.globals, kwargs))
+
+    def findTypeParameter(self, **kwargs):
+        return next(self.find(self.typeParameters, kwargs))
 
     def find(self, defns, kwargs):
         def matchItem(defn, key, value):
@@ -252,6 +264,18 @@ class Class(IrDefinition):
         for method in self.methods:
             buf.write("  method #%d\n" % method.id)
         return buf.getvalue()
+
+
+class TypeParameter(IrDefinition):
+    propertyNames = ("name", "upperBound", "lowerBound", "flags")
+
+    def __repr__(self):
+        return "TypeParameter(%s, %s, %s, %s)" % \
+            (self.name, self.upperBound, self.lowerBound, self.flags)
+
+    def __str__(self):
+        return "%s type %s#%d <: %s >: %s\n" % \
+            (" ".join(self.flags), self.name, self.id, self.upperBound, self.lowerBound)
 
 
 # List of variable kinds

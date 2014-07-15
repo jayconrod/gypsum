@@ -150,8 +150,9 @@ class AstPrimaryConstructorDefinition(AstDefinition):
         return self.attribs + self.parameters
 
 
-class AstTypeParameter(AstNode):
-    def __init__(self, name, upperBound, lowerBound):
+class AstTypeParameter(AstDefinition):
+    def __init__(self, attribs, name, upperBound, lowerBound):
+        super(AstTypeParameter, self).__init__(attribs)
         self.name = name
         self.upperBound = upperBound
         self.lowerBound = lowerBound
@@ -167,7 +168,7 @@ class AstTypeParameter(AstNode):
         return self.name
 
     def children(self):
-        return [self.upperBound, self.lowerBound]
+        return self.attribs + [self.upperBound, self.lowerBound]
 
 
 class AstParameter(AstDefinition):

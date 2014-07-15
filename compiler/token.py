@@ -5,6 +5,7 @@
 
 
 RESERVED = "reserved"
+ATTRIB = "attrib"
 SYMBOL = "symbol"
 OPERATOR = "operator"
 INTEGER = "integer"

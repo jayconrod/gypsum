@@ -778,7 +778,13 @@ class FunctionScope(Scope):
         assert isinstance(irScopeDefn, Function)
 
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
-        if isinstance(astDefn, AstParameter):
+        if isinstance(astDefn, AstTypeParameter):
+            checkFlags(flags, frozenset([STATIC]))
+            if STATIC not in flags:
+                raise NotImplementedError
+            irDefn = TypeParameter(astDefn.name, None, None, flags)
+            self.info.package.addTypeParameter(irDefn)
+        elif isinstance(astDefn, AstParameter):
             checkFlags(flags, frozenset())
             if isinstance(astDefn.pattern, AstVariablePattern):
                 # If the parameter is a simple variable which doesn't need unpacking, we don't
@@ -1037,6 +1043,12 @@ class ScopeVisitor(AstNodeVisitor):
         visitor = self.createChildVisitor(scope)
         visitor.visitChildren(node)
 
+    def visitAstTypeParameter(self, node):
+        if node.upperBound is not None:
+            self.visit(node.upperBound)
+        if node.lowerBound is not None:
+            self.visit(node.lowerBound)
+
     def visitAstParameter(self, node):
         self.visit(node.pattern, node)
 
@@ -1081,6 +1093,10 @@ class DeclarationVisitor(ScopeVisitor):
     def visitAstPrimaryConstructorDefinition(self, node):
         self.scope.declare(node)
         super(DeclarationVisitor, self).visitChildren(node)
+
+    def visitAstTypeParameter(self, node):
+        self.scope.declare(node)
+        super(DeclarationVisitor, self).visitAstTypeParameter(node)
 
     def visitAstParameter(self, node):
         self.scope.declare(node)
