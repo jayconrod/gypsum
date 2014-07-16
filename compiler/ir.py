@@ -108,14 +108,13 @@ class Function(IrDefinition):
                    for param, arg in zip(self.typeParameters, typeArgs)):
             return False
 
-        typeBindings = {param.id: arg for param, arg in zip(self.typeParameters, typeArgs)}
-
         if len(self.parameterTypes) != len(argTypes):
             return False
         if self.isMethod():
             # Nullable receivers are fine, since they are checked when a method is called.
             argTypes = [argTypes[0].withoutFlag(NULLABLE_TYPE_FLAG)] + argTypes[1:]
-        paramTypes = [pt.substitute(typeBindings) for pt in self.parameterTypes]
+        paramTypes = [pt.substitute(self.typeParameters, typeArgs)
+                      for pt in self.parameterTypes]
         return all(at.isSubtypeOf(pt) for at, pt in zip(argTypes, paramTypes))
 
     def isMethod(self):

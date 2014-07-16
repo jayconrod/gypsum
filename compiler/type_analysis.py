@@ -473,9 +473,7 @@ class TypeVisitor(AstNodeVisitor):
                 return irDefn.parameterTypes[0]
             else:
                 assert len(typeArgs) == len(irDefn.typeParameters)
-                typeBindings = {param.id: arg for param, arg
-                                in zip(irDefn.typeParameters, typeArgs)}
-                ty = irDefn.returnType.substitute(typeBindings)
+                ty = irDefn.returnType.substitute(irDefn.typeParameters, typeArgs)
                 return ty
         else:
             assert isinstance(irDefn, Variable) or \

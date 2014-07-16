@@ -24,6 +24,10 @@ class TestIrTypes(unittest.TestCase):
         self.A = self.makeClass("A", getRootClass())
         self.B = self.makeClass("B", self.A)
         self.C = self.makeClass("C", self.B)
+        X = TypeParameter("X", getRootClassType(), getNothingClassType(), frozenset())
+        Y = TypeParameter("Y", getRootClassType(), getNothingClassType(), frozenset())
+        self.P = Class("P", [X, Y], [getRootClassType()], None, None, None, None, frozenset())
+        self.P.id = self.nextId()
 
     def testSubtypeSelf(self):
         self.assertTrue(ClassType(self.A).isSubtypeOf(ClassType(self.A)))
@@ -46,3 +50,15 @@ class TestIrTypes(unittest.TestCase):
         T = TypeParameter("T", ClassType(self.A), ClassType(self.B), frozenset())
         S = TypeParameter("S", ClassType(self.B), ClassType(self.C), frozenset())
         self.assertTrue(VariableType(S).isSubtypeOf(VariableType(T)))
+
+    def testSubstitute(self):
+        T = TypeParameter("T", ClassType(self.A), ClassType(self.B), frozenset())
+        T.id = self.nextId()
+        a = ClassType(self.A)
+        b = ClassType(self.B)
+        p = ClassType(self.P, tuple(VariableType(pt) for pt in self.P.typeParameters))
+        self.assertEquals(UnitType, UnitType.substitute([T], [a]))
+        self.assertEquals(a, a.substitute([T], [a]))
+        self.assertEquals(a, VariableType(T).substitute([T], [a]))
+        self.assertEquals(ClassType(self.P, (a, b)),
+                          p.substitute(self.P.typeParameters, [a, b]))

@@ -76,7 +76,7 @@ class Type(Data):
     def combineFlags(self, other):
         return self.flags.union(other.flags)
 
-    def substitute(self, bindings):
+    def substitute(self, parameters, replacements):
         raise NotImplementedError
 
     def size(self):
@@ -107,7 +107,7 @@ class SimpleType(Type):
     def __str__(self):
         return self.name
 
-    def substitute(self, bindings):
+    def substitute(self, parameters, replacements):
         return self
 
     def isPrimitive(self):
@@ -183,9 +183,10 @@ class ClassType(ObjectType):
                self.clas is other.clas and \
                self.typeArguments == other.typeArguments
 
-    def substitute(self, bindings):
+    def substitute(self, parameters, replacements):
         return ClassType(self.clas,
-                         tuple(arg.substitute(bindings) for arg in self.typeArguments),
+                         tuple(arg.substitute(parameters, replacements)
+                               for arg in self.typeArguments),
                          self.flags)
 
     def isNullable(self):
@@ -214,8 +215,12 @@ class VariableType(ObjectType):
         return self.__class__ is other.__class__ and \
                self.typeParameter is other.typeParameter
 
-    def substitute(self, bindings):
-        return bindings.get(self.id, self)
+    def substitute(self, parameters, replacements):
+        assert len(parameters) == len(replacements)
+        for param, repl in zip(parameters, replacements):
+            if param is self.typeParameter:
+                return repl
+        return self
 
     def isNullable(self):
         return self.typeParameter.upperBound is not None and \
