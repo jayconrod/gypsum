@@ -102,16 +102,21 @@ class Function(IrDefinition):
     propertyNames = ("name", "returnType", "typeParameters", "parameterTypes",
                      "variables", "blocks", "flags")
 
-    def canCallWith(self, argTypes):
+    def canCallWith(self, typeArgs, argTypes):
+        if len(self.typeParameters) != len(typeArgs) or \
+           not all(arg.isSubtypeOf(param.upperBound) and param.lowerBound.isSubtypeOf(arg) \
+                   for param, arg in zip(self.typeParameters, typeArgs)):
+            return False
+
+        typeBindings = {param.id: arg for param, arg in zip(self.typeParameters, typeArgs)}
+
         if len(self.parameterTypes) != len(argTypes):
             return False
         if self.isMethod():
             # Nullable receivers are fine, since they are checked when a method is called.
-            receiverParamType = self.parameterTypes[0]
-            receiverArgType = argTypes[0].withoutFlag(NULLABLE_TYPE_FLAG)
-            return all(a.isSubtypeOf(p) for a, p in zip(argTypes[1:], self.parameterTypes[1:]))
-        else:
-            return all(a.isSubtypeOf(p) for a, p in zip(argTypes, self.parameterTypes))
+            argTypes = [argTypes[0].withoutFlag(NULLABLE_TYPE_FLAG)] + argTypes[1:]
+        paramTypes = [pt.substitute(typeBindings) for pt in self.parameterTypes]
+        return all(at.isSubtypeOf(pt) for at, pt in zip(argTypes, paramTypes))
 
     def isMethod(self):
         return hasattr(self, "clas")
@@ -125,6 +130,21 @@ class Function(IrDefinition):
         return not self.isMethod() or \
                self.isConstructor() or \
                hasattr(self.clas, "isPrimitive") and self.clas.isPrimitive
+
+    def mayOverride(self, other):
+        assert self.isMethod() and other.isMethod()
+        typeParametersAreCompatible = \
+            len(self.typeParameters) == len(other.typeParameters) and \
+            all(atp.isEquivalent(btp) for atp, btp in
+                zip(self.typeParameters, other.typeParameters))
+        parameterTypesAreCompatible = \
+            len(self.parameterTypes) == len(other.parameterTypes) and \
+            all(bt.isSubtypeOf(at) for at, bt in
+                zip(self.parameterTypes[1:], other.parameterTypes[1:]))
+        returnTypeIsCompatible = self.returnType.isSubtypeOf(other.returnType)
+        return typeParametersAreCompatible and \
+               parameterTypesAreCompatible and \
+               returnTypeIsCompatible
 
     def __repr__(self):
         return "Function(%s, %s, %s, %s, %s, %s, %s)" % \
@@ -207,11 +227,12 @@ class Class(IrDefinition):
         else:
             return None
 
-    def getMethod(self, name, argTypes=None):
+    def getMethod(self, name, typeArgs=None, argTypes=None):
+        assert (typeArgs is None) == (argTypes is None)
         candidate = None
         for m in self.methods:
             if m.name == name and \
-               (argTypes is None or m.canCallWith([ClassType(self)] + argTypes)):
+               (argTypes is None or m.canCallWith(type[ClassType(self)] + argTypes)):
                 assert candidate is None
                 candidate = m
         return candidate
@@ -268,6 +289,10 @@ class Class(IrDefinition):
 
 class TypeParameter(IrDefinition):
     propertyNames = ("name", "upperBound", "lowerBound", "flags")
+
+    def isEquivalent(self, other):
+        return self.upperBound == other.upperBound and \
+               self.lowerBound == other.lowerBound
 
     def __repr__(self):
         return "TypeParameter(%s, %s, %s, %s)" % \

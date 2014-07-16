@@ -54,7 +54,7 @@ class TestCompile(unittest.TestCase):
         if parameterTypes is None:
             parameterTypes = [v.type for v in variables if v.kind is PARAMETER]
         blockList = [BasicBlock(i, insts) for i, insts in enumerate(blocks)]
-        function = Function(name, retTy, None, parameterTypes, variables, blockList, attribs)
+        function = Function(name, retTy, [], parameterTypes, variables, blockList, attribs)
         return function
 
     def checkFunction(self, input, expected):
@@ -167,7 +167,7 @@ class TestCompile(unittest.TestCase):
                                          "  foo.x = false\n" +
                                          "  foo.y = 12\n")
         clasTy = ClassType(package.classes[0], ())
-        expected = Function("f", I64Type, None, [clasTy], [
+        expected = Function("f", I64Type, [], [clasTy], [
                                 Variable("foo", clasTy, PARAMETER, frozenset())],
                               [BasicBlock(0, [
                                 ldlocal(0),
@@ -228,7 +228,7 @@ class TestCompile(unittest.TestCase):
                                          "  foo.x += 12\n" +
                                          "  34")
         clasTy = ClassType(package.classes[0], ())
-        expected = Function("f", I64Type, None, [clasTy], [
+        expected = Function("f", I64Type, [], [clasTy], [
                               Variable("foo", clasTy, PARAMETER, frozenset())],
                             [BasicBlock(0, [
                               ldlocal(0),
@@ -249,7 +249,7 @@ class TestCompile(unittest.TestCase):
                                          "def f(foo: Foo) =\n" +
                                          "  foo.x += 12\n")
         clasTy = ClassType(package.classes[0], ())
-        expected = Function("f", I64Type, None, [clasTy], [
+        expected = Function("f", I64Type, [], [clasTy], [
                               Variable("foo", clasTy, PARAMETER, frozenset())],
                             [BasicBlock(0, [
                               ldlocal(0),
@@ -574,7 +574,7 @@ class TestCompile(unittest.TestCase):
     def testTryWithMatchAndFinally(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
-        typeofMethod = exnClass.getMethod("typeof", [])
+        typeofMethod = exnClass.getMethod("typeof")
         typeofMethodIndex = exnClass.getMethodIndex(typeofMethod)
         typeClass = getTypeClass()
         typeTy = ClassType(typeClass)

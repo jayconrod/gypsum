@@ -180,7 +180,7 @@ class TypeVisitor(AstNodeVisitor):
         return ty
 
     def visitAstVariableExpression(self, node):
-        ty = self.handlePossibleCall(self.scope(), node.name, node.id, None, [], False)
+        ty = self.handlePossibleCall(self.scope(), node.name, node.id, None, [], [], False)
         return ty
 
     def visitAstThisExpression(self, node):
@@ -220,23 +220,24 @@ class TypeVisitor(AstNodeVisitor):
     def visitAstPropertyExpression(self, node):
         receiverTy = self.visit(node.receiver)
         ty = self.handleMethodCall(node.propertyName, node.id,
-                                   receiverTy, [], mayAssign=False)
+                                   receiverTy, [], [], mayAssign=False)
         return ty
 
     def visitAstCallExpression(self, node):
+        typeArgs = map(self.visit, node.typeArguments)
         argTypes = map(self.visit, node.arguments)
         if isinstance(node.callee, AstVariableExpression):
             ty = self.handlePossibleCall(self.scope(), node.callee.name, node.id,
-                                         None, argTypes, False)
+                                         None, typeArgs, argTypes, False)
         elif isinstance(node.callee, AstPropertyExpression):
             receiverType = self.visit(node.callee.receiver)
             ty = self.handleMethodCall(node.callee.propertyName, node.id,
-                                       receiverType, argTypes, False)
+                                       receiverType, typeArgs, argTypes, False)
         elif isinstance(node.callee, AstThisExpression) or \
              isinstance(node.callee, AstSuperExpression):
             receiverType = self.visit(node.callee)
             self.handleMethodCall("$constructor", node.id,
-                                  receiverType, argTypes, False)
+                                  receiverType, typeArgs, argTypes, False)
             ty = UnitType
         else:
             # TODO: callable expression
@@ -245,7 +246,7 @@ class TypeVisitor(AstNodeVisitor):
 
     def visitAstUnaryExpression(self, node):
         receiverType = self.visit(node.expr)
-        ty = self.handleMethodCall(node.operator, node.id, receiverType, [], False)
+        ty = self.handleMethodCall(node.operator, node.id, receiverType, [], [], False)
         return ty
 
     def visitAstBinaryExpression(self, node):
@@ -258,7 +259,7 @@ class TypeVisitor(AstNodeVisitor):
                 raise TypeException("type error: expected condition types for logic operands")
             ty = BooleanType
         else:
-            ty = self.handleMethodCall(node.operator, node.id, leftTy, [rightTy], True)
+            ty = self.handleMethodCall(node.operator, node.id, leftTy, [], [rightTy], True)
         return ty
 
     def visitAstIfExpression(self, node):
@@ -432,12 +433,16 @@ class TypeVisitor(AstNodeVisitor):
         else:
             raise NotImplementedError
 
-    def handleMethodCall(self, name, useAstId, receiverType, argTypes, mayAssign):
+    def handleMethodCall(self, name, useAstId, receiverType, typeArgs, argTypes, mayAssign):
         irClass = getClassFromType(receiverType)
         scope = self.info.getScope(irClass)
-        return self.handlePossibleCall(scope, name, useAstId, receiverType, argTypes, mayAssign)
+        return self.handlePossibleCall(scope, name, useAstId,
+                                       receiverType, typeArgs, argTypes,
+                                       mayAssign)
 
-    def handlePossibleCall(self, scope, name, useAstId, receiverType, argTypes, mayAssign):
+    def handlePossibleCall(self, scope, name, useAstId,
+                           receiverType, typeArgs, argTypes,
+                           mayAssign):
         receiverIsExplicit = receiverType is not None
         if not receiverIsExplicit and len(self.receiverTypeStack) > 0:
             receiverType = self.receiverTypeStack[-1]   # may still be None
@@ -458,7 +463,8 @@ class TypeVisitor(AstNodeVisitor):
             useKind = USE_AS_CONSTRUCTOR
         for overload in nameInfo.iterOverloads():
             self.ensureParamTypeInfoForDefn(overload.irDefn)
-        defnInfo = nameInfo.findDefnInfoWithArgTypes(receiverType, receiverIsExplicit, argTypes)
+        defnInfo = nameInfo.findDefnInfoWithArgTypes(receiverType, receiverIsExplicit,
+                                                     typeArgs, argTypes)
         self.scope().use(defnInfo, useAstId, useKind)
         irDefn = defnInfo.irDefn
         self.ensureTypeInfoForDefn(irDefn)
@@ -466,7 +472,11 @@ class TypeVisitor(AstNodeVisitor):
             if irDefn.isConstructor():
                 return irDefn.parameterTypes[0]
             else:
-                return irDefn.returnType
+                assert len(typeArgs) == len(irDefn.typeParameters)
+                typeBindings = {param.id: arg for param, arg
+                                in zip(irDefn.typeParameters, typeArgs)}
+                ty = irDefn.returnType.substitute(typeBindings)
+                return ty
         else:
             assert isinstance(irDefn, Variable) or \
                    isinstance(irDefn, Field) or \

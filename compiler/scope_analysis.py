@@ -286,15 +286,6 @@ class NameInfo(object):
     def didResolveOverrides(self):
         return self.overrides is not None
 
-    @staticmethod
-    def mayOverride(a, b):
-        assert isinstance(a, Function) and isinstance(b, Function)
-        assert a.isMethod() and b.isMethod()
-        return len(a.parameterTypes) == len(b.parameterTypes) and \
-               all(bp.isSubtypeOf(ap)
-                   for ap, bp in zip(a.parameterTypes[1:], b.parameterTypes[1:])) and \
-               a.returnType.isSubtypeOf(b.returnType)
-
     def resolveOverrides(self):
         """Decides which definitions are overloads and which are overrides.
 
@@ -336,7 +327,7 @@ class NameInfo(object):
                 aIrDefn = aDefnInfo.irDefn
                 bIrDefn = bDefnInfo.irDefn
                 assert isinstance(aIrDefn, Function) and isinstance(bIrDefn, Function)
-                if self.mayOverride(aIrDefn, bIrDefn):
+                if aIrDefn.mayOverride(bIrDefn):
                     # Check that nothing else is already overriding this function.
                     if bIrDefn.id in self.overrides:
                         raise TypeException("multiple definitions may override: %s" %
@@ -355,11 +346,11 @@ class NameInfo(object):
                     bDepth = bDefnInfo.inheritanceDepth
                     if bDepth > overrideDepth:
                         break
-                    if self.mayOverride(aDefnInfo.irDefn, bDefnInfo.irDefn):
+                    if aDefnInfo.irDefn.mayOverride(bDefnInfo.irDefn):
                         raise TypeException("may override multiple definitions: %s" %
                                             self.name)
 
-    def findDefnInfoWithArgTypes(self, receiverType, receiverIsExplicit, argTypes):
+    def findDefnInfoWithArgTypes(self, receiverType, receiverIsExplicit, typeArgs, argTypes):
         """Determines which overloaded or overriding function should be called, based on
         argument types.
 
@@ -373,19 +364,20 @@ class NameInfo(object):
             if isinstance(irDefn, Function) and irDefn.id in self.overrides:
                 continue
 
-            isNonFunction = not isinstance(irDefn, Function) and len(argTypes) == 0
+            isNonFunction = not isinstance(irDefn, Function) and \
+                            len(typeArgs) == 0 and len(argTypes) == 0
             isFunction = not receiverIsExplicit and \
                          isinstance(irDefn, Function) and \
                          not irDefn.isMethod() and \
-                         irDefn.canCallWith(argTypes)
+                         irDefn.canCallWith(typeArgs, argTypes)
             isImplicitMethod = not receiverIsExplicit and \
                                isinstance(irDefn, Function) and \
                                irDefn.isMethod() and \
-                               irDefn.canCallWith([receiverType] + argTypes)
+                               irDefn.canCallWith(typeArgs, [receiverType] + argTypes)
             isExplicitMethod = receiverIsExplicit and \
                                isinstance(irDefn, Function) and \
                                irDefn.isMethod() and \
-                               irDefn.canCallWith([receiverType] + argTypes)
+                               irDefn.canCallWith(typeArgs, [receiverType] + argTypes)
 
             if isNonFunction or \
                isFunction or \
@@ -487,7 +479,7 @@ class Scope(AstNodeVisitor):
         irDefn = Class(astDefn.name, None, None, None, [], [], [], flags)
         self.info.package.addClass(irDefn)
 
-        irInitializer = Function("$initializer", None, None, None, [], None, frozenset())
+        irInitializer = Function("$initializer", None, [], None, [], None, frozenset())
         irInitializer.astDefn = astDefn
         self.makeMethod(irInitializer, irDefn)
         self.info.package.addFunction(irInitializer)
@@ -496,7 +488,7 @@ class Scope(AstNodeVisitor):
         if astDefn.hasConstructors():
             irDefaultCtor = None
         else:
-            irDefaultCtor = Function("$constructor", None, None, None, [], None, frozenset())
+            irDefaultCtor = Function("$constructor", None, [], None, [], None, frozenset())
             irDefaultCtor.astDefn = astDefn
             self.makeMethod(irDefaultCtor, irDefn)
             self.info.package.addFunction(irDefaultCtor)
