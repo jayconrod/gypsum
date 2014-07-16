@@ -605,6 +605,22 @@ class TestTypeAnalysis(unittest.TestCase):
                  "  def f = 56"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
+    @unittest.skip("compiler bug")
+    def testBrokenOverride(self):
+        # This test exposes a bug in the compiler. Before we resolve overloads/overrides, we
+        # call ensureParamTypeInfoForDefn, which only processes the body of possible target
+        # functions. Maybe we should call ensureTypeInfo. Or we should require functions
+        # with the `override` keyword to have explicit types. Or we should assume `override`
+        # functions have the same type if not specified.
+        source = "class A\n" + \
+                 "class B <: A\n" + \
+                 "def test(d: D) = d.f\n" + \
+                 "class C\n" + \
+                 "  def f: B = B\n" + \
+                 "class D\n" + \
+                 "  def f = A"
+        self.analyzeFromSource(source)
+
     def testAmbiguousOverload(self):
         source = "class Foo\n" + \
                  "  def f = 12\n" + \
