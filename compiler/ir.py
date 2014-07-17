@@ -82,16 +82,21 @@ class Package(object):
                 return isinstance(defn, Function) and \
                        hasattr(defn, "clas") and \
                        defn.clas is value
+            elif key == "pred":
+                return value(defn)
             else:
                 return getattr(defn, key) == value
         def matchAll(defn):
-            return all(getattr(defn, k) == v for k, v in kwargs.iteritems())
+            return all(matchItem(defn, k, v) for k, v in kwargs.iteritems())
         return (d for d in defns if matchAll(d))
 
 
 class IrDefinition(Data):
     def isBuiltin(self):
         return self.id < 0
+
+    def isTypeDefn(self):
+        return False
 
 
 class Global(IrDefinition):
@@ -265,6 +270,9 @@ class Class(IrDefinition):
                 return i
         raise KeyError("method does not belong to this class")
 
+    def isTypeDefn(self):
+        return True
+
     def __repr__(self):
         return "Class(%s, %s, %s, %s, %s, %s, %s, %s)" % \
             (self.name, repr(self.typeParameters), repr(self.supertypes),
@@ -293,6 +301,9 @@ class TypeParameter(IrDefinition):
         return self.upperBound == other.upperBound and \
                self.lowerBound == other.lowerBound
 
+    def isTypeDefn(self):
+        return True
+
     def __repr__(self):
         return "TypeParameter(%s, %s, %s, %s)" % \
             (self.name, self.upperBound, self.lowerBound, self.flags)
@@ -306,6 +317,5 @@ class TypeParameter(IrDefinition):
 LOCAL = "local"
 PARAMETER = "parameter"
 
-TypeParameter = Data.makeClass("TypeParameter", ("name", "upperBound", "lowerBound", "flags"))
 Variable = Data.makeClass("Variable", ("name", "type", "kind", "flags"))
 Field = Data.makeClass("Field", ("name", "type", "flags"))

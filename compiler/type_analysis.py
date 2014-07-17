@@ -108,6 +108,18 @@ class TypeVisitor(AstNodeVisitor):
     def visitAstPrimaryConstructorDefinition(self, node):
         self.handleFunctionCommon(node, None, None)
 
+    def visitAstTypeParameter(self, node):
+        self.scope().define(node.name)
+        irTypeParam = self.info.getDefnInfo(node).irDefn
+        if node.upperBound is not None:
+            irTypeParam.upperBound = self.visit(node.upperBound)
+        else:
+            irTypeParam.upperBound = getRootClassType()
+        if node.lowerBound is not None:
+            irTypeParam.lowerBound = self.visit(node.lowerBound)
+        else:
+            irTypeParam.lowerBound = getNothingClassType()
+
     def visitAstParameter(self, node):
         ty = self.visit(node.pattern, None)
         if self.info.hasDefnInfo(node):
@@ -165,15 +177,22 @@ class TypeVisitor(AstNodeVisitor):
             else:
                 raise NotImplementedError
         nameInfo = self.scope().lookup(node.name, localOnly=False, mayBeAssignment=False)
-        if nameInfo.isOverloaded() or not isinstance(nameInfo.getDefnInfo().irDefn, Class):
+        if nameInfo.isOverloaded() or not nameInfo.getDefnInfo().irDefn.isTypeDefn():
             raise TypeException("%s: does not refer to a type" % node.name)
         defnInfo = nameInfo.getDefnInfo()
         self.scope().use(defnInfo, node.id, USE_AS_TYPE)
 
-        irClass = nameInfo.getDefnInfo().irDefn
+        irDefn = nameInfo.getDefnInfo().irDefn
         flags = frozenset(astFlagToIrFlag(flag) for flag in node.flags)
-        classTy = ClassType(irClass, (), flags)
-        return classTy
+        if isinstance(irDefn, Class):
+            ty = ClassType(irDefn, (), flags)
+        elif isinstance(irDefn, TypeParameter):
+            if flags != frozenset():
+                raise TypeException("invalid flags for variable type")
+            ty = VariableType(irDefn)
+        else:
+            raise NotImplementedError
+        return ty
 
     def visitAstLiteralExpression(self, node):
         ty = self.visit(node.literal)
@@ -407,6 +426,9 @@ class TypeVisitor(AstNodeVisitor):
         astDefn = irDefn.astDefn
         if self.info.hasScope(astDefn):
             self.scopeStack.append(self.info.getScope(astDefn))
+        if not isinstance(astDefn, AstPrimaryConstructorDefinition):
+            for astTypeParam in irDefn.astDefn.typeParameters:
+                self.visit(astTypeParam)
         irDefn.parameterTypes = []
         if irDefn.isMethod():
             thisType = ClassType(irDefn.clas, ())

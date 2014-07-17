@@ -230,6 +230,8 @@ class VariableType(ObjectType):
 def getClassFromType(ty):
     if isinstance(ty, ClassType):
         return ty.clas
+    elif isinstance(ty, VariableType):
+        return getClassFromType(ty.typeParameter.upperBound)
     else:
         assert ty.isPrimitive()
         return builtins.getBuiltinClassFromType(ty)

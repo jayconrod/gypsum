@@ -640,6 +640,50 @@ class TestTypeAnalysis(unittest.TestCase):
         self.assertEquals(I32Type, info.getType(statements[0]))
         self.assertEquals(F32Type, info.getType(statements[1]))
 
+    def testOverloadWithTypeParameter(self):
+        source = "def f[static T] = {}\n" + \
+                 "def f = {}\n" + \
+                 "def g = f[Object]"
+        info = self.analyzeFromSource(source)
+        use = info.getUseInfo(info.ast.definitions[2].body)
+        f = info.package.findFunction(name="f", pred=lambda fn: len(fn.typeParameters) == 1)
+        self.assertIs(use.defnInfo.irDefn, f)
+
+    def testOverloadOnTypeParameterBounds(self):
+        source = "class A\n" + \
+                 "def f[static T] = {}\n" + \
+                 "def f[static T <: A] = {}\n" + \
+                 "def g = f[Object]"
+        info = self.analyzeFromSource(source)
+        use = info.getUseInfo(info.ast.definitions[3].body)
+        A = info.package.findClass(name="A")
+        pred = lambda fn: len(fn.typeParameters) == 1 and \
+                          fn.typeParameters[0].upperBound.clas is getRootClass()
+        f = info.package.findFunction(name="f", pred=pred)
+        self.assertIs(use.defnInfo.irDefn, f)
+
+    def testIdentityTypeParameter(self):
+        source = "def id[static T](o: T) = o\n" + \
+                 "def f(o: String) = id[String](o)\n"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(getStringType(), f.returnType)
+
+    def testTypeParametersDependInOrder(self):
+        source = "def f[static S, static T <: S, static U <: T] = {}"
+        info = self.analyzeFromSource(source)
+        # pass if no exception
+        source = "def f[static U <: T, static T <: S, static S] = {}"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
+    def testTypeParameterLookup(self):
+        source = "class C\n" + \
+                 "  var x: i64\n" + \
+                 "def f[static T <: C](o: T) = o.x"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(I64Type, f.returnType)
+
     # Tests for usage
     def testUseClassBeforeDefinition(self):
         source = "def f = C\n" + \
