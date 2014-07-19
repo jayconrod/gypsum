@@ -38,6 +38,7 @@ Handle<Function> Function::allocate(Heap* heap, word_t instructionsSize) {
 
 
 void Function::initialize(u32 flags,
+                          TaggedArray* typeParameters,
                           BlockArray* types,
                           word_t localsSize,
                           const vector<u8>& instructions,
@@ -45,6 +46,7 @@ void Function::initialize(u32 flags,
                           Package* package,
                           StackPointerMap* stackPointerMap) {
   setFlags(flags);
+  setTypeParameters(typeParameters);
   setTypes(types);
   setLocalsSize(localsSize);
   setInstructionsSize(instructions.size());

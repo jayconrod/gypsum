@@ -10,7 +10,9 @@
 #include "function.h"
 #include "bitmap-inl.h"
 #include "handle-inl.h"
+#include "package-inl.h"
 #include "type-inl.h"
+#include "type-parameter.h"
 
 namespace codeswitch {
 namespace internal {
@@ -41,6 +43,23 @@ BuiltinId Function::builtinId() {
 void Function::setBuiltinId(BuiltinId id) {
   auto encoded = -static_cast<i8>(id);
   mem<i8>(this, kBuiltinIdOffset) = encoded;
+}
+
+
+word_t Function::typeParameterCount() {
+  return typeParameters()->length();
+}
+
+
+TypeParameter* Function::typeParameter(word_t index) {
+  Tagged<Block> paramTag = typeParameters()->get(index);
+  Block* rawParam = nullptr;
+  if (paramTag.isPointer()) {
+    rawParam = TypeParameter::cast(paramTag.getPointer());
+  } else {
+    rawParam = package()->typeParameters()->get(paramTag.getNumber());
+  }
+  return TypeParameter::cast(rawParam);
 }
 
 

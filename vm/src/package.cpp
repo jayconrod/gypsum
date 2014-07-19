@@ -32,6 +32,9 @@ static Handle<String> readString(VM* vm, istream& stream);
 static Handle<Function> readFunction(VM* vm, istream& stream, Handle<Package> package);
 static void readClass(VM* vm, istream& stream, Handle<Package> package, Handle<Class> clas);
 static Handle<Field> readField(VM* vm, istream& stream, Handle<BlockArray> classes);
+static Handle<TypeParameter> readTypeParameter(VM* vm,
+                                               istream& stream,
+                                               Handle<BlockArray> classes);
 static Handle<Type> readType(VM* vm, istream& stream, Handle<BlockArray> classes);
 template <typename T>
 static T readValue(istream& stream);
@@ -101,7 +104,7 @@ Handle<Package> Package::loadFromStream(VM* vm, istream& stream) {
       throw Error("package file is corrupt");
     auto majorVersion = readValue<u16>(stream);
     auto minorVersion = readValue<u16>(stream);
-    if (majorVersion != 0 || minorVersion != 4)
+    if (majorVersion != 0 || minorVersion != 5)
       throw Error("package file has wrong format version");
 
     package = Package::allocate(vm->heap());
@@ -128,6 +131,11 @@ Handle<Package> Package::loadFromStream(VM* vm, istream& stream) {
     }
     package->setClasses(*classArray);
 
+    auto typeParameterCount = readValue<word_t>(stream);
+    auto typeParametersArray = BlockArray::allocate(vm->heap(), typeParameterCount,
+                                                    false, nullptr);
+    package->setTypeParameters(*typeParametersArray);
+
     auto entryFunctionIndex = readValue<word_t>(stream);
     package->setEntryFunctionIndex(entryFunctionIndex);
 
@@ -142,6 +150,10 @@ Handle<Package> Package::loadFromStream(VM* vm, istream& stream) {
     }
     for (word_t i = 0; i < classCount; i++) {
       readClass(vm, stream, package, Handle<Class>(Class::cast(classArray->get(i))));
+    }
+    for (word_t i = 0; i < typeParameterCount; i++) {
+      auto typeParameter = readTypeParameter(vm, stream, classArray);
+      typeParametersArray->set(i, *typeParameter);
     }
   } catch (istream::failure exn) {
     throw Error("error reading package");
@@ -163,6 +175,14 @@ static Handle<Function> readFunction(VM* vm, istream& stream, Handle<Package> pa
   auto classes = handle(package->classes());
   u32 flags;
   stream.read(reinterpret_cast<char*>(&flags), sizeof(flags));
+
+  auto typeParameterCount = readWordVbn(stream);
+  auto typeParameters = TaggedArray::allocate(vm->heap(), typeParameterCount);
+  for (word_t i = 0; i < typeParameterCount; i++) {
+    auto id = readWordVbn(stream);
+    typeParameters->set(i, Tagged<Block>(id));
+  }
+
   auto returnType = readType(vm, stream, classes);
   auto parameterCount = readWordVbn(stream);
   auto types = BlockArray::allocate(vm->heap(), parameterCount + 1);
@@ -184,7 +204,7 @@ static Handle<Function> readFunction(VM* vm, istream& stream, Handle<Package> pa
   }
 
   auto function = Function::allocate(vm->heap(), instructionsSize);
-  function->initialize(flags, *types, localsSize, instructions,
+  function->initialize(flags, *typeParameters, *types, localsSize, instructions,
                        *blockOffsets, *package, nullptr);
   return function;
 }
@@ -229,6 +249,19 @@ static Handle<Field> readField(VM* vm, istream& stream, Handle<BlockArray> class
   auto field = Field::allocate(vm->heap());
   field->initialize(flags, *type);
   return field;
+}
+
+
+static Handle<TypeParameter> readTypeParameter(VM* vm,
+                                               istream& stream,
+                                               Handle<BlockArray> classes) {
+  u32 flags;
+  stream.read(reinterpret_cast<char*>(&flags), sizeof(flags));
+  auto upperBound = readType(vm, stream, classes);
+  auto lowerBound = readType(vm, stream, classes);
+  auto typeParam = TypeParameter::allocate(vm->heap());
+  typeParam->initialize(flags, *upperBound, *lowerBound);
+  return typeParam;
 }
 
 

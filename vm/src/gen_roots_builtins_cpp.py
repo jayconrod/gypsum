@@ -101,8 +101,8 @@ def initFunction(out, functionData):
     out.write("    auto types = BlockArray::tryAllocate(heap, %s);\n" % len(typeNames))
     for i, name in enumerate(typeNames):
         out.write("    types->set(%d, %s);\n" % (i, getTypeFromName(name)))
-    out.write("    function->initialize(0, types, 0, emptyInstructions, nullptr, " +
-              "nullptr, nullptr);\n")
+    out.write("    function->initialize(0, emptyTaggedArray(), types, 0, " +
+              "emptyInstructions, nullptr, nullptr, nullptr);\n")
     out.write("    function->setBuiltinId(%s);\n" % functionData["id"])
     out.write("  }")
 

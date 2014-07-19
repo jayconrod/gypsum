@@ -143,7 +143,7 @@ static Package* createTestPackage(Heap* heap) {
   package->setFlags(0);
   auto functions = BlockArray::tryAllocate(heap, 1);
   auto function = Function::tryAllocate(heap, ARRAY_LENGTH(instList));
-  function->initialize(0, *typeList, 2 * kWordSize, instList,
+  function->initialize(0, roots->emptyTaggedArray(), *typeList, 2 * kWordSize, instList,
                        blockOffsetList, package, nullptr);
   functions->set(0, function);
   package->setFunctions(functions);
@@ -172,6 +172,7 @@ TEST(BlockVisitorFunction) {
   Heap* heap = vm.heap();
   Package* package = createTestPackage(heap);
   Function* function = package->getFunction(0);
+  TaggedArray* typeParameters = function->typeParameters();
   BlockArray* types = function->types();
   word_t localsSize = function->localsSize();
   word_t instructionsSize = function->instructionsSize();
@@ -181,6 +182,7 @@ TEST(BlockVisitorFunction) {
   word_t expected[] = {
       FUNCTION_BLOCK_TYPE << 2,
       0,
+      reinterpret_cast<word_t>(typeParameters) + 4,
       reinterpret_cast<word_t>(types) + 4,
       localsSize,
       instructionsSize,

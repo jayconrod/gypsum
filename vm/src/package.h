@@ -19,6 +19,7 @@ class BlockArray;
 class Function;
 class Heap;
 class String;
+class TypeParameter;
 
 class Package: public Block {
  public:
@@ -39,6 +40,11 @@ class Package: public Block {
   inline Function* getFunction(word_t index);
   DEFINE_INL_PTR_ACCESSORS(BlockArray*, classes, setClasses, kClassesOffset)
   inline Class* getClass(word_t index);
+  DEFINE_INL_PTR_ACCESSORS(BlockArray*,
+                           typeParameters,
+                           setTypeParameters,
+                           kTypeParametersOffset)
+  inline TypeParameter* getTypeParameter(word_t index);
   DEFINE_INL_ACCESSORS(word_t, entryFunctionIndex, setEntryFunctionIndex,
                        kEntryFunctionIndexOffset)
   inline Function* entryFunction();
@@ -48,10 +54,11 @@ class Package: public Block {
   static const word_t kStringsOffset = kFlagsOffset + sizeof(u64);
   static const word_t kFunctionsOffset = kStringsOffset + kWordSize;
   static const word_t kClassesOffset = kFunctionsOffset + kWordSize;
-  static const word_t kEntryFunctionIndexOffset = kClassesOffset + kWordSize;
+  static const word_t kTypeParametersOffset = kClassesOffset + kWordSize;
+  static const word_t kEntryFunctionIndexOffset = kTypeParametersOffset + kWordSize;
   static const word_t kSize = kEntryFunctionIndexOffset + kWordSize;
 
-  static const word_t kPointerMap = 0xe;
+  static const word_t kPointerMap = 0x3c;
 };
 
 }

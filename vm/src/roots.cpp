@@ -55,6 +55,12 @@ void Roots::initialize(Heap* heap) {
   fieldMeta->objectPointerMap().setWord(0, Field::kPointerMap);
   basicRoots_[FIELD_META_ROOT_INDEX] = fieldMeta;
 
+  Meta* typeParameterMeta = Meta::tryAllocate(heap, 0, TypeParameter::kSize, 0);
+  typeParameterMeta->initialize(TYPE_PARAMETER_BLOCK_TYPE, nullptr, TypeParameter::kSize, 0);
+  typeParameterMeta->setHasPointers(true);
+  typeParameterMeta->objectPointerMap().setWord(0, TypeParameter::kPointerMap);
+  basicRoots_[TYPE_PARAMETER_META_ROOT_INDEX] = typeParameterMeta;
+
   Meta* i8ArrayMeta = Meta::tryAllocate(heap, 0, I8Array::kHeaderSize, sizeof(i8));
   i8ArrayMeta->initialize(I8_ARRAY_BLOCK_TYPE, nullptr, I8Array::kHeaderSize, sizeof(i8));
   basicRoots_[I8_ARRAY_META_ROOT_INDEX] = i8ArrayMeta;
