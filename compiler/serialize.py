@@ -43,16 +43,19 @@ class Serializer(object):
             self.writeFunction(f)
         for c in self.package.classes:
             self.writeClass(c)
+        for p in self.package.typeParameters:
+            self.writeTypeParameter(p)
 
     def writeHeader(self):
-        self.outFile.write(struct.pack("<Ihhqqqqq",
+        self.outFile.write(struct.pack("<Ihhqqqqqq",
                                        0x676b7073,   # magic number
                                        0,            # major version
-                                       4,            # minor version
+                                       5,            # minor version
                                        0,            # flags
                                        len(self.package.strings),
                                        len(self.package.functions),
                                        len(self.package.classes),
+                                       len(self.package.typeParameters),
                                        self.package.entryFunction))
 
     def rewrite(self, format, value, offset, whence=os.SEEK_SET):
@@ -70,6 +73,7 @@ class Serializer(object):
 
     def writeFunction(self, function):
         self.writeFlags(function.flags)
+        self.writeList(lambda p: self.writeVbn(p.id), function.typeParameters)
         self.writeType(function.returnType)
         self.writeVbn(len(function.parameterTypes))
         for ty in function.parameterTypes:
@@ -118,6 +122,11 @@ class Serializer(object):
         self.writeFlags(field.flags)
         self.writeType(field.type)
 
+    def writeTypeParameter(self, typeParameter):
+        self.writeFlags(typeParameter.flags)
+        self.writeType(typeParameter.upperBound)
+        self.writeType(typeParameter.lowerBound)
+
     def writeType(self, type):
         flags = 0
         if NULLABLE_TYPE_FLAG in type.flags:
@@ -130,6 +139,11 @@ class Serializer(object):
     def writeFlags(self, flags):
         bits = flagSetToFlagBits(flags)
         self.outFile.write(struct.pack("<I", bits))
+
+    def writeList(self, writer, list):
+        self.writeVbn(len(list))
+        for elem in list:
+            writer(elem)
 
     def writeVbn(self, value):
         buf = bytearray()
