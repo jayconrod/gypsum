@@ -16,12 +16,11 @@ namespace codeswitch {
 namespace internal {
 
 word_t Block::sizeOfBlock() {
+  word_t size = kNotFound;
   if (!meta()->hasCustomSize()) {
     word_t length = meta()->hasElements() ? elementsLength() : 0;
-    word_t size = meta()->objectSize() + length * meta()->elementSize();
-    return size;
+    size = meta()->objectSize() + length * meta()->elementSize();
   } else {
-    word_t size;
     switch (meta()->type()) {
       case META_BLOCK_TYPE:
         size = Meta::cast(this)->sizeOfMeta();
@@ -31,11 +30,10 @@ word_t Block::sizeOfBlock() {
         break;
       default:
         UNREACHABLE();
-        size = kNotFound;
     }
-    return size;
   }
-  return kNotFound;
+  ASSERT(size != kNotFound && size > 0);
+  return size;
 }
 
 

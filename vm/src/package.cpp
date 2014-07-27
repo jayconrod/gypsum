@@ -31,11 +31,12 @@ namespace internal {
 static Handle<String> readString(VM* vm, istream& stream);
 static Handle<Function> readFunction(VM* vm, istream& stream, Handle<Package> package);
 static void readClass(VM* vm, istream& stream, Handle<Package> package, Handle<Class> clas);
-static Handle<Field> readField(VM* vm, istream& stream, Handle<BlockArray> classes);
-static Handle<TypeParameter> readTypeParameter(VM* vm,
-                                               istream& stream,
-                                               Handle<BlockArray> classes);
-static Handle<Type> readType(VM* vm, istream& stream, Handle<BlockArray> classes);
+static Handle<Field> readField(VM* vm, istream& stream, Handle<Package> package);
+static void readTypeParameter(VM* vm,
+                              istream& stream,
+                              Handle<Package> package,
+                              Handle<TypeParameter> param);
+static Handle<Type> readType(VM* vm, istream& stream, Handle<Package> package);
 template <typename T>
 static T readValue(istream& stream);
 static vector<u8> readData(istream& stream, word_t size);
@@ -134,6 +135,11 @@ Handle<Package> Package::loadFromStream(VM* vm, istream& stream) {
     auto typeParameterCount = readValue<word_t>(stream);
     auto typeParametersArray = BlockArray::allocate(vm->heap(), typeParameterCount,
                                                     false, nullptr);
+    for (word_t i = 0; i < typeParameterCount; i++) {
+      // Type parameters are also pre-allocated.
+      auto param = TypeParameter::allocate(vm->heap());
+      typeParametersArray->set(i, *param);
+    }
     package->setTypeParameters(*typeParametersArray);
 
     auto entryFunctionIndex = readValue<word_t>(stream);
@@ -149,11 +155,12 @@ Handle<Package> Package::loadFromStream(VM* vm, istream& stream) {
       functionArray->set(i, *function);
     }
     for (word_t i = 0; i < classCount; i++) {
-      readClass(vm, stream, package, Handle<Class>(Class::cast(classArray->get(i))));
+      auto clas = handle(Class::cast(classArray->get(i)));
+      readClass(vm, stream, package, clas);
     }
     for (word_t i = 0; i < typeParameterCount; i++) {
-      auto typeParameter = readTypeParameter(vm, stream, classArray);
-      typeParametersArray->set(i, *typeParameter);
+      auto param = handle(TypeParameter::cast(typeParametersArray->get(i)));
+      readTypeParameter(vm, stream, package, param);
     }
   } catch (istream::failure exn) {
     throw Error("error reading package");
@@ -183,12 +190,12 @@ static Handle<Function> readFunction(VM* vm, istream& stream, Handle<Package> pa
     typeParameters->set(i, Tagged<Block>(id));
   }
 
-  auto returnType = readType(vm, stream, classes);
+  auto returnType = readType(vm, stream, package);
   auto parameterCount = readWordVbn(stream);
   auto types = BlockArray::allocate(vm->heap(), parameterCount + 1);
   types->set(0, *returnType);
   for (word_t i = 0; i < parameterCount; i++) {
-    types->set(i + 1, *readType(vm, stream, classes));
+    types->set(i + 1, *readType(vm, stream, package));
   }
 
   auto localsSize = readWordVbn(stream);
@@ -214,12 +221,12 @@ static void readClass(VM* vm, istream& stream, Handle<Package> package, Handle<C
   auto classes = handle(package->classes());
   u32 flags;
   stream.read(reinterpret_cast<char*>(&flags), sizeof(flags));
-  auto supertype = readType(vm, stream, classes);
+  auto supertype = readType(vm, stream, package);
 
   auto fieldCount = readWordVbn(stream);
   auto fields = BlockArray::allocate(vm->heap(), fieldCount);
   for (word_t i = 0; i < fieldCount; i++) {
-    auto field = readField(vm, stream, classes);
+    auto field = readField(vm, stream, package);
     fields->set(i, *field);
   }
 
@@ -242,49 +249,69 @@ static void readClass(VM* vm, istream& stream, Handle<Package> package, Handle<C
 }
 
 
-static Handle<Field> readField(VM* vm, istream& stream, Handle<BlockArray> classes) {
+static Handle<Field> readField(VM* vm, istream& stream, Handle<Package> package) {
   u32 flags;
   stream.read(reinterpret_cast<char*>(&flags), sizeof(flags));
-  auto type = readType(vm, stream, classes);
+  auto type = readType(vm, stream, package);
   auto field = Field::allocate(vm->heap());
   field->initialize(flags, *type);
   return field;
 }
 
 
-static Handle<TypeParameter> readTypeParameter(VM* vm,
-                                               istream& stream,
-                                               Handle<BlockArray> classes) {
+static void readTypeParameter(VM* vm,
+                              istream& stream,
+                              Handle<Package> package,
+                              Handle<TypeParameter> param) {
   u32 flags;
   stream.read(reinterpret_cast<char*>(&flags), sizeof(flags));
-  auto upperBound = readType(vm, stream, classes);
-  auto lowerBound = readType(vm, stream, classes);
-  auto typeParam = TypeParameter::allocate(vm->heap());
-  typeParam->initialize(flags, *upperBound, *lowerBound);
-  return typeParam;
+  auto upperBound = readType(vm, stream, package);
+  auto lowerBound = readType(vm, stream, package);
+  param->initialize(flags, *upperBound, *lowerBound);
 }
 
 
-static Handle<Type> readType(VM* vm, istream& stream, Handle<BlockArray> classes) {
+static Handle<Type> readType(VM* vm,
+                             istream& stream,
+                             Handle<Package> package) {
   auto heap = vm->heap();
-  auto flags = static_cast<Type::Flags>(readWordVbn(stream));
-  if (flags & ~Type::kFlagsMask)
+  auto bits = readWordVbn(stream);
+  auto form = static_cast<Type::Form>(bits & Type::kFormMask);
+  auto flags = static_cast<Type::Flags>(bits >> Type::kFlagsShift);
+  auto isPrimitive = Type::FIRST_PRIMITIVE_TYPE <= form && form <= Type::LAST_PRIMITIVE_TYPE;
+  if (form > Type::LAST_TYPE ||
+      (flags & ~Type::kFlagsMask) != 0 ||
+      (isPrimitive && flags != Type::NO_FLAGS)) {
     throw Error("invalid type flags");
-  auto code = readVbn(stream);
-  if (flags == Type::NO_FLAGS && isBuiltinId(code)) {
-    return handle(vm->roots()->getBuiltinType(static_cast<BuiltinId>(code)));
-  } else if (flags == Type::NULLABLE_FLAG && code == BUILTIN_NOTHING_CLASS_ID) {
-    return handle(vm->roots()->nullType());
+  }
+
+  if (isPrimitive) {
+    return handle(Type::primitiveTypeFromForm(vm->roots(), form));
   } else {
-    Handle<Class> clas;
-    if (isBuiltinId(code)) {
-      clas = handle(vm->roots()->getBuiltinClass(static_cast<BuiltinId>(code)));
+    auto code = readVbn(stream);
+    if (form == Type::CLASS_TYPE &&
+        flags == Type::NULLABLE_FLAG &&
+        code == BUILTIN_NOTHING_CLASS_ID) {
+      return handle(vm->roots()->nullType());
+    } else if (form == Type::CLASS_TYPE) {
+      Handle<Class> clas;
+      if (isBuiltinId(code)) {
+        clas = handle(vm->roots()->getBuiltinClass(static_cast<BuiltinId>(code)));
+      } else {
+        clas = handle(package->getClass(code));
+      }
+      auto ty = Type::allocate(heap, 1);
+      ty->initialize(*clas, flags);
+      return ty;
     } else {
-      clas = handle(Class::cast(classes->get(code)));
+      ASSERT(form == Type::VARIABLE_TYPE);
+      if (isBuiltinId(code))
+        throw Error("no builtin type parameters");
+      auto param = handle(package->getTypeParameter(code));
+      auto ty = Type::allocate(heap, 1);
+      ty->initialize(*param, flags);
+      return ty;
     }
-    auto ty = Type::allocate(heap, 1);
-    ty->initialize(*clas, flags);
-    return ty;
   }
 }
 

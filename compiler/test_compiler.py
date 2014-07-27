@@ -48,13 +48,17 @@ class TestCompile(unittest.TestCase):
             return self.compileFromSource(input)
 
     def makeSimpleFunction(self, name, retTy, blocks,
-                           parameterTypes=None, variables=None, attribs=frozenset()):
+                           typeParameters=None, parameterTypes=None,
+                           variables=None, attribs=frozenset()):
         if variables is None:
             variables = []
+        if typeParameters is None:
+            typeParameters = []
         if parameterTypes is None:
             parameterTypes = [v.type for v in variables if v.kind is PARAMETER]
         blockList = [BasicBlock(i, insts) for i, insts in enumerate(blocks)]
-        function = Function(name, retTy, [], parameterTypes, variables, blockList, attribs)
+        function = Function(name, retTy, typeParameters, parameterTypes,
+                            variables, blockList, attribs)
         return function
 
     def checkFunction(self, input, expected):
@@ -1107,6 +1111,42 @@ class TestCompile(unittest.TestCase):
                                unit(),
                                callg(1, BUILTIN_UNIT_TO_STRING_ID),
                                ret()]]))
+
+    def testCallWithStaticClassTypeArgument(self):
+        source = "class C\n" + \
+                 "def id[static T](x: T) = x\n" + \
+                 "def f(o: C) = id[C](o)"
+        package = self.compileFromSource(source)
+        C = package.findClass(name="C")
+        Cty = ClassType(C)
+        id = package.findFunction(name="id")
+        f = package.findFunction(name="f")
+        expected = self.makeSimpleFunction("f", Cty, [[
+                       ldlocal(0),
+                       tycs(C.id),
+                       callg(1, id.id),
+                       ret()]],
+                     variables=[Variable("o", Cty, PARAMETER, frozenset())],
+                     parameterTypes=[Cty])
+        self.assertEquals(expected, f)
+
+    def testCallWithStaticVariableTypeArgument(self):
+        source = "def id-outer[static TO](x: TO) = id-inner[TO](x)\n" + \
+                 "def id-inner[static TI](x: TI) = x"
+        package = self.compileFromSource(source)
+        T = package.findTypeParameter(name="TO")
+        Tty = VariableType(T)
+        inner = package.findFunction(name="id-inner")
+        outer = package.findFunction(name="id-outer")
+        expected = self.makeSimpleFunction("id-outer", Tty, [[
+            ldlocal(0),
+            tyvs(T.id),
+            callg(1, inner.id),
+            ret()]],
+          variables=[Variable("x", Tty, PARAMETER, frozenset())],
+          typeParameters=[T],
+          parameterTypes=[Tty])
+        self.assertEquals(expected, outer)
 
     def testBlockOrdering(self):
         sys.setrecursionlimit(2000)

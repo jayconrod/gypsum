@@ -22,6 +22,7 @@ Meta* Roots::getMetaForBlockType(int type) {
     case FUNCTION_BLOCK_TYPE: return functionMeta();
     case CLASS_BLOCK_TYPE: return classMeta();
     case FIELD_BLOCK_TYPE: return fieldMeta();
+    case TYPE_PARAMETER_BLOCK_TYPE: return typeParameterMeta();
     case I8_ARRAY_BLOCK_TYPE: return i8ArrayMeta();
     case I32_ARRAY_BLOCK_TYPE: return i32ArrayMeta();
     case I64_ARRAY_BLOCK_TYPE: return i64ArrayMeta();

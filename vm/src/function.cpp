@@ -89,6 +89,29 @@ struct FrameState {
     typeMap[index] = type;
   }
 
+  void pushTypeArg(Type* type) {
+    ASSERT(type->isObject());
+    // TODO: support classes with type parameters
+    ASSERT(type->length() == 1);
+    typeArgs.push_back(type);
+  }
+
+  void popTypeArgs() {
+    typeArgs.clear();
+  }
+
+  Type* substituteReturnType(Function* callee) {
+    ASSERT(typeArgs.size() == callee->typeParameterCount());
+    vector<pair<TypeParameter*, Type*>> typeBindings;
+    typeBindings.reserve(typeArgs.size());
+    for (word_t i = 0; i < typeArgs.size(); i++) {
+      pair<TypeParameter*, Type*> binding(callee->typeParameter(i), typeArgs[i]);
+      typeBindings.push_back(binding);
+    }
+    Type* retTy = callee->returnType()->substitute(typeBindings);
+    return retTy;
+  }
+
   size_t size() { return typeMap.size(); }
 
   bool operator < (const FrameState& other) const {
@@ -96,6 +119,7 @@ struct FrameState {
   }
 
   vector<Type*> typeMap;
+  vector<Type*> typeArgs;
   word_t pcOffset;
 };
 
@@ -359,6 +383,31 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
           break;
         }
 
+        case TYCS: {
+          auto classId = readVbn(bytecode, &pcOffset);
+          Class* clas = isBuiltinId(classId)
+              ? roots->getBuiltinClass(static_cast<BuiltinId>(classId))
+              : package->getClass(classId);
+          Type* type = Type::tryAllocate(heap, 1);
+          if (type == nullptr)
+            return nullptr;
+          type->initialize(clas, Type::NO_FLAGS);
+          currentMap.pushTypeArg(type);
+          break;
+        }
+
+        case TYVS: {
+          auto typeParamId = readVbn(bytecode, &pcOffset);
+          ASSERT(!isBuiltinId(typeParamId));
+          TypeParameter* param = package->getTypeParameter(typeParamId);
+          Type* type = Type::tryAllocate(heap, 1);
+          if (type == nullptr)
+            return nullptr;
+          type->initialize(param, Type::NO_FLAGS);
+          currentMap.pushTypeArg(type);
+          break;
+        }
+
         case CALLG: {
           auto paramCount = static_cast<word_t>(readVbn(bytecode, &pcOffset));
           i64 functionId = readVbn(bytecode, &pcOffset);
@@ -370,7 +419,9 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
           ASSERT(paramCount == callee->parameterCount());
           for (word_t i = 0; i < paramCount; i++)
             currentMap.pop();
-          currentMap.push(callee->returnType());
+          auto returnType = currentMap.substituteReturnType(callee);
+          currentMap.popTypeArgs();
+          currentMap.push(returnType);
           break;
         }
 
@@ -388,9 +439,12 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
           word_t slot = currentMap.size() - argCount;
           auto clas = currentMap.typeMap[slot]->asClass();
           auto callee = clas->getMethod(methodIndex);
+
           for (word_t i = 0, n = callee->parameterCount(); i < n; i++)
             currentMap.pop();
-          currentMap.push(callee->returnType());
+          auto returnType = currentMap.substituteReturnType(callee);
+          currentMap.popTypeArgs();
+          currentMap.push(returnType);
           break;
         }
 

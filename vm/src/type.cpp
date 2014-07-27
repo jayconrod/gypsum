@@ -6,13 +6,15 @@
 
 #include "type-inl.h"
 
+using namespace std;
+
 namespace codeswitch {
 namespace internal {
 
 bool Type::isSubtypeOf(Type* other) {
   if (equals(other))
     return true;
-  if (!isPrimitive() || !other->isPrimitive())
+  if (isPrimitive() || other->isPrimitive())
     return false;
   Class* clas = asClass();
   Class* otherClass = other->asClass();
@@ -28,6 +30,21 @@ bool Type::equals(Type* other) {
   } else {
     return true;
   }
+}
+
+
+Type* Type::substitute(const vector<pair<TypeParameter*, Type*>>& bindings) {
+  if (isVariable()) {
+    TypeParameter* param = asVariable();
+    for (auto binding : bindings) {
+      if (param == binding.first) {
+        return binding.second;
+      }
+    }
+  } else if (isClass()) {
+    // TODO: handle type parameters in class types
+  }
+  return this;
 }
 
 }

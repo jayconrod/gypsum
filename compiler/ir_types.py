@@ -206,7 +206,7 @@ class VariableType(ObjectType):
         return self.typeParameter.name
 
     def __repr__(self):
-        return "TypeParameter(%s)" % self.typeParameter.name
+        return "VariableType(%s)" % self.typeParameter.name
 
     def __hash__(self):
         return hashList([self.typeParameter.name])
