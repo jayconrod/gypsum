@@ -684,6 +684,11 @@ class TestTypeAnalysis(unittest.TestCase):
         f = info.package.findFunction(name="f")
         self.assertEquals(I64Type, f.returnType)
 
+    def testPrimitiveTypeArguments(self):
+        source = "def id[static T](x: T) = x\n" + \
+                 "def f = id[i64](12)"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     # Tests for usage
     def testUseClassBeforeDefinition(self):
         source = "def f = C\n" + \
