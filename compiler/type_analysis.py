@@ -189,6 +189,9 @@ class TypeVisitor(AstNodeVisitor):
         elif isinstance(irDefn, TypeParameter):
             if flags != frozenset():
                 raise TypeException("invalid flags for variable type")
+            if not self.isTypeParameterAvailable(irDefn):
+                raise TypeException("type parameter %s cannot be used in this scope" %
+                                    irDefn.name)
             ty = VariableType(irDefn)
         else:
             raise NotImplementedError
@@ -373,7 +376,7 @@ class TypeVisitor(AstNodeVisitor):
         if irFunction.returnType is not None:
             # Type already known, do not process
             return
-        elif self.isFunctionIdOnStack(node.id):
+        elif self.isFunctionOnStack(irFunction):
             # Recursive or mutually recursive function without full type info
             raise TypeException("recursive function must have full type specified")
         else:
@@ -381,7 +384,7 @@ class TypeVisitor(AstNodeVisitor):
             # get to its AST node, since we need to know its return type.
 
             # Process parameter types first, including "this".
-            self.functionStack.append(None)
+            self.functionStack.append(FunctionState(irFunction))
             self.ensureParamTypeInfoForDefn(irFunction)
 
             # Process return type, if specified.
@@ -390,7 +393,7 @@ class TypeVisitor(AstNodeVisitor):
                     raise TypeException("constructors must not declare return type")
                 returnType = self.visit(astReturnType)
                 irFunction.returnType = returnType
-            self.functionStack[-1] = FunctionState(node.id, irFunction.returnType)
+            self.functionStack[-1].declaredReturnType = irFunction.returnType
 
             # Process body.
             if astBody is None:
@@ -424,6 +427,7 @@ class TypeVisitor(AstNodeVisitor):
            irDefn.parameterTypes is not None:
             return
         astDefn = irDefn.astDefn
+        self.functionStack.append(FunctionState(irDefn))
         if self.info.hasScope(astDefn):
             self.scopeStack.append(self.info.getScope(astDefn))
         if not isinstance(astDefn, AstPrimaryConstructorDefinition):
@@ -439,6 +443,7 @@ class TypeVisitor(AstNodeVisitor):
             irDefn.parameterTypes.append(paramTy)
         if self.info.hasScope(astDefn):
             self.scopeStack.pop()
+        self.functionStack.pop()
 
     def ensureTypeInfoForDefn(self, irDefn):
         if isinstance(irDefn, Function):
@@ -503,8 +508,18 @@ class TypeVisitor(AstNodeVisitor):
                    isinstance(irDefn, Global)
             return irDefn.type
 
+    def isTypeParameterAvailable(self, irTypeParameter):
+        if self.functionStack[-1] is None:
+            return False
+        irFunction = self.functionStack[-1].irDefn
+        return any(irTypeParameter is param for param in irFunction.typeParameters)
+
     def handleResult(self, node, result, *unused):
         if result is not None:
+            if isinstance(result, VariableType):
+                if not self.isTypeParameterAvailable(result.typeParameter):
+                    raise TypeException("type parameter %s cannot be used in this scope" %
+                                        result.typeParameter.name)
             self.info.setType(node, result)
         return result
 
@@ -517,9 +532,9 @@ class TypeVisitor(AstNodeVisitor):
             assert self.scopeStack[-1] is self.info.getScope(node.id)
             self.scopeStack.pop()
 
-    def isFunctionIdOnStack(self, id):
+    def isFunctionOnStack(self, irDefn):
         for state in self.functionStack:
-            if state is not None and state.id == id:
+            if state is not None and state.irDefn is irDefn:
                 return True
         return False
 
@@ -528,9 +543,9 @@ class TypeVisitor(AstNodeVisitor):
 
 
 class FunctionState(object):
-    def __init__(self, id, declaredReturnType):
-        self.id = id
-        self.declaredReturnType = declaredReturnType
+    def __init__(self, irDefn):
+        self.irDefn = irDefn
+        self.declaredReturnType = None
         self.bodyReturnType = None
 
     def handleReturn(self, returnType):

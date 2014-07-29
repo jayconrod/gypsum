@@ -689,6 +689,16 @@ class TestTypeAnalysis(unittest.TestCase):
                  "def f = id[i64](12)"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
+    def testUseTypeParameterInnerFunctionExplicit(self):
+        source = "def id-outer[static T] =\n" + \
+                 "  def id-inner(x: T) = x"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testUseTypeParameterInnerFunctionImplicit(self):
+        source = "def id-outer[static T](x: T) =\n" + \
+                 "  def id-inner = x"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     # Tests for usage
     def testUseClassBeforeDefinition(self):
         source = "def f = C\n" + \

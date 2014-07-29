@@ -23,7 +23,7 @@ from ir_instructions import *
 from bytecode import *
 
 
-class TestCompile(unittest.TestCase):
+class TestCompiler(unittest.TestCase):
     def compileFromSource(self, source):
         filename = "(test)"
         rawTokens = lex(filename, source)
