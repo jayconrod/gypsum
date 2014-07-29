@@ -50,9 +50,7 @@ def attribs():
 
 
 def attrib():
-    return (keyword("public") |
-            keyword("protected") |
-            keyword("private")) ^ AstAttribute
+    return Tag(ATTRIB) ^ AstAttribute
 
 
 def varDefn():
@@ -105,11 +103,11 @@ def typeParameters():
 
 def typeParameter():
     def process(parsed):
-        ((name, upper), lower) = parsed
+        (((ats, name), upper), lower) = parsed
         upper = upper[1] if upper else None
         lower = lower[1] if lower else None
-        return AstTypeParameter(name, upper, lower)
-    return symbol + Opt(keyword("<:") + ty()) + Opt(keyword(">:") + ty()) ^ process
+        return AstTypeParameter(ats, name, upper, lower)
+    return attribs() + symbol + Opt(keyword("<:") + ty()) + Opt(keyword(">:") + ty()) ^ process
 
 
 def parameters():

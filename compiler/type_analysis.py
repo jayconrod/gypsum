@@ -108,6 +108,18 @@ class TypeVisitor(AstNodeVisitor):
     def visitAstPrimaryConstructorDefinition(self, node):
         self.handleFunctionCommon(node, None, None)
 
+    def visitAstTypeParameter(self, node):
+        self.scope().define(node.name)
+        irTypeParam = self.info.getDefnInfo(node).irDefn
+        if node.upperBound is not None:
+            irTypeParam.upperBound = self.visit(node.upperBound)
+        else:
+            irTypeParam.upperBound = getRootClassType()
+        if node.lowerBound is not None:
+            irTypeParam.lowerBound = self.visit(node.lowerBound)
+        else:
+            irTypeParam.lowerBound = getNothingClassType()
+
     def visitAstParameter(self, node):
         ty = self.visit(node.pattern, None)
         if self.info.hasDefnInfo(node):
@@ -165,22 +177,32 @@ class TypeVisitor(AstNodeVisitor):
             else:
                 raise NotImplementedError
         nameInfo = self.scope().lookup(node.name, localOnly=False, mayBeAssignment=False)
-        if nameInfo.isOverloaded() or not isinstance(nameInfo.getDefnInfo().irDefn, Class):
+        if nameInfo.isOverloaded() or not nameInfo.getDefnInfo().irDefn.isTypeDefn():
             raise TypeException("%s: does not refer to a type" % node.name)
         defnInfo = nameInfo.getDefnInfo()
         self.scope().use(defnInfo, node.id, USE_AS_TYPE)
 
-        irClass = nameInfo.getDefnInfo().irDefn
+        irDefn = nameInfo.getDefnInfo().irDefn
         flags = frozenset(astFlagToIrFlag(flag) for flag in node.flags)
-        classTy = ClassType(irClass, (), flags)
-        return classTy
+        if isinstance(irDefn, Class):
+            ty = ClassType(irDefn, (), flags)
+        elif isinstance(irDefn, TypeParameter):
+            if flags != frozenset():
+                raise TypeException("invalid flags for variable type")
+            if not self.isTypeParameterAvailable(irDefn):
+                raise TypeException("type parameter %s cannot be used in this scope" %
+                                    irDefn.name)
+            ty = VariableType(irDefn)
+        else:
+            raise NotImplementedError
+        return ty
 
     def visitAstLiteralExpression(self, node):
         ty = self.visit(node.literal)
         return ty
 
     def visitAstVariableExpression(self, node):
-        ty = self.handlePossibleCall(self.scope(), node.name, node.id, None, [], False)
+        ty = self.handlePossibleCall(self.scope(), node.name, node.id, None, [], [], False)
         return ty
 
     def visitAstThisExpression(self, node):
@@ -220,23 +242,24 @@ class TypeVisitor(AstNodeVisitor):
     def visitAstPropertyExpression(self, node):
         receiverTy = self.visit(node.receiver)
         ty = self.handleMethodCall(node.propertyName, node.id,
-                                   receiverTy, [], mayAssign=False)
+                                   receiverTy, [], [], mayAssign=False)
         return ty
 
     def visitAstCallExpression(self, node):
+        typeArgs = map(self.visit, node.typeArguments)
         argTypes = map(self.visit, node.arguments)
         if isinstance(node.callee, AstVariableExpression):
             ty = self.handlePossibleCall(self.scope(), node.callee.name, node.id,
-                                         None, argTypes, False)
+                                         None, typeArgs, argTypes, False)
         elif isinstance(node.callee, AstPropertyExpression):
             receiverType = self.visit(node.callee.receiver)
             ty = self.handleMethodCall(node.callee.propertyName, node.id,
-                                       receiverType, argTypes, False)
+                                       receiverType, typeArgs, argTypes, False)
         elif isinstance(node.callee, AstThisExpression) or \
              isinstance(node.callee, AstSuperExpression):
             receiverType = self.visit(node.callee)
             self.handleMethodCall("$constructor", node.id,
-                                  receiverType, argTypes, False)
+                                  receiverType, typeArgs, argTypes, False)
             ty = UnitType
         else:
             # TODO: callable expression
@@ -245,7 +268,7 @@ class TypeVisitor(AstNodeVisitor):
 
     def visitAstUnaryExpression(self, node):
         receiverType = self.visit(node.expr)
-        ty = self.handleMethodCall(node.operator, node.id, receiverType, [], False)
+        ty = self.handleMethodCall(node.operator, node.id, receiverType, [], [], False)
         return ty
 
     def visitAstBinaryExpression(self, node):
@@ -258,7 +281,7 @@ class TypeVisitor(AstNodeVisitor):
                 raise TypeException("type error: expected condition types for logic operands")
             ty = BooleanType
         else:
-            ty = self.handleMethodCall(node.operator, node.id, leftTy, [rightTy], True)
+            ty = self.handleMethodCall(node.operator, node.id, leftTy, [], [rightTy], True)
         return ty
 
     def visitAstIfExpression(self, node):
@@ -353,7 +376,7 @@ class TypeVisitor(AstNodeVisitor):
         if irFunction.returnType is not None:
             # Type already known, do not process
             return
-        elif self.isFunctionIdOnStack(node.id):
+        elif self.isFunctionOnStack(irFunction):
             # Recursive or mutually recursive function without full type info
             raise TypeException("recursive function must have full type specified")
         else:
@@ -361,7 +384,7 @@ class TypeVisitor(AstNodeVisitor):
             # get to its AST node, since we need to know its return type.
 
             # Process parameter types first, including "this".
-            self.functionStack.append(None)
+            self.functionStack.append(FunctionState(irFunction))
             self.ensureParamTypeInfoForDefn(irFunction)
 
             # Process return type, if specified.
@@ -370,7 +393,7 @@ class TypeVisitor(AstNodeVisitor):
                     raise TypeException("constructors must not declare return type")
                 returnType = self.visit(astReturnType)
                 irFunction.returnType = returnType
-            self.functionStack[-1] = FunctionState(node.id, irFunction.returnType)
+            self.functionStack[-1].declaredReturnType = irFunction.returnType
 
             # Process body.
             if astBody is None:
@@ -404,8 +427,12 @@ class TypeVisitor(AstNodeVisitor):
            irDefn.parameterTypes is not None:
             return
         astDefn = irDefn.astDefn
+        self.functionStack.append(FunctionState(irDefn))
         if self.info.hasScope(astDefn):
             self.scopeStack.append(self.info.getScope(astDefn))
+        if not isinstance(astDefn, AstPrimaryConstructorDefinition):
+            for astTypeParam in irDefn.astDefn.typeParameters:
+                self.visit(astTypeParam)
         irDefn.parameterTypes = []
         if irDefn.isMethod():
             thisType = ClassType(irDefn.clas, ())
@@ -416,6 +443,7 @@ class TypeVisitor(AstNodeVisitor):
             irDefn.parameterTypes.append(paramTy)
         if self.info.hasScope(astDefn):
             self.scopeStack.pop()
+        self.functionStack.pop()
 
     def ensureTypeInfoForDefn(self, irDefn):
         if isinstance(irDefn, Function):
@@ -432,12 +460,16 @@ class TypeVisitor(AstNodeVisitor):
         else:
             raise NotImplementedError
 
-    def handleMethodCall(self, name, useAstId, receiverType, argTypes, mayAssign):
+    def handleMethodCall(self, name, useAstId, receiverType, typeArgs, argTypes, mayAssign):
         irClass = getClassFromType(receiverType)
         scope = self.info.getScope(irClass)
-        return self.handlePossibleCall(scope, name, useAstId, receiverType, argTypes, mayAssign)
+        return self.handlePossibleCall(scope, name, useAstId,
+                                       receiverType, typeArgs, argTypes,
+                                       mayAssign)
 
-    def handlePossibleCall(self, scope, name, useAstId, receiverType, argTypes, mayAssign):
+    def handlePossibleCall(self, scope, name, useAstId,
+                           receiverType, typeArgs, argTypes,
+                           mayAssign):
         receiverIsExplicit = receiverType is not None
         if not receiverIsExplicit and len(self.receiverTypeStack) > 0:
             receiverType = self.receiverTypeStack[-1]   # may still be None
@@ -458,7 +490,8 @@ class TypeVisitor(AstNodeVisitor):
             useKind = USE_AS_CONSTRUCTOR
         for overload in nameInfo.iterOverloads():
             self.ensureParamTypeInfoForDefn(overload.irDefn)
-        defnInfo = nameInfo.findDefnInfoWithArgTypes(receiverType, receiverIsExplicit, argTypes)
+        defnInfo = nameInfo.findDefnInfoWithArgTypes(receiverType, receiverIsExplicit,
+                                                     typeArgs, argTypes)
         self.scope().use(defnInfo, useAstId, useKind)
         irDefn = defnInfo.irDefn
         self.ensureTypeInfoForDefn(irDefn)
@@ -466,15 +499,27 @@ class TypeVisitor(AstNodeVisitor):
             if irDefn.isConstructor():
                 return irDefn.parameterTypes[0]
             else:
-                return irDefn.returnType
+                assert len(typeArgs) == len(irDefn.typeParameters)
+                ty = irDefn.returnType.substitute(irDefn.typeParameters, typeArgs)
+                return ty
         else:
             assert isinstance(irDefn, Variable) or \
                    isinstance(irDefn, Field) or \
                    isinstance(irDefn, Global)
             return irDefn.type
 
+    def isTypeParameterAvailable(self, irTypeParameter):
+        if self.functionStack[-1] is None:
+            return False
+        irFunction = self.functionStack[-1].irDefn
+        return any(irTypeParameter is param for param in irFunction.typeParameters)
+
     def handleResult(self, node, result, *unused):
         if result is not None:
+            if isinstance(result, VariableType):
+                if not self.isTypeParameterAvailable(result.typeParameter):
+                    raise TypeException("type parameter %s cannot be used in this scope" %
+                                        result.typeParameter.name)
             self.info.setType(node, result)
         return result
 
@@ -487,9 +532,9 @@ class TypeVisitor(AstNodeVisitor):
             assert self.scopeStack[-1] is self.info.getScope(node.id)
             self.scopeStack.pop()
 
-    def isFunctionIdOnStack(self, id):
+    def isFunctionOnStack(self, irDefn):
         for state in self.functionStack:
-            if state is not None and state.id == id:
+            if state is not None and state.irDefn is irDefn:
                 return True
         return False
 
@@ -498,9 +543,9 @@ class TypeVisitor(AstNodeVisitor):
 
 
 class FunctionState(object):
-    def __init__(self, id, declaredReturnType):
-        self.id = id
-        self.declaredReturnType = declaredReturnType
+    def __init__(self, irDefn):
+        self.irDefn = irDefn
+        self.declaredReturnType = None
         self.bodyReturnType = None
 
     def handleReturn(self, returnType):

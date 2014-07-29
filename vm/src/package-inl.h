@@ -11,6 +11,7 @@
 #include "function.h"
 #include "package.h"
 #include "string.h"
+#include "type-parameter.h"
 
 namespace codeswitch {
 namespace internal {
@@ -27,6 +28,11 @@ Function* Package::getFunction(word_t index) {
 
 Class* Package::getClass(word_t index) {
   return Class::cast(classes()->get(index));
+}
+
+
+TypeParameter* Package::getTypeParameter(word_t index) {
+  return TypeParameter::cast(typeParameters()->get(index));
 }
 
 

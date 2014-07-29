@@ -11,6 +11,7 @@
 
 #include "heap-inl.h"
 #include "roots-inl.h"
+#include "type-parameter.h"
 
 namespace codeswitch {
 namespace internal {
@@ -32,26 +33,50 @@ Handle<Type> Type::allocate(Heap* heap, word_t length) {
 }
 
 
-void Type::initialize(PrimitiveType primitive, Flags flags) {
+void Type::initialize(Form primitive, Flags flags) {
   ASSERT(length() == 0);
-  word_t bits = 0;
-  bits = bitInsert(bits, static_cast<word_t>(flags), kFlagsWidth, kFlagsShift);
-  bits = bitInsert(bits, static_cast<word_t>(primitive),
-                   kPrimitiveTypeWidth, kPrimitiveTypeShift);
-  setBitField(bits);
+  ASSERT(FIRST_PRIMITIVE_TYPE <= primitive && primitive <= LAST_PRIMITIVE_TYPE);
+  setForm(primitive);
+  setFlags(flags);
 }
 
 
 void Type::initialize(Class* clas, Flags flags) {
   ASSERT(length() == 1);
-  word_t bits = 0;
-  bits = bitInsert(bits, static_cast<word_t>(flags), kFlagsWidth, kFlagsShift);
-  bits = bitInsert(bits, static_cast<word_t>(NON_PRIMITIVE_TYPE),
-                   kPrimitiveTypeWidth, kPrimitiveTypeShift);
-  setBitField(bits);
+  setForm(CLASS_TYPE);
+  setFlags(flags);
+  // TODO: there has got to be a cleaner way to do this this.
   Class** slot = &mem<Class*>(this, kClassOffset);
   *slot = clas;
   Heap::recordWrite(slot, clas);
+}
+
+
+void Type::initialize(TypeParameter* param, Flags flags) {
+  ASSERT(length() == 1);
+  setForm(VARIABLE_TYPE);
+  setFlags(flags);
+  // TODO: there has got to be a cleaner way to do this
+  TypeParameter** slot = &mem<TypeParameter*>(this, kClassOffset);
+  *slot = param;
+  Heap::recordWrite(slot, param);
+}
+
+
+Type* Type::primitiveTypeFromForm(Roots* roots, Form form) {
+  switch (form) {
+    case UNIT_TYPE: return unitType(roots);
+    case BOOLEAN_TYPE: return booleanType(roots);
+    case I8_TYPE: return i8Type(roots);
+    case I16_TYPE: return i16Type(roots);
+    case I32_TYPE: return i32Type(roots);
+    case I64_TYPE: return i64Type(roots);
+    case F32_TYPE: return f32Type(roots);
+    case F64_TYPE: return f64Type(roots);
+    default:
+      UNREACHABLE();
+      return nullptr;
+  }
 }
 
 
@@ -139,22 +164,18 @@ word_t Type::length() {
 
 
 bool Type::isPrimitive() {
-  auto primitive = static_cast<PrimitiveType>(
-      bitExtract(bitField(), kPrimitiveTypeWidth, kPrimitiveTypeShift));
-  return primitive != NON_PRIMITIVE_TYPE;
+  return FIRST_PRIMITIVE_TYPE <= form() && form() <= LAST_PRIMITIVE_TYPE;
 }
 
 
-Type::PrimitiveType Type::asPrimitive() {
-  auto primitive = static_cast<PrimitiveType>(
-      bitExtract(bitField(), kPrimitiveTypeWidth, kPrimitiveTypeShift));
-  ASSERT(primitive != NON_PRIMITIVE_TYPE);
-  return primitive;
+Type::Form Type::asPrimitive() {
+  ASSERT(isPrimitive());
+  return form();
 }
 
 
 bool Type::isClass() {
-  return !isPrimitive();
+  return form() == CLASS_TYPE;
 }
 
 
@@ -164,53 +185,59 @@ Class* Type::asClass() {
 }
 
 
+bool Type::isVariable() {
+  return form() == VARIABLE_TYPE;
+}
+
+
+TypeParameter* Type::asVariable() {
+  ASSERT(isVariable() && length() > 0);
+  return mem<TypeParameter*>(this, kClassOffset);
+}
+
+
 bool Type::isRootClass() {
   return isClass() && asClass() == getVM()->roots()->getBuiltinClass(BUILTIN_ROOT_CLASS_ID);
 }
 
 
 bool Type::isObject() {
-  return isClass();
+  return FIRST_OBJECT_TYPE <= form() && form() <= LAST_OBJECT_TYPE;
 }
 
 
 bool Type::isBoolean() {
-  return isPrimitive() && asPrimitive() == BOOLEAN_TYPE;
+  return form() == BOOLEAN_TYPE;
 }
 
 
 bool Type::isI8() {
-  return isPrimitive() && asPrimitive() == I8_TYPE;
+  return form() == I8_TYPE;
 }
 
 
 bool Type::isI16() {
-  return isPrimitive() && asPrimitive() == I16_TYPE;
+  return form() == I16_TYPE;
 }
 
 
 bool Type::isI32() {
-  return isPrimitive() && asPrimitive() == I32_TYPE;
+  return form() == I32_TYPE;
 }
 
 
 bool Type::isI64() {
-  return isPrimitive() && asPrimitive() == I64_TYPE;
+  return form() == I64_TYPE;
 }
 
 
 bool Type::isF32() {
-  return isPrimitive() && asPrimitive() == F32_TYPE;
+  return form() == F32_TYPE;
 }
 
 
 bool Type::isF64() {
-  return isPrimitive() && asPrimitive() == F64_TYPE;
-}
-
-
-Type::Flags Type::flags() {
-  return static_cast<Flags>(bitExtract(bitField(), kFlagsWidth, kFlagsShift));
+  return form() == F64_TYPE;
 }
 
 

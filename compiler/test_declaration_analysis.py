@@ -40,7 +40,7 @@ class TestDeclarations(unittest.TestCase):
         ast = info.ast
         astDefn = ast.definitions[0]
         defnInfo = info.getDefnInfo(astDefn)
-        self.assertEquals(DefnInfo(Function("f", None, None, None, [], None, frozenset()),
+        self.assertEquals(DefnInfo(Function("f", None, [], None, [], None, frozenset()),
                                    ast.id),
                           info.getDefnInfo(astDefn))
         self.assertTrue(info.getScope(GLOBAL_SCOPE_ID).isDefined("f"))
@@ -111,7 +111,7 @@ class TestDeclarations(unittest.TestCase):
         info = self.analyzeFromSource("def f = { def g = 12; };")
         ast = info.ast
         astDefn = ast.definitions[0].body.statements[0]
-        self.assertEquals(DefnInfo(Function("g", None, None, None, [], None, frozenset()),
+        self.assertEquals(DefnInfo(Function("g", None, [], None, [], None, frozenset()),
                                    ast.definitions[0].id),
                           info.getDefnInfo(astDefn))
 
@@ -142,7 +142,7 @@ class TestDeclarations(unittest.TestCase):
         info = self.analyzeFromSource("class C { def f = 12; };")
         ast = info.ast
         astDefn = ast.definitions[0].members[0]
-        expectedFunction = Function("f", None, None, None,
+        expectedFunction = Function("f", None, [], None,
                                     [Variable("$this", None, PARAMETER, frozenset())],
                                     None, frozenset())
         expectedDefnInfo = DefnInfo(expectedFunction, ast.definitions[0].id)
@@ -206,3 +206,12 @@ class TestDeclarations(unittest.TestCase):
                                       "  private def f = {}")
         f = info.package.findFunction(name="f")
         self.assertEquals(frozenset([PRIVATE]), f.flags)
+
+    def testFunctionTypeParameterStatic(self):
+        info = self.analyzeFromSource("def f[static T] = {}")
+        T = info.package.findTypeParameter(name="T")
+        self.assertEquals("T", T.name)
+        self.assertEquals(frozenset([STATIC]), T.flags)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(1, len(f.typeParameters))
+        self.assertIs(T, f.typeParameters[0])

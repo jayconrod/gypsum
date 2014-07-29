@@ -286,15 +286,6 @@ class NameInfo(object):
     def didResolveOverrides(self):
         return self.overrides is not None
 
-    @staticmethod
-    def mayOverride(a, b):
-        assert isinstance(a, Function) and isinstance(b, Function)
-        assert a.isMethod() and b.isMethod()
-        return len(a.parameterTypes) == len(b.parameterTypes) and \
-               all(bp.isSubtypeOf(ap)
-                   for ap, bp in zip(a.parameterTypes[1:], b.parameterTypes[1:])) and \
-               a.returnType.isSubtypeOf(b.returnType)
-
     def resolveOverrides(self):
         """Decides which definitions are overloads and which are overrides.
 
@@ -336,7 +327,7 @@ class NameInfo(object):
                 aIrDefn = aDefnInfo.irDefn
                 bIrDefn = bDefnInfo.irDefn
                 assert isinstance(aIrDefn, Function) and isinstance(bIrDefn, Function)
-                if self.mayOverride(aIrDefn, bIrDefn):
+                if aIrDefn.mayOverride(bIrDefn):
                     # Check that nothing else is already overriding this function.
                     if bIrDefn.id in self.overrides:
                         raise TypeException("multiple definitions may override: %s" %
@@ -355,11 +346,11 @@ class NameInfo(object):
                     bDepth = bDefnInfo.inheritanceDepth
                     if bDepth > overrideDepth:
                         break
-                    if self.mayOverride(aDefnInfo.irDefn, bDefnInfo.irDefn):
+                    if aDefnInfo.irDefn.mayOverride(bDefnInfo.irDefn):
                         raise TypeException("may override multiple definitions: %s" %
                                             self.name)
 
-    def findDefnInfoWithArgTypes(self, receiverType, receiverIsExplicit, argTypes):
+    def findDefnInfoWithArgTypes(self, receiverType, receiverIsExplicit, typeArgs, argTypes):
         """Determines which overloaded or overriding function should be called, based on
         argument types.
 
@@ -373,19 +364,20 @@ class NameInfo(object):
             if isinstance(irDefn, Function) and irDefn.id in self.overrides:
                 continue
 
-            isNonFunction = not isinstance(irDefn, Function) and len(argTypes) == 0
+            isNonFunction = not isinstance(irDefn, Function) and \
+                            len(typeArgs) == 0 and len(argTypes) == 0
             isFunction = not receiverIsExplicit and \
                          isinstance(irDefn, Function) and \
                          not irDefn.isMethod() and \
-                         irDefn.canCallWith(argTypes)
+                         irDefn.canCallWith(typeArgs, argTypes)
             isImplicitMethod = not receiverIsExplicit and \
                                isinstance(irDefn, Function) and \
                                irDefn.isMethod() and \
-                               irDefn.canCallWith([receiverType] + argTypes)
+                               irDefn.canCallWith(typeArgs, [receiverType] + argTypes)
             isExplicitMethod = receiverIsExplicit and \
                                isinstance(irDefn, Function) and \
                                irDefn.isMethod() and \
-                               irDefn.canCallWith([receiverType] + argTypes)
+                               irDefn.canCallWith(typeArgs, [receiverType] + argTypes)
 
             if isNonFunction or \
                isFunction or \
@@ -487,7 +479,7 @@ class Scope(AstNodeVisitor):
         irDefn = Class(astDefn.name, None, None, None, [], [], [], flags)
         self.info.package.addClass(irDefn)
 
-        irInitializer = Function("$initializer", None, None, None, [], None, frozenset())
+        irInitializer = Function("$initializer", None, [], None, [], None, frozenset())
         irInitializer.astDefn = astDefn
         self.makeMethod(irInitializer, irDefn)
         self.info.package.addFunction(irInitializer)
@@ -496,7 +488,7 @@ class Scope(AstNodeVisitor):
         if astDefn.hasConstructors():
             irDefaultCtor = None
         else:
-            irDefaultCtor = Function("$constructor", None, None, None, [], None, frozenset())
+            irDefaultCtor = Function("$constructor", None, [], None, [], None, frozenset())
             irDefaultCtor.astDefn = astDefn
             self.makeMethod(irDefaultCtor, irDefn)
             self.info.package.addFunction(irDefaultCtor)
@@ -718,7 +710,7 @@ class GlobalScope(Scope):
             self.info.package.addGlobal(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
             checkFlags(flags, frozenset())
-            irDefn = Function(astDefn.name, None, None, None, [], None, flags)
+            irDefn = Function(astDefn.name, None, [], None, [], None, flags)
             self.info.package.addFunction(irDefn)
             if astDefn.name == "main":
                 assert self.info.package.entryFunction == -1
@@ -778,7 +770,14 @@ class FunctionScope(Scope):
         assert isinstance(irScopeDefn, Function)
 
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
-        if isinstance(astDefn, AstParameter):
+        if isinstance(astDefn, AstTypeParameter):
+            checkFlags(flags, frozenset([STATIC]))
+            if STATIC not in flags:
+                raise NotImplementedError
+            irDefn = TypeParameter(astDefn.name, None, None, flags)
+            self.info.package.addTypeParameter(irDefn)
+            irScopeDefn.typeParameters.append(irDefn)
+        elif isinstance(astDefn, AstParameter):
             checkFlags(flags, frozenset())
             if isinstance(astDefn.pattern, AstVariablePattern):
                 # If the parameter is a simple variable which doesn't need unpacking, we don't
@@ -794,7 +793,7 @@ class FunctionScope(Scope):
             irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
             checkFlags(flags, frozenset())
-            irDefn = Function(astDefn.name, None, None, None, [], None, flags)
+            irDefn = Function(astDefn.name, None, [], None, [], None, flags)
             self.info.package.addFunction(irDefn)
         elif isinstance(astDefn, AstClassDefinition):
             irDefn = self.createIrClassDefn(astDefn)
@@ -864,7 +863,7 @@ class FunctionScope(Scope):
         self.info.package.addClass(irClosureClass)
         closureInfo.irClosureClass = irClosureClass
         irClosureType = ClassType(irClosureClass)
-        irClosureCtor = Function("$closureCtor", UnitType, None, [irClosureType],
+        irClosureCtor = Function("$closureCtor", UnitType, [], [irClosureType],
                                  [Variable("$this", irClosureType, PARAMETER, frozenset())],
                                  None, frozenset())
         irClosureCtor.clas = irClosureClass
@@ -938,16 +937,16 @@ class ClassScope(Scope):
         elif isinstance(astDefn, AstFunctionDefinition):
             checkFlags(flags, frozenset([PROTECTED, PRIVATE]))
             if astDefn.name == "this":
-                irDefn = Function("$constructor", None, None, None, [], None, flags)
+                irDefn = Function("$constructor", None, [], None, [], None, flags)
                 irScopeDefn.constructors.append(irDefn)
             else:
-                irDefn = Function(astDefn.name, None, None, None, [], None, flags)
+                irDefn = Function(astDefn.name, None, [], None, [], None, flags)
                 irScopeDefn.methods.append(irDefn)
             # We don't need to call makeMethod here because the inner FunctionScope will do it.
             self.info.package.addFunction(irDefn)
         elif isinstance(astDefn, AstPrimaryConstructorDefinition):
             checkFlags(flags, frozenset([PROTECTED, PRIVATE]))
-            irDefn = Function("$constructor", None, None, None, [], None, flags)
+            irDefn = Function("$constructor", None, [], None, [], None, flags)
             irScopeDefn.constructors.append(irDefn)
             self.makeMethod(irDefn, irScopeDefn)
             self.info.package.addFunction(irDefn)
@@ -1037,6 +1036,12 @@ class ScopeVisitor(AstNodeVisitor):
         visitor = self.createChildVisitor(scope)
         visitor.visitChildren(node)
 
+    def visitAstTypeParameter(self, node):
+        if node.upperBound is not None:
+            self.visit(node.upperBound)
+        if node.lowerBound is not None:
+            self.visit(node.lowerBound)
+
     def visitAstParameter(self, node):
         self.visit(node.pattern, node)
 
@@ -1081,6 +1086,10 @@ class DeclarationVisitor(ScopeVisitor):
     def visitAstPrimaryConstructorDefinition(self, node):
         self.scope.declare(node)
         super(DeclarationVisitor, self).visitChildren(node)
+
+    def visitAstTypeParameter(self, node):
+        self.scope.declare(node)
+        super(DeclarationVisitor, self).visitAstTypeParameter(node)
 
     def visitAstParameter(self, node):
         self.scope.declare(node)

@@ -15,6 +15,7 @@ class Package(object):
         self.globals = []
         self.functions = []
         self.classes = []
+        self.typeParameters = []
         self.strings = []
         self.entryFunction = -1
 
@@ -26,6 +27,8 @@ class Package(object):
             buf.write("%s\n\n" % f)
         for c in self.classes:
             buf.write("%s\n\n" % c)
+        for p in self.typeParameters:
+            buf.write("%s\n\n" % p)
         buf.write("entry function: %d\n" % self.entryFunction)
         return buf.getvalue()
 
@@ -47,6 +50,12 @@ class Package(object):
         self.globals.append(gbl)
         return gbl.id
 
+    def addTypeParameter(self, tp):
+        assert not hasattr(tp, "id")
+        tp.id = len(self.typeParameters)
+        self.typeParameters.append(tp)
+        return tp.id
+
     def findOrAddString(self, s):
         assert type(s) == unicode
         for i in xrange(0, len(self.strings)):
@@ -64,22 +73,30 @@ class Package(object):
     def findGlobal(self, **kwargs):
         return next(self.find(self.globals, kwargs))
 
+    def findTypeParameter(self, **kwargs):
+        return next(self.find(self.typeParameters, kwargs))
+
     def find(self, defns, kwargs):
         def matchItem(defn, key, value):
             if key == "clas":
                 return isinstance(defn, Function) and \
                        hasattr(defn, "clas") and \
                        defn.clas is value
+            elif key == "pred":
+                return value(defn)
             else:
                 return getattr(defn, key) == value
         def matchAll(defn):
-            return all(getattr(defn, k) == v for k, v in kwargs.iteritems())
+            return all(matchItem(defn, k, v) for k, v in kwargs.iteritems())
         return (d for d in defns if matchAll(d))
 
 
 class IrDefinition(Data):
     def isBuiltin(self):
         return self.id < 0
+
+    def isTypeDefn(self):
+        return False
 
 
 class Global(IrDefinition):
@@ -90,16 +107,20 @@ class Function(IrDefinition):
     propertyNames = ("name", "returnType", "typeParameters", "parameterTypes",
                      "variables", "blocks", "flags")
 
-    def canCallWith(self, argTypes):
+    def canCallWith(self, typeArgs, argTypes):
+        if len(self.typeParameters) != len(typeArgs) or \
+           not all(arg.isSubtypeOf(param.upperBound) and param.lowerBound.isSubtypeOf(arg) \
+                   for param, arg in zip(self.typeParameters, typeArgs)):
+            return False
+
         if len(self.parameterTypes) != len(argTypes):
             return False
         if self.isMethod():
             # Nullable receivers are fine, since they are checked when a method is called.
-            receiverParamType = self.parameterTypes[0]
-            receiverArgType = argTypes[0].withoutFlag(NULLABLE_TYPE_FLAG)
-            return all(a.isSubtypeOf(p) for a, p in zip(argTypes[1:], self.parameterTypes[1:]))
-        else:
-            return all(a.isSubtypeOf(p) for a, p in zip(argTypes, self.parameterTypes))
+            argTypes = [argTypes[0].withoutFlag(NULLABLE_TYPE_FLAG)] + argTypes[1:]
+        paramTypes = [pt.substitute(self.typeParameters, typeArgs)
+                      for pt in self.parameterTypes]
+        return all(at.isSubtypeOf(pt) for at, pt in zip(argTypes, paramTypes))
 
     def isMethod(self):
         return hasattr(self, "clas")
@@ -113,6 +134,21 @@ class Function(IrDefinition):
         return not self.isMethod() or \
                self.isConstructor() or \
                hasattr(self.clas, "isPrimitive") and self.clas.isPrimitive
+
+    def mayOverride(self, other):
+        assert self.isMethod() and other.isMethod()
+        typeParametersAreCompatible = \
+            len(self.typeParameters) == len(other.typeParameters) and \
+            all(atp.isEquivalent(btp) for atp, btp in
+                zip(self.typeParameters, other.typeParameters))
+        parameterTypesAreCompatible = \
+            len(self.parameterTypes) == len(other.parameterTypes) and \
+            all(bt.isSubtypeOf(at) for at, bt in
+                zip(self.parameterTypes[1:], other.parameterTypes[1:]))
+        returnTypeIsCompatible = self.returnType.isSubtypeOf(other.returnType)
+        return typeParametersAreCompatible and \
+               parameterTypesAreCompatible and \
+               returnTypeIsCompatible
 
     def __repr__(self):
         return "Function(%s, %s, %s, %s, %s, %s, %s)" % \
@@ -195,11 +231,12 @@ class Class(IrDefinition):
         else:
             return None
 
-    def getMethod(self, name, argTypes=None):
+    def getMethod(self, name, typeArgs=None, argTypes=None):
+        assert (typeArgs is None) == (argTypes is None)
         candidate = None
         for m in self.methods:
             if m.name == name and \
-               (argTypes is None or m.canCallWith([ClassType(self)] + argTypes)):
+               (argTypes is None or m.canCallWith(type[ClassType(self)] + argTypes)):
                 assert candidate is None
                 candidate = m
         return candidate
@@ -233,6 +270,9 @@ class Class(IrDefinition):
                 return i
         raise KeyError("method does not belong to this class")
 
+    def isTypeDefn(self):
+        return True
+
     def __repr__(self):
         return "Class(%s, %s, %s, %s, %s, %s, %s, %s)" % \
             (self.name, repr(self.typeParameters), repr(self.supertypes),
@@ -254,10 +294,28 @@ class Class(IrDefinition):
         return buf.getvalue()
 
 
+class TypeParameter(IrDefinition):
+    propertyNames = ("name", "upperBound", "lowerBound", "flags")
+
+    def isEquivalent(self, other):
+        return self.upperBound == other.upperBound and \
+               self.lowerBound == other.lowerBound
+
+    def isTypeDefn(self):
+        return True
+
+    def __repr__(self):
+        return "TypeParameter(%s, %s, %s, %s)" % \
+            (self.name, self.upperBound, self.lowerBound, self.flags)
+
+    def __str__(self):
+        return "%s type %s#%d <: %s >: %s\n" % \
+            (" ".join(self.flags), self.name, self.id, self.upperBound, self.lowerBound)
+
+
 # List of variable kinds
 LOCAL = "local"
 PARAMETER = "parameter"
 
-TypeParameter = Data.makeClass("TypeParameter", ("name", "upperBound", "lowerBound", "flags"))
 Variable = Data.makeClass("Variable", ("name", "type", "kind", "flags"))
 Field = Data.makeClass("Field", ("name", "type", "flags"))

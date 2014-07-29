@@ -59,8 +59,8 @@ class TestParser(unittest.TestCase):
 
     def testFunctionDefn(self):
         self.checkParse(AstFunctionDefinition([], "f",
-                                              [AstTypeParameter("S", None, None),
-                                               AstTypeParameter("T", None, None)],
+                                              [AstTypeParameter([], "S", None, None),
+                                               AstTypeParameter([], "T", None, None)],
                                               [AstParameter([], AstVariablePattern("x", AstClassType("S", []))),
                                                AstParameter([], AstVariablePattern("y", AstClassType("T", [])))],
                                               AstClassType("A", []),
@@ -126,19 +126,29 @@ class TestParser(unittest.TestCase):
         self.checkParse([], typeParameters(), "")
 
     def testTypeParameters(self):
-        self.checkParse([AstTypeParameter("S", None, None), AstTypeParameter("T", None, None)],
+        self.checkParse([AstTypeParameter([], "S", None, None),
+                         AstTypeParameter([], "T", None, None)],
                         typeParameters(),
                         "[S, T]")
 
     def testTypeParameter(self):
-        self.checkParse(AstTypeParameter("T", AstClassType("U", []), AstClassType("L", [])),
+        self.checkParse(AstTypeParameter([], "T", AstClassType("U", []), AstClassType("L", [])),
                         typeParameter(),
                         "T <: U >: L")
 
     def testTypeParameterSimple(self):
-        self.checkParse(AstTypeParameter("T", None, None),
+        self.checkParse(AstTypeParameter([], "T", None, None),
                         typeParameter(),
                         "T")
+
+    def testTypeParametersWithFlags(self):
+        self.checkParse(AstTypeParameter([AstAttribute("static")], "T", None, None),
+                        typeParameter(),
+                        "static T")
+        self.checkParse(AstTypeParameter([AstAttribute("public"), AstAttribute("private")],
+                                         "T", None, None),
+                        typeParameter(),
+                        "public private T")
 
     def testParametersEmpty(self):
         self.checkParse([], parameters(), "")
@@ -526,8 +536,8 @@ class TestParser(unittest.TestCase):
 
     def testLambdaExprWithTypeParams(self):
         self.checkParse(AstLambdaExpression(None,
-                                            [AstTypeParameter("S", None, None),
-                                             AstTypeParameter("T", None, None)],
+                                            [AstTypeParameter([], "S", None, None),
+                                             AstTypeParameter([], "T", None, None)],
                                             [AstVariablePattern("x", AstClassType("S", [])),
                                              AstVariablePattern("y", AstClassType("T", []))],
                                             AstVariableExpression("x")),
@@ -536,7 +546,7 @@ class TestParser(unittest.TestCase):
 
     def testLambdaExprWithName(self):
         self.checkParse(AstLambdaExpression("f",
-                                            [AstTypeParameter("T", None, None)],
+                                            [AstTypeParameter([], "T", None, None)],
                                             [AstVariablePattern("x", AstClassType("T", []))],
                                             AstCallExpression(AstVariableExpression("f"),
                                                               [],

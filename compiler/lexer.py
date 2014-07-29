@@ -62,9 +62,11 @@ __expressions = [
   (r"this", RESERVED),
   (r"super", RESERVED),
   (r"null", RESERVED),
-  (r"public", RESERVED),
-  (r"protected", RESERVED),
-  (r"private", RESERVED),
+
+  (r"public", ATTRIB),
+  (r"protected", ATTRIB),
+  (r"private", ATTRIB),
+  (r"static", ATTRIB),
 
   (r"[+-]?[0-9]+(?:i[0-9]+)?", INTEGER),
   (r"[+-]?0[xX][0-9A-Fa-f]+(?:i[0-9]+)?", INTEGER),

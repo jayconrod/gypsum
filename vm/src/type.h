@@ -7,6 +7,7 @@
 #ifndef type_h
 #define type_h
 
+#include <vector>
 #include "bytecode.h"
 #include "class.h"
 #include "handle.h"
@@ -15,14 +16,15 @@
 #include "utils.h"
 
 class Roots;
+class TypeParameter;
 
 namespace codeswitch {
 namespace internal {
 
 class Type: public Object {
  public:
-  enum PrimitiveType {
-    NON_PRIMITIVE_TYPE,
+  enum Form {
+    // Primitive forms
     UNIT_TYPE,
     BOOLEAN_TYPE,
     I8_TYPE,
@@ -31,8 +33,17 @@ class Type: public Object {
     I64_TYPE,
     F32_TYPE,
     F64_TYPE,
-    PRIMITIVE_TYPE_COUNT,
-    LAST_PRIMITIVE_TYPE = I64_TYPE
+
+    // Object forms
+    CLASS_TYPE,
+    VARIABLE_TYPE,
+
+    // Fake forms
+    FIRST_PRIMITIVE_TYPE = UNIT_TYPE,
+    LAST_PRIMITIVE_TYPE = F64_TYPE,
+    FIRST_OBJECT_TYPE = CLASS_TYPE,
+    LAST_OBJECT_TYPE = VARIABLE_TYPE,
+    LAST_TYPE = VARIABLE_TYPE
   };
 
   enum Flags {
@@ -43,9 +54,11 @@ class Type: public Object {
 
   static inline Type* tryAllocate(Heap* heap, word_t length);
   static inline Handle<Type> allocate(Heap* heap, word_t length);
-  inline void initialize(PrimitiveType primitive, Flags flags = NO_FLAGS);
+  inline void initialize(Form primitive, Flags flags = NO_FLAGS);
   inline void initialize(Class* clas, Flags flags = NO_FLAGS);
+  inline void initialize(TypeParameter* param, Flags flags = NO_FLAGS);
 
+  static inline Type* primitiveTypeFromForm(Roots* roots, Form form);
   static inline Type* unitType(Roots* roots);
   static inline Type* booleanType(Roots* roots);
   static inline Type* intTypeFromWidth(Roots* roots, Width width);
@@ -65,10 +78,14 @@ class Type: public Object {
   inline word_t length();
 
   DEFINE_INL_ACCESSORS(word_t, bitField, setBitField, kBitFieldOffset)
+  DEFINE_INL_BIT_ACCESSORS(Form, form, setForm, kBitFieldOffset, kFormWidth, kFormShift)
+  DEFINE_INL_BIT_ACCESSORS(Flags, flags, setFlags, kBitFieldOffset, kFlagsWidth, kFlagsShift)
   inline bool isPrimitive();
-  inline PrimitiveType asPrimitive();
+  inline Form asPrimitive();
   inline bool isClass();
   inline Class* asClass();
+  inline bool isVariable();
+  inline TypeParameter* asVariable();
   inline bool isRootClass();
   inline bool isObject();
   inline bool isBoolean();
@@ -78,7 +95,6 @@ class Type: public Object {
   inline bool isI64();
   inline bool isF32();
   inline bool isF64();
-  inline Flags flags();
   inline bool isNullable();
 
   inline word_t typeSize();
@@ -86,6 +102,7 @@ class Type: public Object {
 
   bool isSubtypeOf(Type* other);
   bool equals(Type* other);
+  Type* substitute(const std::vector<std::pair<TypeParameter*, Type*>>& bindings);
 
   static const int kLengthOffset = kBlockHeaderSize;
   static const int kBitFieldOffset = kLengthOffset + kWordSize;
@@ -93,9 +110,10 @@ class Type: public Object {
   static const int kClassOffset = kHeaderSize;
   static const int kPointerMap = 0;
 
-  static const int kPrimitiveTypeShift = 0;
-  static const int kPrimitiveTypeWidth = 4;
-  static const int kFlagsShift = kPrimitiveTypeShift + kPrimitiveTypeWidth;
+  static const int kFormShift = 0;
+  static const int kFormWidth = 4;
+  static const word_t kFormMask = (1 << kFormWidth) - 1;
+  static const int kFlagsShift = kFormShift + kFormWidth;
   static const int kFlagsWidth = 1;
   static const word_t kFlagsMask = (LAST_FLAG << 1) - 1;
 };

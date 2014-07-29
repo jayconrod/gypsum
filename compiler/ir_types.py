@@ -38,8 +38,17 @@ class Type(Data):
     def isSubtypeOf(self, other):
         if self == other:
             return True
-        elif isinstance(self, ClassType) and isinstance(other, ClassType):
-            return self.clas.isSubclassOf(other.clas) and \
+        elif self.isObject() and other.isObject():
+            def topBottomClasses(ty):
+                if isinstance(ty, ClassType):
+                    return ty.clas, ty.clas
+                else:
+                    assert isinstance(ty, VariableType)
+                    return (topBottomClasses(ty.typeParameter.upperBound)[0],
+                            topBottomClasses(ty.typeParameter.lowerBound)[1])
+            topSelfClass = topBottomClasses(self)[0]
+            bottomOtherClass = topBottomClasses(other)[1]
+            return topSelfClass.isSubclassOf(bottomOtherClass) and \
                    (not self.isNullable() or other.isNullable())
         else:
             return False
@@ -66,6 +75,9 @@ class Type(Data):
 
     def combineFlags(self, other):
         return self.flags.union(other.flags)
+
+    def substitute(self, parameters, replacements):
+        raise NotImplementedError
 
     def size(self):
         raise NotImplementedError
@@ -95,6 +107,9 @@ class SimpleType(Type):
     def __str__(self):
         return self.name
 
+    def substitute(self, parameters, replacements):
+        return self
+
     def isPrimitive(self):
         return True
 
@@ -120,7 +135,21 @@ F64Type = SimpleType("f64", W64, F64Value(0.))
 BooleanType = SimpleType("boolean", W8, BooleanValue(False))
 
 
-class ClassType(Type):
+class ObjectType(Type):
+    def __init__(self, flags):
+        super(ObjectType, self).__init__(flags)
+
+    def isPrimitive(self):
+        return False
+
+    def isObject(self):
+        return True
+
+    def size(self):
+        return WORDSIZE
+
+
+class ClassType(ObjectType):
     propertyNames = Type.propertyNames + ("clas", "typeArguments")
     width = WORD
 
@@ -154,22 +183,55 @@ class ClassType(Type):
                self.clas is other.clas and \
                self.typeArguments == other.typeArguments
 
+    def substitute(self, parameters, replacements):
+        return ClassType(self.clas,
+                         tuple(arg.substitute(parameters, replacements)
+                               for arg in self.typeArguments),
+                         self.flags)
+
     def isNullable(self):
         return NULLABLE_TYPE_FLAG in self.flags
 
-    def isPrimitive(self):
-        return False
 
-    def isObject(self):
-        return True
 
-    def size(self):
-        return WORDSIZE
+class VariableType(ObjectType):
+    propertyNames = Type.propertyNames + ("typeParameter",)
+    width = WORD
+
+    def __init__(self, typeParameter):
+        super(VariableType, self).__init__(frozenset())
+        self.typeParameter = typeParameter
+
+    def __str__(self):
+        return self.typeParameter.name
+
+    def __repr__(self):
+        return "VariableType(%s)" % self.typeParameter.name
+
+    def __hash__(self):
+        return hashList([self.typeParameter.name])
+
+    def __eq__(self, other):
+        return self.__class__ is other.__class__ and \
+               self.typeParameter is other.typeParameter
+
+    def substitute(self, parameters, replacements):
+        assert len(parameters) == len(replacements)
+        for param, repl in zip(parameters, replacements):
+            if param is self.typeParameter:
+                return repl
+        return self
+
+    def isNullable(self):
+        return self.typeParameter.upperBound is not None and \
+               self.typeParameter.upperBound.isNullable()
 
 
 def getClassFromType(ty):
     if isinstance(ty, ClassType):
         return ty.clas
+    elif isinstance(ty, VariableType):
+        return getClassFromType(ty.typeParameter.upperBound)
     else:
         assert ty.isPrimitive()
         return builtins.getBuiltinClassFromType(ty)

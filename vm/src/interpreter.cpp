@@ -421,6 +421,11 @@ i64 Interpreter::call(Handle<Function> callee) {
         break;
       }
 
+      case TYCS:
+      case TYVS:
+        readVbn();
+        break;
+
       case CALLG: {
         readVbn();   // arg count is unused
         auto functionId = static_cast<word_t>(readVbn());

@@ -1,0 +1,7 @@
+def id-outer[static T](value: T) = id-inner[T](value)
+def id-inner[static T](value: T) = value
+
+def main =
+  var s = id-outer[String]("foo")
+  if (s != "foo")
+    throw Exception
