@@ -17,18 +17,16 @@ from utils import *
 
 def compile(info):
     for clas in info.package.classes:
-        assignFieldOffsets(clas, info)
+        assignFieldIndices(clas, info)
     for function in info.package.functions:
         compiler = CompileVisitor(function, info)
         compiler.compile()
 
 
-def assignFieldOffsets(clas, info):
-    offset = WORDSIZE   # first word of every object is reserved
-    for field in clas.fields:
-        offset = align(offset, field.type.alignment())
-        field.offset = offset
-        offset += field.type.size()
+def assignFieldIndices(clas, info):
+    for index, field in enumerate(clas.fields):
+        assert not hasattr(field, "index") or field.index == index
+        field.index = index
 
 
 class CompileVisitor(AstNodeVisitor):
@@ -68,10 +66,8 @@ class CompileVisitor(AstNodeVisitor):
             statements = []
 
         # Set ids (and therefore, fp-offsets) for each local variable.
-        if self.function.isMethod():
-            assert self.function.variables[0].name == "$this"
-            self.function.variables[0].id = 0
         self.enumerateLocals()
+        self.enumerateParameters(parameters)
 
         # If this is a constructor, the first statement may be a "this" or "super" call.
         altCtorCalled = False
@@ -134,8 +130,8 @@ class CompileVisitor(AstNodeVisitor):
             # as the corresponding fields, so we just need to load and store them.
             fields = self.function.clas.fields
             for i in xrange(len(fields)):
-                offset = self.offsetForParameterId(i + 1)
-                self.ldlocal(offset)
+                paramIndex = i + 1   # skip receiver
+                self.ldlocal(paramIndex)
                 self.loadThis()
                 self.storeField(fields[i])
             self.unit()
@@ -510,39 +506,37 @@ class CompileVisitor(AstNodeVisitor):
         else:
             raise CompileException("left side of assignment is unassignable")
 
-    def offsetForLocal(self, var):
-        assert var.kind is LOCAL
-        index = ~var.id
-        offset = index * WORDSIZE
-        return offset
-
-    def offsetForParameter(self, var):
-        assert var.kind is PARAMETER
-        return self.offsetForParameterId(var.id)
-
-    def offsetForParameterId(self, id):
-        index = len(self.function.parameterTypes) - id - 1
-        offset = index * WORDSIZE
-        return offset
-
     def enumerateLocals(self):
-        nextLocalId = Counter()
+        nextLocalIndex = Counter(-1, -1)
         for var in self.function.variables:
             if var.kind is LOCAL:
-                var.id = nextLocalId()
+                var.index = nextLocalIndex()
 
-    def unpackParameter(self, param, id):
-        offset = self.offsetForParameterId(id)
+    def enumerateParameters(self, parameters):
+        if self.function.isMethod():
+            assert self.function.variables[0].name == "$this"
+            self.function.variables[0].index = 0
+            implicitParamCount = 1
+        else:
+            implicitParamCount = 0
+        if parameters is not None:
+            for index, param in enumerate(parameters):
+                if isinstance(param.pattern, AstVariablePattern):
+                    defnInfo = self.info.getDefnInfo(param.pattern)
+                    if isinstance(defnInfo.irDefn, Variable):
+                       defnInfo.irDefn.index = index + implicitParamCount
+
+    def unpackParameter(self, param, index):
         paramType = self.info.getType(param)
         if isinstance(param.pattern, AstVariablePattern):
             defnInfo = self.info.getDefnInfo(param.pattern)
             if isinstance(defnInfo.irDefn, Variable):
-                defnInfo.irDefn.id = id
+                defnInfo.irDefn.index = index
             else:
-                self.ldlocal(offset)
+                self.ldlocal(index)
                 self.storeVariable(defnInfo)
         else:
-            self.ldlocal(offset)
+            self.ldlocal(index)
             self.visit(param.pattern, COMPILE_FOR_EFFECT)
 
     def compileStatements(self, scopeId, parameters, statements, mode):
@@ -586,13 +580,7 @@ class CompileVisitor(AstNodeVisitor):
     def loadVariable(self, varOrDefnInfo):
         if isinstance(varOrDefnInfo, Variable):
             var = varOrDefnInfo
-            if var.kind is LOCAL:
-                offset = self.offsetForLocal(var)
-                self.ldlocal(offset)
-            else:
-                assert var.kind is PARAMETER
-                offset = self.offsetForParameter(var)
-                self.ldlocal(offset)
+            self.ldlocal(var.index)
         else:
             assert isinstance(varOrDefnInfo, DefnInfo)
             defnInfo = varOrDefnInfo
@@ -606,13 +594,7 @@ class CompileVisitor(AstNodeVisitor):
     def storeVariable(self, varOrDefnInfo):
         if isinstance(varOrDefnInfo, Variable):
             var = varOrDefnInfo
-            if var.kind is LOCAL:
-                offset = self.offsetForLocal(var)
-                self.stlocal(offset)
-            else:
-                assert var.kind is PARAMETER
-                offset = self.offsetForParameter(var)
-                self.stlocal(offset)
+            self.stlocal(var.index)
         else:
             assert isinstance(varOrDefnInfo, DefnInfo)
             defnInfo = varOrDefnInfo
@@ -650,7 +632,7 @@ class CompileVisitor(AstNodeVisitor):
             inst = ld32
         elif ty.width == W64:
             inst = ld64
-        self.add(inst(field.offset))
+        self.add(inst(field.index))
 
     def storeField(self, field):
         if field.type.isObject():
@@ -663,12 +645,11 @@ class CompileVisitor(AstNodeVisitor):
             inst = st32
         elif field.type.width == W64:
             inst = st64
-        self.add(inst(field.offset))
+        self.add(inst(field.index))
 
     def loadThis(self):
         assert self.function.isMethod()
-        offset = self.offsetForParameterId(0)
-        self.ldlocal(offset)
+        self.ldlocal(0)
 
     def createContext(self, contextInfo):
         contextClass = contextInfo.irContextClass

@@ -108,7 +108,7 @@ class TestCompiler(unittest.TestCase):
         self.checkFunction("def f = { var x = 12; };",
                            self.makeSimpleFunction("f", UnitType, [[
                                i64(12),
-                               stlocal(-8),
+                               stlocal(-1),
                                unit(),
                                ret()]],
                              variables=[Variable("x", I64Type, LOCAL, frozenset())]))
@@ -117,8 +117,8 @@ class TestCompiler(unittest.TestCase):
         self.checkFunction("def f = { var x = 12; x; }",
                            self.makeSimpleFunction("f", I64Type, [[
                                i64(12),
-                               stlocal(-8),
-                               ldlocal(-8),
+                               stlocal(-1),
+                               ldlocal(-1),
                                ret()]],
                              variables=[Variable("x", I64Type, LOCAL, frozenset())]))
 
@@ -137,12 +137,12 @@ class TestCompiler(unittest.TestCase):
                            "  d\n",
                            self.makeSimpleFunction("f", I32Type, [[
                                i32(1),
-                               stlocal(24),
+                               stlocal(0),
                                true(),
-                               stlocal(16),
+                               stlocal(1),
                                false(),
-                               stlocal(8),
-                               ldlocal(0),
+                               stlocal(2),
+                               ldlocal(3),
                                ret()]],
                              variables=[
                                Variable("a", I32Type, PARAMETER, frozenset()),
@@ -156,10 +156,10 @@ class TestCompiler(unittest.TestCase):
                            "  x = 34",
                            self.makeSimpleFunction("f", I64Type, [[
                                i64(12),
-                               stlocal(-8),
+                               stlocal(-1),
                                i64(34),
                                dup(),
-                               stlocal(-8),
+                               stlocal(-1),
                                ret()]],
                              variables=[Variable("x", I64Type, LOCAL, frozenset())]))
 
@@ -177,12 +177,12 @@ class TestCompiler(unittest.TestCase):
                                 ldlocal(0),
                                 false(),
                                 swap(),
-                                st8(WORDSIZE),
+                                st8(0),
                                 ldlocal(0),
                                 i64(12),
                                 dup(),
                                 swap2(),
-                                st64(WORDSIZE + 8),
+                                st64(1),
                                 ret()])],
                               frozenset())
         self.assertEquals(expected, package.findFunction(name="f"))
@@ -206,7 +206,7 @@ class TestCompiler(unittest.TestCase):
                        ldlocal(0),
                        dup(),
                        swap2(),
-                       stp(WORDSIZE),
+                       stp(0),
                        ret()]],
                      parameterTypes=[clasTy],
                      variables=[Variable("$this", clasTy, PARAMETER, frozenset())])
@@ -220,7 +220,7 @@ class TestCompiler(unittest.TestCase):
         clasTy = ClassType(package.classes[0], ())
         expected = self.makeSimpleFunction("f", clasTy, [[
                        ldlocal(0),
-                       ldp(WORDSIZE),
+                       ldp(0),
                        ret()]],
                      parameterTypes=[clasTy],
                      variables=[Variable("foo", clasTy, PARAMETER, frozenset())])
@@ -237,11 +237,11 @@ class TestCompiler(unittest.TestCase):
                             [BasicBlock(0, [
                               ldlocal(0),
                               dup(),
-                              ld64(WORDSIZE),
+                              ld64(0),
                               i64(12),
                               addi64(),
                               swap(),
-                              st64(WORDSIZE),
+                              st64(0),
                               i64(34),
                               ret()])],
                             frozenset())
@@ -258,12 +258,12 @@ class TestCompiler(unittest.TestCase):
                             [BasicBlock(0, [
                               ldlocal(0),
                               dup(),
-                              ld64(WORDSIZE),
+                              ld64(0),
                               i64(12),
                               addi64(),
                               dup(),
                               swap2(),
-                              st64(WORDSIZE),
+                              st64(0),
                               ret()])],
                             frozenset())
         self.assertEquals(expected, package.findFunction(name="f"))
@@ -279,7 +279,7 @@ class TestCompiler(unittest.TestCase):
                                dup(),
                                callg(1, 1),
                                drop(),
-                               ldpc(WORDSIZE),
+                               ldpc(0),
                                ret()]]))
 
     def testLoadNullableObject(self):
@@ -293,15 +293,15 @@ class TestCompiler(unittest.TestCase):
                                dup(),
                                callg(1, 1),
                                drop(),
-                               ldp(WORDSIZE),
+                               ldp(0),
                                ret()]]))
 
     def testNullableEq(self):
         ty = ClassType(getRootClass(), (), NULLABLE_TYPE_FLAG)
         self.checkFunction("def f(foo: Object?, bar: Object?) = foo === bar",
                            self.makeSimpleFunction("f", BooleanType, [[
-                               ldlocal(WORDSIZE),
                                ldlocal(0),
+                               ldlocal(1),
                                eqp(),
                                ret()]],
                              variables=[Variable("foo", ty, PARAMETER, frozenset()),
@@ -311,8 +311,8 @@ class TestCompiler(unittest.TestCase):
         ty = ClassType(getRootClass(), (), NULLABLE_TYPE_FLAG)
         self.checkFunction("def f(foo: Object?, bar: Object?) = foo !== bar",
                            self.makeSimpleFunction("f", BooleanType, [[
-                               ldlocal(WORDSIZE),
                                ldlocal(0),
+                               ldlocal(1),
                                nep(),
                                ret()]],
                              variables=[Variable("foo", ty, PARAMETER, frozenset()),
@@ -366,12 +366,12 @@ class TestCompiler(unittest.TestCase):
                            "};",
                            self.makeSimpleFunction("f", I64Type, [[
                                i64(12),
-                               stlocal(-8),
-                               ldlocal(-8),
+                               stlocal(-1),
+                               ldlocal(-1),
                                i64(34),
                                addi64(),
                                dup(),
-                               stlocal(-8),
+                               stlocal(-1),
                                ret()]],
                              variables=[Variable("x", I64Type, LOCAL, frozenset())]))
 
@@ -562,7 +562,7 @@ class TestCompiler(unittest.TestCase):
                                callv(2, isSubtypeOfMethodIndex),
                                branchif(3, 5),
                              ], [
-                               stlocal(-WORDSIZE),
+                               stlocal(-1),
                                drop(),
                                drop(),
                                i64(34),
@@ -608,7 +608,7 @@ class TestCompiler(unittest.TestCase):
                                branchif(3, 5),
                              ], [
                                # block 3
-                               stlocal(-WORDSIZE),
+                               stlocal(-1),
                                drop(),
                                drop(),
                                i64(34),
@@ -717,7 +717,7 @@ class TestCompiler(unittest.TestCase):
                                callv(2, 3),
                                branchif(3, 5),
                              ], [
-                               stlocal(-WORDSIZE),
+                               stlocal(-1),
                                drop(),
                                drop(),
                                i64(1),
@@ -816,7 +816,7 @@ class TestCompiler(unittest.TestCase):
                            "};",
                            self.makeSimpleFunction("f", I64Type, [[
                                i64(1),
-                               stlocal(-8),
+                               stlocal(-1),
                                branch(1),
                              ], [
                                ldlocal(0),
@@ -824,17 +824,17 @@ class TestCompiler(unittest.TestCase):
                                gti64(),
                                branchif(2, 3),
                              ], [
-                               ldlocal(-8),
+                               ldlocal(-1),
                                ldlocal(0),
                                muli64(),
-                               stlocal(-8),
+                               stlocal(-1),
                                ldlocal(0),
                                i64(1),
                                subi64(),
                                stlocal(0),
                                branch(1),
                              ], [
-                               ldlocal(-8),
+                               ldlocal(-1),
                                ret(),
                              ]],
                            variables=[
@@ -878,10 +878,10 @@ class TestCompiler(unittest.TestCase):
                            self.makeSimpleFunction("$initializer", UnitType, [[
                                ldlocal(0),
                                ldlocal(0),
-                               stp(WORDSIZE),
+                               stp(0),
                                uninitialized(),
                                ldlocal(0),
-                               stp(2 * WORDSIZE),
+                               stp(1),
                                unit(),
                                ret()]],
                              parameterTypes=[thisType],
@@ -958,15 +958,15 @@ class TestCompiler(unittest.TestCase):
         ctor = clas.constructors[0]
         thisType = ClassType(clas)
         self.assertEquals(self.makeSimpleFunction("$constructor", UnitType, [[
-                              ldlocal(WORDSIZE),
+                              ldlocal(0),
                               callg(1, getRootClass().constructors[0].id),
                               drop(),
-                              ldlocal(WORDSIZE),
+                              ldlocal(0),
                               callg(1, init.id),
                               drop(),
+                              ldlocal(1),
                               ldlocal(0),
-                              ldlocal(WORDSIZE),
-                              st32(WORDSIZE),
+                              st32(0),
                               unit(),
                               ret()]],
                             parameterTypes=[thisType, I32Type],
@@ -1018,9 +1018,9 @@ class TestCompiler(unittest.TestCase):
         self.checkFunction(package,
                            self.makeSimpleFunction("g", I64Type, [[
                                ldlocal(0),
-                               ldpc(WORDSIZE),
-                               ldpc(WORDSIZE),
-                               ld64(WORDSIZE),
+                               ldpc(0),
+                               ldpc(0),
+                               ld64(0),
                                ret()
                              ]],
                              variables=[Variable("$this", closureType, PARAMETER, frozenset())],

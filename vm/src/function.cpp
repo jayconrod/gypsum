@@ -306,8 +306,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
         }
 
         case LDLOCAL: {
-          i64 offset = readVbn(bytecode, &pcOffset);
-          i64 slot = offset / kWordSize;
+          auto slot = readVbn(bytecode, &pcOffset);
           auto type = slot >= 0
               ? parametersMap[slot]
               : currentMap.typeMap[-slot - 1];
@@ -316,12 +315,10 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
         }
 
         case STLOCAL: {
-          i64 offset = readVbn(bytecode, &pcOffset);
-          i64 slot = offset / kWordSize;
-          if (slot < 0) {
-            auto type = currentMap.pop();
+          auto slot = readVbn(bytecode, &pcOffset);
+          auto type = currentMap.pop();
+          if (slot < 0)
             currentMap.typeMap[-slot - 1] = type;
-          }
           break;
         }
 
@@ -331,10 +328,10 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
         case LD64:
         case LDP:
         case LDPC: {
-          i64 offset = readVbn(bytecode, &pcOffset);
+          auto index = readVbn(bytecode, &pcOffset);
           auto clas = currentMap.pop()->asClass();
-          auto fieldIndex = clas->findFieldIndex(static_cast<word_t>(offset));
-          currentMap.push(Field::cast(clas->fields()->get(fieldIndex))->type());
+          auto type = Field::cast(clas->fields()->get(index))->type();
+          currentMap.push(type);
           break;
         }
 

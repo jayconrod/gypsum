@@ -38,6 +38,7 @@ class Class: public Block {
   DEFINE_INL_PTR_ACCESSORS(Type*, supertype, setSupertype, kSupertypeOffset)
   DEFINE_INL_PTR_ACCESSORS(BlockArray*, fields, setFields, kFieldsOffset)
   word_t findFieldIndex(word_t offset);
+  word_t findFieldOffset(word_t index);
   DEFINE_INL_PTR_ACCESSORS(Type*, elementType, setElementType, kElementTypeOffset)
   DEFINE_INL_PTR_ACCESSORS(WordArray*, constructors, setConstructors, kConstructorsOffset)
   inline Function* getConstructor(word_t index);

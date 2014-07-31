@@ -105,7 +105,7 @@ Handle<Package> Package::loadFromStream(VM* vm, istream& stream) {
       throw Error("package file is corrupt");
     auto majorVersion = readValue<u16>(stream);
     auto minorVersion = readValue<u16>(stream);
-    if (majorVersion != 0 || minorVersion != 5)
+    if (majorVersion != 0 || minorVersion != 6)
       throw Error("package file has wrong format version");
 
     package = Package::allocate(vm->heap());

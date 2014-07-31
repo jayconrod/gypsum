@@ -53,6 +53,7 @@ class Function: public Block {
   inline Type* returnType();
   inline word_t parameterCount();
   inline word_t parametersSize();
+  inline ptrdiff_t parameterOffset(word_t index);
   inline Type* parameterType(word_t index);
 
   DEFINE_INL_ACCESSORS(word_t, localsSize, setLocalsSize, kLocalsSizeOffset)

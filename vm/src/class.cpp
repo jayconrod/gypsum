@@ -66,6 +66,18 @@ word_t Class::findFieldIndex(word_t offset) {
 }
 
 
+word_t Class::findFieldOffset(word_t index) {
+  ASSERT(index < fields()->length());
+  word_t currentOffset = kWordSize;
+  for (word_t i = 0; i < index; i++) {
+    auto size = Field::cast(fields()->get(i))->type()->typeSize();
+    auto nextAlignment = Field::cast(fields()->get(i + 1))->type()->alignment();
+    currentOffset = align(currentOffset + size, nextAlignment);
+  }
+  return currentOffset;
+}
+
+
 Meta* Class::tryBuildInstanceMeta(Heap* heap) {
   ASSERT(instanceMeta() == nullptr);
   u32 objectSize = kWordSize, elementSize = 0;

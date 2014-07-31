@@ -109,29 +109,29 @@ static Package* createTestPackage(Heap* heap) {
   typeList->set(1, Type::i8Type(roots));
   typeList->set(2, Type::rootClassType(roots));
 
-  const u8 kByteOffset = makeSmallVbn(WORDSIZE == 64 ? -8 : -4);
-  const u8 kPtrOffset = makeSmallVbn(WORDSIZE == 64 ? -16 : -8);
+  const u8 kByteIndex = makeSmallVbn(-1);
+  const u8 kPtrIndex = makeSmallVbn(-2);
   const u8 kRootClassIndex = makeSmallVbn(-1);
   vector<u8> instList = {
     I8,
     0,
     STLOCAL,
-    kByteOffset,
+    kByteIndex,
     ALLOCOBJ,
     kRootClassIndex,
     STLOCAL,
-    kPtrOffset,
+    kPtrIndex,
     LDLOCAL,
-    kByteOffset,
+    kByteIndex,
     LDLOCAL,
-    kPtrOffset,
+    kPtrIndex,
     CALLG,
     2,
     0,
     LDLOCAL,
-    kByteOffset,
+    kByteIndex,
     LDLOCAL,
-    kPtrOffset,
+    kPtrIndex,
     CALLG,
     2,
     0,

@@ -278,117 +278,49 @@ i64 Interpreter::call(Handle<Function> callee) {
       }
 
       case LDLOCAL: {
-        auto offset = readVbn();
-        auto addr = localAddress(offset);
+        auto index = readVbn();
+        auto addr = localAddressFromIndex(index);
         auto value = mem<i64>(addr);
         push(value);
         break;
       }
 
       case STLOCAL: {
-        auto offset = readVbn();
-        auto addr = localAddress(offset);
+        auto index = readVbn();
+        auto addr = localAddressFromIndex(index);
         auto value = pop<i64>();
         mem<i64>(addr) = value;
         break;
       }
 
-      case LD8: {
-        auto offset = readVbn();
-        auto block = pop<Block*>();
-        CHECK_NON_NULL(block);
-        auto value = mem<i8>(block, offset);
-        push(value);
-        break;
-      }
-
-      case LD16: {
-        auto offset = readVbn();
-        auto block = pop<Block*>();
-        CHECK_NON_NULL(block);
-        auto value = mem<i16>(block, offset);
-        push(value);
-        break;
-      }
-
-      case LD32: {
-        auto offset = readVbn();
-        auto block = pop<Block*>();
-        CHECK_NON_NULL(block);
-        auto value = mem<i32>(block, offset);
-        push(value);
-        break;
-      }
-
-      case LD64: {
-        auto offset = readVbn();
-        auto block = pop<Block*>();
-        CHECK_NON_NULL(block);
-        auto value = mem<i64>(block, offset);
-        push(value);
-        break;
-      }
-
-      case LDP: {
-        auto offset = readVbn();
-        auto block = pop<Block*>();
-        CHECK_NON_NULL(block);
-        auto value = mem<Block*>(block, offset);
-        push(value);
-        break;
-      }
+      case LD8: loadObject<i8>(); break;
+      case LD16: loadObject<i16>(); break;
+      case LD32: loadObject<i32>(); break;
+      case LD64: loadObject<i64>(); break;
+      case LDP: loadObject<i64>(); break;
 
       case LDPC: {
-        auto offset = readVbn();
+        auto index = readVbn();
         auto block = pop<Block*>();
         CHECK_NON_NULL(block);
+        auto offset = block->meta()->clas()->findFieldOffset(index);
         auto value = mem<Block*>(block, offset);
         CHECK_INITIALIZED(value);
         push(value);
         break;
       }
 
-      case ST8: {
-        auto offset = readVbn();
-        auto block = pop<Block*>();
-        auto value = pop<i8>();
-        CHECK_NON_NULL(block);
-        mem<i8>(block, offset) = value;
-        break;
-      }
-
-      case ST16: {
-        auto offset = readVbn();
-        auto block = pop<Block*>();
-        auto value = pop<i16>();
-        CHECK_NON_NULL(block);
-        mem<i16>(block, offset) = value;
-        break;
-      }
-
-      case ST32: {
-        auto offset = readVbn();
-        auto block = pop<Block*>();
-        auto value = pop<i32>();
-        CHECK_NON_NULL(block);
-        mem<i32>(block, offset) = value;
-        break;
-      }
-
-      case ST64: {
-        auto offset = readVbn();
-        auto block = pop<Block*>();
-        auto value = pop<i64>();
-        CHECK_NON_NULL(block);
-        mem<i64>(block, offset) = value;
-        break;
-      }
+      case ST8: storeObject<i8>(); break;
+      case ST16: storeObject<i16>(); break;
+      case ST32: storeObject<i32>(); break;
+      case ST64: storeObject<i64>(); break;
 
       case STP: {
-        auto offset = readVbn();
+        auto index = readVbn();
         auto block = pop<Block*>();
         auto value = pop<Block*>();
         CHECK_NON_NULL(block);
+        auto offset = block->meta()->clas()->findFieldOffset(index);
         auto addr = &mem<Block*>(block, offset);
         *addr = value;
         vm_->heap()->recordWrite(addr, value);
@@ -773,15 +705,26 @@ void Interpreter::doThrow(Block* exception) {
 }
 
 
-Address Interpreter::localAddress(i64 offset) {
-  Address fp = stack_->fp();
-  if (offset >= 0) {
-    // parameter
-    return fp + kFrameControlSize + offset;
+ptrdiff_t Interpreter::localOffsetFromIndex(i64 index) {
+  if (index >= 0) {
+    // parameter. 0 is the first parameter (highest address on stack).
+    return kFrameControlSize + function_->parameterOffset(static_cast<word_t>(index));
   } else {
-    // local
-    return fp + offset;
+    // local. -1 is the first local, and they grow down.
+    // TODO: this assumes all locals are word-sized.
+    return static_cast<ptrdiff_t>(index) * static_cast<ptrdiff_t>(kWordSize);
   }
+}
+
+
+Address Interpreter::localAddressFromOffset(ptrdiff_t offset) {
+  Address fp = stack_->fp();
+  return fp + offset;
+}
+
+
+Address Interpreter::localAddressFromIndex(i64 index) {
+  return localAddressFromOffset(localOffsetFromIndex(index));
 }
 
 
@@ -803,6 +746,34 @@ void Interpreter::collectGarbage() {
   GC gc(vm_->heap());
   gc.collectGarbage();
   stack_->pop<word_t>();
+}
+
+
+template <typename T>
+void Interpreter::loadObject() {
+  auto index = readVbn();
+  auto block = pop<Block*>();
+  if (block == nullptr) {
+    throwBuiltinException(BUILTIN_NULL_POINTER_EXCEPTION_CLASS_ID);
+    return;
+  }
+  auto offset = block->meta()->clas()->findFieldOffset(index);
+  auto value = mem<T>(block, offset);
+  push(value);
+}
+
+
+template <typename T>
+void Interpreter::storeObject() {
+  auto index = readVbn();
+  auto block = pop<Block*>();
+  auto value = pop<T>();
+  if (block == nullptr) {
+    throwBuiltinException(BUILTIN_NULL_POINTER_EXCEPTION_CLASS_ID);
+    return;
+  }
+  auto offset = block->meta()->clas()->findFieldOffset(index);
+  mem<T>(block, offset) = value;
 }
 
 

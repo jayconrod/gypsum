@@ -82,6 +82,15 @@ word_t Function::parametersSize() {
 }
 
 
+ptrdiff_t Function::parameterOffset(word_t index) {
+  ptrdiff_t offset = 0;
+  for (word_t i = parameterCount() - 1; i > index; i--) {
+    offset += align(parameterType(i)->typeSize(), kWordSize);
+  }
+  return offset;
+}
+
+
 Type* Function::parameterType(word_t index) {
   return Type::cast(types()->get(index + 1));
 }

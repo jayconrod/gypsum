@@ -48,10 +48,15 @@ class Interpreter {
   template <typename T> void push(T value);
   template <typename T> T pop();
 
-  Address localAddress(i64 offset);
+  ptrdiff_t localOffsetFromIndex(i64 index);
+  Address localAddressFromOffset(ptrdiff_t offset);
+  Address localAddressFromIndex(i64 index);
   i64 readVbn();
 
   void collectGarbage();
+
+  template <typename T> void loadObject();
+  template <typename T> void storeObject();
 
   template <typename T> void add();
   template <typename T> void sub();
