@@ -765,6 +765,13 @@ class TestCompiler(unittest.TestCase):
                                ret(),
                              ]]))
 
+    def testReturnEmpty(self):
+        self.checkFunction("def f = return",
+                           self.makeSimpleFunction("f", UnitType, [[
+                               unit(),
+                               ret(),
+                             ]]))
+
     def testReturnInWhileBody(self):
         self.checkFunction("def f = while (false) return {}",
                            self.makeSimpleFunction("f", UnitType, [[

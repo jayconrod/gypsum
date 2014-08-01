@@ -479,7 +479,10 @@ class CompileVisitor(AstNodeVisitor):
         self.setCurrentBlock(None)
 
     def visitAstReturnExpression(self, expr, mode):
-        self.visit(expr.expression, COMPILE_FOR_VALUE)
+        if expr.expression is None:
+            self.unit()
+        else:
+            self.visit(expr.expression, COMPILE_FOR_VALUE)
         self.ret()
         self.unreachable = True
 

@@ -70,6 +70,11 @@ class TestTypeAnalysis(unittest.TestCase):
                  "  def this: i32 = 12"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
+    def testConstructorsMayNotReturnValue(self):
+        source = "class Foo\n" + \
+                 "  def this = return 12"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     def testPrimaryConstructorsReturnUnit(self):
         source = "class Foo()"
         info = self.analyzeFromSource(source)
@@ -437,6 +442,11 @@ class TestTypeAnalysis(unittest.TestCase):
         source = "class C\n" + \
                  "  var x = return 12"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testReturnEmpty(self):
+        info = self.analyzeFromSource("def f = return")
+        self.assertEquals(NoType, info.getType(info.ast.definitions[0].body))
+        self.assertEquals(UnitType, info.package.findFunction(name="f").returnType)
 
     def testConstructRootClass(self):
         info = self.analyzeFromSource("def f = Object")

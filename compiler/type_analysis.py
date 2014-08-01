@@ -338,9 +338,13 @@ class TypeVisitor(AstNodeVisitor):
         return ty
 
     def visitAstReturnExpression(self, node):
-        if not self.isAnalyzingFunction():
+        if not self.isAnalyzingFunction() or \
+           (self.functionStack[-1].irDefn.isConstructor() and node.expression is not None):
             raise TypeException("type error: return not valid in this position")
-        retTy = self.visit(node.expression)
+        if node.expression is None:
+            retTy = UnitType
+        else:
+            retTy = self.visit(node.expression)
         self.functionStack[-1].handleReturn(retTy)
         return NoType
 
