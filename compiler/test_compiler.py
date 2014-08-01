@@ -204,9 +204,9 @@ class TestCompiler(unittest.TestCase):
                        drop(),
                        ldlocal(0),
                        ldlocal(0),
-                       dup(),
-                       swap2(),
+                       swap(),
                        stp(0),
+                       unit(),
                        ret()]],
                      parameterTypes=[clasTy],
                      variables=[Variable("$this", clasTy, PARAMETER, frozenset())])
@@ -907,15 +907,58 @@ class TestCompiler(unittest.TestCase):
                             variables=[Variable("$this", thisType, PARAMETER, frozenset())]),
                           ctor)
 
-    def testPrimaryAndSecondaryCtorsCallInitializer(self):
+    def testPrimaryCtorCallsInitializer(self):
         source = "class Foo(x: i32)\n" + \
-                 "  def this(y: f32) = {}"
+                 "  var y = x"
         package = self.makePackage(source)
         clas = package.findClass(name="Foo")
         thisType = ClassType(clas)
-        init = package.findFunction(name="$initializer")
-        for ctor in clas.constructors:
-            self.assertEquals(callg(1, init.id), ctor.blocks[0].instructions[4])
+        ctor = clas.constructors[0]
+        init = clas.initializer
+        expected = self.makeSimpleFunction("$constructor", UnitType, [[
+            ldlocal(0),
+            callg(1, getRootClass().constructors[0].id),
+            drop(),
+            ldlocal(1),
+            ldlocal(0),
+            st32(0),
+            ldlocal(0),
+            callg(1, init.id),
+            drop(),
+            unit(),
+            ret()]],
+          parameterTypes=[thisType, I32Type],
+          variables=[Variable("$this", thisType, PARAMETER, frozenset())])
+        self.assertEquals(expected, ctor)
+
+    def testSecondaryCtorCallsInitializer(self):
+        source = "class Foo\n" + \
+                 "  def this(x: i32) =\n" + \
+                 "    this.x = x\n" + \
+                 "  var x: i32\n" + \
+                 "  var y: i32"
+        package = self.makePackage(source)
+        clas = package.findClass(name="Foo")
+        thisType = ClassType(clas)
+        ctor = clas.constructors[0]
+        init = clas.initializer
+        expected = self.makeSimpleFunction("$constructor", UnitType, [[
+            ldlocal(0),
+            callg(1, getRootClass().constructors[0].id),
+            drop(),
+            ldlocal(0),
+            callg(1, init.id),
+            drop(),
+            ldlocal(0),
+            ldlocal(1),
+            swap(),
+            st32(0),
+            unit(),
+            ret()]],
+          parameterTypes=[thisType, I32Type],
+          variables=[Variable("$this", thisType, PARAMETER, frozenset()),
+                     Variable("x", I32Type, PARAMETER, frozenset())])
+        self.assertEquals(expected, ctor)
 
     def testNullaryCtor(self):
         source = "class Foo\n" + \
@@ -961,12 +1004,12 @@ class TestCompiler(unittest.TestCase):
                               ldlocal(0),
                               callg(1, getRootClass().constructors[0].id),
                               drop(),
-                              ldlocal(0),
-                              callg(1, init.id),
-                              drop(),
                               ldlocal(1),
                               ldlocal(0),
                               st32(0),
+                              ldlocal(0),
+                              callg(1, init.id),
+                              drop(),
                               unit(),
                               ret()]],
                             parameterTypes=[thisType, I32Type],

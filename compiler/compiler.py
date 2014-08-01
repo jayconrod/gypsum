@@ -99,6 +99,13 @@ class CompileVisitor(AstNodeVisitor):
             self.callg(1, defaultSuperCtors[0].id)
             self.drop()
 
+        # If this is a primary constructor, unpack the parameters before calling the
+        # initializer. In this case, unpacking the parameters means storing them into the
+        # object. The initializer may need to access them.
+        if self.function.isConstructor() and \
+           isinstance(self.function.astDefn, AstPrimaryConstructorDefinition):
+            self.unpackParameters(parameters)
+            parameters = None
 
         # If this is a constructor that doesn't call any alternate constructor, call the
         # initializer before we evaluate the body.
@@ -110,10 +117,13 @@ class CompileVisitor(AstNodeVisitor):
                 self.drop()
 
         # Compile those statements.
-        self.compileStatements(self.astDefn.id, parameters, statements, COMPILE_FOR_VALUE)
+        mode = COMPILE_FOR_EFFECT if self.function.isConstructor() else COMPILE_FOR_VALUE
+        self.compileStatements(self.astDefn.id, parameters, statements, mode)
 
         # Add a return if there was no explicit return.
         if self.currentBlock is not None:
+            if mode is COMPILE_FOR_EFFECT:
+                self.unit()
             self.ret()
 
         # Sort the blocks in reverse-post-order and remove any unreachable blocks.
@@ -526,6 +536,11 @@ class CompileVisitor(AstNodeVisitor):
                     if isinstance(defnInfo.irDefn, Variable):
                        defnInfo.irDefn.index = index + implicitParamCount
 
+    def unpackParameters(self, parameters):
+        implicitParameterCount = 1 if self.function.isMethod() else 0
+        for index, param in enumerate(parameters):
+            self.unpackParameter(param, index + implicitParameterCount)
+
     def unpackParameter(self, param, index):
         paramType = self.info.getType(param)
         if isinstance(param.pattern, AstVariablePattern):
@@ -551,9 +566,7 @@ class CompileVisitor(AstNodeVisitor):
 
         # Unpack parameters, if we have them.
         if parameters is not None:
-            implicitParameterCount = 1 if self.function.isMethod() else 0
-            for index, param in enumerate(parameters):
-                self.unpackParameter(param, index + implicitParameterCount)
+            self.unpackParameters(parameters)
 
         # Handle any non-variable definitions.
         self.buildDeclarations(statements)
