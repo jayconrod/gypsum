@@ -25,6 +25,9 @@ word_t Block::sizeOfBlock() {
       case META_BLOCK_TYPE:
         size = Meta::cast(this)->sizeOfMeta();
         break;
+      case FREE_BLOCK_TYPE:
+        size = Free::cast(this)->size();
+        break;
       case FUNCTION_BLOCK_TYPE:
         size = Function::cast(this)->sizeOfFunction();
         break;
@@ -115,6 +118,25 @@ BLOCK_TYPE_LIST(TYPE_STR)
   fprintf(out, "  custom pointers: %s\n", hasCustomPointers() ? "yes" : "no");
   fprintf(out, "  object size: %d\n", static_cast<int>(objectSize()));
   fprintf(out, "  element size: %d\n", static_cast<int>(elementSize()));
+}
+
+
+void* Free::operator new (size_t unused, Heap* heap, size_t size) {
+  auto free = reinterpret_cast<Free*>(heap->allocateRaw(size));
+  if (free == nullptr)
+    return free;
+
+  free->setMeta(FREE_BLOCK_TYPE);
+  free->size_ = size;
+  return free;
+}
+
+
+void* Free::operator new (size_t unused, void* place, size_t size) {
+  auto free = reinterpret_cast<Free*>(place);
+  free->setMeta(FREE_BLOCK_TYPE);
+  free->size_ = size;
+  return free;
 }
 
 }

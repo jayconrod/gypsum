@@ -11,14 +11,18 @@
 #include <memory>
 #include <vector>
 #include "list.h"
+#include "option.h"
+#include "remembered-set.h"
 #include "utils.h"
 
 namespace codeswitch {
 namespace internal {
 
+class Bitmap;
 class Block;
+class Free;
 class Heap;
-class RememberedSet;
+class VM;
 
 enum SpaceId {
   NEW_SPACE,
@@ -28,11 +32,100 @@ enum SpaceId {
 static_assert(SPACE_COUNT <= 16, "space id must fit in 4 bits");
 
 
-/** A MemoryChunk is an aligned region of contiguous memory obtained from the system using
- *  anonymous mapping. Its size must be a multiple of the system page size. Some information
- *  about the memory chunk is stored at the beginning of the chunk itself. Note that this is
- *  a pointer object: "this" always points to the beginning of the actual chunk.
+/** An AllocationRange is a contiguous range of memory currently being used for allocation.
+ *  `base` indicates where the next allocation should occur. `limit` indicates the end of
+ *  the range.
  */
+class AllocationRange {
+ public:
+  constexpr AllocationRange(Address base, Address limit)
+      : base_(base), limit_(limit) { }
+
+  static AllocationRange getInvalid() { return AllocationRange(0, 0); }
+  bool isValid() const { return base_ != 0 && limit_ != 0; }
+  static bool isValid(const AllocationRange& range) { return range.isValid(); }
+
+  Address base() const { return base_; }
+  Address limit() const { return limit_; }
+  Address size() const { return limit_ - base_; }
+
+  /** Increment `base` by `size` bytes and return the old value of `base`. If `base` exceeds
+   *  `limit`, the allocation fails, and `None` is returned.
+   */
+  OptP<Address> allocate(size_t size);
+
+  bool operator == (const AllocationRange& other) const {
+    return base_ == other.base_ && limit_ == other.limit_;
+  }
+  bool operator != (const AllocationRange& other) const { return !(*this == other); }
+
+ private:
+  Address base_;
+  Address limit_;
+};
+
+
+enum Executable {
+  NOT_EXECUTABLE,
+  EXECUTABLE
+};
+
+
+/** A Chunk is the basic unit of memory allocated from the operating system. The garbage
+ *  collected heap is composed of chunks. Each chunk contains some header information, a
+ *  marking bitmap (for the garbage collector), and an area where blocks can be allocated.
+ */
+class Chunk {
+ public:
+  static const word_t kDefaultSize = 1 * MB;
+
+  void* operator new (size_t unused, size_t size, Executable executable);
+  explicit Chunk(VM* vm);
+  void operator delete (void* addr);
+
+  static Chunk* fromAddress(Address addr) {
+    return reinterpret_cast<Chunk*>(alignDown(addr, kDefaultSize));
+  }
+
+  Address base() const { return reinterpret_cast<Address>(this); }
+  word_t size() const { return kDefaultSize; }
+  Address limit() const { return base() + size(); }
+  bool contains(Address addr) const { return base() <= addr && addr < limit(); }
+
+  bool isExecutable() const { return executable_ == EXECUTABLE; }
+  Executable executable() const { return executable_; }
+
+  VM* vm() const { return vm_; }
+
+  Option<AllocationRange>& allocationRange() { return allocationRange_; }
+  void setAllocationRange(Option<AllocationRange> range) { allocationRange_ = range; }
+
+  OptP<Free*> freeListHead() const { return freeListHead_; }
+  void setFreeListHead(OptP<Free*> free) { freeListHead_ = free; }
+
+  RememberedSet& rememberedSet() { return rememberedSet_; }
+
+  Bitmap getBitmap();
+  Address bitmapBase() const;
+  size_t bitmapSize() const;
+
+  Address storageBase() const;
+  Address storageLimit() const;
+  size_t storageSize() const { return storageLimit() - storageBase(); }
+  bool inStorageRange(Address addr) const {
+    return storageBase() <= addr && addr < storageLimit();
+  }
+
+ private:
+  word_t size_;
+  Executable executable_;
+  VM* vm_;
+  Option<AllocationRange> allocationRange_;
+  OptP<Free*> freeListHead_;
+  RememberedSet rememberedSet_;
+};
+
+
 class MemoryChunk {
  public:
   enum Protection {

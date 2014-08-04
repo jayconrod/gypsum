@@ -16,11 +16,11 @@ namespace internal {
 
 class Block;
 
-/** RememberedSet is used to track incoming pointers for a Page. It is a simple data structure,
- *  stored on the C++ heap (which is necessary since it may grow after a page is already full).
- *  Each element of the set is a slot: a location of a pointer to an object on the page.
+/** RememberedSet is used to track incoming pointers for a Chunk. It is a simple data structure,
+ *  stored on the C++ heap (which is necessary since it may grow after a chunk is already full).
+ *  Each element of the set is a slot: a location of a pointer to an object on the chunk.
  *  Note that since pointers can be rewritten, the set may contain pointers that no longer
- *  point to the associated page. The elements of the set are unique.
+ *  point to the associated chunk. The elements of the set are unique.
  *
  *  The set is designed for fast common-case insertion. Elements are stored in two partitions:
  *  a clean array, which is sorted and unique, and a dirty array, which is neither. New slots

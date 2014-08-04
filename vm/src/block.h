@@ -18,6 +18,7 @@ namespace internal {
 
 #define BLOCK_TYPE_LIST(V)             \
 V(Meta, META)                          \
+V(Free, FREE)                          \
 V(Package, PACKAGE)                    \
 V(Stack, STACK)                        \
 V(Function, FUNCTION)                  \
@@ -62,6 +63,10 @@ class Heap;
 
 class Block {
  public:
+  Block() { }
+  Block(const Block&) = delete;
+  Block(const Block&&) = delete;
+
 #define DECLARE_TYPE_CHECK(Name, NAME) \
   inline bool is##Name();
 BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
@@ -87,10 +92,6 @@ BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
   static const word_t kGCBitCount = 2;
   static const word_t kGCBitMask = (1 << kGCBitCount) - 1;
   static const int kBlockHeaderSize = kMetaOffset + kWordSize;
-
- private:
-  Block() { UNREACHABLE(); }
-  NON_COPYABLE(Block)
 };
 
 
@@ -167,6 +168,27 @@ class Meta: public Block {
 
   static const word_t kPointerMap = 0;
   static const word_t kElementPointerMap = 1;
+};
+
+
+/** A Free block is a range of free memory. It contains a size and a pointer to another Free.
+ *  It can be used by the heap as a node in a free list.
+ */
+class Free: public Block {
+ public:
+  void* operator new (size_t unused, Heap* heap, size_t size);
+  void* operator new (size_t unused, void* place, size_t size);
+  Free(OptP<Free*> next)
+      : next_(next) { }
+
+  DEFINE_CAST(Free)
+
+  word_t size() const { return size_; }
+  OptP<Free*> next() const { return next_; }
+
+ private:
+  word_t size_;
+  OptP<Free*> next_;
 };
 
 

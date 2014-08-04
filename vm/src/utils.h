@@ -66,6 +66,9 @@ do { \
 abort(__FILE__, __LINE__, (reason))
 
 
+#define STATIC_ASSERT(cond) static_assert(cond, #cond)
+
+
 #define NON_COPYABLE(className) \
  private: \
   className(const className& copy); \
@@ -73,7 +76,6 @@ abort(__FILE__, __LINE__, (reason))
 
 
 #define USE(e) (void) (e)
-
 
 #define ARRAY_LENGTH(a) (sizeof(a) / sizeof((a)[0]))
 
@@ -115,6 +117,11 @@ inline word_t isPowerOf2(word_t n) {
 
 constexpr inline word_t align(word_t n, word_t alignment) {
   return (n + alignment - 1UL) & ~(alignment - 1UL);
+}
+
+
+constexpr inline word_t alignDown(word_t n, word_t alignment) {
+  return n & ~(alignment - 1UL);
 }
 
 

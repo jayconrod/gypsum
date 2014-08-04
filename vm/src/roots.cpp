@@ -24,6 +24,11 @@ void Roots::initialize(Heap* heap) {
   metaMeta->elementPointerMap().setWord(0, Meta::kElementPointerMap);
   basicRoots_[META_META_ROOT_INDEX] = metaMeta;
 
+  Meta* freeMeta = Meta::tryAllocate(heap, 0, sizeof(Free), 0);
+  freeMeta->initialize(FREE_BLOCK_TYPE, nullptr, sizeof(Free), 0);
+  freeMeta->setHasCustomSize(true);
+  basicRoots_[FREE_META_ROOT_INDEX] = freeMeta;
+
   Meta* packageMeta = Meta::tryAllocate(heap, 0, Package::kSize, 0);
   packageMeta->initialize(PACKAGE_BLOCK_TYPE, nullptr, Package::kSize, 0);
   packageMeta->objectPointerMap().setWord(0, Package::kPointerMap);

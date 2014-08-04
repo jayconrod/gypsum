@@ -35,6 +35,7 @@ class Roots {
 
   #define BASIC_ROOT_LIST(F)                                          \
     F(Meta, metaMeta, META_META)                                      \
+    F(Meta, freeMeta, FREE_META)                                      \
     F(Meta, packageMeta, PACKAGE_META)                                \
     F(Meta, stackMeta, STACK_META)                                    \
     F(Meta, functionMeta, FUNCTION_META)                              \
