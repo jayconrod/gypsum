@@ -72,6 +72,7 @@ class Block {
 BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
 #undef DECLARE_TYPE_CHECK
 
+  Address address() { return reinterpret_cast<Address>(this); }
   word_t sizeOfBlock();
   void print(FILE* out = stderr);
   void relocate(word_t delta);

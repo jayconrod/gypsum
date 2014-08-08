@@ -15,6 +15,7 @@
  */
 
 #include <functional>
+#include <memory>
 #include "utils.h"
 
 namespace codeswitch {
@@ -63,6 +64,19 @@ class GeneralOption {
 template <typename T>
 using Option = GeneralOption<T, T::getInvalid, T::isValid>;
 
+
+template <typename T>
+inline std::unique_ptr<T> getUniquePtrNone() { return std::unique_ptr<T>(); }
+
+template <typename T>
+inline bool isUniquePtrValid(const std::unique_ptr<T>& ptr) { return static_cast<bool>(ptr); }
+
+
+/** OptUP is used to wrap std::unique_ptr. */
+template <typename T>
+using OptUP = GeneralOption<std::unique_ptr<T>,
+                            &getUniquePtrNone<std::unique_ptr<T>>,
+                            &isUniquePtrValid<std::unique_ptr<T>>>;
 
 /** SentinelOption uses a special sentinel value (specified as a template parameter) instead
  *  of a predicate to determine whether a value is valid or not. Unforunately, this cannot

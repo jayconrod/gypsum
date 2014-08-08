@@ -12,6 +12,7 @@
 #include "error.h"
 #include "list.h"
 #include "memory.h"
+#include "option.h"
 #include "utils.h"
 
 namespace codeswitch {
@@ -46,52 +47,31 @@ class Heap {
   static const int kGCBitCount = 2;
   static const int kGCBitMask = (1 << kGCBitCount) - 1;
 
-  inline Address allocateRaw(word_t size);
+  OptP<Address> allocateRaw(word_t size);
 
   template <class T>
-  static inline void recordWrite(T** from, T* to);
-  static inline void recordWrite(Address from, Address to);
+  static void recordWrite(T** from, T* to);
+  static void recordWrite(Address from, Address to);
 
   void collectGarbage();
 
   VM* vm() { return vm_; }
-  NewSpace* newSpace() { return &newSpace_; }
-  Space* packageSpace() { return &packageSpace_; }
 
-  Space* getSpaceById(SpaceId);
-
-  class iterator: public std::iterator<std::input_iterator_tag, Space*> {
+  class iterator: public std::iterator<std::input_iterator_tag, Chunk*> {
    public:
-    inline iterator(Heap* heap, SpaceId id);
-    inline Space* operator * ();
-    inline bool operator == (const iterator& other) const;
-    inline bool operator != (const iterator& other) const {
+    iterator(Heap* heap, std::vector<OptUP<Chunk>> it);
+    Chunk* operator * ();
+    bool operator == (const iterator& other) const;
+    bool operator != (const iterator& other) const {
       return !(*this == other);
     }
-    inline iterator& operator ++ ();
+    iterator& operator ++ ();
    private:
     Heap* heap_;
-    SpaceId id_;
+    std::vector<OptUP<Chunk>>::iterator it_;
   };
-  inline iterator begin();
-  inline iterator end();
-
-  class AllocationRangeScope {
-   public:
-    AllocationRangeScope(Heap* heap, Page* page)
-        : heap_(heap) {
-      heap_->allocationRange(&page_, &top_, &limit_);
-      heap_->setAllocationRange(page);
-    }
-    ~AllocationRangeScope() {
-      heap_->setAllocationRange(page_, top_, limit_);
-    }
-   private:
-    Heap* heap_;
-    Page* page_;
-    Address top_;
-    Address limit_;
-  };
+  iterator begin();
+  iterator end();
 
 #ifdef DEBUG
   bool contains(Block* block);
@@ -102,28 +82,32 @@ class Heap {
   static const word_t kMinAddress = PAGESIZE;
 
  private:
-  inline Address allocateRawFast(word_t size);
-  Address allocateRawSlow(word_t size);
+  OptP<Address> allocateRawFast(word_t size);
+  OptP<Address> allocateRawSlow(word_t size);
 
-  void allocationRange(Page** page, Address* top, Address* limit);
-  void setAllocationRange(Page* page);
-  void setAllocationRange(Page* page, Address top, Address limit);
+  bool shouldExpand() const;
+  void expand();
+
   template <class Callback>
   void visitRoots(Callback callback);
 
   VM* vm_;
-  NewSpace newSpace_;
-  Space packageSpace_;
-  Page* allocatingPage_;
-  Address top_;
-  Address limit_;
+  std::vector<OptUP<Chunk>> chunks_;
+  OptP<AllocationRange*> allocationRange_;
+  OptP<Chunk*> allocationRangeChunk_;
+  bool shouldExpand_;
 
   friend class GC;
-  friend class Package;
   friend class VM;
 
   NON_COPYABLE(Heap)
 };
+
+
+template <class T>
+void Heap::recordWrite(T** from, T* to) {
+  recordWrite(reinterpret_cast<Address>(from), reinterpret_cast<Address>(to));
+}
 
 }
 }

@@ -70,9 +70,9 @@ abort(__FILE__, __LINE__, (reason))
 
 
 #define NON_COPYABLE(className) \
- private: \
-  className(const className& copy); \
-  className& operator = (const className& copy);
+  className(const className&) = delete; \
+  className(const className&&) = delete; \
+  className& operator = (const className&) = delete;
 
 
 #define USE(e) (void) (e)

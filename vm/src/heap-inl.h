@@ -20,29 +20,11 @@ class Block;
 
 
 Address Heap::allocateRaw(word_t size) {
-  size = align(size, kBlockAlignment);
-  Address addr = allocateRawFast(size);
   if (addr != 0) {
     return addr;
   } else {
     return allocateRawSlow(size);
   }
-}
-
-
-template <class T>
-void Heap::recordWrite(T** from, T* to) {
-  recordWrite(reinterpret_cast<Address>(from), reinterpret_cast<Address>(to));
-}
-
-
-void Heap::recordWrite(Address from, Address to) {
-  if (to == 0)
-    return;
-  auto fromPage = Page::fromAddress(from), toPage = Page::fromAddress(to);
-  if (fromPage->identity() == NEW_SPACE || toPage->identity() != NEW_SPACE)
-    return;
-  toPage->rememberedSet()->add(reinterpret_cast<Block**>(from));
 }
 
 

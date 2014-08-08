@@ -78,9 +78,10 @@ enum Executable {
 class Chunk {
  public:
   static const word_t kDefaultSize = 1 * MB;
+  static const word_t kMaxBlockSize = kDefaultSize - 16 * KB;
 
   void* operator new (size_t unused, size_t size, Executable executable);
-  explicit Chunk(VM* vm);
+  explicit Chunk(VM* vm, u32 id);
   void operator delete (void* addr);
 
   static Chunk* fromAddress(Address addr) {
@@ -96,6 +97,7 @@ class Chunk {
   Executable executable() const { return executable_; }
 
   VM* vm() const { return vm_; }
+  u32 id() const { return id_; }
 
   Option<AllocationRange>& allocationRange() { return allocationRange_; }
   void setAllocationRange(Option<AllocationRange> range) { allocationRange_ = range; }
@@ -120,6 +122,7 @@ class Chunk {
   word_t size_;
   Executable executable_;
   VM* vm_;
+  u32 id_;
   Option<AllocationRange> allocationRange_;
   OptP<Free*> freeListHead_;
   RememberedSet rememberedSet_;

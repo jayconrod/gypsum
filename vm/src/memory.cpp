@@ -75,8 +75,9 @@ void* Chunk::operator new (size_t unused, size_t size, Executable executable) {
 }
 
 
-Chunk::Chunk(VM* vm)
-    : vm_(vm) {
+Chunk::Chunk(VM* vm, u32 id)
+    : vm_(vm),
+      id_(id) {
   // We don't initialize the marking bitmap or the contents of the page, since the kernel will
   // zero-initialize pages before giving them to us.
   auto freePlace = reinterpret_cast<void*>(storageBase());
