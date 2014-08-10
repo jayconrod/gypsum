@@ -14,7 +14,7 @@
 #include "bitmap.h"
 #include "block-inl.h"
 #include "error.h"
-#include "handle-inl.h"
+#include "handle.h"
 #include "heap.h"
 #include "remembered-set.h"
 #include "vm.h"

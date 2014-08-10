@@ -53,7 +53,7 @@ class Type: public Object {
   };
 
   static inline Type* tryAllocate(Heap* heap, word_t length);
-  static inline Handle<Type> allocate(Heap* heap, word_t length);
+  static inline Local<Type> allocate(Heap* heap, word_t length);
   inline void initialize(Form primitive, Flags flags = NO_FLAGS);
   inline void initialize(Class* clas, Flags flags = NO_FLAGS);
   inline void initialize(TypeParameter* param, Flags flags = NO_FLAGS);

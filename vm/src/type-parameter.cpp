@@ -7,7 +7,7 @@
 #include "type-parameter.h"
 
 #include "block-inl.h"
-#include "handle-inl.h"
+#include "handle.h"
 #include "heap.h"
 
 namespace codeswitch {
@@ -24,7 +24,7 @@ TypeParameter* TypeParameter::tryAllocate(Heap* heap) {
 }
 
 
-Handle<TypeParameter> TypeParameter::allocate(Heap* heap) {
+Local<TypeParameter> TypeParameter::allocate(Heap* heap) {
   DEFINE_ALLOCATION(heap, TypeParameter, tryAllocate(heap))
 }
 

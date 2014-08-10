@@ -32,7 +32,7 @@ Function* Function::tryAllocate(Heap* heap, word_t instructionsSize) {
 }
 
 
-Handle<Function> Function::allocate(Heap* heap, word_t instructionsSize) {
+Local<Function> Function::allocate(Heap* heap, word_t instructionsSize) {
   DEFINE_ALLOCATION(heap, Function, tryAllocate(heap, instructionsSize))
 }
 
@@ -703,7 +703,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
 }
 
 
-Handle<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, Handle<Function> function) {
+Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, Local<Function> function) {
   DEFINE_ALLOCATION(heap, StackPointerMap, tryBuildFrom(heap, *function))
 }
 

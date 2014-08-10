@@ -7,7 +7,7 @@
 #include "vm.h"
 
 #include "block-inl.h"
-#include "handle-inl.h"
+#include "handle.h"
 #include "heap.h"
 #include "package.h"
 #include "stack-inl.h"
@@ -23,7 +23,11 @@ VM::VM(Flags flags)
       roots_(new Roots),
       handleStorage_(new HandleStorage) {
   roots_->initialize(heap());
-  stack_ = Handle<Stack>(Stack::allocate(heap(), Stack::kDefaultSize));
+  {
+    HandleScope handleScope(handleStorage_.get());
+    Local<Stack> stack = Stack::allocate(heap(), Stack::kDefaultSize);
+    stack_ = Persistent<Stack>(stack);
+  }
   if (hasFlags(kVerifyHeap))
     heap()->verify();
 }
@@ -35,8 +39,8 @@ VM::~VM() {
 }
 
 
-void VM::addPackage(Handle<Package> package) {
-  packages_.add(package);
+void VM::addPackage(const Persistent<Package>& package) {
+  packages_.push_back(package);
 }
 
 }

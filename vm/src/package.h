@@ -24,14 +24,14 @@ class TypeParameter;
 class Package: public Block {
  public:
   static Package* tryAllocate(Heap* heap);
-  static Handle<Package> allocate(Heap* heap);
+  static Local<Package> allocate(Heap* heap);
   DEFINE_CAST(Package)
 
   void printPackage(FILE* out);
 
-  static Handle<Package> loadFromFile(VM* vm, const char* fileName);
-  static Handle<Package> loadFromBytes(VM* vm, const u8* bytes, word_t size);
-  static Handle<Package> loadFromStream(VM* vm, std::istream& stream);
+  static Local<Package> loadFromFile(VM* vm, const char* fileName);
+  static Local<Package> loadFromBytes(VM* vm, const u8* bytes, word_t size);
+  static Local<Package> loadFromStream(VM* vm, std::istream& stream);
 
   DEFINE_INL_ACCESSORS(u64, flags, setFlags, kFlagsOffset)
   DEFINE_INL_PTR_ACCESSORS(BlockArray*, strings, setStrings, kStringsOffset)

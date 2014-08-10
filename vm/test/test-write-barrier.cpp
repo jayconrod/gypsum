@@ -7,7 +7,7 @@
 #include "test.h"
 
 #include <memory>
-#include "handle-inl.h"
+#include "handle.h"
 #include "heap.h"
 #include "memory.h"
 #include "remembered-set.h"

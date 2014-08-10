@@ -7,7 +7,7 @@
 #include "field.h"
 
 #include "block-inl.h"
-#include "handle-inl.h"
+#include "handle.h"
 #include "heap.h"
 
 namespace codeswitch {
@@ -23,7 +23,7 @@ Field* Field::tryAllocate(Heap* heap) {
 }
 
 
-Handle<Field> Field::allocate(Heap* heap) {
+Local<Field> Field::allocate(Heap* heap) {
   DEFINE_ALLOCATION(heap, Field, tryAllocate(heap))
 }
 

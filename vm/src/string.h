@@ -18,12 +18,12 @@ namespace internal {
 class String: public Object {
  public:
   static inline String* tryAllocate(Heap* heap, word_t length);
-  static inline Handle<String> allocate(Heap* heap, word_t length);
+  static inline Local<String> allocate(Heap* heap, word_t length);
   void initialize(const u32* chars);
-  static Handle<String> fromUtf8CString(Heap* heap, const char* utf8Chars);
-  static Handle<String> fromUtf8String(Heap* heap, const u8* utf8Chars, word_t size);
-  static Handle<String> fromUtf8String(Heap* heap, const u8* utf8Chars,
-                                       word_t length, word_t size);
+  static Local<String> fromUtf8CString(Heap* heap, const char* utf8Chars);
+  static Local<String> fromUtf8String(Heap* heap, const u8* utf8Chars, word_t size);
+  static Local<String> fromUtf8String(Heap* heap, const u8* utf8Chars,
+                                      word_t length, word_t size);
 
   DEFINE_CAST(String)
 
@@ -39,7 +39,9 @@ class String: public Object {
   int compare(String* other);
 
   String* tryConcat(Heap* heap, String* other);
-  static Handle<String> concat(Heap* heap, Handle<String> left, Handle<String> right);
+  static Local<String> concat(Heap* heap,
+                              const Handle<String>& left,
+                              const Handle<String>& right);
 
   static const int kLengthOffset = kBlockHeaderSize;
   static const int kHeaderSize = kLengthOffset + kWordSize;

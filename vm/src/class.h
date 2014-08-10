@@ -21,7 +21,7 @@ class Type;
 class Class: public Block {
  public:
   static Class* tryAllocate(Heap* heap);
-  static Handle<Class> allocate(Heap* heap);
+  static Local<Class> allocate(Heap* heap);
   void initialize(u32 flags,
                   Type* supertype,
                   BlockArray* fields,
@@ -48,8 +48,8 @@ class Class: public Block {
   DEFINE_INL_PTR_ACCESSORS(Meta*, instanceMeta, setInstanceMeta, kInstanceMetaOffset)
   inline Meta* getOrTryBuildInstanceMeta(Heap* heap);
   Meta* tryBuildInstanceMeta(Heap* heap);
-  inline Handle<Meta> getOrBuildInstanceMeta(Heap* heap);
-  Handle<Meta> buildInstanceMeta(Heap* heap);
+  inline Local<Meta> getOrBuildInstanceMeta(Heap* heap);
+  Local<Meta> buildInstanceMeta(Heap* heap);
 
   bool isSubclassOf(Class* other);
 

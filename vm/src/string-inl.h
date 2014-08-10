@@ -9,7 +9,7 @@
 
 #include "string.h"
 
-#include "handle-inl.h"
+#include "handle.h"
 #include "heap.h"
 
 namespace codeswitch {
@@ -27,7 +27,7 @@ String* String::tryAllocate(Heap* heap, word_t length) {
 }
 
 
-Handle<String> String::allocate(Heap* heap, word_t length) {
+Local<String> String::allocate(Heap* heap, word_t length) {
   DEFINE_ALLOCATION(heap, String, tryAllocate(heap, length))
 }
 

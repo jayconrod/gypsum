@@ -6,7 +6,7 @@
 
 #include "test.h"
 
-#include "handle-inl.h"
+#include "handle.h"
 #include "heap.h"
 #include "vm-inl.h"
 

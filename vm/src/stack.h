@@ -52,7 +52,7 @@ class StackFrame {
 class Stack: public Block {
  public:
   static Stack* tryAllocate(Heap* heap, word_t size);
-  static Handle<Stack> allocate(Heap* heap, word_t size);
+  static Local<Stack> allocate(Heap* heap, word_t size);
   DEFINE_CAST(Stack)
   inline word_t sizeOfStack() { return mem<word_t>(this, kStackSizeOffset); }
   void printStack(FILE* out);

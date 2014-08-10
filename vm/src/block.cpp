@@ -8,7 +8,7 @@
 
 #include "array.h"
 #include "function-inl.h"
-#include "handle-inl.h"
+#include "handle.h"
 #include "heap.h"
 #include "stack-inl.h"
 
@@ -74,7 +74,7 @@ Meta* Meta::tryAllocate(Heap* heap, word_t dataLength, u32 objectSize, u32 eleme
 }
 
 
-Handle<Meta> Meta::allocate(Heap* heap, word_t dataLength, u32 objectSize, u32 elementSize) {
+Local<Meta> Meta::allocate(Heap* heap, word_t dataLength, u32 objectSize, u32 elementSize) {
   DEFINE_ALLOCATION(heap, Meta, tryAllocate(heap, dataLength, objectSize, elementSize));
 }
 

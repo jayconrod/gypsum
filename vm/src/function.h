@@ -23,7 +23,7 @@ class StackPointerMap;
 class Function: public Block {
  public:
   static Function* tryAllocate(Heap* heap, word_t instructionsSize);
-  static Handle<Function> allocate(Heap* heap, word_t instructionsSize);
+  static Local<Function> allocate(Heap* heap, word_t instructionsSize);
   void initialize(u32 flags,
                   TaggedArray* typeParameters,
                   BlockArray* types,
@@ -87,7 +87,7 @@ class Function: public Block {
 class StackPointerMap: public WordArray {
  public:
   static StackPointerMap* tryBuildFrom(Heap* heap, Function* function);
-  static Handle<StackPointerMap> buildFrom(Heap* heap, Handle<Function> function);
+  static Local<StackPointerMap> buildFrom(Heap* heap, Local<Function> function);
   static inline StackPointerMap* cast(Block* block);
 
   inline Bitmap bitmap();

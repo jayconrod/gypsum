@@ -7,59 +7,440 @@
 #ifndef handle_h
 #define handle_h
 
-#include "list.h"
+#include <deque>
+#include <iterator>
+#include <vector>
 #include "utils.h"
 
 namespace codeswitch {
 namespace internal {
 
 class Block;
-struct HandleData;
 class VM;
 
-/** Handles are used to reference heap blocks in C++ code that might trigger garbage collection.
- *  A Handle doesn't point directly to the block it refers to. Instead, HandleData provides
- *  an extra level of indirection.
+/** Handles are used in C++ code to indirectly reference blocks on the garbage collected heap.
+ *  These are necessary since the GC cannot precisely scan the C++ stack for pointers. It
+ *  also can't update pointers on the stack when objects move.
+ *
+ *  This is a base class for handles. Local and Persistent are subclasses.
  */
 template <class T>
 class Handle {
  public:
-  inline Handle();
-  template <class S>
-  explicit inline Handle(S* block);
-  template <class S>
-  inline Handle(VM* vm, S* block);
-  inline Handle(const Handle<T>& handle);
-  template <class S>
-  inline Handle(const Handle<S>& handle);
-  inline Handle(Handle<T>&& handle);
-  inline Handle& operator = (const Handle<T>& handle);
-  template <class S>
-  inline Handle& operator = (const Handle<S>& handle);
-  inline Handle& operator = (Handle<T>&& handle);
-  inline ~Handle();
+  T* operator * () const;
+  T* operator -> () const;
 
-  inline T* operator * () const;
-  inline T* operator -> () const;
+  operator bool () const;
+  bool operator ! () const;
+  bool isEmpty() const;
 
-  inline operator bool () const;
-  inline bool operator ! () const;
-  inline bool isEmpty() const;
+ protected:
+  Handle()
+      : slot_(nullptr) { }
+  explicit Handle(T** slot)
+      : slot_(slot) { }
+  Handle(const Handle& h) = delete;
 
-  HandleData* data() const { return data_; }
+  T** slot_;
+};
+
+
+/** A Local is a handle with stack lifetime. It must be created between the creation and
+ *  destruction of a `HandleScope`. It is no longer valid after the most local `HandleScope` is
+ *  destroyed (unless it is created with `HandleScope::escape`).
+ */
+template <class T>
+class Local: public Handle<T> {
+ public:
+  Local();
+  template <class S>
+  explicit Local(S* block);
+  template <class S>
+  Local(VM* vm, S* block);
+  Local(const Local<T>& local);
+  template <class S>
+  Local(const Local<S>& local);
+  template <class S>
+  Local(const Handle<S>& handle);
+  Local& operator = (const Local<T>& local);
+  template <class S>
+  Local& operator = (const Local<S>& local);
+  template <class S>
+  Local& operator = (const Handle<S>& handle);
 
  private:
-  inline void retain();
-  inline void release();
-  HandleData* data_;
+  Local(T** slot)
+      : Handle<T>(slot) { }
+  friend class HandleScope;
+};
+
+
+/** A Persistent is a handle with no fixed lifetime. This may be stored in data structures or
+ *  passed to a client. It is slower to create and destroy than Local though.
+ */
+template <class T>
+class Persistent: public Handle<T> {
+ public:
+  Persistent();
+  template <class S>
+  explicit Persistent(S* block);
+  template <class S>
+  Persistent(VM* vm, S* block);
+  Persistent(const Persistent<T>& persistent);
+  template <class S>
+  Persistent(const Handle<S>& handle);
+  Persistent(Persistent<T>&& persistent);
+  ~Persistent();
+  Persistent& operator = (const Persistent<T>& persistent);
+  template <class S>
+  Persistent& operator = (const Handle<S>& handle);
+  Persistent& operator = (Persistent<T>&& persistent);
+
+  template <class S>
+  void set(S* block);
+
+ private:
+  void release();
+  size_t index_;
 };
 
 
 template <class T>
-Handle<T> handle(T* value) {
-  return Handle<T>(value);
+Local<T> handle(T* value) {
+  return Local<T>(value);
 }
 
+
+/** HandleStorage contains the pointers Handles actually point to in one big list. The GC
+ *  can scan and update this list all at once. Handles are always allocated by adding a new
+ *  element to the end of the list. `HandleScope`s are used to free handles at the end of
+ *  the list.
+ */
+class HandleStorage {
+ public:
+  HandleStorage();
+
+  // These methods help the templated handle constructors avoid a direct dependency on the VM
+  // class itself. Since vm.h includes this header, we would have a circular reference.
+  static HandleStorage* fromBlock(Block* block);
+  static HandleStorage* fromVM(VM* vm);
+
+  Block** createLocal(Block* block);
+  template <class T>
+  T** createLocal(T* block);
+  void createPersistent(Block* block, Block*** out_slot, size_t* out_index);
+  template <class T>
+  void createPersistent(T* block, T*** out_slot, size_t* out_index);
+  void destroyPersistent(size_t index);
+
+  class iterator: public std::iterator<std::input_iterator_tag, Block**> {
+   public:
+    Block** operator * () { return &*it_; }
+    bool operator == (const iterator& other) const { return it_ == other.it_; }
+    bool operator != (const iterator& other) const { return !(*this == other); }
+    iterator& operator ++ ();
+
+   private:
+    iterator(const std::deque<Block*>::iterator it,
+             bool isLocal,
+             HandleStorage* storage);
+    void advance();
+    bool isValid() const;
+    bool done() const;
+
+    std::deque<Block*>::iterator it_;
+    bool isLocal_;
+    HandleStorage* storage_;
+
+    friend HandleStorage;
+  };
+  iterator begin();
+  iterator end();
+
+ private:
+  bool canCreateLocal_;
+
+  // We use a deque to guarantee references to elements are stable after insertion at the end.
+  // We don't insert at the beginning.
+  std::deque<Block*> localSlots_;
+  std::deque<Block*> persistentSlots_;
+  std::vector<size_t> persistentFreeList_;
+
+  friend class GC;
+  friend class HandleScope;
+};
+
+
+/** HandleScope controls allocation of handles by HandleStorage. When a HandleScope is
+ *  destroyed, the handles that were created since the HandleScope was created are also
+ *  destroyed. This is the only way for handles to be destroyed.
+ */
+class HandleScope {
+ public:
+  explicit HandleScope(HandleStorage* storage);
+  explicit HandleScope(VM* vm);
+  ~HandleScope();
+
+  /** Create a handle that will survive this scope. This can only be done once per scope.
+   *  There must be a parent scope.
+   */
+  template <class T>
+  Local<T> escape(T* block);
+
+ private:
+  HandleStorage* storage_;
+  bool oldCanCreateLocal_;
+  size_t oldSize_;
+
+  Block** escapeSlot_;
+  bool escapeSlotUsed_;
+};
+
+
+template <class T>
+T* Handle<T>::operator * () const {
+  ASSERT(slot_ != nullptr);
+  return *slot_;
+}
+
+
+template <class T>
+T* Handle<T>::operator -> () const {
+  ASSERT(slot_ != nullptr);
+  return *slot_;
+}
+
+
+template <class T>
+Handle<T>::operator bool () const {
+  return slot_ != nullptr;
+}
+
+
+template <class T>
+bool Handle<T>::operator ! () const {
+  return slot_ == nullptr;
+}
+
+
+template <class T>
+bool Handle<T>::isEmpty() const {
+  return slot_ == nullptr;
+}
+
+
+template <class T>
+Local<T>::Local()
+    : Handle<T>(nullptr) { }
+
+
+template <class T>
+template <class S>
+Local<T>::Local(S* block)
+    : Handle<T>(reinterpret_cast<T**>(HandleStorage::fromBlock(block)->createLocal(block))) {
+  CHECK_SUBTYPE_VALUE(T*, block);
+}
+
+
+template <class T>
+template <class S>
+Local<T>::Local(VM* vm, S* block)
+    : Handle<T>(reinterpret_cast<T**>(HandleStorage::fromVM(vm)->createLocal(block))) {
+  CHECK_SUBTYPE_VALUE(T*, block);
+}
+
+
+template <class T>
+Local<T>::Local(const Local<T>& local)
+    : Handle<T>(local.slot_) { }
+
+
+template <class T>
+template <class S>
+Local<T>::Local(const Local<S>& local)
+    : Handle<T>(reinterpret_cast<T**>(local.slot_)) {
+  CHECK_SUBTYPE_VALUE(T*, *local);
+}
+
+
+template <class T>
+template <class S>
+Local<T>::Local(const Handle<S>& handle)
+    : Handle<T>(handle ?
+                reinterpret_cast<T**>(HandleStorage::fromBlock(*handle)->createLocal(*handle))
+                : nullptr) {
+  CHECK_SUBTYPE_VALUE(T*, *handle);
+}
+
+
+template <class T>
+Local<T>& Local<T>::operator = (const Local<T>& local) {
+  // g++ complains if we just say `slot_`
+  this->slot_ = local.slot_;
+  return *this;
+}
+
+
+template <class T>
+template <class S>
+Local<T>& Local<T>::operator = (const Local<S>& local) {
+  this->slot_ = reinterpret_cast<T**>(local.slot_);
+  CHECK_SUBTYPE_VALUE(T*, *local);
+  return *this;
+}
+
+
+template <class T>
+template <class S>
+Local<T>& Local<T>::operator = (const Handle<S>& handle) {
+  this->slot_ = handle
+      ? reinterpret_cast<T**>(HandleStorage::fromBlock(*handle)->createLocal(*handle))
+      : nullptr;
+  CHECK_SUBTYPE_VALUE(T*, *handle);
+  return *this;
+}
+
+
+template <class T>
+Persistent<T>::Persistent()
+    : index_(kNotSet) { }
+
+
+template <class T>
+template <class S>
+Persistent<T>::Persistent(S* block) {
+  HandleStorage::fromBlock(block)->createPersistent(block, &this->slot_, &index_);
+  CHECK_SUBTYPE_VALUE(T*, block);
+}
+
+
+template <class T>
+template <class S>
+Persistent<T>::Persistent(VM* vm, S* block) {
+  HandleStorage::fromVM(vm)->createPersistent(block, &this->slot_, &index_);
+  CHECK_SUBTYPE_VALUE(T*, block);
+}
+
+
+template <class T>
+Persistent<T>::Persistent(const Persistent<T>& persistent)
+    : index_(kNotSet) {
+  if (persistent) {
+    HandleStorage::fromBlock(*persistent)->createPersistent(*persistent, &this->slot_, &index_);
+  }
+}
+
+
+template <class T>
+template <class S>
+Persistent<T>::Persistent(const Handle<S>& handle)
+    : index_(kNotSet) {
+  if (handle)
+    HandleStorage::fromBlock(*handle)->createPersistent(*handle, &this->slot_, &index_);
+  CHECK_SUBTYPE_VALUE(T*, *handle);
+}
+
+
+template <class T>
+Persistent<T>::Persistent(Persistent<T>&& persistent)
+    : Handle<T>(persistent.slot_),
+      index_(persistent.index_) {
+  persistent.slot_ = nullptr;
+  persistent.index_ = kNotSet;
+}
+
+
+template <class T>
+Persistent<T>::~Persistent() {
+  release();
+}
+
+
+template <class T>
+Persistent<T>& Persistent<T>::operator = (const Persistent<T>& persistent) {
+  release();
+  if (persistent) {
+    HandleStorage::fromBlock(*persistent)->createPersistent(*persistent, &this->slot_, &index_);
+  }
+  return *this;
+}
+
+
+template <class T>
+template <class S>
+Persistent<T>& Persistent<T>::operator = (const Handle<S>& handle) {
+  if (this->isEmpty()) {
+    if (handle)
+      HandleStorage::fromBlock(*handle)->createPersistent(*handle, &this->slot_, &index_);
+  } else {
+    if (handle) {
+      *this->slot_ = *handle;
+    } else {
+      release();
+    }
+  }
+  return *this;
+}
+
+
+template <class T>
+Persistent<T>& Persistent<T>::operator = (Persistent<T>&& persistent) {
+  release();
+  this->slot_ = persistent.slot_;
+  index_ = persistent.index_;
+  persistent.slot_ = nullptr;
+  persistent.index_ = kNotSet;
+  return *this;
+}
+
+
+template <class T>
+template <class S>
+void Persistent<T>::set(S* block) {
+  ASSERT(!this->isEmpty() && block != nullptr);
+  *this->slot_ = block;
+}
+
+
+template <class T>
+void Persistent<T>::release() {
+  if (index_ == kNotSet)
+    return;
+  HandleStorage::fromBlock(*this->slot_)->destroyPersistent(index_);
+  index_ = kNotSet;
+  this->slot_ = nullptr;
+}
+
+
+
+template <class T>
+T** HandleStorage::createLocal(T* block) {
+  ASSERT(block != nullptr);
+  CHECK_SUBTYPE_VALUE(Block*, block);
+  return reinterpret_cast<T**>(createLocal(reinterpret_cast<Block*>(block)));
+}
+
+
+template <class T>
+void HandleStorage::createPersistent(T* block, T*** out_slot, size_t* out_index) {
+  ASSERT(block != nullptr);
+  CHECK_SUBTYPE_VALUE(Block*, block);
+  createPersistent(reinterpret_cast<Block*>(block),
+                   reinterpret_cast<Block***>(out_slot),
+                   out_index);
+}
+
+
+template <class T>
+Local<T> HandleScope::escape(T* block) {
+  ASSERT(block != nullptr);
+  ASSERT(!escapeSlotUsed_);
+  T** slot = reinterpret_cast<T**>(escapeSlot_);
+  *slot = block;
+  escapeSlotUsed_ = true;
+  oldSize_++;
+  return Local<T>(slot);
+}
 
 }
 }

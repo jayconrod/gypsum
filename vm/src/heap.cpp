@@ -15,7 +15,7 @@
 #include "error.h"
 #include "function.h"
 #include "gc.h"
-#include "handle-inl.h"
+#include "handle.h"
 #include "package.h"
 #include "stack.h"
 

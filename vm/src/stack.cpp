@@ -7,7 +7,7 @@
 #include "stack-inl.h"
 
 #include "block-inl.h"
-#include "handle-inl.h"
+#include "handle.h"
 #include "heap.h"
 
 namespace codeswitch {
@@ -36,7 +36,7 @@ Stack* Stack::tryAllocate(Heap* heap, word_t size) {
 }
 
 
-Handle<Stack> Stack::allocate(Heap* heap, word_t size) {
+Local<Stack> Stack::allocate(Heap* heap, word_t size) {
   DEFINE_ALLOCATION(heap, Stack, tryAllocate(heap, size))
 }
 

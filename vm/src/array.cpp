@@ -7,7 +7,7 @@
 #include "array.h"
 
 #include "block-inl.h"
-#include "handle-inl.h"
+#include "handle.h"
 #include "heap.h"
 
 namespace codeswitch {
@@ -20,7 +20,7 @@ I8Array* I8Array::tryAllocate(Heap* heap, word_t length) {
 }
 
 
-Handle<I8Array> I8Array::allocate(Heap* heap, word_t length) {
+Local<I8Array> I8Array::allocate(Heap* heap, word_t length) {
   DEFINE_ALLOCATION(heap, I8Array, tryAllocate(heap, length))
 }
 
@@ -32,7 +32,7 @@ I32Array* I32Array::tryAllocate(Heap* heap, word_t length) {
 }
 
 
-Handle<I32Array> I32Array::allocate(Heap* heap, word_t length) {
+Local<I32Array> I32Array::allocate(Heap* heap, word_t length) {
   DEFINE_ALLOCATION(heap, I32Array, tryAllocate(heap, length))
 }
 
@@ -53,7 +53,7 @@ I64Array* I64Array::tryAllocate(Heap* heap, word_t length) {
 }
 
 
-Handle<I64Array> I64Array::allocate(Heap* heap, word_t length) {
+Local<I64Array> I64Array::allocate(Heap* heap, word_t length) {
   DEFINE_ALLOCATION(heap, I64Array, tryAllocate(heap, length))
 }
 
@@ -78,7 +78,7 @@ BlockArray* BlockArray::tryAllocate(Heap* heap, word_t length, bool fill, Block*
 }
 
 
-Handle<BlockArray> BlockArray::allocate(Heap* heap, word_t length,
+Local<BlockArray> BlockArray::allocate(Heap* heap, word_t length,
                                         bool fill, Block* fillValue) {
   DEFINE_ALLOCATION(heap, BlockArray, tryAllocate(heap, length, fill, fillValue))
 }
@@ -99,7 +99,7 @@ TaggedArray* TaggedArray::tryAllocate(Heap* heap, word_t length) {
 }
 
 
-Handle<TaggedArray> TaggedArray::allocate(Heap* heap, word_t length) {
+Local<TaggedArray> TaggedArray::allocate(Heap* heap, word_t length) {
   DEFINE_ALLOCATION(heap, TaggedArray, tryAllocate(heap, length))
 }
 

@@ -19,7 +19,7 @@
 #include "error.h"
 #include "field.h"
 #include "function-inl.h"
-#include "handle-inl.h"
+#include "handle.h"
 #include "heap.h"
 #include "string-inl.h"
 #include "type-inl.h"
@@ -29,15 +29,18 @@ using namespace std;
 namespace codeswitch {
 namespace internal {
 
-static Handle<String> readString(VM* vm, istream& stream);
-static Handle<Function> readFunction(VM* vm, istream& stream, Handle<Package> package);
-static void readClass(VM* vm, istream& stream, Handle<Package> package, Handle<Class> clas);
-static Handle<Field> readField(VM* vm, istream& stream, Handle<Package> package);
+static Local<String> readString(VM* vm, istream& stream);
+static Local<Function> readFunction(VM* vm, istream& stream, const Local<Package>& package);
+static void readClass(VM* vm,
+                      istream& stream,
+                      const Local<Package>& package,
+                      const Local<Class>& clas);
+static Local<Field> readField(VM* vm, istream& stream, const Local<Package>& package);
 static void readTypeParameter(VM* vm,
                               istream& stream,
-                              Handle<Package> package,
-                              Handle<TypeParameter> param);
-static Handle<Type> readType(VM* vm, istream& stream, Handle<Package> package);
+                              const Local<Package>& package,
+                              const Local<TypeParameter>& param);
+static Local<Type> readType(VM* vm, istream& stream, const Local<Package>& package);
 template <typename T>
 static T readValue(istream& stream);
 static vector<u8> readData(istream& stream, word_t size);
@@ -54,7 +57,7 @@ Package* Package::tryAllocate(Heap* heap) {
 }
 
 
-Handle<Package> Package::allocate(Heap* heap) {
+Local<Package> Package::allocate(Heap* heap) {
   DEFINE_ALLOCATION(heap, Package, tryAllocate(heap))
 }
 
@@ -70,12 +73,12 @@ void Package::printPackage(FILE* out) {
 }
 
 
-Handle<Package> Package::loadFromFile(VM* vm, const char* fileName) {
+Local<Package> Package::loadFromFile(VM* vm, const char* fileName) {
   ifstream file(fileName, ios::binary);
   if (!file.good())
     throw Error("could not open package file");
   file.exceptions(ios::failbit | ios::badbit | ios::eofbit);
-  Handle<Package> package = loadFromStream(vm, file);
+  auto package = loadFromStream(vm, file);
   auto pos = file.tellg();
   file.seekg(0, ios::end);
   if (pos != file.tellg())
@@ -84,10 +87,10 @@ Handle<Package> Package::loadFromFile(VM* vm, const char* fileName) {
 }
 
 
-Handle<Package> Package::loadFromBytes(VM* vm, const u8* bytes, word_t size) {
+Local<Package> Package::loadFromBytes(VM* vm, const u8* bytes, word_t size) {
   stringstream stream(string(reinterpret_cast<const char*>(bytes), size));
   stream.exceptions(ios::failbit | ios::badbit | ios::eofbit);
-  Handle<Package> package = loadFromStream(vm, stream);
+  auto package = loadFromStream(vm, stream);
   auto pos = stream.tellg();
   stream.seekg(0, ios::end);
   if (pos != stream.tellg())
@@ -97,8 +100,9 @@ Handle<Package> Package::loadFromBytes(VM* vm, const u8* bytes, word_t size) {
 
 
 
-Handle<Package> Package::loadFromStream(VM* vm, istream& stream) {
-  Handle<Package> package;
+Local<Package> Package::loadFromStream(VM* vm, istream& stream) {
+  HandleScope handleScope(vm);
+  Local<Package> package;
   try {
     auto magic = readValue<u32>(stream);
     if (magic != kMagic)
@@ -108,7 +112,7 @@ Handle<Package> Package::loadFromStream(VM* vm, istream& stream) {
     if (majorVersion != 0 || minorVersion != 6)
       throw Error("package file has wrong format version");
 
-    package = Package::allocate(vm->heap());
+    package = handleScope.escape(*Package::allocate(vm->heap()));
 
     auto flags = readValue<u64>(stream);
     package->setFlags(flags);
@@ -170,7 +174,7 @@ Handle<Package> Package::loadFromStream(VM* vm, istream& stream) {
 }
 
 
-static Handle<String> readString(VM* vm, istream& stream) {
+static Local<String> readString(VM* vm, istream& stream) {
   auto length = readWordVbn(stream);
   auto size = readWordVbn(stream);
   vector<u8> utf8Chars = readData(stream, size);
@@ -178,8 +182,7 @@ static Handle<String> readString(VM* vm, istream& stream) {
 }
 
 
-static Handle<Function> readFunction(VM* vm, istream& stream, Handle<Package> package) {
-  auto classes = handle(package->classes());
+static Local<Function> readFunction(VM* vm, istream& stream, const Local<Package>& package) {
   u32 flags;
   stream.read(reinterpret_cast<char*>(&flags), sizeof(flags));
 
@@ -217,8 +220,10 @@ static Handle<Function> readFunction(VM* vm, istream& stream, Handle<Package> pa
 }
 
 
-static void readClass(VM* vm, istream& stream, Handle<Package> package, Handle<Class> clas) {
-  auto classes = handle(package->classes());
+static void readClass(VM* vm,
+                      istream& stream,
+                      const Local<Package>& package,
+                      const Local<Class>& clas) {
   u32 flags;
   stream.read(reinterpret_cast<char*>(&flags), sizeof(flags));
   auto supertype = readType(vm, stream, package);
@@ -249,7 +254,7 @@ static void readClass(VM* vm, istream& stream, Handle<Package> package, Handle<C
 }
 
 
-static Handle<Field> readField(VM* vm, istream& stream, Handle<Package> package) {
+static Local<Field> readField(VM* vm, istream& stream, const Local<Package>& package) {
   u32 flags;
   stream.read(reinterpret_cast<char*>(&flags), sizeof(flags));
   auto type = readType(vm, stream, package);
@@ -261,8 +266,8 @@ static Handle<Field> readField(VM* vm, istream& stream, Handle<Package> package)
 
 static void readTypeParameter(VM* vm,
                               istream& stream,
-                              Handle<Package> package,
-                              Handle<TypeParameter> param) {
+                              const Local<Package>& package,
+                              const Local<TypeParameter>& param) {
   u32 flags;
   stream.read(reinterpret_cast<char*>(&flags), sizeof(flags));
   auto upperBound = readType(vm, stream, package);
@@ -271,9 +276,9 @@ static void readTypeParameter(VM* vm,
 }
 
 
-static Handle<Type> readType(VM* vm,
-                             istream& stream,
-                             Handle<Package> package) {
+static Local<Type> readType(VM* vm,
+                            istream& stream,
+                            const Local<Package>& package) {
   auto heap = vm->heap();
   auto bits = readWordVbn(stream);
   auto form = static_cast<Type::Form>(bits & Type::kFormMask);
@@ -294,7 +299,7 @@ static Handle<Type> readType(VM* vm,
         code == BUILTIN_NOTHING_CLASS_ID) {
       return handle(vm->roots()->nullType());
     } else if (form == Type::CLASS_TYPE) {
-      Handle<Class> clas;
+      Local<Class> clas;
       if (isBuiltinId(code)) {
         clas = handle(vm->roots()->getBuiltinClass(static_cast<BuiltinId>(code)));
       } else {

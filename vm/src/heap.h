@@ -29,12 +29,12 @@ class VM;
       throw Error("out of memory");                   \
     }                                                 \
   }                                                   \
-  name = Handle<type>(_value);                        \
+  name = Local<type>(_value);                         \
 } while (false)                                       \
 
 
 #define DEFINE_ALLOCATION(heap, type, call)      \
-  Handle<type> _result;                          \
+  Local<type> _result;                           \
   ALLOCATE_WITH_GC(_result, heap, type, call);   \
   return _result;                                \
 

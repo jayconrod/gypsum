@@ -15,7 +15,7 @@ namespace internal {
 class TypeParameter: public Block {
  public:
   static TypeParameter* tryAllocate(Heap* heap);
-  static Handle<TypeParameter> allocate(Heap* heap);
+  static Local<TypeParameter> allocate(Heap* heap);
   void initialize(u32 flags, Type* upperBound, Type* lowerBound);
 
   void printTypeParameter(FILE* out);

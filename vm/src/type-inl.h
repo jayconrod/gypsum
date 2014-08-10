@@ -28,7 +28,7 @@ Type* Type::tryAllocate(Heap* heap, word_t length) {
 }
 
 
-Handle<Type> Type::allocate(Heap* heap, word_t length) {
+Local<Type> Type::allocate(Heap* heap, word_t length) {
   DEFINE_ALLOCATION(heap, Type, tryAllocate(heap, length))
 }
 

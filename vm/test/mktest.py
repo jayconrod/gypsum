@@ -29,7 +29,7 @@ with open(outFileName, "w") as outFile:
 
 #include "test.h"
 
-#include "handle-inl.h"
+#include "handle.h"
 #include "interpreter.h"
 #include "package-inl.h"
 #include "stack-inl.h"
@@ -41,10 +41,11 @@ using namespace codeswitch::internal;
 TEST({testName}) {{
   u8 bytes[] = {{ {bytes} }};
   VM vm;
-  Handle<Package> package = Package::loadFromBytes(&vm, bytes, sizeof(bytes));
+  HandleScope handleScope(&vm);
+  auto package = Package::loadFromBytes(&vm, bytes, sizeof(bytes));
   vm.addPackage(package);
-  Handle<Function> function(package->getFunction(package->entryFunctionIndex()));
-  Handle<Stack> stack(vm.stack());
+  Local<Function> function(package->getFunction(package->entryFunctionIndex()));
+  Local<Stack> stack(vm.stack());
   Interpreter interpreter(&vm, stack);
   try {{
     interpreter.call(function);

@@ -8,7 +8,7 @@
 
 #include <memory>
 #include <unistd.h>
-#include "handle-inl.h"
+#include "handle.h"
 #include "heap.h"
 #include "memory.h"
 #include "utils.h"
@@ -64,10 +64,10 @@ TEST(ChunkAllocation) {
   // Avoiding calculations here so that we don't make the same mistakes as Chunk if there are
   // any. This makes the test unfortunately brittle. The important invariant is that:
   //   bitmapSize * 8 >= storageSize / kWordSize
-  ASSERT_EQ(base + 88, chunk->bitmapBase());
+  ASSERT_EQ(base + 96, chunk->bitmapBase());
   ASSERT_EQ(16136, chunk->bitmapSize());
-  ASSERT_EQ(base + 16224, chunk->storageBase());
-  ASSERT_EQ(1032352, chunk->storageSize());
+  ASSERT_EQ(base + 16232, chunk->storageBase());
+  ASSERT_EQ(1032344, chunk->storageSize());
   ASSERT_EQ(base + Chunk::kDefaultSize, chunk->storageLimit());
 
   ASSERT_EQ(chunk.get(), Chunk::fromAddress(base + 100));

@@ -142,7 +142,7 @@ class PointerArray: public Array<T> {
 class I8Array: public Array<i8> {
  public:
   static I8Array* tryAllocate(Heap* heap, word_t length);
-  static Handle<I8Array> allocate(Heap* heap, word_t length);
+  static Local<I8Array> allocate(Heap* heap, word_t length);
   DEFINE_CAST(I8Array)
   void printI8Array(FILE* out);
 };
@@ -151,7 +151,7 @@ class I8Array: public Array<i8> {
 class I32Array: public Array<i32> {
  public:
   static I32Array* tryAllocate(Heap* heap, word_t length);
-  static Handle<I32Array> allocate(Heap* heap, word_t length);
+  static Local<I32Array> allocate(Heap* heap, word_t length);
   DEFINE_CAST(I32Array)
   void printI32Array(FILE* out);
 };
@@ -160,7 +160,7 @@ class I32Array: public Array<i32> {
 class I64Array: public Array<i64> {
  public:
   static I64Array* tryAllocate(Heap* heap, word_t length);
-  static Handle<I64Array> allocate(Heap* heap, word_t length);
+  static Local<I64Array> allocate(Heap* heap, word_t length);
   DEFINE_CAST(I64Array)
   void printI64Array(FILE* out);
 };
@@ -170,7 +170,7 @@ class BlockArray: public PointerArray<Block*> {
  public:
   static BlockArray* tryAllocate(Heap* heap, word_t length,
                                  bool fill = false, Block* fillValue = nullptr);
-  static Handle<BlockArray> allocate(Heap* heap, word_t length,
+  static Local<BlockArray> allocate(Heap* heap, word_t length,
                                      bool fill = false, Block* fillValue = nullptr);
   DEFINE_CAST(BlockArray)
   void printBlockArray(FILE* out);
@@ -180,7 +180,7 @@ class BlockArray: public PointerArray<Block*> {
 class TaggedArray: public Array<Tagged<Block>> {
  public:
   static TaggedArray* tryAllocate(Heap* heap, word_t length);
-  static Handle<TaggedArray> allocate(Heap* heap, word_t length);
+  static Local<TaggedArray> allocate(Heap* heap, word_t length);
   DEFINE_CAST(TaggedArray)
   void printTaggedArray(FILE* out);
 

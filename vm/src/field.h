@@ -16,7 +16,7 @@ namespace internal {
 class Field: public Block {
  public:
   static Field* tryAllocate(Heap* heap);
-  static Handle<Field> allocate(Heap* heap);
+  static Local<Field> allocate(Heap* heap);
 
   void initialize(u32 flags, Type* type);
 

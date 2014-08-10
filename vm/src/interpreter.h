@@ -23,9 +23,9 @@ class Type;
 
 class Interpreter {
  public:
-  Interpreter(VM* vm, Handle<Stack> stack);
+  Interpreter(VM* vm, const Handle<Stack>& stack);
 
-  i64 call(Handle<Function> callee);
+  i64 call(const Handle<Function>& callee);
 
   static const int kFpOffset = 0;
   static const int kFunctionOffset = kFpOffset + kWordSize;
@@ -35,11 +35,11 @@ class Interpreter {
  private:
   static const word_t kDonePcOffset = ~0;
 
-  void ensurePointerMap(Handle<Function> function);
+  void ensurePointerMap(const Handle<Function>& function);
   void handleBuiltin(BuiltinId id);
-  Handle<Meta> getMetaForClassId(i64 classId);
+  Local<Meta> getMetaForClassId(i64 classId);
 
-  void enter(Handle<Function> callee);
+  void enter(const Handle<Function>& callee);
   void leave();
   void doThrow(Block* exception);
 
@@ -93,9 +93,9 @@ class Interpreter {
   };
 
   VM* vm_;
-  Handle<Stack> stack_;
+  Persistent<Stack> stack_;
 
-  Handle<Function> function_;
+  Persistent<Function> function_;
   word_t pcOffset_;
 
   std::vector<Handler> handlers_;

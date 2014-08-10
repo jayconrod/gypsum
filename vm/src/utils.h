@@ -56,6 +56,8 @@ do { \
   } \
 } while (0)
 
+#define USE(e) (void) (e)
+
 #define ASSERT(cond) CHECK(cond)
 
 #define UNREACHABLE() ABORT("unreachable code")
@@ -68,14 +70,15 @@ abort(__FILE__, __LINE__, (reason))
 
 #define STATIC_ASSERT(cond) static_assert(cond, #cond)
 
+#define CHECK_SUBTYPE_VALUE(type, value) \
+do { if (false) { type _t = (value); USE(_t); } } while (0)
+
 
 #define NON_COPYABLE(className) \
   className(const className&) = delete; \
   className(const className&&) = delete; \
   className& operator = (const className&) = delete;
 
-
-#define USE(e) (void) (e)
 
 #define ARRAY_LENGTH(a) (sizeof(a) / sizeof((a)[0]))
 

@@ -8,7 +8,7 @@
 
 #include <cstring>
 #include "block-inl.h"
-#include "handle-inl.h"
+#include "handle.h"
 #include "heap.h"
 
 namespace codeswitch {
@@ -42,12 +42,12 @@ Object* Object::tryAllocateArray(Heap* heap, Meta* meta, word_t length) {
 }
 
 
-Handle<Object> Object::allocate(Heap* heap, Meta* meta) {
+Local<Object> Object::allocate(Heap* heap, Meta* meta) {
   DEFINE_ALLOCATION(heap, Object, tryAllocate(heap, meta))
 }
 
 
-Handle<Object> Object::allocateArray(Heap* heap, Meta* meta, word_t length) {
+Local<Object> Object::allocateArray(Heap* heap, Meta* meta, word_t length) {
   DEFINE_ALLOCATION(heap, Object, tryAllocateArray(heap, meta, length))
 }
 

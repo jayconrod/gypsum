@@ -43,8 +43,8 @@ Meta* Class::getOrTryBuildInstanceMeta(Heap* heap) {
 }
 
 
-Handle<Meta> Class::getOrBuildInstanceMeta(Heap* heap) {
-  Handle<Meta> meta(instanceMeta());
+Local<Meta> Class::getOrBuildInstanceMeta(Heap* heap) {
+  Local<Meta> meta(instanceMeta());
   if (*meta != nullptr) {
     return meta;
   } else {

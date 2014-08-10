@@ -10,7 +10,7 @@
 #include <cstring>
 #include "block-inl.h"
 #include "error.h"
-#include "handle-inl.h"
+#include "handle.h"
 #include "heap.h"
 #include "utils.h"
 
@@ -24,7 +24,7 @@ void String::initialize(const u32* chars) {
 }
 
 
-Handle<String> String::fromUtf8String(Heap* heap, const u8* utf8Chars,
+Local<String> String::fromUtf8String(Heap* heap, const u8* utf8Chars,
                                       word_t length, word_t size) {
   auto string = String::allocate(heap, length);
   auto chars = string->chars();
@@ -42,13 +42,13 @@ Handle<String> String::fromUtf8String(Heap* heap, const u8* utf8Chars,
 }
 
 
-Handle<String> String::fromUtf8CString(Heap* heap, const char* utf8Chars) {
+Local<String> String::fromUtf8CString(Heap* heap, const char* utf8Chars) {
   word_t size = strlen(utf8Chars);
   return fromUtf8String(heap, reinterpret_cast<const u8*>(utf8Chars), size);
 }
 
 
-Handle<String> String::fromUtf8String(Heap* heap, const u8* utf8Chars, word_t size) {
+Local<String> String::fromUtf8String(Heap* heap, const u8* utf8Chars, word_t size) {
   word_t length = 0;
   auto p = utf8Chars;
   auto end = p + size;
@@ -133,7 +133,9 @@ String* String::tryConcat(Heap* heap, String* other) {
 }
 
 
-Handle<String> String::concat(Heap* heap, Handle<String> left, Handle<String> right) {
+Local<String> String::concat(Heap* heap,
+                             const Handle<String>& left,
+                             const Handle<String>& right) {
   DEFINE_ALLOCATION(heap, String, left->tryConcat(heap, *right))
 }
 

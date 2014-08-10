@@ -17,7 +17,7 @@
 #include "bytecode.h"
 #include "function-inl.h"
 #include "gc.h"
-#include "handle-inl.h"
+#include "handle.h"
 #include "object.h"
 #include "package-inl.h"
 #include "stack-inl.h"
@@ -27,7 +27,7 @@ using namespace std;
 namespace codeswitch {
 namespace internal {
 
-Interpreter::Interpreter(VM* vm, Handle<Stack> stack)
+Interpreter::Interpreter(VM* vm, const Handle<Stack>& stack)
     : vm_(vm),
       stack_(stack),
       pcOffset_(kDonePcOffset) { }
@@ -123,7 +123,10 @@ if (var == nullptr) {                                                 \
   }                                                                   \
 
 
-i64 Interpreter::call(Handle<Function> callee) {
+i64 Interpreter::call(const Handle<Function>& callee) {
+  // TODO: figure out a reasonable way to manage locals here.
+  HandleScope handleScope(vm_);
+
   // Set up initial stack frame.
   ASSERT(pcOffset_ == kDonePcOffset);
   enter(callee);
@@ -364,7 +367,7 @@ i64 Interpreter::call(Handle<Function> callee) {
         if (isBuiltinId(functionId)) {
           handleBuiltin(static_cast<BuiltinId>(functionId));
         } else {
-          Handle<Function> callee(function_->package()->getFunction(functionId));
+          Local<Function> callee(function_->package()->getFunction(functionId));
           enter(callee);
         }
         break;
@@ -375,7 +378,7 @@ i64 Interpreter::call(Handle<Function> callee) {
         auto methodIndex = readVbn();
         auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
         CHECK_NON_NULL(receiver);
-        Handle<Function> callee(Function::cast(receiver->meta()->getData(methodIndex)));
+        Local<Function> callee(Function::cast(receiver->meta()->getData(methodIndex)));
         if (callee->hasBuiltinId()) {
           handleBuiltin(callee->builtinId());
         } else {
@@ -478,7 +481,7 @@ i64 Interpreter::call(Handle<Function> callee) {
 }
 
 
-void Interpreter::ensurePointerMap(Handle<Function> function) {
+void Interpreter::ensurePointerMap(const Handle<Function>& function) {
   // It is not safe to enter a function if we don't have pointer maps for it. These can only
   // be generated if all the other functions called by this function are accessible (so we
   // can't do it before all packages are loaded and validated). Since this requires some
@@ -530,8 +533,8 @@ void Interpreter::handleBuiltin(BuiltinId id) {
     }
 
     case BUILTIN_STRING_CONCAT_OP_ID: {
-      Handle<String> right(String::cast(pop<Block*>()));
-      Handle<String> left(String::cast(pop<Block*>()));
+      Local<String> right(String::cast(pop<Block*>()));
+      Local<String> left(String::cast(pop<Block*>()));
       auto cons = left->tryConcat(vm_->heap(), *right);
       if (cons == nullptr) {
         collectGarbage();
@@ -631,11 +634,11 @@ void Interpreter::handleBuiltin(BuiltinId id) {
 }
 
 
-Handle<Meta> Interpreter::getMetaForClassId(i64 classId) {
+Local<Meta> Interpreter::getMetaForClassId(i64 classId) {
   if (isBuiltinId(classId)) {
     return handle(vm_->roots()->getBuiltinMeta(classId));
   }
-  Handle<Class> clas(function_->package()->getClass(classId));
+  Local<Class> clas(function_->package()->getClass(classId));
   if (clas->instanceMeta() == nullptr) {
     if (clas->tryBuildInstanceMeta(vm_->heap()) == nullptr) {
       collectGarbage();
@@ -647,7 +650,7 @@ Handle<Meta> Interpreter::getMetaForClassId(i64 classId) {
 }
 
 
-void Interpreter::enter(Handle<Function> callee) {
+void Interpreter::enter(const Handle<Function>& callee) {
   // Make sure we have pointer maps for the callee before we build a stack frame for it.
   // This may trigger garbage collection (since pointer maps are allocated like everything
   // else), but that's fine since we're at a safepoint, and we haven't built the frame yet.
@@ -670,7 +673,7 @@ void Interpreter::leave() {
   Address fp = stack_->fp();
   pcOffset_ = mem<word_t>(fp, kCallerPcOffsetOffset);
   auto caller = mem<Function*>(fp, kFunctionOffset);
-  function_ = caller ? Handle<Function>(caller) : Handle<Function>();
+  function_ = caller ? Persistent<Function>(caller) : Persistent<Function>();
   stack_->setSp(fp + kFrameControlSize + parametersSize);
   fp = mem<Address>(fp);
   stack_->setFp(fp);
@@ -682,7 +685,7 @@ void Interpreter::doThrow(Block* exception) {
     // If the exception is unhandled, we need to completely unwind the stack and reset the state
     // of the interpreter in case it is used again.
     stack_->resetPointers();
-    function_ = Handle<Function>();
+    function_ = Persistent<Function>();
     pcOffset_ = kNotSet;
     throw Error("unhandled exception");
   } else {
@@ -695,7 +698,7 @@ void Interpreter::doThrow(Block* exception) {
     for (auto frame : **stack_) {
       if (frame.fp() == fp)
         break;
-      function_ = handle(frame.function());
+      function_.set(frame.function());
     }
     stack_->setFramePointerOffset(handler.fpOffset);
     stack_->setStackPointerOffset(handler.spOffset);

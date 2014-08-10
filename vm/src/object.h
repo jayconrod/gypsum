@@ -15,9 +15,9 @@ namespace internal {
 class Object: public Block {
  public:
   static Object* tryAllocate(Heap* heap, Meta* meta);
-  static Handle<Object> allocate(Heap* heap, Meta* meta);
+  static Local<Object> allocate(Heap* heap, Meta* meta);
   static Object* tryAllocateArray(Heap* heap, Meta* meta, word_t length);
-  static Handle<Object> allocateArray(Heap* heap, Meta* meta, word_t length);
+  static Local<Object> allocateArray(Heap* heap, Meta* meta, word_t length);
   void printObject(FILE* out);
   DEFINE_CAST(Object)
 };

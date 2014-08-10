@@ -99,7 +99,7 @@ BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
 class Meta: public Block {
  public:
   static Meta* tryAllocate(Heap* heap, word_t dataLength, u32 objectSize, u32 elementSize);
-  static Handle<Meta> allocate(Heap* heap, word_t dataLength, u32 objectSize, u32 elementSize);
+  static Local<Meta> allocate(Heap* heap, word_t dataLength, u32 objectSize, u32 elementSize);
   void initialize(BlockType type, Class* clas, u32 objectSize, u32 elementSize);
   static word_t sizeForMeta(word_t dataLength, u32 objectSize, u32 elementSize);
   word_t sizeOfMeta();

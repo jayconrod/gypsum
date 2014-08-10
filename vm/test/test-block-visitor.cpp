@@ -170,6 +170,7 @@ const ExpectedPointerMap kExpectedPointerMaps[] = {
 
 TEST(BlockVisitorFunction) {
   VM vm(0);
+  HandleScope handleScope(&vm);
   Heap* heap = vm.heap();
   Package* package = createTestPackage(heap);
   Function* function = package->getFunction(0);
@@ -198,6 +199,7 @@ TEST(BlockVisitorFunction) {
 
 TEST(BuildStackPointerMap) {
   VM vm(0);
+  HandleScope handleScope(&vm);
   auto heap = vm.heap();
   auto package = createTestPackage(heap);
   auto function = package->getFunction(0);
@@ -244,6 +246,7 @@ class StackIncrementVisitor: public BlockVisitorBase<StackIncrementVisitor> {
 
 TEST(VisitAndRelocateStack) {
   VM vm(0);
+  HandleScope handleScope(&vm);
   auto heap = vm.heap();
   auto stack = vm.stack();
   auto package = createTestPackage(heap);
