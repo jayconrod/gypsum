@@ -8,6 +8,7 @@
 #define package_inl_h
 
 #include "array.h"
+#include "block-inl.h"
 #include "function.h"
 #include "package.h"
 #include "string.h"

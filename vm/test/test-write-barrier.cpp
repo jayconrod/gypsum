@@ -8,9 +8,9 @@
 
 #include <memory>
 #include "handle-inl.h"
-#include "heap-inl.h"
-#include "memory-inl.h"
-#include "remembered-set-inl.h"
+#include "heap.h"
+#include "memory.h"
+#include "remembered-set.h"
 #include "utils.h"
 
 using namespace std;
@@ -32,43 +32,13 @@ TEST(RememberedSetIteration) {
 }
 
 
-TEST(WriteBarrierSamePage) {
-  VM vm(0);
-  unique_ptr<Page> page(Page::allocate(&vm));
-  page->setIdentity(NEW_SPACE);
-  auto slot = reinterpret_cast<Block**>(page->allocationBase());
-  *slot = reinterpret_cast<Block*>(page->allocationBase());
+TEST(WriteBarrierSameChunk) {
+  unique_ptr<Chunk> chunk(new(Chunk::kDefaultSize, NOT_EXECUTABLE) Chunk(nullptr, 0));
+  auto slot = reinterpret_cast<Block**>(chunk->storageBase());
+  *slot = reinterpret_cast<Block*>(chunk->storageBase());
   Heap::recordWrite(slot, *slot);
-  ASSERT_EQ(0, page->rememberedSet()->length());
+  ASSERT_EQ(0, chunk->rememberedSet().length());
 }
 
 
-TEST(WriteBarrierFromNewToPackage) {
-  VM vm(0);
-  unique_ptr<Page> newPage(Page::allocate(&vm));
-  newPage->setIdentity(NEW_SPACE);
-  unique_ptr<Page> packagePage(Page::allocate(&vm));
-  packagePage->setIdentity(PACKAGE_SPACE);
-  auto slot = reinterpret_cast<Block**>(newPage->allocationBase());
-  auto block = reinterpret_cast<Block*>(packagePage->allocationBase());
-  *slot = block;
-  Heap::recordWrite(slot, block);
-  ASSERT_EQ(0, newPage->rememberedSet()->length());
-  ASSERT_EQ(0, packagePage->rememberedSet()->length());
-}
-
-
-TEST(WriteBarrierFromPackageToNew) {
-  VM vm(0);
-  unique_ptr<Page> newPage(Page::allocate(&vm));
-  newPage->setIdentity(NEW_SPACE);
-  unique_ptr<Page> packagePage(Page::allocate(&vm));
-  packagePage->setIdentity(PACKAGE_SPACE);
-  auto slot = reinterpret_cast<Block**>(packagePage->allocationBase());
-  auto block = reinterpret_cast<Block*>(newPage->allocationBase());
-  *slot = block;
-  Heap::recordWrite(slot, block);
-  ASSERT_EQ(1, newPage->rememberedSet()->length());
-  ASSERT_EQ(slot, *newPage->rememberedSet()->begin());
-  ASSERT_EQ(0, packagePage->rememberedSet()->length());
-}
+// TODO: test write barrier for different chunks.

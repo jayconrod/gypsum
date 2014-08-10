@@ -179,17 +179,17 @@ class Free: public Block {
  public:
   void* operator new (size_t unused, Heap* heap, size_t size);
   void* operator new (size_t unused, void* place, size_t size);
-  Free(OptP<Free*> next)
+  explicit Free(Free* next)
       : next_(next) { }
 
   DEFINE_CAST(Free)
 
   word_t size() const { return size_; }
-  OptP<Free*> next() const { return next_; }
+  Free* next() const { return next_; }
 
  private:
   word_t size_;
-  OptP<Free*> next_;
+  Free* next_;
 };
 
 

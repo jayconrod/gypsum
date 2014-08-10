@@ -10,14 +10,14 @@
 #include "string.h"
 
 #include "handle-inl.h"
-#include "heap-inl.h"
+#include "heap.h"
 
 namespace codeswitch {
 namespace internal {
 
 String* String::tryAllocate(Heap* heap, word_t length) {
   word_t size = kHeaderSize + length * sizeof(u32);
-  String* string = reinterpret_cast<String*>(heap->allocateRaw(size));
+  String* string = reinterpret_cast<String*>(heap->allocate(size));
   if (string == nullptr)
     return nullptr;
 

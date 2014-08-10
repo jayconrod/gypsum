@@ -23,7 +23,7 @@ namespace internal {
 
 Function* Function::tryAllocate(Heap* heap, word_t instructionsSize) {
   word_t size = sizeForFunction(instructionsSize);
-  Function* function = reinterpret_cast<Function*>(heap->allocateRaw(size));
+  Function* function = reinterpret_cast<Function*>(heap->allocate(size));
   if (function == nullptr)
     return nullptr;
 

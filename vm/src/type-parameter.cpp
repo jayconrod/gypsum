@@ -6,13 +6,15 @@
 
 #include "type-parameter.h"
 
-#include "heap-inl.h"
+#include "block-inl.h"
+#include "handle-inl.h"
+#include "heap.h"
 
 namespace codeswitch {
 namespace internal {
 
 TypeParameter* TypeParameter::tryAllocate(Heap* heap) {
-  TypeParameter* param = reinterpret_cast<TypeParameter*>(heap->allocateRaw(kSize));
+  TypeParameter* param = reinterpret_cast<TypeParameter*>(heap->allocate(kSize));
   if (param == nullptr) {
     return nullptr;
   }

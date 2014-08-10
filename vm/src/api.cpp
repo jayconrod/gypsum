@@ -20,6 +20,8 @@
 #include "utils.h"
 #include "vm.h"
 
+using namespace std;
+
 namespace codeswitch {
 
 namespace i = internal;

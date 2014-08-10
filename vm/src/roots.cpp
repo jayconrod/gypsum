@@ -8,6 +8,7 @@
 
 #include "block-inl.h"
 #include "field.h"
+#include "handle-inl.h"
 #include "package-inl.h"
 #include "stack-inl.h"
 #include "type-inl.h"

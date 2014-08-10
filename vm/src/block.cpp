@@ -9,7 +9,7 @@
 #include "array.h"
 #include "function-inl.h"
 #include "handle-inl.h"
-#include "heap-inl.h"
+#include "heap.h"
 #include "stack-inl.h"
 
 namespace codeswitch {
@@ -64,7 +64,7 @@ void Block::relocate(word_t delta) {
 
 Meta* Meta::tryAllocate(Heap* heap, word_t dataLength, u32 objectSize, u32 elementSize) {
   word_t size = sizeForMeta(dataLength, objectSize, elementSize);
-  Meta* meta = reinterpret_cast<Meta*>(heap->allocateRaw(size));
+  Meta* meta = reinterpret_cast<Meta*>(heap->allocate(size));
   if (meta == nullptr)
     return meta;
 
@@ -122,7 +122,7 @@ BLOCK_TYPE_LIST(TYPE_STR)
 
 
 void* Free::operator new (size_t unused, Heap* heap, size_t size) {
-  auto free = reinterpret_cast<Free*>(heap->allocateRaw(size));
+  auto free = reinterpret_cast<Free*>(heap->allocate(size));
   if (free == nullptr)
     return free;
 

@@ -9,7 +9,7 @@
 #include <sys/mman.h>
 #include "block-inl.h"
 #include "error.h"
-#include "heap-inl.h"
+#include "heap.h"
 
 using namespace std;
 

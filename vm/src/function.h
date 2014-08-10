@@ -7,6 +7,7 @@
 #ifndef function_h
 #define function_h
 
+#include <vector>
 #include "array.h"
 #include "block.h"
 #include "type.h"
@@ -27,7 +28,7 @@ class Function: public Block {
                   TaggedArray* typeParameters,
                   BlockArray* types,
                   word_t localsSize,
-                  const vector<u8>& instructions,
+                  const std::vector<u8>& instructions,
                   WordArray* blockOffsets,
                   Package* package,
                   StackPointerMap* stackPointerMap);

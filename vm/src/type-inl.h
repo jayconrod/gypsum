@@ -9,7 +9,7 @@
 
 #include "type.h"
 
-#include "heap-inl.h"
+#include "heap.h"
 #include "roots-inl.h"
 #include "type-parameter.h"
 
@@ -18,7 +18,7 @@ namespace internal {
 
 Type* Type::tryAllocate(Heap* heap, word_t length) {
   word_t size = kHeaderSize + length * kWordSize;
-  Type* type = reinterpret_cast<Type*>(heap->allocateRaw(size));
+  Type* type = reinterpret_cast<Type*>(heap->allocate(size));
   if (type == nullptr)
     return nullptr;
 

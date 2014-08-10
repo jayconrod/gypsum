@@ -8,7 +8,8 @@
 
 #include <cstring>
 #include "block-inl.h"
-#include "heap-inl.h"
+#include "handle-inl.h"
+#include "heap.h"
 
 namespace codeswitch {
 namespace internal {
@@ -16,7 +17,7 @@ namespace internal {
 Object* Object::tryAllocate(Heap* heap, Meta* meta) {
   ASSERT(meta->elementSize() == 0);
   word_t size = meta->objectSize();
-  Object* obj = reinterpret_cast<Object*>(heap->allocateRaw(size));
+  Object* obj = reinterpret_cast<Object*>(heap->allocate(size));
   if (obj == nullptr)
     return obj;
 
@@ -29,7 +30,7 @@ Object* Object::tryAllocate(Heap* heap, Meta* meta) {
 Object* Object::tryAllocateArray(Heap* heap, Meta* meta, word_t length) {
   ASSERT(meta->elementSize() > 0);
   word_t size = meta->objectSize() + length * meta->elementSize();
-  Object* obj = reinterpret_cast<Object*>(heap->allocateRaw(size));
+  Object* obj = reinterpret_cast<Object*>(heap->allocate(size));
   if (obj == nullptr)
     return obj;
 

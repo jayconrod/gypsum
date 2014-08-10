@@ -20,10 +20,11 @@
 #include "field.h"
 #include "function-inl.h"
 #include "handle-inl.h"
-#include "heap-inl.h"
-#include "memory-inl.h"
+#include "heap.h"
 #include "string-inl.h"
 #include "type-inl.h"
+
+using namespace std;
 
 namespace codeswitch {
 namespace internal {
@@ -44,7 +45,7 @@ static i64 readVbn(istream& stream);
 static word_t readWordVbn(istream& stream);
 
 Package* Package::tryAllocate(Heap* heap) {
-  Package* pkg = reinterpret_cast<Package*>(heap->allocateRaw(Package::kSize));
+  Package* pkg = reinterpret_cast<Package*>(heap->allocate(Package::kSize));
   if (pkg == nullptr)
     return nullptr;
 
@@ -97,7 +98,6 @@ Handle<Package> Package::loadFromBytes(VM* vm, const u8* bytes, word_t size) {
 
 
 Handle<Package> Package::loadFromStream(VM* vm, istream& stream) {
-  unique_ptr<Page> page;
   Handle<Package> package;
   try {
     auto magic = readValue<u32>(stream);

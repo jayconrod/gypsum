@@ -50,15 +50,12 @@ inline void assertTrue(bool result, const std::string& message) {
     throw TestException(message);
 }
 
+
 inline void assertFalse(bool result, const std::string& message) {
   if (result)
     throw TestException(message);
 }
 
-inline void assertEquals(bool equals, const std::string& message) {
-  if (!equals)
-    throw TestException(message);
-}
 
 #define S(x) #x
 #define S_(x) S(x)
@@ -67,8 +64,10 @@ inline void assertEquals(bool equals, const std::string& message) {
 
 #define ASSERT_TRUE(cond) assertTrue((cond), MESSAGE(#cond))
 #define ASSERT_FALSE(cond) assertFalse((cond), MESSAGE(#cond))
-#define ASSERT_EQ(expected, actual) assertEquals((expected) == (actual), \
+#define ASSERT_EQ(expected, actual) assertTrue((expected) == (actual), \
     MESSAGE(#expected " == " #actual))
+#define ASSERT_NE(expected, actual) assertTrue((expected) != (actual), \
+    MESSAGE(#expected " != " #actual))
 
 #define TEST(name) \
 class Test ## name : public TestBase { \
@@ -79,5 +78,11 @@ class Test ## name : public TestBase { \
 }; \
 Test ## name name ## Instance; \
 void Test ## name ::test()
+
+
+// Ugly hack: bypass member protection for classes included after this. The "correct" way would
+// be to explicitly add `friend` declarations for all test functions, but that seems worse.
+#define protected public
+#define private public
 
 #endif

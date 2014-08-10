@@ -8,9 +8,10 @@
 
 #include <algorithm>
 #include <cstring>
+#include "block-inl.h"
 #include "error.h"
 #include "handle-inl.h"
-#include "heap-inl.h"
+#include "heap.h"
 #include "utils.h"
 
 using namespace std;

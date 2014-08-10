@@ -15,6 +15,7 @@
 #include "package-inl.h"
 
 using namespace codeswitch::internal;
+using namespace std;
 
 class IncrementVisitor: public BlockVisitorBase<IncrementVisitor> {
  public:

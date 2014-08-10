@@ -7,7 +7,6 @@
 #ifndef gc_h
 #define gc_h
 
-#include "block.h"
 #include "utils.h"
 
 namespace codeswitch {
@@ -21,10 +20,6 @@ class GC {
   void collectGarbage();
 
  private:
-  static const u8 kIsForwardingAddress = 1;
-
-  void copyAndUpdate(Block** p);
-
   Heap* heap_;
 
   friend class PointerUpdatingVisitor;

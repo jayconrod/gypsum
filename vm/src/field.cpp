@@ -6,13 +6,15 @@
 
 #include "field.h"
 
-#include "heap-inl.h"
+#include "block-inl.h"
+#include "handle-inl.h"
+#include "heap.h"
 
 namespace codeswitch {
 namespace internal {
 
 Field* Field::tryAllocate(Heap* heap) {
-  Field* field = reinterpret_cast<Field*>(heap->allocateRaw(kSize));
+  Field* field = reinterpret_cast<Field*>(heap->allocate(kSize));
   if (field == nullptr)
     return nullptr;
 

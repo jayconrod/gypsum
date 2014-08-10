@@ -8,7 +8,7 @@
 
 #include "block-inl.h"
 #include "handle-inl.h"
-#include "heap-inl.h"
+#include "heap.h"
 #include "package.h"
 #include "stack-inl.h"
 

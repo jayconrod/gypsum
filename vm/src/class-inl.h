@@ -11,6 +11,7 @@
 
 #include "array.h"
 #include "package-inl.h"
+#include "roots.h"
 #include "type.h"
 
 namespace codeswitch {

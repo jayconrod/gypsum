@@ -7,7 +7,8 @@
 #include "stack-inl.h"
 
 #include "block-inl.h"
-#include "heap-inl.h"
+#include "handle-inl.h"
+#include "heap.h"
 
 namespace codeswitch {
 namespace internal {
@@ -24,7 +25,7 @@ void Stack::printStack(FILE* out) {
 
 
 Stack* Stack::tryAllocate(Heap* heap, word_t size) {
-  Stack* stack = reinterpret_cast<Stack*>(heap->allocateRaw(size));
+  Stack* stack = reinterpret_cast<Stack*>(heap->allocate(size));
   if (stack == nullptr)
     return stack;
 

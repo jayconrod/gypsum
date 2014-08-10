@@ -9,7 +9,7 @@
 #include <memory>
 #include "block-inl.h"
 #include "handle-inl.h"
-#include "heap-inl.h"
+#include "heap.h"
 
 using namespace std;
 using namespace codeswitch::internal;

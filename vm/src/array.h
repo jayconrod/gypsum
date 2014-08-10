@@ -8,7 +8,7 @@
 #define array_h
 
 #include "block.h"
-#include "heap-inl.h"
+#include "heap.h"
 #include "tagged.h"
 #include "utils.h"
 
@@ -119,7 +119,7 @@ class Array: public Block {
  protected:
   static Array<T>* allocateBase(Heap* heap, word_t meta, word_t length) {
     word_t size = sizeForLength(length);
-    Array<T>* array = reinterpret_cast<Array<T>*>(heap->allocateRaw(size));
+    Array<T>* array = reinterpret_cast<Array<T>*>(heap->allocate(size));
     if (array == nullptr)
       return array;
 

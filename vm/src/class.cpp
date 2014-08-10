@@ -8,13 +8,14 @@
 
 #include "block-inl.h"
 #include "field.h"
+#include "handle-inl.h"
 #include "type-inl.h"
 
 namespace codeswitch {
 namespace internal {
 
 Class* Class::tryAllocate(Heap* heap) {
-  Class* clas = reinterpret_cast<Class*>(heap->allocateRaw(kSize));
+  Class* clas = reinterpret_cast<Class*>(heap->allocate(kSize));
   if (clas == nullptr)
     return nullptr;
 

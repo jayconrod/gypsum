@@ -4,7 +4,7 @@
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
 
-#include "remembered-set-inl.h"
+#include "remembered-set.h"
 
 #include <algorithm>
 
@@ -19,6 +19,14 @@ RememberedSet::RememberedSet()
       setSize_(kMinimumSetSize) { }
 
 
+void RememberedSet::add(Slot slot) {
+  if (dirty_.get() != nullptr && dirtyCount_ < setSize_)
+    addFast(slot);
+  else
+    addSlow(slot);
+}
+
+
 word_t RememberedSet::length() {
   sortAndMerge();
   return cleanCount_;
@@ -31,6 +39,39 @@ void RememberedSet::clear() {
   cleanCount_ = 0;
   dirtyCount_ = 0;
   setSize_ = kMinimumSetSize;
+}
+
+
+RememberedSet::Slot RememberedSet::iterator::operator * () {
+  ASSERT(index_ < set_->cleanCount_);
+  return set_->clean_[index_];
+}
+
+
+bool RememberedSet::iterator::operator == (const iterator& other) const {
+  return index_ == other.index_;
+}
+
+
+RememberedSet::iterator& RememberedSet::iterator::operator ++ () {
+  ++index_;
+  return *this;
+}
+
+
+RememberedSet::iterator RememberedSet::begin() {
+  sortAndMerge();
+  return iterator(this, 0);
+}
+
+
+RememberedSet::iterator RememberedSet::end() {
+  return iterator(this, cleanCount_);
+}
+
+
+void RememberedSet::addFast(Slot slot) {
+  dirty_[dirtyCount_++] = slot;
 }
 
 

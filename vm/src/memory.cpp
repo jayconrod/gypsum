@@ -15,8 +15,8 @@
 #include "block-inl.h"
 #include "error.h"
 #include "handle-inl.h"
-#include "heap-inl.h"
-#include "remembered-set-inl.h"
+#include "heap.h"
+#include "remembered-set.h"
 #include "vm.h"
 
 using namespace std;
@@ -24,17 +24,17 @@ using namespace std;
 namespace codeswitch {
 namespace internal {
 
-OptP<Address> AllocationRange::allocate(size_t size) {
+Address AllocationRange::allocate(size_t size) {
   STATIC_ASSERT(sizeof(base_) == sizeof(size));
   ASSERT(isValid());
   auto newBase = base_ + size;
   // We can safely check for overflow because unsigned addition is defined to wrap.
   bool overflow = newBase < base_;
   if (overflow || newBase > limit_)
-    return OptP<Address>();
+    return 0;
   auto addr = base_;
   base_ = newBase;
-  return Some(addr);
+  return addr;
 }
 
 
@@ -82,7 +82,7 @@ Chunk::Chunk(VM* vm, u32 id)
   // zero-initialize pages before giving them to us.
   auto freePlace = reinterpret_cast<void*>(storageBase());
   auto free = new(freePlace, storageSize()) Free(nullptr);
-  setFreeListHead(Some(free));
+  setFreeListHead(free);
 }
 
 
@@ -212,59 +212,6 @@ Address MemoryChunk::randomAddress(word_t alignment) {
   if (fd != -1)
     close(fd);
   return 0;
-}
-
-
-Page* Page::allocate(VM* vm) {
-  MemoryChunk* chunk = MemoryChunk::allocate(kSize, kSize,
-                                             static_cast<Protection>(READABLE | WRITABLE));
-  Page* page = reinterpret_cast<Page*>(chunk);
-  page->setVm(vm);
-  page->setHeap(vm->heap());
-  page->setAllocationPtr(reinterpret_cast<Address>(page) + kPageHeaderSize);
-  page->setRememberedSet(new RememberedSet());
-  return page;
-}
-
-
-Page::~Page() {
-  if (rememberedSet() != nullptr)
-    delete rememberedSet();
-}
-
-
-void Page::shrinkToAllocationPtr() {
-  word_t usedSize = align(allocationPtr() - base(), PAGESIZE);
-  shrink(usedSize);
-}
-
-
-void Space::expand() {
-  unique_ptr<Page> page(Page::allocate(vm_));
-  page->setIdentity(identity_);
-  pages_.push_back(move(page));
-}
-
-
-NewSpace::NewSpace(VM* vm)
-    : vm_(vm),
-      semiSpace1_(vm, NEW_SPACE),
-      semiSpace2_(vm, NEW_SPACE),
-      toSpace_(&semiSpace1_),
-      fromSpace_(&semiSpace2_) { }
-
-
-void NewSpace::expand() {
-  toSpace_->expand();
-  fromSpace_->expand();
-}
-
-
-void NewSpace::swap() {
-  std::swap(toSpace_, fromSpace_);
-  for (unique_ptr<Page>& page : toSpace_->pages()) {
-    page->setAllocationPtr(page->allocationBase());
-  }
 }
 
 }

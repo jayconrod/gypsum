@@ -9,7 +9,7 @@
 
 #include "block.h"
 
-#include "memory-inl.h"
+#include "memory.h"
 #include "roots-inl.h"
 
 namespace codeswitch {
@@ -66,7 +66,7 @@ void Block::setGcBits(u8 bits) {
 
 
 VM* Block::getVM() {
-  Page* page = Page::fromAddress(this);
+  Chunk* page = Chunk::fromAddress(this);
   return page->vm();
 }
 

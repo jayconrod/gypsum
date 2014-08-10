@@ -10,7 +10,6 @@
 #include <memory>
 #include <vector>
 #include "handle.h"
-#include "memory-inl.h"
 #include "vm-inl.h"
 
 namespace codeswitch {
@@ -37,6 +36,7 @@ struct HandleData {
  *  HandleData elements. Internally, HandleDataBlock is allocated with mmap to guarantee
  *  alignment. This lets us easily figure out what block any given handle belongs to.
  */
+// TODO: break dependency on MemoryChunk
 class HandleDataBlock: public MemoryChunk {
  public:
   static HandleDataBlock* allocate();

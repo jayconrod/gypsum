@@ -8,7 +8,8 @@
 
 #include <cstring>
 #include "block-inl.h"
-#include "heap-inl.h"
+#include "handle-inl.h"
+#include "heap.h"
 #include "object.h"
 #include "vm-inl.h"
 

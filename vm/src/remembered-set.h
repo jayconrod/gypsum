@@ -33,28 +33,29 @@ class RememberedSet {
 
   RememberedSet();
 
-  inline void add(Slot slot);
+  void add(Slot slot);
   word_t length();
   void clear();
 
   class iterator: public std::iterator<std::input_iterator_tag, Slot> {
    public:
-    inline iterator(RememberedSet* set, word_t index);
-    inline Slot operator * ();
-    inline bool operator == (const iterator& other) const;
-    inline bool operator != (const iterator& other) const {
+    iterator(RememberedSet* set, word_t index)
+        : set_(set), index_(index) { }
+    Slot operator * ();
+    bool operator == (const iterator& other) const;
+    bool operator != (const iterator& other) const {
       return !(*this == other);
     }
-    inline iterator& operator ++ ();
+    iterator& operator ++ ();
    private:
     RememberedSet* set_;
     word_t index_;
   };
-  inline iterator begin();
-  inline iterator end();
+  iterator begin();
+  iterator end();
 
  private:
-  inline void addFast(Slot slot);
+  void addFast(Slot slot);
   void addSlow(Slot slot);
   void sortAndMerge();
 
