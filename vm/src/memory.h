@@ -131,39 +131,6 @@ class Chunk {
   RememberedSet rememberedSet_;
 };
 
-
-class MemoryChunk {
- public:
-  enum Protection {
-    READABLE = 1,
-    WRITABLE = 2,
-    EXECUTABLE = 4,
-  };
-
-  static MemoryChunk* allocate(word_t size, word_t alignment, Protection protection);
-  void operator delete(void* chunk);
-
-  Address base() { return reinterpret_cast<Address>(this); }
-  word_t size() { return mem<word_t>(this, kSizeOffset); }
-  Address limit() { return base() + size(); }
-  Protection protection() {
-    return static_cast<Protection>(mem<word_t>(this, kProtectionOffset));
-  }
-
-  bool inRange(Address addr) { return base() <= addr && addr < limit(); }
-
-  void shrink(word_t newSize);
-
-  static const word_t kSizeOffset = 0;
-  static const word_t kAlignmentOffset = kSizeOffset + kWordSize;
-  static const word_t kProtectionOffset = kAlignmentOffset + kWordSize;
-  static const word_t kMemoryChunkHeaderSize = kProtectionOffset + kWordSize;
-
- private:
-  static Address randomAddress(word_t alignment);
-};
-
-
 }
 }
 
