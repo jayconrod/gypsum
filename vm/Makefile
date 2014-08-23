@@ -40,6 +40,10 @@ LIB_OBJECTS := $(call objects,$(LIB_SOURCES)) $(LIB_GEN_OBJS)
 LIB_DEPS := $(call deps,$(LIB_SOURCES))
 LIB := $(OUT_DIR)/$(LIB_NAME).a
 
+LIB_PREFIX := $(LIB_SRC_DIR)/prefix.h
+LIB_PREFIX_PCH := prefix_.h
+LIB_PREFIX_COMPILED := $(GEN_DIR)/$(LIB_PREFIX_PCH).gch
+
 TEST_GY_SOURCES := $(wildcard $(TEST_SRC_DIR)/*.gy)
 TEST_CSP_PACKAGES := $(call csp_packages,$(TEST_GY_SOURCES))
 TEST_CSP_TESTS := $(call csp_tests,$(TEST_CSP_PACKAGES))
@@ -76,10 +80,14 @@ $(PROGRAMS) $(TEST):
 $(LIB):
 	$(AR) $@ $^
 
+$(LIB_PREFIX_COMPILED): $(LIB_PREFIX)
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -x c++-header $(DEFINES) $(INCLUDES) $< -o $@
+
 $(OBJECTS):
 	@mkdir -p $(dir $@)
-	@$(DEPENDS) $(CXXFLAGS) $(DEFINES) $(INCLUDES) -MT $@ $< >$(call deps,$<)
-	$(CXX) $(CXXFLAGS) $(DEFINES) $(INCLUDES) $< -o $@
+	@$(DEPENDS) $(CXXFLAGS) $(DEFINES) $(INCLUDES) -MT $@ $(filter %.cpp,$^) >$(call deps,$<)
+	$(CXX) $(CXXFLAGS) $(DEFINES) $(INCLUDES) -include $(LIB_PREFIX_PCH) $(filter %.cpp,$^) -o $@
 
 $(TEST_CSP_PACKAGES):
 	@mkdir -p $(dir $@)
@@ -103,7 +111,8 @@ $(LIB): $(LIB_OBJECTS)
 
 $(TEST): $(TEST_OBJECTS) $(LIB)
 
-$(OBJECTS): $(filter %.h,$(GEN))
+$(OBJECTS) $(LIB_PREFIX_COMPILED): $(filter %.h,$(GEN))
+$(OBJECTS): $(LIB_PREFIX_COMPILED)
 
 $(foreach src,$(PROGRAM_SOURCES),\
 	$(eval $(call programs,$(src)): $(call objects,$(src)) $(LIB)))
