@@ -41,16 +41,14 @@ TEST(AllocationRangeFullAllocation) {
 
 TEST(AllocationRangeExhausted) {
   AllocationRange range(100, 200);
-  auto a = range.allocate(101);
-  ASSERT_EQ(0, a);
+  ASSERT_THROWS(AllocationError, range.allocate(101));
   ASSERT_EQ(100, range.base());
 }
 
 
 TEST(AllocationRangeOverflow) {
   AllocationRange range(100, 200);
-  auto a = range.allocate(~static_cast<size_t>(0));
-  ASSERT_EQ(0, a);
+  ASSERT_THROWS(AllocationError, range.allocate(~static_cast<size_t>(0)));
   ASSERT_EQ(100, range.base());
 }
 

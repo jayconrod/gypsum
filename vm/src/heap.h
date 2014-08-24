@@ -7,6 +7,7 @@
 #ifndef heap_h
 #define heap_h
 
+#include <exception>
 #include <iterator>
 #include "builtins.h"
 #include "error.h"
@@ -39,6 +40,22 @@ class VM;
   return _result;                                \
 
 
+/** Thrown when memory can't be allocated from the heap. Contains a flag that indicates whether
+ *  allocation should be reattempted after garbage collection.
+ */
+class AllocationError: public std::exception {
+ public:
+  explicit AllocationError(bool shouldRetryAfterGC = true)
+      : shouldRetryAfterGC_(shouldRetryAfterGC) { }
+
+  bool shouldRetryAfterGC() const { return shouldRetryAfterGC_; }
+  virtual const char* what() const noexcept override { return "allocation error"; }
+
+ private:
+  bool shouldRetryAfterGC_;
+};
+
+
 /** The main class that manages memory for the VM. There is exactly one heap in each VM.
  *  Memory is managed as a list of `Chunk`s, which are obtained from the kernel using `mmap` or
  *  some similar mechanism. Memory is allocated using a contiguous `AllocationRange` on one of
@@ -66,17 +83,14 @@ class Heap {
    */
   static const word_t kMinAddress = PAGESIZE;
 
-
-  /** Reserves raw memory on the heap without initializing it. Returns nullptr if allocation
-   *  was not possible (but does not trigger the garbage collector). Note that in order for
-   *  garbage collection to be safe, the allocated memory must be filled with one or more blocks
-   *  with well-defined sizes before the next allocation. If a pointer to a block is stored
-   *  somewhere, all words in the block should be fully initialized first.
+  /** Reserves raw memory on the heap without initializing it. Note that all words in a block
+   *  should be initialized before storing a pointer to the block in any other reachable block.
+   *  Throws `AllocationError` on failure.
    */
   Address allocateUninitialized(word_t size);
 
   /** Reserves memory on the heap and zero-initializes it. See safety comments for
-   *  `allocateUninitialized`.
+   *  `allocateUninitialized`. Throws `AllocationError` on failure.
    */
   Address allocate(word_t size);
 
@@ -125,6 +139,7 @@ class Heap {
     Allocator()
         : range_(nullptr), chunk_(nullptr) { }
     explicit Allocator(Chunk* chunk);
+    bool canAllocate(word_t size) const;
     Address allocate(word_t size);
     void release();
 

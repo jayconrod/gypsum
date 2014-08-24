@@ -24,6 +24,14 @@ using namespace std;
 namespace codeswitch {
 namespace internal {
 
+bool AllocationRange::canAllocate(size_t size) const {
+  ASSERT(isValid());
+  auto newBase = base_ + size;
+  bool overflow = newBase < base_;
+  return !overflow && newBase <= limit_;
+}
+
+
 Address AllocationRange::allocate(size_t size) {
   STATIC_ASSERT(sizeof(base_) == sizeof(size));
   ASSERT(isValid());
@@ -31,7 +39,7 @@ Address AllocationRange::allocate(size_t size) {
   // We can safely check for overflow because unsigned addition is defined to wrap.
   bool overflow = newBase < base_;
   if (overflow || newBase > limit_)
-    return 0;
+    throw AllocationError();
   auto addr = base_;
   base_ = newBase;
   return addr;

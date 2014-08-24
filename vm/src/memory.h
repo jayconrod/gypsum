@@ -49,6 +49,9 @@ class AllocationRange {
   Address limit() const { return limit_; }
   Address size() const { return limit_ - base_; }
 
+  /** Returns true if an allocation of the given size will succeed. */
+  bool canAllocate(size_t size) const;
+
   /** Increment `base` by `size` bytes and return the old value of `base`. If `base` exceeds
    *  `limit`, the allocation fails, and 0 is returned.
    */

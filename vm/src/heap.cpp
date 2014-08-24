@@ -140,6 +140,12 @@ Heap::Allocator::Allocator(Chunk* chunk)
 }
 
 
+bool Heap::Allocator::canAllocate(word_t size) const {
+  ASSERT(isAligned(size, kBlockAlignment));
+  return range_ && range_->canAllocate(size);
+}
+
+
 Address Heap::Allocator::allocate(word_t size) {
   ASSERT(isAligned(size, kBlockAlignment));
   if (!range_)
@@ -169,9 +175,8 @@ Address Heap::allocateSlow(word_t size) {
 
   // Check if we can allocate from the allocation range. `allocateFast` already does this, but
   // we will recurse after creating a new allocation range.
-  auto addr = allocator_.allocate(size);
-  if (addr != 0)
-    return addr;
+  if (allocator_.canAllocate(size))
+    return allocator_.allocate(size);
 
   // Since we failed to allocate from the range, we'll invalidate it.
   allocator_.release();
@@ -200,7 +205,7 @@ Address Heap::allocateSlow(word_t size) {
 
   // Nope. Caller must call `collectGarbage` or give up. We won't call it here, since we don't
   // know if the caller is in a good state for GC.
-  return 0;
+  throw AllocationError();
 }
 
 
