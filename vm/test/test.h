@@ -68,6 +68,17 @@ inline void assertFalse(bool result, const std::string& message) {
     MESSAGE(#expected " == " #actual))
 #define ASSERT_NE(expected, actual) assertTrue((expected) != (actual), \
     MESSAGE(#expected " != " #actual))
+#define ASSERT_THROWS(exn_name, expr) \
+    do { \
+      bool _success = false; \
+      try { \
+        expr; \
+      } catch (exn_name exn) { \
+        _success = true; \
+      } \
+      assertTrue(_success, MESSAGE(#expr " throws " #exn_name)); \
+    } while (0)
+
 
 #define TEST(name) \
 class Test ## name : public TestBase { \
