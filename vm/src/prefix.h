@@ -17,11 +17,3 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-#include "codeswitch.h"
-#include "array.h"
-#include "heap.h"
-#include "block-inl.h"
-#include "handle.h"
-#include "type.h"
-#include "utils.h"
-#include "vm.h"
