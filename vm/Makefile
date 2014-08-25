@@ -86,7 +86,7 @@ $(LIB_PREFIX_COMPILED): $(LIB_PREFIX)
 
 $(OBJECTS):
 	@mkdir -p $(dir $@)
-	@$(DEPENDS) $(CXXFLAGS) $(DEFINES) $(INCLUDES) -MT $@ $(filter %.cpp,$^) >$(call deps,$<)
+	@$(DEPENDS) $(CXXFLAGS) $(DEFINES) $(INCLUDES) -MT $@ $(filter %.cpp,$^) >$(call deps,$(filter %.cpp,$^))
 	$(CXX) $(CXXFLAGS) $(DEFINES) $(INCLUDES) -include $(LIB_PREFIX_PCH) $(filter %.cpp,$^) -o $@
 
 $(TEST_CSP_PACKAGES):
