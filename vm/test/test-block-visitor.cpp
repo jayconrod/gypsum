@@ -8,7 +8,7 @@
 
 #include <cstring>
 #include "array.h"
-#include "block-inl.h"
+#include "block.h"
 #include "block-visitor.h"
 #include "bytecode.h"
 #include "function-inl.h"
@@ -47,13 +47,13 @@ TEST(BlockVisitorEncodedMeta) {
 
   // The meta meta should have an encoded meta pointing to itself.
   Meta* metaMeta = vm.roots()->metaMeta();
-  ASSERT_TRUE(metaMeta->hasEncodedMeta());
+  ASSERT_TRUE(metaMeta->metaWord().isBlockType());
   ASSERT_EQ(metaMeta->meta(), metaMeta);
 
   // The increment visitor should not visit encoded metas, since they aren't really pointers.
   IncrementVisitor visitor;
   visitor.visit(metaMeta);
-  ASSERT_TRUE(metaMeta->hasEncodedMeta());
+  ASSERT_TRUE(metaMeta->metaWord().isBlockType());
   ASSERT_EQ(metaMeta->meta(), metaMeta);
 }
 
@@ -61,9 +61,8 @@ TEST(BlockVisitorEncodedMeta) {
 TEST(BlockVisitorRegularMeta) {
   // This time, we'll create our own meta.
   VM vm;
-  Heap* heap = vm.heap();
-  Meta* meta = Meta::tryAllocate(heap, 0, kWordSize, 0);
-  meta->initialize(META_BLOCK_TYPE, nullptr, kWordSize, 0);
+  auto heap = vm.heap();
+  auto meta = new(heap, 0, kWordSize, 0) Meta(META_BLOCK_TYPE);
 
   // Our fake object will use this meta.
   word_t fake[] = { reinterpret_cast<word_t>(meta) };
@@ -78,11 +77,10 @@ TEST(BlockVisitorRegularMeta) {
 
 TEST(BlockVisitorRegularPointers) {
   VM vm;
-  Heap* heap = vm.heap();
-  Meta* meta = Meta::tryAllocate(heap, 0, 6 * kWordSize, 3 * kWordSize);
-  meta->initialize(OBJECT_BLOCK_TYPE, nullptr, 6 * kWordSize, 3 * kWordSize);
-  meta->setHasPointers(true);
-  meta->setHasElementPointers(true);
+  auto heap = vm.heap();
+  auto meta = new(heap, 0, 6 * kWordSize, 3 * kWordSize) Meta(OBJECT_BLOCK_TYPE);
+  meta->hasPointers_ = true;
+  meta->hasElementPointers_ = true;
   meta->objectPointerMap().setWord(0, 0x34);
   meta->elementPointerMap().setWord(0, 0x5);
 

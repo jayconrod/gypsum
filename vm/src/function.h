@@ -34,7 +34,7 @@ class Function: public Block {
                   StackPointerMap* stackPointerMap);
 
   static inline word_t sizeForFunction(word_t instructionsSize);
-  inline word_t sizeOfFunction();
+  inline word_t sizeOfFunction() const;
   void printFunction(FILE* out);
   DEFINE_CAST(Function)
 

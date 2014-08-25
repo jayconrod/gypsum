@@ -6,7 +6,7 @@
 
 #include "handle.h"
 
-#include "block-inl.h"
+#include "block.h"
 #include "error.h"
 #include "vm.h"
 

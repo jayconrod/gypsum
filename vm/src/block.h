@@ -52,6 +52,10 @@ BLOCK_TYPE_LIST(DECLARE_BLOCK_CLASSES)
 static Name* cast(Block* block) { \
   ASSERT(block->is##Name()); \
   return reinterpret_cast<Name*>(block); \
+} \
+static const Name* cast(const Block* block) { \
+  ASSERT(block->is##Name()); \
+  return reinterpret_cast<const Name*>(block); \
 }
 
 
@@ -59,116 +63,168 @@ class Bitmap;
 template <class T>
 class Handle;
 class Heap;
+class Meta;
 
 
-class Block {
+/** Encodes the first word of each `Block`. The first word is called the "meta word".
+ *  It contains either a pointer to a `Meta`, which describes the structure of the `Block`, or
+ *  a `BlockType`, which can be used to find a standard `Meta` in `Roots`. Since all `Block`s,
+ *  including `Meta`s are at least word-aligned on the heap, the two low bits of the `Meta`
+ *  pointer are guaranteed to be 0. `BlockType` does not need all bits either. So we reserve
+ *  these bits for use by the GC. These bits are masked out when we access the Meta.
+ */
+class MetaWord {
  public:
-  Block() { }
-  Block(const Block&) = delete;
-  Block(const Block&&) = delete;
+  MetaWord(Meta* meta, word_t gcBits = 0)
+      : bits_(reinterpret_cast<word_t>(meta) | gcBits) { }
+  MetaWord(BlockType type, word_t gcBits = 0)
+      : bits_((static_cast<word_t>(type) << kGcBitCount) | gcBits) { }
 
-#define DECLARE_TYPE_CHECK(Name, NAME) \
-  inline bool is##Name();
-BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
-#undef DECLARE_TYPE_CHECK
+  bool isPointer() const {
+    return (bits_ >> kGcBitCount) >= Heap::kMinAddress;
+  }
+  Meta* getPointer() const {
+    ASSERT(isPointer());
+    return reinterpret_cast<Meta*>(bits_ & ~kGcBitMask);
+  }
+  void setPointer(Meta* meta) {
+    bits_ = reinterpret_cast<word_t>(meta) | gcBits();
+  }
+  bool isBlockType() const {
+    return !isPointer();
+  }
+  BlockType getBlockType() const {
+    ASSERT(isBlockType());
+    return static_cast<BlockType>(bits_ >> kGcBitCount);
+  }
+  void setBlockType(BlockType type) {
+    bits_ = static_cast<word_t>(type) | gcBits();
+  }
 
-  Address address() { return reinterpret_cast<Address>(this); }
-  word_t sizeOfBlock();
-  void print(FILE* out = stderr);
-  void relocate(word_t delta);
+  word_t gcBits() const { return bits_ & kGcBitMask; }
+  void setGcBits(word_t gcBits) {
+    bits_ = (bits_ & ~kGcBitMask) | gcBits;
+  }
 
-  DECLARE_ACCESSORS(Meta*, meta, setMeta)
-  inline void setMeta(BlockType type);
-  inline bool hasEncodedMeta();
-  inline BlockType getMetaEncoding();
-  DEFINE_INL_ACCESSORS(word_t, metaWord, setMetaWord, kMetaOffset)
-  DECLARE_ACCESSORS(u8, gcBits, setGcBits)
+  static const word_t kGcBitCount = 2;
+  static const word_t kGcBitMask = (1 << kGcBitCount) - 1;
 
-  DEFINE_INL_ACCESSORS(word_t, elementsLength, setElementsLength, kBlockHeaderSize)
-
-  inline VM* getVM();
-  inline Heap* getHeap();
-
-  static const int kMetaOffset = 0;
-  static const word_t kGCBitCount = 2;
-  static const word_t kGCBitMask = (1 << kGCBitCount) - 1;
-  static const int kBlockHeaderSize = kMetaOffset + kWordSize;
+ private:
+  // We don't use bit fields since their order is implementation-defined. We will likely need
+  // to access the meta word in jitcode, so they need to be in a well-defined order.
+  word_t bits_;
 };
 
 
+/** Block is the base class for every kind of block allocated on the garbage-collected heap.
+ *  It just contains one "meta word": every block begins with one of these. See `MetaWord`
+ *  for details on this.
+ */
+class Block {
+ public:
+  explicit Block(MetaWord metaWord)
+      : metaWord_(metaWord) { }
+
+#define DECLARE_TYPE_CHECK(Name, NAME) \
+  inline bool is##Name() const;
+BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
+#undef DECLARE_TYPE_CHECK
+
+  Address address() const { return reinterpret_cast<Address>(this); }
+  word_t sizeOfBlock() const;
+  void print(FILE* out = stderr);
+  void relocate(word_t delta);
+
+  const MetaWord& metaWord() const { return metaWord_; }
+  Meta* meta() const;
+  void setMeta(Meta* meta);
+  BlockType blockType() const;
+
+  word_t elementsLength() const;
+
+  VM* getVM() const;
+  Heap* getHeap() const;
+
+  // TODO: remove these methods when no longer needed for compatibility.
+  void setMeta(BlockType blockType) { metaWord_ = MetaWord(blockType); }
+  void setMetaWord(word_t mw) {
+    metaWord_ = MetaWord(static_cast<BlockType>(mw >> MetaWord::kGcBitCount));
+  }
+
+ private:
+  MetaWord metaWord_;
+};
+
+
+// TODO: remove this when no longer needed for compatibility.
+static const int kBlockHeaderSize = sizeof(Block);
+
+
+/** Contains shared meta-data for blocks that point to it. Metas contain:
+ *  - the size of the block and the size of each element if the block has elements
+ *  - the `BlockType`
+ *  - an optional pointer to a `Class`
+ *  - various flags
+ *  - pointer maps for the block and its elements, to be used by the GC
+ *  - an array of pointers, useful for methods or static class members.
+ *  Each `Class` typically has its own `Meta` for instances. Built-in classes have their own
+ *  `Meta`s, too.
+ */
 class Meta: public Block {
  public:
-  static Meta* tryAllocate(Heap* heap, word_t dataLength, u32 objectSize, u32 elementSize);
-  static Local<Meta> allocate(Heap* heap, word_t dataLength, u32 objectSize, u32 elementSize);
-  void initialize(BlockType type, Class* clas, u32 objectSize, u32 elementSize);
-  static word_t sizeForMeta(word_t dataLength, u32 objectSize, u32 elementSize);
-  word_t sizeOfMeta();
+  void* operator new (size_t, Heap* heap, word_t dataLength, u32 objectSize, u32 elementSize);
+  explicit Meta(BlockType blockType)
+      : Block(META_BLOCK_TYPE),
+        blockType_(blockType) { }
+
+  word_t sizeOfMeta() const;
   DEFINE_CAST(Meta)
 
   void printMeta(FILE* out);
 
-  DEFINE_INL_ACCESSORS(word_t, dataLength, setDataLength, kDataLengthOffset)
-  DEFINE_INL_ACCESSORS(word_t, flags, setFlags, kFlagsOffset)
-  DEFINE_INL_BIT_ACCESSORS(BlockType, type, setType, kFlagsOffset, kTypeWidth, kTypeShift)
-  DEFINE_INL_BOOL_ACCESSORS(hasCustomSize, setHasCustomSize,
-                            kFlagsOffset, kHasCustomSizeShift)
-  DEFINE_INL_BOOL_ACCESSORS(hasPointers, setHasPointers,
-                            kFlagsOffset, kHasPointersShift)
-  DEFINE_INL_BOOL_ACCESSORS(hasElementPointers, setHasElementPointers,
-                            kFlagsOffset, kHasElementPointersShift)
-  DEFINE_INL_BOOL_ACCESSORS(hasCustomPointers, setHasCustomPointers,
-                            kFlagsOffset, kHasCustomPointersShift)
-  DEFINE_INL_BOOL_ACCESSORS(needsRelocation, setNeedsRelocation,
-                            kFlagsOffset, kNeedsRelocationShift)
-  DEFINE_INL_PTR_ACCESSORS(Class*, clas, setClass, kClassOffset)
-  DEFINE_INL_ACCESSORS(u32, objectSize, setObjectSize, kObjectSizeOffset)
-  DEFINE_INL_ACCESSORS(u32, elementSize, setElementSize, kElementSizeOffset)
+  word_t dataLength() const { return dataLength_; }
+  BlockType blockType() const { return blockType_; }
+  bool hasCustomSize() const { return hasCustomSize_; }
+  bool hasPointers() const { return hasPointers_; }
+  bool hasElementPointers() const { return hasElementPointers_; }
+  bool hasCustomPointers() const { return hasCustomPointers_; }
+  bool needsRelocation() const { return needsRelocation_; }
+  DEFINE_INL_PTR_ACCESSORS2(Class*, clas, setClass)
+  u32 objectSize() const { return objectSize_; }
+  u32 elementSize() const { return elementSize_; }
 
-  inline Block** dataBase() {
-    return &mem<Block*>(this, kHeaderSize);
-  }
-  inline Block* getData(word_t index) { return mem<Block*>(this, kHeaderSize, index); }
-  inline void setData(word_t index, Block* value) {
-    mem<Block*>(this, kHeaderSize, index) = value;
-  }
+  Block* getData(word_t index) const;
+  void setData(word_t index, Block* value);
 
   bool hasElements() { return elementSize() > 0; }
-  inline word_t* rawObjectPointerMap() {
-    word_t dataSize = dataLength() * kWordSize;
-    return &mem<word_t>(this, kHeaderSize + dataSize);
-  }
-  inline Bitmap objectPointerMap() {
-    word_t objectWordCount = align(objectSize(), kWordSize) / kWordSize;
-    return Bitmap(rawObjectPointerMap(), objectWordCount);
-  }
-  inline word_t* rawElementPointerMap() {
-    word_t dataSize = dataLength() * kWordSize;
-    word_t objectWordCount = align(objectSize(), kWordSize) / kWordSize;
-    word_t objectPointerMapSize = Bitmap::sizeFor(objectWordCount);
-    return &mem<word_t>(this, kHeaderSize + dataSize + objectPointerMapSize);
-  }
-  inline Bitmap elementPointerMap() {
-    word_t elementWordCount = align(elementSize(), kWordSize) / kWordSize;
-    return Bitmap(rawElementPointerMap(), elementWordCount);
-  }
+  word_t* rawObjectPointerMap();
+  Bitmap objectPointerMap();
+  word_t* rawElementPointerMap();
+  Bitmap elementPointerMap();
 
-  static const int kDataLengthOffset = kBlockHeaderSize;
-  static const int kFlagsOffset = kDataLengthOffset + kWordSize;
-  static const int kTypeWidth = 8;
-  static const int kTypeShift = 0;
-  static const int kHasCustomSizeShift = kTypeShift + kTypeWidth;
-  static const int kHasPointersShift = kHasCustomSizeShift + 1;
-  static const int kHasElementPointersShift = kHasPointersShift + 1;
-  static const int kHasCustomPointersShift = kHasElementPointersShift + 1;
-  static const int kNeedsRelocationShift = kHasCustomPointersShift + 1;
-  static const int kClassOffset = kFlagsOffset + kWordSize;
-  static const int kObjectSizeOffset = kClassOffset + kWordSize;
-  static const int kElementSizeOffset = kObjectSizeOffset + sizeof(u32);
-  static const int kHeaderSize = kElementSizeOffset + sizeof(u32);
-  static const int kElementSize = kWordSize;
+  static const word_t kElementSize = kWordSize;
 
-  static const word_t kPointerMap = 0;
-  static const word_t kElementPointerMap = 1;
+ private:
+  static word_t sizeForMeta(word_t dataLength, u32 objectSize, u32 elementSize);
+  Block** dataBase() { return &mem<Block*>(this, sizeof(Meta)); }
+  Block* const* dataBase() const { return &mem<Block*>(this, sizeof(Meta)); }
+
+  word_t dataLength_;
+  BlockType blockType_ : 8;
+  bool hasCustomSize_ : 1;
+  bool hasPointers_ : 1;
+  bool hasElementPointers_ : 1;
+  bool hasCustomPointers_ : 1;
+  bool needsRelocation_ : 1;
+  alignas(word_t) Class* clas_;
+  u32 objectSize_;
+  u32 elementSize_;
+
+  static const word_t kPointerMap = 0x8;
+  static const word_t kElementPointerMap = 0x1;
+
+  friend class Class;
+  friend class Roots;
 };
 
 
@@ -177,10 +233,11 @@ class Meta: public Block {
  */
 class Free: public Block {
  public:
-  void* operator new (size_t unused, Heap* heap, size_t size);
-  void* operator new (size_t unused, void* place, size_t size);
+  void* operator new (size_t, Heap* heap, size_t size);
+  void* operator new (size_t, void* place, size_t size);
   explicit Free(Free* next)
-      : next_(next) { }
+      : Block(FREE_BLOCK_TYPE),
+        next_(next) { }
 
   DEFINE_CAST(Free)
 
@@ -193,10 +250,9 @@ class Free: public Block {
 };
 
 
-#define DEFINE_TYPE_CHECK(Name, NAME) \
-bool Block::is##Name() { \
-  auto type = hasEncodedMeta() ? getMetaEncoding() : meta()->type(); \
-  return type == NAME##_BLOCK_TYPE; \
+#define DEFINE_TYPE_CHECK(Name, NAME)                   \
+bool Block::is##Name() const {                          \
+  return blockType() == NAME##_BLOCK_TYPE;              \
 }
 BLOCK_TYPE_LIST(DEFINE_TYPE_CHECK)
 #undef DEFINE_TYPE_CHECK

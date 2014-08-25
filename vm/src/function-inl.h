@@ -22,8 +22,10 @@ word_t Function::sizeForFunction(word_t instructionsSize) {
 }
 
 
-word_t Function::sizeOfFunction() {
-  return sizeForFunction(instructionsSize());
+word_t Function::sizeOfFunction() const {
+  // TODO: hack
+  auto f = const_cast<Function*>(this);
+  return sizeForFunction(f->instructionsSize());
 }
 
 

@@ -90,7 +90,7 @@ class Chunk {
   static Chunk* fromAddress(Address addr) {
     return reinterpret_cast<Chunk*>(alignDown(addr, kDefaultSize));
   }
-  static Chunk* fromAddress(void* addr) {
+  static Chunk* fromAddress(const void* addr) {
     return fromAddress(reinterpret_cast<Address>(addr));
   }
 

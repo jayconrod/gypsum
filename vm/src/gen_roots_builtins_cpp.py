@@ -143,7 +143,7 @@ with open(rootsBuiltinsName, "w") as rootsBuiltinsFile:
 #include <vector>
 #include "array.h"
 #include "builtins.h"
-#include "block-inl.h"
+#include "block.h"
 #include "class-inl.h"
 #include "field.h"
 #include "function-inl.h"

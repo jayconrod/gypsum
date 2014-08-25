@@ -7,7 +7,7 @@
 #include "gc.h"
 
 #include <cstring>
-#include "block-inl.h"
+#include "block.h"
 #include "block-visitor.h"
 #include "heap.h"
 #include "remembered-set.h"

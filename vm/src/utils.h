@@ -108,7 +108,7 @@ T& mem(void* base, word_t offset = 0, word_t index = 0) {
 
 
 template <class T>
-T mem(const void* base, word_t offset = 0, word_t index = 0) {
+const T& mem(const void* base, word_t offset = 0, word_t index = 0) {
   return mem<T>(reinterpret_cast<Address>(base), offset, index);
 }
 
@@ -193,6 +193,15 @@ void utf8Encode(u32 codePoint, u8** bytes);
     *p = _newValue; \
     Heap::recordWrite(p, _newValue); \
   }
+
+
+// TODO: replace the one above with this
+#define DEFINE_INL_PTR_ACCESSORS2(type, name, setter) \
+  type name() const { return name##_; }               \
+  void setter(type _newValue) {                       \
+    name##_ = _newValue;                              \
+    Heap::recordWrite(&name##_, _newValue);           \
+  }                                                   \
 
 
 #define DEFINE_INL_CAST_ACCESSORS(type, rawType, getter, setter, offset) \

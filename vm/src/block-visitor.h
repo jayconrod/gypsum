@@ -55,7 +55,7 @@ void BlockVisitorBase<BlockVisitor>::visit(Block* block) {
 
 template <class BlockVisitor>
 void BlockVisitorBase<BlockVisitor>::visitMetaWord(Block* block) {
-  if (block->hasEncodedMeta())
+  if (!block->metaWord().isPointer())
     return;
 
   Block* oldMeta = block->meta();
@@ -96,7 +96,7 @@ void BlockVisitorBase<BlockVisitor>::visitBlockWithPointerMap(Block* block, Meta
 
 template <class BlockVisitor>
 void BlockVisitorBase<BlockVisitor>::visitBlockWithCustomPointers(Block* block, Meta* meta) {
-  BlockType type = meta->type();
+  auto type = meta->blockType();
   switch (type) {
     case STACK_BLOCK_TYPE:
       self()->visitStack(static_cast<Stack*>(block));

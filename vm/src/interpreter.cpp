@@ -12,7 +12,7 @@
 #include <string>
 #include <type_traits>
 #include "array.h"
-#include "block-inl.h"
+#include "block.h"
 #include "builtins.h"
 #include "bytecode.h"
 #include "function-inl.h"

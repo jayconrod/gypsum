@@ -8,7 +8,7 @@
 
 #include <algorithm>
 #include <cstring>
-#include "block-inl.h"
+#include "block.h"
 #include "error.h"
 #include "handle.h"
 #include "heap.h"

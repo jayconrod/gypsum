@@ -7,7 +7,7 @@
 #include "test.h"
 
 #include <cstring>
-#include "block-inl.h"
+#include "block.h"
 #include "handle.h"
 #include "heap.h"
 #include "object.h"
@@ -20,8 +20,7 @@ TEST(ObjectsAreZeroInitialized) {
   Heap* heap = vm.heap();
 
   word_t objectSize = 16;
-  auto meta = Meta::tryAllocate(heap, 0, objectSize, 0);
-  meta->initialize(OBJECT_BLOCK_TYPE, nullptr, objectSize, 0);
+  auto meta = new(heap, 0, objectSize, 0) Meta(OBJECT_BLOCK_TYPE);
   auto dummy = Object::tryAllocate(heap, meta);
   ASSERT_EQ(objectSize, dummy->sizeOfBlock());
   memset(reinterpret_cast<char*>(dummy) + objectSize, 0xef, 100);

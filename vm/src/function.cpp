@@ -8,7 +8,7 @@
 
 #include <algorithm>
 #include <vector>
-#include "block-inl.h"
+#include "block.h"
 #include "bytecode.h"
 #include "class-inl.h"
 #include "field.h"

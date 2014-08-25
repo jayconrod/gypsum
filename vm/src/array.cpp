@@ -6,7 +6,7 @@
 
 #include "array.h"
 
-#include "block-inl.h"
+#include "block.h"
 #include "handle.h"
 #include "heap.h"
 
@@ -14,7 +14,7 @@ namespace codeswitch {
 namespace internal {
 
 I8Array* I8Array::tryAllocate(Heap* heap, word_t length) {
-  auto mw = static_cast<word_t>(I8_ARRAY_BLOCK_TYPE) << kGCBitCount;
+  auto mw = static_cast<word_t>(I8_ARRAY_BLOCK_TYPE) << MetaWord::kGcBitCount;
   return reinterpret_cast<I8Array*>(
       allocateBase(heap, mw, length));
 }
@@ -26,7 +26,7 @@ Local<I8Array> I8Array::allocate(Heap* heap, word_t length) {
 
 
 I32Array* I32Array::tryAllocate(Heap* heap, word_t length) {
-  auto mw = static_cast<word_t>(I32_ARRAY_BLOCK_TYPE) << kGCBitCount;
+  auto mw = static_cast<word_t>(I32_ARRAY_BLOCK_TYPE) << MetaWord::kGcBitCount;
   return reinterpret_cast<I32Array*>(
       allocateBase(heap, mw, length));
 }
@@ -47,7 +47,7 @@ void I32Array::printI32Array(FILE* out) {
 
 
 I64Array* I64Array::tryAllocate(Heap* heap, word_t length) {
-  auto mw = static_cast<word_t>(I64_ARRAY_BLOCK_TYPE) << kGCBitCount;
+  auto mw = static_cast<word_t>(I64_ARRAY_BLOCK_TYPE) << MetaWord::kGcBitCount;
   return reinterpret_cast<I64Array*>(
       allocateBase(heap, mw, length));
 }
@@ -68,7 +68,7 @@ void I64Array::printI64Array(FILE* out) {
 
 
 BlockArray* BlockArray::tryAllocate(Heap* heap, word_t length, bool fill, Block* fillValue) {
-  auto mw = static_cast<word_t>(BLOCK_ARRAY_BLOCK_TYPE) << kGCBitCount;
+  auto mw = static_cast<word_t>(BLOCK_ARRAY_BLOCK_TYPE) << MetaWord::kGcBitCount;
   auto array = reinterpret_cast<BlockArray*>(allocateBase(heap, mw, length));
   if (array != nullptr && fill) {
     for (word_t i = 0; i < length; i++)
@@ -94,7 +94,7 @@ void BlockArray::printBlockArray(FILE* out) {
 
 
 TaggedArray* TaggedArray::tryAllocate(Heap* heap, word_t length) {
-  auto mw = static_cast<word_t>(TAGGED_ARRAY_BLOCK_TYPE) << kGCBitCount;
+  auto mw = static_cast<word_t>(TAGGED_ARRAY_BLOCK_TYPE) << MetaWord::kGcBitCount;
   return reinterpret_cast<TaggedArray*>(allocateBase(heap, mw, length));
 }
 

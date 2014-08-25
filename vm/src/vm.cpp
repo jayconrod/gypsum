@@ -6,10 +6,11 @@
 
 #include "vm.h"
 
-#include "block-inl.h"
+#include "block.h"
 #include "handle.h"
 #include "heap.h"
 #include "package.h"
+#include "roots.h"
 #include "stack-inl.h"
 
 namespace codeswitch {

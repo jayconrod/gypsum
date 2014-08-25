@@ -8,7 +8,7 @@
 
 #include <string>
 #include <vector>
-#include "block-inl.h"
+#include "block.h"
 #include "handle.h"
 #include "string-inl.h"
 #include "vm-inl.h"

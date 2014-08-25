@@ -6,7 +6,7 @@
 
 #include "class-inl.h"
 
-#include "block-inl.h"
+#include "block.h"
 #include "field.h"
 #include "handle.h"
 #include "type-inl.h"
@@ -91,12 +91,10 @@ Meta* Class::tryBuildInstanceMeta(Heap* heap) {
   }
 
   auto methodCount = methods()->length();
-  auto m = Meta::tryAllocate(heap, methodCount, objectSize, elementSize);
-  if (m == nullptr)
-    return nullptr;
-  m->initialize(OBJECT_BLOCK_TYPE, this, objectSize, elementSize);
-  m->setHasPointers(hasObjectPointers);
-  m->setHasElementPointers(hasElementPointers);
+  auto m = new(heap, methodCount, objectSize, elementSize) Meta(OBJECT_BLOCK_TYPE);
+  m->setClass(this);
+  m->hasPointers_ = hasObjectPointers;
+  m->hasElementPointers_ = hasElementPointers;
   for (word_t i = 0; i < methodCount; i++) {
     auto method = getMethod(i);
     m->setData(i, method);

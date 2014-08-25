@@ -6,7 +6,7 @@
 
 #include "field.h"
 
-#include "block-inl.h"
+#include "block.h"
 #include "handle.h"
 #include "heap.h"
 

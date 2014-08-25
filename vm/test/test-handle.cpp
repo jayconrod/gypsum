@@ -8,9 +8,10 @@
 
 #include <algorithm>
 #include <memory>
-#include "block-inl.h"
+#include "block.h"
 #include "handle.h"
 #include "heap.h"
+#include "roots.h"
 
 using namespace std;
 using namespace codeswitch::internal;

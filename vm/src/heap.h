@@ -21,6 +21,14 @@ namespace internal {
 class Function;
 class VM;
 
+#define DEFINE_NEW(clas, type)                                                        \
+  void* operator new (size_t, Heap* heap) {                                           \
+    auto _block = reinterpret_cast<clas*>(heap->allocateUninitialized(sizeof(clas))); \
+    _block->setMetaWord(type);                                                        \
+    return _block;                                                                    \
+  }                                                                                   \
+
+
 #define ALLOCATE_WITH_GC(name, heap, type, call) do { \
   type* _value = call;                                \
   if (_value == nullptr) {                            \
@@ -66,10 +74,6 @@ class AllocationError: public std::exception {
 class Heap {
  public:
   explicit Heap(VM* vm);
-
-  /** The bits of the first word of each block on the heap are reserved for use by the GC. */
-  static const int kGCBitCount = 2;
-  static const int kGCBitMask = (1 << kGCBitCount) - 1;
 
   /** Blocks are always aligned to 8 bytes on both 32 and 64-bit architectures. This matches
    *  the largest primitive data types, so we can lay out objects with predictable alignment.

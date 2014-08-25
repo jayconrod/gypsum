@@ -12,7 +12,7 @@
 #include <sys/mman.h>
 #include <sys/fcntl.h>
 #include "bitmap.h"
-#include "block-inl.h"
+#include "block.h"
 #include "error.h"
 #include "handle.h"
 #include "heap.h"

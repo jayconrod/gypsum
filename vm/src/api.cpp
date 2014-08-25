@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <utility>
 #include <vector>
-#include "block-inl.h"
+#include "block.h"
 #include "error.h"
 #include "function.h"
 #include "function-inl.h"

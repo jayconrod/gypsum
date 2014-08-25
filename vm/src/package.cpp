@@ -14,7 +14,7 @@
 #include <vector>
 #include <cstdio>
 #include "array.h"
-#include "block-inl.h"
+#include "block.h"
 #include "bytecode.h"
 #include "error.h"
 #include "field.h"

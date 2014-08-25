@@ -6,7 +6,7 @@
 
 #include "type-inl.h"
 
-#include "block-inl.h"
+#include "block.h"
 #include "handle.h"
 
 using namespace std;

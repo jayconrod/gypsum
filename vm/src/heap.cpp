@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <vector>
 #include "array.h"
-#include "block-inl.h"
+#include "block.h"
 #include "block-visitor.h"
 #include "bytecode.h"
 #include "error.h"
