@@ -8,6 +8,7 @@
 
 #include "array.h"
 #include "function-inl.h"
+#include "gc.h"
 #include "handle.h"
 #include "heap.h"
 #include "stack-inl.h"
@@ -111,6 +112,16 @@ void* Meta::operator new (size_t, Heap* heap,
   meta->objectSize_ = objectSize;
   meta->elementSize_ = elementSize;
   return meta;
+}
+
+
+Local<Meta> Meta::create(Heap* heap,
+                         word_t dataLength,
+                         u32 objectSize,
+                         u32 elementSize,
+                         BlockType blockType) {
+  RETRY_WITH_GC(return Local<Meta>(
+      new(heap, dataLength, objectSize, elementSize) Meta(blockType)));
 }
 
 

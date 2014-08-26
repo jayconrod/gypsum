@@ -14,6 +14,20 @@ namespace internal {
 
 class Heap;
 
+#define RETRY_WITH_GC(stmt)                 \
+  do {                                      \
+    try {                                   \
+      stmt;                                 \
+      break;                                \
+    } catch (const AllocationError& exn) {  \
+      if (!exn.shouldRetryAfterGC())        \
+        throw;                              \
+      GC gc(heap);                          \
+      gc.collectGarbage();                  \
+    }                                       \
+  } while (true)                            \
+
+
 class GC {
  public:
   explicit GC(Heap* heap);

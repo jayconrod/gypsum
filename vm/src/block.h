@@ -63,6 +63,8 @@ class Bitmap;
 template <class T>
 class Handle;
 class Heap;
+template <class T>
+class Local;
 class Meta;
 
 
@@ -172,10 +174,19 @@ static const int kBlockHeaderSize = sizeof(Block);
  */
 class Meta: public Block {
  public:
+  /** Attempts to allocate raw memory for a `Meta`. Throws AllocationError on failure. The
+   *  memory will be zero-initialized (except for size-related members), so explicit
+   *  zero-initialization is not necessary.
+   */
   void* operator new (size_t, Heap* heap, word_t dataLength, u32 objectSize, u32 elementSize);
   explicit Meta(BlockType blockType)
       : Block(META_BLOCK_TYPE),
         blockType_(blockType) { }
+  static Local<Meta> create(Heap* heap,
+                            word_t dataLength,
+                            u32 objectSize,
+                            u32 elementSize,
+                            BlockType blockType);
 
   word_t sizeOfMeta() const;
   DEFINE_CAST(Meta)

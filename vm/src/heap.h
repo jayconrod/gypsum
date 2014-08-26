@@ -29,6 +29,7 @@ class VM;
   }                                                                                   \
 
 
+// TODO: remove when no longer used
 #define ALLOCATE_WITH_GC(name, heap, type, call) do { \
   type* _value = call;                                \
   if (_value == nullptr) {                            \
@@ -42,6 +43,7 @@ class VM;
 } while (false)                                       \
 
 
+// TODO: remove when no longer used
 #define DEFINE_ALLOCATION(heap, type, call)      \
   Local<type> _result;                           \
   ALLOCATE_WITH_GC(_result, heap, type, call);   \
