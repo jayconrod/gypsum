@@ -6,6 +6,7 @@
 
 #include "class-inl.h"
 
+#include "array.h"
 #include "block.h"
 #include "field.h"
 #include "handle.h"
@@ -31,7 +32,7 @@ Local<Class> Class::allocate(Heap* heap) {
 
 void Class::initialize(u32 flags,
                        Type* supertype,
-                       BlockArray* fields,
+                       BlockArray<Field>* fields,
                        Type* elementType,
                        WordArray* constructors,
                        WordArray* methods,

@@ -8,6 +8,7 @@
 #define array_h
 
 #include "block.h"
+#include "gc.h"
 #include "heap.h"
 #include "tagged.h"
 #include "utils.h"
@@ -21,18 +22,36 @@ class Handle;
 template <class T>
 class Array: public Block {
  public:
-  static word_t sizeForLength(word_t length) {
-    return align(kHeaderSize + kElementSize * length, kWordSize);
+  void* operator new(size_t, Heap* heap, word_t length) {
+    auto size = sizeForLength(length);
+    auto array = reinterpret_cast<Array<T>*>(heap->allocate(size));
+    array->length_ = length;
+    return array;
   }
 
-  DEFINE_INL_ACCESSORS(word_t, length, setLength, kLengthOffset)
+  void* operator new(size_t, Heap* heap, word_t length, T fillValue) {
+    auto size = sizeForLength(length);
+    auto array = reinterpret_cast<Array<T>*>(heap->allocate(size));
+    array->length_ = length;
+    for (word_t i = 0; i < length; i++)
+      array->elements()[i] = fillValue;
+    return array;
+  }
+
+  static word_t sizeForLength(word_t length) {
+    return sizeof(Array) + sizeof(T) * length;
+  }
+
+  word_t length() const { return length_; }
 
   T* elements() {
-    Address elementsBase = reinterpret_cast<Address>(this) + kHeaderSize;
-    return reinterpret_cast<T*>(elementsBase);
+    return &mem<T>(this, sizeof(Array));
+  }
+  const T* elements() const {
+    return &mem<const T>(this, sizeof(Array));
   }
 
-  T get(word_t index) {
+  T get(word_t index) const {
     ASSERT(index < length());
     return elements()[index];
   }
@@ -51,10 +70,6 @@ class Array: public Block {
   void recordWrite(T* slot, T value) {
     // subclasses containing pointers must override this
   }
-
-  static const int kLengthOffset = kBlockHeaderSize;
-  static const int kHeaderSize = kLengthOffset + kWordSize;
-  static const int kElementSize = sizeof(T);
 
   class iterator: public std::iterator<std::random_access_iterator_tag, T> {
    public:
@@ -117,79 +132,97 @@ class Array: public Block {
   iterator end() { return iterator(elements() + length()); }
 
  protected:
-  static Array<T>* allocateBase(Heap* heap, word_t meta, word_t length) {
-    word_t size = sizeForLength(length);
-    Array<T>* array = reinterpret_cast<Array<T>*>(heap->allocate(size));
-    if (array == nullptr)
-      return array;
+  explicit Array(BlockType blockType)
+      : Block(blockType) { }
 
-    array->setMetaWord(meta);
-    array->setLength(length);
-    return array;
-  }
+  word_t length_;
 };
 
 
+#define DEFINE_ARRAY_CREATE(Name, T)                                     \
+static Local<Name> create(Heap* heap, word_t length) {                   \
+  RETRY_WITH_GC(return Local<Name>(new(heap, length) Name));             \
+}                                                                        \
+static Local<Name> create(Heap* heap, word_t length, T fillValue) {      \
+  RETRY_WITH_GC(return Local<Name>(new(heap, length, fillValue) Name));  \
+}
+
+
 template <class T>
-class PointerArray: public Array<T> {
+class BlockArray: public Array<T*> {
  public:
-  void recordWrite(T* slot, T value) {
+  BlockArray() : Array<T*>(BLOCK_ARRAY_BLOCK_TYPE) {
+    CHECK_SUBTYPE_VALUE(Block*, this->get(0));
+  }
+
+  DEFINE_ARRAY_CREATE(BlockArray, T)
+
+  void printBlockArray(FILE* out) {
+    fprintf(out, "BlockArray @%p\n", reinterpret_cast<void*>(this));
+    fprintf(out, "  length: %d\n", static_cast<int>(this->length()));
+    for (word_t i = 0; i < this->length(); i++) {
+      fprintf(out, "  %3d: %p\n", static_cast<int>(i), reinterpret_cast<void*>(this->get(i)));
+    }
+  }
+
+  void recordWrite(T** slot, T* value) {
     Heap::recordWrite(slot, value);
   }
 };
 
 
-class I8Array: public Array<i8> {
+template <class T, BlockType blockType>
+class DataArray: public Array<T> {
  public:
-  static I8Array* tryAllocate(Heap* heap, word_t length);
-  static Local<I8Array> allocate(Heap* heap, word_t length);
+  DataArray() : Array<T>(blockType) { }
+};
+
+
+class I8Array: public DataArray<i8, I8_ARRAY_BLOCK_TYPE> {
+ public:
+  DEFINE_ARRAY_CREATE(I8Array, i8)
   DEFINE_CAST(I8Array)
   void printI8Array(FILE* out);
 };
 
 
-class I32Array: public Array<i32> {
+class I32Array: public DataArray<i32, I32_ARRAY_BLOCK_TYPE> {
  public:
-  static I32Array* tryAllocate(Heap* heap, word_t length);
-  static Local<I32Array> allocate(Heap* heap, word_t length);
+  DEFINE_ARRAY_CREATE(I32Array, i32)
   DEFINE_CAST(I32Array)
   void printI32Array(FILE* out);
 };
 
 
-class I64Array: public Array<i64> {
+class I64Array: public DataArray<i64, I64_ARRAY_BLOCK_TYPE> {
  public:
-  static I64Array* tryAllocate(Heap* heap, word_t length);
-  static Local<I64Array> allocate(Heap* heap, word_t length);
+  DEFINE_ARRAY_CREATE(I64Array, i64)
   DEFINE_CAST(I64Array)
   void printI64Array(FILE* out);
 };
 
 
-class BlockArray: public PointerArray<Block*> {
+template <class T>
+class TaggedArray: public Array<Tagged<T>> {
  public:
-  static BlockArray* tryAllocate(Heap* heap, word_t length,
-                                 bool fill = false, Block* fillValue = nullptr);
-  static Local<BlockArray> allocate(Heap* heap, word_t length,
-                                     bool fill = false, Block* fillValue = nullptr);
-  DEFINE_CAST(BlockArray)
-  void printBlockArray(FILE* out);
-};
+  TaggedArray() : Array<Tagged<T>>(TAGGED_ARRAY_BLOCK_TYPE) { }
 
-
-class TaggedArray: public Array<Tagged<Block>> {
- public:
-  static TaggedArray* tryAllocate(Heap* heap, word_t length);
-  static Local<TaggedArray> allocate(Heap* heap, word_t length);
+  DEFINE_ARRAY_CREATE(TaggedArray, Tagged<T>)
   DEFINE_CAST(TaggedArray)
-  void printTaggedArray(FILE* out);
 
-  void recordWrite(Tagged<Block>* slot, Tagged<Block> value) {
+  void printTaggedArray(FILE* out) {
+    UNIMPLEMENTED();
+  }
+
+  void recordWrite(Tagged<T>* slot, Tagged<T> value) {
     if (value.isPointer()) {
       Heap::recordWrite(reinterpret_cast<Block**>(slot), value.getPointer());
     }
   }
 };
+
+
+#undef DEFINE_ARRAY_CREATE
 
 }
 }

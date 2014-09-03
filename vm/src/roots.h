@@ -14,6 +14,7 @@ namespace codeswitch {
 namespace internal {
 
 class Block;
+template <class T>
 class BlockArray;
 class Class;
 class Function;
@@ -22,6 +23,7 @@ class I8Array;
 class I32Array;
 class I64Array;
 class Meta;
+template <class T>
 class TaggedArray;
 class Type;
 
@@ -50,8 +52,8 @@ class Roots {
     F(I8Array, emptyi8Array, EMPTY_I8_ARRAY)                          \
     F(I32Array, emptyi32Array, EMPTY_I32_ARRAY)                       \
     F(I64Array, emptyi64Array, EMPTY_I64_ARRAY)                       \
-    F(TaggedArray, emptyTaggedArray, EMPTY_TAGGED_ARRAY)              \
-    F(BlockArray, emptyBlockArray, EMPTY_BLOCK_ARRAY)                 \
+    F(TaggedArray<Block>, emptyTaggedArray, EMPTY_TAGGED_ARRAY)       \
+    F(BlockArray<Block>, emptyBlockArray, EMPTY_BLOCK_ARRAY)          \
     F(Type, nullType, NULL_TYPE)                                      \
     F(Meta, typeMeta, TYPE_META)                                      \
     F(Meta, stringMeta, STRING_META)                                  \

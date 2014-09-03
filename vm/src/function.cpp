@@ -38,8 +38,8 @@ Local<Function> Function::allocate(Heap* heap, word_t instructionsSize) {
 
 
 void Function::initialize(u32 flags,
-                          TaggedArray* typeParameters,
-                          BlockArray* types,
+                          TaggedArray<TypeParameter>* typeParameters,
+                          BlockArray<Type>* types,
                           word_t localsSize,
                           const vector<u8>& instructions,
                           WordArray* blockOffsets,
@@ -674,7 +674,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
   word_t arrayLength = StackPointerMap::kHeaderLength +
       maps.size() * StackPointerMap::kEntryLength +
       align(bitmapLength, kBitsInWord) / kWordSize;
-  WordArray* array = WordArray::tryAllocate(heap, arrayLength);
+  WordArray* array = new(heap, arrayLength) WordArray;
   if (array == nullptr)
     return nullptr;
 

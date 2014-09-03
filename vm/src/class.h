@@ -13,8 +13,12 @@
 namespace codeswitch {
 namespace internal {
 
+template <class T>
+class BlockArray;
+class Field;
 class Function;
 class Package;
+template <class T>
 class TaggedArray;
 class Type;
 
@@ -24,7 +28,7 @@ class Class: public Block {
   static Local<Class> allocate(Heap* heap);
   void initialize(u32 flags,
                   Type* supertype,
-                  BlockArray* fields,
+                  BlockArray<Field>* fields,
                   Type* elementType,
                   WordArray* constructors,
                   WordArray* methods,
@@ -36,7 +40,7 @@ class Class: public Block {
 
   DEFINE_INL_ACCESSORS(u32, flags, setFlags, kFlagsOffset)
   DEFINE_INL_PTR_ACCESSORS(Type*, supertype, setSupertype, kSupertypeOffset)
-  DEFINE_INL_PTR_ACCESSORS(BlockArray*, fields, setFields, kFieldsOffset)
+  DEFINE_INL_PTR_ACCESSORS(BlockArray<Field>*, fields, setFields, kFieldsOffset)
   word_t findFieldIndex(word_t offset);
   word_t findFieldOffset(word_t index);
   DEFINE_INL_PTR_ACCESSORS(Type*, elementType, setElementType, kElementTypeOffset)

@@ -13,6 +13,8 @@
 namespace codeswitch {
 namespace internal {
 
+class Type;
+
 class Field: public Block {
  public:
   static Field* tryAllocate(Heap* heap);

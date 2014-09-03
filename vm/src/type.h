@@ -15,11 +15,11 @@
 #include "tagged.h"
 #include "utils.h"
 
-class Roots;
-class TypeParameter;
-
 namespace codeswitch {
 namespace internal {
+
+class Roots;
+class TypeParameter;
 
 class Type: public Object {
  public:

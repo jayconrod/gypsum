@@ -118,16 +118,15 @@ Local<Package> Package::loadFromStream(VM* vm, istream& stream) {
     package->setFlags(flags);
 
     auto stringCount = readValue<word_t>(stream);
-    auto stringArray = BlockArray::allocate(vm->heap(), stringCount, false, nullptr);
+    auto stringArray = BlockArray<String>::create(vm->heap(), stringCount);
     package->setStrings(*stringArray);
 
     auto functionCount = readValue<word_t>(stream);
-    auto functionArray = BlockArray::allocate(vm->heap(), functionCount,
-                                              false, nullptr);
+    auto functionArray = BlockArray<Function>::create(vm->heap(), functionCount);
     package->setFunctions(*functionArray);
 
     auto classCount = readValue<word_t>(stream);
-    auto classArray = BlockArray::allocate(vm->heap(), classCount, false, nullptr);
+    auto classArray = BlockArray<Class>::create(vm->heap(), classCount);
     for (word_t i = 0; i < classCount; i++) {
       // We pre-allocate classes so Types we read can refer to them.
       auto clas = Class::allocate(vm->heap());
@@ -137,8 +136,8 @@ Local<Package> Package::loadFromStream(VM* vm, istream& stream) {
     package->setClasses(*classArray);
 
     auto typeParameterCount = readValue<word_t>(stream);
-    auto typeParametersArray = BlockArray::allocate(vm->heap(), typeParameterCount,
-                                                    false, nullptr);
+    auto typeParametersArray =
+        BlockArray<TypeParameter>::create(vm->heap(), typeParameterCount);
     for (word_t i = 0; i < typeParameterCount; i++) {
       // Type parameters are also pre-allocated.
       auto param = TypeParameter::allocate(vm->heap());
@@ -187,15 +186,15 @@ static Local<Function> readFunction(VM* vm, istream& stream, const Local<Package
   stream.read(reinterpret_cast<char*>(&flags), sizeof(flags));
 
   auto typeParameterCount = readWordVbn(stream);
-  auto typeParameters = TaggedArray::allocate(vm->heap(), typeParameterCount);
+  auto typeParameters = TaggedArray<TypeParameter>::create(vm->heap(), typeParameterCount);
   for (word_t i = 0; i < typeParameterCount; i++) {
     auto id = readWordVbn(stream);
-    typeParameters->set(i, Tagged<Block>(id));
+    typeParameters->set(i, Tagged<TypeParameter>(id));
   }
 
   auto returnType = readType(vm, stream, package);
   auto parameterCount = readWordVbn(stream);
-  auto types = BlockArray::allocate(vm->heap(), parameterCount + 1);
+  auto types = BlockArray<Type>::create(vm->heap(), parameterCount + 1);
   types->set(0, *returnType);
   for (word_t i = 0; i < parameterCount; i++) {
     types->set(i + 1, *readType(vm, stream, package));
@@ -207,7 +206,7 @@ static Local<Function> readFunction(VM* vm, istream& stream, const Local<Package
   vector<u8> instructions = readData(stream, instructionsSize);
 
   auto blockOffsetCount = readWordVbn(stream);
-  auto blockOffsets = WordArray::allocate(vm->heap(), blockOffsetCount);
+  auto blockOffsets = WordArray::create(vm->heap(), blockOffsetCount);
   for (word_t i = 0; i < blockOffsetCount; i++) {
     auto offset = readWordVbn(stream);
     blockOffsets->set(i, offset);
@@ -229,21 +228,21 @@ static void readClass(VM* vm,
   auto supertype = readType(vm, stream, package);
 
   auto fieldCount = readWordVbn(stream);
-  auto fields = BlockArray::allocate(vm->heap(), fieldCount);
+  auto fields = BlockArray<Field>::create(vm->heap(), fieldCount);
   for (word_t i = 0; i < fieldCount; i++) {
     auto field = readField(vm, stream, package);
     fields->set(i, *field);
   }
 
   auto constructorCount = readWordVbn(stream);
-  auto constructors = WordArray::allocate(vm->heap(), constructorCount);
+  auto constructors = WordArray::create(vm->heap(), constructorCount);
   for (word_t i = 0; i < constructorCount; i++) {
     word_t id = readWordVbn(stream);
     constructors->set(i, id);
   }
 
   auto methodCount = readWordVbn(stream);
-  auto methods = WordArray::allocate(vm->heap(), methodCount);
+  auto methods = WordArray::create(vm->heap(), methodCount);
   for (word_t i = 0; i < methodCount; i++) {
     word_t id = readWordVbn(stream);
     methods->set(i, id);

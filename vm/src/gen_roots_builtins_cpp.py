@@ -60,9 +60,9 @@ def initClass(out, classData):
     else:
         out.write("    auto supertype = %s;\n" % getTypeFromName(classData["supertype"]))
     if len(classData["fields"]) == 0:
-        out.write("    auto fields = emptyBlockArray();\n")
+        out.write("    auto fields = reinterpret_cast<BlockArray<Field>*>(emptyBlockArray());\n")
     else:
-        out.write("    auto fields = BlockArray::tryAllocate(heap, %d);\n" %
+        out.write("    auto fields = new(heap, %d) BlockArray<Field>;\n" %
                   len(classData["fields"]))
         for i, fieldData in enumerate(classData["fields"]):
             typeName = fieldData["type"]
@@ -76,7 +76,7 @@ def initClass(out, classData):
     if len(classData["constructors"]) == 0:
         out.write("    auto constructors = emptyi64Array();\n")
     else:
-        out.write("    auto constructors = I64Array::tryAllocate(heap, %d);\n" %
+        out.write("    auto constructors = new(heap, %d) I64Array;\n" %
                   len(classData["constructors"]))
         for i, ctorData in enumerate(classData["constructors"]):
             out.write("    constructors->set(%d, %s);\n" %
@@ -85,7 +85,7 @@ def initClass(out, classData):
     if len(allMethodIds) == 0:
         out.write("    auto methods = emptyi64Array();\n")
     else:
-        out.write("    auto methods = I64Array::tryAllocate(heap, %d);\n" % len(allMethodIds))
+        out.write("    auto methods = new(heap, %d) I64Array;\n" % len(allMethodIds))
         for i, id in enumerate(allMethodIds):
             out.write("    methods->set(%d, %s);\n" % (i, id))
     out.write("    clas->initialize(0, supertype, fields, elementType, constructors, " +
@@ -98,10 +98,10 @@ def initFunction(out, functionData):
     out.write("\n  { // %s\n" % functionData["id"])
     out.write("    auto function = getBuiltinFunction(%s);\n" % functionData["id"])
     typeNames = [functionData["returnType"]] + functionData["parameterTypes"]
-    out.write("    auto types = BlockArray::tryAllocate(heap, %s);\n" % len(typeNames))
+    out.write("    auto types = new(heap, %d) BlockArray<Type>;\n" % len(typeNames))
     for i, name in enumerate(typeNames):
         out.write("    types->set(%d, %s);\n" % (i, getTypeFromName(name)))
-    out.write("    function->initialize(0, emptyTaggedArray(), types, 0, " +
+    out.write("    function->initialize(0, emptyTypeParameters, types, 0, " +
               "emptyInstructions, nullptr, nullptr, nullptr);\n")
     out.write("    function->setBuiltinId(%s);\n" % functionData["id"])
     out.write("  }")
@@ -197,7 +197,9 @@ void Roots::initializeBuiltins(Heap* heap) {
   //
   // Initialize functions
   //
-  vector<u8> emptyInstructions;""")
+  vector<u8> emptyInstructions;
+  auto emptyTypeParameters = reinterpret_cast<TaggedArray<TypeParameter>*>(emptyTaggedArray());
+""")
     for classData in classesData:
         if not classData["isPrimitive"]:
             for ctorData in classData["constructors"]:

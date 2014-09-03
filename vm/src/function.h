@@ -19,14 +19,15 @@ namespace internal {
 class Bitmap;
 class Package;
 class StackPointerMap;
+class TypeParameter;
 
 class Function: public Block {
  public:
   static Function* tryAllocate(Heap* heap, word_t instructionsSize);
   static Local<Function> allocate(Heap* heap, word_t instructionsSize);
   void initialize(u32 flags,
-                  TaggedArray* typeParameters,
-                  BlockArray* types,
+                  TaggedArray<TypeParameter>* typeParameters,
+                  BlockArray<Type>* types,
                   word_t localsSize,
                   const std::vector<u8>& instructions,
                   WordArray* blockOffsets,
@@ -43,14 +44,14 @@ class Function: public Block {
   inline void setBuiltinId(BuiltinId id);
   inline bool hasBuiltinId();
 
-  DEFINE_INL_PTR_ACCESSORS(TaggedArray*,
+  DEFINE_INL_PTR_ACCESSORS(TaggedArray<TypeParameter>*,
                            typeParameters,
                            setTypeParameters,
                            kTypeParametersOffset)
   inline word_t typeParameterCount();
   inline TypeParameter* typeParameter(word_t index);
 
-  DEFINE_INL_PTR_ACCESSORS(BlockArray*, types, setTypes, kTypesOffset)
+  DEFINE_INL_PTR_ACCESSORS(BlockArray<Type>*, types, setTypes, kTypesOffset)
   inline Type* returnType();
   inline word_t parameterCount();
   inline word_t parametersSize();

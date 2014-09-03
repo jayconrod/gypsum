@@ -54,14 +54,12 @@ word_t Function::typeParameterCount() {
 
 
 TypeParameter* Function::typeParameter(word_t index) {
-  Tagged<Block> paramTag = typeParameters()->get(index);
-  Block* rawParam = nullptr;
+  auto paramTag = typeParameters()->get(index);
   if (paramTag.isPointer()) {
-    rawParam = TypeParameter::cast(paramTag.getPointer());
+    return TypeParameter::cast(paramTag.getPointer());
   } else {
-    rawParam = package()->typeParameters()->get(paramTag.getNumber());
+    return package()->typeParameters()->get(paramTag.getNumber());
   }
-  return TypeParameter::cast(rawParam);
 }
 
 

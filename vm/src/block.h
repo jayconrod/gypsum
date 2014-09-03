@@ -43,11 +43,6 @@ enum BlockType {
 #undef ENUM_BLOCK_TYPE
 
 
-#define DECLARE_BLOCK_CLASSES(Name, NAME) class Name;
-BLOCK_TYPE_LIST(DECLARE_BLOCK_CLASSES)
-#undef DECLARE_BLOCK_CLASSES
-
-
 #define DEFINE_CAST(Name) \
 static Name* cast(Block* block) { \
   ASSERT(block->is##Name()); \
@@ -60,6 +55,7 @@ static const Name* cast(const Block* block) { \
 
 
 class Bitmap;
+class Class;
 template <class T>
 class Handle;
 class Heap;

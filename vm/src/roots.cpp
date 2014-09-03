@@ -62,19 +62,19 @@ void Roots::initialize(Heap* heap) {
   typeParameterMeta->objectPointerMap().setWord(0, TypeParameter::kPointerMap);
   basicRoots_[TYPE_PARAMETER_META_ROOT_INDEX] = typeParameterMeta;
 
-  auto i8ArrayMeta = new(heap, 0, I8Array::kHeaderSize, sizeof(i8)) Meta(I8_ARRAY_BLOCK_TYPE);
+  auto i8ArrayMeta = new(heap, 0, sizeof(I8Array), sizeof(i8)) Meta(I8_ARRAY_BLOCK_TYPE);
   basicRoots_[I8_ARRAY_META_ROOT_INDEX] = i8ArrayMeta;
 
   auto i32ArrayMeta =
-      new(heap, 0, I32Array::kHeaderSize, sizeof(i32)) Meta(I32_ARRAY_BLOCK_TYPE);
+      new(heap, 0, sizeof(I32Array), sizeof(i32)) Meta(I32_ARRAY_BLOCK_TYPE);
   basicRoots_[I32_ARRAY_META_ROOT_INDEX] = i32ArrayMeta;
 
   auto i64ArrayMeta =
-      new(heap, 0, I64Array::kHeaderSize, sizeof(i64)) Meta(I64_ARRAY_BLOCK_TYPE);
+      new(heap, 0, sizeof(I64Array), sizeof(i64)) Meta(I64_ARRAY_BLOCK_TYPE);
   basicRoots_[I64_ARRAY_META_ROOT_INDEX] = i64ArrayMeta;
 
   auto blockArrayMeta =
-      new(heap, 0, BlockArray::kHeaderSize, kWordSize) Meta(BLOCK_ARRAY_BLOCK_TYPE);
+      new(heap, 0, sizeof(BlockArray<Block>), kWordSize) Meta(BLOCK_ARRAY_BLOCK_TYPE);
   blockArrayMeta->hasPointers_ = true;
   blockArrayMeta->hasElementPointers_ = true;
   blockArrayMeta->objectPointerMap().setWord(0, 0);
@@ -82,24 +82,24 @@ void Roots::initialize(Heap* heap) {
   basicRoots_[BLOCK_ARRAY_META_ROOT_INDEX] = blockArrayMeta;
 
   auto taggedArrayMeta =
-      new(heap, 0, TaggedArray::kHeaderSize, kWordSize) Meta(TAGGED_ARRAY_BLOCK_TYPE);
+      new(heap, 0, sizeof(TaggedArray<Block>), kWordSize) Meta(TAGGED_ARRAY_BLOCK_TYPE);
   taggedArrayMeta->hasPointers_ = true;
   taggedArrayMeta->hasCustomPointers_ = true;
   basicRoots_[TAGGED_ARRAY_META_ROOT_INDEX] = taggedArrayMeta;
 
-  I8Array* emptyI8Array = I8Array::tryAllocate(heap, 0);
+  auto emptyI8Array = new(heap, 0) I8Array;
   basicRoots_[EMPTY_I8_ARRAY_ROOT_INDEX] = emptyI8Array;
 
-  I32Array* emptyI32Array = I32Array::tryAllocate(heap, 0);
+  auto emptyI32Array = new(heap, 0) I32Array;
   basicRoots_[EMPTY_I32_ARRAY_ROOT_INDEX] = emptyI32Array;
 
-  I64Array* emptyI64Array = I64Array::tryAllocate(heap, 0);
+  auto emptyI64Array = new(heap, 0) I64Array;
   basicRoots_[EMPTY_I64_ARRAY_ROOT_INDEX] = emptyI64Array;
 
-  TaggedArray* emptyTaggedArray = TaggedArray::tryAllocate(heap, 0);
+  auto emptyTaggedArray = new(heap, 0) TaggedArray<Block>;
   basicRoots_[EMPTY_TAGGED_ARRAY_ROOT_INDEX] = emptyTaggedArray;
 
-  BlockArray* emptyBlockArray = BlockArray::tryAllocate(heap, 0);
+  auto emptyBlockArray = new(heap, 0) BlockArray<Block>;
   basicRoots_[EMPTY_BLOCK_ARRAY_ROOT_INDEX] = emptyBlockArray;
 
   initializeBuiltins(heap);

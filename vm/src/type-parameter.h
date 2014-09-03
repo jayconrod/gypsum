@@ -12,6 +12,8 @@
 namespace codeswitch {
 namespace internal {
 
+class Type;
+
 class TypeParameter: public Block {
  public:
   static TypeParameter* tryAllocate(Heap* heap);

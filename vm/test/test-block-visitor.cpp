@@ -102,7 +102,7 @@ static u8 makeSmallVbn(i64 value) {
 
 static Package* createTestPackage(Heap* heap) {
   auto roots = heap->vm()->roots();
-  auto typeList = BlockArray::allocate(heap, 3);
+  auto typeList = BlockArray<Type>::create(heap, 3);
 
   typeList->set(0, Type::rootClassType(roots));
   typeList->set(1, Type::i8Type(roots));
@@ -136,13 +136,15 @@ static Package* createTestPackage(Heap* heap) {
     0,
     RET,
   };
-  auto blockOffsetList = WordArray::tryAllocate(heap, 1);
+  auto blockOffsetList = new(heap, 1) WordArray;
   blockOffsetList->set(0, 0);
   Package* package = Package::tryAllocate(heap);
   package->setFlags(0);
-  auto functions = BlockArray::tryAllocate(heap, 1);
+  auto functions = new(heap, 1) BlockArray<Function>;
   auto function = Function::tryAllocate(heap, ARRAY_LENGTH(instList));
-  function->initialize(0, roots->emptyTaggedArray(), *typeList, 2 * kWordSize, instList,
+  auto emptyTypeParameters = reinterpret_cast<TaggedArray<TypeParameter>*>(
+      roots->emptyTaggedArray());
+  function->initialize(0, emptyTypeParameters, *typeList, 2 * kWordSize, instList,
                        blockOffsetList, package, nullptr);
   functions->set(0, function);
   package->setFunctions(functions);
@@ -170,13 +172,13 @@ TEST(BlockVisitorFunction) {
   VM vm(0);
   HandleScope handleScope(&vm);
   Heap* heap = vm.heap();
-  Package* package = createTestPackage(heap);
-  Function* function = package->getFunction(0);
-  TaggedArray* typeParameters = function->typeParameters();
-  BlockArray* types = function->types();
-  word_t localsSize = function->localsSize();
-  word_t instructionsSize = function->instructionsSize();
-  WordArray* blockOffsets = function->blockOffsets();
+  auto package = createTestPackage(heap);
+  auto function = package->getFunction(0);
+  auto typeParameters = function->typeParameters();
+  auto types = function->types();
+  auto localsSize = function->localsSize();
+  auto instructionsSize = function->instructionsSize();
+  auto blockOffsets = function->blockOffsets();
   IncrementVisitor visitor;
   visitor.visit(function);
   word_t expected[] = {

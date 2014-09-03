@@ -15,6 +15,7 @@
 namespace codeswitch {
 namespace internal {
 
+template <class T>
 class BlockArray;
 class Function;
 class Heap;
@@ -34,13 +35,13 @@ class Package: public Block {
   static Local<Package> loadFromStream(VM* vm, std::istream& stream);
 
   DEFINE_INL_ACCESSORS(u64, flags, setFlags, kFlagsOffset)
-  DEFINE_INL_PTR_ACCESSORS(BlockArray*, strings, setStrings, kStringsOffset)
+  DEFINE_INL_PTR_ACCESSORS(BlockArray<String>*, strings, setStrings, kStringsOffset)
   inline String* getString(word_t index);
-  DEFINE_INL_PTR_ACCESSORS(BlockArray*, functions, setFunctions, kFunctionsOffset)
+  DEFINE_INL_PTR_ACCESSORS(BlockArray<Function>*, functions, setFunctions, kFunctionsOffset)
   inline Function* getFunction(word_t index);
-  DEFINE_INL_PTR_ACCESSORS(BlockArray*, classes, setClasses, kClassesOffset)
+  DEFINE_INL_PTR_ACCESSORS(BlockArray<Class>*, classes, setClasses, kClassesOffset)
   inline Class* getClass(word_t index);
-  DEFINE_INL_PTR_ACCESSORS(BlockArray*,
+  DEFINE_INL_PTR_ACCESSORS(BlockArray<TypeParameter>*,
                            typeParameters,
                            setTypeParameters,
                            kTypeParametersOffset)

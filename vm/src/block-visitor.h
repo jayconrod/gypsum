@@ -35,7 +35,7 @@ class BlockVisitorBase {
   inline void visitBlockWithPointerMap(Block* block, Meta* meta);
   inline void visitBlockWithCustomPointers(Block* block, Meta* meta);
   inline void visitStack(Stack* stack);
-  inline void visitTaggedArray(TaggedArray* array);
+  inline void visitTaggedArray(TaggedArray<Block>* array);
 };
 
 
@@ -103,7 +103,7 @@ void BlockVisitorBase<BlockVisitor>::visitBlockWithCustomPointers(Block* block, 
       break;
 
     case TAGGED_ARRAY_BLOCK_TYPE:
-      self()->visitTaggedArray(static_cast<TaggedArray*>(block));
+      self()->visitTaggedArray(static_cast<TaggedArray<Block>*>(block));
       break;
 
     default:
@@ -159,7 +159,7 @@ void BlockVisitorBase<BlockVisitor>::visitStack(Stack* stack) {
 
 
 template <class BlockVisitor>
-void BlockVisitorBase<BlockVisitor>::visitTaggedArray(TaggedArray* array) {
+void BlockVisitorBase<BlockVisitor>::visitTaggedArray(TaggedArray<Block>* array) {
   for (word_t i = 0, n = array->length(); i < n; i++) {
     Tagged<Block>* taggedSlot = array->elements() + i;
     if (taggedSlot->isPointer()) {
