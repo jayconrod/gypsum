@@ -4,7 +4,7 @@
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
 
-#include "package-inl.h"
+#include "package.h"
 
 #include <algorithm>
 #include <fstream>
@@ -47,18 +47,20 @@ static vector<u8> readData(istream& stream, word_t size);
 static i64 readVbn(istream& stream);
 static word_t readWordVbn(istream& stream);
 
-Package* Package::tryAllocate(Heap* heap) {
-  Package* pkg = reinterpret_cast<Package*>(heap->allocate(Package::kSize));
-  if (pkg == nullptr)
-    return nullptr;
 
-  pkg->setMeta(PACKAGE_BLOCK_TYPE);
-  return pkg;
-}
+Package::Package(VM* vm)
+    : Block(PACKAGE_BLOCK_TYPE),
+      flags_(0),
+      strings_(reinterpret_cast<BlockArray<String>*>(vm->roots()->emptyBlockArray())),
+      functions_(reinterpret_cast<BlockArray<Function>*>(vm->roots()->emptyBlockArray())),
+      classes_(reinterpret_cast<BlockArray<Class>*>(vm->roots()->emptyBlockArray())),
+      typeParameters_(reinterpret_cast<BlockArray<TypeParameter>*>(
+                          vm->roots()->emptyBlockArray())),
+      entryFunctionIndex_(kNotSet) { }
 
 
-Local<Package> Package::allocate(Heap* heap) {
-  DEFINE_ALLOCATION(heap, Package, tryAllocate(heap))
+Local<Package> Package::create(VM* vm) {
+  RETRY_WITH_GC(vm->heap(), return Local<Package>(new(vm->heap()) Package(vm)));
 }
 
 
@@ -112,7 +114,7 @@ Local<Package> Package::loadFromStream(VM* vm, istream& stream) {
     if (majorVersion != 0 || minorVersion != 6)
       throw Error("package file has wrong format version");
 
-    package = handleScope.escape(*Package::allocate(vm->heap()));
+    package = handleScope.escape(*Package::create(vm));
 
     auto flags = readValue<u64>(stream);
     package->setFlags(flags);
@@ -170,6 +172,34 @@ Local<Package> Package::loadFromStream(VM* vm, istream& stream) {
   }
 
   return package;
+}
+
+
+String* Package::getString(word_t index) {
+  return String::cast(strings()->get(index));
+}
+
+
+Function* Package::getFunction(word_t index) {
+  return Function::cast(functions()->get(index));
+}
+
+
+Class* Package::getClass(word_t index) {
+  return Class::cast(classes()->get(index));
+}
+
+
+TypeParameter* Package::getTypeParameter(word_t index) {
+  return TypeParameter::cast(typeParameters()->get(index));
+}
+
+
+Function* Package::entryFunction() {
+  word_t index = entryFunctionIndex();
+  if (index == kNotSet)
+    return nullptr;
+  return getFunction(index);
 }
 
 

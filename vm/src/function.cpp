@@ -12,7 +12,7 @@
 #include "bytecode.h"
 #include "class-inl.h"
 #include "field.h"
-#include "package-inl.h"
+#include "package.h"
 #include "type.h"
 #include "utils.h"
 

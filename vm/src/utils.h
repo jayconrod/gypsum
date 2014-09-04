@@ -186,6 +186,12 @@ void utf8Encode(u32 codePoint, u8** bytes);
   void setter(type _newValue) { mem<type>(this, offset) = _newValue; }
 
 
+// TODO: replace the one above with this
+#define DEFINE_INL_ACCESSORS2(type, name, setter) \
+  type name() { return name##_; }                 \
+  void setter(type _value) { name##_ = _value; }  \
+
+
 #define DEFINE_INL_PTR_ACCESSORS(type, getter, setter, offset) \
   type getter() { return mem<type>(this, offset); } \
   void setter(type _newValue) { \

@@ -29,9 +29,10 @@ with open(outFileName, "w") as outFile:
 
 #include "test.h"
 
+#include "function.h"
 #include "handle.h"
 #include "interpreter.h"
-#include "package-inl.h"
+#include "package.h"
 #include "stack-inl.h"
 #include "utils.h"
 #include "vm-inl.h"

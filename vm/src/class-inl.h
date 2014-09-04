@@ -10,7 +10,7 @@
 #include "class.h"
 
 #include "array.h"
-#include "package-inl.h"
+#include "package.h"
 #include "roots.h"
 #include "type.h"
 

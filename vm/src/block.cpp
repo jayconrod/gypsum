@@ -120,7 +120,7 @@ Local<Meta> Meta::create(Heap* heap,
                          u32 objectSize,
                          u32 elementSize,
                          BlockType blockType) {
-  RETRY_WITH_GC(return Local<Meta>(
+  RETRY_WITH_GC(heap, return Local<Meta>(
       new(heap, dataLength, objectSize, elementSize) Meta(blockType)));
 }
 

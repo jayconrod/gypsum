@@ -139,12 +139,12 @@ class Array: public Block {
 };
 
 
-#define DEFINE_ARRAY_CREATE(Name, T)                                     \
-static Local<Name> create(Heap* heap, word_t length) {                   \
-  RETRY_WITH_GC(return Local<Name>(new(heap, length) Name));             \
-}                                                                        \
-static Local<Name> create(Heap* heap, word_t length, T fillValue) {      \
-  RETRY_WITH_GC(return Local<Name>(new(heap, length, fillValue) Name));  \
+#define DEFINE_ARRAY_CREATE(Name, T)                                           \
+static Local<Name> create(Heap* heap, word_t length) {                         \
+  RETRY_WITH_GC(heap, return Local<Name>(new(heap, length) Name));             \
+}                                                                              \
+static Local<Name> create(Heap* heap, word_t length, T fillValue) {            \
+  RETRY_WITH_GC(heap, return Local<Name>(new(heap, length, fillValue) Name));  \
 }
 
 

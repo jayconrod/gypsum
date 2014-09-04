@@ -6,10 +6,12 @@
 
 #include "roots.h"
 
+#include "array.h"
 #include "block.h"
 #include "field.h"
+#include "function.h"
 #include "handle.h"
-#include "package-inl.h"
+#include "package.h"
 #include "stack-inl.h"
 #include "type-inl.h"
 
@@ -29,7 +31,7 @@ void Roots::initialize(Heap* heap) {
   freeMeta->hasCustomSize_ = true;
   basicRoots_[FREE_META_ROOT_INDEX] = freeMeta;
 
-  auto packageMeta = new(heap, 0, Package::kSize, 0) Meta(PACKAGE_BLOCK_TYPE);
+  auto packageMeta = new(heap, 0, sizeof(Package), 0) Meta(PACKAGE_BLOCK_TYPE);
   packageMeta->hasPointers_ = true;
   packageMeta->objectPointerMap().setWord(0, Package::kPointerMap);
   basicRoots_[PACKAGE_META_ROOT_INDEX] = packageMeta;

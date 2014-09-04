@@ -14,7 +14,7 @@ namespace internal {
 
 class Heap;
 
-#define RETRY_WITH_GC(stmt)                 \
+#define RETRY_WITH_GC(heap, stmt)           \
   do {                                      \
     try {                                   \
       stmt;                                 \

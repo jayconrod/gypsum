@@ -19,8 +19,9 @@
 #include "gc.h"
 #include "handle.h"
 #include "object.h"
-#include "package-inl.h"
+#include "package.h"
 #include "stack-inl.h"
+#include "string.h"
 
 using namespace std;
 

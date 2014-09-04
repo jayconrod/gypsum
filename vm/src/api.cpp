@@ -15,7 +15,7 @@
 #include "function-inl.h"
 #include "handle.h"
 #include "interpreter.h"
-#include "package-inl.h"
+#include "package.h"
 #include "stack-inl.h"
 #include "type-inl.h"
 #include "utils.h"

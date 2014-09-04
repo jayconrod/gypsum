@@ -12,7 +12,7 @@
 #include "block-visitor.h"
 #include "bytecode.h"
 #include "function-inl.h"
-#include "package-inl.h"
+#include "package.h"
 
 using namespace codeswitch::internal;
 using namespace std;
@@ -138,7 +138,7 @@ static Package* createTestPackage(Heap* heap) {
   };
   auto blockOffsetList = new(heap, 1) WordArray;
   blockOffsetList->set(0, 0);
-  Package* package = Package::tryAllocate(heap);
+  Package* package = new(heap) Package(heap->vm());
   package->setFlags(0);
   auto functions = new(heap, 1) BlockArray<Function>;
   auto function = Function::tryAllocate(heap, ARRAY_LENGTH(instList));

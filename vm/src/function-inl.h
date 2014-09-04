@@ -10,7 +10,7 @@
 #include "function.h"
 #include "bitmap-inl.h"
 #include "handle.h"
-#include "package-inl.h"
+#include "package.h"
 #include "type-inl.h"
 #include "type-parameter.h"
 

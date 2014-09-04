@@ -9,6 +9,7 @@
 #include "array.h"
 #include "block.h"
 #include "field.h"
+#include "function.h"
 #include "handle.h"
 #include "type-inl.h"
 
