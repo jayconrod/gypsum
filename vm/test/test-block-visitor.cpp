@@ -257,7 +257,6 @@ TEST(VisitAndRelocateStack) {
   // Construct some fake stack frames.
   const word_t kDataMarker = 0;
   const word_t kObjectMarker = 10;
-  const word_t kFpDelta = 1000;
   word_t startSp = stack->sp();
   // args
   stack->push<word_t>(kDataMarker);
@@ -265,7 +264,7 @@ TEST(VisitAndRelocateStack) {
   // frame
   stack->push<word_t>(kNotSet);
   stack->push<Function*>(function);
-  stack->push<Address>(stack->fp() - kFpDelta);
+  stack->push<Address>(stack->fp());
   stack->setFp(stack->sp());
   // locals
   stack->push<word_t>(kDataMarker);
@@ -279,7 +278,7 @@ TEST(VisitAndRelocateStack) {
   // frame
   stack->push<word_t>(kExpectedPointerMaps[2].pcOffset);
   stack->push<Function*>(function);
-  stack->push<Address>(stack->fp() - kFpDelta);
+  stack->push<Address>(stack->fp());
   stack->setFp(stack->sp());
   // locals
   stack->push<word_t>(kDataMarker);
@@ -291,14 +290,32 @@ TEST(VisitAndRelocateStack) {
   // frame
   stack->push<word_t>(kExpectedPointerMaps[1].pcOffset);
   stack->push<Function*>(function);
-  stack->push<Address>(stack->fp() - kFpDelta);
+  stack->push<Address>(stack->fp());
   stack->setFp(stack->sp());
   // locals
   stack->push<word_t>(kDataMarker);
   stack->push<word_t>(kDataMarker);
   stack->push<word_t>(kExpectedPointerMaps[0].pcOffset);
 
-  word_t endSp = stack->sp();
+  auto endSp = stack->sp();
+
+  // Copy the stack to a new location and relocate it, as the GC would do.
+  ASSERT_TRUE(stack->meta()->needsRelocation());
+  auto rawNewStack = heap->allocateUninitialized(stack->sizeOfBlock());
+  copy_n(reinterpret_cast<u8*>(*stack),
+         stack->sizeOfBlock(),
+         reinterpret_cast<u8*>(rawNewStack));
+  Local<Stack> newStack(&vm, reinterpret_cast<Stack*>(rawNewStack));
+  auto delta = rawNewStack - stack->address();
+  newStack->relocate(delta);
+
+  // Increment pointers on the copied stack.
+  StackIncrementVisitor visitor(function);
+  visitor.visit(*stack);
+  visitor.visit(*newStack);
+
+  // Compute expected contents of the stack. Regular pointers should be incremented. Internal
+  // (frame) pointers should be incremented by the distance between the new and old stacks.
   vector<word_t> expected((startSp - endSp) / kWordSize);
   expected.assign(reinterpret_cast<word_t*>(stack->sp()),
                   reinterpret_cast<word_t*>(stack->sp()) + expected.size());
@@ -306,20 +323,11 @@ TEST(VisitAndRelocateStack) {
     if (i == kObjectMarker)
       i += 4;         // pointers
     else if (i > 100 && i != reinterpret_cast<word_t>(function) && i != kNotSet)
-      i += kFpDelta;  // fp in each frame
+      i += delta;  // fp in each frame
   }
 
-  // Update frame pointers as if we had moved the stack.
-  // The GC should do this first, before visiting pointers.
-  ASSERT_TRUE(stack->meta()->needsRelocation());
-  stack->relocate(kFpDelta);
-
-  // Increment pointers on the stack.
-  StackIncrementVisitor visitor(function);
-  visitor.visit(*stack);
-
   // Check the contents of the stack.
-  word_t* contents = reinterpret_cast<word_t*>(stack->sp());
+  word_t* contents = reinterpret_cast<word_t*>(newStack->sp());
   for (word_t i = 0; i < expected.size(); i++) {
     ASSERT_EQ(expected[i], contents[i]);
   }

@@ -11,7 +11,7 @@
 #include "gc.h"
 #include "handle.h"
 #include "heap.h"
-#include "stack-inl.h"
+#include "stack.h"
 
 namespace codeswitch {
 namespace internal {

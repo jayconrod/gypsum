@@ -33,7 +33,7 @@ with open(outFileName, "w") as outFile:
 #include "handle.h"
 #include "interpreter.h"
 #include "package.h"
-#include "stack-inl.h"
+#include "stack.h"
 #include "utils.h"
 #include "vm-inl.h"
 

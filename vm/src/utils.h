@@ -188,7 +188,7 @@ void utf8Encode(u32 codePoint, u8** bytes);
 
 // TODO: replace the one above with this
 #define DEFINE_INL_ACCESSORS2(type, name, setter) \
-  type name() { return name##_; }                 \
+  type name() const { return name##_; }           \
   void setter(type _value) { name##_ = _value; }  \
 
 

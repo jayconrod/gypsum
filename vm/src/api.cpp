@@ -16,7 +16,7 @@
 #include "handle.h"
 #include "interpreter.h"
 #include "package.h"
-#include "stack-inl.h"
+#include "stack.h"
 #include "type-inl.h"
 #include "utils.h"
 #include "vm.h"

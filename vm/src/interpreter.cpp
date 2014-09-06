@@ -20,7 +20,7 @@
 #include "handle.h"
 #include "object.h"
 #include "package.h"
-#include "stack-inl.h"
+#include "stack.h"
 #include "string.h"
 
 using namespace std;

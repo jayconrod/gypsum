@@ -10,7 +10,7 @@
 #include "array.h"
 #include "block.h"
 #include "function-inl.h"
-#include "stack-inl.h"
+#include "stack.h"
 #include "utils.h"
 
 namespace codeswitch {

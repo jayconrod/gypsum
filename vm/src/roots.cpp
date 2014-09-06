@@ -12,7 +12,7 @@
 #include "function.h"
 #include "handle.h"
 #include "package.h"
-#include "stack-inl.h"
+#include "stack.h"
 #include "type-inl.h"
 
 namespace codeswitch {
@@ -36,7 +36,7 @@ void Roots::initialize(Heap* heap) {
   packageMeta->objectPointerMap().setWord(0, Package::kPointerMap);
   basicRoots_[PACKAGE_META_ROOT_INDEX] = packageMeta;
 
-  auto stackMeta = new(heap, 0, Stack::kHeaderSize, 1) Meta(STACK_BLOCK_TYPE);
+  auto stackMeta = new(heap, 0, sizeof(Stack), 1) Meta(STACK_BLOCK_TYPE);
   stackMeta->hasPointers_ = true;
   stackMeta->hasCustomPointers_ = true;
   stackMeta->needsRelocation_ = true;

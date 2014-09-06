@@ -11,7 +11,7 @@
 #include "heap.h"
 #include "package.h"
 #include "roots.h"
-#include "stack-inl.h"
+#include "stack.h"
 
 namespace codeswitch {
 namespace internal {
@@ -26,7 +26,7 @@ VM::VM(Flags flags)
   roots_->initialize(heap());
   {
     HandleScope handleScope(handleStorage_.get());
-    Local<Stack> stack = Stack::allocate(heap(), Stack::kDefaultSize);
+    Local<Stack> stack = Stack::create(heap(), Stack::kDefaultSize);
     stack_ = Persistent<Stack>(stack);
   }
   if (hasFlags(kVerifyHeap))

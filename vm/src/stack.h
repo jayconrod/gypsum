@@ -51,72 +51,104 @@ class StackFrame {
 
 class Stack: public Block {
  public:
-  static Stack* tryAllocate(Heap* heap, word_t size);
-  static Local<Stack> allocate(Heap* heap, word_t size);
+  void* operator new(size_t, Heap* heap, word_t size);
+  Stack();
+  static Local<Stack> create(Heap* heap, word_t size);
+
   DEFINE_CAST(Stack)
-  inline word_t sizeOfStack() { return mem<word_t>(this, kStackSizeOffset); }
-  void printStack(FILE* out);
+  word_t sizeOfStack() { return stackSize(); }
+  void printStack(FILE* out) const;
   void relocateStack(word_t delta);
 
   // [stackSize]: size in bytes of the stack itself, not including the header.
-  DEFINE_INL_ACCESSORS(word_t, stackSize, setStackSize, kStackSizeOffset)
+  word_t stackSize() const { return stackSize_; }
 
   // The high address of the stack; sp and fp start from here and grow down.
-  inline Address limit();
+  Address limit() const;
 
   // The low address of the stack; sp and fp cannot go past here.
-  inline Address base();
+  Address base() const;
 
-  // [framePointerOffset]: distance from base to fp
-  DECLARE_ACCESSORS(word_t, framePointerOffset, setFramePointerOffset)
-
-  // [stackPointerOffset]: distance from base to sp
-  DECLARE_ACCESSORS(word_t, stackPointerOffset, setStackPointerOffset)
-
-  // sp and fp are alternative accessors for the corresponding offsets. The actual
-  // addresses are not stored anywhere, since the stack object could be moved by the GC.
-  DECLARE_ACCESSORS(Address, sp, setSp)
-  DECLARE_ACCESSORS(Address, fp, setFp)
+  // sp and fp are the stack pointer and frame pointer, respectively. These addresses are
+  // stored directly in the stack header. If the GC moves the stack, they are updated by
+  // relocateStack.
+  Address sp() const { return sp_; }
+  void setSp(Address newSp) {
+    ASSERT(base() <= newSp && newSp <= limit());
+    sp_ = newSp;
+  }
+  Address fp() const { return fp_; }
+  void setFp(Address newFp) {
+    ASSERT(base() <= newFp && newFp <= limit());
+    fp_ = newFp;
+  }
   void resetPointers();
 
-  template <typename T>
-  inline void push(T x);
-  template <typename T>
-  inline T pop();
+  // [framePointerOffset]: distance from base to fp
+  word_t framePointerOffset() const;
+  void setFramePointerOffset(word_t offset);
 
-  inline bool isAligned(int alignment);
-  inline void align(int alignment);
+  // [stackPointerOffset]: distance from base to sp
+  word_t stackPointerOffset() const;
+  void setStackPointerOffset(word_t offset);
+
+  template <typename T>
+  void push(T x);
+  template <typename T>
+  T pop();
+
+  bool isAligned(word_t alignment) const;
+  void align(word_t alignment);
 
   // Stack frame iteration requires the pc offset of the active (top) frame to be pushed on
   // top of the stack. This is normally done when invoking the garbage collector.
   class iterator {
    public:
-    inline iterator(Stack* stack, Address fp, word_t pcOffset);
+    iterator(Stack* stack, Address fp, word_t pcOffset);
 
-    inline StackFrame operator * ();
-    inline iterator& operator ++ ();
-    inline bool operator == (const iterator& other) const {
+    StackFrame operator * ();
+    iterator& operator ++ ();
+    bool operator == (const iterator& other) const {
       return !(*this != other);
     }
-    inline bool operator != (const iterator& other) const;
+    bool operator != (const iterator& other) const;
 
    private:
     Stack* stack_;
     StackFrame frame_;
   };
-  inline iterator begin();
-  inline iterator end();
+  iterator begin();
+  iterator end();
 
   // This method does NOT require the pc offset to be pushed.
-  inline StackFrame top(word_t pcOffset = 0);
+  StackFrame top(word_t pcOffset = 0);
 
   static const int kDefaultSize = 32 * KB;
 
-  static const int kStackSizeOffset = kBlockHeaderSize;
-  static const int kFramePointerOffset = kStackSizeOffset + kWordSize;
-  static const int kStackPointerOffset = kFramePointerOffset + kWordSize;
-  static const int kHeaderSize = kStackPointerOffset;
+ private:
+  word_t stackSize_;
+  Address fp_;
+  Address sp_;
 };
+
+
+template <typename T>
+void Stack::push(T x) {
+  ASSERT(isAligned(sizeof(x)));
+  Address slot = sp() - sizeof(x);
+  setSp(slot);
+  mem<T>(slot) = x;
+}
+
+
+template <typename T>
+T Stack::pop() {
+  ASSERT(isAligned(sizeof(T)));
+  Address slot = sp();
+  setSp(slot + sizeof(T));
+  return mem<T>(slot);
+}
+
 
 }
 }
