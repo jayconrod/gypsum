@@ -34,7 +34,7 @@ def declareClass(out, classData):
 def declareFunction(out, funcData):
     out.write("""
   { // %s
-    auto function = Function::tryAllocate(heap, 0);
+    auto function = reinterpret_cast<Function*>(heap->allocate(Function::sizeForFunction(0)));
     builtinFunctions_.push_back(function);
   }""" % funcData["id"])
 
@@ -101,7 +101,7 @@ def initFunction(out, functionData):
     out.write("    auto types = new(heap, %d) BlockArray<Type>;\n" % len(typeNames))
     for i, name in enumerate(typeNames):
         out.write("    types->set(%d, %s);\n" % (i, getTypeFromName(name)))
-    out.write("    function->initialize(0, emptyTypeParameters, types, 0, " +
+    out.write("    ::new(function) Function(0, emptyTypeParameters, types, 0, " +
               "emptyInstructions, nullptr, nullptr, nullptr);\n")
     out.write("    function->setBuiltinId(%s);\n" % functionData["id"])
     out.write("  }")
@@ -140,13 +140,14 @@ with open(rootsBuiltinsName, "w") as rootsBuiltinsFile:
 
 #include "roots-inl.h"
 
+#include <new>
 #include <vector>
 #include "array.h"
 #include "builtins.h"
 #include "block.h"
 #include "class-inl.h"
 #include "field.h"
-#include "function-inl.h"
+#include "function.h"
 #include "type-inl.h"
 
 using namespace std;

@@ -9,7 +9,7 @@
 
 #include "array.h"
 #include "block.h"
-#include "function-inl.h"
+#include "function.h"
 #include "stack.h"
 #include "utils.h"
 

@@ -42,7 +42,7 @@ void Roots::initialize(Heap* heap) {
   stackMeta->needsRelocation_ = true;
   basicRoots_[STACK_META_ROOT_INDEX] = stackMeta;
 
-  auto functionMeta = new(heap, 0, Function::kHeaderSize, 0) Meta(FUNCTION_BLOCK_TYPE);
+  auto functionMeta = new(heap, 0, sizeof(Function), 0) Meta(FUNCTION_BLOCK_TYPE);
   functionMeta->hasPointers_ = true;
   functionMeta->hasCustomSize_ = true;
   functionMeta->objectPointerMap().setWord(0, Function::kPointerMap);

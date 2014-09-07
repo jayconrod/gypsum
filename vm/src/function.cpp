@@ -4,7 +4,7 @@
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
 
-#include "function-inl.h"
+#include "function.h"
 
 #include <algorithm>
 #include <vector>
@@ -13,7 +13,8 @@
 #include "class-inl.h"
 #include "field.h"
 #include "package.h"
-#include "type.h"
+#include "roots-inl.h"
+#include "type-inl.h"
 #include "utils.h"
 
 using namespace std;
@@ -21,39 +22,71 @@ using namespace std;
 namespace codeswitch {
 namespace internal {
 
-Function* Function::tryAllocate(Heap* heap, word_t instructionsSize) {
+#define FUNCTION_POINTER_LIST(F) \
+  F(Function, typeParameters_)   \
+  F(Function, types_)            \
+  F(Function, blockOffsets_)     \
+  F(Function, package_)          \
+  F(Function, stackPointerMap_)  \
+
+
+DEFINE_POINTER_MAP(Function, FUNCTION_POINTER_LIST)
+
+#undef FUNCTION_POINTER_LIST
+
+
+void* Function::operator new(size_t, Heap* heap, word_t instructionsSize) {
   word_t size = sizeForFunction(instructionsSize);
   Function* function = reinterpret_cast<Function*>(heap->allocate(size));
-  if (function == nullptr)
-    return nullptr;
-
-  function->setMeta(FUNCTION_BLOCK_TYPE);
+  function->instructionsSize_ = instructionsSize;
   return function;
 }
 
 
-Local<Function> Function::allocate(Heap* heap, word_t instructionsSize) {
-  DEFINE_ALLOCATION(heap, Function, tryAllocate(heap, instructionsSize))
+Function::Function(u32 flags,
+                   TaggedArray<TypeParameter>* typeParameters,
+                   BlockArray<Type>* types,
+                   word_t localsSize,
+                   const vector<u8>& instructions,
+                   WordArray* blockOffsets,
+                   Package* package,
+                   StackPointerMap* stackPointerMap)
+    : Block(FUNCTION_BLOCK_TYPE),
+      flags_(flags),
+      builtinId_(0),
+      typeParameters_(typeParameters),
+      types_(types),
+      localsSize_(localsSize),
+      instructionsSize_(instructions.size()),
+      blockOffsets_(blockOffsets),
+      package_(package),
+      stackPointerMap_(stackPointerMap) {
+  ASSERT(instructionsSize_ == instructions.size());
+  copy_n(instructions.begin(), instructions.size(), instructionsStart());
 }
 
 
-void Function::initialize(u32 flags,
-                          TaggedArray<TypeParameter>* typeParameters,
-                          BlockArray<Type>* types,
-                          word_t localsSize,
-                          const vector<u8>& instructions,
-                          WordArray* blockOffsets,
-                          Package* package,
-                          StackPointerMap* stackPointerMap) {
-  setFlags(flags);
-  setTypeParameters(typeParameters);
-  setTypes(types);
-  setLocalsSize(localsSize);
-  setInstructionsSize(instructions.size());
-  setBlockOffsets(blockOffsets);
-  setPackage(package);
-  setStackPointerMap(stackPointerMap);
-  copy_n(instructions.data(), instructions.size(), instructionsStart());
+Local<Function> Function::create(Heap* heap,
+                                 u32 flags,
+                                 const Handle<TaggedArray<TypeParameter>>& typeParameters,
+                                 const Handle<BlockArray<Type>>& types,
+                                 word_t localsSize,
+                                 const vector<u8>& instructions,
+                                 const Handle<WordArray>& blockOffsets,
+                                 const Handle<Package>& package) {
+  RETRY_WITH_GC(heap, return Local<Function>(new(heap, instructions.size()) Function(
+      flags, *typeParameters, *types, localsSize, instructions,
+      *blockOffsets, *package, nullptr)));
+}
+
+
+word_t Function::sizeForFunction(word_t instructionsSize) {
+  return align(sizeof(Function), kWordSize) + instructionsSize;
+}
+
+
+word_t Function::sizeOfFunction() const {
+  return sizeForFunction(instructionsSize());
 }
 
 
@@ -61,6 +94,66 @@ void Function::printFunction(FILE* out) {
   fprintf(out, "Function @%p\n", reinterpret_cast<void*>(this));
   fprintf(out, "  instructions size: %d\n", static_cast<int>(instructionsSize()));
   fprintf(out, "  parameter count: %d\n", static_cast<int>(parameterCount()));
+}
+
+
+TypeParameter* Function::typeParameter(word_t index) const {
+  auto paramTag = typeParameters_->get(index);
+  if (paramTag.isNumber()) {
+    return package()->getTypeParameter(paramTag.getNumber());
+  } else {
+    return paramTag.getPointer();
+  }
+}
+
+
+word_t Function::parametersSize() const {
+  word_t size = 0;
+  for (word_t i = 0, n = parameterCount(); i < n; i++) {
+    size += align(parameterType(i)->typeSize(), kWordSize);
+  }
+  return size;
+}
+
+
+ptrdiff_t Function::parameterOffset(word_t index) const {
+  ptrdiff_t offset = 0;
+  for (word_t i = parameterCount() - 1; i > index; i--) {
+    offset += align(parameterType(i)->typeSize(), kWordSize);
+  }
+  return offset;
+}
+
+
+u8* Function::instructionsStart() const {
+  auto start = align(address() + sizeof(Function), kWordSize);
+  return reinterpret_cast<u8*>(start);
+}
+
+
+StackPointerMap* StackPointerMap::cast(Block* block) {
+  WordArray* array = WordArray::cast(block);
+  return reinterpret_cast<StackPointerMap*>(array);
+}
+
+
+Bitmap StackPointerMap::bitmap() {
+  word_t* base = reinterpret_cast<word_t*>(
+      elements() + kHeaderLength + entryCount() * kEntryLength);
+  return Bitmap(base, bitmapLength());
+}
+
+
+void StackPointerMap::getParametersRegion(word_t* paramOffset, word_t* paramCount) {
+  *paramOffset = 0;
+  // The parameter region is first in the bitmap. We determine its size by checking the offset
+  // of the first locals region. If there are no other regions, then it is the size of the
+  // whole bitmap.
+  if (entryCount() == 0) {
+    *paramCount = bitmapLength();
+  } else {
+    *paramCount = mapOffset(0);
+  }
 }
 
 

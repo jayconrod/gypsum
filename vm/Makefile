@@ -20,7 +20,7 @@ PYTHON := python
 MKTEST := $(TEST_SRC_DIR)/mktest.py
 
 # Flags
-CXXFLAGS := -O0 -g3 -fno-inline -Werror -Wall
+CXXFLAGS := -O0 -g3 -fno-inline -Werror -Wall -Wno-invalid-offsetof
 DEFINES := -DWORDSIZE=64 -DPAGESIZE=4096 -DDEBUG
 LDFLAGS :=
 INCLUDES := -I$(INCLUDE_DIR) $(addprefix -iquote,$(LIB_SRC_DIR) $(TEST_SRC_DIR) $(GEN_DIR))

@@ -18,7 +18,7 @@
 #include "bytecode.h"
 #include "error.h"
 #include "field.h"
-#include "function-inl.h"
+#include "function.h"
 #include "handle.h"
 #include "heap.h"
 #include "string-inl.h"
@@ -59,8 +59,8 @@ Package::Package(VM* vm)
       entryFunctionIndex_(kNotSet) { }
 
 
-Local<Package> Package::create(VM* vm) {
-  RETRY_WITH_GC(vm->heap(), return Local<Package>(new(vm->heap()) Package(vm)));
+Local<Package> Package::create(Heap* heap) {
+  RETRY_WITH_GC(heap, return Local<Package>(new(heap) Package(heap->vm())));
 }
 
 
@@ -114,7 +114,7 @@ Local<Package> Package::loadFromStream(VM* vm, istream& stream) {
     if (majorVersion != 0 || minorVersion != 6)
       throw Error("package file has wrong format version");
 
-    package = handleScope.escape(*Package::create(vm));
+    package = handleScope.escape(*Package::create(vm->heap()));
 
     auto flags = readValue<u64>(stream);
     package->setFlags(flags);
@@ -156,7 +156,6 @@ Local<Package> Package::loadFromStream(VM* vm, istream& stream) {
     }
     for (word_t i = 0; i < functionCount; i++) {
       auto function = readFunction(vm, stream, package);
-      function->setPackage(*package);
       functionArray->set(i, *function);
     }
     for (word_t i = 0; i < classCount; i++) {
@@ -242,9 +241,8 @@ static Local<Function> readFunction(VM* vm, istream& stream, const Local<Package
     blockOffsets->set(i, offset);
   }
 
-  auto function = Function::allocate(vm->heap(), instructionsSize);
-  function->initialize(flags, *typeParameters, *types, localsSize, instructions,
-                       *blockOffsets, *package, nullptr);
+  auto function = Function::create(vm->heap(), flags, typeParameters, types,
+                                   localsSize, instructions, blockOffsets, package);
   return function;
 }
 

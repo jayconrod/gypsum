@@ -7,10 +7,11 @@
 #include "block.h"
 
 #include "array.h"
-#include "function-inl.h"
+#include "function.h"
 #include "gc.h"
 #include "handle.h"
 #include "heap.h"
+#include "roots-inl.h"
 #include "stack.h"
 
 namespace codeswitch {

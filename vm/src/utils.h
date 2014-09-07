@@ -251,6 +251,36 @@ void utf8Encode(u32 codePoint, u8** bytes);
   }
 
 
+// Pointer maps are bit maps used by the garbage collector to identify pointers within a block.
+// They are stored in metas. C++ classes which abstract objects on the garbage-collected heap
+// usually define a static word_t which can be used to build metas for these classes. This is
+// possible since the offsets of pointers in these classes are known at compile-time.
+// Constructing the bit maps by hand is error-prone, so these macros help.
+
+// Call this in the private section of a class definition which needs a pointer map.
+#define DECLARE_POINTER_MAP()      \
+  friend class Roots;              \
+  static const word_t kPointerMap; \
+  static word_t buildPointerMap(); \
+
+
+// Used by DEFINE_POINTER_MAP below. Don't call directly.
+#define POINTER_MAP_BIT(className, fieldName) \
+  | (1 << (offsetof(className, fieldName) / kWordSize))
+
+
+// Call this in a .cpp file. The second argument should be a macro of the form:
+//   #define FOO_POINTER_LIST(F)
+//     F(Foo, ptrA_)
+//     F(Foo, ptrB_)
+// (backslashes elided to keep compiler happy).
+#define DEFINE_POINTER_MAP(className, POINTER_LIST)                 \
+word_t className::buildPointerMap() {                               \
+  return 0 POINTER_LIST(POINTER_MAP_BIT);                           \
+}                                                                   \
+const word_t className::kPointerMap = className::buildPointerMap(); \
+
+
 // Printing formats for words
 #if WORDSIZE == 32
 #define WFD "%d"

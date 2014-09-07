@@ -7,6 +7,7 @@
 #ifndef function_h
 #define function_h
 
+#include <new>
 #include <vector>
 #include "array.h"
 #include "block.h"
@@ -23,65 +24,72 @@ class TypeParameter;
 
 class Function: public Block {
  public:
-  static Function* tryAllocate(Heap* heap, word_t instructionsSize);
-  static Local<Function> allocate(Heap* heap, word_t instructionsSize);
-  void initialize(u32 flags,
-                  TaggedArray<TypeParameter>* typeParameters,
-                  BlockArray<Type>* types,
-                  word_t localsSize,
-                  const std::vector<u8>& instructions,
-                  WordArray* blockOffsets,
-                  Package* package,
-                  StackPointerMap* stackPointerMap);
+  void* operator new(size_t, Heap* heap, word_t instructionsSize);
+  Function(u32 flags,
+           TaggedArray<TypeParameter>* typeParameters,
+           BlockArray<Type>* types,
+           word_t localsSize,
+           const std::vector<u8>& instructions,
+           WordArray* blockOffsets,
+           Package* package,
+           StackPointerMap* stackPointerMap);
+  static Local<Function> create(Heap* heap,
+                                u32 flags,
+                                const Handle<TaggedArray<TypeParameter>>& typeParameters,
+                                const Handle<BlockArray<Type>>& types,
+                                word_t localsSize,
+                                const std::vector<u8>& instructions,
+                                const Handle<WordArray>& blockOffsets,
+                                const Handle<Package>& package);
 
-  static inline word_t sizeForFunction(word_t instructionsSize);
-  inline word_t sizeOfFunction() const;
+  static word_t sizeForFunction(word_t instructionsSize);
+  word_t sizeOfFunction() const;
   void printFunction(FILE* out);
   DEFINE_CAST(Function)
 
-  DEFINE_INL_ACCESSORS(u32, flags, setFlags, kFlagsOffset)
-  inline BuiltinId builtinId();
-  inline void setBuiltinId(BuiltinId id);
-  inline bool hasBuiltinId();
+  u32 flags() const { return flags_; }
 
-  DEFINE_INL_PTR_ACCESSORS(TaggedArray<TypeParameter>*,
-                           typeParameters,
-                           setTypeParameters,
-                           kTypeParametersOffset)
-  inline word_t typeParameterCount();
-  inline TypeParameter* typeParameter(word_t index);
+  BuiltinId builtinId() const {
+    ASSERT(hasBuiltinId());
+    return builtinId_;
+  }
+  void setBuiltinId(BuiltinId id) { builtinId_ = id; }
+  bool hasBuiltinId() const { return builtinId_ != 0; }
 
-  DEFINE_INL_PTR_ACCESSORS(BlockArray<Type>*, types, setTypes, kTypesOffset)
-  inline Type* returnType();
-  inline word_t parameterCount();
-  inline word_t parametersSize();
-  inline ptrdiff_t parameterOffset(word_t index);
-  inline Type* parameterType(word_t index);
+  TaggedArray<TypeParameter>* typeParameters() const { return typeParameters_; }
+  TypeParameter* typeParameter(word_t index) const;
+  word_t typeParameterCount() const { return typeParameters_->length(); }
 
-  DEFINE_INL_ACCESSORS(word_t, localsSize, setLocalsSize, kLocalsSizeOffset)
+  BlockArray<Type>* types() const { return types_; }
+  Type* returnType() const { return types_->get(0); }
+  word_t parameterCount() const { return types_->length() - 1; }
+  word_t parametersSize() const;
+  ptrdiff_t parameterOffset(word_t index) const;
+  Type* parameterType(word_t index) const { return types_->get(index + 1); }
 
-  DEFINE_INL_ACCESSORS(word_t, instructionsSize, setInstructionsSize, kInstructionsSizeOffset)
-  inline u8* instructionsStart();
+  word_t localsSize() const { return localsSize_; }
 
-  DEFINE_INL_PTR_ACCESSORS(WordArray*, blockOffsets, setBlockOffsets, kBlockOffsetsOffset)
-  inline word_t blockOffset(word_t index);
+  word_t instructionsSize() const { return instructionsSize_; }
+  u8* instructionsStart() const;
 
-  DEFINE_INL_PTR_ACCESSORS(Package*, package, setPackage, kPackageOffset)
-  DEFINE_INL_PTR_ACCESSORS(StackPointerMap*, stackPointerMap,
-                           setStackPointerMap, kStackPointerMapOffset)
+  WordArray* blockOffsets() const { return blockOffsets_; }
+  word_t blockOffset(word_t index) const { return blockOffsets_->get(index); }
 
-  static const int kFlagsOffset = kBlockHeaderSize;
-  static const int kBuiltinIdOffset = kFlagsOffset + sizeof(u32);
-  static const int kTypeParametersOffset = align(kBuiltinIdOffset + sizeof(u8), kWordSize);
-  static const int kTypesOffset = kTypeParametersOffset + kWordSize;
-  static const int kLocalsSizeOffset = kTypesOffset + kWordSize;
-  static const int kInstructionsSizeOffset = kLocalsSizeOffset + kWordSize;
-  static const int kBlockOffsetsOffset = kInstructionsSizeOffset + kWordSize;
-  static const int kPackageOffset = kBlockOffsetsOffset + kWordSize;
-  static const int kStackPointerMapOffset = kPackageOffset + kWordSize;
-  static const int kHeaderSize = kStackPointerMapOffset + kWordSize;
+  Package* package() const { return package_; }
+  DEFINE_INL_PTR_ACCESSORS2(StackPointerMap*, stackPointerMap, setStackPointerMap)
 
-  static const word_t kPointerMap = 0x1cc;
+ private:
+  DECLARE_POINTER_MAP()
+  u32 flags_;
+  BuiltinId builtinId_;
+  TaggedArray<TypeParameter>* typeParameters_;
+  BlockArray<Type>* types_;
+  word_t localsSize_;
+  word_t instructionsSize_;
+  WordArray* blockOffsets_;
+  Package* package_;
+  StackPointerMap* stackPointerMap_;
+  // Update FUNCTION_POINTER_LIST if pointer members change.
 };
 
 
@@ -89,10 +97,10 @@ class StackPointerMap: public WordArray {
  public:
   static StackPointerMap* tryBuildFrom(Heap* heap, Function* function);
   static Local<StackPointerMap> buildFrom(Heap* heap, Local<Function> function);
-  static inline StackPointerMap* cast(Block* block);
+  static StackPointerMap* cast(Block* block);
 
-  inline Bitmap bitmap();
-  inline void getParametersRegion(word_t* paramOffset, word_t* paramCount);
+  Bitmap bitmap();
+  void getParametersRegion(word_t* paramOffset, word_t* paramCount);
   void getLocalsRegion(word_t pc, word_t* localsOffset, word_t* localsCount);
 
   DEFINE_INL_INDEX_ACCESSORS(word_t, bitmapLength, setBitmapLength, kBitmapLengthIndex)

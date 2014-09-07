@@ -12,7 +12,7 @@
 #include "block.h"
 #include "error.h"
 #include "function.h"
-#include "function-inl.h"
+#include "function.h"
 #include "handle.h"
 #include "interpreter.h"
 #include "package.h"

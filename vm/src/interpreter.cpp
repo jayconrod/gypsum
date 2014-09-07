@@ -15,13 +15,15 @@
 #include "block.h"
 #include "builtins.h"
 #include "bytecode.h"
-#include "function-inl.h"
+#include "function.h"
 #include "gc.h"
 #include "handle.h"
 #include "object.h"
 #include "package.h"
+#include "roots-inl.h"
 #include "stack.h"
 #include "string.h"
+#include "type-inl.h"
 
 using namespace std;
 

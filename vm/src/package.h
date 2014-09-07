@@ -27,7 +27,7 @@ class Package: public Block {
  public:
   DEFINE_NEW(Package, PACKAGE_BLOCK_TYPE)
   explicit Package(VM* vm);
-  static Local<Package> create(VM* vm);
+  static Local<Package> create(Heap* heap);
   DEFINE_CAST(Package)
 
   void printPackage(FILE* out);

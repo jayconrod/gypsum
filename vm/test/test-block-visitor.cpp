@@ -11,8 +11,10 @@
 #include "block.h"
 #include "block-visitor.h"
 #include "bytecode.h"
-#include "function-inl.h"
+#include "function.h"
 #include "package.h"
+#include "roots-inl.h"
+#include "type-inl.h"
 
 using namespace codeswitch::internal;
 using namespace std;
@@ -100,7 +102,7 @@ static u8 makeSmallVbn(i64 value) {
 }
 
 
-static Package* createTestPackage(Heap* heap) {
+static Local<Package> createTestPackage(Heap* heap) {
   auto roots = heap->vm()->roots();
   auto typeList = BlockArray<Type>::create(heap, 3);
 
@@ -136,18 +138,16 @@ static Package* createTestPackage(Heap* heap) {
     0,
     RET,
   };
-  auto blockOffsetList = new(heap, 1) WordArray;
+  auto blockOffsetList = WordArray::create(heap, 1);
   blockOffsetList->set(0, 0);
-  Package* package = new(heap) Package(heap->vm());
-  package->setFlags(0);
-  auto functions = new(heap, 1) BlockArray<Function>;
-  auto function = Function::tryAllocate(heap, ARRAY_LENGTH(instList));
-  auto emptyTypeParameters = reinterpret_cast<TaggedArray<TypeParameter>*>(
-      roots->emptyTaggedArray());
-  function->initialize(0, emptyTypeParameters, *typeList, 2 * kWordSize, instList,
-                       blockOffsetList, package, nullptr);
-  functions->set(0, function);
-  package->setFunctions(functions);
+  auto package = Package::create(heap);
+  auto functions = BlockArray<Function>::create(heap, 1);
+  Local<TaggedArray<TypeParameter>> emptyTypeParameters(
+      reinterpret_cast<TaggedArray<TypeParameter>*>(roots->emptyTaggedArray()));
+  auto function = Function::create(heap, 0, emptyTypeParameters, typeList,
+                                   2 * kWordSize, instList, blockOffsetList, package);
+  functions->set(0, *function);
+  package->setFunctions(*functions);
   package->setEntryFunctionIndex(0);
 
   return package;
@@ -172,7 +172,7 @@ TEST(BlockVisitorFunction) {
   VM vm(0);
   HandleScope handleScope(&vm);
   Heap* heap = vm.heap();
-  auto package = createTestPackage(heap);
+  auto package = *createTestPackage(heap);
   auto function = package->getFunction(0);
   auto typeParameters = function->typeParameters();
   auto types = function->types();
@@ -183,6 +183,7 @@ TEST(BlockVisitorFunction) {
   visitor.visit(function);
   word_t expected[] = {
       FUNCTION_BLOCK_TYPE << 2,
+      0,
       0,
       reinterpret_cast<word_t>(typeParameters) + 4,
       reinterpret_cast<word_t>(types) + 4,
@@ -201,7 +202,7 @@ TEST(BuildStackPointerMap) {
   VM vm(0);
   HandleScope handleScope(&vm);
   auto heap = vm.heap();
-  auto package = createTestPackage(heap);
+  auto package = *createTestPackage(heap);
   auto function = package->getFunction(0);
   auto pointerMap = StackPointerMap::tryBuildFrom(heap, function);
   auto bitmap = pointerMap->bitmap();
@@ -249,7 +250,7 @@ TEST(VisitAndRelocateStack) {
   HandleScope handleScope(&vm);
   auto heap = vm.heap();
   auto stack = vm.stack();
-  auto package = createTestPackage(heap);
+  auto package = *createTestPackage(heap);
   auto function = package->getFunction(0);
   auto stackPointerMap = StackPointerMap::tryBuildFrom(heap, function);
   function->setStackPointerMap(stackPointerMap);
