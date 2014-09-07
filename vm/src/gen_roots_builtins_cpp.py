@@ -23,7 +23,7 @@ def declareClass(out, classData):
     out.write("\n  { // %s" % classData["id"])
     if not classData["isPrimitive"]:
         out.write("""
-    auto clas = Class::tryAllocate(heap);
+    auto clas = reinterpret_cast<Class*>(heap->allocate(sizeof(Class)));
     builtinClasses_.push_back(clas);""")
     out.write("""
     auto ty = Type::tryAllocate(heap, %d);
@@ -88,9 +88,10 @@ def initClass(out, classData):
         out.write("    auto methods = new(heap, %d) I64Array;\n" % len(allMethodIds))
         for i, id in enumerate(allMethodIds):
             out.write("    methods->set(%d, %s);\n" % (i, id))
-    out.write("    clas->initialize(0, supertype, fields, elementType, constructors, " +
+    out.write("    ::new(clas) Class(0, supertype, fields, elementType, constructors, " +
               "methods, nullptr, nullptr);\n")
-    out.write("    auto meta = clas->tryBuildInstanceMeta(heap);\n")
+    out.write("    auto meta = clas->buildInstanceMeta();\n")
+    out.write("    clas->setInstanceMeta(meta);\n")
     out.write("    builtinMetas_.push_back(meta);\n  }")
 
 
@@ -145,7 +146,7 @@ with open(rootsBuiltinsName, "w") as rootsBuiltinsFile:
 #include "array.h"
 #include "builtins.h"
 #include "block.h"
-#include "class-inl.h"
+#include "class.h"
 #include "field.h"
 #include "function.h"
 #include "type-inl.h"

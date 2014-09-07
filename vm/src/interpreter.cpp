@@ -642,14 +642,7 @@ Local<Meta> Interpreter::getMetaForClassId(i64 classId) {
     return handle(vm_->roots()->getBuiltinMeta(classId));
   }
   Local<Class> clas(function_->package()->getClass(classId));
-  if (clas->instanceMeta() == nullptr) {
-    if (clas->tryBuildInstanceMeta(vm_->heap()) == nullptr) {
-      collectGarbage();
-      clas->tryBuildInstanceMeta(vm_->heap());
-      CHECK(clas->instanceMeta() != nullptr);
-    }
-  }
-  return handle(clas->instanceMeta());
+  return Class::ensureAndGetInstanceMeta(clas);
 }
 
 

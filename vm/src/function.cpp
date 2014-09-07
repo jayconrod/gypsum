@@ -10,7 +10,7 @@
 #include <vector>
 #include "block.h"
 #include "bytecode.h"
-#include "class-inl.h"
+#include "class.h"
 #include "field.h"
 #include "package.h"
 #include "roots-inl.h"

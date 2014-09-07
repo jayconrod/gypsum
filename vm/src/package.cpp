@@ -131,7 +131,7 @@ Local<Package> Package::loadFromStream(VM* vm, istream& stream) {
     auto classArray = BlockArray<Class>::create(vm->heap(), classCount);
     for (word_t i = 0; i < classCount; i++) {
       // We pre-allocate classes so Types we read can refer to them.
-      auto clas = Class::allocate(vm->heap());
+      auto clas = Class::create(vm->heap());
       clas->setPackage(*package);
       classArray->set(i, *clas);
     }
@@ -276,8 +276,12 @@ static void readClass(VM* vm,
     methods->set(i, id);
   }
 
-  clas->initialize(flags, *supertype, *fields, nullptr,
-                   *constructors, *methods, *package, nullptr);
+  clas->setFlags(flags);
+  clas->setSupertype(*supertype);
+  clas->setFields(*fields);
+  clas->setConstructors(*constructors);
+  clas->setMethods(*methods);
+  clas->setPackage(*package);
 }
 
 

@@ -29,6 +29,7 @@ class Handle {
  public:
   T* operator * () const;
   T* operator -> () const;
+  T* getOrNull() const;
 
   operator bool () const;
   bool operator ! () const;
@@ -208,6 +209,12 @@ template <class T>
 T* Handle<T>::operator -> () const {
   ASSERT(slot_ != nullptr);
   return *slot_;
+}
+
+
+template <class T>
+T* Handle<T>::getOrNull() const {
+  return slot_ == nullptr ? nullptr : *slot_;
 }
 
 
