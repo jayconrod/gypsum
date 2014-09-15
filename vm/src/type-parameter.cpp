@@ -7,32 +7,46 @@
 #include "type-parameter.h"
 
 #include "block.h"
+#include "gc.h"
 #include "handle.h"
 #include "heap.h"
 
 namespace codeswitch {
 namespace internal {
 
-TypeParameter* TypeParameter::tryAllocate(Heap* heap) {
-  TypeParameter* param = reinterpret_cast<TypeParameter*>(heap->allocate(kSize));
-  if (param == nullptr) {
-    return nullptr;
-  }
+#define TYPE_PARAMETERS_POINTER_LIST(F) \
+  F(TypeParameter, upperBound_)         \
+  F(TypeParameter, lowerBound_)         \
 
-  param->setMeta(TYPE_PARAMETER_BLOCK_TYPE);
-  return param;
+DEFINE_POINTER_MAP(TypeParameter, TYPE_PARAMETERS_POINTER_LIST)
+
+#undef TYPE_PARAMETERS_POINTER_LIST
+
+
+void* TypeParameter::operator new (size_t, Heap* heap) {
+  return reinterpret_cast<TypeParameter*>(heap->allocate(sizeof(TypeParameter)));
 }
 
 
-Local<TypeParameter> TypeParameter::allocate(Heap* heap) {
-  DEFINE_ALLOCATION(heap, TypeParameter, tryAllocate(heap))
+TypeParameter::TypeParameter(u32 flags, Type* upperBound, Type* lowerBound)
+    : Block(TYPE_PARAMETER_BLOCK_TYPE),
+      flags_(flags),
+      upperBound_(upperBound),
+      lowerBound_(lowerBound) { }
+
+
+Local<TypeParameter> TypeParameter::create(Heap* heap) {
+  RETRY_WITH_GC(heap, return Local<TypeParameter>(
+      new(heap) TypeParameter(0, nullptr, nullptr)));
 }
 
 
-void TypeParameter::initialize(u32 flags, Type* upperBound, Type* lowerBound) {
-  setFlags(flags);
-  setUpperBound(upperBound);
-  setLowerBound(lowerBound);
+Local<TypeParameter> TypeParameter::create(Heap* heap,
+                                           u32 flags,
+                                           const Handle<Type>& upperBound,
+                                           const Handle<Type>& lowerBound) {
+  RETRY_WITH_GC(heap, return Local<TypeParameter>(
+      new(heap) TypeParameter(flags, upperBound.getOrNull(), lowerBound.getOrNull())));
 }
 
 

@@ -142,7 +142,7 @@ Local<Package> Package::loadFromStream(VM* vm, istream& stream) {
         BlockArray<TypeParameter>::create(vm->heap(), typeParameterCount);
     for (word_t i = 0; i < typeParameterCount; i++) {
       // Type parameters are also pre-allocated.
-      auto param = TypeParameter::allocate(vm->heap());
+      auto param = TypeParameter::create(vm->heap());
       typeParametersArray->set(i, *param);
     }
     package->setTypeParameters(*typeParametersArray);
@@ -302,7 +302,9 @@ static void readTypeParameter(VM* vm,
   stream.read(reinterpret_cast<char*>(&flags), sizeof(flags));
   auto upperBound = readType(vm, stream, package);
   auto lowerBound = readType(vm, stream, package);
-  param->initialize(flags, *upperBound, *lowerBound);
+  param->setFlags(flags);
+  param->setUpperBound(*upperBound);
+  param->setLowerBound(*lowerBound);
 }
 
 

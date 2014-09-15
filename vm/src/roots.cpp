@@ -59,7 +59,7 @@ void Roots::initialize(Heap* heap) {
   basicRoots_[FIELD_META_ROOT_INDEX] = fieldMeta;
 
   auto typeParameterMeta =
-      new(heap, 0, TypeParameter::kSize, 0) Meta(TYPE_PARAMETER_BLOCK_TYPE);
+      new(heap, 0, sizeof(TypeParameter), 0) Meta(TYPE_PARAMETER_BLOCK_TYPE);
   typeParameterMeta->hasPointers_ = true;
   typeParameterMeta->objectPointerMap().setWord(0, TypeParameter::kPointerMap);
   basicRoots_[TYPE_PARAMETER_META_ROOT_INDEX] = typeParameterMeta;
