@@ -17,22 +17,22 @@ class Type;
 
 class Field: public Block {
  public:
-  static Field* tryAllocate(Heap* heap);
-  static Local<Field> allocate(Heap* heap);
-
-  void initialize(u32 flags, Type* type);
+  void* operator new (size_t, Heap* heap);
+  Field(u32 flags, Type* type);
+  static Local<Field> create(Heap* heap, u32 flags, const Handle<Type>& type);
 
   void printField(FILE* out);
   DEFINE_CAST(Field)
 
-  DEFINE_INL_ACCESSORS(u32, flags, setFlags, kFlagsOffset)
-  DEFINE_INL_PTR_ACCESSORS(Type*, type, setType, kTypeOffset)
+  u32 flags() const { return flags_; }
+  Type* type() const { return type_; }
 
-  static const int kFlagsOffset = kBlockHeaderSize;
-  static const int kTypeOffset = align(kFlagsOffset + sizeof(u32), kWordSize);
-  static const int kSize = kTypeOffset + kWordSize;
+ private:
+  DECLARE_POINTER_MAP()
 
-  static const word_t kPointerMap = 0x4;
+  u32 flags_;
+  Type* type_;
+  // Update FIELD_POINTER_LIST if pointer members change.
 };
 
 }

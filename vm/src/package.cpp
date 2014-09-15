@@ -289,8 +289,7 @@ static Local<Field> readField(VM* vm, istream& stream, const Local<Package>& pac
   u32 flags;
   stream.read(reinterpret_cast<char*>(&flags), sizeof(flags));
   auto type = readType(vm, stream, package);
-  auto field = Field::allocate(vm->heap());
-  field->initialize(flags, *type);
+  auto field = Field::create(vm->heap(), flags, type);
   return field;
 }
 

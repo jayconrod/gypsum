@@ -66,8 +66,8 @@ def initClass(out, classData):
                   len(classData["fields"]))
         for i, fieldData in enumerate(classData["fields"]):
             typeName = fieldData["type"]
-            out.write("    auto field%d = Field::tryAllocate(heap);\n" % i)
-            out.write("    field%d->initialize(0, %s);\n" % (i, getTypeFromName(typeName)))
+            out.write("    auto field%d = new(heap) Field(0, %s);\n" %
+                      (i, getTypeFromName(typeName)))
             out.write("    fields->set(%d, field%d);\n" % (i, i))
     if "elements" not in classData:
         out.write("    Type* elementType = nullptr;\n")

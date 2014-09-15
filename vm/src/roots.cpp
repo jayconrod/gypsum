@@ -53,7 +53,7 @@ void Roots::initialize(Heap* heap) {
   classMeta->objectPointerMap().setWord(0, Class::kPointerMap);
   basicRoots_[CLASS_META_ROOT_INDEX] = classMeta;
 
-  auto fieldMeta = new(heap, 0, Field::kSize, 0) Meta(FIELD_BLOCK_TYPE);
+  auto fieldMeta = new(heap, 0, sizeof(Field), 0) Meta(FIELD_BLOCK_TYPE);
   fieldMeta->hasPointers_ = true;
   fieldMeta->objectPointerMap().setWord(0, Field::kPointerMap);
   basicRoots_[FIELD_META_ROOT_INDEX] = fieldMeta;
