@@ -90,6 +90,12 @@ word_t Block::elementsLength() const {
 }
 
 
+void Block::setElementsLength(word_t length) {
+  ASSERT(meta()->hasElements());
+  mem<word_t>(this, sizeof(Block)) = length;
+}
+
+
 VM* Block::getVM() const {
   Chunk* page = Chunk::fromAddress(this);
   return page->vm();

@@ -336,7 +336,8 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       case ALLOCOBJ: {
         auto classId = readVbn();
         auto meta = getMetaForClassId(classId);
-        ALLOCATE_GC_RETRY(Object*, obj, Object::tryAllocate(vm_->heap(), *meta))
+        Object* obj = nullptr;
+        RETRY_WITH_GC(vm_->heap(), obj = new(vm_->heap(), *meta) Object);
         push<Block*>(obj);
         break;
       }
@@ -345,7 +346,8 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         auto classId = readVbn();
         auto length = readVbn();
         auto meta = getMetaForClassId(classId);
-        ALLOCATE_GC_RETRY(Object*, obj, Object::tryAllocateArray(vm_->heap(), *meta, length))
+        Object* obj = nullptr;
+        RETRY_WITH_GC(vm_->heap(), obj = new(vm_->heap(), *meta, length) Object);
         push<Block*>(obj);
         break;
       }
@@ -735,7 +737,7 @@ i64 Interpreter::readVbn() {
 void Interpreter::throwBuiltinException(BuiltinId id) {
   // TODO: ensure this allocation succeeds because we don't have a pointer map here.
   auto exnMeta = vm_->roots()->getBuiltinMeta(id);
-  auto exn = Object::tryAllocate(vm_->heap(), exnMeta);
+  auto exn = new(vm_->heap(), exnMeta) Object;
   doThrow(exn);
 }
 

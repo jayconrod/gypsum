@@ -8,47 +8,43 @@
 
 #include <cstring>
 #include "block.h"
+#include "gc.h"
 #include "handle.h"
 #include "heap.h"
 
 namespace codeswitch {
 namespace internal {
 
-Object* Object::tryAllocate(Heap* heap, Meta* meta) {
+void* Object::operator new (size_t, Heap* heap, Meta* meta) {
   ASSERT(meta->elementSize() == 0);
-  word_t size = meta->objectSize();
-  Object* obj = reinterpret_cast<Object*>(heap->allocate(size));
-  if (obj == nullptr)
-    return obj;
-
+  auto size = meta->objectSize();
+  auto obj = reinterpret_cast<Object*>(heap->allocate(size));
   obj->setMeta(meta);
-  memset(reinterpret_cast<char*>(obj) + kWordSize, 0, size - kWordSize);
   return obj;
 }
 
 
-Object* Object::tryAllocateArray(Heap* heap, Meta* meta, word_t length) {
+void* Object::operator new (size_t, Heap* heap, Meta* meta, word_t length) {
   ASSERT(meta->elementSize() > 0);
-  word_t size = meta->objectSize() + length * meta->elementSize();
-  Object* obj = reinterpret_cast<Object*>(heap->allocate(size));
-  if (obj == nullptr)
-    return obj;
-
+  auto size = meta->objectSize() + length * meta->elementSize();
+  auto obj = reinterpret_cast<Object*>(heap->allocate(size));
   obj->setMeta(meta);
-  // TODO: this is a hack.
-  mem<word_t>(obj, kWordSize) = length;
-  memset(reinterpret_cast<char*>(obj) + 2 * kWordSize, 0, size - 2 * kWordSize);
+  obj->setElementsLength(length);
   return obj;
 }
 
 
-Local<Object> Object::allocate(Heap* heap, Meta* meta) {
-  DEFINE_ALLOCATION(heap, Object, tryAllocate(heap, meta))
+Object::Object()
+    : Block(meta()) { }
+
+
+Local<Object> Object::create(Heap* heap, const Handle<Meta>& meta) {
+  RETRY_WITH_GC(heap, return Local<Object>(new(heap, *meta) Object));
 }
 
 
-Local<Object> Object::allocateArray(Heap* heap, Meta* meta, word_t length) {
-  DEFINE_ALLOCATION(heap, Object, tryAllocateArray(heap, meta, length))
+Local<Object> Object::create(Heap* heap, const Handle<Meta>& meta, word_t length) {
+  RETRY_WITH_GC(heap, return Local<Object>(new(heap, *meta, length) Object));
 }
 
 

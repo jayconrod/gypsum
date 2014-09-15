@@ -21,10 +21,10 @@ TEST(ObjectsAreZeroInitialized) {
 
   word_t objectSize = 16;
   auto meta = new(heap, 0, objectSize, 0) Meta(OBJECT_BLOCK_TYPE);
-  auto dummy = Object::tryAllocate(heap, meta);
+  auto dummy = new(heap, meta) Object;
   ASSERT_EQ(objectSize, dummy->sizeOfBlock());
   memset(reinterpret_cast<char*>(dummy) + objectSize, 0xef, 100);
-  auto obj = Object::tryAllocate(heap, meta);
+  auto obj = new(heap, meta) Object;
   auto value = mem<word_t>(obj, kWordSize);
   ASSERT_EQ(0, value);
 }
