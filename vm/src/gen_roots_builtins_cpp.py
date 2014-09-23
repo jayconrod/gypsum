@@ -26,7 +26,7 @@ def declareClass(out, classData):
     auto clas = reinterpret_cast<Class*>(heap->allocate(sizeof(Class)));
     builtinClasses_.push_back(clas);""")
     out.write("""
-    auto ty = Type::tryAllocate(heap, %d);
+    auto ty = reinterpret_cast<Type*>(heap->allocate(Type::sizeForLength(%d)));
     builtinTypes_.push_back(ty);
   }""" % (0 if classData["isPrimitive"] else 1))
 
@@ -44,10 +44,10 @@ def initType(out, classData):
     out.write("    auto ty = getBuiltinType(%s);\n" % classData["id"])
     if classData["isPrimitive"]:
         primitiveType = classData["id"][8:-3]
-        out.write("    ty->initialize(Type::%s);\n" % primitiveType)
+        out.write("    new(ty, 0) Type(Type::%s);\n" % primitiveType)
     else:
         out.write("    auto clas = getBuiltinClass(%s);\n" % classData["id"])
-        out.write("    ty->initialize(clas);\n")
+        out.write("    new(ty, 1) Type(clas);\n")
     out.write("  }")
 
 
@@ -181,9 +181,8 @@ void Roots::initializeBuiltins(Heap* heap) {
 
     rootsBuiltinsFile.write("""
 
-  auto nullableRootClassType = Type::tryAllocate(heap, 1);
-  nullableRootClassType->initialize(getBuiltinClass(BUILTIN_ROOT_CLASS_ID),
-                                    Type::NULLABLE_FLAG);""")
+  auto nullableRootClassType = new(heap, 1) Type(getBuiltinClass(BUILTIN_ROOT_CLASS_ID),
+                                                 Type::NULLABLE_FLAG);""")
 
     rootsBuiltinsFile.write("""
 

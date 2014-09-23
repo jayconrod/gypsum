@@ -52,70 +52,71 @@ class Type: public Object {
     LAST_FLAG = NULLABLE_FLAG
   };
 
-  static inline Type* tryAllocate(Heap* heap, word_t length);
-  static inline Local<Type> allocate(Heap* heap, word_t length);
-  inline void initialize(Form primitive, Flags flags = NO_FLAGS);
-  inline void initialize(Class* clas, Flags flags = NO_FLAGS);
-  inline void initialize(TypeParameter* param, Flags flags = NO_FLAGS);
+  static word_t sizeForLength(word_t length);
+  void* operator new (size_t, Heap* heap, word_t length);
+  void* operator new (size_t, void* place, word_t length);
+  explicit Type(Form primitive, Flags flags = NO_FLAGS);
+  explicit Type(Class* clas, Flags flags = NO_FLAGS);
+  explicit Type(TypeParameter* param, Flags flags = NO_FLAGS);
+  static Local<Type> create(Heap* heap, Form primitive, Flags flags = NO_FLAGS);
+  static Local<Type> create(Heap* heap, const Handle<Class>& clas, Flags fags = NO_FLAGS);
+  static Local<Type> create(Heap* heap,
+                            const Handle<TypeParameter>& param,
+                            Flags flags = NO_FLAGS);
 
-  static inline Type* primitiveTypeFromForm(Roots* roots, Form form);
-  static inline Type* unitType(Roots* roots);
-  static inline Type* booleanType(Roots* roots);
-  static inline Type* intTypeFromWidth(Roots* roots, Width width);
-  static inline Type* i8Type(Roots* roots);
-  static inline Type* i16Type(Roots* roots);
-  static inline Type* i32Type(Roots* roots);
-  static inline Type* i64Type(Roots* roots);
-  static inline Type* floatTypeFromWidth(Roots* roots, Width width);
-  static inline Type* f32Type(Roots* roots);
-  static inline Type* f64Type(Roots* roots);
-  static inline Type* wordType(Roots* roots);
-  static inline Type* rootClassType(Roots* roots);
-  static inline Type* nullType(Roots* roots);
+  static Type* primitiveTypeFromForm(Roots* roots, Form form);
+  static Type* unitType(Roots* roots);
+  static Type* booleanType(Roots* roots);
+  static Type* intTypeFromWidth(Roots* roots, Width width);
+  static Type* i8Type(Roots* roots);
+  static Type* i16Type(Roots* roots);
+  static Type* i32Type(Roots* roots);
+  static Type* i64Type(Roots* roots);
+  static Type* floatTypeFromWidth(Roots* roots, Width width);
+  static Type* f32Type(Roots* roots);
+  static Type* f64Type(Roots* roots);
+  static Type* wordType(Roots* roots);
+  static Type* rootClassType(Roots* roots);
+  static Type* nullType(Roots* roots);
 
   DEFINE_CAST(Type)
 
-  inline word_t length();
+  word_t length() const { return elementsLength(); }
 
-  DEFINE_INL_ACCESSORS(word_t, bitField, setBitField, kBitFieldOffset)
-  DEFINE_INL_BIT_ACCESSORS(Form, form, setForm, kBitFieldOffset, kFormWidth, kFormShift)
-  DEFINE_INL_BIT_ACCESSORS(Flags, flags, setFlags, kBitFieldOffset, kFlagsWidth, kFlagsShift)
-  inline bool isPrimitive();
-  inline Form asPrimitive();
-  inline bool isClass();
-  inline Class* asClass();
-  inline bool isVariable();
-  inline TypeParameter* asVariable();
-  inline bool isRootClass();
-  inline bool isObject();
-  inline bool isBoolean();
-  inline bool isI8();
-  inline bool isI16();
-  inline bool isI32();
-  inline bool isI64();
-  inline bool isF32();
-  inline bool isF64();
-  inline bool isNullable();
+  Form form() const { return form_; }
+  Flags flags() const { return flags_; }
+  bool isPrimitive() const;
+  Form asPrimitive() const;
+  bool isClass() const;
+  Class* asClass() const;
+  bool isVariable() const;
+  TypeParameter* asVariable() const;
+  bool isRootClass() const;
+  bool isObject() const;
+  bool isBoolean() const;
+  bool isI8() const;
+  bool isI16() const;
+  bool isI32() const;
+  bool isI64() const;
+  bool isF32() const;
+  bool isF64() const;
+  bool isNullable() const;
 
-  inline word_t typeSize();
-  inline word_t alignment();
+  word_t typeSize() const;
+  word_t alignment() const;
 
-  bool isSubtypeOf(Type* other);
-  bool equals(Type* other);
+  bool isSubtypeOf(Type* other) const;
+  bool equals(Type* other) const;
   Type* substitute(const std::vector<std::pair<TypeParameter*, Type*>>& bindings);
 
-  static const int kLengthOffset = kBlockHeaderSize;
-  static const int kBitFieldOffset = kLengthOffset + kWordSize;
-  static const int kHeaderSize = kBitFieldOffset + kWordSize;
-  static const int kClassOffset = kHeaderSize;
-  static const int kPointerMap = 0;
+ private:
+  friend class Roots;
+  static const word_t kPointerMap = 0;
 
-  static const int kFormShift = 0;
-  static const int kFormWidth = 4;
-  static const word_t kFormMask = (1 << kFormWidth) - 1;
-  static const int kFlagsShift = kFormShift + kFormWidth;
-  static const int kFlagsWidth = 1;
-  static const word_t kFlagsMask = (LAST_FLAG << 1) - 1;
+  word_t length_;
+  Form form_ : 4;
+  Flags flags_ : 28;
+  Block* elements_[0];
 };
 
 }

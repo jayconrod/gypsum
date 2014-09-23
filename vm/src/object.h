@@ -22,6 +22,9 @@ class Object: public Block {
 
   void printObject(FILE* out);
   DEFINE_CAST(Object)
+
+ protected:
+  explicit Object(BlockType blockType);
 };
 
 }

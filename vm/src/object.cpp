@@ -38,6 +38,10 @@ Object::Object()
     : Block(meta()) { }
 
 
+Object::Object(BlockType blockType)
+    : Block(blockType) { }
+
+
 Local<Object> Object::create(Heap* heap, const Handle<Meta>& meta) {
   RETRY_WITH_GC(heap, return Local<Object>(new(heap, *meta) Object));
 }

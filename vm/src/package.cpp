@@ -313,11 +313,11 @@ static Local<Type> readType(VM* vm,
                             const Local<Package>& package) {
   auto heap = vm->heap();
   auto bits = readWordVbn(stream);
-  auto form = static_cast<Type::Form>(bits & Type::kFormMask);
-  auto flags = static_cast<Type::Flags>(bits >> Type::kFlagsShift);
+  auto form = static_cast<Type::Form>(bits & 0xf);
+  auto flags = static_cast<Type::Flags>(bits >> 4);
   auto isPrimitive = Type::FIRST_PRIMITIVE_TYPE <= form && form <= Type::LAST_PRIMITIVE_TYPE;
   if (form > Type::LAST_TYPE ||
-      (flags & ~Type::kFlagsMask) != 0 ||
+      flags > Type::LAST_FLAG ||
       (isPrimitive && flags != Type::NO_FLAGS)) {
     throw Error("invalid type flags");
   }
@@ -337,16 +337,14 @@ static Local<Type> readType(VM* vm,
       } else {
         clas = handle(package->getClass(code));
       }
-      auto ty = Type::allocate(heap, 1);
-      ty->initialize(*clas, flags);
+      auto ty = Type::create(heap, clas, flags);
       return ty;
     } else {
       ASSERT(form == Type::VARIABLE_TYPE);
       if (isBuiltinId(code))
         throw Error("no builtin type parameters");
       auto param = handle(package->getTypeParameter(code));
-      auto ty = Type::allocate(heap, 1);
-      ty->initialize(*param, flags);
+      auto ty = Type::create(heap, param, flags);
       return ty;
     }
   }

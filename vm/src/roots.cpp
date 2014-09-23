@@ -106,8 +106,8 @@ void Roots::initialize(Heap* heap) {
 
   initializeBuiltins(heap);
 
-  Type* nullType = Type::tryAllocate(heap, 1);
-  nullType->initialize(getBuiltinClass(BUILTIN_NOTHING_CLASS_ID), Type::NULLABLE_FLAG);
+  auto nullType = new(heap, 1) Type(getBuiltinClass(BUILTIN_NOTHING_CLASS_ID),
+                                    Type::NULLABLE_FLAG);
   basicRoots_[NULL_TYPE_ROOT_INDEX] = nullType;
 
   Meta* typeMeta = getBuiltinClass(BUILTIN_TYPE_CLASS_ID)->instanceMeta();

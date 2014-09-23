@@ -501,17 +501,10 @@ void Interpreter::ensurePointerMap(const Handle<Function>& function) {
 void Interpreter::handleBuiltin(BuiltinId id) {
   switch (id) {
     case BUILTIN_ROOT_CLASS_TYPEOF_ID: {
-      Type* type = Type::tryAllocate(vm_->heap(), 1);
-      if (type == nullptr) {
-        collectGarbage();
-        type = Type::tryAllocate(vm_->heap(), 1);
-        CHECK(type != nullptr);
-      }
       auto receiver = Object::cast(pop<Block*>());
-      auto clas = receiver->meta()->clas();
-      ASSERT(clas != nullptr);
-      type->initialize(clas);
-      push<Block*>(type);
+      Local<Class> clas(receiver->meta()->clas());
+      auto type = Type::create(vm_->heap(), clas);
+      push<Block*>(*type);
       break;
     }
 
@@ -524,7 +517,7 @@ void Interpreter::handleBuiltin(BuiltinId id) {
     case BUILTIN_TYPE_CTOR_ID: {
       auto clas = Class::cast(pop<Block*>());
       auto receiver = Type::cast(pop<Block*>());
-      receiver->initialize(clas);
+      new(receiver, 1) Type(clas);
       push<i8>(0);
       break;
     }

@@ -446,10 +446,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
           if (isBuiltinId(classId)) {
             type = roots->getBuiltinType(classId);
           } else {
-            type = Type::tryAllocate(heap, 1);
-            if (type == nullptr)
-              return nullptr;
-            type->initialize(Class::cast(package->classes()->get(classId)));
+            type = new(heap, 1) Type(Class::cast(package->classes()->get(classId)));
           }
           currentMap.push(type);
           break;
@@ -464,10 +461,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
           if (isBuiltinId(classId)) {
             type = roots->getBuiltinType(classId);
           } else {
-            type = Type::tryAllocate(heap, 1);
-            if (type == nullptr)
-              return nullptr;
-            type->initialize(Class::cast(package->classes()->get(classId)));
+            type = new(heap, 1) Type(Class::cast(package->classes()->get(classId)));
           }
           currentMap.push(type);
           break;
@@ -478,10 +472,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
           Class* clas = isBuiltinId(classId)
               ? roots->getBuiltinClass(static_cast<BuiltinId>(classId))
               : package->getClass(classId);
-          Type* type = Type::tryAllocate(heap, 1);
-          if (type == nullptr)
-            return nullptr;
-          type->initialize(clas, Type::NO_FLAGS);
+          Type* type = new(heap, 1) Type(clas, Type::NO_FLAGS);
           currentMap.pushTypeArg(type);
           break;
         }
@@ -490,10 +481,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
           auto typeParamId = readVbn(bytecode, &pcOffset);
           ASSERT(!isBuiltinId(typeParamId));
           TypeParameter* param = package->getTypeParameter(typeParamId);
-          Type* type = Type::tryAllocate(heap, 1);
-          if (type == nullptr)
-            return nullptr;
-          type->initialize(param, Type::NO_FLAGS);
+          Type* type = new(heap, 1) Type(param, Type::NO_FLAGS);
           currentMap.pushTypeArg(type);
           break;
         }
