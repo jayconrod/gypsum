@@ -8,15 +8,72 @@
 
 #include <memory>
 #include <unistd.h>
-#include "array.h"
-#include "heap-inl.h"
-#include "memory-inl.h"
+#include "handle.h"
+#include "heap.h"
+#include "memory.h"
 #include "utils.h"
 #include "vm-inl.h"
 
 using namespace std;
 using namespace codeswitch::internal;
 
+TEST(AllocationRangeNormalAllocation) {
+  AllocationRange range(100, 200);
+  ASSERT_EQ(100, range.base());
+  ASSERT_EQ(200, range.limit());
+  ASSERT_EQ(100, range.size());
+
+  auto a = range.allocate(10);
+  ASSERT_EQ(100, a);
+  ASSERT_EQ(110, range.base());
+  ASSERT_EQ(90, range.size());
+}
+
+
+TEST(AllocationRangeFullAllocation) {
+  AllocationRange range(100, 200);
+  auto a = range.allocate(100);
+  ASSERT_EQ(100, a);
+  ASSERT_EQ(200, range.base());
+  ASSERT_EQ(0, range.size());
+}
+
+
+TEST(AllocationRangeExhausted) {
+  AllocationRange range(100, 200);
+  ASSERT_THROWS(AllocationError, range.allocate(101));
+  ASSERT_EQ(100, range.base());
+}
+
+
+TEST(AllocationRangeOverflow) {
+  AllocationRange range(100, 200);
+  ASSERT_THROWS(AllocationError, range.allocate(~static_cast<size_t>(0)));
+  ASSERT_EQ(100, range.base());
+}
+
+
+TEST(ChunkAllocation) {
+  unique_ptr<Chunk> chunk(new(Chunk::kDefaultSize, NOT_EXECUTABLE) Chunk(nullptr, 0));
+  auto base = chunk->base();
+  ASSERT_TRUE(isAligned(base, Chunk::kDefaultSize));
+  ASSERT_FALSE(chunk->allocationRange().isValid());
+
+  // Avoiding calculations here so that we don't make the same mistakes as Chunk if there are
+  // any. This makes the test unfortunately brittle. The important invariant is that:
+  //   bitmapSize * 8 >= storageSize / kWordSize
+  ASSERT_EQ(base + 96, chunk->bitmapBase());
+  ASSERT_EQ(16136, chunk->bitmapSize());
+  ASSERT_EQ(base + 16232, chunk->storageBase());
+  ASSERT_EQ(1032344, chunk->storageSize());
+  ASSERT_EQ(base + Chunk::kDefaultSize, chunk->storageLimit());
+
+  ASSERT_EQ(chunk.get(), Chunk::fromAddress(base + 100));
+}
+
+
+// TODO: convert these tests to newer classes.
+#if 0
 TEST(MemoryChunkAlignment) {
   const auto systemPageSize = static_cast<word_t>(sysconf(_SC_PAGESIZE));
 
@@ -105,3 +162,4 @@ TEST(SpaceIteration) {
   }
   ASSERT_TRUE(it == space.end());
 }
+#endif

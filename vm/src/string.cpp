@@ -4,13 +4,15 @@
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
 
-#include "string-inl.h"
+#include "string.h"
 
 #include <algorithm>
 #include <cstring>
+#include "block.h"
 #include "error.h"
-#include "handle-inl.h"
-#include "heap-inl.h"
+#include "gc.h"
+#include "handle.h"
+#include "heap.h"
 #include "utils.h"
 
 using namespace std;
@@ -18,15 +20,43 @@ using namespace std;
 namespace codeswitch {
 namespace internal {
 
-void String::initialize(const u32* chars) {
-  copy_n(chars, length(), this->chars());
+word_t String::sizeForLength(word_t length) {
+  return sizeof(String) + length * sizeof(u32);
 }
 
 
-Handle<String> String::fromUtf8String(Heap* heap, const u8* utf8Chars,
+void* String::operator new (size_t, Heap* heap, word_t length) {
+  auto size = sizeForLength(length);
+  auto string = reinterpret_cast<String*>(heap->allocate(size));
+  string->length_ = length;
+  return string;
+}
+
+
+String::String(const u32* chars)
+    : Object(STRING_BLOCK_TYPE) {
+  copy_n(chars, length_, chars_);
+}
+
+
+String::String()
+    : Object(STRING_BLOCK_TYPE) { }
+
+
+Local<String> String::create(Heap* heap, word_t length, const u32* chars) {
+  RETRY_WITH_GC(heap, return Local<String>(new(heap, length) String(chars)));
+}
+
+
+Local<String> String::create(Heap* heap, word_t length) {
+  RETRY_WITH_GC(heap, return Local<String>(new(heap, length) String));
+}
+
+
+Local<String> String::fromUtf8String(Heap* heap, const u8* utf8Chars,
                                       word_t length, word_t size) {
-  auto string = String::allocate(heap, length);
-  auto chars = string->chars();
+  auto string = String::create(heap, length);
+  u32* chars = string->chars_;
   auto end = utf8Chars + size;
   word_t i;
   for (i = 0; i < length; i++) {
@@ -41,13 +71,13 @@ Handle<String> String::fromUtf8String(Heap* heap, const u8* utf8Chars,
 }
 
 
-Handle<String> String::fromUtf8CString(Heap* heap, const char* utf8Chars) {
+Local<String> String::fromUtf8CString(Heap* heap, const char* utf8Chars) {
   word_t size = strlen(utf8Chars);
   return fromUtf8String(heap, reinterpret_cast<const u8*>(utf8Chars), size);
 }
 
 
-Handle<String> String::fromUtf8String(Heap* heap, const u8* utf8Chars, word_t size) {
+Local<String> String::fromUtf8String(Heap* heap, const u8* utf8Chars, word_t size) {
   word_t length = 0;
   auto p = utf8Chars;
   auto end = p + size;
@@ -61,7 +91,7 @@ Handle<String> String::fromUtf8String(Heap* heap, const u8* utf8Chars, word_t si
 }
 
 
-word_t String::utf8EncodedSize() {
+word_t String::utf8EncodedSize() const {
   word_t size = 0;
   for (word_t i = 0; i < length(); i++) {
     size += utf8EncodeSize(get(i));
@@ -70,7 +100,7 @@ word_t String::utf8EncodedSize() {
 }
 
 
-vector<u8> String::toUtf8StlVector() {
+vector<u8> String::toUtf8StlVector() const {
   word_t size = utf8EncodedSize();
   vector<u8> utf8Chars(size);
   auto p = utf8Chars.data();
@@ -84,13 +114,13 @@ vector<u8> String::toUtf8StlVector() {
 
 
 
-string String::toUtf8StlString() {
+string String::toUtf8StlString() const {
   vector<u8> utf8Chars = toUtf8StlVector();
   return string(reinterpret_cast<char*>(utf8Chars.data()), utf8Chars.size());
 }
 
 
-bool String::equals(String* other) {
+bool String::equals(String* other) const {
   if (length() != other->length())
     return false;
   for (word_t i = 0; i < length(); i++) {
@@ -101,7 +131,7 @@ bool String::equals(String* other) {
 }
 
 
-int String::compare(String* other) {
+int String::compare(String* other) const {
   auto minLength = min(length(), other->length());
   int cmp;
   for (word_t i = 0; i < minLength; i++) {
@@ -115,25 +145,25 @@ int String::compare(String* other) {
 
 
 String* String::tryConcat(Heap* heap, String* other) {
-  if (other->length() == 0) {
+  if (other->length_ == 0) {
     return this;
-  } else if (length() == 0) {
+  } else if (length_ == 0) {
     return other;
   }
 
-  auto consLength = length() + other->length();
+  auto consLength = length_ + other->length_;
   // TODO: check for overflow
-  auto cons = tryAllocate(heap, consLength);
-  if (cons == nullptr)
-    return nullptr;
-  copy_n(chars(), length(), cons->chars());
-  copy_n(other->chars(), other->length(), cons->chars() + length());
+  auto cons = new(heap, consLength) String;
+  copy_n(chars_, length_, cons->chars_);
+  copy_n(other->chars_, other->length_, cons->chars_ + length_);
   return cons;
 }
 
 
-Handle<String> String::concat(Heap* heap, Handle<String> left, Handle<String> right) {
-  DEFINE_ALLOCATION(heap, String, left->tryConcat(heap, *right))
+Local<String> String::concat(Heap* heap,
+                             const Handle<String>& left,
+                             const Handle<String>& right) {
+  RETRY_WITH_GC(heap, return Local<String>(left->tryConcat(heap, *right)));
 }
 
 }

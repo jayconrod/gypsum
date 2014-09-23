@@ -15,50 +15,49 @@
 namespace codeswitch {
 namespace internal {
 
+template <class T>
 class BlockArray;
 class Function;
 class Heap;
 class String;
 class TypeParameter;
 
+
 class Package: public Block {
  public:
-  static Package* tryAllocate(Heap* heap);
-  static Handle<Package> allocate(Heap* heap);
+  DEFINE_NEW(Package, PACKAGE_BLOCK_TYPE)
+  explicit Package(VM* vm);
+  static Local<Package> create(Heap* heap);
   DEFINE_CAST(Package)
 
   void printPackage(FILE* out);
 
-  static Handle<Package> loadFromFile(VM* vm, const char* fileName);
-  static Handle<Package> loadFromBytes(VM* vm, const u8* bytes, word_t size);
-  static Handle<Package> loadFromStream(VM* vm, std::istream& stream);
+  static Local<Package> loadFromFile(VM* vm, const char* fileName);
+  static Local<Package> loadFromBytes(VM* vm, const u8* bytes, word_t size);
+  static Local<Package> loadFromStream(VM* vm, std::istream& stream);
 
-  DEFINE_INL_ACCESSORS(u64, flags, setFlags, kFlagsOffset)
-  DEFINE_INL_PTR_ACCESSORS(BlockArray*, strings, setStrings, kStringsOffset)
-  inline String* getString(word_t index);
-  DEFINE_INL_PTR_ACCESSORS(BlockArray*, functions, setFunctions, kFunctionsOffset)
-  inline Function* getFunction(word_t index);
-  DEFINE_INL_PTR_ACCESSORS(BlockArray*, classes, setClasses, kClassesOffset)
-  inline Class* getClass(word_t index);
-  DEFINE_INL_PTR_ACCESSORS(BlockArray*,
-                           typeParameters,
-                           setTypeParameters,
-                           kTypeParametersOffset)
-  inline TypeParameter* getTypeParameter(word_t index);
-  DEFINE_INL_ACCESSORS(word_t, entryFunctionIndex, setEntryFunctionIndex,
-                       kEntryFunctionIndexOffset)
-  inline Function* entryFunction();
+  DEFINE_INL_ACCESSORS2(u64, flags, setFlags)
+  DEFINE_INL_PTR_ACCESSORS2(BlockArray<String>*, strings, setStrings)
+  String* getString(word_t index);
+  DEFINE_INL_PTR_ACCESSORS2(BlockArray<Function>*, functions, setFunctions)
+  Function* getFunction(word_t index);
+  DEFINE_INL_PTR_ACCESSORS2(BlockArray<Class>*, classes, setClasses)
+  Class* getClass(word_t index);
+  DEFINE_INL_PTR_ACCESSORS2(BlockArray<TypeParameter>*, typeParameters, setTypeParameters)
+  TypeParameter* getTypeParameter(word_t index);
+  DEFINE_INL_ACCESSORS2(word_t, entryFunctionIndex, setEntryFunctionIndex)
+  Function* entryFunction();
 
   static const u32 kMagic = 0x676b7073;
-  static const word_t kFlagsOffset = kBlockHeaderSize;
-  static const word_t kStringsOffset = kFlagsOffset + sizeof(u64);
-  static const word_t kFunctionsOffset = kStringsOffset + kWordSize;
-  static const word_t kClassesOffset = kFunctionsOffset + kWordSize;
-  static const word_t kTypeParametersOffset = kClassesOffset + kWordSize;
-  static const word_t kEntryFunctionIndexOffset = kTypeParametersOffset + kWordSize;
-  static const word_t kSize = kEntryFunctionIndexOffset + kWordSize;
-
   static const word_t kPointerMap = 0x3c;
+
+ private:
+  u64 flags_;
+  BlockArray<String>* strings_;
+  BlockArray<Function>* functions_;
+  BlockArray<Class>* classes_;
+  BlockArray<TypeParameter>* typeParameters_;
+  word_t entryFunctionIndex_;
 };
 
 }

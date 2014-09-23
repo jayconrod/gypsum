@@ -6,68 +6,49 @@
 
 #include "test.h"
 
+#include <algorithm>
 #include <memory>
-#include "block-inl.h"
-#include "handle-inl.h"
-#include "heap-inl.h"
+#include "block.h"
+#include "handle.h"
+#include "heap.h"
+#include "roots.h"
 
 using namespace std;
 using namespace codeswitch::internal;
 
-TEST(HandleDataValidity) {
-  HandleData handle;
-  handle.refCount = 1;
-  ASSERT_TRUE(handle.isValid());
-  handle.invalidate();
-  ASSERT_EQ(0, handle.refCount);
-  ASSERT_FALSE(handle.isValid());
+
+static int countHandles(HandleStorage& storage) {
+  return count_if(storage.begin(), storage.end(), [](Block** b) { return true; });
 }
 
 
-TEST(HandleDataBlockOperations) {
-  // Check that the block is aligned.
-  unique_ptr<HandleDataBlock> block(HandleDataBlock::allocate());
-  ASSERT_TRUE(isAligned(reinterpret_cast<Address>(block.get()),
-              HandleDataBlock::kSize));
-  HandleData* handle = block->allocateHandle(nullptr);
-  ASSERT_EQ(block.get(), HandleDataBlock::fromHandle(handle));
-  block->freeHandle(handle);
-
-  // Allocate all of the handles.
-  ASSERT_EQ(HandleDataBlock::kCount, block->freeCount());
-  Block* fakeBlock = reinterpret_cast<Block*>(0x1000);
-  for (word_t i = 0; i < HandleDataBlock::kCount; i++) {
-    HandleData* handle = block->allocateHandle(fakeBlock);
-    ASSERT_EQ(1, handle->refCount);
-    ASSERT_EQ(fakeBlock, handle->block);
+TEST(HandleScopeAndLocals) {
+  VM vm(0);
+  int vmHandles = countHandles(vm.handleStorage());
+  {
+    HandleScope scopeA(&vm);
+    Local<Block> a(vm.roots()->metaMeta());
+    ASSERT_EQ(vmHandles + 1, countHandles(vm.handleStorage()));
+    {
+      HandleScope scopeB(&vm);
+      Local<Block> b(vm.roots()->metaMeta());
+      ASSERT_EQ(vmHandles + 2, countHandles(vm.handleStorage()));
+    }
+    ASSERT_EQ(vmHandles + 1, countHandles(vm.handleStorage()));
   }
-  ASSERT_EQ(0, block->freeCount());
-
-  // Free some of the handles to create a free list.
-  for (word_t i = 0; i < HandleDataBlock::kCount; i += 2) {
-    block->freeHandle(block->at(i));
-  }
-
-  // Reallocate those handles;
-  while (block->freeCount() > 0) {
-    block->allocateHandle(nullptr);
-  }
+  ASSERT_EQ(vmHandles, countHandles(vm.handleStorage()));
 }
 
 
-TEST(HandleStorageOperations) {
-  HandleStorage storage;
-
-  // Allocate lots of handles.
-  for (word_t i = 0; i < 2 * HandleDataBlock::kCount; i++) {
-    storage.allocateHandle(nullptr);
-  }
-
-  // Iterate over them.
-  word_t count = 0;
-  for (HandleData& handle : storage) {
-    USE(handle);
-    count++;
-  }
-  ASSERT_EQ(2 * HandleDataBlock::kCount, count);
+TEST(PersistentHandles) {
+  VM vm(0);
+  int vmHandles = countHandles(vm.handleStorage());
+  auto a = new Persistent<Block>(vm.roots()->metaMeta());
+  ASSERT_EQ(vmHandles + 1, countHandles(vm.handleStorage()));
+  auto b = new Persistent<Block>(vm.roots()->metaMeta());
+  ASSERT_EQ(vmHandles + 2, countHandles(vm.handleStorage()));
+  delete a;
+  ASSERT_EQ(vmHandles + 1, countHandles(vm.handleStorage()));
+  delete b;
+  ASSERT_EQ(vmHandles, countHandles(vm.handleStorage()));
 }

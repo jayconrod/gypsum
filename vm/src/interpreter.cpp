@@ -12,22 +12,25 @@
 #include <string>
 #include <type_traits>
 #include "array.h"
-#include "block-inl.h"
+#include "block.h"
 #include "builtins.h"
 #include "bytecode.h"
-#include "function-inl.h"
+#include "function.h"
 #include "gc.h"
-#include "handle-inl.h"
+#include "handle.h"
 #include "object.h"
-#include "package-inl.h"
-#include "stack-inl.h"
+#include "package.h"
+#include "roots-inl.h"
+#include "stack.h"
+#include "string.h"
+#include "type.h"
 
 using namespace std;
 
 namespace codeswitch {
 namespace internal {
 
-Interpreter::Interpreter(VM* vm, Handle<Stack> stack)
+Interpreter::Interpreter(VM* vm, const Handle<Stack>& stack)
     : vm_(vm),
       stack_(stack),
       pcOffset_(kDonePcOffset) { }
@@ -123,7 +126,10 @@ if (var == nullptr) {                                                 \
   }                                                                   \
 
 
-i64 Interpreter::call(Handle<Function> callee) {
+i64 Interpreter::call(const Handle<Function>& callee) {
+  // TODO: figure out a reasonable way to manage locals here.
+  HandleScope handleScope(vm_);
+
   // Set up initial stack frame.
   ASSERT(pcOffset_ == kDonePcOffset);
   enter(callee);
@@ -330,7 +336,8 @@ i64 Interpreter::call(Handle<Function> callee) {
       case ALLOCOBJ: {
         auto classId = readVbn();
         auto meta = getMetaForClassId(classId);
-        ALLOCATE_GC_RETRY(Object*, obj, Object::tryAllocate(vm_->heap(), *meta))
+        Object* obj = nullptr;
+        RETRY_WITH_GC(vm_->heap(), obj = new(vm_->heap(), *meta) Object);
         push<Block*>(obj);
         break;
       }
@@ -339,7 +346,8 @@ i64 Interpreter::call(Handle<Function> callee) {
         auto classId = readVbn();
         auto length = readVbn();
         auto meta = getMetaForClassId(classId);
-        ALLOCATE_GC_RETRY(Object*, obj, Object::tryAllocateArray(vm_->heap(), *meta, length))
+        Object* obj = nullptr;
+        RETRY_WITH_GC(vm_->heap(), obj = new(vm_->heap(), *meta, length) Object);
         push<Block*>(obj);
         break;
       }
@@ -364,7 +372,7 @@ i64 Interpreter::call(Handle<Function> callee) {
         if (isBuiltinId(functionId)) {
           handleBuiltin(static_cast<BuiltinId>(functionId));
         } else {
-          Handle<Function> callee(function_->package()->getFunction(functionId));
+          Local<Function> callee(function_->package()->getFunction(functionId));
           enter(callee);
         }
         break;
@@ -375,7 +383,7 @@ i64 Interpreter::call(Handle<Function> callee) {
         auto methodIndex = readVbn();
         auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
         CHECK_NON_NULL(receiver);
-        Handle<Function> callee(Function::cast(receiver->meta()->getData(methodIndex)));
+        Local<Function> callee(Function::cast(receiver->meta()->getData(methodIndex)));
         if (callee->hasBuiltinId()) {
           handleBuiltin(callee->builtinId());
         } else {
@@ -478,7 +486,7 @@ i64 Interpreter::call(Handle<Function> callee) {
 }
 
 
-void Interpreter::ensurePointerMap(Handle<Function> function) {
+void Interpreter::ensurePointerMap(const Handle<Function>& function) {
   // It is not safe to enter a function if we don't have pointer maps for it. These can only
   // be generated if all the other functions called by this function are accessible (so we
   // can't do it before all packages are loaded and validated). Since this requires some
@@ -493,17 +501,10 @@ void Interpreter::ensurePointerMap(Handle<Function> function) {
 void Interpreter::handleBuiltin(BuiltinId id) {
   switch (id) {
     case BUILTIN_ROOT_CLASS_TYPEOF_ID: {
-      Type* type = Type::tryAllocate(vm_->heap(), 1);
-      if (type == nullptr) {
-        collectGarbage();
-        type = Type::tryAllocate(vm_->heap(), 1);
-        CHECK(type != nullptr);
-      }
       auto receiver = Object::cast(pop<Block*>());
-      auto clas = receiver->meta()->clas();
-      ASSERT(clas != nullptr);
-      type->initialize(clas);
-      push<Block*>(type);
+      Local<Class> clas(receiver->meta()->clas());
+      auto type = Type::create(vm_->heap(), clas);
+      push<Block*>(*type);
       break;
     }
 
@@ -516,7 +517,7 @@ void Interpreter::handleBuiltin(BuiltinId id) {
     case BUILTIN_TYPE_CTOR_ID: {
       auto clas = Class::cast(pop<Block*>());
       auto receiver = Type::cast(pop<Block*>());
-      receiver->initialize(clas);
+      new(receiver, 1) Type(clas);
       push<i8>(0);
       break;
     }
@@ -530,8 +531,8 @@ void Interpreter::handleBuiltin(BuiltinId id) {
     }
 
     case BUILTIN_STRING_CONCAT_OP_ID: {
-      Handle<String> right(String::cast(pop<Block*>()));
-      Handle<String> left(String::cast(pop<Block*>()));
+      Local<String> right(String::cast(pop<Block*>()));
+      Local<String> left(String::cast(pop<Block*>()));
       auto cons = left->tryConcat(vm_->heap(), *right);
       if (cons == nullptr) {
         collectGarbage();
@@ -631,23 +632,16 @@ void Interpreter::handleBuiltin(BuiltinId id) {
 }
 
 
-Handle<Meta> Interpreter::getMetaForClassId(i64 classId) {
+Local<Meta> Interpreter::getMetaForClassId(i64 classId) {
   if (isBuiltinId(classId)) {
     return handle(vm_->roots()->getBuiltinMeta(classId));
   }
-  Handle<Class> clas(function_->package()->getClass(classId));
-  if (clas->instanceMeta() == nullptr) {
-    if (clas->tryBuildInstanceMeta(vm_->heap()) == nullptr) {
-      collectGarbage();
-      clas->tryBuildInstanceMeta(vm_->heap());
-      CHECK(clas->instanceMeta() != nullptr);
-    }
-  }
-  return handle(clas->instanceMeta());
+  Local<Class> clas(function_->package()->getClass(classId));
+  return Class::ensureAndGetInstanceMeta(clas);
 }
 
 
-void Interpreter::enter(Handle<Function> callee) {
+void Interpreter::enter(const Handle<Function>& callee) {
   // Make sure we have pointer maps for the callee before we build a stack frame for it.
   // This may trigger garbage collection (since pointer maps are allocated like everything
   // else), but that's fine since we're at a safepoint, and we haven't built the frame yet.
@@ -670,7 +664,7 @@ void Interpreter::leave() {
   Address fp = stack_->fp();
   pcOffset_ = mem<word_t>(fp, kCallerPcOffsetOffset);
   auto caller = mem<Function*>(fp, kFunctionOffset);
-  function_ = caller ? Handle<Function>(caller) : Handle<Function>();
+  function_ = caller ? Persistent<Function>(caller) : Persistent<Function>();
   stack_->setSp(fp + kFrameControlSize + parametersSize);
   fp = mem<Address>(fp);
   stack_->setFp(fp);
@@ -682,7 +676,7 @@ void Interpreter::doThrow(Block* exception) {
     // If the exception is unhandled, we need to completely unwind the stack and reset the state
     // of the interpreter in case it is used again.
     stack_->resetPointers();
-    function_ = Handle<Function>();
+    function_ = Persistent<Function>();
     pcOffset_ = kNotSet;
     throw Error("unhandled exception");
   } else {
@@ -695,7 +689,7 @@ void Interpreter::doThrow(Block* exception) {
     for (auto frame : **stack_) {
       if (frame.fp() == fp)
         break;
-      function_ = handle(frame.function());
+      function_.set(frame.function());
     }
     stack_->setFramePointerOffset(handler.fpOffset);
     stack_->setStackPointerOffset(handler.spOffset);
@@ -736,7 +730,7 @@ i64 Interpreter::readVbn() {
 void Interpreter::throwBuiltinException(BuiltinId id) {
   // TODO: ensure this allocation succeeds because we don't have a pointer map here.
   auto exnMeta = vm_->roots()->getBuiltinMeta(id);
-  auto exn = Object::tryAllocate(vm_->heap(), exnMeta);
+  auto exn = new(vm_->heap(), exnMeta) Object;
   doThrow(exn);
 }
 

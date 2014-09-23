@@ -16,11 +16,11 @@ namespace internal {
 
 class Block;
 
-/** RememberedSet is used to track incoming pointers for a Page. It is a simple data structure,
- *  stored on the C++ heap (which is necessary since it may grow after a page is already full).
- *  Each element of the set is a slot: a location of a pointer to an object on the page.
+/** RememberedSet is used to track incoming pointers for a Chunk. It is a simple data structure,
+ *  stored on the C++ heap (which is necessary since it may grow after a chunk is already full).
+ *  Each element of the set is a slot: a location of a pointer to an object on the chunk.
  *  Note that since pointers can be rewritten, the set may contain pointers that no longer
- *  point to the associated page. The elements of the set are unique.
+ *  point to the associated chunk. The elements of the set are unique.
  *
  *  The set is designed for fast common-case insertion. Elements are stored in two partitions:
  *  a clean array, which is sorted and unique, and a dirty array, which is neither. New slots
@@ -33,28 +33,29 @@ class RememberedSet {
 
   RememberedSet();
 
-  inline void add(Slot slot);
+  void add(Slot slot);
   word_t length();
   void clear();
 
   class iterator: public std::iterator<std::input_iterator_tag, Slot> {
    public:
-    inline iterator(RememberedSet* set, word_t index);
-    inline Slot operator * ();
-    inline bool operator == (const iterator& other) const;
-    inline bool operator != (const iterator& other) const {
+    iterator(RememberedSet* set, word_t index)
+        : set_(set), index_(index) { }
+    Slot operator * ();
+    bool operator == (const iterator& other) const;
+    bool operator != (const iterator& other) const {
       return !(*this == other);
     }
-    inline iterator& operator ++ ();
+    iterator& operator ++ ();
    private:
     RememberedSet* set_;
     word_t index_;
   };
-  inline iterator begin();
-  inline iterator end();
+  iterator begin();
+  iterator end();
 
  private:
-  inline void addFast(Slot slot);
+  void addFast(Slot slot);
   void addSlow(Slot slot);
   void sortAndMerge();
 

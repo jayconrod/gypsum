@@ -4,26 +4,31 @@
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
 
-#include "block-inl.h"
+#include "block.h"
 
 #include "array.h"
-#include "function-inl.h"
-#include "handle-inl.h"
-#include "heap-inl.h"
-#include "stack-inl.h"
+#include "function.h"
+#include "gc.h"
+#include "handle.h"
+#include "heap.h"
+#include "roots-inl.h"
+#include "stack.h"
 
 namespace codeswitch {
 namespace internal {
 
-word_t Block::sizeOfBlock() {
+word_t Block::sizeOfBlock() const {
   word_t size = kNotFound;
   if (!meta()->hasCustomSize()) {
     word_t length = meta()->hasElements() ? elementsLength() : 0;
     size = meta()->objectSize() + length * meta()->elementSize();
   } else {
-    switch (meta()->type()) {
+    switch (meta()->blockType()) {
       case META_BLOCK_TYPE:
         size = Meta::cast(this)->sizeOfMeta();
+        break;
+      case FREE_BLOCK_TYPE:
+        size = Free::cast(this)->size();
         break;
       case FUNCTION_BLOCK_TYPE:
         size = Function::cast(this)->sizeOfFunction();
@@ -38,7 +43,7 @@ word_t Block::sizeOfBlock() {
 
 
 void Block::print(FILE* out) {
-  switch (meta()->type()) {
+  switch (meta()->blockType()) {
     case META_BLOCK_TYPE: Meta::cast(this)->printMeta(out); break;
     case STACK_BLOCK_TYPE: Stack::cast(this)->printStack(out); break;
     case FUNCTION_BLOCK_TYPE: Function::cast(this)->printFunction(out); break;
@@ -51,7 +56,7 @@ void Block::print(FILE* out) {
 
 
 void Block::relocate(word_t delta) {
-  switch (meta()->type()) {
+  switch (meta()->blockType()) {
     case STACK_BLOCK_TYPE: Stack::cast(this)->relocateStack(delta); break;
     default:
       UNREACHABLE();
@@ -59,50 +64,82 @@ void Block::relocate(word_t delta) {
 }
 
 
-Meta* Meta::tryAllocate(Heap* heap, word_t dataLength, u32 objectSize, u32 elementSize) {
-  word_t size = sizeForMeta(dataLength, objectSize, elementSize);
-  Meta* meta = reinterpret_cast<Meta*>(heap->allocateRaw(size));
-  if (meta == nullptr)
-    return meta;
+Meta* Block::meta() const {
+  return metaWord().isPointer()
+       ? metaWord().getPointer()
+       : getVM()->roots()->getMetaForBlockType(metaWord().getBlockType());
+}
 
-  meta->setMeta(META_BLOCK_TYPE);
-  meta->setDataLength(dataLength);
+
+void Block::setMeta(Meta* meta) {
+  metaWord_.setPointer(meta);
+  Heap::recordWrite(reinterpret_cast<Address>(&metaWord_), reinterpret_cast<Address>(meta));
+}
+
+
+BlockType Block::blockType() const {
+  return metaWord().isBlockType()
+       ? metaWord().getBlockType()
+       : metaWord().getPointer()->blockType();
+}
+
+
+word_t Block::elementsLength() const {
+  ASSERT(meta()->hasElements());
+  return mem<word_t>(this, sizeof(Block));
+}
+
+
+void Block::setElementsLength(word_t length) {
+  ASSERT(meta()->hasElements());
+  mem<word_t>(this, sizeof(Block)) = length;
+}
+
+
+VM* Block::getVM() const {
+  Chunk* page = Chunk::fromAddress(this);
+  return page->vm();
+}
+
+
+Heap* Block::getHeap() const {
+  return getVM()->heap();
+}
+
+
+void* Meta::operator new (size_t, Heap* heap,
+                          word_t dataLength,
+                          u32 objectSize,
+                          u32 elementSize) {
+  auto size = sizeForMeta(dataLength, objectSize, elementSize);
+  // Heap::allocate zero-initializes the block for us. This is needed since the constructor
+  // doesn't initialize most of the body.
+  auto meta = reinterpret_cast<Meta*>(heap->allocate(size));
+  meta->dataLength_ = dataLength;
+  meta->objectSize_ = objectSize;
+  meta->elementSize_ = elementSize;
   return meta;
 }
 
 
-Handle<Meta> Meta::allocate(Heap* heap, word_t dataLength, u32 objectSize, u32 elementSize) {
-  DEFINE_ALLOCATION(heap, Meta, tryAllocate(heap, dataLength, objectSize, elementSize));
+Local<Meta> Meta::create(Heap* heap,
+                         word_t dataLength,
+                         u32 objectSize,
+                         u32 elementSize,
+                         BlockType blockType) {
+  RETRY_WITH_GC(heap, return Local<Meta>(
+      new(heap, dataLength, objectSize, elementSize) Meta(blockType)));
 }
 
 
-void Meta::initialize(BlockType type, Class* clas, u32 objectSize, u32 elementSize) {
-  word_t flags = bitInsert(0, type, kTypeWidth, kTypeShift);
-  setFlags(flags);
-  setClass(clas);
-  setObjectSize(objectSize);
-  setElementSize(elementSize);
-  objectPointerMap().clear();
-  elementPointerMap().clear();
-}
-
-
-word_t Meta::sizeForMeta(word_t dataLength, u32 objectSize, u32 elementSize) {
-  word_t dataSize = dataLength * kWordSize;
-  word_t objectWords = align(objectSize, kWordSize) / kWordSize;
-  word_t elementWords = align(elementSize, kWordSize) / kWordSize;
-  return kHeaderSize + dataSize + Bitmap::sizeFor(objectWords) + Bitmap::sizeFor(elementWords);
-}
-
-
-word_t Meta::sizeOfMeta() {
+word_t Meta::sizeOfMeta() const {
   return sizeForMeta(dataLength(), objectSize(), elementSize());
 }
 
 
 void Meta::printMeta(FILE* out) {
   const char* typeStr;
-  switch (type()) {
+  switch (meta()->blockType()) {
 #define TYPE_STR(Name, NAME) case NAME##_BLOCK_TYPE: typeStr = #Name; break;
 BLOCK_TYPE_LIST(TYPE_STR)
 #undef TYPE_STR
@@ -115,6 +152,74 @@ BLOCK_TYPE_LIST(TYPE_STR)
   fprintf(out, "  custom pointers: %s\n", hasCustomPointers() ? "yes" : "no");
   fprintf(out, "  object size: %d\n", static_cast<int>(objectSize()));
   fprintf(out, "  element size: %d\n", static_cast<int>(elementSize()));
+}
+
+
+Block* Meta::getData(word_t index) const {
+  ASSERT(index < dataLength());
+  return dataBase()[index];
+}
+
+
+void Meta::setData(word_t index, Block* value) {
+  ASSERT(index < dataLength());
+  Block** p = dataBase() + index;
+  *p = value;
+  Heap::recordWrite(p, value);
+}
+
+
+word_t* Meta::rawObjectPointerMap() {
+  auto dataSize = dataLength() * kWordSize;
+  return &mem<word_t>(this, sizeof(Meta) + dataSize);
+}
+
+
+Bitmap Meta::objectPointerMap() {
+  auto objectWordCount = align(objectSize(), kWordSize) / kWordSize;
+  return Bitmap(rawObjectPointerMap(), objectWordCount);
+}
+
+
+word_t* Meta::rawElementPointerMap() {
+  auto dataSize = dataLength() * kWordSize;
+  auto objectWordCount = align(objectSize(), kWordSize) / kWordSize;
+  auto objectPointerMapSize = Bitmap::sizeFor(objectWordCount);
+  return &mem<word_t>(this, sizeof(Meta) + dataSize + objectPointerMapSize);
+}
+
+
+Bitmap Meta::elementPointerMap() {
+  auto elementWordCount = align(elementSize(), kWordSize) / kWordSize;
+  return Bitmap(rawElementPointerMap(), elementWordCount);
+}
+
+
+word_t Meta::sizeForMeta(word_t dataLength, u32 objectSize, u32 elementSize) {
+  auto headerSize = sizeof(Meta);
+  auto dataSize = dataLength * kWordSize;
+  auto objectWords = align(objectSize, kWordSize) / kWordSize;
+  auto elementWords = align(elementSize, kWordSize) / kWordSize;
+  return headerSize + dataSize + Bitmap::sizeFor(objectWords) + Bitmap::sizeFor(elementWords);
+}
+
+
+void* Free::operator new (size_t unused, Heap* heap, size_t size) {
+  auto free = reinterpret_cast<Free*>(heap->allocate(size));
+  if (free == nullptr)
+    return free;
+
+  free->setMeta(FREE_BLOCK_TYPE);
+  free->size_ = size;
+  return free;
+}
+
+
+void* Free::operator new (size_t unused, void* place, size_t size) {
+  auto free = reinterpret_cast<Free*>(place);
+  free->setMeta(FREE_BLOCK_TYPE);
+  free->size_ = size;
+  return free;
 }
 
 }

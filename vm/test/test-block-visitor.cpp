@@ -8,13 +8,16 @@
 
 #include <cstring>
 #include "array.h"
-#include "block-inl.h"
+#include "block.h"
 #include "block-visitor.h"
 #include "bytecode.h"
-#include "function-inl.h"
-#include "package-inl.h"
+#include "function.h"
+#include "package.h"
+#include "roots-inl.h"
+#include "type.h"
 
 using namespace codeswitch::internal;
+using namespace std;
 
 class IncrementVisitor: public BlockVisitorBase<IncrementVisitor> {
  public:
@@ -46,13 +49,13 @@ TEST(BlockVisitorEncodedMeta) {
 
   // The meta meta should have an encoded meta pointing to itself.
   Meta* metaMeta = vm.roots()->metaMeta();
-  ASSERT_TRUE(metaMeta->hasEncodedMeta());
+  ASSERT_TRUE(metaMeta->metaWord().isBlockType());
   ASSERT_EQ(metaMeta->meta(), metaMeta);
 
   // The increment visitor should not visit encoded metas, since they aren't really pointers.
   IncrementVisitor visitor;
   visitor.visit(metaMeta);
-  ASSERT_TRUE(metaMeta->hasEncodedMeta());
+  ASSERT_TRUE(metaMeta->metaWord().isBlockType());
   ASSERT_EQ(metaMeta->meta(), metaMeta);
 }
 
@@ -60,9 +63,8 @@ TEST(BlockVisitorEncodedMeta) {
 TEST(BlockVisitorRegularMeta) {
   // This time, we'll create our own meta.
   VM vm;
-  Heap* heap = vm.heap();
-  Meta* meta = Meta::tryAllocate(heap, 0, kWordSize, 0);
-  meta->initialize(META_BLOCK_TYPE, nullptr, kWordSize, 0);
+  auto heap = vm.heap();
+  auto meta = new(heap, 0, kWordSize, 0) Meta(META_BLOCK_TYPE);
 
   // Our fake object will use this meta.
   word_t fake[] = { reinterpret_cast<word_t>(meta) };
@@ -77,11 +79,10 @@ TEST(BlockVisitorRegularMeta) {
 
 TEST(BlockVisitorRegularPointers) {
   VM vm;
-  Heap* heap = vm.heap();
-  Meta* meta = Meta::tryAllocate(heap, 0, 6 * kWordSize, 3 * kWordSize);
-  meta->initialize(OBJECT_BLOCK_TYPE, nullptr, 6 * kWordSize, 3 * kWordSize);
-  meta->setHasPointers(true);
-  meta->setHasElementPointers(true);
+  auto heap = vm.heap();
+  auto meta = new(heap, 0, 6 * kWordSize, 3 * kWordSize) Meta(OBJECT_BLOCK_TYPE);
+  meta->hasPointers_ = true;
+  meta->hasElementPointers_ = true;
   meta->objectPointerMap().setWord(0, 0x34);
   meta->elementPointerMap().setWord(0, 0x5);
 
@@ -101,9 +102,9 @@ static u8 makeSmallVbn(i64 value) {
 }
 
 
-static Package* createTestPackage(Heap* heap) {
+static Local<Package> createTestPackage(Heap* heap) {
   auto roots = heap->vm()->roots();
-  auto typeList = BlockArray::allocate(heap, 3);
+  auto typeList = BlockArray<Type>::create(heap, 3);
 
   typeList->set(0, Type::rootClassType(roots));
   typeList->set(1, Type::i8Type(roots));
@@ -137,16 +138,16 @@ static Package* createTestPackage(Heap* heap) {
     0,
     RET,
   };
-  auto blockOffsetList = WordArray::tryAllocate(heap, 1);
+  auto blockOffsetList = WordArray::create(heap, 1);
   blockOffsetList->set(0, 0);
-  Package* package = Package::tryAllocate(heap);
-  package->setFlags(0);
-  auto functions = BlockArray::tryAllocate(heap, 1);
-  auto function = Function::tryAllocate(heap, ARRAY_LENGTH(instList));
-  function->initialize(0, roots->emptyTaggedArray(), *typeList, 2 * kWordSize, instList,
-                       blockOffsetList, package, nullptr);
-  functions->set(0, function);
-  package->setFunctions(functions);
+  auto package = Package::create(heap);
+  auto functions = BlockArray<Function>::create(heap, 1);
+  Local<TaggedArray<TypeParameter>> emptyTypeParameters(
+      reinterpret_cast<TaggedArray<TypeParameter>*>(roots->emptyTaggedArray()));
+  auto function = Function::create(heap, 0, emptyTypeParameters, typeList,
+                                   2 * kWordSize, instList, blockOffsetList, package);
+  functions->set(0, *function);
+  package->setFunctions(*functions);
   package->setEntryFunctionIndex(0);
 
   return package;
@@ -169,18 +170,20 @@ const ExpectedPointerMap kExpectedPointerMaps[] = {
 
 TEST(BlockVisitorFunction) {
   VM vm(0);
+  HandleScope handleScope(&vm);
   Heap* heap = vm.heap();
-  Package* package = createTestPackage(heap);
-  Function* function = package->getFunction(0);
-  TaggedArray* typeParameters = function->typeParameters();
-  BlockArray* types = function->types();
-  word_t localsSize = function->localsSize();
-  word_t instructionsSize = function->instructionsSize();
-  WordArray* blockOffsets = function->blockOffsets();
+  auto package = *createTestPackage(heap);
+  auto function = package->getFunction(0);
+  auto typeParameters = function->typeParameters();
+  auto types = function->types();
+  auto localsSize = function->localsSize();
+  auto instructionsSize = function->instructionsSize();
+  auto blockOffsets = function->blockOffsets();
   IncrementVisitor visitor;
   visitor.visit(function);
   word_t expected[] = {
       FUNCTION_BLOCK_TYPE << 2,
+      0,
       0,
       reinterpret_cast<word_t>(typeParameters) + 4,
       reinterpret_cast<word_t>(types) + 4,
@@ -197,8 +200,9 @@ TEST(BlockVisitorFunction) {
 
 TEST(BuildStackPointerMap) {
   VM vm(0);
+  HandleScope handleScope(&vm);
   auto heap = vm.heap();
-  auto package = createTestPackage(heap);
+  auto package = *createTestPackage(heap);
   auto function = package->getFunction(0);
   auto pointerMap = StackPointerMap::tryBuildFrom(heap, function);
   auto bitmap = pointerMap->bitmap();
@@ -243,9 +247,10 @@ class StackIncrementVisitor: public BlockVisitorBase<StackIncrementVisitor> {
 
 TEST(VisitAndRelocateStack) {
   VM vm(0);
+  HandleScope handleScope(&vm);
   auto heap = vm.heap();
   auto stack = vm.stack();
-  auto package = createTestPackage(heap);
+  auto package = *createTestPackage(heap);
   auto function = package->getFunction(0);
   auto stackPointerMap = StackPointerMap::tryBuildFrom(heap, function);
   function->setStackPointerMap(stackPointerMap);
@@ -253,7 +258,6 @@ TEST(VisitAndRelocateStack) {
   // Construct some fake stack frames.
   const word_t kDataMarker = 0;
   const word_t kObjectMarker = 10;
-  const word_t kFpDelta = 1000;
   word_t startSp = stack->sp();
   // args
   stack->push<word_t>(kDataMarker);
@@ -261,7 +265,7 @@ TEST(VisitAndRelocateStack) {
   // frame
   stack->push<word_t>(kNotSet);
   stack->push<Function*>(function);
-  stack->push<Address>(stack->fp() - kFpDelta);
+  stack->push<Address>(stack->fp());
   stack->setFp(stack->sp());
   // locals
   stack->push<word_t>(kDataMarker);
@@ -275,7 +279,7 @@ TEST(VisitAndRelocateStack) {
   // frame
   stack->push<word_t>(kExpectedPointerMaps[2].pcOffset);
   stack->push<Function*>(function);
-  stack->push<Address>(stack->fp() - kFpDelta);
+  stack->push<Address>(stack->fp());
   stack->setFp(stack->sp());
   // locals
   stack->push<word_t>(kDataMarker);
@@ -287,14 +291,32 @@ TEST(VisitAndRelocateStack) {
   // frame
   stack->push<word_t>(kExpectedPointerMaps[1].pcOffset);
   stack->push<Function*>(function);
-  stack->push<Address>(stack->fp() - kFpDelta);
+  stack->push<Address>(stack->fp());
   stack->setFp(stack->sp());
   // locals
   stack->push<word_t>(kDataMarker);
   stack->push<word_t>(kDataMarker);
   stack->push<word_t>(kExpectedPointerMaps[0].pcOffset);
 
-  word_t endSp = stack->sp();
+  auto endSp = stack->sp();
+
+  // Copy the stack to a new location and relocate it, as the GC would do.
+  ASSERT_TRUE(stack->meta()->needsRelocation());
+  auto rawNewStack = heap->allocateUninitialized(stack->sizeOfBlock());
+  copy_n(reinterpret_cast<u8*>(*stack),
+         stack->sizeOfBlock(),
+         reinterpret_cast<u8*>(rawNewStack));
+  Local<Stack> newStack(&vm, reinterpret_cast<Stack*>(rawNewStack));
+  auto delta = rawNewStack - stack->address();
+  newStack->relocate(delta);
+
+  // Increment pointers on the copied stack.
+  StackIncrementVisitor visitor(function);
+  visitor.visit(*stack);
+  visitor.visit(*newStack);
+
+  // Compute expected contents of the stack. Regular pointers should be incremented. Internal
+  // (frame) pointers should be incremented by the distance between the new and old stacks.
   vector<word_t> expected((startSp - endSp) / kWordSize);
   expected.assign(reinterpret_cast<word_t*>(stack->sp()),
                   reinterpret_cast<word_t*>(stack->sp()) + expected.size());
@@ -302,20 +324,11 @@ TEST(VisitAndRelocateStack) {
     if (i == kObjectMarker)
       i += 4;         // pointers
     else if (i > 100 && i != reinterpret_cast<word_t>(function) && i != kNotSet)
-      i += kFpDelta;  // fp in each frame
+      i += delta;  // fp in each frame
   }
 
-  // Update frame pointers as if we had moved the stack.
-  // The GC should do this first, before visiting pointers.
-  ASSERT_TRUE(stack->meta()->needsRelocation());
-  stack->relocate(kFpDelta);
-
-  // Increment pointers on the stack.
-  StackIncrementVisitor visitor(function);
-  visitor.visit(*stack);
-
   // Check the contents of the stack.
-  word_t* contents = reinterpret_cast<word_t*>(stack->sp());
+  word_t* contents = reinterpret_cast<word_t*>(newStack->sp());
   for (word_t i = 0; i < expected.size(); i++) {
     ASSERT_EQ(expected[i], contents[i]);
   }

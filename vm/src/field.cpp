@@ -6,29 +6,35 @@
 
 #include "field.h"
 
-#include "heap-inl.h"
+#include "block.h"
+#include "gc.h"
+#include "handle.h"
+#include "heap.h"
 
 namespace codeswitch {
 namespace internal {
 
-Field* Field::tryAllocate(Heap* heap) {
-  Field* field = reinterpret_cast<Field*>(heap->allocateRaw(kSize));
-  if (field == nullptr)
-    return nullptr;
+#define FIELD_POINTERS_LIST(F) \
+  F(Field, type_)              \
 
-  field->setMeta(FIELD_BLOCK_TYPE);
-  return field;
+DEFINE_POINTER_MAP(Field, FIELD_POINTERS_LIST)
+
+#undef FIELD_POINTERS_LIST
+
+
+void* Field::operator new (size_t, Heap* heap) {
+  return reinterpret_cast<Field*>(heap->allocate(sizeof(Field)));
 }
 
 
-Handle<Field> Field::allocate(Heap* heap) {
-  DEFINE_ALLOCATION(heap, Field, tryAllocate(heap))
-}
+Field::Field(u32 flags, Type* type)
+    : Block(FIELD_BLOCK_TYPE),
+      flags_(flags),
+      type_(type) { }
 
 
-void Field::initialize(u32 flags, Type* type) {
-  setFlags(flags);
-  setType(type);
+Local<Field> Field::create(Heap* heap, u32 flags, const Handle<Type>& type) {
+  RETRY_WITH_GC(heap, return Local<Field>(new(heap) Field(flags, *type)));
 }
 
 

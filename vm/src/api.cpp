@@ -7,18 +7,21 @@
 #include "codeswitch.h"
 
 #include <algorithm>
+#include <utility>
 #include <vector>
-#include "block-inl.h"
+#include "block.h"
 #include "error.h"
 #include "function.h"
-#include "function-inl.h"
-#include "handle-inl.h"
+#include "function.h"
+#include "handle.h"
 #include "interpreter.h"
-#include "package-inl.h"
-#include "stack-inl.h"
-#include "type-inl.h"
+#include "package.h"
+#include "stack.h"
+#include "type.h"
 #include "utils.h"
 #include "vm.h"
+
+using namespace std;
 
 namespace codeswitch {
 
@@ -77,30 +80,30 @@ class VM::Impl : public RefCounted {
 
 class Package::Impl : public RefCounted {
  public:
-  Impl(i::VM* vm, i::Handle<i::Package> package)
+  Impl(i::VM* vm, i::Persistent<i::Package> package)
       : vm_(vm),
-        package_(package) { }
+        package_(move(package)) { }
 
   i::VM* vm() { return vm_; }
-  i::Handle<i::Package> package() { return package_; }
+  const i::Persistent<i::Package>& package() { return package_; }
 
  private:
   i::VM* vm_;
-  i::Handle<i::Package> package_;
+  i::Persistent<i::Package> package_;
 };
 
 
 class Function::Impl : public RefCounted {
  public:
-  Impl(i::VM* vm, i::Handle<i::Function> function)
+  Impl(i::VM* vm, i::Persistent<i::Function> function)
       : vm_(vm),
-        function_(function) { }
+        function_(move(function)) { }
 
   i::VM* vm() { return vm_; }
-  i::Handle<i::Function> function() { return function_; }
+  i::Persistent<i::Function>& function() { return function_; }
 
   i::i64 call(i::i64* data, i::word_t count) {
-    i::Handle<i::Stack> stack = vm()->stack();
+    const i::Persistent<i::Stack>& stack = vm()->stack();
     i::word_t size = count * sizeof(i::i64);
     stack->setStackPointerOffset(stack->stackPointerOffset() - size);
     copy_n(data, count, reinterpret_cast<i::word_t*>(stack->sp()));
@@ -111,16 +114,16 @@ class Function::Impl : public RefCounted {
 
  private:
   i::VM* vm_;
-  i::Handle<i::Function> function_;
+  i::Persistent<i::Function> function_;
 };
 
 
 class Arguments::Impl: public RefCounted {
  public:
-  Impl(i::VM* vm, i::Handle<i::Function> function)
-      : function_(function),
+  Impl(i::VM* vm, i::Persistent<i::Function> function)
+      : function_(move(function)),
         paramIndex_(0),
-        data_(function->parameterCount()) { }
+        data_(function_->parameterCount()) { }
 
   i::i64* data() { return data_.data(); }
 
@@ -137,7 +140,7 @@ class Arguments::Impl: public RefCounted {
   }
 
  private:
-  i::Handle<i::Function> function_;
+  i::Persistent<i::Function> function_;
   i::word_t paramIndex_;
   vector<i::i64> data_;
 };
@@ -188,7 +191,7 @@ VM::~VM() {
 
 Package VM::loadPackage(const char* fileName) {
   i::VM::Scope vmScope(impl_->vm());
-  i::Handle<i::Package> package;
+  i::Persistent<i::Package> package;
   try {
     package = i::Package::loadFromFile(impl_->vm(), fileName);
   } catch (i::Error error) {
@@ -196,7 +199,7 @@ Package VM::loadPackage(const char* fileName) {
   }
 
   impl_->vm()->addPackage(package);
-  return Package(new Package::Impl(impl_->vm(), package));
+  return Package(new Package::Impl(impl_->vm(), move(package)));
 }
 
 
@@ -231,7 +234,7 @@ void Package::print(FILE* out) {
 
 Function Package::entryFunction() {
   i::VM::Scope vmScope(impl_->vm());
-  i::Handle<i::Function> function(impl_->vm(), impl_->package()->entryFunction());
+  i::Persistent<i::Function> function(impl_->vm(), impl_->package()->entryFunction());
   if (!function)
     throw Error("this package does not have an entry function");
   return Function(new Function::Impl(impl_->vm(), function));

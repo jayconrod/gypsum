@@ -9,8 +9,8 @@
 
 #include "array.h"
 #include "block.h"
-#include "function-inl.h"
-#include "stack-inl.h"
+#include "function.h"
+#include "stack.h"
 #include "utils.h"
 
 namespace codeswitch {
@@ -35,7 +35,7 @@ class BlockVisitorBase {
   inline void visitBlockWithPointerMap(Block* block, Meta* meta);
   inline void visitBlockWithCustomPointers(Block* block, Meta* meta);
   inline void visitStack(Stack* stack);
-  inline void visitTaggedArray(TaggedArray* array);
+  inline void visitTaggedArray(TaggedArray<Block>* array);
 };
 
 
@@ -55,7 +55,7 @@ void BlockVisitorBase<BlockVisitor>::visit(Block* block) {
 
 template <class BlockVisitor>
 void BlockVisitorBase<BlockVisitor>::visitMetaWord(Block* block) {
-  if (block->hasEncodedMeta())
+  if (!block->metaWord().isPointer())
     return;
 
   Block* oldMeta = block->meta();
@@ -96,14 +96,14 @@ void BlockVisitorBase<BlockVisitor>::visitBlockWithPointerMap(Block* block, Meta
 
 template <class BlockVisitor>
 void BlockVisitorBase<BlockVisitor>::visitBlockWithCustomPointers(Block* block, Meta* meta) {
-  BlockType type = meta->type();
+  auto type = meta->blockType();
   switch (type) {
     case STACK_BLOCK_TYPE:
       self()->visitStack(static_cast<Stack*>(block));
       break;
 
     case TAGGED_ARRAY_BLOCK_TYPE:
-      self()->visitTaggedArray(static_cast<TaggedArray*>(block));
+      self()->visitTaggedArray(static_cast<TaggedArray<Block>*>(block));
       break;
 
     default:
@@ -159,7 +159,7 @@ void BlockVisitorBase<BlockVisitor>::visitStack(Stack* stack) {
 
 
 template <class BlockVisitor>
-void BlockVisitorBase<BlockVisitor>::visitTaggedArray(TaggedArray* array) {
+void BlockVisitorBase<BlockVisitor>::visitTaggedArray(TaggedArray<Block>* array) {
   for (word_t i = 0, n = array->length(); i < n; i++) {
     Tagged<Block>* taggedSlot = array->elements() + i;
     if (taggedSlot->isPointer()) {

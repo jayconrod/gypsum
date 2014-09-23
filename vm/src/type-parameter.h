@@ -12,26 +12,38 @@
 namespace codeswitch {
 namespace internal {
 
+class Type;
+
 class TypeParameter: public Block {
  public:
-  static TypeParameter* tryAllocate(Heap* heap);
-  static Handle<TypeParameter> allocate(Heap* heap);
-  void initialize(u32 flags, Type* upperBound, Type* lowerBound);
+  void* operator new (size_t, Heap* heap);
+  TypeParameter(u32 flags, Type* upperBound, Type* lowerBound);
+  static Local<TypeParameter> create(Heap* heap);
+  static Local<TypeParameter> create(Heap* heap,
+                                     u32 flags,
+                                     const Handle<Type>& upperBound,
+                                     const Handle<Type>& lowerBound);
 
   void printTypeParameter(FILE* out);
 
   DEFINE_CAST(TypeParameter)
 
-  DEFINE_INL_ACCESSORS(u32, flags, setFlags, kFlagsOffset)
-  DEFINE_INL_PTR_ACCESSORS(Type*, upperBound, setUpperBound, kUpperBoundOffset)
-  DEFINE_INL_PTR_ACCESSORS(Type*, lowerBound, setLowerBound, kLowerBoundOffset)
+  // The bounds can be set after construction, even though we woud like to consider
+  // TypeParameter as immutable. This is necessary since TypeParameter and Type have a cyclic
+  // relationship. We may need to allocate TypeParameter objects early, then fill them after
+  // other objects which refer to them have been allocated.
 
-  static const int kFlagsOffset = kBlockHeaderSize;
-  static const int kUpperBoundOffset = align(kFlagsOffset + sizeof(u32), kWordSize);
-  static const int kLowerBoundOffset = align(kUpperBoundOffset + kWordSize, kWordSize);
-  static const int kSize = align(kLowerBoundOffset + kWordSize, kWordSize);
+  DEFINE_INL_ACCESSORS2(u32, flags, setFlags)
+  DEFINE_INL_PTR_ACCESSORS2(Type*, upperBound, setUpperBound)
+  DEFINE_INL_PTR_ACCESSORS2(Type*, lowerBound, setLowerBound)
 
-  static const word_t kPointerMap = 0xc;
+ private:
+  DECLARE_POINTER_MAP()
+
+  u32 flags_;
+  Type* upperBound_;
+  Type* lowerBound_;
+  // Update TYPE_PARAMETER_POINTER_LIST if pointer members change.
 };
 
 }

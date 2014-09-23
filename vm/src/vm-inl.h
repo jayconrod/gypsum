@@ -14,7 +14,7 @@ namespace codeswitch {
 namespace internal {
 
 VM* VM::fromAddress(void* address) {
-  Page* page = Page::fromAddress(address);
+  Chunk* page = Chunk::fromAddress(address);
   return page->vm();
 }
 

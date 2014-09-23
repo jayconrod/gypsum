@@ -8,8 +8,8 @@
 #define vm_h
 
 #include <memory>
+#include <vector>
 #include "handle.h"
-#include "list.h"
 #include "utils.h"
 
 namespace codeswitch {
@@ -57,20 +57,23 @@ class VM {
   Heap* heap() { return heap_.get(); }
   Roots* roots() { return roots_.get(); }
   HandleStorage& handleStorage() { return *handleStorage_; }
-  Handle<Stack> stack() { return stack_; }
+  const Persistent<Stack>& stack() { return stack_; }
 
-  void addPackage(Handle<Package> package);
-  const List<Handle<Package> >& packages() { return packages_; }
+  void addPackage(const Persistent<Package>& package);
+  const std::vector<Persistent<Package>>& package() { return packages_; }
 
  private:
   static VM* currentVM_;
 
   Flags flags_;
+
+
   std::unique_ptr<Heap> heap_;
   std::unique_ptr<Roots> roots_;
   std::unique_ptr<HandleStorage> handleStorage_;
-  Handle<Stack> stack_;
-  List<Handle<Package> > packages_;
+  Persistent<Stack> stack_;
+  std::vector<Persistent<Package> > packages_;
+
 
   friend class GC;
 };

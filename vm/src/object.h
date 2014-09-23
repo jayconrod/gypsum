@@ -14,12 +14,17 @@ namespace internal {
 
 class Object: public Block {
  public:
-  static Object* tryAllocate(Heap* heap, Meta* meta);
-  static Handle<Object> allocate(Heap* heap, Meta* meta);
-  static Object* tryAllocateArray(Heap* heap, Meta* meta, word_t length);
-  static Handle<Object> allocateArray(Heap* heap, Meta* meta, word_t length);
+  void* operator new (size_t, Heap* heap, Meta* meta);
+  void* operator new (size_t, Heap* heap, Meta* meta, word_t length);
+  Object();
+  static Local<Object> create(Heap* heap, const Handle<Meta>& meta);
+  static Local<Object> create(Heap* heap, const Handle<Meta>& meta, word_t length);
+
   void printObject(FILE* out);
   DEFINE_CAST(Object)
+
+ protected:
+  explicit Object(BlockType blockType);
 };
 
 }

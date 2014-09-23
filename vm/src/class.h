@@ -13,62 +13,90 @@
 namespace codeswitch {
 namespace internal {
 
+template <class T>
+class BlockArray;
+class Field;
 class Function;
 class Package;
+template <class T>
 class TaggedArray;
 class Type;
 
 class Class: public Block {
  public:
-  static Class* tryAllocate(Heap* heap);
-  static Handle<Class> allocate(Heap* heap);
-  void initialize(u32 flags,
-                  Type* supertype,
-                  BlockArray* fields,
-                  Type* elementType,
-                  WordArray* constructors,
-                  WordArray* methods,
-                  Package* package,
-                  Meta* instanceMeta);
+  void* operator new(size_t, Heap* heap);
+  Class(u32 flags,
+        Type* supertype,
+        BlockArray<Field>* fields,
+        Type* elementType,
+        WordArray* constructors,
+        WordArray* methods,
+        Package* package,
+        Meta* instanceMeta);
+  static Local<Class> create(Heap* heap);
+  static Local<Class> create(Heap* heap,
+                             u32 flags,
+                             const Handle<Type>& supertype,
+                             const Handle<BlockArray<Field>>& fields,
+                             const Handle<Type>& elementType,
+                             const Handle<WordArray>& constructors,
+                             const Handle<WordArray>& methods,
+                             const Handle<Package>& package,
+                             const Handle<Meta>& instanceMeta);
 
   void printClass(FILE* out);
   DEFINE_CAST(Class)
 
-  DEFINE_INL_ACCESSORS(u32, flags, setFlags, kFlagsOffset)
-  DEFINE_INL_PTR_ACCESSORS(Type*, supertype, setSupertype, kSupertypeOffset)
-  DEFINE_INL_PTR_ACCESSORS(BlockArray*, fields, setFields, kFieldsOffset)
-  word_t findFieldIndex(word_t offset);
-  word_t findFieldOffset(word_t index);
-  DEFINE_INL_PTR_ACCESSORS(Type*, elementType, setElementType, kElementTypeOffset)
-  DEFINE_INL_PTR_ACCESSORS(WordArray*, constructors, setConstructors, kConstructorsOffset)
-  inline Function* getConstructor(word_t index);
-  DEFINE_INL_PTR_ACCESSORS(WordArray*, methods, setMethods, kMethodsOffset)
-  inline Function* getMethod(word_t index);
-  DEFINE_INL_PTR_ACCESSORS(Package*, package, setPackage, kPackageOffset)
-  DEFINE_INL_PTR_ACCESSORS(Meta*, instanceMeta, setInstanceMeta, kInstanceMetaOffset)
-  inline Meta* getOrTryBuildInstanceMeta(Heap* heap);
-  Meta* tryBuildInstanceMeta(Heap* heap);
-  inline Handle<Meta> getOrBuildInstanceMeta(Heap* heap);
-  Handle<Meta> buildInstanceMeta(Heap* heap);
+  // Most members can be set after construction, even though we would like to consider Class
+  // as immutable. This is necessary since Class and Type have a cyclic relationship. We may
+  // need to allocate empty Class objects early, then fill them after other objects which
+  // refer to them have been allocated.
 
-  bool isSubclassOf(Class* other);
+  u32 flags() const { return flags_; }
+  void setFlags(u32 flags) { flags_ = flags; }
 
-  static const int kFlagsOffset = kBlockHeaderSize;
-  static const int kSupertypeOffset = kFlagsOffset + kWordSize;
-  static const int kFieldsOffset = kSupertypeOffset + kWordSize;
-  static const int kElementTypeOffset = kFieldsOffset + kWordSize;
-  static const int kConstructorsOffset = kElementTypeOffset + kWordSize;
-  static const int kMethodsOffset = kConstructorsOffset + kWordSize;
-  static const int kPackageOffset = kMethodsOffset + kWordSize;
-  static const int kInstanceMetaOffset = kPackageOffset + kWordSize;
-  static const int kSize = kInstanceMetaOffset + kWordSize;
+  DEFINE_INL_PTR_ACCESSORS2(Type*, supertype, setSupertype)
 
-  static const word_t kPointerMap = 0x1FC;
+  DEFINE_INL_PTR_ACCESSORS2(BlockArray<Field>*, fields, setFields)
+  word_t findFieldIndex(word_t offset) const;
+  word_t findFieldOffset(word_t index) const;
+
+  DEFINE_INL_PTR_ACCESSORS2(Type*, elementType, setElementType)
+
+  DEFINE_INL_PTR_ACCESSORS2(WordArray*, constructors, setConstructors)
+  Function* getConstructor(word_t index) const;
+
+  DEFINE_INL_PTR_ACCESSORS2(WordArray*, methods, setMethods)
+  Function* getMethod(word_t index) const;
+
+  DEFINE_INL_PTR_ACCESSORS2(Package*, package, setPackage)
+  DEFINE_INL_PTR_ACCESSORS2(Meta*, instanceMeta, setInstanceMeta)
+
+  /** Constructs a new instance Meta whether one already exists or not. Does not use handles
+   *  or invoke the garbage collector. This is used by Roots, since GC is not available there.
+   *  `ensureAndGetInstaceMeta` should be called normally.
+   */
+  Meta* buildInstanceMeta();
+  static Local<Meta> ensureAndGetInstanceMeta(const Handle<Class>& clas);
+  static void ensureInstanceMeta(const Handle<Class>& clas);
+
+  bool isSubclassOf(Class* other) const;
 
  private:
-  void computeSizeAndPointerMap(u32* size, bool* hasPointers, BitSet* pointerMap);
+  void computeSizeAndPointerMap(u32* size, bool* hasPointers, BitSet* pointerMap) const;
   void computeSizeAndPointerMapForType(Type* type, u32* size,
-                                       bool* hasPointers, BitSet* pointerMap);
+                                       bool* hasPointers, BitSet* pointerMap) const;
+
+  DECLARE_POINTER_MAP()
+  u32 flags_;
+  Type* supertype_;
+  BlockArray<Field>* fields_;
+  Type* elementType_;
+  WordArray* constructors_;
+  WordArray* methods_;
+  Package* package_;
+  Meta* instanceMeta_;
+  // Update CLASS_POINTER_LIST if pointer members change.
 };
 
 }

@@ -23,10 +23,10 @@ def declareClass(out, classData):
     out.write("\n  { // %s" % classData["id"])
     if not classData["isPrimitive"]:
         out.write("""
-    auto clas = Class::tryAllocate(heap);
+    auto clas = reinterpret_cast<Class*>(heap->allocate(sizeof(Class)));
     builtinClasses_.push_back(clas);""")
     out.write("""
-    auto ty = Type::tryAllocate(heap, %d);
+    auto ty = reinterpret_cast<Type*>(heap->allocate(Type::sizeForLength(%d)));
     builtinTypes_.push_back(ty);
   }""" % (0 if classData["isPrimitive"] else 1))
 
@@ -34,7 +34,7 @@ def declareClass(out, classData):
 def declareFunction(out, funcData):
     out.write("""
   { // %s
-    auto function = Function::tryAllocate(heap, 0);
+    auto function = reinterpret_cast<Function*>(heap->allocate(Function::sizeForFunction(0)));
     builtinFunctions_.push_back(function);
   }""" % funcData["id"])
 
@@ -44,10 +44,10 @@ def initType(out, classData):
     out.write("    auto ty = getBuiltinType(%s);\n" % classData["id"])
     if classData["isPrimitive"]:
         primitiveType = classData["id"][8:-3]
-        out.write("    ty->initialize(Type::%s);\n" % primitiveType)
+        out.write("    new(ty, 0) Type(Type::%s);\n" % primitiveType)
     else:
         out.write("    auto clas = getBuiltinClass(%s);\n" % classData["id"])
-        out.write("    ty->initialize(clas);\n")
+        out.write("    new(ty, 1) Type(clas);\n")
     out.write("  }")
 
 
@@ -60,14 +60,14 @@ def initClass(out, classData):
     else:
         out.write("    auto supertype = %s;\n" % getTypeFromName(classData["supertype"]))
     if len(classData["fields"]) == 0:
-        out.write("    auto fields = emptyBlockArray();\n")
+        out.write("    auto fields = reinterpret_cast<BlockArray<Field>*>(emptyBlockArray());\n")
     else:
-        out.write("    auto fields = BlockArray::tryAllocate(heap, %d);\n" %
+        out.write("    auto fields = new(heap, %d) BlockArray<Field>;\n" %
                   len(classData["fields"]))
         for i, fieldData in enumerate(classData["fields"]):
             typeName = fieldData["type"]
-            out.write("    auto field%d = Field::tryAllocate(heap);\n" % i)
-            out.write("    field%d->initialize(0, %s);\n" % (i, getTypeFromName(typeName)))
+            out.write("    auto field%d = new(heap) Field(0, %s);\n" %
+                      (i, getTypeFromName(typeName)))
             out.write("    fields->set(%d, field%d);\n" % (i, i))
     if "elements" not in classData:
         out.write("    Type* elementType = nullptr;\n")
@@ -76,7 +76,7 @@ def initClass(out, classData):
     if len(classData["constructors"]) == 0:
         out.write("    auto constructors = emptyi64Array();\n")
     else:
-        out.write("    auto constructors = I64Array::tryAllocate(heap, %d);\n" %
+        out.write("    auto constructors = new(heap, %d) I64Array;\n" %
                   len(classData["constructors"]))
         for i, ctorData in enumerate(classData["constructors"]):
             out.write("    constructors->set(%d, %s);\n" %
@@ -85,12 +85,13 @@ def initClass(out, classData):
     if len(allMethodIds) == 0:
         out.write("    auto methods = emptyi64Array();\n")
     else:
-        out.write("    auto methods = I64Array::tryAllocate(heap, %d);\n" % len(allMethodIds))
+        out.write("    auto methods = new(heap, %d) I64Array;\n" % len(allMethodIds))
         for i, id in enumerate(allMethodIds):
             out.write("    methods->set(%d, %s);\n" % (i, id))
-    out.write("    clas->initialize(0, supertype, fields, elementType, constructors, " +
+    out.write("    ::new(clas) Class(0, supertype, fields, elementType, constructors, " +
               "methods, nullptr, nullptr);\n")
-    out.write("    auto meta = clas->tryBuildInstanceMeta(heap);\n")
+    out.write("    auto meta = clas->buildInstanceMeta();\n")
+    out.write("    clas->setInstanceMeta(meta);\n")
     out.write("    builtinMetas_.push_back(meta);\n  }")
 
 
@@ -98,10 +99,10 @@ def initFunction(out, functionData):
     out.write("\n  { // %s\n" % functionData["id"])
     out.write("    auto function = getBuiltinFunction(%s);\n" % functionData["id"])
     typeNames = [functionData["returnType"]] + functionData["parameterTypes"]
-    out.write("    auto types = BlockArray::tryAllocate(heap, %s);\n" % len(typeNames))
+    out.write("    auto types = new(heap, %d) BlockArray<Type>;\n" % len(typeNames))
     for i, name in enumerate(typeNames):
         out.write("    types->set(%d, %s);\n" % (i, getTypeFromName(name)))
-    out.write("    function->initialize(0, emptyTaggedArray(), types, 0, " +
+    out.write("    ::new(function) Function(0, emptyTypeParameters, types, 0, " +
               "emptyInstructions, nullptr, nullptr, nullptr);\n")
     out.write("    function->setBuiltinId(%s);\n" % functionData["id"])
     out.write("  }")
@@ -140,14 +141,15 @@ with open(rootsBuiltinsName, "w") as rootsBuiltinsFile:
 
 #include "roots-inl.h"
 
+#include <new>
 #include <vector>
 #include "array.h"
 #include "builtins.h"
-#include "block-inl.h"
-#include "class-inl.h"
+#include "block.h"
+#include "class.h"
 #include "field.h"
-#include "function-inl.h"
-#include "type-inl.h"
+#include "function.h"
+#include "type.h"
 
 using namespace std;
 
@@ -179,9 +181,8 @@ void Roots::initializeBuiltins(Heap* heap) {
 
     rootsBuiltinsFile.write("""
 
-  auto nullableRootClassType = Type::tryAllocate(heap, 1);
-  nullableRootClassType->initialize(getBuiltinClass(BUILTIN_ROOT_CLASS_ID),
-                                    Type::NULLABLE_FLAG);""")
+  auto nullableRootClassType = new(heap, 1) Type(getBuiltinClass(BUILTIN_ROOT_CLASS_ID),
+                                                 Type::NULLABLE_FLAG);""")
 
     rootsBuiltinsFile.write("""
 
@@ -197,7 +198,9 @@ void Roots::initializeBuiltins(Heap* heap) {
   //
   // Initialize functions
   //
-  vector<u8> emptyInstructions;""")
+  vector<u8> emptyInstructions;
+  auto emptyTypeParameters = reinterpret_cast<TaggedArray<TypeParameter>*>(emptyTaggedArray());
+""")
     for classData in classesData:
         if not classData["isPrimitive"]:
             for ctorData in classData["constructors"]:

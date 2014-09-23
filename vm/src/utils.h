@@ -56,6 +56,8 @@ do { \
   } \
 } while (0)
 
+#define USE(e) (void) (e)
+
 #define ASSERT(cond) CHECK(cond)
 
 #define UNREACHABLE() ABORT("unreachable code")
@@ -66,13 +68,16 @@ do { \
 abort(__FILE__, __LINE__, (reason))
 
 
+#define STATIC_ASSERT(cond) static_assert(cond, #cond)
+
+#define CHECK_SUBTYPE_VALUE(type, value) \
+do { if (false) { type _t = (value); USE(_t); } } while (0)
+
+
 #define NON_COPYABLE(className) \
- private: \
-  className(const className& copy); \
-  className& operator = (const className& copy);
-
-
-#define USE(e) (void) (e)
+  className(const className&) = delete; \
+  className(const className&&) = delete; \
+  className& operator = (const className&) = delete;
 
 
 #define ARRAY_LENGTH(a) (sizeof(a) / sizeof((a)[0]))
@@ -103,7 +108,7 @@ T& mem(void* base, word_t offset = 0, word_t index = 0) {
 
 
 template <class T>
-T mem(const void* base, word_t offset = 0, word_t index = 0) {
+const T& mem(const void* base, word_t offset = 0, word_t index = 0) {
   return mem<T>(reinterpret_cast<Address>(base), offset, index);
 }
 
@@ -115,6 +120,11 @@ inline word_t isPowerOf2(word_t n) {
 
 constexpr inline word_t align(word_t n, word_t alignment) {
   return (n + alignment - 1UL) & ~(alignment - 1UL);
+}
+
+
+constexpr inline word_t alignDown(word_t n, word_t alignment) {
+  return n & ~(alignment - 1UL);
 }
 
 
@@ -176,6 +186,12 @@ void utf8Encode(u32 codePoint, u8** bytes);
   void setter(type _newValue) { mem<type>(this, offset) = _newValue; }
 
 
+// TODO: replace the one above with this
+#define DEFINE_INL_ACCESSORS2(type, name, setter) \
+  type name() const { return name##_; }           \
+  void setter(type _value) { name##_ = _value; }  \
+
+
 #define DEFINE_INL_PTR_ACCESSORS(type, getter, setter, offset) \
   type getter() { return mem<type>(this, offset); } \
   void setter(type _newValue) { \
@@ -183,6 +199,15 @@ void utf8Encode(u32 codePoint, u8** bytes);
     *p = _newValue; \
     Heap::recordWrite(p, _newValue); \
   }
+
+
+// TODO: replace the one above with this
+#define DEFINE_INL_PTR_ACCESSORS2(type, name, setter) \
+  type name() const { return name##_; }               \
+  void setter(type _newValue) {                       \
+    name##_ = _newValue;                              \
+    Heap::recordWrite(&name##_, _newValue);           \
+  }                                                   \
 
 
 #define DEFINE_INL_CAST_ACCESSORS(type, rawType, getter, setter, offset) \
@@ -224,6 +249,36 @@ void utf8Encode(u32 codePoint, u8** bytes);
   void setter(word_t index, type _newValue) { \
     set(headerLength + index * entryLength + entryIndex, _newValue); \
   }
+
+
+// Pointer maps are bit maps used by the garbage collector to identify pointers within a block.
+// They are stored in metas. C++ classes which abstract objects on the garbage-collected heap
+// usually define a static word_t which can be used to build metas for these classes. This is
+// possible since the offsets of pointers in these classes are known at compile-time.
+// Constructing the bit maps by hand is error-prone, so these macros help.
+
+// Call this in the private section of a class definition which needs a pointer map.
+#define DECLARE_POINTER_MAP()      \
+  friend class Roots;              \
+  static const word_t kPointerMap; \
+  static word_t buildPointerMap(); \
+
+
+// Used by DEFINE_POINTER_MAP below. Don't call directly.
+#define POINTER_MAP_BIT(className, fieldName) \
+  | (1 << (offsetof(className, fieldName) / kWordSize))
+
+
+// Call this in a .cpp file. The second argument should be a macro of the form:
+//   #define FOO_POINTER_LIST(F)
+//     F(Foo, ptrA_)
+//     F(Foo, ptrB_)
+// (backslashes elided to keep compiler happy).
+#define DEFINE_POINTER_MAP(className, POINTER_LIST)                 \
+word_t className::buildPointerMap() {                               \
+  return 0 POINTER_LIST(POINTER_MAP_BIT);                           \
+}                                                                   \
+const word_t className::kPointerMap = className::buildPointerMap(); \
 
 
 // Printing formats for words
