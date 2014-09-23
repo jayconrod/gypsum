@@ -10,7 +10,7 @@
 #include <vector>
 #include "block.h"
 #include "handle.h"
-#include "string-inl.h"
+#include "string.h"
 #include "vm-inl.h"
 
 using namespace std;
@@ -43,8 +43,7 @@ TEST(StringToStl) {
   HandleScope handleScope(&vm);
   const u32 chars[] = { 0x66, 0x6f, 0x6f, 0x2603 };
   const u8 expected[] = { 0x66, 0x6f, 0x6f, 0xe2, 0x98, 0x83 };
-  auto str = String::allocate(vm.heap(), 4);
-  str->initialize(chars);
+  auto str = new(vm.heap(), 4) String(chars);
   ASSERT_EQ(4, str->length());
   ASSERT_EQ(6, str->utf8EncodedSize());
   auto stlVec = str->toUtf8StlVector();

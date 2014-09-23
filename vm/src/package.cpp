@@ -21,7 +21,7 @@
 #include "function.h"
 #include "handle.h"
 #include "heap.h"
-#include "string-inl.h"
+#include "string.h"
 #include "type-inl.h"
 
 using namespace std;
