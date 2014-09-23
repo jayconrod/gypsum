@@ -21,8 +21,10 @@
 #include "function.h"
 #include "handle.h"
 #include "heap.h"
+#include "roots-inl.h"
 #include "string.h"
-#include "type-inl.h"
+#include "type.h"
+#include "type-parameter.h"
 
 using namespace std;
 

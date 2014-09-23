@@ -13,7 +13,8 @@
 #include "gc.h"
 #include "handle.h"
 #include "package.h"
-#include "type-inl.h"
+#include "roots-inl.h"
+#include "type.h"
 
 namespace codeswitch {
 namespace internal {

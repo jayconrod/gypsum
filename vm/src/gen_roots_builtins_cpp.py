@@ -149,7 +149,7 @@ with open(rootsBuiltinsName, "w") as rootsBuiltinsFile:
 #include "class.h"
 #include "field.h"
 #include "function.h"
-#include "type-inl.h"
+#include "type.h"
 
 using namespace std;
 

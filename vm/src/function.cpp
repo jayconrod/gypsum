@@ -14,7 +14,7 @@
 #include "field.h"
 #include "package.h"
 #include "roots-inl.h"
-#include "type-inl.h"
+#include "type.h"
 #include "utils.h"
 
 using namespace std;

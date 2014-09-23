@@ -17,7 +17,7 @@
 #include "interpreter.h"
 #include "package.h"
 #include "stack.h"
-#include "type-inl.h"
+#include "type.h"
 #include "utils.h"
 #include "vm.h"
 

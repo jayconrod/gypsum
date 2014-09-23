@@ -4,7 +4,7 @@
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
 
-#include "roots.h"
+#include "roots-inl.h"
 
 #include "array.h"
 #include "block.h"
@@ -13,7 +13,8 @@
 #include "handle.h"
 #include "package.h"
 #include "stack.h"
-#include "type-inl.h"
+#include "type.h"
+#include "type-parameter.h"
 
 namespace codeswitch {
 namespace internal {

@@ -4,11 +4,13 @@
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
 
-#include "type-inl.h"
+#include "type.h"
 
 #include "block.h"
 #include "gc.h"
 #include "handle.h"
+#include "roots-inl.h"
+#include "type-parameter.h"
 
 using namespace std;
 

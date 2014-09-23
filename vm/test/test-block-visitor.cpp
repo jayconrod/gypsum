@@ -14,7 +14,7 @@
 #include "function.h"
 #include "package.h"
 #include "roots-inl.h"
-#include "type-inl.h"
+#include "type.h"
 
 using namespace codeswitch::internal;
 using namespace std;

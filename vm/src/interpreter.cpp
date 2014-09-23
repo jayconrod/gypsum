@@ -23,7 +23,7 @@
 #include "roots-inl.h"
 #include "stack.h"
 #include "string.h"
-#include "type-inl.h"
+#include "type.h"
 
 using namespace std;
 
