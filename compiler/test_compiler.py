@@ -1076,6 +1076,38 @@ class TestCompiler(unittest.TestCase):
                              variables=[Variable("$this", closureType, PARAMETER, frozenset())],
                              parameterTypes=[closureType]))
 
+    def testCallClosure(self):
+        source = "def foo(x: i64) =\n" + \
+                 "  def bar = x\n" + \
+                 "  bar"
+        package = self.compileFromSource(source)
+        contextClass = package.findClass(name="$context")
+        contextType = ClassType(contextClass)
+        closureClass = package.findClass(name="$closure")
+        closureType = ClassType(closureClass)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("foo", I64Type, [[
+                               allocobj(contextClass.id),
+                               dup(),
+                               callg(1, contextClass.constructors[0].id),
+                               drop(),
+                               stlocal(-1),
+                               ldlocal(0),
+                               ldlocal(-1),
+                               st64(0),
+                               allocobj(closureClass.id),
+                               dup(),
+                               ldlocal(-1),
+                               callg(2, closureClass.constructors[0].id),
+                               drop(),
+                               stlocal(-2),
+                               ldlocal(-2),
+                               callv(1, len(closureClass.methods) - 1),
+                               ret()]],
+                             variables=[Variable("$context", contextType, LOCAL, frozenset()),
+                                        Variable("bar", closureType, LOCAL, frozenset())],
+                             parameterTypes=[I64Type]))
+
     def testCallAlternateCtor(self):
         source = "class Foo(a: i64)\n" + \
                  "  def this = this(12)"

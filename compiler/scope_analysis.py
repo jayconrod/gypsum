@@ -191,10 +191,16 @@ def convertClosures(info):
           var closure-g = Closure-g(context)
           closure-g.apply()
     """
+    # Do the actual closure conversion.
     for useInfo in info.useInfo.itervalues():
         if useInfo.shouldCapture(info):
             useScope = info.getScope(useInfo.useScopeId)
             useScope.capture(useInfo)
+
+    # We are done modifying scopes, and we made a mess. Call finish on scopes in no
+    # particular order.
+    for scope in info.scopes.values():
+        scope.finish()
 
 
 def flattenClasses(info):
@@ -832,7 +838,10 @@ class FunctionScope(Scope):
     def captureInContext(self, defnInfo, irContextClass):
         contextInfo = self.info.getContextInfo(self.scopeId)
         irDefn = defnInfo.irDefn
-        if isinstance(irDefn, Variable):
+        if isinstance(irDefn, Field):
+            # variable which was already captured
+            pass
+        elif isinstance(irDefn, Variable):
             defnInfo.irDefn.kind = None  # finish() will delete this
             irCaptureField = Field(defnInfo.irDefn.name, irDefn.type, frozenset())
             if hasattr(defnInfo.irDefn, "astDefn"):

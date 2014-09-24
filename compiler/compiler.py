@@ -712,6 +712,9 @@ class CompileVisitor(AstNodeVisitor):
         shouldDropForEffect = mode is COMPILE_FOR_EFFECT
         defnInfo = useInfo.defnInfo
         irDefn = defnInfo.irDefn
+        closureInfo = self.info.getClosureInfo(irDefn) \
+                      if self.info.hasClosureInfo(irDefn) \
+                      else None
         assert isinstance(irDefn, Function)
         argCount = len(argExprs)
 
@@ -744,7 +747,8 @@ class CompileVisitor(AstNodeVisitor):
             # Compile the receiver
             if receiver is None:
                 # Load implicit receiver
-                if closureInfo.irClosureVar is not None:
+                if closureInfo is not None and \
+                   closureInfo.irClosureVar is not None:
                     # This is a closure, so load the closure object.
                     if isinstance(closureInfo.irClosureVar, Variable):
                         # Local closure

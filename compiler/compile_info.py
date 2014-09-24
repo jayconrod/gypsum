@@ -207,7 +207,7 @@ class UseInfo(Data):
         # Info about the definition being referenced.
         "defnInfo",
 
-        # The scope id containing the symbol. If the symbol is used in a difference scope than
+        # The scope id containing the symbol. If the symbol is used in a different scope than
         # the one it was defined, it may need to be captured.
         "useScopeId",
 
