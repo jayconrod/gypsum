@@ -1,0 +1,37 @@
+// This is a simple Gypsum program.
+// You can compile it with this command:
+//   ../compiler/compiler list.gy -o list.csp
+// You can run it with this command:
+//   ../vm/out/driver list.csp
+// (If you haven't build the VM yet, run this first):
+//   (cd ../vm; make -j)
+
+// This program shows how closures can capture definitions in outer scopes. Gypsum is a
+// lexically scoped language. This means that syntactic constructs, such as functions, classes,
+// and block expressions create scopes. A definition can only be referenced in the same scope
+// it is defined in or an inner scope.
+
+// This function contains three definitions in its scope: `n`, `inc`, and `counter`.
+def test-counter(n: i64, inc: i64) =
+  // `counter` creates an inner scope within `test-counter`. Definitions in outer scopes can
+  // still be referenced.
+  def counter =
+    // `n` is read and written here. `inc` is also read. Since these variables are defined in
+    // an outer scope, they are captured. The compiler will store them in a context object.
+    // `counter` will be compiled as a closure class instead of a raw function, and objects
+    // of this closure class will have references to the context they were created in.
+    var value = n
+    n += inc
+    value
+
+  print(counter.to-string + "\n")
+  print(counter.to-string + "\n")
+  print(counter.to-string + "\n")
+
+// TODO: when we support function types an values, this example would be more interesting if
+// we returned `counter`. That would demonstrate how context objects can outlive the scope
+// that created them. Could also demonstrate different contexts with different values.
+
+
+def main =
+  test-counter(0, 1)
