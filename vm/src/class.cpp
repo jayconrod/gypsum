@@ -13,7 +13,7 @@
 #include "gc.h"
 #include "handle.h"
 #include "package.h"
-#include "roots-inl.h"
+#include "roots.h"
 #include "type.h"
 
 namespace codeswitch {

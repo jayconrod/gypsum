@@ -11,7 +11,7 @@
 #include "block.h"
 #include "handle.h"
 #include "string.h"
-#include "vm-inl.h"
+#include "vm.h"
 
 using namespace std;
 using namespace codeswitch::internal;

@@ -35,7 +35,7 @@ with open(outFileName, "w") as outFile:
 #include "package.h"
 #include "stack.h"
 #include "utils.h"
-#include "vm-inl.h"
+#include "vm.h"
 
 using namespace codeswitch::internal;
 

@@ -8,7 +8,7 @@
 
 #include "handle.h"
 #include "heap.h"
-#include "vm-inl.h"
+#include "vm.h"
 
 using namespace codeswitch::internal;
 

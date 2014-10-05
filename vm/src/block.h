@@ -8,7 +8,7 @@
 #define block_h
 
 #include <cstdio>
-#include "bitmap-inl.h"
+#include "bitmap.h"
 #include "heap.h"
 #include "ptr.h"
 #include "utils.h"

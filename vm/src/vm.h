@@ -49,7 +49,7 @@ class VM {
     VM* oldVM_;
   };
 
-  static inline VM* fromAddress(void* addr);
+  static VM* fromAddress(void* addr);
 
   Flags flags() { return flags_; };
   bool hasFlags(Flags flags) { return (flags_ & flags) == flags; }

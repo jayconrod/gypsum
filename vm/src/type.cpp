@@ -9,7 +9,7 @@
 #include "block.h"
 #include "gc.h"
 #include "handle.h"
-#include "roots-inl.h"
+#include "roots.h"
 #include "type-parameter.h"
 
 using namespace std;

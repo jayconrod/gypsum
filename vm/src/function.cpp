@@ -13,7 +13,7 @@
 #include "class.h"
 #include "field.h"
 #include "package.h"
-#include "roots-inl.h"
+#include "roots.h"
 #include "type.h"
 #include "utils.h"
 

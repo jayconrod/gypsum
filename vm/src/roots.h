@@ -65,12 +65,12 @@ class Roots {
   BASIC_ROOT_LIST(DEFINE_BASIC_GETTER)
   #undef DEFINE_BASIC_GETTER
 
-  inline Meta* getMetaForBlockType(int type);
+  Meta* getMetaForBlockType(int type);
 
-  inline Class* getBuiltinClass(BuiltinId id) const;
-  inline Meta* getBuiltinMeta(BuiltinId id) const;
-  inline Type* getBuiltinType(BuiltinId id) const;
-  inline Function* getBuiltinFunction(BuiltinId id) const;
+  Class* getBuiltinClass(BuiltinId id) const;
+  Meta* getBuiltinMeta(BuiltinId id) const;
+  Type* getBuiltinType(BuiltinId id) const;
+  Function* getBuiltinFunction(BuiltinId id) const;
 
   template <class Callback>
   void visit(Callback callback);
@@ -95,6 +95,26 @@ class Roots {
 
   #undef BASIC_META_LIST
 };
+
+
+template <class Callback>
+void Roots::visit(Callback callback) {
+  for (int i = 0; i < BASIC_ROOT_COUNT; i++) {
+    callback(reinterpret_cast<Block**>(&basicRoots_[i]));
+  }
+  for (size_t i = 0; i < builtinClasses_.size(); i++) {
+    callback(reinterpret_cast<Block**>(&builtinClasses_[i]));
+  }
+  for (size_t i = 0; i < builtinMetas_.size(); i++) {
+    callback(reinterpret_cast<Block**>(&builtinMetas_[i]));
+  }
+  for (size_t i = 0; i < builtinTypes_.size(); i++) {
+    callback(reinterpret_cast<Block**>(&builtinTypes_[i]));
+  }
+  for (size_t i = 0; i < builtinFunctions_.size(); i++) {
+    callback(reinterpret_cast<Block**>(&builtinFunctions_[i]));
+  }
+}
 
 }
 }

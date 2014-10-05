@@ -4,7 +4,7 @@
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
 
-#include "roots-inl.h"
+#include "roots.h"
 
 #include "array.h"
 #include "block.h"
@@ -127,6 +127,57 @@ void Roots::initialize(Heap* heap) {
   Meta* stringMeta = getBuiltinClass(BUILTIN_STRING_CLASS_ID)->instanceMeta();
   stringMeta->blockType_ = STRING_BLOCK_TYPE;
   basicRoots_[STRING_META_ROOT_INDEX] = stringMeta;
+}
+
+
+Meta* Roots::getMetaForBlockType(int type) {
+  switch (type) {
+    case META_BLOCK_TYPE: return metaMeta();
+    case PACKAGE_BLOCK_TYPE: return packageMeta();
+    case STACK_BLOCK_TYPE: return stackMeta();
+    case FUNCTION_BLOCK_TYPE: return functionMeta();
+    case CLASS_BLOCK_TYPE: return classMeta();
+    case FIELD_BLOCK_TYPE: return fieldMeta();
+    case TYPE_PARAMETER_BLOCK_TYPE: return typeParameterMeta();
+    case I8_ARRAY_BLOCK_TYPE: return i8ArrayMeta();
+    case I32_ARRAY_BLOCK_TYPE: return i32ArrayMeta();
+    case I64_ARRAY_BLOCK_TYPE: return i64ArrayMeta();
+    case BLOCK_ARRAY_BLOCK_TYPE: return blockArrayMeta();
+    case TAGGED_ARRAY_BLOCK_TYPE: return taggedArrayMeta();
+    case TYPE_BLOCK_TYPE: return typeMeta();
+    case STRING_BLOCK_TYPE: return stringMeta();
+    default:
+      UNREACHABLE();
+      return nullptr;
+  }
+}
+
+
+Class* Roots::getBuiltinClass(BuiltinId id) const {
+  auto index = builtinIdToIndex(id);
+  ASSERT(index < builtinClasses_.size());
+  return builtinClasses_[index];
+}
+
+
+Meta* Roots::getBuiltinMeta(BuiltinId id) const {
+  auto index = builtinIdToIndex(id);
+  ASSERT(index < builtinMetas_.size());
+  return builtinMetas_[index];
+}
+
+
+Type* Roots::getBuiltinType(BuiltinId id) const {
+  auto index = builtinIdToIndex(id);
+  ASSERT(index < builtinTypes_.size());
+  return builtinTypes_[index];
+}
+
+
+Function* Roots::getBuiltinFunction(BuiltinId id) const {
+  auto index = builtinIdToIndex(id);
+  ASSERT(index < builtinFunctions_.size());
+  return builtinFunctions_[index];
 }
 
 }

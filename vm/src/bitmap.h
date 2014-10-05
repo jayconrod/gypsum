@@ -18,22 +18,22 @@ class Bitmap {
   Bitmap(word_t* base, word_t bitCount)
       : base_(base), bitCount_(bitCount) { }
 
-  static inline word_t sizeFor(word_t bitCount);
+  static word_t sizeFor(word_t bitCount);
 
   word_t* base() { return base_; }
   word_t bitCount() const { return bitCount_; }
-  inline word_t wordCount() const;
-  inline bool at(word_t index) const;
-  inline bool operator [] (word_t index) const { return at(index); }
-  inline void set(word_t index, bool value);
-  inline void setWord(word_t wordIndex, word_t value);
+  word_t wordCount() const;
+  bool at(word_t index) const;
+  bool operator [] (word_t index) const { return at(index); }
+  void set(word_t index, bool value);
+  void setWord(word_t wordIndex, word_t value);
   void clear();
 
   void copyFrom(Bitmap bitmap);
 
  private:
-  inline word_t wordIndexForBit(word_t index) const;
-  inline word_t bitIndexForBit(word_t index) const;
+  word_t wordIndexForBit(word_t index) const;
+  word_t bitIndexForBit(word_t index) const;
 
   word_t* base_;
   word_t bitCount_;
@@ -42,17 +42,17 @@ class Bitmap {
 
 class BitSet {
  public:
-  explicit inline BitSet(word_t bitCount = 0);
+  explicit BitSet(word_t bitCount = 0);
 
-  inline bool contains(word_t key) const;
-  inline void add(word_t key);
-  inline void remove(word_t key);
+  bool contains(word_t key) const;
+  void add(word_t key);
+  void remove(word_t key);
   void expand(word_t bitCount);
 
   Bitmap& bitmap() { return bitmap_; }
 
  private:
-  inline void ensureCapacity(word_t key);
+  void ensureCapacity(word_t key);
 
   word_t bitCount_;
   std::vector<word_t> words_;

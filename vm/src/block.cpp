@@ -11,7 +11,7 @@
 #include "gc.h"
 #include "handle.h"
 #include "heap.h"
-#include "roots-inl.h"
+#include "roots.h"
 #include "stack.h"
 
 namespace codeswitch {

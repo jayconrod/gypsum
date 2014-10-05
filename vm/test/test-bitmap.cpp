@@ -6,7 +6,7 @@
 
 #include "test.h"
 
-#include "bitmap-inl.h"
+#include "bitmap.h"
 
 using namespace codeswitch::internal;
 

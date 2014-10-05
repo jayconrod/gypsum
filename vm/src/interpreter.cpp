@@ -20,7 +20,7 @@
 #include "handle.h"
 #include "object.h"
 #include "package.h"
-#include "roots-inl.h"
+#include "roots.h"
 #include "stack.h"
 #include "string.h"
 #include "type.h"

@@ -21,7 +21,7 @@
 #include "function.h"
 #include "handle.h"
 #include "heap.h"
-#include "roots-inl.h"
+#include "roots.h"
 #include "string.h"
 #include "type.h"
 #include "type-parameter.h"

@@ -13,7 +13,7 @@
 #include "bytecode.h"
 #include "function.h"
 #include "package.h"
-#include "roots-inl.h"
+#include "roots.h"
 #include "type.h"
 
 using namespace codeswitch::internal;
