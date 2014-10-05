@@ -154,7 +154,9 @@ String* String::tryConcat(Heap* heap, String* other) {
   }
 
   auto consLength = length_ + other->length_;
-  // TODO: check for overflow
+  if (consLength > kMaxLength)
+    throw Error("maximum string length exeeded in concatenation");
+
   auto cons = new(heap, consLength) String;
   copy_n(chars_, length_, cons->chars_);
   copy_n(other->chars_, other->length_, cons->chars_ + length_);
