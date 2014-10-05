@@ -141,7 +141,7 @@ class Arguments::Impl: public RefCounted {
 
  private:
   i::Persistent<i::Function> function_;
-  i::word_t paramIndex_;
+  i::length_t paramIndex_;
   vector<i::i64> data_;
 };
 

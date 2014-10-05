@@ -17,12 +17,14 @@ using namespace std;
 namespace codeswitch {
 namespace internal {
 
-word_t Type::sizeForLength(word_t length) {
+word_t Type::sizeForLength(length_t length) {
+  ASSERT(length <= kMaxLength);
   return align(sizeof(Type), kWordSize) + length * kWordSize;
 }
 
 
-void* Type::operator new (size_t, Heap* heap, word_t length) {
+void* Type::operator new (size_t, Heap* heap, length_t length) {
+  ASSERT(length <= kMaxLength);
   auto size = sizeForLength(length);
   auto type = reinterpret_cast<Type*>(heap->allocate(size));
   type->length_ = length;
@@ -30,7 +32,8 @@ void* Type::operator new (size_t, Heap* heap, word_t length) {
 }
 
 
-void* Type::operator new (size_t, void* place, word_t length) {
+void* Type::operator new (size_t, void* place, length_t length) {
+  ASSERT(length <= kMaxLength);
   auto ty = reinterpret_cast<Type*>(place);
   ty->length_ = length;
   return ty;

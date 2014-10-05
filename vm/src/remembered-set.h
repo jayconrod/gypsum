@@ -34,12 +34,12 @@ class RememberedSet {
   RememberedSet();
 
   void add(Slot slot);
-  word_t length();
+  length_t length();
   void clear();
 
   class iterator: public std::iterator<std::input_iterator_tag, Slot> {
    public:
-    iterator(RememberedSet* set, word_t index)
+    iterator(RememberedSet* set, length_t index)
         : set_(set), index_(index) { }
     Slot operator * ();
     bool operator == (const iterator& other) const;
@@ -49,7 +49,7 @@ class RememberedSet {
     iterator& operator ++ ();
    private:
     RememberedSet* set_;
-    word_t index_;
+    length_t index_;
   };
   iterator begin();
   iterator end();
@@ -59,13 +59,13 @@ class RememberedSet {
   void addSlow(Slot slot);
   void sortAndMerge();
 
-  static const word_t kMinimumSetSize = 16;
+  static const length_t kMinimumSetSize = 16;
 
   std::unique_ptr<Slot[]> clean_;
   std::unique_ptr<Slot[]> dirty_;
-  word_t cleanCount_;
-  word_t dirtyCount_;
-  word_t setSize_;
+  length_t cleanCount_;
+  length_t dirtyCount_;
+  length_t setSize_;
 };
 
 }

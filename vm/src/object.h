@@ -15,10 +15,10 @@ namespace internal {
 class Object: public Block {
  public:
   void* operator new (size_t, Heap* heap, Meta* meta);
-  void* operator new (size_t, Heap* heap, Meta* meta, word_t length);
+  void* operator new (size_t, Heap* heap, Meta* meta, length_t length);
   Object();
   static Local<Object> create(Heap* heap, const Handle<Meta>& meta);
-  static Local<Object> create(Heap* heap, const Handle<Meta>& meta, word_t length);
+  static Local<Object> create(Heap* heap, const Handle<Meta>& meta, length_t length);
 
   void printObject(FILE* out);
   DEFINE_CAST(Object)

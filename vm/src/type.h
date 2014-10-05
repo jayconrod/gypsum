@@ -52,9 +52,9 @@ class Type: public Object {
     LAST_FLAG = NULLABLE_FLAG
   };
 
-  static word_t sizeForLength(word_t length);
-  void* operator new (size_t, Heap* heap, word_t length);
-  void* operator new (size_t, void* place, word_t length);
+  static word_t sizeForLength(length_t length);
+  void* operator new (size_t, Heap* heap, length_t length);
+  void* operator new (size_t, void* place, length_t length);
   explicit Type(Form primitive, Flags flags = NO_FLAGS);
   explicit Type(Class* clas, Flags flags = NO_FLAGS);
   explicit Type(TypeParameter* param, Flags flags = NO_FLAGS);
@@ -81,7 +81,7 @@ class Type: public Object {
 
   DEFINE_CAST(Type)
 
-  word_t length() const { return elementsLength(); }
+  length_t length() const { return elementsLength(); }
 
   Form form() const { return form_; }
   Flags flags() const { return flags_; }
@@ -113,7 +113,7 @@ class Type: public Object {
   friend class Roots;
   static const word_t kPointerMap = 0;
 
-  word_t length_;
+  length_t length_;
   Form form_ : 4;
   Flags flags_ : 28;
   Block* elements_[0];

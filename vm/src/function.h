@@ -24,13 +24,13 @@ class TypeParameter;
 
 class Function: public Block {
  public:
-  void* operator new(size_t, Heap* heap, word_t instructionsSize);
+  void* operator new(size_t, Heap* heap, length_t instructionsSize);
   Function(u32 flags,
            TaggedArray<TypeParameter>* typeParameters,
            BlockArray<Type>* types,
            word_t localsSize,
            const std::vector<u8>& instructions,
-           WordArray* blockOffsets,
+           LengthArray* blockOffsets,
            Package* package,
            StackPointerMap* stackPointerMap);
   static Local<Function> create(Heap* heap,
@@ -39,10 +39,10 @@ class Function: public Block {
                                 const Handle<BlockArray<Type>>& types,
                                 word_t localsSize,
                                 const std::vector<u8>& instructions,
-                                const Handle<WordArray>& blockOffsets,
+                                const Handle<LengthArray>& blockOffsets,
                                 const Handle<Package>& package);
 
-  static word_t sizeForFunction(word_t instructionsSize);
+  static word_t sizeForFunction(length_t instructionsSize);
   word_t sizeOfFunction() const;
   void printFunction(FILE* out);
   DEFINE_CAST(Function)
@@ -57,23 +57,23 @@ class Function: public Block {
   bool hasBuiltinId() const { return builtinId_ != 0; }
 
   TaggedArray<TypeParameter>* typeParameters() const { return typeParameters_; }
-  TypeParameter* typeParameter(word_t index) const;
-  word_t typeParameterCount() const { return typeParameters_->length(); }
+  TypeParameter* typeParameter(length_t index) const;
+  length_t typeParameterCount() const { return typeParameters_->length(); }
 
   BlockArray<Type>* types() const { return types_; }
   Type* returnType() const { return types_->get(0); }
-  word_t parameterCount() const { return types_->length() - 1; }
+  length_t parameterCount() const { return types_->length() - 1; }
   word_t parametersSize() const;
-  ptrdiff_t parameterOffset(word_t index) const;
-  Type* parameterType(word_t index) const { return types_->get(index + 1); }
+  ptrdiff_t parameterOffset(length_t index) const;
+  Type* parameterType(length_t index) const { return types_->get(index + 1); }
 
   word_t localsSize() const { return localsSize_; }
 
-  word_t instructionsSize() const { return instructionsSize_; }
+  length_t instructionsSize() const { return instructionsSize_; }
   u8* instructionsStart() const;
 
-  WordArray* blockOffsets() const { return blockOffsets_; }
-  word_t blockOffset(word_t index) const { return blockOffsets_->get(index); }
+  LengthArray* blockOffsets() const { return blockOffsets_; }
+  length_t blockOffset(length_t index) const { return blockOffsets_->get(index); }
 
   Package* package() const { return package_; }
   DEFINE_INL_PTR_ACCESSORS2(StackPointerMap*, stackPointerMap, setStackPointerMap)
@@ -85,8 +85,8 @@ class Function: public Block {
   TaggedArray<TypeParameter>* typeParameters_;
   BlockArray<Type>* types_;
   word_t localsSize_;
-  word_t instructionsSize_;
-  WordArray* blockOffsets_;
+  length_t instructionsSize_;
+  LengthArray* blockOffsets_;
   Package* package_;
   StackPointerMap* stackPointerMap_;
   // Update FUNCTION_POINTER_LIST if pointer members change.
@@ -101,7 +101,7 @@ class StackPointerMap: public WordArray {
 
   Bitmap bitmap();
   void getParametersRegion(word_t* paramOffset, word_t* paramCount);
-  void getLocalsRegion(word_t pc, word_t* localsOffset, word_t* localsCount);
+  void getLocalsRegion(length_t pc, word_t* localsOffset, word_t* localsCount);
 
   DEFINE_INL_INDEX_ACCESSORS(word_t, bitmapLength, setBitmapLength, kBitmapLengthIndex)
   DEFINE_INL_INDEX_ACCESSORS(word_t, entryCount, setEntryCount, kEntryCountIndex)

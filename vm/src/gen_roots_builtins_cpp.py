@@ -74,18 +74,18 @@ def initClass(out, classData):
     else:
         out.write("    auto elementType = %s;\n" % getTypeFromName(classData["elements"]))
     if len(classData["constructors"]) == 0:
-        out.write("    auto constructors = emptyi64Array();\n")
+        out.write("    auto constructors = emptyi32Array();\n")
     else:
-        out.write("    auto constructors = new(heap, %d) I64Array;\n" %
+        out.write("    auto constructors = new(heap, %d) IdArray;\n" %
                   len(classData["constructors"]))
         for i, ctorData in enumerate(classData["constructors"]):
             out.write("    constructors->set(%d, %s);\n" %
                       (i, ctorData["id"]))
     allMethodIds = findInheritedMethodIds(classData)
     if len(allMethodIds) == 0:
-        out.write("    auto methods = emptyi64Array();\n")
+        out.write("    auto methods = emptyi32Array();\n")
     else:
-        out.write("    auto methods = new(heap, %d) I64Array;\n" % len(allMethodIds))
+        out.write("    auto methods = new(heap, %d) IdArray;\n" % len(allMethodIds))
         for i, id in enumerate(allMethodIds):
             out.write("    methods->set(%d, %s);\n" % (i, id))
     out.write("    ::new(clas) Class(0, supertype, fields, elementType, constructors, " +

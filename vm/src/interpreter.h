@@ -33,7 +33,7 @@ class Interpreter {
   static const int kFrameControlSize = kCallerPcOffsetOffset + kWordSize;
 
  private:
-  static const word_t kDonePcOffset = ~0;
+  static const length_t kDonePcOffset = ~0;
 
   void ensurePointerMap(const Handle<Function>& function);
   void handleBuiltin(BuiltinId id);
@@ -89,14 +89,14 @@ class Interpreter {
   struct Handler {
     word_t fpOffset;
     word_t spOffset;
-    word_t pcOffset;
+    length_t pcOffset;
   };
 
   VM* vm_;
   Persistent<Stack> stack_;
 
   Persistent<Function> function_;
-  word_t pcOffset_;
+  length_t pcOffset_;
 
   std::vector<Handler> handlers_;
 

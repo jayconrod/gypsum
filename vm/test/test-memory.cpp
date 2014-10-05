@@ -59,13 +59,9 @@ TEST(ChunkAllocation) {
   ASSERT_TRUE(isAligned(base, Chunk::kDefaultSize));
   ASSERT_FALSE(chunk->allocationRange().isValid());
 
-  // Avoiding calculations here so that we don't make the same mistakes as Chunk if there are
-  // any. This makes the test unfortunately brittle. The important invariant is that:
-  //   bitmapSize * 8 >= storageSize / kWordSize
-  ASSERT_EQ(base + 96, chunk->bitmapBase());
-  ASSERT_EQ(16136, chunk->bitmapSize());
-  ASSERT_EQ(base + 16232, chunk->storageBase());
-  ASSERT_EQ(1032344, chunk->storageSize());
+  ASSERT_EQ(align(base + sizeof(Chunk), kWordSize), chunk->bitmapBase());
+  ASSERT(chunk->bitmapSize() * 8 >= chunk->storageSize() / kWordSize);
+  ASSERT_EQ(chunk->bitmapBase() + chunk->bitmapSize(), chunk->storageBase());
   ASSERT_EQ(base + Chunk::kDefaultSize, chunk->storageLimit());
 
   ASSERT_EQ(chunk.get(), Chunk::fromAddress(base + 100));

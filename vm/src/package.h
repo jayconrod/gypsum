@@ -38,14 +38,14 @@ class Package: public Block {
 
   DEFINE_INL_ACCESSORS2(u64, flags, setFlags)
   DEFINE_INL_PTR_ACCESSORS2(BlockArray<String>*, strings, setStrings)
-  String* getString(word_t index);
+  String* getString(length_t index);
   DEFINE_INL_PTR_ACCESSORS2(BlockArray<Function>*, functions, setFunctions)
-  Function* getFunction(word_t index);
+  Function* getFunction(length_t index);
   DEFINE_INL_PTR_ACCESSORS2(BlockArray<Class>*, classes, setClasses)
-  Class* getClass(word_t index);
+  Class* getClass(length_t index);
   DEFINE_INL_PTR_ACCESSORS2(BlockArray<TypeParameter>*, typeParameters, setTypeParameters)
-  TypeParameter* getTypeParameter(word_t index);
-  DEFINE_INL_ACCESSORS2(word_t, entryFunctionIndex, setEntryFunctionIndex)
+  TypeParameter* getTypeParameter(length_t index);
+  DEFINE_INL_ACCESSORS2(length_t, entryFunctionIndex, setEntryFunctionIndex)
   Function* entryFunction();
 
   static const u32 kMagic = 0x676b7073;
@@ -57,7 +57,7 @@ class Package: public Block {
   BlockArray<Function>* functions_;
   BlockArray<Class>* classes_;
   BlockArray<TypeParameter>* typeParameters_;
-  word_t entryFunctionIndex_;
+  length_t entryFunctionIndex_;
 };
 
 }

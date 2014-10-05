@@ -35,7 +35,8 @@ DEFINE_POINTER_MAP(Function, FUNCTION_POINTER_LIST)
 #undef FUNCTION_POINTER_LIST
 
 
-void* Function::operator new(size_t, Heap* heap, word_t instructionsSize) {
+void* Function::operator new(size_t, Heap* heap, length_t instructionsSize) {
+  ASSERT(instructionsSize <= kMaxLength);
   word_t size = sizeForFunction(instructionsSize);
   Function* function = reinterpret_cast<Function*>(heap->allocate(size));
   function->instructionsSize_ = instructionsSize;
@@ -48,7 +49,7 @@ Function::Function(u32 flags,
                    BlockArray<Type>* types,
                    word_t localsSize,
                    const vector<u8>& instructions,
-                   WordArray* blockOffsets,
+                   LengthArray* blockOffsets,
                    Package* package,
                    StackPointerMap* stackPointerMap)
     : Block(FUNCTION_BLOCK_TYPE),
@@ -61,7 +62,7 @@ Function::Function(u32 flags,
       blockOffsets_(blockOffsets),
       package_(package),
       stackPointerMap_(stackPointerMap) {
-  ASSERT(instructionsSize_ == instructions.size());
+  ASSERT(instructionsSize_ <= kMaxLength);
   copy_n(instructions.begin(), instructions.size(), instructionsStart());
 }
 
@@ -72,7 +73,7 @@ Local<Function> Function::create(Heap* heap,
                                  const Handle<BlockArray<Type>>& types,
                                  word_t localsSize,
                                  const vector<u8>& instructions,
-                                 const Handle<WordArray>& blockOffsets,
+                                 const Handle<LengthArray>& blockOffsets,
                                  const Handle<Package>& package) {
   RETRY_WITH_GC(heap, return Local<Function>(new(heap, instructions.size()) Function(
       flags, *typeParameters, *types, localsSize, instructions,
@@ -80,7 +81,8 @@ Local<Function> Function::create(Heap* heap,
 }
 
 
-word_t Function::sizeForFunction(word_t instructionsSize) {
+word_t Function::sizeForFunction(length_t instructionsSize) {
+  ASSERT(instructionsSize <= kMaxLength);
   return align(sizeof(Function), kWordSize) + instructionsSize;
 }
 
@@ -97,7 +99,7 @@ void Function::printFunction(FILE* out) {
 }
 
 
-TypeParameter* Function::typeParameter(word_t index) const {
+TypeParameter* Function::typeParameter(length_t index) const {
   auto paramTag = typeParameters_->get(index);
   if (paramTag.isNumber()) {
     return package()->getTypeParameter(paramTag.getNumber());
@@ -109,16 +111,16 @@ TypeParameter* Function::typeParameter(word_t index) const {
 
 word_t Function::parametersSize() const {
   word_t size = 0;
-  for (word_t i = 0, n = parameterCount(); i < n; i++) {
+  for (length_t i = 0, n = parameterCount(); i < n; i++) {
     size += align(parameterType(i)->typeSize(), kWordSize);
   }
   return size;
 }
 
 
-ptrdiff_t Function::parameterOffset(word_t index) const {
+ptrdiff_t Function::parameterOffset(length_t index) const {
   ptrdiff_t offset = 0;
-  for (word_t i = parameterCount() - 1; i > index; i--) {
+  for (length_t i = parameterCount() - 1; i > index; i--) {
     offset += align(parameterType(i)->typeSize(), kWordSize);
   }
   return offset;
@@ -159,7 +161,7 @@ void StackPointerMap::getParametersRegion(word_t* paramOffset, word_t* paramCoun
 
 struct FrameState {
   FrameState(word_t localsSlots, Type* defaultType)
-      : pcOffset(kNotSet) {
+      : pcOffset(-1) {
     typeMap.insert(typeMap.begin(), localsSlots, defaultType);
   }
 
@@ -213,7 +215,7 @@ struct FrameState {
 
   vector<Type*> typeMap;
   vector<Type*> typeArgs;
-  word_t pcOffset;
+  length_t pcOffset;
 };
 
 
@@ -225,7 +227,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
 
   // Constrct a pointer map for the parameters.
   vector<Type*> parametersMap;
-  for (word_t i = 0, n = function->parameterCount(); i < n; i++) {
+  for (length_t i = 0, n = function->parameterCount(); i < n; i++) {
     parametersMap.push_back(function->parameterType(i));
   }
 
@@ -247,7 +249,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
     blocksToVisit.pop_back();
     if (visitedBlockOffsets.contains(currentMap.pcOffset))
       continue;
-    word_t pcOffset = currentMap.pcOffset;
+    length_t pcOffset = currentMap.pcOffset;
     visitedBlockOffsets.add(pcOffset);
 
     bool blockDone = false;
@@ -752,7 +754,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
   }
 
   // Allocate and build the final data structure.
-  word_t arrayLength = StackPointerMap::kHeaderLength +
+  length_t arrayLength = StackPointerMap::kHeaderLength +
       maps.size() * StackPointerMap::kEntryLength +
       align(bitmapLength, kBitsInWord) / kWordSize;
   WordArray* array = new(heap, arrayLength) WordArray;
@@ -761,8 +763,8 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
 
   StackPointerMap* stackPointerMap = StackPointerMap::cast(array);
   stackPointerMap->setEntryCount(maps.size());
-  word_t mapOffset = parametersMap.size();
-  for (word_t i = 0, n = maps.size(); i < n; i++) {
+  length_t mapOffset = parametersMap.size();
+  for (length_t i = 0, n = maps.size(); i < n; i++) {
     stackPointerMap->setPcOffset(i, maps[i].pcOffset);
     stackPointerMap->setMapOffset(i, mapOffset);
     stackPointerMap->setMapCount(i, maps[i].typeMap.size());
@@ -789,7 +791,7 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, Local<Function> fu
 }
 
 
-void StackPointerMap::getLocalsRegion(word_t pc, word_t* localsOffset, word_t* localsCount) {
+void StackPointerMap::getLocalsRegion(length_t pc, word_t* localsOffset, word_t* localsCount) {
   word_t begin = 0;
   word_t end = entryCount();
   word_t middle = begin + (end - begin) / 2;

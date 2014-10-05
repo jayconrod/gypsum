@@ -157,21 +157,21 @@ i64 Interpreter::call(const Handle<Function>& callee) {
 
       case BRANCH: {
         i64 blockIndex = readVbn();
-        pcOffset_ = function_->blockOffset(static_cast<word_t>(blockIndex));
+        pcOffset_ = function_->blockOffset(toLength(blockIndex));
         break;
       }
 
       case BRANCHIF: {
-        auto trueBlockIndex = static_cast<word_t>(readVbn());
-        auto falseBlockIndex = static_cast<word_t>(readVbn());
+        auto trueBlockIndex = toLength(readVbn());
+        auto falseBlockIndex = toLength(readVbn());
         auto condition = pop<bool>();
         pcOffset_ = function_->blockOffset(condition ? trueBlockIndex : falseBlockIndex);
         break;
       }
 
       case PUSHTRY: {
-        auto tryBlockIndex = static_cast<word_t>(readVbn());
-        auto catchBlockIndex = static_cast<word_t>(readVbn());
+        auto tryBlockIndex = toLength(readVbn());
+        auto catchBlockIndex = toLength(readVbn());
         pcOffset_ = function_->blockOffset(tryBlockIndex);
         Handler handler = { stack_->framePointerOffset(),
                             stack_->stackPointerOffset(),
@@ -181,7 +181,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       }
 
       case POPTRY: {
-        auto doneBlockIndex = static_cast<word_t>(readVbn());
+        auto doneBlockIndex = toLength(readVbn());
         pcOffset_ = function_->blockOffset(doneBlockIndex);
         handlers_.pop_back();
         break;
@@ -368,11 +368,12 @@ i64 Interpreter::call(const Handle<Function>& callee) {
 
       case CALLG: {
         readVbn();   // arg count is unused
-        auto functionId = static_cast<word_t>(readVbn());
+        auto functionId = readVbn();
         if (isBuiltinId(functionId)) {
           handleBuiltin(static_cast<BuiltinId>(functionId));
         } else {
-          Local<Function> callee(function_->package()->getFunction(functionId));
+          auto functionIndex = toLength(functionId);
+          Local<Function> callee(function_->package()->getFunction(functionIndex));
           enter(callee);
         }
         break;
@@ -380,7 +381,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
 
       case CALLV: {
         auto argCount = readVbn();
-        auto methodIndex = readVbn();
+        auto methodIndex = toLength(readVbn());
         auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
         CHECK_NON_NULL(receiver);
         Local<Function> callee(Function::cast(receiver->meta()->getData(methodIndex)));
@@ -648,7 +649,7 @@ void Interpreter::enter(const Handle<Function>& callee) {
   ensurePointerMap(callee);
 
   stack_->align(kWordSize);
-  stack_->push(pcOffset_);
+  stack_->push(static_cast<word_t>(pcOffset_));
   stack_->push(function_ ? *function_ : nullptr);
   stack_->push(stack_->fp());
   stack_->setFp(stack_->sp());
@@ -660,9 +661,9 @@ void Interpreter::enter(const Handle<Function>& callee) {
 
 
 void Interpreter::leave() {
-  word_t parametersSize = function_->parametersSize();
-  Address fp = stack_->fp();
-  pcOffset_ = mem<word_t>(fp, kCallerPcOffsetOffset);
+  auto parametersSize = function_->parametersSize();
+  auto fp = stack_->fp();
+  pcOffset_ = toLength(mem<word_t>(fp, kCallerPcOffsetOffset));
   auto caller = mem<Function*>(fp, kFunctionOffset);
   function_ = caller ? Persistent<Function>(caller) : Persistent<Function>();
   stack_->setSp(fp + kFrameControlSize + parametersSize);
@@ -677,7 +678,7 @@ void Interpreter::doThrow(Block* exception) {
     // of the interpreter in case it is used again.
     stack_->resetPointers();
     function_ = Persistent<Function>();
-    pcOffset_ = kNotSet;
+    pcOffset_ = kPcNotSet;
     throw Error("unhandled exception");
   } else {
     // If there is a handler, we pop the exception, unwind the stack, push the exception, and
@@ -685,7 +686,7 @@ void Interpreter::doThrow(Block* exception) {
     Handler handler = handlers_.back();
     handlers_.pop_back();
     Address fp = handler.fpOffset + stack_->base();
-    stack_->push(pcOffset_);
+    stack_->push(static_cast<word_t>(pcOffset_));
     for (auto frame : **stack_) {
       if (frame.fp() == fp)
         break;
@@ -702,7 +703,7 @@ void Interpreter::doThrow(Block* exception) {
 ptrdiff_t Interpreter::localOffsetFromIndex(i64 index) {
   if (index >= 0) {
     // parameter. 0 is the first parameter (highest address on stack).
-    return kFrameControlSize + function_->parameterOffset(static_cast<word_t>(index));
+    return kFrameControlSize + function_->parameterOffset(toLength(index));
   } else {
     // local. -1 is the first local, and they grow down.
     // TODO: this assumes all locals are word-sized.
@@ -736,7 +737,7 @@ void Interpreter::throwBuiltinException(BuiltinId id) {
 
 
 void Interpreter::collectGarbage() {
-  stack_->push(pcOffset_);
+  stack_->push(static_cast<word_t>(pcOffset_));
   GC gc(vm_->heap());
   gc.collectGarbage();
   stack_->pop<word_t>();

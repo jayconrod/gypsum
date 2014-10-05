@@ -138,7 +138,7 @@ static Local<Package> createTestPackage(Heap* heap) {
     0,
     RET,
   };
-  auto blockOffsetList = WordArray::create(heap, 1);
+  auto blockOffsetList = LengthArray::create(heap, 1);
   blockOffsetList->set(0, 0);
   auto package = Package::create(heap);
   auto functions = BlockArray<Function>::create(heap, 1);

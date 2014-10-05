@@ -20,7 +20,7 @@ namespace internal {
 word_t Block::sizeOfBlock() const {
   word_t size = kNotFound;
   if (!meta()->hasCustomSize()) {
-    word_t length = meta()->hasElements() ? elementsLength() : 0;
+    length_t length = meta()->hasElements() ? elementsLength() : 0;
     size = meta()->objectSize() + length * meta()->elementSize();
   } else {
     switch (meta()->blockType()) {
@@ -84,15 +84,16 @@ BlockType Block::blockType() const {
 }
 
 
-word_t Block::elementsLength() const {
+length_t Block::elementsLength() const {
   ASSERT(meta()->hasElements());
-  return mem<word_t>(this, sizeof(Block));
+  return mem<length_t>(this, sizeof(Block));
 }
 
 
-void Block::setElementsLength(word_t length) {
+void Block::setElementsLength(length_t length) {
   ASSERT(meta()->hasElements());
-  mem<word_t>(this, sizeof(Block)) = length;
+  ASSERT(length <= kMaxLength);
+  mem<length_t>(this, sizeof(Block)) = length;
 }
 
 
@@ -108,9 +109,10 @@ Heap* Block::getHeap() const {
 
 
 void* Meta::operator new (size_t, Heap* heap,
-                          word_t dataLength,
+                          length_t dataLength,
                           u32 objectSize,
                           u32 elementSize) {
+  ASSERT(dataLength <= kMaxLength);
   auto size = sizeForMeta(dataLength, objectSize, elementSize);
   // Heap::allocate zero-initializes the block for us. This is needed since the constructor
   // doesn't initialize most of the body.
@@ -123,10 +125,11 @@ void* Meta::operator new (size_t, Heap* heap,
 
 
 Local<Meta> Meta::create(Heap* heap,
-                         word_t dataLength,
+                         length_t dataLength,
                          u32 objectSize,
                          u32 elementSize,
                          BlockType blockType) {
+  ASSERT(dataLength <= kMaxLength);
   RETRY_WITH_GC(heap, return Local<Meta>(
       new(heap, dataLength, objectSize, elementSize) Meta(blockType)));
 }
@@ -155,13 +158,13 @@ BLOCK_TYPE_LIST(TYPE_STR)
 }
 
 
-Block* Meta::getData(word_t index) const {
+Block* Meta::getData(length_t index) const {
   ASSERT(index < dataLength());
   return dataBase()[index];
 }
 
 
-void Meta::setData(word_t index, Block* value) {
+void Meta::setData(length_t index, Block* value) {
   ASSERT(index < dataLength());
   Block** p = dataBase() + index;
   *p = value;
@@ -195,7 +198,8 @@ Bitmap Meta::elementPointerMap() {
 }
 
 
-word_t Meta::sizeForMeta(word_t dataLength, u32 objectSize, u32 elementSize) {
+word_t Meta::sizeForMeta(length_t dataLength, u32 objectSize, u32 elementSize) {
+  ASSERT(dataLength <= kMaxLength);
   auto headerSize = sizeof(Meta);
   auto dataSize = dataLength * kWordSize;
   auto objectWords = align(objectSize, kWordSize) / kWordSize;
@@ -204,7 +208,7 @@ word_t Meta::sizeForMeta(word_t dataLength, u32 objectSize, u32 elementSize) {
 }
 
 
-void* Free::operator new (size_t unused, Heap* heap, size_t size) {
+void* Free::operator new (size_t unused, Heap* heap, word_t size) {
   auto free = reinterpret_cast<Free*>(heap->allocate(size));
   if (free == nullptr)
     return free;
@@ -215,7 +219,7 @@ void* Free::operator new (size_t unused, Heap* heap, size_t size) {
 }
 
 
-void* Free::operator new (size_t unused, void* place, size_t size) {
+void* Free::operator new (size_t unused, void* place, word_t size) {
   auto free = reinterpret_cast<Free*>(place);
   free->setMeta(FREE_BLOCK_TYPE);
   free->size_ = size;

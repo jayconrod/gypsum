@@ -22,27 +22,30 @@ class Handle;
 template <class T>
 class Array: public Block {
  public:
-  void* operator new(size_t, Heap* heap, word_t length) {
+  void* operator new(size_t, Heap* heap, length_t length) {
+    ASSERT(length <= kMaxLength);
     auto size = sizeForLength(length);
     auto array = reinterpret_cast<Array<T>*>(heap->allocate(size));
     array->length_ = length;
     return array;
   }
 
-  void* operator new(size_t, Heap* heap, word_t length, T fillValue) {
+  void* operator new(size_t, Heap* heap, length_t length, T fillValue) {
+    ASSERT(length <= kMaxLength);
     auto size = sizeForLength(length);
     auto array = reinterpret_cast<Array<T>*>(heap->allocate(size));
     array->length_ = length;
-    for (word_t i = 0; i < length; i++)
+    for (length_t i = 0; i < length; i++)
       array->elements()[i] = fillValue;
     return array;
   }
 
-  static word_t sizeForLength(word_t length) {
+  static word_t sizeForLength(length_t length) {
+    ASSERT(length <= kMaxLength);
     return sizeof(Array) + sizeof(T) * length;
   }
 
-  word_t length() const { return length_; }
+  length_t length() const { return length_; }
 
   T* elements() {
     return &mem<T>(this, sizeof(Array));
@@ -51,19 +54,19 @@ class Array: public Block {
     return &mem<const T>(this, sizeof(Array));
   }
 
-  T get(word_t index) const {
+  T get(length_t index) const {
     ASSERT(index < length());
     return elements()[index];
   }
 
-  void set(word_t index, T value) {
+  void set(length_t index, T value) {
     ASSERT(index < length());
     elements()[index] = value;
     recordWrite(&elements()[index], value);
   }
 
   void setAll(T value) {
-    for (word_t i = 0, n = length(); i < n; i++)
+    for (length_t i = 0, n = length(); i < n; i++)
       set(i, value);
   }
 
@@ -135,15 +138,15 @@ class Array: public Block {
   explicit Array(BlockType blockType)
       : Block(blockType) { }
 
-  word_t length_;
+  length_t length_;
 };
 
 
 #define DEFINE_ARRAY_CREATE(Name, T)                                           \
-static Local<Name> create(Heap* heap, word_t length) {                         \
+static Local<Name> create(Heap* heap, length_t length) {                       \
   RETRY_WITH_GC(heap, return Local<Name>(new(heap, length) Name));             \
 }                                                                              \
-static Local<Name> create(Heap* heap, word_t length, T fillValue) {            \
+static Local<Name> create(Heap* heap, length_t length, T fillValue) {          \
   RETRY_WITH_GC(heap, return Local<Name>(new(heap, length, fillValue) Name));  \
 }
 
@@ -160,7 +163,7 @@ class BlockArray: public Array<T*> {
   void printBlockArray(FILE* out) {
     fprintf(out, "BlockArray @%p\n", reinterpret_cast<void*>(this));
     fprintf(out, "  length: %d\n", static_cast<int>(this->length()));
-    for (word_t i = 0; i < this->length(); i++) {
+    for (length_t i = 0; i < this->length(); i++) {
       fprintf(out, "  %3d: %p\n", static_cast<int>(i), reinterpret_cast<void*>(this->get(i)));
     }
   }
@@ -192,6 +195,10 @@ class I32Array: public DataArray<i32, I32_ARRAY_BLOCK_TYPE> {
   DEFINE_CAST(I32Array)
   void printI32Array(FILE* out);
 };
+
+
+typedef I32Array LengthArray;
+typedef I32Array IdArray;
 
 
 class I64Array: public DataArray<i64, I64_ARRAY_BLOCK_TYPE> {

@@ -27,7 +27,7 @@ void RememberedSet::add(Slot slot) {
 }
 
 
-word_t RememberedSet::length() {
+length_t RememberedSet::length() {
   sortAndMerge();
   return cleanCount_;
 }
@@ -90,8 +90,8 @@ void RememberedSet::sortAndMerge() {
   sort(dirty_.get(), dirty_.get() + dirtyCount_);
   setSize_ = max(cleanCount_ + dirtyCount_, kMinimumSetSize);
   unique_ptr<Slot[]> merged(new Slot[setSize_]);
-  word_t mergeIdx = 0;
-  for (word_t cleanIdx = 0, dirtyIdx = 0;
+  length_t mergeIdx = 0;
+  for (length_t cleanIdx = 0, dirtyIdx = 0;
        cleanIdx < cleanCount_ || dirtyIdx < dirtyCount_;) {
     Slot slot;
     if (cleanIdx == cleanCount_) {

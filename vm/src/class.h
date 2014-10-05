@@ -17,6 +17,9 @@ template <class T>
 class BlockArray;
 class Field;
 class Function;
+class I32Array;
+typedef I32Array LengthArray;
+typedef I32Array IdArray;
 class Package;
 template <class T>
 class TaggedArray;
@@ -29,8 +32,8 @@ class Class: public Block {
         Type* supertype,
         BlockArray<Field>* fields,
         Type* elementType,
-        WordArray* constructors,
-        WordArray* methods,
+        IdArray* constructors,
+        IdArray* methods,
         Package* package,
         Meta* instanceMeta);
   static Local<Class> create(Heap* heap);
@@ -39,8 +42,8 @@ class Class: public Block {
                              const Handle<Type>& supertype,
                              const Handle<BlockArray<Field>>& fields,
                              const Handle<Type>& elementType,
-                             const Handle<WordArray>& constructors,
-                             const Handle<WordArray>& methods,
+                             const Handle<IdArray>& constructors,
+                             const Handle<IdArray>& methods,
                              const Handle<Package>& package,
                              const Handle<Meta>& instanceMeta);
 
@@ -58,16 +61,16 @@ class Class: public Block {
   DEFINE_INL_PTR_ACCESSORS2(Type*, supertype, setSupertype)
 
   DEFINE_INL_PTR_ACCESSORS2(BlockArray<Field>*, fields, setFields)
-  word_t findFieldIndex(word_t offset) const;
-  word_t findFieldOffset(word_t index) const;
+  length_t findFieldIndex(word_t offset) const;
+  word_t findFieldOffset(length_t index) const;
 
   DEFINE_INL_PTR_ACCESSORS2(Type*, elementType, setElementType)
 
-  DEFINE_INL_PTR_ACCESSORS2(WordArray*, constructors, setConstructors)
-  Function* getConstructor(word_t index) const;
+  DEFINE_INL_PTR_ACCESSORS2(IdArray*, constructors, setConstructors)
+  Function* getConstructor(length_t index) const;
 
-  DEFINE_INL_PTR_ACCESSORS2(WordArray*, methods, setMethods)
-  Function* getMethod(word_t index) const;
+  DEFINE_INL_PTR_ACCESSORS2(IdArray*, methods, setMethods)
+  Function* getMethod(length_t index) const;
 
   DEFINE_INL_PTR_ACCESSORS2(Package*, package, setPackage)
   DEFINE_INL_PTR_ACCESSORS2(Meta*, instanceMeta, setInstanceMeta)
@@ -92,8 +95,8 @@ class Class: public Block {
   Type* supertype_;
   BlockArray<Field>* fields_;
   Type* elementType_;
-  WordArray* constructors_;
-  WordArray* methods_;
+  IdArray* constructors_;
+  IdArray* methods_;
   Package* package_;
   Meta* instanceMeta_;
   // Update CLASS_POINTER_LIST if pointer members change.

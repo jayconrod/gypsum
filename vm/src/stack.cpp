@@ -102,21 +102,21 @@ void Stack::align(word_t alignment) {
 
 
 Stack::iterator Stack::begin() {
-  return iterator(this, fp(), *reinterpret_cast<word_t*>(sp()));
+  return iterator(this, fp(), toLength(mem<word_t>(sp())));
 }
 
 
 Stack::iterator Stack::end() {
-  return iterator(this, limit(), kNotSet);
+  return iterator(this, limit(), kPcNotSet);
 }
 
 
-StackFrame Stack::top(word_t pcOffset) {
+StackFrame Stack::top(length_t pcOffset) {
   return StackFrame(fp(), pcOffset);
 }
 
 
-Stack::iterator::iterator(Stack* stack, Address fp, word_t pcOffset)
+Stack::iterator::iterator(Stack* stack, Address fp, length_t pcOffset)
     : stack_(stack),
       frame_(fp, pcOffset) { }
 

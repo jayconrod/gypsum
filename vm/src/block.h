@@ -138,7 +138,7 @@ BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
   void setMeta(Meta* meta);
   BlockType blockType() const;
 
-  word_t elementsLength() const;
+  length_t elementsLength() const;
 
   VM* getVM() const;
   Heap* getHeap() const;
@@ -150,7 +150,7 @@ BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
   }
 
  protected:
-  void setElementsLength(word_t length);
+  void setElementsLength(length_t length);
 
  private:
   MetaWord metaWord_;
@@ -177,12 +177,12 @@ class Meta: public Block {
    *  memory will be zero-initialized (except for size-related members), so explicit
    *  zero-initialization is not necessary.
    */
-  void* operator new (size_t, Heap* heap, word_t dataLength, u32 objectSize, u32 elementSize);
+  void* operator new (size_t, Heap* heap, length_t dataLength, u32 objectSize, u32 elementSize);
   explicit Meta(BlockType blockType)
       : Block(META_BLOCK_TYPE),
         blockType_(blockType) { }
   static Local<Meta> create(Heap* heap,
-                            word_t dataLength,
+                            length_t dataLength,
                             u32 objectSize,
                             u32 elementSize,
                             BlockType blockType);
@@ -192,7 +192,7 @@ class Meta: public Block {
 
   void printMeta(FILE* out);
 
-  word_t dataLength() const { return dataLength_; }
+  length_t dataLength() const { return dataLength_; }
   BlockType blockType() const { return blockType_; }
   bool hasCustomSize() const { return hasCustomSize_; }
   bool hasPointers() const { return hasPointers_; }
@@ -203,8 +203,8 @@ class Meta: public Block {
   u32 objectSize() const { return objectSize_; }
   u32 elementSize() const { return elementSize_; }
 
-  Block* getData(word_t index) const;
-  void setData(word_t index, Block* value);
+  Block* getData(length_t index) const;
+  void setData(length_t index, Block* value);
 
   bool hasElements() { return elementSize() > 0; }
   word_t* rawObjectPointerMap();
@@ -215,11 +215,11 @@ class Meta: public Block {
   static const word_t kElementSize = kWordSize;
 
  private:
-  static word_t sizeForMeta(word_t dataLength, u32 objectSize, u32 elementSize);
+  static word_t sizeForMeta(length_t dataLength, u32 objectSize, u32 elementSize);
   Block** dataBase() { return &mem<Block*>(this, sizeof(Meta)); }
   Block* const* dataBase() const { return &mem<Block*>(this, sizeof(Meta)); }
 
-  word_t dataLength_;
+  length_t dataLength_;
   BlockType blockType_ : 8;
   bool hasCustomSize_ : 1;
   bool hasPointers_ : 1;
@@ -243,8 +243,8 @@ class Meta: public Block {
  */
 class Free: public Block {
  public:
-  void* operator new (size_t, Heap* heap, size_t size);
-  void* operator new (size_t, void* place, size_t size);
+  void* operator new (size_t, Heap* heap, word_t size);
+  void* operator new (size_t, void* place, word_t size);
   explicit Free(Free* next)
       : Block(FREE_BLOCK_TYPE),
         next_(next) { }

@@ -36,12 +36,19 @@ typedef I32Array WordArray;
 #error WORDSIZE must be 32 or 64
 #endif
 typedef word_t Address;
-const int kWordSize = WORDSIZE / 8;
+const size_t kWordSize = WORDSIZE / 8;
 const int kBitsInWord = WORDSIZE;
 const word_t kNotSet = static_cast<word_t>(-1);
 const word_t kNotFound = static_cast<word_t>(-1);
 void* const kFailed = reinterpret_cast<void*>(1);
 void* const kUninitialized = nullptr;
+typedef u32 length_t;
+const length_t kMaxLength = 0x7fffffffu;
+const length_t kLengthNotSet = ~0u;
+const length_t kIndexNotSet = ~0u;
+const length_t kPcNotSet = ~0u;
+typedef i32 id_t;
+const id_t kIdNotSet = -1;
 
 const int KB = 1024;
 const int MB = 1024 * KB;
@@ -146,6 +153,14 @@ inline word_t bitExtract(word_t n, word_t width, word_t shift) {
 inline word_t bitInsert(word_t n, word_t value, word_t width, word_t shift) {
   word_t mask = ((1UL << width) - 1UL) << shift;
   return (n & ~mask) | ((value << shift) & mask);
+}
+
+
+template <typename T>
+length_t toLength(T n) {
+  auto len = static_cast<length_t>(n);
+  ASSERT((0 <= len && len <= kMaxLength) || len == kLengthNotSet);
+  return len;
 }
 
 

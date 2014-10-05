@@ -16,7 +16,7 @@ namespace internal {
 
 class StackFrame {
  public:
-  StackFrame(Address fp, word_t pcOffset)
+  StackFrame(Address fp, length_t pcOffset)
       : fp_(fp), pcOffset_(pcOffset) { }
 
   Address fp() const { return fp_; }
@@ -27,10 +27,10 @@ class StackFrame {
   void setFunction(Function* newFunction) {
     mem<Function*>(fp_, kFunctionOffset) = newFunction;
   }
-  word_t pcOffset() const { return pcOffset_; }
-  word_t callerPcOffset() const { return mem<word_t>(fp_, kCallerPcOffsetOffset); }
+  length_t pcOffset() const { return pcOffset_; }
+  length_t callerPcOffset() const { return toLength(mem<word_t>(fp_, kCallerPcOffsetOffset)); }
 
-  bool isLast() const { return callerPcOffset() == kNotSet; }
+  bool isLast() const { return callerPcOffset() == kPcNotSet; }
 
   Address parameters() const { return fp_ + kParametersOffset; }
   Address locals() const { return fp_ + kLocalsOffset; }
@@ -45,7 +45,7 @@ class StackFrame {
 
  private:
   Address fp_;
-  word_t pcOffset_;
+  length_t pcOffset_;
 };
 
 
@@ -104,7 +104,7 @@ class Stack: public Block {
   // top of the stack. This is normally done when invoking the garbage collector.
   class iterator {
    public:
-    iterator(Stack* stack, Address fp, word_t pcOffset);
+    iterator(Stack* stack, Address fp, length_t pcOffset);
 
     StackFrame operator * ();
     iterator& operator ++ ();
@@ -121,7 +121,7 @@ class Stack: public Block {
   iterator end();
 
   // This method does NOT require the pc offset to be pushed.
-  StackFrame top(word_t pcOffset = 0);
+  StackFrame top(length_t pcOffset = 0);
 
   static const int kDefaultSize = 32 * KB;
 

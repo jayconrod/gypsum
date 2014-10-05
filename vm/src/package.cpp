@@ -45,9 +45,12 @@ static void readTypeParameter(VM* vm,
 static Local<Type> readType(VM* vm, istream& stream, const Local<Package>& package);
 template <typename T>
 static T readValue(istream& stream);
+static length_t readLength(istream& stream);
 static vector<u8> readData(istream& stream, word_t size);
 static i64 readVbn(istream& stream);
 static word_t readWordVbn(istream& stream);
+static length_t readLengthVbn(istream& stream);
+static id_t readIdVbn(istream& stream);
 
 
 Package::Package(VM* vm)
@@ -58,7 +61,7 @@ Package::Package(VM* vm)
       classes_(reinterpret_cast<BlockArray<Class>*>(vm->roots()->emptyBlockArray())),
       typeParameters_(reinterpret_cast<BlockArray<TypeParameter>*>(
                           vm->roots()->emptyBlockArray())),
-      entryFunctionIndex_(kNotSet) { }
+      entryFunctionIndex_(kIndexNotSet) { }
 
 
 Local<Package> Package::create(Heap* heap) {
@@ -69,9 +72,9 @@ Local<Package> Package::create(Heap* heap) {
 void Package::printPackage(FILE* out) {
   printf("Package @%p\n", reinterpret_cast<void*>(this));
   printf("  flags: " WFX "\n", flags());
-  printf("  entry function: " WFD "\n", entryFunctionIndex());
+  printf("  entry function: %d\n", entryFunctionIndex());
   printf("  functions:\n");
-  for (word_t i = 0, n = functions()->length(); i < n; i++) {
+  for (length_t i = 0, n = functions()->length(); i < n; i++) {
     printf("    %p\n", reinterpret_cast<void*>(getFunction(i)));
   }
 }
@@ -113,7 +116,7 @@ Local<Package> Package::loadFromStream(VM* vm, istream& stream) {
       throw Error("package file is corrupt");
     auto majorVersion = readValue<u16>(stream);
     auto minorVersion = readValue<u16>(stream);
-    if (majorVersion != 0 || minorVersion != 6)
+    if (majorVersion != 0 || minorVersion != 7)
       throw Error("package file has wrong format version");
 
     package = handleScope.escape(*Package::create(vm->heap()));
@@ -121,17 +124,17 @@ Local<Package> Package::loadFromStream(VM* vm, istream& stream) {
     auto flags = readValue<u64>(stream);
     package->setFlags(flags);
 
-    auto stringCount = readValue<word_t>(stream);
+    auto stringCount = readLength(stream);
     auto stringArray = BlockArray<String>::create(vm->heap(), stringCount);
     package->setStrings(*stringArray);
 
-    auto functionCount = readValue<word_t>(stream);
+    auto functionCount = readLength(stream);
     auto functionArray = BlockArray<Function>::create(vm->heap(), functionCount);
     package->setFunctions(*functionArray);
 
-    auto classCount = readValue<word_t>(stream);
+    auto classCount = readLength(stream);
     auto classArray = BlockArray<Class>::create(vm->heap(), classCount);
-    for (word_t i = 0; i < classCount; i++) {
+    for (length_t i = 0; i < classCount; i++) {
       // We pre-allocate classes so Types we read can refer to them.
       auto clas = Class::create(vm->heap());
       clas->setPackage(*package);
@@ -139,32 +142,32 @@ Local<Package> Package::loadFromStream(VM* vm, istream& stream) {
     }
     package->setClasses(*classArray);
 
-    auto typeParameterCount = readValue<word_t>(stream);
+    auto typeParameterCount = readLength(stream);
     auto typeParametersArray =
         BlockArray<TypeParameter>::create(vm->heap(), typeParameterCount);
-    for (word_t i = 0; i < typeParameterCount; i++) {
+    for (length_t i = 0; i < typeParameterCount; i++) {
       // Type parameters are also pre-allocated.
       auto param = TypeParameter::create(vm->heap());
       typeParametersArray->set(i, *param);
     }
     package->setTypeParameters(*typeParametersArray);
 
-    auto entryFunctionIndex = readValue<word_t>(stream);
+    auto entryFunctionIndex = readLength(stream);
     package->setEntryFunctionIndex(entryFunctionIndex);
 
-    for (word_t i = 0; i < stringCount; i++) {
+    for (length_t i = 0; i < stringCount; i++) {
       auto string = readString(vm, stream);
       stringArray->set(i, *string);
     }
-    for (word_t i = 0; i < functionCount; i++) {
+    for (length_t i = 0; i < functionCount; i++) {
       auto function = readFunction(vm, stream, package);
       functionArray->set(i, *function);
     }
-    for (word_t i = 0; i < classCount; i++) {
+    for (length_t i = 0; i < classCount; i++) {
       auto clas = handle(Class::cast(classArray->get(i)));
       readClass(vm, stream, package, clas);
     }
-    for (word_t i = 0; i < typeParameterCount; i++) {
+    for (length_t i = 0; i < typeParameterCount; i++) {
       auto param = handle(TypeParameter::cast(typeParametersArray->get(i)));
       readTypeParameter(vm, stream, package, param);
     }
@@ -176,28 +179,28 @@ Local<Package> Package::loadFromStream(VM* vm, istream& stream) {
 }
 
 
-String* Package::getString(word_t index) {
+String* Package::getString(length_t index) {
   return String::cast(strings()->get(index));
 }
 
 
-Function* Package::getFunction(word_t index) {
+Function* Package::getFunction(length_t index) {
   return Function::cast(functions()->get(index));
 }
 
 
-Class* Package::getClass(word_t index) {
+Class* Package::getClass(length_t index) {
   return Class::cast(classes()->get(index));
 }
 
 
-TypeParameter* Package::getTypeParameter(word_t index) {
+TypeParameter* Package::getTypeParameter(length_t index) {
   return TypeParameter::cast(typeParameters()->get(index));
 }
 
 
 Function* Package::entryFunction() {
-  word_t index = entryFunctionIndex();
+  auto index = entryFunctionIndex();
   if (index == kNotSet)
     return nullptr;
   return getFunction(index);
@@ -205,8 +208,8 @@ Function* Package::entryFunction() {
 
 
 static Local<String> readString(VM* vm, istream& stream) {
-  auto length = readWordVbn(stream);
-  auto size = readWordVbn(stream);
+  auto length = readLengthVbn(stream);
+  auto size = readLengthVbn(stream);
   vector<u8> utf8Chars = readData(stream, size);
   return String::fromUtf8String(vm->heap(), utf8Chars.data(), length, size);
 }
@@ -216,30 +219,30 @@ static Local<Function> readFunction(VM* vm, istream& stream, const Local<Package
   u32 flags;
   stream.read(reinterpret_cast<char*>(&flags), sizeof(flags));
 
-  auto typeParameterCount = readWordVbn(stream);
+  auto typeParameterCount = readLengthVbn(stream);
   auto typeParameters = TaggedArray<TypeParameter>::create(vm->heap(), typeParameterCount);
-  for (word_t i = 0; i < typeParameterCount; i++) {
-    auto id = readWordVbn(stream);
+  for (length_t i = 0; i < typeParameterCount; i++) {
+    auto id = readIdVbn(stream);
     typeParameters->set(i, Tagged<TypeParameter>(id));
   }
 
   auto returnType = readType(vm, stream, package);
-  auto parameterCount = readWordVbn(stream);
+  auto parameterCount = readLengthVbn(stream);
   auto types = BlockArray<Type>::create(vm->heap(), parameterCount + 1);
   types->set(0, *returnType);
-  for (word_t i = 0; i < parameterCount; i++) {
+  for (length_t i = 0; i < parameterCount; i++) {
     types->set(i + 1, *readType(vm, stream, package));
   }
 
   auto localsSize = readWordVbn(stream);
 
-  auto instructionsSize = readWordVbn(stream);
+  auto instructionsSize = readLengthVbn(stream);
   vector<u8> instructions = readData(stream, instructionsSize);
 
-  auto blockOffsetCount = readWordVbn(stream);
-  auto blockOffsets = WordArray::create(vm->heap(), blockOffsetCount);
-  for (word_t i = 0; i < blockOffsetCount; i++) {
-    auto offset = readWordVbn(stream);
+  auto blockOffsetCount = readLengthVbn(stream);
+  auto blockOffsets = LengthArray::create(vm->heap(), blockOffsetCount);
+  for (length_t i = 0; i < blockOffsetCount; i++) {
+    auto offset = readLengthVbn(stream);
     blockOffsets->set(i, offset);
   }
 
@@ -257,24 +260,24 @@ static void readClass(VM* vm,
   stream.read(reinterpret_cast<char*>(&flags), sizeof(flags));
   auto supertype = readType(vm, stream, package);
 
-  auto fieldCount = readWordVbn(stream);
+  auto fieldCount = readLengthVbn(stream);
   auto fields = BlockArray<Field>::create(vm->heap(), fieldCount);
-  for (word_t i = 0; i < fieldCount; i++) {
+  for (length_t i = 0; i < fieldCount; i++) {
     auto field = readField(vm, stream, package);
     fields->set(i, *field);
   }
 
-  auto constructorCount = readWordVbn(stream);
-  auto constructors = WordArray::create(vm->heap(), constructorCount);
-  for (word_t i = 0; i < constructorCount; i++) {
-    word_t id = readWordVbn(stream);
+  auto constructorCount = readLengthVbn(stream);
+  auto constructors = IdArray::create(vm->heap(), constructorCount);
+  for (length_t i = 0; i < constructorCount; i++) {
+    auto id = readIdVbn(stream);
     constructors->set(i, id);
   }
 
-  auto methodCount = readWordVbn(stream);
-  auto methods = WordArray::create(vm->heap(), methodCount);
-  for (word_t i = 0; i < methodCount; i++) {
-    word_t id = readWordVbn(stream);
+  auto methodCount = readLengthVbn(stream);
+  auto methods = IdArray::create(vm->heap(), methodCount);
+  for (length_t i = 0; i < methodCount; i++) {
+    auto id = readIdVbn(stream);
     methods->set(i, id);
   }
 
@@ -361,6 +364,15 @@ static T readValue(istream& stream) {
 }
 
 
+static length_t readLength(istream& stream) {
+  length_t len;
+  stream.read(reinterpret_cast<char*>(&len), sizeof(len));
+  if (len > kMaxLength)
+    throw Error("could not read length");
+  return len;
+}
+
+
 static vector<u8> readData(istream& stream, word_t size) {
   vector<u8> buffer(size);
   stream.read(reinterpret_cast<char*>(buffer.data()), size);
@@ -395,6 +407,26 @@ static word_t readWordVbn(istream& stream) {
     throw Error("could not read number from stream");
   }
   return w;
+}
+
+
+static length_t readLengthVbn(istream& stream) {
+  i64 n = readVbn(stream);
+  auto len = static_cast<length_t>(n);
+  if (static_cast<i64>(len) != n || len > kMaxLength) {
+    throw Error("could not read length from stream");
+  }
+  return len;
+}
+
+
+static id_t readIdVbn(istream& stream) {
+  i64 n = readVbn(stream);
+  auto id = static_cast<id_t>(n);
+  if (static_cast<i64>(id) != n) {
+    throw Error("could not read id from stream");
+  }
+  return id;
 }
 
 }

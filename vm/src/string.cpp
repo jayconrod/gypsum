@@ -20,12 +20,14 @@ using namespace std;
 namespace codeswitch {
 namespace internal {
 
-word_t String::sizeForLength(word_t length) {
+word_t String::sizeForLength(length_t length) {
+  ASSERT(length <= kMaxLength);
   return sizeof(String) + length * sizeof(u32);
 }
 
 
-void* String::operator new (size_t, Heap* heap, word_t length) {
+void* String::operator new (size_t, Heap* heap, length_t length) {
+  ASSERT(length <= kMaxLength);
   auto size = sizeForLength(length);
   auto string = reinterpret_cast<String*>(heap->allocate(size));
   string->length_ = length;
@@ -43,22 +45,22 @@ String::String()
     : Object(STRING_BLOCK_TYPE) { }
 
 
-Local<String> String::create(Heap* heap, word_t length, const u32* chars) {
+Local<String> String::create(Heap* heap, length_t length, const u32* chars) {
   RETRY_WITH_GC(heap, return Local<String>(new(heap, length) String(chars)));
 }
 
 
-Local<String> String::create(Heap* heap, word_t length) {
+Local<String> String::create(Heap* heap, length_t length) {
   RETRY_WITH_GC(heap, return Local<String>(new(heap, length) String));
 }
 
 
 Local<String> String::fromUtf8String(Heap* heap, const u8* utf8Chars,
-                                      word_t length, word_t size) {
+                                      length_t length, word_t size) {
   auto string = String::create(heap, length);
   u32* chars = string->chars_;
   auto end = utf8Chars + size;
-  word_t i;
+  length_t i;
   for (i = 0; i < length; i++) {
     auto ch = utf8Decode(&utf8Chars, end);
     if (ch == UTF8_DECODE_ERROR)
@@ -78,7 +80,7 @@ Local<String> String::fromUtf8CString(Heap* heap, const char* utf8Chars) {
 
 
 Local<String> String::fromUtf8String(Heap* heap, const u8* utf8Chars, word_t size) {
-  word_t length = 0;
+  length_t length = 0;
   auto p = utf8Chars;
   auto end = p + size;
   while (p != end) {
@@ -93,7 +95,7 @@ Local<String> String::fromUtf8String(Heap* heap, const u8* utf8Chars, word_t siz
 
 word_t String::utf8EncodedSize() const {
   word_t size = 0;
-  for (word_t i = 0; i < length(); i++) {
+  for (length_t i = 0; i < length(); i++) {
     size += utf8EncodeSize(get(i));
   }
   return size;
@@ -105,7 +107,7 @@ vector<u8> String::toUtf8StlVector() const {
   vector<u8> utf8Chars(size);
   auto p = utf8Chars.data();
   auto end = p + size;
-  for (word_t i = 0; i < length(); i++) {
+  for (length_t i = 0; i < length(); i++) {
     utf8Encode(get(i), &p);
   }
   ASSERT(p == end);
@@ -123,7 +125,7 @@ string String::toUtf8StlString() const {
 bool String::equals(String* other) const {
   if (length() != other->length())
     return false;
-  for (word_t i = 0; i < length(); i++) {
+  for (length_t i = 0; i < length(); i++) {
     if (get(i) != other->get(i))
       return false;
   }
@@ -134,7 +136,7 @@ bool String::equals(String* other) const {
 int String::compare(String* other) const {
   auto minLength = min(length(), other->length());
   int cmp;
-  for (word_t i = 0; i < minLength; i++) {
+  for (length_t i = 0; i < minLength; i++) {
     cmp = static_cast<int>(get(i)) - static_cast<int>(other->get(i));
     if (cmp != 0)
       return cmp;

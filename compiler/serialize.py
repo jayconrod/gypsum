@@ -47,10 +47,10 @@ class Serializer(object):
             self.writeTypeParameter(p)
 
     def writeHeader(self):
-        self.outFile.write(struct.pack("<Ihhqqqqqq",
+        self.outFile.write(struct.pack("<Ihhqiiiii",
                                        0x676b7073,   # magic number
                                        0,            # major version
-                                       6,            # minor version
+                                       7,            # minor version
                                        0,            # flags
                                        len(self.package.strings),
                                        len(self.package.functions),
