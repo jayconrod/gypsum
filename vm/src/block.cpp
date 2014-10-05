@@ -108,6 +108,13 @@ Heap* Block::getHeap() const {
 }
 
 
+#define META_POINTER_LIST(F) \
+  F(Meta, clas_)             \
+
+DEFINE_POINTER_MAP(Meta, META_POINTER_LIST)
+#undef META_POINTER_LIST
+
+
 void* Meta::operator new (size_t, Heap* heap,
                           length_t dataLength,
                           u32 objectSize,

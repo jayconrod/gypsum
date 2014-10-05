@@ -49,15 +49,17 @@ class Package: public Block {
   Function* entryFunction();
 
   static const u32 kMagic = 0x676b7073;
-  static const word_t kPointerMap = 0x3c;
 
  private:
+  DECLARE_POINTER_MAP()
+
   u64 flags_;
   BlockArray<String>* strings_;
   BlockArray<Function>* functions_;
   BlockArray<Class>* classes_;
   BlockArray<TypeParameter>* typeParameters_;
   length_t entryFunctionIndex_;
+  // Update PACKAGE_POINTER_LIST if pointers change.
 };
 
 }

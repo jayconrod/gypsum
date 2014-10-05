@@ -215,6 +215,10 @@ class Meta: public Block {
   static const word_t kElementSize = kWordSize;
 
  private:
+  DECLARE_POINTER_MAP()
+
+  static const word_t kElementPointerMap = 0x1;
+
   static word_t sizeForMeta(length_t dataLength, u32 objectSize, u32 elementSize);
   Block** dataBase() { return &mem<Block*>(this, sizeof(Meta)); }
   Block* const* dataBase() const { return &mem<Block*>(this, sizeof(Meta)); }
@@ -229,12 +233,9 @@ class Meta: public Block {
   alignas(word_t) Class* clas_;
   u32 objectSize_;
   u32 elementSize_;
-
-  static const word_t kPointerMap = 0x8;
-  static const word_t kElementPointerMap = 0x1;
+  // Update META_POINTER_LIST if pointers change.
 
   friend class Class;
-  friend class Roots;
 };
 
 

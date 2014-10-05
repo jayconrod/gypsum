@@ -53,6 +53,17 @@ static length_t readLengthVbn(istream& stream);
 static id_t readIdVbn(istream& stream);
 
 
+#define PACKAGE_POINTER_LIST(F) \
+  F(Package, strings_)          \
+  F(Package, functions_)        \
+  F(Package, classes_)          \
+  F(Package, typeParameters_)   \
+
+DEFINE_POINTER_MAP(Package, PACKAGE_POINTER_LIST)
+
+#undef PACKAGE_POINTER_LIST
+
+
 Package::Package(VM* vm)
     : Block(PACKAGE_BLOCK_TYPE),
       flags_(0),
