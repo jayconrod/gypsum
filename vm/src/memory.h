@@ -10,7 +10,6 @@
 #include <iterator>
 #include <memory>
 #include <vector>
-#include "list.h"
 #include "remembered-set.h"
 #include "utils.h"
 

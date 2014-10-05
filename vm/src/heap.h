@@ -11,7 +11,6 @@
 #include <iterator>
 #include "builtins.h"
 #include "error.h"
-#include "list.h"
 #include "memory.h"
 #include "utils.h"
 
