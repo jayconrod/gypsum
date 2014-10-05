@@ -27,6 +27,8 @@ class Type;
 
 class Class: public Block {
  public:
+  static const BlockType kBlockType = CLASS_BLOCK_TYPE;
+
   void* operator new(size_t, Heap* heap);
   Class(u32 flags,
         Type* supertype,
@@ -50,7 +52,6 @@ class Class: public Block {
                              length_t lengthFieldIndex = kIndexNotSet);
 
   void printClass(FILE* out);
-  DEFINE_CAST(Class)
 
   // Most members can be set after construction, even though we would like to consider Class
   // as immutable. This is necessary since Class and Type have a cyclic relationship. We may

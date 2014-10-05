@@ -14,6 +14,8 @@ namespace internal {
 
 class Object: public Block {
  public:
+  static const BlockType kBlockType = OBJECT_BLOCK_TYPE;
+
   void* operator new (size_t, Heap* heap, Meta* meta);
   void* operator new (size_t, Heap* heap, Meta* meta, length_t length);
   Object();
@@ -21,7 +23,6 @@ class Object: public Block {
   static Local<Object> create(Heap* heap, const Handle<Meta>& meta, length_t length);
 
   void printObject(FILE* out);
-  DEFINE_CAST(Object)
 
  protected:
   explicit Object(BlockType blockType);

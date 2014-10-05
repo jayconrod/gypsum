@@ -28,7 +28,7 @@ word_t Block::sizeOfBlock() const {
   } else {
     switch (meta()->blockType()) {
       case META_BLOCK_TYPE:
-        size = Meta::cast(this)->sizeOfMeta();
+        size = const_block_cast<Meta>(this)->sizeOfMeta();
         break;
       default:
         UNREACHABLE();
@@ -41,11 +41,11 @@ word_t Block::sizeOfBlock() const {
 
 void Block::print(FILE* out) {
   switch (meta()->blockType()) {
-    case META_BLOCK_TYPE: Meta::cast(this)->printMeta(out); break;
-    case STACK_BLOCK_TYPE: Stack::cast(this)->printStack(out); break;
-    case FUNCTION_BLOCK_TYPE: Function::cast(this)->printFunction(out); break;
-    case I32_ARRAY_BLOCK_TYPE: I32Array::cast(this)->printI32Array(out); break;
-    case I64_ARRAY_BLOCK_TYPE: I64Array::cast(this)->printI64Array(out); break;
+    case META_BLOCK_TYPE: block_cast<Meta>(this)->printMeta(out); break;
+    case STACK_BLOCK_TYPE: block_cast<Stack>(this)->printStack(out); break;
+    case FUNCTION_BLOCK_TYPE: block_cast<Function>(this)->printFunction(out); break;
+    case I32_ARRAY_BLOCK_TYPE: block_cast<I32Array>(this)->printI32Array(out); break;
+    case I64_ARRAY_BLOCK_TYPE: block_cast<I64Array>(this)->printI64Array(out); break;
     default:
       fprintf(out, "invalid object\n");
   }
@@ -54,7 +54,7 @@ void Block::print(FILE* out) {
 
 void Block::relocate(word_t delta) {
   switch (meta()->blockType()) {
-    case STACK_BLOCK_TYPE: Stack::cast(this)->relocateStack(delta); break;
+    case STACK_BLOCK_TYPE: block_cast<Stack>(this)->relocateStack(delta); break;
     default:
       UNREACHABLE();
   }

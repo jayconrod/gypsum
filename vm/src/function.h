@@ -24,6 +24,8 @@ class TypeParameter;
 
 class Function: public Block {
  public:
+  static const BlockType kBlockType = FUNCTION_BLOCK_TYPE;
+
   void* operator new(size_t, Heap* heap, length_t instructionsSize);
   Function(u32 flags,
            TaggedArray<TypeParameter>* typeParameters,
@@ -44,7 +46,6 @@ class Function: public Block {
 
   static word_t sizeForFunction(length_t instructionsSize);
   void printFunction(FILE* out);
-  DEFINE_CAST(Function)
 
   u32 flags() const { return flags_; }
 
@@ -100,7 +101,6 @@ class StackPointerMap: public WordArray {
  public:
   static StackPointerMap* tryBuildFrom(Heap* heap, Function* function);
   static Local<StackPointerMap> buildFrom(Heap* heap, Local<Function> function);
-  static StackPointerMap* cast(Block* block);
 
   Bitmap bitmap();
   void getParametersRegion(word_t* paramOffset, word_t* paramCount);

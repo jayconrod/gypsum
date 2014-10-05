@@ -179,6 +179,7 @@ class BlockArray: public Array<T*> {
 template <class T, BlockType blockType>
 class DataArray: public Array<T> {
  public:
+  static const BlockType kBlockType = blockType;
   DataArray() : Array<T>(blockType) { }
 };
 
@@ -186,7 +187,6 @@ class DataArray: public Array<T> {
 class I8Array: public DataArray<i8, I8_ARRAY_BLOCK_TYPE> {
  public:
   DEFINE_ARRAY_CREATE(I8Array, i8)
-  DEFINE_CAST(I8Array)
   void printI8Array(FILE* out);
 };
 
@@ -194,7 +194,6 @@ class I8Array: public DataArray<i8, I8_ARRAY_BLOCK_TYPE> {
 class I32Array: public DataArray<i32, I32_ARRAY_BLOCK_TYPE> {
  public:
   DEFINE_ARRAY_CREATE(I32Array, i32)
-  DEFINE_CAST(I32Array)
   void printI32Array(FILE* out);
 };
 
@@ -206,7 +205,6 @@ typedef I32Array IdArray;
 class I64Array: public DataArray<i64, I64_ARRAY_BLOCK_TYPE> {
  public:
   DEFINE_ARRAY_CREATE(I64Array, i64)
-  DEFINE_CAST(I64Array)
   void printI64Array(FILE* out);
 };
 
@@ -214,10 +212,11 @@ class I64Array: public DataArray<i64, I64_ARRAY_BLOCK_TYPE> {
 template <class T>
 class TaggedArray: public Array<Tagged<T>> {
  public:
+  static const BlockType kBlockType = TAGGED_ARRAY_BLOCK_TYPE;
+
   TaggedArray() : Array<Tagged<T>>(TAGGED_ARRAY_BLOCK_TYPE) { }
 
   DEFINE_ARRAY_CREATE(TaggedArray, Tagged<T>)
-  DEFINE_CAST(TaggedArray)
 
   void printTaggedArray(FILE* out) {
     UNIMPLEMENTED();

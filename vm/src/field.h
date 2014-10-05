@@ -17,12 +17,13 @@ class Type;
 
 class Field: public Block {
  public:
+  static const BlockType kBlockType = FIELD_BLOCK_TYPE;
+
   void* operator new (size_t, Heap* heap);
   Field(u32 flags, Type* type);
   static Local<Field> create(Heap* heap, u32 flags, const Handle<Type>& type);
 
   void printField(FILE* out);
-  DEFINE_CAST(Field)
 
   u32 flags() const { return flags_; }
   Type* type() const { return type_.get(); }

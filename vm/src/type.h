@@ -23,6 +23,8 @@ class TypeParameter;
 
 class Type: public Object {
  public:
+  static const BlockType kBlockType = TYPE_BLOCK_TYPE;
+
   enum Form {
     // Primitive forms
     UNIT_TYPE,
@@ -78,8 +80,6 @@ class Type: public Object {
   static Type* wordType(Roots* roots);
   static Type* rootClassType(Roots* roots);
   static Type* nullType(Roots* roots);
-
-  DEFINE_CAST(Type)
 
   length_t length() const { return elementsLength(); }
 

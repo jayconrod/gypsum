@@ -195,7 +195,7 @@ bool Type::isClass() const {
 
 Class* Type::asClass() const {
   ASSERT(isClass() && length() > 0);
-  return Class::cast(elements_[0]);
+  return block_cast<Class>(elements_[0]);
 }
 
 
@@ -206,7 +206,7 @@ bool Type::isVariable() const {
 
 TypeParameter* Type::asVariable() const {
   ASSERT(isVariable() && length() > 0);
-  return TypeParameter::cast(elements_[0]);
+  return block_cast<TypeParameter>(elements_[0]);
 }
 
 

@@ -16,6 +16,8 @@ class Type;
 
 class TypeParameter: public Block {
  public:
+  static const BlockType kBlockType = TYPE_PARAMETER_BLOCK_TYPE;
+
   void* operator new (size_t, Heap* heap);
   TypeParameter(u32 flags, Type* upperBound, Type* lowerBound);
   static Local<TypeParameter> create(Heap* heap);
@@ -25,8 +27,6 @@ class TypeParameter: public Block {
                                      const Handle<Type>& lowerBound);
 
   void printTypeParameter(FILE* out);
-
-  DEFINE_CAST(TypeParameter)
 
   // The bounds can be set after construction, even though we woud like to consider
   // TypeParameter as immutable. This is necessary since TypeParameter and Type have a cyclic

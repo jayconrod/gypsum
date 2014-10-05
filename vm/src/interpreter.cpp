@@ -278,7 +278,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
 
       case STRING: {
         auto index = readVbn();
-        String* string = String::cast(function_->package()->getString(index));
+        String* string = block_cast<String>(function_->package()->getString(index));
         push<Block*>(string);
         break;
       }
@@ -384,7 +384,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         auto methodIndex = toLength(readVbn());
         auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
         CHECK_NON_NULL(receiver);
-        Local<Function> callee(Function::cast(receiver->meta()->getData(methodIndex)));
+        Local<Function> callee(block_cast<Function>(receiver->meta()->getData(methodIndex)));
         if (callee->hasBuiltinId()) {
           handleBuiltin(callee->builtinId());
         } else {
@@ -502,7 +502,7 @@ void Interpreter::ensurePointerMap(const Handle<Function>& function) {
 void Interpreter::handleBuiltin(BuiltinId id) {
   switch (id) {
     case BUILTIN_ROOT_CLASS_TYPEOF_ID: {
-      auto receiver = Object::cast(pop<Block*>());
+      auto receiver = block_cast<Object>(pop<Block*>());
       Local<Class> clas(receiver->meta()->clas());
       auto type = Type::create(vm_->heap(), clas);
       push<Block*>(*type);
@@ -516,24 +516,24 @@ void Interpreter::handleBuiltin(BuiltinId id) {
       break;
 
     case BUILTIN_TYPE_CTOR_ID: {
-      auto clas = Class::cast(pop<Block*>());
-      auto receiver = Type::cast(pop<Block*>());
+      auto clas = block_cast<Class>(pop<Block*>());
+      auto receiver = block_cast<Type>(pop<Block*>());
       new(receiver, 1) Type(clas);
       push<i8>(0);
       break;
     }
 
     case BUILTIN_TYPE_IS_SUBTYPE_OF_ID: {
-      auto other = Type::cast(pop<Block*>());
-      auto receiver = Type::cast(pop<Block*>());
+      auto other = block_cast<Type>(pop<Block*>());
+      auto receiver = block_cast<Type>(pop<Block*>());
       auto result = receiver->isSubtypeOf(other);
       push<i8>(result ? 1 : 0);
       break;
     }
 
     case BUILTIN_STRING_CONCAT_OP_ID: {
-      Local<String> right(String::cast(pop<Block*>()));
-      Local<String> left(String::cast(pop<Block*>()));
+      Local<String> right(block_cast<String>(pop<Block*>()));
+      Local<String> left(block_cast<String>(pop<Block*>()));
       auto cons = left->tryConcat(vm_->heap(), *right);
       if (cons == nullptr) {
         collectGarbage();
@@ -606,7 +606,7 @@ void Interpreter::handleBuiltin(BuiltinId id) {
       break;
 
     case BUILTIN_PRINT_FUNCTION_ID: {
-      auto string = String::cast(pop<Block*>());
+      auto string = block_cast<String>(pop<Block*>());
       auto stlString = string->toUtf8StlString();
       cout << stlString;
       push<i8>(0);
@@ -839,8 +839,8 @@ void Interpreter::convert() {
 
 
 int Interpreter::strcmp() {
-  auto right = String::cast(pop<Block*>());
-  auto left = String::cast(pop<Block*>());
+  auto right = block_cast<String>(pop<Block*>());
+  auto left = block_cast<String>(pop<Block*>());
   auto cmp = left->compare(right);
   return cmp;
 }

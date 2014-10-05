@@ -7,6 +7,7 @@
 #ifndef block_h
 #define block_h
 
+#include <type_traits>
 #include <cstdio>
 #include "bitmap.h"
 #include "heap.h"
@@ -44,18 +45,8 @@ enum BlockType {
 #undef ENUM_BLOCK_TYPE
 
 
-#define DEFINE_CAST(Name) \
-static Name* cast(Block* block) { \
-  ASSERT(block->is##Name()); \
-  return reinterpret_cast<Name*>(block); \
-} \
-static const Name* cast(const Block* block) { \
-  ASSERT(block->is##Name()); \
-  return reinterpret_cast<const Name*>(block); \
-}
-
-
 class Bitmap;
+class Block;
 class Class;
 template <class T>
 class Handle;
@@ -177,6 +168,8 @@ static const int kBlockHeaderSize = sizeof(Block);
  */
 class Meta: public Block {
  public:
+  static const BlockType kBlockType = META_BLOCK_TYPE;
+
   /** Attempts to allocate raw memory for a `Meta`. Throws AllocationError on failure. The
    *  memory will be zero-initialized (except for size-related members), so explicit
    *  zero-initialization is not necessary.
@@ -193,7 +186,6 @@ class Meta: public Block {
 
   static word_t sizeForMeta(length_t dataLength, u32 objectSize, u32 elementSize);
   word_t sizeOfMeta() const;
-  DEFINE_CAST(Meta)
 
   void printMeta(FILE* out);
 
@@ -253,13 +245,13 @@ class Meta: public Block {
  */
 class Free: public Block {
  public:
+  static const BlockType kBlockType = FREE_BLOCK_TYPE;
+
   void* operator new (size_t, Heap* heap, word_t size);
   void* operator new (size_t, void* place, word_t size);
   explicit Free(Free* next)
       : Block(FREE_BLOCK_TYPE),
         next_(next) { }
-
-  DEFINE_CAST(Free)
 
   word_t size() const { return size_; }
   Free* next() const { return next_; }
@@ -274,12 +266,30 @@ class Free: public Block {
 STATIC_ASSERT(isAligned(sizeof(Free), kWordSize));
 
 
-#define DEFINE_TYPE_CHECK(Name, NAME)                   \
-bool Block::is##Name() const {                          \
-  return blockType() == NAME##_BLOCK_TYPE;              \
+/** Returns true if the block is an instance of the template class. Concrete sub-classes of
+ *  Block must define a static kBlockType member for this to work.
+ */
+template <class T>
+bool isa(const Block* block) {
+  return block->meta()->blockType() == T::kBlockType;
 }
-BLOCK_TYPE_LIST(DEFINE_TYPE_CHECK)
-#undef DEFINE_TYPE_CHECK
+
+
+/** A checked cast for a block pointer to a given type. Note that the type argument must be a
+ *  pointer type to a concrete Block subclass.
+ */
+template <class T>
+T* block_cast(Block* block) {
+  ASSERT(isa<T>(block));
+  return reinterpret_cast<T*>(block);
+}
+
+
+template <class T>
+const T* const_block_cast(const Block* block) {
+  ASSERT(isa<T>(block));
+  return reinterpret_cast<const T*>(block);
+}
 
 }
 }

@@ -51,11 +51,12 @@ class StackFrame {
 
 class Stack: public Block {
  public:
+  static const BlockType kBlockType = STACK_BLOCK_TYPE;
+
   void* operator new(size_t, Heap* heap, word_t size);
   Stack();
   static Local<Stack> create(Heap* heap, word_t size);
 
-  DEFINE_CAST(Stack)
   void printStack(FILE* out) const;
   void relocateStack(word_t delta);
 

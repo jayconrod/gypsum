@@ -176,11 +176,11 @@ Local<Package> Package::loadFromStream(VM* vm, istream& stream) {
       functionArray->set(i, *function);
     }
     for (length_t i = 0; i < classCount; i++) {
-      auto clas = handle(Class::cast(classArray->get(i)));
+      auto clas = handle(block_cast<Class>(classArray->get(i)));
       readClass(vm, stream, package, clas);
     }
     for (length_t i = 0; i < typeParameterCount; i++) {
-      auto param = handle(TypeParameter::cast(typeParametersArray->get(i)));
+      auto param = handle(block_cast<TypeParameter>(typeParametersArray->get(i)));
       readTypeParameter(vm, stream, package, param);
     }
   } catch (istream::failure exn) {
@@ -192,22 +192,22 @@ Local<Package> Package::loadFromStream(VM* vm, istream& stream) {
 
 
 String* Package::getString(length_t index) {
-  return String::cast(strings()->get(index));
+  return block_cast<String>(strings()->get(index));
 }
 
 
 Function* Package::getFunction(length_t index) {
-  return Function::cast(functions()->get(index));
+  return block_cast<Function>(functions()->get(index));
 }
 
 
 Class* Package::getClass(length_t index) {
-  return Class::cast(classes()->get(index));
+  return block_cast<Class>(classes()->get(index));
 }
 
 
 TypeParameter* Package::getTypeParameter(length_t index) {
-  return TypeParameter::cast(typeParameters()->get(index));
+  return block_cast<TypeParameter>(typeParameters()->get(index));
 }
 
 

@@ -128,12 +128,6 @@ u8* Function::instructionsStart() const {
 }
 
 
-StackPointerMap* StackPointerMap::cast(Block* block) {
-  WordArray* array = WordArray::cast(block);
-  return reinterpret_cast<StackPointerMap*>(array);
-}
-
-
 Bitmap StackPointerMap::bitmap() {
   word_t* base = reinterpret_cast<word_t*>(
       elements() + kHeaderLength + entryCount() * kEntryLength);
@@ -420,7 +414,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
         case LDPC: {
           auto index = readVbn(bytecode, &pcOffset);
           auto clas = currentMap.pop()->asClass();
-          auto type = Field::cast(clas->fields()->get(index))->type();
+          auto type = block_cast<Field>(clas->fields()->get(index))->type();
           currentMap.push(type);
           break;
         }
@@ -443,7 +437,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
           if (isBuiltinId(classId)) {
             type = roots->getBuiltinType(classId);
           } else {
-            type = new(heap, 1) Type(Class::cast(package->classes()->get(classId)));
+            type = new(heap, 1) Type(block_cast<Class>(package->classes()->get(classId)));
           }
           currentMap.push(type);
           break;
@@ -458,7 +452,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
           if (isBuiltinId(classId)) {
             type = roots->getBuiltinType(classId);
           } else {
-            type = new(heap, 1) Type(Class::cast(package->classes()->get(classId)));
+            type = new(heap, 1) Type(block_cast<Class>(package->classes()->get(classId)));
           }
           currentMap.push(type);
           break;
@@ -756,7 +750,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
   if (array == nullptr)
     return nullptr;
 
-  StackPointerMap* stackPointerMap = StackPointerMap::cast(array);
+  StackPointerMap* stackPointerMap = block_cast<StackPointerMap>(array);
   stackPointerMap->setEntryCount(maps.size());
   length_t mapOffset = parametersMap.size();
   for (length_t i = 0, n = maps.size(); i < n; i++) {

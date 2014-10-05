@@ -17,6 +17,8 @@ namespace internal {
 
 class String: public Object {
  public:
+  static const BlockType kBlockType = STRING_BLOCK_TYPE;
+
   static word_t sizeForLength(length_t length);
   void* operator new (size_t, Heap* heap, length_t length);
   explicit String(const u32* chars);
@@ -25,8 +27,6 @@ class String: public Object {
   static Local<String> fromUtf8String(Heap* heap, const u8* utf8Chars, word_t size);
   static Local<String> fromUtf8String(Heap* heap, const u8* utf8Chars,
                                       length_t length, word_t size);
-
-  DEFINE_CAST(String)
 
   length_t length() const { return length_; }
   const u32* chars() const { return chars_; }

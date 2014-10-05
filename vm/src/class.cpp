@@ -93,7 +93,7 @@ void Class::printClass(FILE* out) {
 length_t Class::findFieldIndex(word_t offset) const {
   word_t currentOffset = kWordSize;
   for (length_t i = 0, n = fields()->length(); i < n; i++) {
-    auto type = Field::cast(fields()->get(i))->type();
+    auto type = block_cast<Field>(fields()->get(i))->type();
     currentOffset = align(currentOffset, type->alignment());
     if (currentOffset == offset)
       return i;
@@ -108,8 +108,8 @@ word_t Class::findFieldOffset(length_t index) const {
   ASSERT(index < fields()->length());
   word_t currentOffset = kWordSize;
   for (length_t i = 0; i < index; i++) {
-    auto size = Field::cast(fields()->get(i))->type()->typeSize();
-    auto nextAlignment = Field::cast(fields()->get(i + 1))->type()->alignment();
+    auto size = block_cast<Field>(fields()->get(i))->type()->typeSize();
+    auto nextAlignment = block_cast<Field>(fields()->get(i + 1))->type()->alignment();
     currentOffset = align(currentOffset + size, nextAlignment);
   }
   return currentOffset;
@@ -186,7 +186,7 @@ bool Class::isSubclassOf(Class* other) const {
 
 void Class::computeSizeAndPointerMap(u32* size, bool* hasPointers, BitSet* pointerMap) const {
   for (length_t i = 0, n = fields()->length(); i < n; i++) {
-    auto type = Field::cast(fields()->get(i))->type();
+    auto type = block_cast<Field>(fields()->get(i))->type();
     computeSizeAndPointerMapForType(type, size, hasPointers, pointerMap);
   }
 }
