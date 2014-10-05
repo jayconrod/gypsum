@@ -135,7 +135,7 @@ constexpr inline word_t alignDown(word_t n, word_t alignment) {
 }
 
 
-inline bool isAligned(word_t n, word_t alignment) {
+constexpr inline bool isAligned(word_t n, word_t alignment) {
   return (n & (alignment - 1UL)) == 0;
 }
 

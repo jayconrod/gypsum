@@ -20,18 +20,15 @@ namespace internal {
 word_t Block::sizeOfBlock() const {
   word_t size = kNotFound;
   if (!meta()->hasCustomSize()) {
-    length_t length = meta()->hasElements() ? elementsLength() : 0;
-    size = meta()->objectSize() + length * meta()->elementSize();
+    if (meta()->hasElements()) {
+      size = elementsOffset() + elementsSize();
+    } else {
+      size = meta()->objectSize();
+    }
   } else {
     switch (meta()->blockType()) {
       case META_BLOCK_TYPE:
         size = Meta::cast(this)->sizeOfMeta();
-        break;
-      case FREE_BLOCK_TYPE:
-        size = Free::cast(this)->size();
-        break;
-      case FUNCTION_BLOCK_TYPE:
-        size = Function::cast(this)->sizeOfFunction();
         break;
       default:
         UNREACHABLE();
@@ -84,16 +81,49 @@ BlockType Block::blockType() const {
 }
 
 
-length_t Block::elementsLength() const {
-  ASSERT(meta()->hasElements());
-  return mem<length_t>(this, sizeof(Block));
+word_t Block::elementsLength() const {
+  ASSERT(meta()->elementSize() > 0 && meta()->lengthOffset() > 0);
+  word_t len;
+  if (meta()->hasWordSizeLength()) {
+    len = mem<word_t>(this, meta()->lengthOffset());
+    ASSERT(len != kNotSet);
+  } else {
+    len = static_cast<word_t>(mem<length_t>(this, meta()->lengthOffset()));
+    ASSERT(len != kLengthNotSet);
+  }
+  return len;
 }
 
 
-void Block::setElementsLength(length_t length) {
+void Block::setElementsLength(word_t length) {
+  ASSERT(meta()->elementSize() > 0 && meta()->lengthOffset() > 0);
+  ASSERT(length != kNotSet);
+  if (meta()->hasWordSizeLength()) {
+    mem<word_t>(this, meta()->lengthOffset()) = length;
+  } else {
+    ASSERT(length <= kMaxLength);
+    auto len = static_cast<length_t>(length);
+    ASSERT(len == length);
+    mem<word_t>(this, meta()->lengthOffset()) = len;
+  }
+}
+
+
+ptrdiff_t Block::elementsOffset() const {
   ASSERT(meta()->hasElements());
-  ASSERT(length <= kMaxLength);
-  mem<length_t>(this, sizeof(Block)) = length;
+  return align(meta()->objectSize(), kWordSize);
+}
+
+
+Address Block::elementsBase() const {
+  ASSERT(meta()->hasElements());
+  return address() + elementsOffset();
+}
+
+
+word_t Block::elementsSize() const {
+  ASSERT(meta()->hasElements());
+  return static_cast<word_t>(elementsLength()) * meta()->elementSize();
 }
 
 
@@ -142,6 +172,16 @@ Local<Meta> Meta::create(Heap* heap,
 }
 
 
+word_t Meta::sizeForMeta(length_t dataLength, u32 objectSize, u32 elementSize) {
+  ASSERT(dataLength <= kMaxLength);
+  auto headerSize = align(sizeof(Meta), kWordSize);
+  auto dataSize = dataLength * kWordSize;
+  auto objectWords = align(objectSize, kWordSize) / kWordSize;
+  auto elementWords = align(elementSize, kWordSize) / kWordSize;
+  return headerSize + dataSize + Bitmap::sizeFor(objectWords) + Bitmap::sizeFor(elementWords);
+}
+
+
 word_t Meta::sizeOfMeta() const {
   return sizeForMeta(dataLength(), objectSize(), elementSize());
 }
@@ -180,8 +220,8 @@ void Meta::setData(length_t index, Block* value) {
 
 
 word_t* Meta::rawObjectPointerMap() {
-  auto dataSize = dataLength() * kWordSize;
-  return &mem<word_t>(this, sizeof(Meta) + dataSize);
+  Address elementsEnd = elementsBase() + elementsSize();
+  return reinterpret_cast<word_t*>(elementsEnd);
 }
 
 
@@ -192,10 +232,10 @@ Bitmap Meta::objectPointerMap() {
 
 
 word_t* Meta::rawElementPointerMap() {
-  auto dataSize = dataLength() * kWordSize;
+  Address elementsEnd = elementsBase() + elementsSize();
   auto objectWordCount = align(objectSize(), kWordSize) / kWordSize;
   auto objectPointerMapSize = Bitmap::sizeFor(objectWordCount);
-  return &mem<word_t>(this, sizeof(Meta) + dataSize + objectPointerMapSize);
+  return reinterpret_cast<word_t*>(elementsEnd + objectPointerMapSize);
 }
 
 
@@ -205,23 +245,13 @@ Bitmap Meta::elementPointerMap() {
 }
 
 
-word_t Meta::sizeForMeta(length_t dataLength, u32 objectSize, u32 elementSize) {
-  ASSERT(dataLength <= kMaxLength);
-  auto headerSize = sizeof(Meta);
-  auto dataSize = dataLength * kWordSize;
-  auto objectWords = align(objectSize, kWordSize) / kWordSize;
-  auto elementWords = align(elementSize, kWordSize) / kWordSize;
-  return headerSize + dataSize + Bitmap::sizeFor(objectWords) + Bitmap::sizeFor(elementWords);
-}
-
-
 void* Free::operator new (size_t unused, Heap* heap, word_t size) {
   auto free = reinterpret_cast<Free*>(heap->allocate(size));
   if (free == nullptr)
     return free;
 
   free->setMeta(FREE_BLOCK_TYPE);
-  free->size_ = size;
+  free->size_ = size - sizeof(Free);
   return free;
 }
 
@@ -229,7 +259,7 @@ void* Free::operator new (size_t unused, Heap* heap, word_t size) {
 void* Free::operator new (size_t unused, void* place, word_t size) {
   auto free = reinterpret_cast<Free*>(place);
   free->setMeta(FREE_BLOCK_TYPE);
-  free->size_ = size;
+  free->size_ = size - sizeof(Free);
   return free;
 }
 

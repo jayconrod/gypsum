@@ -43,7 +43,6 @@ class Function: public Block {
                                 const Handle<Package>& package);
 
   static word_t sizeForFunction(length_t instructionsSize);
-  word_t sizeOfFunction() const;
   void printFunction(FILE* out);
   DEFINE_CAST(Function)
 

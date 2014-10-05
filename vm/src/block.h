@@ -138,7 +138,10 @@ BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
   void setMeta(Meta* meta);
   BlockType blockType() const;
 
-  length_t elementsLength() const;
+  word_t elementsLength() const;
+  ptrdiff_t elementsOffset() const;
+  Address elementsBase() const;
+  word_t elementsSize() const;
 
   VM* getVM() const;
   Heap* getHeap() const;
@@ -150,7 +153,7 @@ BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
   }
 
  protected:
-  void setElementsLength(length_t length);
+  void setElementsLength(word_t length);
 
  private:
   MetaWord metaWord_;
@@ -187,6 +190,7 @@ class Meta: public Block {
                             u32 elementSize,
                             BlockType blockType);
 
+  static word_t sizeForMeta(length_t dataLength, u32 objectSize, u32 elementSize);
   word_t sizeOfMeta() const;
   DEFINE_CAST(Meta)
 
@@ -199,6 +203,8 @@ class Meta: public Block {
   bool hasElementPointers() const { return hasElementPointers_; }
   bool hasCustomPointers() const { return hasCustomPointers_; }
   bool needsRelocation() const { return needsRelocation_; }
+  bool hasWordSizeLength() const { return hasWordSizeLength_; }
+  u8 lengthOffset() const { return lengthOffset_; }
   DEFINE_INL_PTR_ACCESSORS2(Class*, clas, setClass)
   u32 objectSize() const { return objectSize_; }
   u32 elementSize() const { return elementSize_; }
@@ -219,9 +225,8 @@ class Meta: public Block {
 
   static const word_t kElementPointerMap = 0x1;
 
-  static word_t sizeForMeta(length_t dataLength, u32 objectSize, u32 elementSize);
-  Block** dataBase() { return &mem<Block*>(this, sizeof(Meta)); }
-  Block* const* dataBase() const { return &mem<Block*>(this, sizeof(Meta)); }
+  Block** dataBase() { return reinterpret_cast<Block**>(elementsBase()); }
+  Block* const* dataBase() const { return reinterpret_cast<Block**>(elementsBase()); }
 
   length_t dataLength_;
   BlockType blockType_ : 8;
@@ -230,6 +235,8 @@ class Meta: public Block {
   bool hasElementPointers_ : 1;
   bool hasCustomPointers_ : 1;
   bool needsRelocation_ : 1;
+  bool hasWordSizeLength_ : 1;
+  u8 lengthOffset_;
   alignas(word_t) Class* clas_;
   u32 objectSize_;
   u32 elementSize_;
@@ -258,7 +265,11 @@ class Free: public Block {
  private:
   word_t size_;
   Free* next_;
+
+  friend class Roots;
 };
+
+STATIC_ASSERT(isAligned(sizeof(Free), kWordSize));
 
 
 #define DEFINE_TYPE_CHECK(Name, NAME)                   \

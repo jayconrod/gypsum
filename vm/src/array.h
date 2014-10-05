@@ -139,6 +139,8 @@ class Array: public Block {
       : Block(blockType) { }
 
   length_t length_;
+
+  friend class Roots;
 };
 
 

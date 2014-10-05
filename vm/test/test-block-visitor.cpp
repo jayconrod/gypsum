@@ -83,6 +83,7 @@ TEST(BlockVisitorRegularPointers) {
   auto meta = new(heap, 0, 6 * kWordSize, 3 * kWordSize) Meta(OBJECT_BLOCK_TYPE);
   meta->hasPointers_ = true;
   meta->hasElementPointers_ = true;
+  meta->lengthOffset_ = kWordSize;
   meta->objectPointerMap().setWord(0, 0x34);
   meta->elementPointerMap().setWord(0, 0x5);
 

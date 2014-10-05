@@ -21,15 +21,17 @@ namespace internal {
 
 void Roots::initialize(Heap* heap) {
   auto metaMeta = new(heap, 0, sizeof(Meta), Meta::kElementSize) Meta(META_BLOCK_TYPE);
+  basicRoots_[META_META_ROOT_INDEX] = metaMeta;
   metaMeta->hasPointers_ = true;
   metaMeta->hasCustomSize_ = true;
   metaMeta->hasElementPointers_ = true;
+  metaMeta->lengthOffset_ = offsetof(Meta, dataLength_);
   metaMeta->objectPointerMap().setWord(0, Meta::kPointerMap);
   metaMeta->elementPointerMap().setWord(0, Meta::kElementPointerMap);
-  basicRoots_[META_META_ROOT_INDEX] = metaMeta;
 
-  auto freeMeta = new(heap, 0, sizeof(Free), 0) Meta(FREE_BLOCK_TYPE);
-  freeMeta->hasCustomSize_ = true;
+  auto freeMeta = new(heap, 0, sizeof(Free), 1) Meta(FREE_BLOCK_TYPE);
+  freeMeta->hasWordSizeLength_ = true;
+  freeMeta->lengthOffset_ = offsetof(Free, size_);
   basicRoots_[FREE_META_ROOT_INDEX] = freeMeta;
 
   auto packageMeta = new(heap, 0, sizeof(Package), 0) Meta(PACKAGE_BLOCK_TYPE);
@@ -41,11 +43,13 @@ void Roots::initialize(Heap* heap) {
   stackMeta->hasPointers_ = true;
   stackMeta->hasCustomPointers_ = true;
   stackMeta->needsRelocation_ = true;
+  stackMeta->hasWordSizeLength_ = true;
+  stackMeta->lengthOffset_ = offsetof(Stack, stackSize_);
   basicRoots_[STACK_META_ROOT_INDEX] = stackMeta;
 
-  auto functionMeta = new(heap, 0, sizeof(Function), 0) Meta(FUNCTION_BLOCK_TYPE);
+  auto functionMeta = new(heap, 0, sizeof(Function), 1) Meta(FUNCTION_BLOCK_TYPE);
   functionMeta->hasPointers_ = true;
-  functionMeta->hasCustomSize_ = true;
+  functionMeta->lengthOffset_ = offsetof(Function, instructionsSize_);
   functionMeta->objectPointerMap().setWord(0, Function::kPointerMap);
   basicRoots_[FUNCTION_META_ROOT_INDEX] = functionMeta;
 
@@ -66,20 +70,24 @@ void Roots::initialize(Heap* heap) {
   basicRoots_[TYPE_PARAMETER_META_ROOT_INDEX] = typeParameterMeta;
 
   auto i8ArrayMeta = new(heap, 0, sizeof(I8Array), sizeof(i8)) Meta(I8_ARRAY_BLOCK_TYPE);
+  i8ArrayMeta->lengthOffset_ = offsetof(I8Array, length_);
   basicRoots_[I8_ARRAY_META_ROOT_INDEX] = i8ArrayMeta;
 
   auto i32ArrayMeta =
       new(heap, 0, sizeof(I32Array), sizeof(i32)) Meta(I32_ARRAY_BLOCK_TYPE);
+  i32ArrayMeta->lengthOffset_ = offsetof(I32Array, length_);
   basicRoots_[I32_ARRAY_META_ROOT_INDEX] = i32ArrayMeta;
 
   auto i64ArrayMeta =
       new(heap, 0, sizeof(I64Array), sizeof(i64)) Meta(I64_ARRAY_BLOCK_TYPE);
+  i64ArrayMeta->lengthOffset_ = offsetof(I64Array, length_);
   basicRoots_[I64_ARRAY_META_ROOT_INDEX] = i64ArrayMeta;
 
   auto blockArrayMeta =
       new(heap, 0, sizeof(BlockArray<Block>), kWordSize) Meta(BLOCK_ARRAY_BLOCK_TYPE);
   blockArrayMeta->hasPointers_ = true;
   blockArrayMeta->hasElementPointers_ = true;
+  blockArrayMeta->lengthOffset_ = offsetof(BlockArray<Block>, length_);
   blockArrayMeta->objectPointerMap().setWord(0, 0);
   blockArrayMeta->elementPointerMap().setWord(0, 1);
   basicRoots_[BLOCK_ARRAY_META_ROOT_INDEX] = blockArrayMeta;
@@ -88,6 +96,7 @@ void Roots::initialize(Heap* heap) {
       new(heap, 0, sizeof(TaggedArray<Block>), kWordSize) Meta(TAGGED_ARRAY_BLOCK_TYPE);
   taggedArrayMeta->hasPointers_ = true;
   taggedArrayMeta->hasCustomPointers_ = true;
+  taggedArrayMeta->lengthOffset_ = offsetof(TaggedArray<Block>, length_);
   basicRoots_[TAGGED_ARRAY_META_ROOT_INDEX] = taggedArrayMeta;
 
   auto emptyI8Array = new(heap, 0) I8Array;

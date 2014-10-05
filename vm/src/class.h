@@ -31,21 +31,23 @@ class Class: public Block {
   Class(u32 flags,
         Type* supertype,
         BlockArray<Field>* fields,
-        Type* elementType,
         IdArray* constructors,
         IdArray* methods,
         Package* package,
-        Meta* instanceMeta);
+        Meta* instanceMeta = nullptr,
+        Type* elementType = nullptr,
+        length_t lengthFieldIndex = kIndexNotSet);
   static Local<Class> create(Heap* heap);
   static Local<Class> create(Heap* heap,
                              u32 flags,
                              const Handle<Type>& supertype,
                              const Handle<BlockArray<Field>>& fields,
-                             const Handle<Type>& elementType,
                              const Handle<IdArray>& constructors,
                              const Handle<IdArray>& methods,
                              const Handle<Package>& package,
-                             const Handle<Meta>& instanceMeta);
+                             const Handle<Meta>& instanceMeta = Local<Meta>(),
+                             const Handle<Type>& elementType = Local<Type>(),
+                             length_t lengthFieldIndex = kIndexNotSet);
 
   void printClass(FILE* out);
   DEFINE_CAST(Class)
@@ -64,8 +66,6 @@ class Class: public Block {
   length_t findFieldIndex(word_t offset) const;
   word_t findFieldOffset(length_t index) const;
 
-  DEFINE_INL_PTR_ACCESSORS2(Type*, elementType, setElementType)
-
   DEFINE_INL_PTR_ACCESSORS2(IdArray*, constructors, setConstructors)
   Function* getConstructor(length_t index) const;
 
@@ -74,6 +74,10 @@ class Class: public Block {
 
   DEFINE_INL_PTR_ACCESSORS2(Package*, package, setPackage)
   DEFINE_INL_PTR_ACCESSORS2(Meta*, instanceMeta, setInstanceMeta)
+
+  DEFINE_INL_PTR_ACCESSORS2(Type*, elementType, setElementType)
+
+  length_t lengthFieldIndex() const { return lengthFieldIndex_; }
 
   /** Constructs a new instance Meta whether one already exists or not. Does not use handles
    *  or invoke the garbage collector. This is used by Roots, since GC is not available there.
@@ -94,11 +98,12 @@ class Class: public Block {
   u32 flags_;
   Type* supertype_;
   BlockArray<Field>* fields_;
-  Type* elementType_;
   IdArray* constructors_;
   IdArray* methods_;
   Package* package_;
   Meta* instanceMeta_;
+  Type* elementType_;
+  length_t lengthFieldIndex_;
   // Update CLASS_POINTER_LIST if pointer members change.
 };
 

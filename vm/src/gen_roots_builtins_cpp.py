@@ -71,8 +71,13 @@ def initClass(out, classData):
             out.write("    fields->set(%d, field%d);\n" % (i, i))
     if "elements" not in classData:
         out.write("    Type* elementType = nullptr;\n")
+        out.write("    length_t lengthFieldIndex = kIndexNotSet;\n")
     else:
         out.write("    auto elementType = %s;\n" % getTypeFromName(classData["elements"]))
+        lengthFieldIndex = next(i for i, field in
+                                enumerate(classData["fields"])
+                                if field["name"] == "length")
+        out.write("    auto lengthFieldIndex = %d;\n" % lengthFieldIndex)
     if len(classData["constructors"]) == 0:
         out.write("    auto constructors = emptyi32Array();\n")
     else:
@@ -88,8 +93,8 @@ def initClass(out, classData):
         out.write("    auto methods = new(heap, %d) IdArray;\n" % len(allMethodIds))
         for i, id in enumerate(allMethodIds):
             out.write("    methods->set(%d, %s);\n" % (i, id))
-    out.write("    ::new(clas) Class(0, supertype, fields, elementType, constructors, " +
-              "methods, nullptr, nullptr);\n")
+    out.write("    ::new(clas) Class(0, supertype, fields, constructors, methods, " +
+              "nullptr, nullptr, elementType, lengthFieldIndex);\n")
     out.write("    auto meta = clas->buildInstanceMeta();\n")
     out.write("    clas->setInstanceMeta(meta);\n")
     out.write("    builtinMetas_.push_back(meta);\n  }")

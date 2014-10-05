@@ -56,7 +56,6 @@ class Stack: public Block {
   static Local<Stack> create(Heap* heap, word_t size);
 
   DEFINE_CAST(Stack)
-  word_t sizeOfStack() { return stackSize(); }
   void printStack(FILE* out) const;
   void relocateStack(word_t delta);
 
@@ -129,6 +128,8 @@ class Stack: public Block {
   word_t stackSize_;
   Address fp_;
   Address sp_;
+
+  friend class Roots;
 };
 
 

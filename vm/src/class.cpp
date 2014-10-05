@@ -22,11 +22,11 @@ namespace internal {
 #define CLASS_POINTER_LIST(F) \
   F(Class, supertype_)        \
   F(Class, fields_)           \
-  F(Class, elementType_)      \
   F(Class, constructors_)     \
   F(Class, methods_)          \
   F(Class, package_)          \
   F(Class, instanceMeta_)     \
+  F(Class, elementType_)      \
 
 DEFINE_POINTER_MAP(Class, CLASS_POINTER_LIST)
 
@@ -41,41 +41,47 @@ void* Class::operator new (size_t, Heap* heap) {
 Class::Class(u32 flags,
              Type* supertype,
              BlockArray<Field>* fields,
-             Type* elementType,
              IdArray* constructors,
              IdArray* methods,
              Package* package,
-             Meta* instanceMeta)
+             Meta* instanceMeta,
+             Type* elementType,
+             length_t lengthFieldIndex)
     : Block(CLASS_BLOCK_TYPE),
       flags_(flags),
       supertype_(supertype),
       fields_(fields),
-      elementType_(elementType),
       constructors_(constructors),
       methods_(methods),
       package_(package),
-      instanceMeta_(instanceMeta) { }
+      instanceMeta_(instanceMeta),
+      elementType_(elementType),
+      lengthFieldIndex_(lengthFieldIndex) {
+  ASSERT((elementType_ == nullptr) == (lengthFieldIndex_ == kIndexNotSet));
+}
 
 
 Local<Class> Class::create(Heap* heap,
                            u32 flags,
                            const Handle<Type>& supertype,
                            const Handle<BlockArray<Field>>& fields,
-                           const Handle<Type>& elementType,
                            const Handle<IdArray>& constructors,
                            const Handle<IdArray>& methods,
                            const Handle<Package>& package,
-                           const Handle<Meta>& instanceMeta) {
+                           const Handle<Meta>& instanceMeta,
+                           const Handle<Type>& elementType,
+                           length_t lengthFieldIndex) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
-      flags, *supertype, *fields, *elementType, *constructors,
-      *methods, package.getOrNull(), instanceMeta.getOrNull())));
+      flags, *supertype, *fields, *constructors, *methods,
+      package.getOrNull(), instanceMeta.getOrNull(),
+      elementType.getOrNull(), lengthFieldIndex)));
 }
 
 
 Local<Class> Class::create(Heap* heap) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
       0, nullptr, nullptr, nullptr, nullptr,
-      nullptr, nullptr, nullptr)));
+      nullptr, nullptr, nullptr, kIndexNotSet)));
 }
 
 
@@ -129,12 +135,14 @@ Function* Class::getMethod(length_t index) const {
 
 Meta* Class::buildInstanceMeta() {
   u32 objectSize = kWordSize, elementSize = 0;
+  u8 lengthOffset = 0;
   bool hasObjectPointers = false, hasElementPointers = false;
   BitSet objectPointerMap(1), elementPointerMap;
   computeSizeAndPointerMap(&objectSize, &hasObjectPointers, &objectPointerMap);
   if (elementType() != nullptr) {
     computeSizeAndPointerMapForType(elementType(), &elementSize,
                                     &hasElementPointers, &elementPointerMap);
+    lengthOffset = findFieldOffset(lengthFieldIndex_);
   }
 
   auto methodCount = methods()->length();
@@ -142,6 +150,7 @@ Meta* Class::buildInstanceMeta() {
   meta->setClass(this);
   meta->hasPointers_ = hasObjectPointers;
   meta->hasElementPointers_ = hasElementPointers;
+  meta->lengthOffset_ = lengthOffset;
   for (length_t i = 0; i < methodCount; i++) {
     auto method = getMethod(i);
     meta->setData(i, method);

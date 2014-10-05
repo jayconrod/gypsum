@@ -87,11 +87,6 @@ word_t Function::sizeForFunction(length_t instructionsSize) {
 }
 
 
-word_t Function::sizeOfFunction() const {
-  return sizeForFunction(instructionsSize());
-}
-
-
 void Function::printFunction(FILE* out) {
   fprintf(out, "Function @%p\n", reinterpret_cast<void*>(this));
   fprintf(out, "  instructions size: %d\n", static_cast<int>(instructionsSize()));
