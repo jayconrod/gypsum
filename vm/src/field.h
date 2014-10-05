@@ -25,13 +25,13 @@ class Field: public Block {
   DEFINE_CAST(Field)
 
   u32 flags() const { return flags_; }
-  Type* type() const { return type_; }
+  Type* type() const { return type_.get(); }
 
  private:
   DECLARE_POINTER_MAP()
 
   u32 flags_;
-  Type* type_;
+  Ptr<Type> type_;
   // Update FIELD_POINTER_LIST if pointer members change.
 };
 

@@ -55,13 +55,13 @@ Function::Function(u32 flags,
     : Block(FUNCTION_BLOCK_TYPE),
       flags_(flags),
       builtinId_(0),
-      typeParameters_(typeParameters),
-      types_(types),
+      typeParameters_(this, typeParameters),
+      types_(this, types),
       localsSize_(localsSize),
       instructionsSize_(instructions.size()),
-      blockOffsets_(blockOffsets),
-      package_(package),
-      stackPointerMap_(stackPointerMap) {
+      blockOffsets_(this, blockOffsets),
+      package_(this, package),
+      stackPointerMap_(this, stackPointerMap) {
   ASSERT(instructionsSize_ <= kMaxLength);
   copy_n(instructions.begin(), instructions.size(), instructionsStart());
 }
@@ -95,7 +95,7 @@ void Function::printFunction(FILE* out) {
 
 
 TypeParameter* Function::typeParameter(length_t index) const {
-  auto paramTag = typeParameters_->get(index);
+  auto paramTag = typeParameters()->get(index);
   if (paramTag.isNumber()) {
     return package()->getTypeParameter(paramTag.getNumber());
   } else {

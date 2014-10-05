@@ -67,10 +67,11 @@ DEFINE_POINTER_MAP(Package, PACKAGE_POINTER_LIST)
 Package::Package(VM* vm)
     : Block(PACKAGE_BLOCK_TYPE),
       flags_(0),
-      strings_(reinterpret_cast<BlockArray<String>*>(vm->roots()->emptyBlockArray())),
-      functions_(reinterpret_cast<BlockArray<Function>*>(vm->roots()->emptyBlockArray())),
-      classes_(reinterpret_cast<BlockArray<Class>*>(vm->roots()->emptyBlockArray())),
-      typeParameters_(reinterpret_cast<BlockArray<TypeParameter>*>(
+      strings_(this, reinterpret_cast<BlockArray<String>*>(vm->roots()->emptyBlockArray())),
+      functions_(this, reinterpret_cast<BlockArray<Function>*>(vm->roots()->emptyBlockArray())),
+      classes_(this, reinterpret_cast<BlockArray<Class>*>(vm->roots()->emptyBlockArray())),
+      typeParameters_(this,
+                      reinterpret_cast<BlockArray<TypeParameter>*>(
                           vm->roots()->emptyBlockArray())),
       entryFunctionIndex_(kIndexNotSet) { }
 

@@ -37,13 +37,19 @@ class Package: public Block {
   static Local<Package> loadFromStream(VM* vm, std::istream& stream);
 
   DEFINE_INL_ACCESSORS2(u64, flags, setFlags)
-  DEFINE_INL_PTR_ACCESSORS2(BlockArray<String>*, strings, setStrings)
+  BlockArray<String>* strings() const { return strings_.get(); }
+  void setStrings(BlockArray<String>* newStrings) { strings_.set(this, newStrings); }
   String* getString(length_t index);
-  DEFINE_INL_PTR_ACCESSORS2(BlockArray<Function>*, functions, setFunctions)
+  BlockArray<Function>* functions() const { return functions_.get(); }
+  void setFunctions(BlockArray<Function>* newFunctions) { functions_.set(this, newFunctions); }
   Function* getFunction(length_t index);
-  DEFINE_INL_PTR_ACCESSORS2(BlockArray<Class>*, classes, setClasses)
+  BlockArray<Class>* classes() const { return classes_.get(); }
+  void setClasses(BlockArray<Class>* newClasses) { classes_.set(this, newClasses); }
   Class* getClass(length_t index);
-  DEFINE_INL_PTR_ACCESSORS2(BlockArray<TypeParameter>*, typeParameters, setTypeParameters)
+  BlockArray<TypeParameter>* typeParameters() const { return typeParameters_.get(); }
+  void setTypeParameters(BlockArray<TypeParameter>* newTypeParameters) {
+    typeParameters_.set(this, newTypeParameters);
+  }
   TypeParameter* getTypeParameter(length_t index);
   DEFINE_INL_ACCESSORS2(length_t, entryFunctionIndex, setEntryFunctionIndex)
   Function* entryFunction();
@@ -54,10 +60,10 @@ class Package: public Block {
   DECLARE_POINTER_MAP()
 
   u64 flags_;
-  BlockArray<String>* strings_;
-  BlockArray<Function>* functions_;
-  BlockArray<Class>* classes_;
-  BlockArray<TypeParameter>* typeParameters_;
+  Ptr<BlockArray<String>> strings_;
+  Ptr<BlockArray<Function>> functions_;
+  Ptr<BlockArray<Class>> classes_;
+  Ptr<BlockArray<TypeParameter>> typeParameters_;
   length_t entryFunctionIndex_;
   // Update PACKAGE_POINTER_LIST if pointers change.
 };

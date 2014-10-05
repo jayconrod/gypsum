@@ -30,7 +30,7 @@ void* Field::operator new (size_t, Heap* heap) {
 Field::Field(u32 flags, Type* type)
     : Block(FIELD_BLOCK_TYPE),
       flags_(flags),
-      type_(type) { }
+      type_(this, type) { }
 
 
 Local<Field> Field::create(Heap* heap, u32 flags, const Handle<Type>& type) {

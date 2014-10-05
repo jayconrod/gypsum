@@ -49,13 +49,13 @@ Class::Class(u32 flags,
              length_t lengthFieldIndex)
     : Block(CLASS_BLOCK_TYPE),
       flags_(flags),
-      supertype_(supertype),
-      fields_(fields),
-      constructors_(constructors),
-      methods_(methods),
-      package_(package),
-      instanceMeta_(instanceMeta),
-      elementType_(elementType),
+      supertype_(this, supertype),
+      fields_(this, fields),
+      constructors_(this, constructors),
+      methods_(this, methods),
+      package_(this, package),
+      instanceMeta_(this, instanceMeta),
+      elementType_(this, elementType),
       lengthFieldIndex_(lengthFieldIndex) {
   ASSERT((elementType_ == nullptr) == (lengthFieldIndex_ == kIndexNotSet));
 }

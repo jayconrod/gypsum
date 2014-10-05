@@ -31,8 +31,8 @@ void* TypeParameter::operator new (size_t, Heap* heap) {
 TypeParameter::TypeParameter(u32 flags, Type* upperBound, Type* lowerBound)
     : Block(TYPE_PARAMETER_BLOCK_TYPE),
       flags_(flags),
-      upperBound_(upperBound),
-      lowerBound_(lowerBound) { }
+      upperBound_(this, upperBound),
+      lowerBound_(this, lowerBound) { }
 
 
 Local<TypeParameter> TypeParameter::create(Heap* heap) {

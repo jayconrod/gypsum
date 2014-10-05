@@ -55,39 +55,43 @@ class Function: public Block {
   void setBuiltinId(BuiltinId id) { builtinId_ = id; }
   bool hasBuiltinId() const { return builtinId_ != 0; }
 
-  TaggedArray<TypeParameter>* typeParameters() const { return typeParameters_; }
+  TaggedArray<TypeParameter>* typeParameters() const { return typeParameters_.get(); }
   TypeParameter* typeParameter(length_t index) const;
-  length_t typeParameterCount() const { return typeParameters_->length(); }
+  length_t typeParameterCount() const { return typeParameters()->length(); }
 
-  BlockArray<Type>* types() const { return types_; }
-  Type* returnType() const { return types_->get(0); }
-  length_t parameterCount() const { return types_->length() - 1; }
+  BlockArray<Type>* types() const { return types_.get(); }
+  Type* returnType() const { return types()->get(0); }
+  length_t parameterCount() const { return types()->length() - 1; }
   word_t parametersSize() const;
   ptrdiff_t parameterOffset(length_t index) const;
-  Type* parameterType(length_t index) const { return types_->get(index + 1); }
+  Type* parameterType(length_t index) const { return types()->get(index + 1); }
 
   word_t localsSize() const { return localsSize_; }
 
   length_t instructionsSize() const { return instructionsSize_; }
   u8* instructionsStart() const;
 
-  LengthArray* blockOffsets() const { return blockOffsets_; }
-  length_t blockOffset(length_t index) const { return blockOffsets_->get(index); }
+  LengthArray* blockOffsets() const { return blockOffsets_.get(); }
+  length_t blockOffset(length_t index) const { return blockOffsets()->get(index); }
 
-  Package* package() const { return package_; }
-  DEFINE_INL_PTR_ACCESSORS2(StackPointerMap*, stackPointerMap, setStackPointerMap)
+  Package* package() const { return package_.get(); }
+
+  StackPointerMap* stackPointerMap() const { return stackPointerMap_.get(); }
+  void setStackPointerMap(StackPointerMap* newStackPointerMap) {
+      stackPointerMap_.set(this, newStackPointerMap);
+  }
 
  private:
   DECLARE_POINTER_MAP()
   u32 flags_;
   BuiltinId builtinId_;
-  TaggedArray<TypeParameter>* typeParameters_;
-  BlockArray<Type>* types_;
+  Ptr<TaggedArray<TypeParameter>> typeParameters_;
+  Ptr<BlockArray<Type>> types_;
   word_t localsSize_;
   length_t instructionsSize_;
-  LengthArray* blockOffsets_;
-  Package* package_;
-  StackPointerMap* stackPointerMap_;
+  Ptr<LengthArray> blockOffsets_;
+  Ptr<Package> package_;
+  Ptr<StackPointerMap> stackPointerMap_;
   // Update FUNCTION_POINTER_LIST if pointer members change.
 };
 

@@ -33,16 +33,19 @@ class TypeParameter: public Block {
   // relationship. We may need to allocate TypeParameter objects early, then fill them after
   // other objects which refer to them have been allocated.
 
-  DEFINE_INL_ACCESSORS2(u32, flags, setFlags)
-  DEFINE_INL_PTR_ACCESSORS2(Type*, upperBound, setUpperBound)
-  DEFINE_INL_PTR_ACCESSORS2(Type*, lowerBound, setLowerBound)
+  u32 flags() const { return flags_; }
+  void setFlags(u32 newFlags) { flags_ = newFlags; }
+  Type* upperBound() const { return upperBound_.get(); }
+  void setUpperBound(Type* newUpperBound) { upperBound_.set(this, newUpperBound); }
+  Type* lowerBound() const { return lowerBound_.get(); }
+  void setLowerBound(Type* newLowerBound) { lowerBound_.set(this, newLowerBound); }
 
  private:
   DECLARE_POINTER_MAP()
 
   u32 flags_;
-  Type* upperBound_;
-  Type* lowerBound_;
+  Ptr<Type> upperBound_;
+  Ptr<Type> lowerBound_;
   // Update TYPE_PARAMETER_POINTER_LIST if pointer members change.
 };
 

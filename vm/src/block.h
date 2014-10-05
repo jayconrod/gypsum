@@ -10,6 +10,7 @@
 #include <cstdio>
 #include "bitmap-inl.h"
 #include "heap.h"
+#include "ptr.h"
 #include "utils.h"
 #include "vm.h"
 
@@ -205,7 +206,8 @@ class Meta: public Block {
   bool needsRelocation() const { return needsRelocation_; }
   bool hasWordSizeLength() const { return hasWordSizeLength_; }
   u8 lengthOffset() const { return lengthOffset_; }
-  DEFINE_INL_PTR_ACCESSORS2(Class*, clas, setClass)
+  Class* clas() const { return clas_.get(); }
+  void setClass(Class* newClass) { clas_.set(this, newClass); }
   u32 objectSize() const { return objectSize_; }
   u32 elementSize() const { return elementSize_; }
 
@@ -237,7 +239,7 @@ class Meta: public Block {
   bool needsRelocation_ : 1;
   bool hasWordSizeLength_ : 1;
   u8 lengthOffset_;
-  alignas(word_t) Class* clas_;
+  Ptr<Class> clas_;
   u32 objectSize_;
   u32 elementSize_;
   // Update META_POINTER_LIST if pointers change.

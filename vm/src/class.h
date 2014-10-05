@@ -60,22 +60,29 @@ class Class: public Block {
   u32 flags() const { return flags_; }
   void setFlags(u32 flags) { flags_ = flags; }
 
-  DEFINE_INL_PTR_ACCESSORS2(Type*, supertype, setSupertype)
+  Type* supertype() const { return supertype_.get(); }
+  void setSupertype(Type* newSupertype) { supertype_.set(this, newSupertype); }
 
-  DEFINE_INL_PTR_ACCESSORS2(BlockArray<Field>*, fields, setFields)
+  BlockArray<Field>* fields() const { return fields_.get(); }
+  void setFields(BlockArray<Field>* newFields) { fields_.set(this, newFields); }
   length_t findFieldIndex(word_t offset) const;
   word_t findFieldOffset(length_t index) const;
 
-  DEFINE_INL_PTR_ACCESSORS2(IdArray*, constructors, setConstructors)
+  IdArray* constructors() const { return constructors_.get(); }
+  void setConstructors(IdArray* newConstructors) { constructors_.set(this, newConstructors); }
   Function* getConstructor(length_t index) const;
 
-  DEFINE_INL_PTR_ACCESSORS2(IdArray*, methods, setMethods)
+  IdArray* methods() const { return methods_.get(); }
+  void setMethods(IdArray* newMethods) { methods_.set(this, newMethods); }
   Function* getMethod(length_t index) const;
 
-  DEFINE_INL_PTR_ACCESSORS2(Package*, package, setPackage)
-  DEFINE_INL_PTR_ACCESSORS2(Meta*, instanceMeta, setInstanceMeta)
+  Package* package() const { return package_.get(); }
+  void setPackage(Package* newPackage) { package_.set(this, newPackage); }
+  Meta* instanceMeta() const { return instanceMeta_.get(); }
+  void setInstanceMeta(Meta* newInstanceMeta) { instanceMeta_.set(this, newInstanceMeta); }
 
-  DEFINE_INL_PTR_ACCESSORS2(Type*, elementType, setElementType)
+  Type* elementType() const { return elementType_.get(); }
+  void setElementType(Type* newElementType) { elementType_.set(this, newElementType); }
 
   length_t lengthFieldIndex() const { return lengthFieldIndex_; }
 
@@ -96,13 +103,13 @@ class Class: public Block {
 
   DECLARE_POINTER_MAP()
   u32 flags_;
-  Type* supertype_;
-  BlockArray<Field>* fields_;
-  IdArray* constructors_;
-  IdArray* methods_;
-  Package* package_;
-  Meta* instanceMeta_;
-  Type* elementType_;
+  Ptr<Type> supertype_;
+  Ptr<BlockArray<Field>> fields_;
+  Ptr<IdArray> constructors_;
+  Ptr<IdArray> methods_;
+  Ptr<Package> package_;
+  Ptr<Meta> instanceMeta_;
+  Ptr<Type> elementType_;
   length_t lengthFieldIndex_;
   // Update CLASS_POINTER_LIST if pointer members change.
 };
