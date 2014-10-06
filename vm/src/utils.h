@@ -165,22 +165,42 @@ length_t toLength(T n) {
 
 
 inline u32 f32ToBits(f32 value) {
-  return *reinterpret_cast<u32*>(&value);
+  union {
+    f32 from;
+    u32 to;
+  } cast;
+  cast.from = value;
+  return cast.to;
 }
 
 
 inline f32 f32FromBits(u32 bits) {
-  return *reinterpret_cast<f32*>(&bits);
+  union {
+    u32 from;
+    f32 to;
+  } cast;
+  cast.from = bits;
+  return cast.to;
 }
 
 
 inline u64 f64ToBits(f64 value) {
-  return *reinterpret_cast<u64*>(&value);
+  union {
+    f64 from;
+    u64 to;
+  } cast;
+  cast.from = value;
+  return cast.to;
 }
 
 
 inline f64 f64FromBits(u64 bits) {
-  return *reinterpret_cast<f64*>(&bits);
+  union {
+    u64 from;
+    f64 to;
+  } cast;
+  cast.from = bits;
+  return cast.to;
 }
 
 

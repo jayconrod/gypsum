@@ -52,7 +52,7 @@ void Interpreter::push<bool>(bool value) {
 
 template <>
 void Interpreter::push<f32>(f32 value) {
-  auto bits = static_cast<u64>(*reinterpret_cast<u32*>(&value));
+  auto bits = static_cast<u64>(f32ToBits(value));
   stack_->push(bits);
 }
 
@@ -86,7 +86,7 @@ T Interpreter::pop() {
 template <>
 f32 Interpreter::pop<f32>() {
   auto bits = static_cast<u32>(stack_->pop<u64>());
-  return *reinterpret_cast<f32*>(&bits);
+  return f32FromBits(bits);
 }
 
 
@@ -135,7 +135,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
   enter(callee);
 
   // Interpreter loop.
-  i64 result;
+  i64 result = 0xdeadc0dedeadcafell;
   while (pcOffset_ != kDonePcOffset) {
     u8 bc = function_->instructionsStart()[pcOffset_++];
     auto opc = static_cast<Opcode>(bc);
