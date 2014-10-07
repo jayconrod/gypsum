@@ -55,8 +55,6 @@ class Package: public Block {
   DEFINE_INL_ACCESSORS2(length_t, entryFunctionIndex, setEntryFunctionIndex)
   Function* entryFunction();
 
-  static const u32 kMagic = 0x676b7073;
-
  private:
   DECLARE_POINTER_MAP()
 
