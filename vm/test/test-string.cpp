@@ -18,6 +18,7 @@ using namespace codeswitch::internal;
 
 TEST(StringFromUtf8) {
   VM vm;
+  AllowAllocationScope allowAllocation(vm.heap(), true);
   HandleScope handleScope(&vm);
   const u8 chars[] = { 0x66, 0x6f, 0x6f, 0xe2, 0x98, 0x83, 0x00 };
   word_t size = sizeof(chars) - 1;
@@ -40,6 +41,7 @@ TEST(StringFromUtf8) {
 
 TEST(StringToStl) {
   VM vm;
+  AllowAllocationScope allowAllocation(vm.heap(), true);
   HandleScope handleScope(&vm);
   const u32 chars[] = { 0x66, 0x6f, 0x6f, 0x2603 };
   const u8 expected[] = { 0x66, 0x6f, 0x6f, 0xe2, 0x98, 0x83 };
@@ -59,6 +61,7 @@ TEST(StringToStl) {
 
 TEST(StringCompare) {
   VM vm;
+  AllowAllocationScope allowAllocation(vm.heap(), true);
   HandleScope handleScope(&vm);
   auto foo = String::fromUtf8CString(vm.heap(), "foo");
   auto foob = String::fromUtf8CString(vm.heap(), "foob");
@@ -77,6 +80,7 @@ TEST(StringCompare) {
 
 TEST(StringConcat) {
   VM vm;
+  AllowAllocationScope allowAllocation(vm.heap(), true);
   HandleScope handleScope(&vm);
   auto empty = String::fromUtf8CString(vm.heap(), "");
   auto foo = String::fromUtf8CString(vm.heap(), "foo");

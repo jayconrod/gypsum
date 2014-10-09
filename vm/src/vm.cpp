@@ -24,6 +24,7 @@ VM::VM(Flags flags)
       heap_(new Heap(this)),
       roots_(new Roots),
       handleStorage_(new HandleStorage) {
+  AllowAllocationScope allowAllocation(heap_.get(), true);
   roots_->initialize(heap());
   {
     HandleScope handleScope(handleStorage_.get());

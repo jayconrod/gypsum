@@ -26,7 +26,8 @@ namespace internal {
 
 Heap::Heap(VM* vm)
     : vm_(vm),
-      shouldExpand_(true) {
+      shouldExpand_(true),
+      isAllocationAllowed_(false) {
   expand();
 }
 
@@ -60,6 +61,7 @@ void Heap::recordWrite(Address from, Address to) {
 
 
 void Heap::collectGarbage() {
+  ASSERT(isAllocationAllowed());
   allocator_.release();
   GC gc(this);
   gc.collectGarbage();
@@ -165,12 +167,14 @@ void Heap::Allocator::release() {
 
 
 Address Heap::allocateFast(word_t size) {
+  ASSERT(isAllocationAllowed());
   ASSERT(isAligned(size, kBlockAlignment));
   return allocator_.allocate(size);
 }
 
 
 Address Heap::allocateSlow(word_t size) {
+  ASSERT(isAllocationAllowed());
   ASSERT(isAligned(size, kBlockAlignment));
 
   // Check if we can allocate from the allocation range. `allocateFast` already does this, but

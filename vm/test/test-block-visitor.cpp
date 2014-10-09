@@ -64,6 +64,7 @@ TEST(BlockVisitorRegularMeta) {
   // This time, we'll create our own meta.
   VM vm;
   auto heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
   auto meta = new(heap, 0, kWordSize, 0) Meta(META_BLOCK_TYPE);
 
   // Our fake object will use this meta.
@@ -80,6 +81,7 @@ TEST(BlockVisitorRegularMeta) {
 TEST(BlockVisitorRegularPointers) {
   VM vm;
   auto heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
   auto meta = new(heap, 0, 6 * kWordSize, 3 * kWordSize) Meta(OBJECT_BLOCK_TYPE);
   meta->hasPointers_ = true;
   meta->hasElementPointers_ = true;
@@ -171,8 +173,9 @@ const ExpectedPointerMap kExpectedPointerMaps[] = {
 
 TEST(BlockVisitorFunction) {
   VM vm(0);
-  HandleScope handleScope(&vm);
   Heap* heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
+  HandleScope handleScope(&vm);
   auto package = *createTestPackage(heap);
   auto function = package->getFunction(0);
   auto typeParameters = function->typeParameters();
@@ -201,8 +204,9 @@ TEST(BlockVisitorFunction) {
 
 TEST(BuildStackPointerMap) {
   VM vm(0);
-  HandleScope handleScope(&vm);
   auto heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
+  HandleScope handleScope(&vm);
   auto package = *createTestPackage(heap);
   auto function = package->getFunction(0);
   auto pointerMap = StackPointerMap::tryBuildFrom(heap, function);
@@ -248,8 +252,9 @@ class StackIncrementVisitor: public BlockVisitorBase<StackIncrementVisitor> {
 
 TEST(VisitAndRelocateStack) {
   VM vm(0);
-  HandleScope handleScope(&vm);
   auto heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
+  HandleScope handleScope(&vm);
   auto stack = vm.stack();
   auto package = *createTestPackage(heap);
   auto function = package->getFunction(0);

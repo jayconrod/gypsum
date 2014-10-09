@@ -88,6 +88,9 @@ class Heap {
    */
   static const word_t kMinAddress = PAGESIZE;
 
+  bool isAllocationAllowed() const { return isAllocationAllowed_; }
+  void setIsAllocationAllowed(bool allowed) { isAllocationAllowed_ = allowed; }
+
   /** Reserves raw memory on the heap without initializing it. Note that all words in a block
    *  should be initialized before storing a pointer to the block in any other reachable block.
    *  Throws `AllocationError` on failure.
@@ -166,6 +169,7 @@ class Heap {
   std::vector<std::unique_ptr<Chunk>> chunks_;
   Allocator allocator_;
   bool shouldExpand_;
+  bool isAllocationAllowed_;
 
   friend class GC;
   friend class VM;
@@ -178,6 +182,24 @@ template <class T>
 void Heap::recordWrite(T** from, T* to) {
   recordWrite(reinterpret_cast<Address>(from), reinterpret_cast<Address>(to));
 }
+
+
+class AllowAllocationScope {
+ public:
+  AllowAllocationScope(Heap* heap, bool allow)
+      : heap_(heap),
+        wasAllocationAllowed_(heap->isAllocationAllowed()) {
+    heap_->setIsAllocationAllowed(allow);
+  }
+
+  ~AllowAllocationScope() {
+    heap_->setIsAllocationAllowed(wasAllocationAllowed_);
+  }
+
+ private:
+  Heap* heap_;
+  bool wasAllocationAllowed_;
+};
 
 }
 }

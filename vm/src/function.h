@@ -81,6 +81,7 @@ class Function: public Block {
   void setStackPointerMap(StackPointerMap* newStackPointerMap) {
       stackPointerMap_.set(this, newStackPointerMap);
   }
+  bool hasPointerMapAtPcOffset(length_t pcOffset) const;
 
  private:
   DECLARE_POINTER_MAP()
@@ -105,6 +106,8 @@ class StackPointerMap: public WordArray {
   Bitmap bitmap();
   void getParametersRegion(word_t* paramOffset, word_t* paramCount);
   void getLocalsRegion(length_t pc, word_t* localsOffset, word_t* localsCount);
+  word_t searchLocalsRegion(length_t pc);
+  bool hasLocalsRegion(length_t pc) { return searchLocalsRegion(pc) != kNotSet; }
 
   DEFINE_INL_INDEX_ACCESSORS(word_t, bitmapLength, setBitmapLength, kBitmapLengthIndex)
   DEFINE_INL_INDEX_ACCESSORS(word_t, entryCount, setEntryCount, kEntryCountIndex)

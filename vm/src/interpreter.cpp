@@ -103,15 +103,6 @@ Block* Interpreter::pop<Block*>() {
 }
 
 
-#define ALLOCATE_GC_RETRY(type, var, expr)                            \
-type var = expr;                                                      \
-if (var == nullptr) {                                                 \
-  collectGarbage();                                                   \
-  var = expr;                                                         \
-  ASSERT(var != nullptr);                                             \
-}                                                                     \
-
-
 #define CHECK_NON_NULL(block)                                         \
   if ((block) == nullptr) {                                           \
     throwBuiltinException(BUILTIN_NULL_POINTER_EXCEPTION_CLASS_ID);   \
@@ -129,6 +120,7 @@ if (var == nullptr) {                                                 \
 i64 Interpreter::call(const Handle<Function>& callee) {
   // TODO: figure out a reasonable way to manage locals here.
   HandleScope handleScope(vm_);
+  AllowAllocationScope disallowAllocation(vm_->heap(), false);
 
   // Set up initial stack frame.
   ASSERT(pcOffset_ == kDonePcOffset);
@@ -335,6 +327,8 @@ i64 Interpreter::call(const Handle<Function>& callee) {
 
       case ALLOCOBJ: {
         auto classId = readVbn();
+        ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
+        AllowAllocationScope allowAllocation(vm_->heap(), true);
         auto meta = getMetaForClassId(classId);
         Object* obj = nullptr;
         RETRY_WITH_GC(vm_->heap(), obj = new(vm_->heap(), *meta) Object);
@@ -345,6 +339,8 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       case ALLOCARRI: {
         auto classId = readVbn();
         auto length = readVbn();
+        ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
+        AllowAllocationScope allowAllocation(vm_->heap(), true);
         auto meta = getMetaForClassId(classId);
         Object* obj = nullptr;
         RETRY_WITH_GC(vm_->heap(), obj = new(vm_->heap(), *meta, length) Object);
@@ -369,7 +365,9 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       case CALLG: {
         readVbn();   // arg count is unused
         auto functionId = readVbn();
+        ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
         if (isBuiltinId(functionId)) {
+          AllowAllocationScope allowAllocation(vm_->heap(), true);
           handleBuiltin(static_cast<BuiltinId>(functionId));
         } else {
           auto functionIndex = toLength(functionId);
@@ -382,10 +380,12 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       case CALLV: {
         auto argCount = readVbn();
         auto methodIndex = toLength(readVbn());
+        ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
         auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
         CHECK_NON_NULL(receiver);
         Local<Function> callee(block_cast<Function>(receiver->meta()->getData(methodIndex)));
         if (callee->hasBuiltinId()) {
+          AllowAllocationScope allowAllocation(vm_->heap(), true);
           handleBuiltin(callee->builtinId());
         } else {
           enter(callee);
@@ -492,6 +492,8 @@ void Interpreter::ensurePointerMap(const Handle<Function>& function) {
   // be generated if all the other functions called by this function are accessible (so we
   // can't do it before all packages are loaded and validated). Since this requires some
   // analysis, we only do it for functions which are actually called.
+  ASSERT(pcOffset_ == kDonePcOffset || function_->hasPointerMapAtPcOffset(pcOffset_));
+  AllowAllocationScope allowAllocation(vm_->heap(), true);
   if (function->stackPointerMap() == nullptr) {
     auto stackPointerMap = StackPointerMap::buildFrom(vm_->heap(), function);
     function->setStackPointerMap(*stackPointerMap);

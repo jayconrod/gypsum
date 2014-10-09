@@ -128,6 +128,14 @@ u8* Function::instructionsStart() const {
 }
 
 
+bool Function::hasPointerMapAtPcOffset(length_t pcOffset) const {
+  auto map = stackPointerMap();
+  if (map == nullptr)
+    return false;
+  return map->hasLocalsRegion(pcOffset);
+}
+
+
 Bitmap StackPointerMap::bitmap() {
   word_t* base = reinterpret_cast<word_t*>(
       elements() + kHeaderLength + entryCount() * kEntryLength);
@@ -795,6 +803,24 @@ void StackPointerMap::getLocalsRegion(length_t pc, word_t* localsOffset, word_t*
   }
   *localsOffset = mapOffset(middle);
   *localsCount = mapCount(middle);
+}
+
+
+word_t StackPointerMap::searchLocalsRegion(length_t pc) {
+  word_t begin = 0;
+  word_t end = entryCount();
+  word_t middle = begin + (end - begin) / 2;
+  ASSERT(end != 0);
+  while (pc != pcOffset(middle) && middle < end) {
+    if (pc < pcOffset(middle))
+      end = middle;
+    else
+      begin = middle + 1;
+    middle = begin + (end - begin) / 2;
+  }
+  if (middle == entryCount() || pcOffset(middle) != pc)
+    return kNotSet;
+  return middle;
 }
 
 }
