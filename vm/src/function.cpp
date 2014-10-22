@@ -15,6 +15,7 @@
 #include "package.h"
 #include "roots.h"
 #include "type.h"
+#include "type-parameter.h"
 #include "utils.h"
 
 using namespace std;
@@ -143,45 +144,32 @@ Bitmap StackPointerMap::bitmap() {
 }
 
 
-void StackPointerMap::getParametersRegion(word_t* paramOffset, word_t* paramCount) {
-  *paramOffset = 0;
-  // The parameter region is first in the bitmap. We determine its size by checking the offset
-  // of the first locals region. If there are no other regions, then it is the size of the
-  // whole bitmap.
-  if (entryCount() == 0) {
-    *paramCount = bitmapLength();
-  } else {
-    *paramCount = mapOffset(0);
-  }
-}
-
-
 struct FrameState {
-  FrameState(word_t localsSlots, Type* defaultType)
+  FrameState(word_t localsSlots, const Local<Type>& defaultType)
       : pcOffset(-1) {
     typeMap.insert(typeMap.begin(), localsSlots, defaultType);
   }
 
-  void push(Type* type) {
+  void push(const Local<Type>& type) {
     typeMap.push_back(type);
   }
 
-  Type* pop() {
+  Local<Type> pop() {
     auto type = typeMap.back();
     typeMap.pop_back();
     return type;
   }
 
-  Type* top() { return typeMap.back(); }
+  Local<Type>& top() { return typeMap.back(); }
 
-  void setLocal(i64 slot, Type* type) {
+  void setLocal(i64 slot, const Local<Type>& type) {
     ASSERT(slot < 0);
     word_t index = -slot - 1;
     ASSERT(index < typeMap.size());
     typeMap[index] = type;
   }
 
-  void pushTypeArg(Type* type) {
+  void pushTypeArg(const Local<Type>& type) {
     ASSERT(type->isObject());
     // TODO: support classes with type parameters
     ASSERT(type->length() == 1);
@@ -192,15 +180,17 @@ struct FrameState {
     typeArgs.clear();
   }
 
-  Type* substituteReturnType(Function* callee) {
+  Local<Type> substituteReturnType(const Local<Function>& callee) {
     ASSERT(typeArgs.size() == callee->typeParameterCount());
-    vector<pair<TypeParameter*, Type*>> typeBindings;
+    vector<pair<Local<TypeParameter>, Local<Type>>> typeBindings;
     typeBindings.reserve(typeArgs.size());
     for (word_t i = 0; i < typeArgs.size(); i++) {
-      pair<TypeParameter*, Type*> binding(callee->typeParameter(i), typeArgs[i]);
+      pair<Local<TypeParameter>, Local<Type>> binding(
+          Local<TypeParameter>(callee->typeParameter(i)),
+          typeArgs[i]);
       typeBindings.push_back(binding);
     }
-    Type* retTy = callee->returnType()->substitute(typeBindings);
+    auto retTy = Type::substitute(handle(callee->returnType()), typeBindings);
     return retTy;
   }
 
@@ -210,22 +200,23 @@ struct FrameState {
     return pcOffset < other.pcOffset;
   }
 
-  vector<Type*> typeMap;
-  vector<Type*> typeArgs;
+  vector<Local<Type>> typeMap;
+  vector<Local<Type>> typeArgs;
   length_t pcOffset;
 };
 
 
-StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
+Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Function>& function) {
   ASSERT(function->instructionsSize() > 0);
 
-  Roots* roots = heap->vm()->roots();
-  Package* package = function->package();
+  auto roots = heap->vm()->roots();
+  HandleScope handleScope(heap->vm());
+  Local<Package> package(function->package());
 
   // Constrct a pointer map for the parameters.
-  vector<Type*> parametersMap;
+  vector<Local<Type>> parametersMap;
   for (length_t i = 0, n = function->parameterCount(); i < n; i++) {
-    parametersMap.push_back(function->parameterType(i));
+    parametersMap.push_back(handle(function->parameterType(i)));
   }
 
   // Construct a pointer map for each point in the function where the garbage collector may be
@@ -237,21 +228,21 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
   BitSet visitedBlockOffsets;
   vector<FrameState> blocksToVisit;
   blocksToVisit.push_back(FrameState(function->localsSize() / kWordSize,
-                          Type::unitType(roots)));
+                                     handle(Type::unitType(roots))));
   blocksToVisit.front().pcOffset = 0;
-  u8* bytecode = function->instructionsStart();
+  auto bytecode = function->instructionsStart();
 
   while (!blocksToVisit.empty()) {
     FrameState currentMap = blocksToVisit.back();
     blocksToVisit.pop_back();
     if (visitedBlockOffsets.contains(currentMap.pcOffset))
       continue;
-    length_t pcOffset = currentMap.pcOffset;
+    auto pcOffset = currentMap.pcOffset;
     visitedBlockOffsets.add(pcOffset);
 
     bool blockDone = false;
     while (!blockDone) {
-      Opcode opc = static_cast<Opcode>(bytecode[pcOffset++]);
+      auto opc = static_cast<Opcode>(bytecode[pcOffset++]);
       switch (opc) {
         case NOP:
           break;
@@ -287,7 +278,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
           blocksToVisit.push_back(currentMap);
           i64 catchBlockIndex = readVbn(bytecode, &pcOffset);
           currentMap.pcOffset = function->blockOffset(catchBlockIndex);
-          currentMap.push(roots->getBuiltinType(BUILTIN_EXCEPTION_CLASS_ID));
+          currentMap.push(handle(roots->getBuiltinType(BUILTIN_EXCEPTION_CLASS_ID)));
           blocksToVisit.push_back(move(currentMap));
           blockDone = true;
           break;
@@ -342,58 +333,58 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
         }
 
         case UNIT:
-          currentMap.push(Type::unitType(roots));
+          currentMap.push(handle(Type::unitType(roots)));
           break;
 
         case TRUE:
-          currentMap.push(Type::booleanType(roots));
+          currentMap.push(handle(Type::booleanType(roots)));
           break;
 
         case FALSE:
-          currentMap.push(Type::booleanType(roots));
+          currentMap.push(handle(Type::booleanType(roots)));
           break;
 
         case NUL:
-          currentMap.push(Type::nullType(roots));
+          currentMap.push(handle(Type::nullType(roots)));
           break;
 
         case UNINITIALIZED:
-          currentMap.push(Type::nullType(roots));
+          currentMap.push(handle(Type::nullType(roots)));
           break;
 
         case I8:
           readVbn(bytecode, &pcOffset);
-          currentMap.push(Type::i8Type(roots));
+          currentMap.push(handle(Type::i8Type(roots)));
           break;
 
         case I16:
           readVbn(bytecode, &pcOffset);
-          currentMap.push(Type::i16Type(roots));
+          currentMap.push(handle(Type::i16Type(roots)));
           break;
 
         case I32:
           readVbn(bytecode, &pcOffset);
-          currentMap.push(Type::i32Type(roots));
+          currentMap.push(handle(Type::i32Type(roots)));
           break;
 
         case I64:
           readVbn(bytecode, &pcOffset);
-          currentMap.push(Type::i64Type(roots));
+          currentMap.push(handle(Type::i64Type(roots)));
           break;
 
         case F32:
           pcOffset += 4;
-          currentMap.push(Type::f32Type(roots));
+          currentMap.push(handle(Type::f32Type(roots)));
           break;
 
         case F64:
           pcOffset += 8;
-          currentMap.push(Type::f64Type(roots));
+          currentMap.push(handle(Type::f64Type(roots)));
           break;
 
         case STRING: {
           readVbn(bytecode, &pcOffset);
-          currentMap.push(roots->getBuiltinType(BUILTIN_STRING_CLASS_ID));
+          currentMap.push(handle(roots->getBuiltinType(BUILTIN_STRING_CLASS_ID)));
           break;
         }
 
@@ -421,8 +412,8 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
         case LDP:
         case LDPC: {
           auto index = readVbn(bytecode, &pcOffset);
-          auto clas = currentMap.pop()->asClass();
-          auto type = block_cast<Field>(clas->fields()->get(index))->type();
+          Local<Class> clas(currentMap.pop()->asClass());
+          Local<Type> type(block_cast<Field>(clas->fields()->get(index))->type());
           currentMap.push(type);
           break;
         }
@@ -441,11 +432,11 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
           i64 classId = readVbn(bytecode, &pcOffset);
           currentMap.pcOffset = pcOffset;
           maps.push_back(currentMap);
-          Type* type;
+          Local<Type> type;
           if (isBuiltinId(classId)) {
-            type = roots->getBuiltinType(classId);
+            type = handle(roots->getBuiltinType(classId));
           } else {
-            type = new(heap, 1) Type(block_cast<Class>(package->classes()->get(classId)));
+            type = Type::create(heap, handle(package->getClass(classId)));
           }
           currentMap.push(type);
           break;
@@ -456,31 +447,33 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
           readVbn(bytecode, &pcOffset);  // length is unused
           currentMap.pcOffset = pcOffset;
           maps.push_back(currentMap);
-          Type* type;
+          Local<Type> type;
           if (isBuiltinId(classId)) {
-            type = roots->getBuiltinType(classId);
+            type = handle(roots->getBuiltinType(classId));
           } else {
-            type = new(heap, 1) Type(block_cast<Class>(package->classes()->get(classId)));
+            type = Type::create(heap, handle(package->getClass(classId)));
           }
           currentMap.push(type);
           break;
         }
 
         case TYCS: {
-          auto classId = readVbn(bytecode, &pcOffset);
-          Class* clas = isBuiltinId(classId)
-              ? roots->getBuiltinClass(static_cast<BuiltinId>(classId))
-              : package->getClass(classId);
-          Type* type = new(heap, 1) Type(clas, Type::NO_FLAGS);
-          currentMap.pushTypeArg(type);
+          i64 classId = readVbn(bytecode, &pcOffset);
+          Local<Class> clas;
+          if (isBuiltinId(classId)) {
+            clas = handle(roots->getBuiltinClass(static_cast<BuiltinId>(classId)));
+          } else {
+            clas = handle(package->getClass(classId));
+          }
+          currentMap.pushTypeArg(Type::create(heap, clas));
           break;
         }
 
         case TYVS: {
           auto typeParamId = readVbn(bytecode, &pcOffset);
           ASSERT(!isBuiltinId(typeParamId));
-          TypeParameter* param = package->getTypeParameter(typeParamId);
-          Type* type = new(heap, 1) Type(param, Type::NO_FLAGS);
+          Local<TypeParameter> param(package->getTypeParameter(typeParamId));
+          auto type = Type::create(heap, param, Type::NO_FLAGS);
           currentMap.pushTypeArg(type);
           break;
         }
@@ -490,9 +483,12 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
           i64 functionId = readVbn(bytecode, &pcOffset);
           currentMap.pcOffset = pcOffset;
           maps.push_back(currentMap);
-          Function* callee = isBuiltinId(functionId)
-              ? roots->getBuiltinFunction(static_cast<BuiltinId>(functionId))
-              : package->getFunction(functionId);
+          Local<Function> callee;
+          if (isBuiltinId(functionId)) {
+            callee = handle(roots->getBuiltinFunction(static_cast<BuiltinId>(functionId)));
+          } else {
+            callee = handle(package->getFunction(functionId));
+          }
           ASSERT(paramCount == callee->parameterCount());
           for (word_t i = 0; i < paramCount; i++)
             currentMap.pop();
@@ -504,7 +500,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
 
         case CLS: {
           readVbn(bytecode, &pcOffset);
-          currentMap.push(Type::rootClassType(roots));
+          currentMap.push(handle(Type::rootClassType(roots)));
           break;
         }
 
@@ -514,8 +510,8 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
           currentMap.pcOffset = pcOffset;
           maps.push_back(currentMap);
           word_t slot = currentMap.size() - argCount;
-          auto clas = currentMap.typeMap[slot]->asClass();
-          auto callee = clas->getMethod(methodIndex);
+          Local<Class> clas(currentMap.typeMap[slot]->asClass());
+          Local<Function> callee(clas->getMethod(methodIndex));
 
           for (word_t i = 0, n = callee->parameterCount(); i < n; i++)
             currentMap.pop();
@@ -538,7 +534,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
         case XORI8:
           currentMap.pop();
           currentMap.pop();
-          currentMap.push(Type::i8Type(roots));
+          currentMap.push(handle(Type::i8Type(roots)));
           break;
 
         case ADDI16:
@@ -554,7 +550,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
         case XORI16:
           currentMap.pop();
           currentMap.pop();
-          currentMap.push(Type::i16Type(roots));
+          currentMap.push(handle(Type::i16Type(roots)));
           break;
 
         case ADDI32:
@@ -570,7 +566,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
         case XORI32:
           currentMap.pop();
           currentMap.pop();
-          currentMap.push(Type::i32Type(roots));
+          currentMap.push(handle(Type::i32Type(roots)));
           break;
 
         case ADDI64:
@@ -586,7 +582,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
         case XORI64:
           currentMap.pop();
           currentMap.pop();
-          currentMap.push(Type::i64Type(roots));
+          currentMap.push(handle(Type::i64Type(roots)));
           break;
 
         case ADDF32:
@@ -595,7 +591,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
         case DIVF32:
           currentMap.pop();
           currentMap.pop();
-          currentMap.push(Type::f32Type(roots));
+          currentMap.push(handle(Type::f32Type(roots)));
           break;
 
         case ADDF64:
@@ -604,7 +600,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
         case DIVF64:
           currentMap.pop();
           currentMap.pop();
-          currentMap.push(Type::f64Type(roots));
+          currentMap.push(handle(Type::f64Type(roots)));
           break;
 
         case EQI8:
@@ -647,58 +643,58 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
         case GEF64:
           currentMap.pop();
           currentMap.pop();
-          currentMap.push(Type::booleanType(roots));
+          currentMap.push(handle(Type::booleanType(roots)));
           break;
 
         case NEGI8:
         case INVI8:
           currentMap.pop();
-          currentMap.push(Type::i8Type(roots));
+          currentMap.push(handle(Type::i8Type(roots)));
           break;
 
         case NEGI16:
         case INVI16:
           currentMap.pop();
-          currentMap.push(Type::i16Type(roots));
+          currentMap.push(handle(Type::i16Type(roots)));
           break;
 
         case NEGI32:
         case INVI32:
           currentMap.pop();
-          currentMap.push(Type::i32Type(roots));
+          currentMap.push(handle(Type::i32Type(roots)));
           break;
 
         case NEGI64:
         case INVI64:
           currentMap.pop();
-          currentMap.push(Type::i64Type(roots));
+          currentMap.push(handle(Type::i64Type(roots)));
           break;
 
         case NEGF32:
           currentMap.pop();
-          currentMap.push(Type::f32Type(roots));
+          currentMap.push(handle(Type::f32Type(roots)));
           break;
 
         case NEGF64:
           currentMap.pop();
-          currentMap.push(Type::f64Type(roots));
+          currentMap.push(handle(Type::f64Type(roots)));
           break;
 
         case NOTB:
           currentMap.pop();
-          currentMap.push(Type::booleanType(roots));
+          currentMap.push(handle(Type::booleanType(roots)));
           break;
 
         case TRUNCI8:
           currentMap.pop();
-          currentMap.push(Type::i8Type(roots));
+          currentMap.push(handle(Type::i8Type(roots)));
           break;
 
         case TRUNCI16:
         case SEXTI16_8:
         case ZEXTI16:
           currentMap.pop();
-          currentMap.push(Type::i16Type(roots));
+          currentMap.push(handle(Type::i16Type(roots)));
           break;
 
         case TRUNCI32:
@@ -708,7 +704,7 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
         case FCVTI32:
         case FTOI32:
           currentMap.pop();
-          currentMap.push(Type::i32Type(roots));
+          currentMap.push(handle(Type::i32Type(roots)));
           break;
 
         case SEXTI64_8:
@@ -718,21 +714,21 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
         case FCVTI64:
         case FTOI64:
           currentMap.pop();
-          currentMap.push(Type::i64Type(roots));
+          currentMap.push(handle(Type::i64Type(roots)));
           break;
 
         case TRUNCF32:
         case ICVTF32:
         case ITOF32:
           currentMap.pop();
-          currentMap.push(Type::f32Type(roots));
+          currentMap.push(handle(Type::f32Type(roots)));
           break;
 
         case EXTF64:
         case ICVTF64:
         case ITOF64:
           currentMap.pop();
-          currentMap.push(Type::f64Type(roots));
+          currentMap.push(handle(Type::f64Type(roots)));
           break;
 
         default:
@@ -754,11 +750,9 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
   length_t arrayLength = StackPointerMap::kHeaderLength +
       maps.size() * StackPointerMap::kEntryLength +
       align(bitmapLength, kBitsInWord) / kWordSize;
-  WordArray* array = new(heap, arrayLength) WordArray;
-  if (array == nullptr)
-    return nullptr;
+  auto array = WordArray::create(heap, arrayLength);
 
-  StackPointerMap* stackPointerMap = block_cast<StackPointerMap>(array);
+  auto stackPointerMap = handle(static_cast<StackPointerMap*>(*array));
   stackPointerMap->setEntryCount(maps.size());
   length_t mapOffset = parametersMap.size();
   for (length_t i = 0, n = maps.size(); i < n; i++) {
@@ -770,11 +764,11 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
   stackPointerMap->setBitmapLength(bitmapLength);
   Bitmap bitmap = stackPointerMap->bitmap();
   word_t bitOffset = 0;
-  for (Type* type : parametersMap) {
+  for (auto& type : parametersMap) {
     bitmap.set(bitOffset++, type->isObject());
   }
-  for (FrameState state : maps) {
-    for (Type* type : state.typeMap) {
+  for (auto& state : maps) {
+    for (auto& type : state.typeMap) {
       bitmap.set(bitOffset++, type->isObject());
     }
   }
@@ -783,8 +777,16 @@ StackPointerMap* StackPointerMap::tryBuildFrom(Heap* heap, Function* function) {
 }
 
 
-Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, Local<Function> function) {
-  DEFINE_ALLOCATION(heap, StackPointerMap, tryBuildFrom(heap, *function))
+void StackPointerMap::getParametersRegion(word_t* paramOffset, word_t* paramCount) {
+  *paramOffset = 0;
+  // The parameter region is first in the bitmap. We determine its size by checking the offset
+  // of the first locals region. If there are no other regions, then it is the size of the
+  // whole bitmap.
+  if (entryCount() == 0) {
+    *paramCount = bitmapLength();
+  } else {
+    *paramCount = mapOffset(0);
+  }
 }
 
 

@@ -207,9 +207,9 @@ TEST(BuildStackPointerMap) {
   auto heap = vm.heap();
   AllowAllocationScope allowAllocation(heap, true);
   HandleScope handleScope(&vm);
-  auto package = *createTestPackage(heap);
-  auto function = package->getFunction(0);
-  auto pointerMap = StackPointerMap::tryBuildFrom(heap, function);
+  auto package = createTestPackage(heap);
+  auto function = handle(package->getFunction(0));
+  auto pointerMap = StackPointerMap::buildFrom(heap, function);
   auto bitmap = pointerMap->bitmap();
 
   word_t paramExpected = 0x2;
@@ -256,10 +256,10 @@ TEST(VisitAndRelocateStack) {
   AllowAllocationScope allowAllocation(heap, true);
   HandleScope handleScope(&vm);
   auto stack = vm.stack();
-  auto package = *createTestPackage(heap);
-  auto function = package->getFunction(0);
-  auto stackPointerMap = StackPointerMap::tryBuildFrom(heap, function);
-  function->setStackPointerMap(stackPointerMap);
+  auto package = createTestPackage(heap);
+  auto function = handle(package->getFunction(0));
+  auto stackPointerMap = StackPointerMap::buildFrom(heap, function);
+  function->setStackPointerMap(*stackPointerMap);
 
   // Construct some fake stack frames.
   const word_t kDataMarker = 0;
@@ -270,7 +270,7 @@ TEST(VisitAndRelocateStack) {
   stack->push<word_t>(kObjectMarker);
   // frame
   stack->push<word_t>(kNotSet);
-  stack->push<Function*>(function);
+  stack->push<Function*>(*function);
   stack->push<Address>(stack->fp());
   stack->setFp(stack->sp());
   // locals
@@ -284,7 +284,7 @@ TEST(VisitAndRelocateStack) {
   stack->push<word_t>(kObjectMarker);
   // frame
   stack->push<word_t>(kExpectedPointerMaps[2].pcOffset);
-  stack->push<Function*>(function);
+  stack->push<Function*>(*function);
   stack->push<Address>(stack->fp());
   stack->setFp(stack->sp());
   // locals
@@ -296,7 +296,7 @@ TEST(VisitAndRelocateStack) {
   stack->push<word_t>(kObjectMarker);
   // frame
   stack->push<word_t>(kExpectedPointerMaps[1].pcOffset);
-  stack->push<Function*>(function);
+  stack->push<Function*>(*function);
   stack->push<Address>(stack->fp());
   stack->setFp(stack->sp());
   // locals
@@ -317,7 +317,7 @@ TEST(VisitAndRelocateStack) {
   newStack->relocate(delta);
 
   // Increment pointers on the copied stack.
-  StackIncrementVisitor visitor(function);
+  StackIncrementVisitor visitor(*function);
   visitor.visit(*stack);
   visitor.visit(*newStack);
 
@@ -329,7 +329,7 @@ TEST(VisitAndRelocateStack) {
   for (word_t& i : expected) {
     if (i == kObjectMarker)
       i += 4;         // pointers
-    else if (i > 100 && i != reinterpret_cast<word_t>(function) && i != kNotSet)
+    else if (i > 100 && i != reinterpret_cast<word_t>(*function) && i != kNotSet)
       i += delta;  // fp in each frame
   }
 

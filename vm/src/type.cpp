@@ -307,18 +307,19 @@ bool Type::equals(Type* other) const {
 }
 
 
-Type* Type::substitute(const vector<pair<TypeParameter*, Type*>>& bindings) {
-  if (isVariable()) {
-    TypeParameter* param = asVariable();
+Local<Type> Type::substitute(const Local<Type>& type,
+                             const vector<pair<Local<TypeParameter>, Local<Type>>>& bindings) {
+  if (type->isVariable()) {
+    Local<TypeParameter> param(type->asVariable());
     for (auto binding : bindings) {
-      if (param == binding.first) {
+      if (*param == *binding.first) {
         return binding.second;
       }
     }
-  } else if (isClass()) {
+  } else if (type->isClass()) {
     // TODO: handle type parameters in class types
   }
-  return this;
+  return type;
 }
 
 }

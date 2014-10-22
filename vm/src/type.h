@@ -107,7 +107,9 @@ class Type: public Object {
 
   bool isSubtypeOf(Type* other) const;
   bool equals(Type* other) const;
-  Type* substitute(const std::vector<std::pair<TypeParameter*, Type*>>& bindings);
+  static Local<Type> substitute(const Local<Type>& type,
+                                const std::vector<std::pair<Local<TypeParameter>,
+                                                            Local<Type>>>& bindings);
 
  private:
   friend class Roots;

@@ -79,7 +79,7 @@ class Function: public Block {
 
   StackPointerMap* stackPointerMap() const { return stackPointerMap_.get(); }
   void setStackPointerMap(StackPointerMap* newStackPointerMap) {
-      stackPointerMap_.set(this, newStackPointerMap);
+    stackPointerMap_.set(this, newStackPointerMap);
   }
   bool hasPointerMapAtPcOffset(length_t pcOffset) const;
 
@@ -99,9 +99,12 @@ class Function: public Block {
 
 
 class StackPointerMap: public WordArray {
+  // NOTE: We shouldn't say StackPointerMap "is a" WordArray. It is implemented using a
+  // WordArray, so private inheritance might be more appropriate. However, it definitely
+  // "is a" block. Multiple inheritance will likely mess up everything here, but at least
+  // there aren't any virtual methods.
  public:
-  static StackPointerMap* tryBuildFrom(Heap* heap, Function* function);
-  static Local<StackPointerMap> buildFrom(Heap* heap, Local<Function> function);
+  static Local<StackPointerMap> buildFrom(Heap* heap, const Local<Function>& function);
 
   Bitmap bitmap();
   void getParametersRegion(word_t* paramOffset, word_t* paramCount);
