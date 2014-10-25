@@ -7,6 +7,7 @@
 #ifndef type_h
 #define type_h
 
+#include <iostream>
 #include <vector>
 #include "bytecode.h"
 #include "class.h"
@@ -120,6 +121,8 @@ class Type: public Object {
   Flags flags_ : 28;
   Block* elements_[0];
 };
+
+std::ostream& operator << (std::ostream& os, const Type* type);
 
 }
 }

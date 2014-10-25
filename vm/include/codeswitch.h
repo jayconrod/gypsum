@@ -41,7 +41,6 @@ class Package {
 
   Package& operator = (const Package& package);
 
-  void print(FILE* out);
   Function entryFunction();
 
  private:

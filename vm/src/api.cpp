@@ -229,12 +229,6 @@ Package::~Package() {
 }
 
 
-void Package::print(FILE* out) {
-  i::VM::Scope vmScope(impl_->vm());
-  impl_->package()->print(out);
-}
-
-
 Function Package::entryFunction() {
   i::VM::Scope vmScope(impl_->vm());
   i::Persistent<i::Function> function(impl_->vm(), impl_->package()->entryFunction());

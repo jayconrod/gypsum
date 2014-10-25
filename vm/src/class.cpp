@@ -16,6 +16,8 @@
 #include "roots.h"
 #include "type.h"
 
+using namespace std;
+
 namespace codeswitch {
 namespace internal {
 
@@ -82,11 +84,6 @@ Local<Class> Class::create(Heap* heap) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
       0, nullptr, nullptr, nullptr, nullptr,
       nullptr, nullptr, nullptr, kIndexNotSet)));
-}
-
-
-void Class::printClass(FILE* out) {
-  fprintf(out, "Class @%p\n", reinterpret_cast<void*>(this));
 }
 
 
@@ -201,6 +198,20 @@ void Class::computeSizeAndPointerMapForType(Type* type, u32* size,
   }
   *size = offset + type->typeSize();
   pointerMap->expand(align(*size, kWordSize) / kWordSize);
+}
+
+
+ostream& operator << (ostream& os, const Class* clas) {
+  os << brief(clas)
+     << "\n  supertype: " << brief(clas->supertype())
+     << "\n  fields: " << brief(clas->fields())
+     << "\n  constructors: " << brief(clas->constructors())
+     << "\n  methods: " << brief(clas->methods())
+     << "\n  package: " << brief(clas->package())
+     << "\n  instance meta: " << brief(clas->instanceMeta())
+     << "\n  element type: " << brief(clas->elementType())
+     << "\n  length field index: " << clas->lengthFieldIndex();
+  return os;
 }
 
 }

@@ -7,6 +7,7 @@
 #ifndef function_h
 #define function_h
 
+#include <iostream>
 #include <new>
 #include <vector>
 #include "array.h"
@@ -45,7 +46,6 @@ class Function: public Block {
                                 const Handle<Package>& package);
 
   static word_t sizeForFunction(length_t instructionsSize);
-  void printFunction(FILE* out);
 
   u32 flags() const { return flags_; }
 
@@ -96,6 +96,8 @@ class Function: public Block {
   Ptr<StackPointerMap> stackPointerMap_;
   // Update FUNCTION_POINTER_LIST if pointer members change.
 };
+
+std::ostream& operator << (std::ostream& os, const Function* fn);
 
 
 class StackPointerMap: public WordArray {

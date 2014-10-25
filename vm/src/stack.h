@@ -7,6 +7,7 @@
 #ifndef stack_h
 #define stack_h
 
+#include <iostream>
 #include "block.h"
 #include "handle.h"
 #include "utils.h"
@@ -57,7 +58,6 @@ class Stack: public Block {
   Stack();
   static Local<Stack> create(Heap* heap, word_t size);
 
-  void printStack(FILE* out) const;
   void relocateStack(word_t delta);
 
   // [stackSize]: size in bytes of the stack itself, not including the header.
@@ -132,6 +132,8 @@ class Stack: public Block {
 
   friend class Roots;
 };
+
+std::ostream& operator << (std::ostream& os, const Stack* stack);
 
 
 template <typename T>

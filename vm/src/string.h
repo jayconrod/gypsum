@@ -7,6 +7,7 @@
 #ifndef string_h
 #define string_h
 
+#include <iostream>
 #include <string>
 #include <vector>
 #include "object.h"
@@ -57,6 +58,8 @@ class String: public Object {
   length_t length_;
   u32 chars_[0];
 };
+
+std::ostream& operator << (std::ostream& os, const String* str);
 
 }
 }

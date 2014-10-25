@@ -7,8 +7,8 @@
 #ifndef block_h
 #define block_h
 
+#include <iostream>
 #include <type_traits>
-#include <cstdio>
 #include "bitmap.h"
 #include "heap.h"
 #include "ptr.h"
@@ -122,7 +122,6 @@ BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
 
   Address address() const { return reinterpret_cast<Address>(this); }
   word_t sizeOfBlock() const;
-  void print(FILE* out = stderr);
   void relocate(word_t delta);
 
   const MetaWord& metaWord() const { return metaWord_; }
@@ -150,6 +149,22 @@ BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
  private:
   MetaWord metaWord_;
 };
+
+
+/** Convenience struct for printing the short version of a block. Example:
+ *    cout << brief(block)
+ *  This is useful for implementing other << operators. In general, while we're printing a
+ *  block, we don't want to print another block verbosely. This could result in LOTS of output
+ *  and possibly infinite recursion.
+ */
+struct brief {
+ public:
+  explicit brief(const Block* block)
+      : block_(block) { }
+  const Block* block_;
+};
+
+std::ostream& operator << (std::ostream& os, brief b);
 
 
 // TODO: remove this when no longer needed for compatibility.
@@ -186,8 +201,6 @@ class Meta: public Block {
 
   static word_t sizeForMeta(length_t dataLength, u32 objectSize, u32 elementSize);
   word_t sizeOfMeta() const;
-
-  void printMeta(FILE* out);
 
   length_t dataLength() const { return dataLength_; }
   BlockType blockType() const { return blockType_; }

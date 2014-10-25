@@ -14,6 +14,8 @@
 #include "roots.h"
 #include "stack.h"
 
+using namespace std;
+
 namespace codeswitch {
 namespace internal {
 
@@ -39,16 +41,18 @@ word_t Block::sizeOfBlock() const {
 }
 
 
-void Block::print(FILE* out) {
-  switch (meta()->blockType()) {
-    case META_BLOCK_TYPE: block_cast<Meta>(this)->printMeta(out); break;
-    case STACK_BLOCK_TYPE: block_cast<Stack>(this)->printStack(out); break;
-    case FUNCTION_BLOCK_TYPE: block_cast<Function>(this)->printFunction(out); break;
-    case I32_ARRAY_BLOCK_TYPE: block_cast<I32Array>(this)->printI32Array(out); break;
-    case I64_ARRAY_BLOCK_TYPE: block_cast<I64Array>(this)->printI64Array(out); break;
-    default:
-      fprintf(out, "invalid object\n");
-  }
+static const char* kBlockTypeStrings[] = {
+  #define BLOCK_TYPE_STRING(Name, NAME) #Name,
+  BLOCK_TYPE_LIST(BLOCK_TYPE_STRING)
+  #undef BLOCK_TYPE_STRING
+  "Unknown"
+};
+
+
+ostream& operator << (std::ostream& os, brief b) {
+  os << kBlockTypeStrings[b.block_->meta()->blockType()]
+     << " @" << static_cast<const void*>(b.block_);
+  return os;
 }
 
 
@@ -187,21 +191,21 @@ word_t Meta::sizeOfMeta() const {
 }
 
 
-void Meta::printMeta(FILE* out) {
-  const char* typeStr;
-  switch (meta()->blockType()) {
-#define TYPE_STR(Name, NAME) case NAME##_BLOCK_TYPE: typeStr = #Name; break;
-BLOCK_TYPE_LIST(TYPE_STR)
-#undef TYPE_STR
-    default: typeStr = "Unknown";
-  }
-  fprintf(out, "Meta @%p\n", reinterpret_cast<void*>(this));
-  fprintf(out, "  length: %d\n", static_cast<int>(dataLength()));
-  fprintf(out, "  type: %s\n", typeStr);
-  fprintf(out, "  custom size: %s\n", hasCustomSize() ? "yes" : "no");
-  fprintf(out, "  custom pointers: %s\n", hasCustomPointers() ? "yes" : "no");
-  fprintf(out, "  object size: %d\n", static_cast<int>(objectSize()));
-  fprintf(out, "  element size: %d\n", static_cast<int>(elementSize()));
+ostream& operator << (ostream& os, const Meta* meta) {
+  os << brief(meta)
+     << "\n  length: " << meta->dataLength()
+     << "\n  type: " << kBlockTypeStrings[meta->blockType()]
+     << "\n  has custom size: " << meta->hasCustomSize()
+     << "\n  has pointers: " << meta->hasPointers()
+     << "\n  has element pointers: " << meta->hasElementPointers()
+     << "\n  has custom pointers: " << meta->hasCustomPointers()
+     << "\n  needs relocation: " << meta->needsRelocation()
+     << "\n  has word size length: " << meta->hasWordSizeLength()
+     << "\n  length offset: " << meta->lengthOffset()
+     << "\n  clas: " << brief(meta->clas())
+     << "\n  object size: " << meta->objectSize()
+     << "\n  element size: " << meta->elementSize();
+  return os;
 }
 
 
@@ -261,6 +265,14 @@ void* Free::operator new (size_t unused, void* place, word_t size) {
   free->setMeta(FREE_BLOCK_TYPE);
   free->size_ = size - sizeof(Free);
   return free;
+}
+
+
+ostream& operator << (ostream& os, const Free* free) {
+  os << brief(free)
+     << "\n  size: " << free->size()
+     << "\n  next: " << brief(free->next());
+  return os;
 }
 
 }

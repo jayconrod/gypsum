@@ -7,6 +7,7 @@
 #ifndef type_parameter_h
 #define type_parameter_h
 
+#include <iostream>
 #include "block.h"
 
 namespace codeswitch {
@@ -25,8 +26,6 @@ class TypeParameter: public Block {
                                      u32 flags,
                                      const Handle<Type>& upperBound,
                                      const Handle<Type>& lowerBound);
-
-  void printTypeParameter(FILE* out);
 
   // The bounds can be set after construction, even though we woud like to consider
   // TypeParameter as immutable. This is necessary since TypeParameter and Type have a cyclic
@@ -48,6 +47,8 @@ class TypeParameter: public Block {
   Ptr<Type> lowerBound_;
   // Update TYPE_PARAMETER_POINTER_LIST if pointer members change.
 };
+
+std::ostream& operator << (std::ostream& os, const TypeParameter* tp);
 
 }
 }

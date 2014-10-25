@@ -10,6 +10,9 @@
 #include "gc.h"
 #include "handle.h"
 #include "heap.h"
+#include "type.h"
+
+using namespace std;
 
 namespace codeswitch {
 namespace internal {
@@ -50,8 +53,11 @@ Local<TypeParameter> TypeParameter::create(Heap* heap,
 }
 
 
-void TypeParameter::printTypeParameter(FILE* out) {
-  fprintf(out, "TypeParameter @%p\n", reinterpret_cast<void*>(this));
+ostream& operator << (ostream& os, const TypeParameter* tp) {
+  os << brief(tp)
+     << "\n  upper bound: " << brief(tp->upperBound())
+     << "\n  lower bound: " << brief(tp->lowerBound());
+  return os;
 }
 
 }

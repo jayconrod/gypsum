@@ -7,6 +7,7 @@
 #ifndef class_h
 #define class_h
 
+#include <iostream>
 #include "block.h"
 #include "utils.h"
 
@@ -50,8 +51,6 @@ class Class: public Block {
                              const Handle<Meta>& instanceMeta = Local<Meta>(),
                              const Handle<Type>& elementType = Local<Type>(),
                              length_t lengthFieldIndex = kIndexNotSet);
-
-  void printClass(FILE* out);
 
   // Most members can be set after construction, even though we would like to consider Class
   // as immutable. This is necessary since Class and Type have a cyclic relationship. We may
@@ -114,6 +113,8 @@ class Class: public Block {
   length_t lengthFieldIndex_;
   // Update CLASS_POINTER_LIST if pointer members change.
 };
+
+std::ostream& operator << (std::ostream& os, const Class* clas);
 
 }
 }

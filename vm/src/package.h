@@ -7,7 +7,7 @@
 #ifndef package_h
 #define package_h
 
-#include <cstdio>
+#include <iostream>
 #include "block.h"
 #include "handle.h"
 #include "utils.h"
@@ -30,8 +30,6 @@ class Package: public Block {
   DEFINE_NEW(Package, PACKAGE_BLOCK_TYPE)
   explicit Package(VM* vm);
   static Local<Package> create(Heap* heap);
-
-  void printPackage(FILE* out);
 
   static Local<Package> loadFromFile(VM* vm, const char* fileName);
   static Local<Package> loadFromBytes(VM* vm, const u8* bytes, word_t size);
@@ -66,6 +64,8 @@ class Package: public Block {
   length_t entryFunctionIndex_;
   // Update PACKAGE_POINTER_LIST if pointers change.
 };
+
+std::ostream& operator << (std::ostream& os, const Package* pkg);
 
 }
 }

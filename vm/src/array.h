@@ -7,6 +7,8 @@
 #ifndef array_h
 #define array_h
 
+#include <iomanip>
+#include <iostream>
 #include "block.h"
 #include "gc.h"
 #include "heap.h"
@@ -228,6 +230,59 @@ class TaggedArray: public Array<Tagged<T>> {
     }
   }
 };
+
+
+template <class A>
+void printBlockElements(std::ostream& os, const A* array) {
+  for (length_t i = 0; i < array->length(); i++) {
+    os << "\n  " << std::setw(5) << i << ": " << brief(array->get(i));
+  }
+}
+
+
+template <class A>
+void printRawElements(std::ostream& os, const A* array) {
+  for (length_t i = 0; i < array->length(); i++) {
+    os << "\n  " << std::setw(5) << i << ": " << array->get(i);
+  }
+}
+
+
+template <class T>
+std::ostream& operator << (std::ostream& os, const BlockArray<T>* array) {
+  os << brief(array);
+  printBlockElements(os, array);
+  return os;
+}
+
+
+inline std::ostream& operator << (std::ostream& os, const I8Array* array) {
+  os << brief(array);
+  printRawElements(os, array);
+  return os;
+}
+
+
+inline std::ostream& operator << (std::ostream& os, const I32Array* array) {
+  os << brief(array);
+  printRawElements(os, array);
+  return os;
+}
+
+
+inline std::ostream& operator << (std::ostream& os, const I64Array* array) {
+  os << brief(array);
+  printRawElements(os, array);
+  return os;
+}
+
+
+template <class T>
+std::ostream& operator << (std::ostream& os, const TaggedArray<T>* array) {
+  os << brief(array);
+  printRawElements(os, array);
+  return os;
+}
 
 
 #undef DEFINE_ARRAY_CREATE

@@ -12,7 +12,6 @@
 #include <string>
 #include <sstream>
 #include <vector>
-#include <cstdio>
 #include "array.h"
 #include "block.h"
 #include "bytecode.h"
@@ -94,17 +93,6 @@ Local<Package> Package::create(Heap* heap) {
 }
 
 
-void Package::printPackage(FILE* out) {
-  printf("Package @%p\n", reinterpret_cast<void*>(this));
-  printf("  flags: " WFX "\n", flags());
-  printf("  entry function: %d\n", entryFunctionIndex());
-  printf("  functions:\n");
-  for (length_t i = 0, n = functions()->length(); i < n; i++) {
-    printf("    %p\n", reinterpret_cast<void*>(getFunction(i)));
-  }
-}
-
-
 Local<Package> Package::loadFromFile(VM* vm, const char* fileName) {
   ifstream file(fileName, ios::binary);
   if (!file.good())
@@ -163,6 +151,17 @@ Function* Package::entryFunction() {
   if (index == kNotSet)
     return nullptr;
   return getFunction(index);
+}
+
+
+ostream& operator << (ostream& os, const Package* pkg) {
+  os << brief(pkg)
+     << "\n  strings: " << brief(pkg->strings())
+     << "\n  functions: " << brief(pkg->functions())
+     << "\n  classes: " << brief(pkg->classes())
+     << "\n  type parameters: " << brief(pkg->typeParameters())
+     << "\n  entry function index: " << pkg->entryFunctionIndex();
+  return os;
 }
 
 

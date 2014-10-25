@@ -7,6 +7,7 @@
 #ifndef object_h
 #define object_h
 
+#include <iostream>
 #include "block.h"
 
 namespace codeswitch {
@@ -22,11 +23,11 @@ class Object: public Block {
   static Local<Object> create(Heap* heap, const Handle<Meta>& meta);
   static Local<Object> create(Heap* heap, const Handle<Meta>& meta, length_t length);
 
-  void printObject(FILE* out);
-
  protected:
   explicit Object(BlockType blockType);
 };
+
+std::ostream& operator << (std::ostream& os, const Object* obj);
 
 }
 }

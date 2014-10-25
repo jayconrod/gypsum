@@ -322,5 +322,18 @@ Local<Type> Type::substitute(const Local<Type>& type,
   return type;
 }
 
+
+ostream& operator << (ostream& os, const Type* type) {
+  os << brief(type)
+     << "\n  length: " << type->length()
+     << "\n  form: " << type->form();
+  if (type->isClass()) {
+    os << "\n  class: " << brief(type->asClass());
+  } else if (type->isVariable()) {
+    os << "\n  variable: " << brief(type->asVariable());
+  }
+  return os;
+}
+
 }
 }

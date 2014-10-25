@@ -170,5 +170,12 @@ Local<String> String::concat(Heap* heap,
   RETRY_WITH_GC(heap, return Local<String>(left->tryConcat(heap, *right)));
 }
 
+
+ostream& operator << (ostream& os, const String* str) {
+  os << brief(str)
+     << "\n  chars: " << str->toUtf8StlString();
+  return os;
+}
+
 }
 }

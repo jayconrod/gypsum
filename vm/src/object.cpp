@@ -12,6 +12,8 @@
 #include "handle.h"
 #include "heap.h"
 
+using namespace std;
+
 namespace codeswitch {
 namespace internal {
 
@@ -53,8 +55,8 @@ Local<Object> Object::create(Heap* heap, const Handle<Meta>& meta, length_t leng
 }
 
 
-void Object::printObject(FILE* out) {
-  fprintf(out, "Object @%p\n", reinterpret_cast<void*>(this));
+ostream& operator << (ostream& os, const Object* obj) {
+  return os << brief(obj);
 }
 
 }

@@ -88,13 +88,6 @@ word_t Function::sizeForFunction(length_t instructionsSize) {
 }
 
 
-void Function::printFunction(FILE* out) {
-  fprintf(out, "Function @%p\n", reinterpret_cast<void*>(this));
-  fprintf(out, "  instructions size: %d\n", static_cast<int>(instructionsSize()));
-  fprintf(out, "  parameter count: %d\n", static_cast<int>(parameterCount()));
-}
-
-
 TypeParameter* Function::typeParameter(length_t index) const {
   auto paramTag = typeParameters()->get(index);
   if (paramTag.isNumber()) {
@@ -134,6 +127,21 @@ bool Function::hasPointerMapAtPcOffset(length_t pcOffset) const {
   if (map == nullptr)
     return false;
   return map->hasLocalsRegion(pcOffset);
+}
+
+
+ostream& operator << (ostream& os, const Function* fn) {
+  os << brief(fn);
+  if (fn->hasBuiltinId())
+    os << "\n  builtin id: " << fn->builtinId();
+  os << "\n  type parameters: " << brief(fn->typeParameters())
+     << "\n  types: " << brief(fn->types())
+     << "\n  locals size: " << fn->localsSize()
+     << "\n  instructions size: " << fn->instructionsSize()
+     << "\n  block offsets: " << brief(fn->blockOffsets())
+     << "\n  package: " << brief(fn->package())
+     << "\n  stack pointer map: " << brief(fn->stackPointerMap());
+  return os;
 }
 
 
