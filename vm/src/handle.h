@@ -158,6 +158,12 @@ class HandleStorage {
   iterator begin();
   iterator end();
 
+  template <class Callback>
+  void visitPointers(Callback callback) {
+    for (auto p : *this)
+      callback(p);
+  }
+
  private:
   bool canCreateLocal_;
 

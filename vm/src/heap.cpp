@@ -50,14 +50,7 @@ Address Heap::allocate(word_t size) {
 }
 
 
-void Heap::recordWrite(Address from, Address to) {
-  if (to == 0)
-    return;
-  auto fromChunk = Chunk::fromAddress(from), toChunk = Chunk::fromAddress(to);
-  if (fromChunk == toChunk)
-    return;
-  toChunk->rememberedSet().add(reinterpret_cast<Block**>(from));
-}
+void Heap::recordWrite(Address from, Address to) { }
 
 
 void Heap::collectGarbage() {

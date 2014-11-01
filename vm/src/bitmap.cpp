@@ -30,6 +30,12 @@ bool Bitmap::at(word_t index) const {
 }
 
 
+word_t Bitmap::wordAt(word_t wordIndex) const {
+  ASSERT(wordIndex * kBitsInWord < bitCount_);
+  return base_[wordIndex];
+}
+
+
 void Bitmap::set(word_t index, bool value) {
   word_t wordIndex = wordIndexForBit(index);
   word_t bitIndex = bitIndexForBit(index);

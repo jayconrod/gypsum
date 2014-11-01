@@ -142,6 +142,13 @@ Heap* Block::getHeap() const {
 }
 
 
+#ifdef DEBUG
+void Block::dump() const {
+  cerr << brief(this) << endl;
+}
+#endif
+
+
 #define META_POINTER_LIST(F) \
   F(Meta, clas_)             \
 

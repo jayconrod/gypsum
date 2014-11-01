@@ -143,6 +143,10 @@ BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
     metaWord_ = MetaWord(static_cast<BlockType>(mw >> MetaWord::kGcBitCount));
   }
 
+  #ifdef DEBUG
+  void dump() const;
+  #endif
+
  protected:
   void setElementsLength(word_t length);
 
@@ -268,6 +272,7 @@ class Free: public Block {
 
   word_t size() const { return size_; }
   Free* next() const { return next_; }
+  void setNext(Free* next) { next_ = next; }
 
  private:
   word_t size_;

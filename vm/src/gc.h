@@ -12,6 +12,9 @@
 namespace codeswitch {
 namespace internal {
 
+class Block;
+class Chunk;
+class Free;
 class Heap;
 
 #define RETRY_WITH_GC(heap, stmt)           \
@@ -34,9 +37,17 @@ class GC {
   void collectGarbage();
 
  private:
+  static const word_t kMinFreeSize = 64;
+
+  void markLiveObjects();
+  static bool isMarked(Block* b);
+  static void mark(Block* b);
+  static void sweepChunk(Chunk* chunk);
+  static Free* maybeFreeRange(Address begin, Address end);
+
   Heap* heap_;
 
-  friend class PointerUpdatingVisitor;
+  friend class PointerMarkingVisitor;
 
   NON_COPYABLE(GC)
 };

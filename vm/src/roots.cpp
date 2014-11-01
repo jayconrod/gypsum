@@ -133,6 +133,7 @@ void Roots::initialize(Heap* heap) {
 Meta* Roots::getMetaForBlockType(int type) {
   switch (type) {
     case META_BLOCK_TYPE: return metaMeta();
+    case FREE_BLOCK_TYPE: return freeMeta();
     case PACKAGE_BLOCK_TYPE: return packageMeta();
     case STACK_BLOCK_TYPE: return stackMeta();
     case FUNCTION_BLOCK_TYPE: return functionMeta();

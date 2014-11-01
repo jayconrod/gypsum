@@ -25,6 +25,7 @@ class Bitmap {
   word_t wordCount() const;
   bool at(word_t index) const;
   bool operator [] (word_t index) const { return at(index); }
+  word_t wordAt(word_t wordIndex) const;
   void set(word_t index, bool value);
   void setWord(word_t wordIndex, word_t value);
   void clear();

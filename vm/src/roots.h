@@ -73,7 +73,7 @@ class Roots {
   Function* getBuiltinFunction(BuiltinId id) const;
 
   template <class Callback>
-  void visit(Callback callback);
+  void visitPointers(Callback callback);
 
  private:
   enum BasicRootIndex {
@@ -98,21 +98,21 @@ class Roots {
 
 
 template <class Callback>
-void Roots::visit(Callback callback) {
+void Roots::visitPointers(Callback callback) {
   for (int i = 0; i < BASIC_ROOT_COUNT; i++) {
     callback(reinterpret_cast<Block**>(&basicRoots_[i]));
   }
-  for (size_t i = 0; i < builtinClasses_.size(); i++) {
-    callback(reinterpret_cast<Block**>(&builtinClasses_[i]));
+  for (auto& p : builtinClasses_) {
+    callback(reinterpret_cast<Block**>(&p));
   }
-  for (size_t i = 0; i < builtinMetas_.size(); i++) {
-    callback(reinterpret_cast<Block**>(&builtinMetas_[i]));
+  for (auto& p : builtinMetas_) {
+    callback(reinterpret_cast<Block**>(&p));
   }
-  for (size_t i = 0; i < builtinTypes_.size(); i++) {
-    callback(reinterpret_cast<Block**>(&builtinTypes_[i]));
+  for (auto& p : builtinTypes_) {
+    callback(reinterpret_cast<Block**>(&p));
   }
-  for (size_t i = 0; i < builtinFunctions_.size(); i++) {
-    callback(reinterpret_cast<Block**>(&builtinFunctions_[i]));
+  for (auto& p : builtinFunctions_) {
+    callback(reinterpret_cast<Block**>(&p));
   }
 }
 
