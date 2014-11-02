@@ -99,10 +99,10 @@
   fields:
     -
       name: length
-      type: i64
+      type: i32
     -
       name: flags
-      type: i64
+      type: i32
   elements: Object
   methods:
     -
@@ -121,7 +121,7 @@
   fields:
     -
       name: length
-      type: i64
+      type: i32
   elements: i32
   methods:
     -

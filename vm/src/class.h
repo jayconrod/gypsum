@@ -7,6 +7,7 @@
 #ifndef class_h
 #define class_h
 
+#include <iostream>
 #include "block.h"
 #include "utils.h"
 
@@ -17,6 +18,9 @@ template <class T>
 class BlockArray;
 class Field;
 class Function;
+class I32Array;
+typedef I32Array LengthArray;
+typedef I32Array IdArray;
 class Package;
 template <class T>
 class TaggedArray;
@@ -24,28 +28,29 @@ class Type;
 
 class Class: public Block {
  public:
+  static const BlockType kBlockType = CLASS_BLOCK_TYPE;
+
   void* operator new(size_t, Heap* heap);
   Class(u32 flags,
         Type* supertype,
         BlockArray<Field>* fields,
-        Type* elementType,
-        WordArray* constructors,
-        WordArray* methods,
+        IdArray* constructors,
+        IdArray* methods,
         Package* package,
-        Meta* instanceMeta);
+        Meta* instanceMeta = nullptr,
+        Type* elementType = nullptr,
+        length_t lengthFieldIndex = kIndexNotSet);
   static Local<Class> create(Heap* heap);
   static Local<Class> create(Heap* heap,
                              u32 flags,
                              const Handle<Type>& supertype,
                              const Handle<BlockArray<Field>>& fields,
-                             const Handle<Type>& elementType,
-                             const Handle<WordArray>& constructors,
-                             const Handle<WordArray>& methods,
+                             const Handle<IdArray>& constructors,
+                             const Handle<IdArray>& methods,
                              const Handle<Package>& package,
-                             const Handle<Meta>& instanceMeta);
-
-  void printClass(FILE* out);
-  DEFINE_CAST(Class)
+                             const Handle<Meta>& instanceMeta = Local<Meta>(),
+                             const Handle<Type>& elementType = Local<Type>(),
+                             length_t lengthFieldIndex = kIndexNotSet);
 
   // Most members can be set after construction, even though we would like to consider Class
   // as immutable. This is necessary since Class and Type have a cyclic relationship. We may
@@ -55,22 +60,31 @@ class Class: public Block {
   u32 flags() const { return flags_; }
   void setFlags(u32 flags) { flags_ = flags; }
 
-  DEFINE_INL_PTR_ACCESSORS2(Type*, supertype, setSupertype)
+  Type* supertype() const { return supertype_.get(); }
+  void setSupertype(Type* newSupertype) { supertype_.set(this, newSupertype); }
 
-  DEFINE_INL_PTR_ACCESSORS2(BlockArray<Field>*, fields, setFields)
-  word_t findFieldIndex(word_t offset) const;
-  word_t findFieldOffset(word_t index) const;
+  BlockArray<Field>* fields() const { return fields_.get(); }
+  void setFields(BlockArray<Field>* newFields) { fields_.set(this, newFields); }
+  length_t findFieldIndex(word_t offset) const;
+  word_t findFieldOffset(length_t index) const;
 
-  DEFINE_INL_PTR_ACCESSORS2(Type*, elementType, setElementType)
+  IdArray* constructors() const { return constructors_.get(); }
+  void setConstructors(IdArray* newConstructors) { constructors_.set(this, newConstructors); }
+  Function* getConstructor(length_t index) const;
 
-  DEFINE_INL_PTR_ACCESSORS2(WordArray*, constructors, setConstructors)
-  Function* getConstructor(word_t index) const;
+  IdArray* methods() const { return methods_.get(); }
+  void setMethods(IdArray* newMethods) { methods_.set(this, newMethods); }
+  Function* getMethod(length_t index) const;
 
-  DEFINE_INL_PTR_ACCESSORS2(WordArray*, methods, setMethods)
-  Function* getMethod(word_t index) const;
+  Package* package() const { return package_.get(); }
+  void setPackage(Package* newPackage) { package_.set(this, newPackage); }
+  Meta* instanceMeta() const { return instanceMeta_.get(); }
+  void setInstanceMeta(Meta* newInstanceMeta) { instanceMeta_.set(this, newInstanceMeta); }
 
-  DEFINE_INL_PTR_ACCESSORS2(Package*, package, setPackage)
-  DEFINE_INL_PTR_ACCESSORS2(Meta*, instanceMeta, setInstanceMeta)
+  Type* elementType() const { return elementType_.get(); }
+  void setElementType(Type* newElementType) { elementType_.set(this, newElementType); }
+
+  length_t lengthFieldIndex() const { return lengthFieldIndex_; }
 
   /** Constructs a new instance Meta whether one already exists or not. Does not use handles
    *  or invoke the garbage collector. This is used by Roots, since GC is not available there.
@@ -89,15 +103,18 @@ class Class: public Block {
 
   DECLARE_POINTER_MAP()
   u32 flags_;
-  Type* supertype_;
-  BlockArray<Field>* fields_;
-  Type* elementType_;
-  WordArray* constructors_;
-  WordArray* methods_;
-  Package* package_;
-  Meta* instanceMeta_;
+  Ptr<Type> supertype_;
+  Ptr<BlockArray<Field>> fields_;
+  Ptr<IdArray> constructors_;
+  Ptr<IdArray> methods_;
+  Ptr<Package> package_;
+  Ptr<Meta> instanceMeta_;
+  Ptr<Type> elementType_;
+  length_t lengthFieldIndex_;
   // Update CLASS_POINTER_LIST if pointer members change.
 };
+
+std::ostream& operator << (std::ostream& os, const Class* clas);
 
 }
 }

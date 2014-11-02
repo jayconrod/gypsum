@@ -10,6 +10,7 @@
 #include <memory>
 #include <vector>
 #include "handle.h"
+#include "roots.h"
 #include "utils.h"
 
 namespace codeswitch {
@@ -17,9 +18,7 @@ namespace internal {
 
 class Block;
 class Heap;
-class Roots;
 class Stack;
-class HandleStorage;
 class Package;
 
 class VM {
@@ -49,7 +48,7 @@ class VM {
     VM* oldVM_;
   };
 
-  static inline VM* fromAddress(void* addr);
+  static VM* fromAddress(void* addr);
 
   Flags flags() { return flags_; };
   bool hasFlags(Flags flags) { return (flags_ & flags) == flags; }
@@ -62,18 +61,22 @@ class VM {
   void addPackage(const Persistent<Package>& package);
   const std::vector<Persistent<Package>>& package() { return packages_; }
 
+  template <class Callback>
+  void visitPointers(Callback callback) {
+    roots_->visitPointers(callback);
+    handleStorage_->visitPointers(callback);
+  }
+
  private:
   static VM* currentVM_;
 
   Flags flags_;
-
 
   std::unique_ptr<Heap> heap_;
   std::unique_ptr<Roots> roots_;
   std::unique_ptr<HandleStorage> handleStorage_;
   Persistent<Stack> stack_;
   std::vector<Persistent<Package> > packages_;
-
 
   friend class GC;
 };

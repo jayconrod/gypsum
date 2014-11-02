@@ -8,7 +8,7 @@
 
 #include "handle.h"
 #include "heap.h"
-#include "vm-inl.h"
+#include "vm.h"
 
 using namespace codeswitch::internal;
 
@@ -27,6 +27,7 @@ TEST(HeapIteration) {
 TEST(AllocateUnaligned) {
   VM vm;
   auto heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
   auto addr = heap->allocate(7);
   ASSERT_NE(0, addr);
 }

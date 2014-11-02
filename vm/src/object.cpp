@@ -12,6 +12,8 @@
 #include "handle.h"
 #include "heap.h"
 
+using namespace std;
+
 namespace codeswitch {
 namespace internal {
 
@@ -24,8 +26,9 @@ void* Object::operator new (size_t, Heap* heap, Meta* meta) {
 }
 
 
-void* Object::operator new (size_t, Heap* heap, Meta* meta, word_t length) {
+void* Object::operator new (size_t, Heap* heap, Meta* meta, length_t length) {
   ASSERT(meta->elementSize() > 0);
+  ASSERT(length <= kMaxLength);
   auto size = meta->objectSize() + length * meta->elementSize();
   auto obj = reinterpret_cast<Object*>(heap->allocate(size));
   obj->setMeta(meta);
@@ -47,13 +50,13 @@ Local<Object> Object::create(Heap* heap, const Handle<Meta>& meta) {
 }
 
 
-Local<Object> Object::create(Heap* heap, const Handle<Meta>& meta, word_t length) {
+Local<Object> Object::create(Heap* heap, const Handle<Meta>& meta, length_t length) {
   RETRY_WITH_GC(heap, return Local<Object>(new(heap, *meta, length) Object));
 }
 
 
-void Object::printObject(FILE* out) {
-  fprintf(out, "Object @%p\n", reinterpret_cast<void*>(this));
+ostream& operator << (ostream& os, const Object* obj) {
+  return os << brief(obj);
 }
 
 }

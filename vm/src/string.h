@@ -7,6 +7,7 @@
 #ifndef string_h
 #define string_h
 
+#include <iostream>
 #include <string>
 #include <vector>
 #include "object.h"
@@ -17,20 +18,20 @@ namespace internal {
 
 class String: public Object {
  public:
-  static word_t sizeForLength(word_t length);
-  void* operator new (size_t, Heap* heap, word_t length);
+  static const BlockType kBlockType = STRING_BLOCK_TYPE;
+
+  static word_t sizeForLength(length_t length);
+  void* operator new (size_t, Heap* heap, length_t length);
   explicit String(const u32* chars);
-  static Local<String> create(Heap* heap, word_t length, const u32* chars);
+  static Local<String> create(Heap* heap, length_t length, const u32* chars);
   static Local<String> fromUtf8CString(Heap* heap, const char* utf8Chars);
   static Local<String> fromUtf8String(Heap* heap, const u8* utf8Chars, word_t size);
   static Local<String> fromUtf8String(Heap* heap, const u8* utf8Chars,
-                                      word_t length, word_t size);
+                                      length_t length, word_t size);
 
-  DEFINE_CAST(String)
-
-  word_t length() const { return length_; }
+  length_t length() const { return length_; }
   const u32* chars() const { return chars_; }
-  u32 get(word_t index) const {
+  u32 get(length_t index) const {
     ASSERT(index < length_);
     return chars_[index];
   }
@@ -49,14 +50,16 @@ class String: public Object {
 
  private:
   String();
-  static Local<String> create(Heap* heap, word_t length);
+  static Local<String> create(Heap* heap, length_t length);
 
   friend class Roots;
   static const word_t kPointerMap = 0;
 
-  word_t length_;
+  length_t length_;
   u32 chars_[0];
 };
+
+std::ostream& operator << (std::ostream& os, const String* str);
 
 }
 }

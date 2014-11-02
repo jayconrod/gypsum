@@ -10,6 +10,9 @@
 #include "gc.h"
 #include "handle.h"
 #include "heap.h"
+#include "type.h"
+
+using namespace std;
 
 namespace codeswitch {
 namespace internal {
@@ -30,7 +33,7 @@ void* Field::operator new (size_t, Heap* heap) {
 Field::Field(u32 flags, Type* type)
     : Block(FIELD_BLOCK_TYPE),
       flags_(flags),
-      type_(type) { }
+      type_(this, type) { }
 
 
 Local<Field> Field::create(Heap* heap, u32 flags, const Handle<Type>& type) {
@@ -38,8 +41,10 @@ Local<Field> Field::create(Heap* heap, u32 flags, const Handle<Type>& type) {
 }
 
 
-void Field::printField(FILE* out) {
-  fprintf(out, "Field @%p\n", reinterpret_cast<void*>(this));
+ostream& operator << (ostream& os, const Field* field) {
+  os << brief(field)
+     << "\n  type: " << brief(field->type());
+  return os;
 }
 
 }

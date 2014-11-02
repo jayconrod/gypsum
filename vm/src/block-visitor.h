@@ -81,8 +81,8 @@ void BlockVisitorBase<BlockVisitor>::visitBlockWithPointerMap(Block* block, Meta
   if (meta->hasElements() && meta->hasElementPointers()) {
     ASSERT(!objectMap[1]);   // count should not be set
     Bitmap elementMap = meta->elementPointerMap();
-    word_t count = reinterpret_cast<word_t*>(block)[1];
-    for (word_t j = 0; j < count; j++) {
+    auto count = block->elementsLength();
+    for (length_t j = 0; j < count; j++) {
       for (word_t k = 0; k < elementMap.bitCount(); k++, i++) {
         if (elementMap[k] && pointers[i].isPointer()) {
           auto slot = reinterpret_cast<Block**>(&pointers[i]);
@@ -160,7 +160,7 @@ void BlockVisitorBase<BlockVisitor>::visitStack(Stack* stack) {
 
 template <class BlockVisitor>
 void BlockVisitorBase<BlockVisitor>::visitTaggedArray(TaggedArray<Block>* array) {
-  for (word_t i = 0, n = array->length(); i < n; i++) {
+  for (length_t i = 0, n = array->length(); i < n; i++) {
     Tagged<Block>* taggedSlot = array->elements() + i;
     if (taggedSlot->isPointer()) {
       Block** slot = reinterpret_cast<Block**>(taggedSlot);

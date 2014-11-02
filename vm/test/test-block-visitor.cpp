@@ -13,7 +13,7 @@
 #include "bytecode.h"
 #include "function.h"
 #include "package.h"
-#include "roots-inl.h"
+#include "roots.h"
 #include "type.h"
 
 using namespace codeswitch::internal;
@@ -64,6 +64,7 @@ TEST(BlockVisitorRegularMeta) {
   // This time, we'll create our own meta.
   VM vm;
   auto heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
   auto meta = new(heap, 0, kWordSize, 0) Meta(META_BLOCK_TYPE);
 
   // Our fake object will use this meta.
@@ -80,9 +81,11 @@ TEST(BlockVisitorRegularMeta) {
 TEST(BlockVisitorRegularPointers) {
   VM vm;
   auto heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
   auto meta = new(heap, 0, 6 * kWordSize, 3 * kWordSize) Meta(OBJECT_BLOCK_TYPE);
   meta->hasPointers_ = true;
   meta->hasElementPointers_ = true;
+  meta->lengthOffset_ = kWordSize;
   meta->objectPointerMap().setWord(0, 0x34);
   meta->elementPointerMap().setWord(0, 0x5);
 
@@ -138,7 +141,7 @@ static Local<Package> createTestPackage(Heap* heap) {
     0,
     RET,
   };
-  auto blockOffsetList = WordArray::create(heap, 1);
+  auto blockOffsetList = LengthArray::create(heap, 1);
   blockOffsetList->set(0, 0);
   auto package = Package::create(heap);
   auto functions = BlockArray<Function>::create(heap, 1);
@@ -170,8 +173,9 @@ const ExpectedPointerMap kExpectedPointerMaps[] = {
 
 TEST(BlockVisitorFunction) {
   VM vm(0);
-  HandleScope handleScope(&vm);
   Heap* heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
+  HandleScope handleScope(&vm);
   auto package = *createTestPackage(heap);
   auto function = package->getFunction(0);
   auto typeParameters = function->typeParameters();
@@ -200,11 +204,12 @@ TEST(BlockVisitorFunction) {
 
 TEST(BuildStackPointerMap) {
   VM vm(0);
-  HandleScope handleScope(&vm);
   auto heap = vm.heap();
-  auto package = *createTestPackage(heap);
-  auto function = package->getFunction(0);
-  auto pointerMap = StackPointerMap::tryBuildFrom(heap, function);
+  AllowAllocationScope allowAllocation(heap, true);
+  HandleScope handleScope(&vm);
+  auto package = createTestPackage(heap);
+  auto function = handle(package->getFunction(0));
+  auto pointerMap = StackPointerMap::buildFrom(heap, function);
   auto bitmap = pointerMap->bitmap();
 
   word_t paramExpected = 0x2;
@@ -247,13 +252,14 @@ class StackIncrementVisitor: public BlockVisitorBase<StackIncrementVisitor> {
 
 TEST(VisitAndRelocateStack) {
   VM vm(0);
-  HandleScope handleScope(&vm);
   auto heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
+  HandleScope handleScope(&vm);
   auto stack = vm.stack();
-  auto package = *createTestPackage(heap);
-  auto function = package->getFunction(0);
-  auto stackPointerMap = StackPointerMap::tryBuildFrom(heap, function);
-  function->setStackPointerMap(stackPointerMap);
+  auto package = createTestPackage(heap);
+  auto function = handle(package->getFunction(0));
+  auto stackPointerMap = StackPointerMap::buildFrom(heap, function);
+  function->setStackPointerMap(*stackPointerMap);
 
   // Construct some fake stack frames.
   const word_t kDataMarker = 0;
@@ -264,7 +270,7 @@ TEST(VisitAndRelocateStack) {
   stack->push<word_t>(kObjectMarker);
   // frame
   stack->push<word_t>(kNotSet);
-  stack->push<Function*>(function);
+  stack->push<Function*>(*function);
   stack->push<Address>(stack->fp());
   stack->setFp(stack->sp());
   // locals
@@ -278,7 +284,7 @@ TEST(VisitAndRelocateStack) {
   stack->push<word_t>(kObjectMarker);
   // frame
   stack->push<word_t>(kExpectedPointerMaps[2].pcOffset);
-  stack->push<Function*>(function);
+  stack->push<Function*>(*function);
   stack->push<Address>(stack->fp());
   stack->setFp(stack->sp());
   // locals
@@ -290,7 +296,7 @@ TEST(VisitAndRelocateStack) {
   stack->push<word_t>(kObjectMarker);
   // frame
   stack->push<word_t>(kExpectedPointerMaps[1].pcOffset);
-  stack->push<Function*>(function);
+  stack->push<Function*>(*function);
   stack->push<Address>(stack->fp());
   stack->setFp(stack->sp());
   // locals
@@ -311,7 +317,7 @@ TEST(VisitAndRelocateStack) {
   newStack->relocate(delta);
 
   // Increment pointers on the copied stack.
-  StackIncrementVisitor visitor(function);
+  StackIncrementVisitor visitor(*function);
   visitor.visit(*stack);
   visitor.visit(*newStack);
 
@@ -323,7 +329,7 @@ TEST(VisitAndRelocateStack) {
   for (word_t& i : expected) {
     if (i == kObjectMarker)
       i += 4;         // pointers
-    else if (i > 100 && i != reinterpret_cast<word_t>(function) && i != kNotSet)
+    else if (i > 100 && i != reinterpret_cast<word_t>(*function) && i != kNotSet)
       i += delta;  // fp in each frame
   }
 

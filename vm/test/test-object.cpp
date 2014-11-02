@@ -11,13 +11,14 @@
 #include "handle.h"
 #include "heap.h"
 #include "object.h"
-#include "vm-inl.h"
+#include "vm.h"
 
 using namespace codeswitch::internal;
 
 TEST(ObjectsAreZeroInitialized) {
   VM vm;
-  Heap* heap = vm.heap();
+  auto heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
 
   word_t objectSize = 16;
   auto meta = new(heap, 0, objectSize, 0) Meta(OBJECT_BLOCK_TYPE);

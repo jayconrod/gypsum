@@ -20,7 +20,7 @@
 #include "handle.h"
 #include "object.h"
 #include "package.h"
-#include "roots-inl.h"
+#include "roots.h"
 #include "stack.h"
 #include "string.h"
 #include "type.h"
@@ -52,7 +52,7 @@ void Interpreter::push<bool>(bool value) {
 
 template <>
 void Interpreter::push<f32>(f32 value) {
-  auto bits = static_cast<u64>(*reinterpret_cast<u32*>(&value));
+  auto bits = static_cast<u64>(f32ToBits(value));
   stack_->push(bits);
 }
 
@@ -86,7 +86,7 @@ T Interpreter::pop() {
 template <>
 f32 Interpreter::pop<f32>() {
   auto bits = static_cast<u32>(stack_->pop<u64>());
-  return *reinterpret_cast<f32*>(&bits);
+  return f32FromBits(bits);
 }
 
 
@@ -101,15 +101,6 @@ Block* Interpreter::pop<Block*>() {
   static_assert(sizeof(Block*) == sizeof(i64), "Specialization requires 64-bit");
   return stack_->pop<Block*>();
 }
-
-
-#define ALLOCATE_GC_RETRY(type, var, expr)                            \
-type var = expr;                                                      \
-if (var == nullptr) {                                                 \
-  collectGarbage();                                                   \
-  var = expr;                                                         \
-  ASSERT(var != nullptr);                                             \
-}                                                                     \
 
 
 #define CHECK_NON_NULL(block)                                         \
@@ -129,13 +120,14 @@ if (var == nullptr) {                                                 \
 i64 Interpreter::call(const Handle<Function>& callee) {
   // TODO: figure out a reasonable way to manage locals here.
   HandleScope handleScope(vm_);
+  AllowAllocationScope disallowAllocation(vm_->heap(), false);
 
   // Set up initial stack frame.
   ASSERT(pcOffset_ == kDonePcOffset);
   enter(callee);
 
   // Interpreter loop.
-  i64 result;
+  i64 result = 0xdeadc0dedeadcafell;
   while (pcOffset_ != kDonePcOffset) {
     u8 bc = function_->instructionsStart()[pcOffset_++];
     auto opc = static_cast<Opcode>(bc);
@@ -157,21 +149,21 @@ i64 Interpreter::call(const Handle<Function>& callee) {
 
       case BRANCH: {
         i64 blockIndex = readVbn();
-        pcOffset_ = function_->blockOffset(static_cast<word_t>(blockIndex));
+        pcOffset_ = function_->blockOffset(toLength(blockIndex));
         break;
       }
 
       case BRANCHIF: {
-        auto trueBlockIndex = static_cast<word_t>(readVbn());
-        auto falseBlockIndex = static_cast<word_t>(readVbn());
+        auto trueBlockIndex = toLength(readVbn());
+        auto falseBlockIndex = toLength(readVbn());
         auto condition = pop<bool>();
         pcOffset_ = function_->blockOffset(condition ? trueBlockIndex : falseBlockIndex);
         break;
       }
 
       case PUSHTRY: {
-        auto tryBlockIndex = static_cast<word_t>(readVbn());
-        auto catchBlockIndex = static_cast<word_t>(readVbn());
+        auto tryBlockIndex = toLength(readVbn());
+        auto catchBlockIndex = toLength(readVbn());
         pcOffset_ = function_->blockOffset(tryBlockIndex);
         Handler handler = { stack_->framePointerOffset(),
                             stack_->stackPointerOffset(),
@@ -181,7 +173,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       }
 
       case POPTRY: {
-        auto doneBlockIndex = static_cast<word_t>(readVbn());
+        auto doneBlockIndex = toLength(readVbn());
         pcOffset_ = function_->blockOffset(doneBlockIndex);
         handlers_.pop_back();
         break;
@@ -278,7 +270,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
 
       case STRING: {
         auto index = readVbn();
-        String* string = String::cast(function_->package()->getString(index));
+        String* string = block_cast<String>(function_->package()->getString(index));
         push<Block*>(string);
         break;
       }
@@ -335,6 +327,8 @@ i64 Interpreter::call(const Handle<Function>& callee) {
 
       case ALLOCOBJ: {
         auto classId = readVbn();
+        ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
+        AllowAllocationScope allowAllocation(vm_->heap(), true);
         auto meta = getMetaForClassId(classId);
         Object* obj = nullptr;
         RETRY_WITH_GC(vm_->heap(), obj = new(vm_->heap(), *meta) Object);
@@ -345,6 +339,8 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       case ALLOCARRI: {
         auto classId = readVbn();
         auto length = readVbn();
+        ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
+        AllowAllocationScope allowAllocation(vm_->heap(), true);
         auto meta = getMetaForClassId(classId);
         Object* obj = nullptr;
         RETRY_WITH_GC(vm_->heap(), obj = new(vm_->heap(), *meta, length) Object);
@@ -368,11 +364,14 @@ i64 Interpreter::call(const Handle<Function>& callee) {
 
       case CALLG: {
         readVbn();   // arg count is unused
-        auto functionId = static_cast<word_t>(readVbn());
+        auto functionId = readVbn();
+        ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
         if (isBuiltinId(functionId)) {
+          AllowAllocationScope allowAllocation(vm_->heap(), true);
           handleBuiltin(static_cast<BuiltinId>(functionId));
         } else {
-          Local<Function> callee(function_->package()->getFunction(functionId));
+          auto functionIndex = toLength(functionId);
+          Local<Function> callee(function_->package()->getFunction(functionIndex));
           enter(callee);
         }
         break;
@@ -380,11 +379,13 @@ i64 Interpreter::call(const Handle<Function>& callee) {
 
       case CALLV: {
         auto argCount = readVbn();
-        auto methodIndex = readVbn();
+        auto methodIndex = toLength(readVbn());
+        ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
         auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
         CHECK_NON_NULL(receiver);
-        Local<Function> callee(Function::cast(receiver->meta()->getData(methodIndex)));
+        Local<Function> callee(block_cast<Function>(receiver->meta()->getData(methodIndex)));
         if (callee->hasBuiltinId()) {
+          AllowAllocationScope allowAllocation(vm_->heap(), true);
           handleBuiltin(callee->builtinId());
         } else {
           enter(callee);
@@ -491,6 +492,8 @@ void Interpreter::ensurePointerMap(const Handle<Function>& function) {
   // be generated if all the other functions called by this function are accessible (so we
   // can't do it before all packages are loaded and validated). Since this requires some
   // analysis, we only do it for functions which are actually called.
+  ASSERT(pcOffset_ == kDonePcOffset || function_->hasPointerMapAtPcOffset(pcOffset_));
+  AllowAllocationScope allowAllocation(vm_->heap(), true);
   if (function->stackPointerMap() == nullptr) {
     auto stackPointerMap = StackPointerMap::buildFrom(vm_->heap(), function);
     function->setStackPointerMap(*stackPointerMap);
@@ -501,7 +504,7 @@ void Interpreter::ensurePointerMap(const Handle<Function>& function) {
 void Interpreter::handleBuiltin(BuiltinId id) {
   switch (id) {
     case BUILTIN_ROOT_CLASS_TYPEOF_ID: {
-      auto receiver = Object::cast(pop<Block*>());
+      auto receiver = block_cast<Object>(pop<Block*>());
       Local<Class> clas(receiver->meta()->clas());
       auto type = Type::create(vm_->heap(), clas);
       push<Block*>(*type);
@@ -515,24 +518,24 @@ void Interpreter::handleBuiltin(BuiltinId id) {
       break;
 
     case BUILTIN_TYPE_CTOR_ID: {
-      auto clas = Class::cast(pop<Block*>());
-      auto receiver = Type::cast(pop<Block*>());
+      auto clas = block_cast<Class>(pop<Block*>());
+      auto receiver = block_cast<Type>(pop<Block*>());
       new(receiver, 1) Type(clas);
       push<i8>(0);
       break;
     }
 
     case BUILTIN_TYPE_IS_SUBTYPE_OF_ID: {
-      auto other = Type::cast(pop<Block*>());
-      auto receiver = Type::cast(pop<Block*>());
+      auto other = block_cast<Type>(pop<Block*>());
+      auto receiver = block_cast<Type>(pop<Block*>());
       auto result = receiver->isSubtypeOf(other);
       push<i8>(result ? 1 : 0);
       break;
     }
 
     case BUILTIN_STRING_CONCAT_OP_ID: {
-      Local<String> right(String::cast(pop<Block*>()));
-      Local<String> left(String::cast(pop<Block*>()));
+      Local<String> right(block_cast<String>(pop<Block*>()));
+      Local<String> left(block_cast<String>(pop<Block*>()));
       auto cons = left->tryConcat(vm_->heap(), *right);
       if (cons == nullptr) {
         collectGarbage();
@@ -605,7 +608,7 @@ void Interpreter::handleBuiltin(BuiltinId id) {
       break;
 
     case BUILTIN_PRINT_FUNCTION_ID: {
-      auto string = String::cast(pop<Block*>());
+      auto string = block_cast<String>(pop<Block*>());
       auto stlString = string->toUtf8StlString();
       cout << stlString;
       push<i8>(0);
@@ -648,7 +651,7 @@ void Interpreter::enter(const Handle<Function>& callee) {
   ensurePointerMap(callee);
 
   stack_->align(kWordSize);
-  stack_->push(pcOffset_);
+  stack_->push(static_cast<word_t>(pcOffset_));
   stack_->push(function_ ? *function_ : nullptr);
   stack_->push(stack_->fp());
   stack_->setFp(stack_->sp());
@@ -660,9 +663,9 @@ void Interpreter::enter(const Handle<Function>& callee) {
 
 
 void Interpreter::leave() {
-  word_t parametersSize = function_->parametersSize();
-  Address fp = stack_->fp();
-  pcOffset_ = mem<word_t>(fp, kCallerPcOffsetOffset);
+  auto parametersSize = function_->parametersSize();
+  auto fp = stack_->fp();
+  pcOffset_ = toLength(mem<word_t>(fp, kCallerPcOffsetOffset));
   auto caller = mem<Function*>(fp, kFunctionOffset);
   function_ = caller ? Persistent<Function>(caller) : Persistent<Function>();
   stack_->setSp(fp + kFrameControlSize + parametersSize);
@@ -677,7 +680,7 @@ void Interpreter::doThrow(Block* exception) {
     // of the interpreter in case it is used again.
     stack_->resetPointers();
     function_ = Persistent<Function>();
-    pcOffset_ = kNotSet;
+    pcOffset_ = kPcNotSet;
     throw Error("unhandled exception");
   } else {
     // If there is a handler, we pop the exception, unwind the stack, push the exception, and
@@ -685,7 +688,7 @@ void Interpreter::doThrow(Block* exception) {
     Handler handler = handlers_.back();
     handlers_.pop_back();
     Address fp = handler.fpOffset + stack_->base();
-    stack_->push(pcOffset_);
+    stack_->push(static_cast<word_t>(pcOffset_));
     for (auto frame : **stack_) {
       if (frame.fp() == fp)
         break;
@@ -702,7 +705,7 @@ void Interpreter::doThrow(Block* exception) {
 ptrdiff_t Interpreter::localOffsetFromIndex(i64 index) {
   if (index >= 0) {
     // parameter. 0 is the first parameter (highest address on stack).
-    return kFrameControlSize + function_->parameterOffset(static_cast<word_t>(index));
+    return kFrameControlSize + function_->parameterOffset(toLength(index));
   } else {
     // local. -1 is the first local, and they grow down.
     // TODO: this assumes all locals are word-sized.
@@ -736,7 +739,7 @@ void Interpreter::throwBuiltinException(BuiltinId id) {
 
 
 void Interpreter::collectGarbage() {
-  stack_->push(pcOffset_);
+  stack_->push(static_cast<word_t>(pcOffset_));
   GC gc(vm_->heap());
   gc.collectGarbage();
   stack_->pop<word_t>();
@@ -838,8 +841,8 @@ void Interpreter::convert() {
 
 
 int Interpreter::strcmp() {
-  auto right = String::cast(pop<Block*>());
-  auto left = String::cast(pop<Block*>());
+  auto right = block_cast<String>(pop<Block*>());
+  auto left = block_cast<String>(pop<Block*>());
   auto cmp = left->compare(right);
   return cmp;
 }

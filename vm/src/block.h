@@ -7,9 +7,11 @@
 #ifndef block_h
 #define block_h
 
-#include <cstdio>
-#include "bitmap-inl.h"
+#include <iostream>
+#include <type_traits>
+#include "bitmap.h"
 #include "heap.h"
+#include "ptr.h"
 #include "utils.h"
 #include "vm.h"
 
@@ -43,18 +45,8 @@ enum BlockType {
 #undef ENUM_BLOCK_TYPE
 
 
-#define DEFINE_CAST(Name) \
-static Name* cast(Block* block) { \
-  ASSERT(block->is##Name()); \
-  return reinterpret_cast<Name*>(block); \
-} \
-static const Name* cast(const Block* block) { \
-  ASSERT(block->is##Name()); \
-  return reinterpret_cast<const Name*>(block); \
-}
-
-
 class Bitmap;
+class Block;
 class Class;
 template <class T>
 class Handle;
@@ -130,7 +122,6 @@ BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
 
   Address address() const { return reinterpret_cast<Address>(this); }
   word_t sizeOfBlock() const;
-  void print(FILE* out = stderr);
   void relocate(word_t delta);
 
   const MetaWord& metaWord() const { return metaWord_; }
@@ -139,6 +130,9 @@ BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
   BlockType blockType() const;
 
   word_t elementsLength() const;
+  ptrdiff_t elementsOffset() const;
+  Address elementsBase() const;
+  word_t elementsSize() const;
 
   VM* getVM() const;
   Heap* getHeap() const;
@@ -149,12 +143,32 @@ BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
     metaWord_ = MetaWord(static_cast<BlockType>(mw >> MetaWord::kGcBitCount));
   }
 
+  #ifdef DEBUG
+  void dump() const;
+  #endif
+
  protected:
   void setElementsLength(word_t length);
 
  private:
   MetaWord metaWord_;
 };
+
+
+/** Convenience struct for printing the short version of a block. Example:
+ *    cout << brief(block)
+ *  This is useful for implementing other << operators. In general, while we're printing a
+ *  block, we don't want to print another block verbosely. This could result in LOTS of output
+ *  and possibly infinite recursion.
+ */
+struct brief {
+ public:
+  explicit brief(const Block* block)
+      : block_(block) { }
+  const Block* block_;
+};
+
+std::ostream& operator << (std::ostream& os, brief b);
 
 
 // TODO: remove this when no longer needed for compatibility.
@@ -173,38 +187,41 @@ static const int kBlockHeaderSize = sizeof(Block);
  */
 class Meta: public Block {
  public:
+  static const BlockType kBlockType = META_BLOCK_TYPE;
+
   /** Attempts to allocate raw memory for a `Meta`. Throws AllocationError on failure. The
    *  memory will be zero-initialized (except for size-related members), so explicit
    *  zero-initialization is not necessary.
    */
-  void* operator new (size_t, Heap* heap, word_t dataLength, u32 objectSize, u32 elementSize);
+  void* operator new (size_t, Heap* heap, length_t dataLength, u32 objectSize, u32 elementSize);
   explicit Meta(BlockType blockType)
       : Block(META_BLOCK_TYPE),
         blockType_(blockType) { }
   static Local<Meta> create(Heap* heap,
-                            word_t dataLength,
+                            length_t dataLength,
                             u32 objectSize,
                             u32 elementSize,
                             BlockType blockType);
 
+  static word_t sizeForMeta(length_t dataLength, u32 objectSize, u32 elementSize);
   word_t sizeOfMeta() const;
-  DEFINE_CAST(Meta)
 
-  void printMeta(FILE* out);
-
-  word_t dataLength() const { return dataLength_; }
+  length_t dataLength() const { return dataLength_; }
   BlockType blockType() const { return blockType_; }
   bool hasCustomSize() const { return hasCustomSize_; }
   bool hasPointers() const { return hasPointers_; }
   bool hasElementPointers() const { return hasElementPointers_; }
   bool hasCustomPointers() const { return hasCustomPointers_; }
   bool needsRelocation() const { return needsRelocation_; }
-  DEFINE_INL_PTR_ACCESSORS2(Class*, clas, setClass)
+  bool hasWordSizeLength() const { return hasWordSizeLength_; }
+  u8 lengthOffset() const { return lengthOffset_; }
+  Class* clas() const { return clas_.get(); }
+  void setClass(Class* newClass) { clas_.set(this, newClass); }
   u32 objectSize() const { return objectSize_; }
   u32 elementSize() const { return elementSize_; }
 
-  Block* getData(word_t index) const;
-  void setData(word_t index, Block* value);
+  Block* getData(length_t index) const;
+  void setData(length_t index, Block* value);
 
   bool hasElements() { return elementSize() > 0; }
   word_t* rawObjectPointerMap();
@@ -215,26 +232,28 @@ class Meta: public Block {
   static const word_t kElementSize = kWordSize;
 
  private:
-  static word_t sizeForMeta(word_t dataLength, u32 objectSize, u32 elementSize);
-  Block** dataBase() { return &mem<Block*>(this, sizeof(Meta)); }
-  Block* const* dataBase() const { return &mem<Block*>(this, sizeof(Meta)); }
+  DECLARE_POINTER_MAP()
 
-  word_t dataLength_;
+  static const word_t kElementPointerMap = 0x1;
+
+  Block** dataBase() { return reinterpret_cast<Block**>(elementsBase()); }
+  Block* const* dataBase() const { return reinterpret_cast<Block**>(elementsBase()); }
+
+  length_t dataLength_;
   BlockType blockType_ : 8;
   bool hasCustomSize_ : 1;
   bool hasPointers_ : 1;
   bool hasElementPointers_ : 1;
   bool hasCustomPointers_ : 1;
   bool needsRelocation_ : 1;
-  alignas(word_t) Class* clas_;
+  bool hasWordSizeLength_ : 1;
+  u8 lengthOffset_;
+  Ptr<Class> clas_;
   u32 objectSize_;
   u32 elementSize_;
-
-  static const word_t kPointerMap = 0x8;
-  static const word_t kElementPointerMap = 0x1;
+  // Update META_POINTER_LIST if pointers change.
 
   friend class Class;
-  friend class Roots;
 };
 
 
@@ -243,29 +262,52 @@ class Meta: public Block {
  */
 class Free: public Block {
  public:
-  void* operator new (size_t, Heap* heap, size_t size);
-  void* operator new (size_t, void* place, size_t size);
+  static const BlockType kBlockType = FREE_BLOCK_TYPE;
+
+  void* operator new (size_t, Heap* heap, word_t size);
+  void* operator new (size_t, void* place, word_t size);
   explicit Free(Free* next)
       : Block(FREE_BLOCK_TYPE),
         next_(next) { }
 
-  DEFINE_CAST(Free)
-
   word_t size() const { return size_; }
   Free* next() const { return next_; }
+  void setNext(Free* next) { next_ = next; }
 
  private:
   word_t size_;
   Free* next_;
+
+  friend class Roots;
 };
 
+STATIC_ASSERT(isAligned(sizeof(Free), kWordSize));
 
-#define DEFINE_TYPE_CHECK(Name, NAME)                   \
-bool Block::is##Name() const {                          \
-  return blockType() == NAME##_BLOCK_TYPE;              \
+
+/** Returns true if the block is an instance of the template class. Concrete sub-classes of
+ *  Block must define a static kBlockType member for this to work.
+ */
+template <class T>
+bool isa(const Block* block) {
+  return block->meta()->blockType() == T::kBlockType;
 }
-BLOCK_TYPE_LIST(DEFINE_TYPE_CHECK)
-#undef DEFINE_TYPE_CHECK
+
+
+/** A checked cast for a block pointer to a given type. Note that the type argument must be a
+ *  pointer type to a concrete Block subclass.
+ */
+template <class T>
+T* block_cast(Block* block) {
+  ASSERT(isa<T>(block));
+  return reinterpret_cast<T*>(block);
+}
+
+
+template <class T>
+const T* const_block_cast(const Block* block) {
+  ASSERT(isa<T>(block));
+  return reinterpret_cast<const T*>(block);
+}
 
 }
 }

@@ -11,6 +11,8 @@
 #include "handle.h"
 #include "heap.h"
 
+using namespace std;
+
 namespace codeswitch {
 namespace internal {
 
@@ -29,17 +31,6 @@ Stack::Stack()
 
 Local<Stack> Stack::create(Heap* heap, word_t size) {
   RETRY_WITH_GC(heap, return Local<Stack>(new(heap, size) Stack));
-}
-
-
-void Stack::printStack(FILE* out) const {
-  fprintf(out, "Stack @%p\n", reinterpret_cast<const void*>(this));
-  fprintf(out, "  size: %d\n  fp: %d (%p)\n  sp: %d (%p)\n",
-          static_cast<int>(stackSize()),
-          static_cast<int>(framePointerOffset()),
-          reinterpret_cast<void*>(fp()),
-          static_cast<int>(stackPointerOffset()),
-          reinterpret_cast<void*>(sp()));
 }
 
 
@@ -102,21 +93,21 @@ void Stack::align(word_t alignment) {
 
 
 Stack::iterator Stack::begin() {
-  return iterator(this, fp(), *reinterpret_cast<word_t*>(sp()));
+  return iterator(this, fp(), toLength(mem<word_t>(sp())));
 }
 
 
 Stack::iterator Stack::end() {
-  return iterator(this, limit(), kNotSet);
+  return iterator(this, limit(), kPcNotSet);
 }
 
 
-StackFrame Stack::top(word_t pcOffset) {
+StackFrame Stack::top(length_t pcOffset) {
   return StackFrame(fp(), pcOffset);
 }
 
 
-Stack::iterator::iterator(Stack* stack, Address fp, word_t pcOffset)
+Stack::iterator::iterator(Stack* stack, Address fp, length_t pcOffset)
     : stack_(stack),
       frame_(fp, pcOffset) { }
 
@@ -134,6 +125,15 @@ Stack::iterator& Stack::iterator::operator ++ () {
 
 bool Stack::iterator::operator != (const Stack::iterator& other) const {
   return frame_.fp() != other.frame_.fp();
+}
+
+
+ostream& operator << (ostream& os, const Stack* stack) {
+  os << brief(stack)
+     << "  size: " << stack->stackSize()
+     << "  fp: " << reinterpret_cast<void*>(stack->fp())
+     << "  sp: " << reinterpret_cast<void*>(stack->sp());
+  return os;
 }
 
 }

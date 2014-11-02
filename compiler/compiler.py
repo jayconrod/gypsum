@@ -527,8 +527,9 @@ class CompileVisitor(AstNodeVisitor):
 
     def enumerateParameters(self, parameters):
         if self.function.isMethod():
-            assert self.function.variables[0].name == "$this"
-            self.function.variables[0].index = 0
+            if self.function.variables[0].name == "$this":
+                # Receiver may be captured, so don't assume it's a regular variable.
+                self.function.variables[0].index = 0
             implicitParamCount = 1
         else:
             implicitParamCount = 0

@@ -13,8 +13,10 @@
 #include "gc.h"
 #include "handle.h"
 #include "package.h"
-#include "roots-inl.h"
+#include "roots.h"
 #include "type.h"
+
+using namespace std;
 
 namespace codeswitch {
 namespace internal {
@@ -22,11 +24,11 @@ namespace internal {
 #define CLASS_POINTER_LIST(F) \
   F(Class, supertype_)        \
   F(Class, fields_)           \
-  F(Class, elementType_)      \
   F(Class, constructors_)     \
   F(Class, methods_)          \
   F(Class, package_)          \
   F(Class, instanceMeta_)     \
+  F(Class, elementType_)      \
 
 DEFINE_POINTER_MAP(Class, CLASS_POINTER_LIST)
 
@@ -41,53 +43,54 @@ void* Class::operator new (size_t, Heap* heap) {
 Class::Class(u32 flags,
              Type* supertype,
              BlockArray<Field>* fields,
-             Type* elementType,
-             WordArray* constructors,
-             WordArray* methods,
+             IdArray* constructors,
+             IdArray* methods,
              Package* package,
-             Meta* instanceMeta)
+             Meta* instanceMeta,
+             Type* elementType,
+             length_t lengthFieldIndex)
     : Block(CLASS_BLOCK_TYPE),
       flags_(flags),
-      supertype_(supertype),
-      fields_(fields),
-      elementType_(elementType),
-      constructors_(constructors),
-      methods_(methods),
-      package_(package),
-      instanceMeta_(instanceMeta) { }
+      supertype_(this, supertype),
+      fields_(this, fields),
+      constructors_(this, constructors),
+      methods_(this, methods),
+      package_(this, package),
+      instanceMeta_(this, instanceMeta),
+      elementType_(this, elementType),
+      lengthFieldIndex_(lengthFieldIndex) {
+  ASSERT((elementType_ == nullptr) == (lengthFieldIndex_ == kIndexNotSet));
+}
 
 
 Local<Class> Class::create(Heap* heap,
                            u32 flags,
                            const Handle<Type>& supertype,
                            const Handle<BlockArray<Field>>& fields,
-                           const Handle<Type>& elementType,
-                           const Handle<WordArray>& constructors,
-                           const Handle<WordArray>& methods,
+                           const Handle<IdArray>& constructors,
+                           const Handle<IdArray>& methods,
                            const Handle<Package>& package,
-                           const Handle<Meta>& instanceMeta) {
+                           const Handle<Meta>& instanceMeta,
+                           const Handle<Type>& elementType,
+                           length_t lengthFieldIndex) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
-      flags, *supertype, *fields, *elementType, *constructors,
-      *methods, package.getOrNull(), instanceMeta.getOrNull())));
+      flags, *supertype, *fields, *constructors, *methods,
+      package.getOrNull(), instanceMeta.getOrNull(),
+      elementType.getOrNull(), lengthFieldIndex)));
 }
 
 
 Local<Class> Class::create(Heap* heap) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
       0, nullptr, nullptr, nullptr, nullptr,
-      nullptr, nullptr, nullptr)));
+      nullptr, nullptr, nullptr, kIndexNotSet)));
 }
 
 
-void Class::printClass(FILE* out) {
-  fprintf(out, "Class @%p\n", reinterpret_cast<void*>(this));
-}
-
-
-word_t Class::findFieldIndex(word_t offset) const {
+length_t Class::findFieldIndex(word_t offset) const {
   word_t currentOffset = kWordSize;
-  for (word_t i = 0, n = fields()->length(); i < n; i++) {
-    auto type = Field::cast(fields()->get(i))->type();
+  for (length_t i = 0, n = fields()->length(); i < n; i++) {
+    auto type = block_cast<Field>(fields()->get(i))->type();
     currentOffset = align(currentOffset, type->alignment());
     if (currentOffset == offset)
       return i;
@@ -98,26 +101,26 @@ word_t Class::findFieldIndex(word_t offset) const {
 }
 
 
-word_t Class::findFieldOffset(word_t index) const {
+word_t Class::findFieldOffset(length_t index) const {
   ASSERT(index < fields()->length());
   word_t currentOffset = kWordSize;
-  for (word_t i = 0; i < index; i++) {
-    auto size = Field::cast(fields()->get(i))->type()->typeSize();
-    auto nextAlignment = Field::cast(fields()->get(i + 1))->type()->alignment();
+  for (length_t i = 0; i < index; i++) {
+    auto size = block_cast<Field>(fields()->get(i))->type()->typeSize();
+    auto nextAlignment = block_cast<Field>(fields()->get(i + 1))->type()->alignment();
     currentOffset = align(currentOffset + size, nextAlignment);
   }
   return currentOffset;
 }
 
 
-Function* Class::getConstructor(word_t index) const {
-  word_t id = constructors()->get(index);
-  Function* ctor = package()->getFunction(id);
+Function* Class::getConstructor(length_t index) const {
+  auto id = constructors()->get(index);
+  auto ctor = package()->getFunction(id);
   return ctor;
 }
 
 
-Function* Class::getMethod(word_t index) const {
+Function* Class::getMethod(length_t index) const {
   intptr_t id = methods()->get(index);
   if (isBuiltinId(id)) {
     return getVM()->roots()->getBuiltinFunction(static_cast<BuiltinId>(id));
@@ -129,12 +132,14 @@ Function* Class::getMethod(word_t index) const {
 
 Meta* Class::buildInstanceMeta() {
   u32 objectSize = kWordSize, elementSize = 0;
+  u8 lengthOffset = 0;
   bool hasObjectPointers = false, hasElementPointers = false;
   BitSet objectPointerMap(1), elementPointerMap;
   computeSizeAndPointerMap(&objectSize, &hasObjectPointers, &objectPointerMap);
   if (elementType() != nullptr) {
     computeSizeAndPointerMapForType(elementType(), &elementSize,
                                     &hasElementPointers, &elementPointerMap);
+    lengthOffset = findFieldOffset(lengthFieldIndex_);
   }
 
   auto methodCount = methods()->length();
@@ -142,7 +147,8 @@ Meta* Class::buildInstanceMeta() {
   meta->setClass(this);
   meta->hasPointers_ = hasObjectPointers;
   meta->hasElementPointers_ = hasElementPointers;
-  for (word_t i = 0; i < methodCount; i++) {
+  meta->lengthOffset_ = lengthOffset;
+  for (length_t i = 0; i < methodCount; i++) {
     auto method = getMethod(i);
     meta->setData(i, method);
   }
@@ -176,8 +182,8 @@ bool Class::isSubclassOf(Class* other) const {
 
 
 void Class::computeSizeAndPointerMap(u32* size, bool* hasPointers, BitSet* pointerMap) const {
-  for (word_t i = 0, n = fields()->length(); i < n; i++) {
-    auto type = Field::cast(fields()->get(i))->type();
+  for (length_t i = 0, n = fields()->length(); i < n; i++) {
+    auto type = block_cast<Field>(fields()->get(i))->type();
     computeSizeAndPointerMapForType(type, size, hasPointers, pointerMap);
   }
 }
@@ -192,6 +198,20 @@ void Class::computeSizeAndPointerMapForType(Type* type, u32* size,
   }
   *size = offset + type->typeSize();
   pointerMap->expand(align(*size, kWordSize) / kWordSize);
+}
+
+
+ostream& operator << (ostream& os, const Class* clas) {
+  os << brief(clas)
+     << "\n  supertype: " << brief(clas->supertype())
+     << "\n  fields: " << brief(clas->fields())
+     << "\n  constructors: " << brief(clas->constructors())
+     << "\n  methods: " << brief(clas->methods())
+     << "\n  package: " << brief(clas->package())
+     << "\n  instance meta: " << brief(clas->instanceMeta())
+     << "\n  element type: " << brief(clas->elementType())
+     << "\n  length field index: " << clas->lengthFieldIndex();
+  return os;
 }
 
 }

@@ -36,12 +36,19 @@ typedef I32Array WordArray;
 #error WORDSIZE must be 32 or 64
 #endif
 typedef word_t Address;
-const int kWordSize = WORDSIZE / 8;
+const size_t kWordSize = WORDSIZE / 8;
 const int kBitsInWord = WORDSIZE;
 const word_t kNotSet = static_cast<word_t>(-1);
 const word_t kNotFound = static_cast<word_t>(-1);
 void* const kFailed = reinterpret_cast<void*>(1);
 void* const kUninitialized = nullptr;
+typedef u32 length_t;
+const length_t kMaxLength = 0x7fffffffu;
+const length_t kLengthNotSet = ~0u;
+const length_t kIndexNotSet = ~0u;
+const length_t kPcNotSet = ~0u;
+typedef i32 id_t;
+const id_t kIdNotSet = -1;
 
 const int KB = 1024;
 const int MB = 1024 * KB;
@@ -128,7 +135,7 @@ constexpr inline word_t alignDown(word_t n, word_t alignment) {
 }
 
 
-inline bool isAligned(word_t n, word_t alignment) {
+constexpr inline bool isAligned(word_t n, word_t alignment) {
   return (n & (alignment - 1UL)) == 0;
 }
 
@@ -149,23 +156,51 @@ inline word_t bitInsert(word_t n, word_t value, word_t width, word_t shift) {
 }
 
 
+template <typename T>
+length_t toLength(T n) {
+  auto len = static_cast<length_t>(n);
+  ASSERT((0 <= len && len <= kMaxLength) || len == kLengthNotSet);
+  return len;
+}
+
+
 inline u32 f32ToBits(f32 value) {
-  return *reinterpret_cast<u32*>(&value);
+  union {
+    f32 from;
+    u32 to;
+  } cast;
+  cast.from = value;
+  return cast.to;
 }
 
 
 inline f32 f32FromBits(u32 bits) {
-  return *reinterpret_cast<f32*>(&bits);
+  union {
+    u32 from;
+    f32 to;
+  } cast;
+  cast.from = bits;
+  return cast.to;
 }
 
 
 inline u64 f64ToBits(f64 value) {
-  return *reinterpret_cast<u64*>(&value);
+  union {
+    f64 from;
+    u64 to;
+  } cast;
+  cast.from = value;
+  return cast.to;
 }
 
 
 inline f64 f64FromBits(u64 bits) {
-  return *reinterpret_cast<f64*>(&bits);
+  union {
+    u64 from;
+    f64 to;
+  } cast;
+  cast.from = bits;
+  return cast.to;
 }
 
 

@@ -7,6 +7,7 @@
 #ifndef field_h
 #define field_h
 
+#include <iostream>
 #include "block.h"
 #include "utils.h"
 
@@ -17,23 +18,24 @@ class Type;
 
 class Field: public Block {
  public:
+  static const BlockType kBlockType = FIELD_BLOCK_TYPE;
+
   void* operator new (size_t, Heap* heap);
   Field(u32 flags, Type* type);
   static Local<Field> create(Heap* heap, u32 flags, const Handle<Type>& type);
 
-  void printField(FILE* out);
-  DEFINE_CAST(Field)
-
   u32 flags() const { return flags_; }
-  Type* type() const { return type_; }
+  Type* type() const { return type_.get(); }
 
  private:
   DECLARE_POINTER_MAP()
 
   u32 flags_;
-  Type* type_;
+  Ptr<Type> type_;
   // Update FIELD_POINTER_LIST if pointer members change.
 };
+
+std::ostream& operator << (std::ostream& os, const Field* field);
 
 }
 }

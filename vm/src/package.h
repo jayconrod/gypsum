@@ -7,7 +7,7 @@
 #ifndef package_h
 #define package_h
 
-#include <cstdio>
+#include <iostream>
 #include "block.h"
 #include "handle.h"
 #include "utils.h"
@@ -25,40 +25,47 @@ class TypeParameter;
 
 class Package: public Block {
  public:
+  static const BlockType kBlockType = PACKAGE_BLOCK_TYPE;
+
   DEFINE_NEW(Package, PACKAGE_BLOCK_TYPE)
   explicit Package(VM* vm);
   static Local<Package> create(Heap* heap);
-  DEFINE_CAST(Package)
-
-  void printPackage(FILE* out);
 
   static Local<Package> loadFromFile(VM* vm, const char* fileName);
   static Local<Package> loadFromBytes(VM* vm, const u8* bytes, word_t size);
   static Local<Package> loadFromStream(VM* vm, std::istream& stream);
 
   DEFINE_INL_ACCESSORS2(u64, flags, setFlags)
-  DEFINE_INL_PTR_ACCESSORS2(BlockArray<String>*, strings, setStrings)
-  String* getString(word_t index);
-  DEFINE_INL_PTR_ACCESSORS2(BlockArray<Function>*, functions, setFunctions)
-  Function* getFunction(word_t index);
-  DEFINE_INL_PTR_ACCESSORS2(BlockArray<Class>*, classes, setClasses)
-  Class* getClass(word_t index);
-  DEFINE_INL_PTR_ACCESSORS2(BlockArray<TypeParameter>*, typeParameters, setTypeParameters)
-  TypeParameter* getTypeParameter(word_t index);
-  DEFINE_INL_ACCESSORS2(word_t, entryFunctionIndex, setEntryFunctionIndex)
+  BlockArray<String>* strings() const { return strings_.get(); }
+  void setStrings(BlockArray<String>* newStrings) { strings_.set(this, newStrings); }
+  String* getString(length_t index);
+  BlockArray<Function>* functions() const { return functions_.get(); }
+  void setFunctions(BlockArray<Function>* newFunctions) { functions_.set(this, newFunctions); }
+  Function* getFunction(length_t index);
+  BlockArray<Class>* classes() const { return classes_.get(); }
+  void setClasses(BlockArray<Class>* newClasses) { classes_.set(this, newClasses); }
+  Class* getClass(length_t index);
+  BlockArray<TypeParameter>* typeParameters() const { return typeParameters_.get(); }
+  void setTypeParameters(BlockArray<TypeParameter>* newTypeParameters) {
+    typeParameters_.set(this, newTypeParameters);
+  }
+  TypeParameter* getTypeParameter(length_t index);
+  DEFINE_INL_ACCESSORS2(length_t, entryFunctionIndex, setEntryFunctionIndex)
   Function* entryFunction();
 
-  static const u32 kMagic = 0x676b7073;
-  static const word_t kPointerMap = 0x3c;
-
  private:
+  DECLARE_POINTER_MAP()
+
   u64 flags_;
-  BlockArray<String>* strings_;
-  BlockArray<Function>* functions_;
-  BlockArray<Class>* classes_;
-  BlockArray<TypeParameter>* typeParameters_;
-  word_t entryFunctionIndex_;
+  Ptr<BlockArray<String>> strings_;
+  Ptr<BlockArray<Function>> functions_;
+  Ptr<BlockArray<Class>> classes_;
+  Ptr<BlockArray<TypeParameter>> typeParameters_;
+  length_t entryFunctionIndex_;
+  // Update PACKAGE_POINTER_LIST if pointers change.
 };
+
+std::ostream& operator << (std::ostream& os, const Package* pkg);
 
 }
 }

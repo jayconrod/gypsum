@@ -107,6 +107,8 @@ class Function::Impl : public RefCounted {
     i::word_t size = count * sizeof(i::i64);
     stack->setStackPointerOffset(stack->stackPointerOffset() - size);
     copy_n(data, count, reinterpret_cast<i::word_t*>(stack->sp()));
+
+    i::AllowAllocationScope allowAllocation(vm()->heap(), true);
     i::Interpreter interpreter(vm(), stack);
     i::i64 result = interpreter.call(function());
     return result;
@@ -141,7 +143,7 @@ class Arguments::Impl: public RefCounted {
 
  private:
   i::Persistent<i::Function> function_;
-  i::word_t paramIndex_;
+  i::length_t paramIndex_;
   vector<i::i64> data_;
 };
 
@@ -193,6 +195,7 @@ Package VM::loadPackage(const char* fileName) {
   i::VM::Scope vmScope(impl_->vm());
   i::Persistent<i::Package> package;
   try {
+    i::AllowAllocationScope allowAllocation(impl_->vm()->heap(), true);
     package = i::Package::loadFromFile(impl_->vm(), fileName);
   } catch (i::Error error) {
     throw Error(error.message());
@@ -223,12 +226,6 @@ Package& Package::operator = (const Package& package) {
 
 Package::~Package() {
   impl_->release();
-}
-
-
-void Package::print(FILE* out) {
-  i::VM::Scope vmScope(impl_->vm());
-  impl_->package()->print(out);
 }
 
 

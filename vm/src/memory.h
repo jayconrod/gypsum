@@ -10,8 +10,7 @@
 #include <iterator>
 #include <memory>
 #include <vector>
-#include "list.h"
-#include "remembered-set.h"
+#include "bitmap.h"
 #include "utils.h"
 
 namespace codeswitch {
@@ -111,11 +110,16 @@ class Chunk {
   Free* freeListHead() const { return freeListHead_; }
   void setFreeListHead(Free* free) { freeListHead_ = free; }
 
-  RememberedSet& rememberedSet() { return rememberedSet_; }
+  bool isMarked() const { return isMarked_; }
+  void setIsMarked(bool marked) { isMarked_ = marked; }
 
   Bitmap getBitmap();
   Address bitmapBase() const;
   size_t bitmapSize() const;
+  word_t bitIndexForAddress(Address addr) const;
+  word_t bitIndexForAddress(const void* addr) const {
+    return bitIndexForAddress(reinterpret_cast<Address>(addr));
+  }
 
   Address storageBase() const;
   Address storageLimit() const;
@@ -124,6 +128,28 @@ class Chunk {
     return storageBase() <= addr && addr < storageLimit();
   }
 
+  class iterator: public std::iterator<std::input_iterator_tag, Address> {
+   public:
+    Address operator * ();
+    bool operator == (const iterator& other) const;
+    bool operator != (const iterator& other) const {
+      return !(*this == other);
+    }
+    iterator& operator ++ ();
+
+   private:
+    iterator(Chunk* chunk, word_t index);
+    static word_t findNextIndex(Bitmap bitmap, word_t from, word_t limit);
+
+    Address storageBase_;
+    Bitmap bitmap_;
+    word_t index_;
+
+    friend class Chunk;
+  };
+  iterator begin();
+  iterator end();
+
  private:
   word_t size_;
   Executable executable_;
@@ -131,7 +157,7 @@ class Chunk {
   u32 id_;
   AllocationRange allocationRange_;
   Free* freeListHead_;
-  RememberedSet rememberedSet_;
+  bool isMarked_ : 1;
 };
 
 }

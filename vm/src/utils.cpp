@@ -6,9 +6,12 @@
 
 #include "utils.h"
 
+#include <iostream>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+
+using namespace std;
 
 namespace codeswitch {
 namespace internal {
@@ -16,9 +19,11 @@ namespace internal {
 void abort(const char* fileName, int lineNumber, const char* reason, ...) {
   va_list ap;
   va_start(ap, reason);
-  fprintf(stderr, "%s: %d: ", fileName, lineNumber);
-  vfprintf(stderr, reason, ap);
-  fprintf(stderr, "\n");
+  char buffer[512];
+  snprintf(buffer, sizeof(buffer), "%s: %d: ", fileName, lineNumber);
+  cerr << buffer;
+  vsnprintf(buffer, sizeof(buffer), reason, ap);
+  cerr << buffer << endl;
   va_end(ap);
   ::abort();
 }

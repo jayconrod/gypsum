@@ -9,7 +9,7 @@
 #include "block.h"
 #include "gc.h"
 #include "handle.h"
-#include "roots-inl.h"
+#include "roots.h"
 #include "type-parameter.h"
 
 using namespace std;
@@ -17,12 +17,14 @@ using namespace std;
 namespace codeswitch {
 namespace internal {
 
-word_t Type::sizeForLength(word_t length) {
+word_t Type::sizeForLength(length_t length) {
+  ASSERT(length <= kMaxLength);
   return align(sizeof(Type), kWordSize) + length * kWordSize;
 }
 
 
-void* Type::operator new (size_t, Heap* heap, word_t length) {
+void* Type::operator new (size_t, Heap* heap, length_t length) {
+  ASSERT(length <= kMaxLength);
   auto size = sizeForLength(length);
   auto type = reinterpret_cast<Type*>(heap->allocate(size));
   type->length_ = length;
@@ -30,7 +32,8 @@ void* Type::operator new (size_t, Heap* heap, word_t length) {
 }
 
 
-void* Type::operator new (size_t, void* place, word_t length) {
+void* Type::operator new (size_t, void* place, length_t length) {
+  ASSERT(length <= kMaxLength);
   auto ty = reinterpret_cast<Type*>(place);
   ty->length_ = length;
   return ty;
@@ -192,7 +195,7 @@ bool Type::isClass() const {
 
 Class* Type::asClass() const {
   ASSERT(isClass() && length() > 0);
-  return Class::cast(elements_[0]);
+  return block_cast<Class>(elements_[0]);
 }
 
 
@@ -203,7 +206,7 @@ bool Type::isVariable() const {
 
 TypeParameter* Type::asVariable() const {
   ASSERT(isVariable() && length() > 0);
-  return TypeParameter::cast(elements_[0]);
+  return block_cast<TypeParameter>(elements_[0]);
 }
 
 
@@ -304,18 +307,32 @@ bool Type::equals(Type* other) const {
 }
 
 
-Type* Type::substitute(const vector<pair<TypeParameter*, Type*>>& bindings) {
-  if (isVariable()) {
-    TypeParameter* param = asVariable();
+Local<Type> Type::substitute(const Local<Type>& type,
+                             const vector<pair<Local<TypeParameter>, Local<Type>>>& bindings) {
+  if (type->isVariable()) {
+    Local<TypeParameter> param(type->asVariable());
     for (auto binding : bindings) {
-      if (param == binding.first) {
+      if (*param == *binding.first) {
         return binding.second;
       }
     }
-  } else if (isClass()) {
+  } else if (type->isClass()) {
     // TODO: handle type parameters in class types
   }
-  return this;
+  return type;
+}
+
+
+ostream& operator << (ostream& os, const Type* type) {
+  os << brief(type)
+     << "\n  length: " << type->length()
+     << "\n  form: " << type->form();
+  if (type->isClass()) {
+    os << "\n  class: " << brief(type->asClass());
+  } else if (type->isVariable()) {
+    os << "\n  variable: " << brief(type->asVariable());
+  }
+  return os;
 }
 
 }

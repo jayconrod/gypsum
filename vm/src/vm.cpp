@@ -9,6 +9,7 @@
 #include "block.h"
 #include "handle.h"
 #include "heap.h"
+#include "memory.h"
 #include "package.h"
 #include "roots.h"
 #include "stack.h"
@@ -23,6 +24,7 @@ VM::VM(Flags flags)
       heap_(new Heap(this)),
       roots_(new Roots),
       handleStorage_(new HandleStorage) {
+  AllowAllocationScope allowAllocation(heap_.get(), true);
   roots_->initialize(heap());
   {
     HandleScope handleScope(handleStorage_.get());
@@ -37,6 +39,12 @@ VM::VM(Flags flags)
 VM::~VM() {
   if (hasFlags(kVerifyHeap))
     heap()->verify();
+}
+
+
+VM* VM::fromAddress(void* address) {
+  Chunk* page = Chunk::fromAddress(address);
+  return page->vm();
 }
 
 

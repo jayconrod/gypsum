@@ -7,6 +7,7 @@
 #ifndef object_h
 #define object_h
 
+#include <iostream>
 #include "block.h"
 
 namespace codeswitch {
@@ -14,18 +15,19 @@ namespace internal {
 
 class Object: public Block {
  public:
+  static const BlockType kBlockType = OBJECT_BLOCK_TYPE;
+
   void* operator new (size_t, Heap* heap, Meta* meta);
-  void* operator new (size_t, Heap* heap, Meta* meta, word_t length);
+  void* operator new (size_t, Heap* heap, Meta* meta, length_t length);
   Object();
   static Local<Object> create(Heap* heap, const Handle<Meta>& meta);
-  static Local<Object> create(Heap* heap, const Handle<Meta>& meta, word_t length);
-
-  void printObject(FILE* out);
-  DEFINE_CAST(Object)
+  static Local<Object> create(Heap* heap, const Handle<Meta>& meta, length_t length);
 
  protected:
   explicit Object(BlockType blockType);
 };
+
+std::ostream& operator << (std::ostream& os, const Object* obj);
 
 }
 }

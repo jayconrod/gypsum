@@ -11,7 +11,7 @@ import re
 import sys
 
 if len(sys.argv) != 3:
-    sys.stderr.write("usage: %s testname in.sl out.o\n" % sys.argv[0])
+    sys.stderr.write("usage: %s testname in.gy out.cpp\n" % sys.argv[0])
     sys.exit(1)
 
 inFileName = sys.argv[1]
@@ -35,13 +35,14 @@ with open(outFileName, "w") as outFile:
 #include "package.h"
 #include "stack.h"
 #include "utils.h"
-#include "vm-inl.h"
+#include "vm.h"
 
 using namespace codeswitch::internal;
 
 TEST({testName}) {{
   u8 bytes[] = {{ {bytes} }};
   VM vm;
+  AllowAllocationScope allowAllocation(vm.heap(), true);
   HandleScope handleScope(&vm);
   auto package = Package::loadFromBytes(&vm, bytes, sizeof(bytes));
   vm.addPackage(package);

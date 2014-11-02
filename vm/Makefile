@@ -1,3 +1,6 @@
+# Configurations
+mode ?= debug
+
 # Places
 HERE := $(realpath $(dir $(lastword $(MAKEFILE_LIST))))
 LIB_SRC_DIR := $(HERE)/src
@@ -5,7 +8,8 @@ TEST_SRC_DIR := $(HERE)/test
 INCLUDE_DIR := $(HERE)/include
 PROGRAM_SRC_DIR := $(HERE)/programs
 COMMON_DIR := $(HERE)/../common
-OUT_DIR := $(HERE)/out
+OUT_BASE_DIR := $(HERE)/out
+OUT_DIR := $(OUT_BASE_DIR)/$(mode)
 GEN_DIR := $(OUT_DIR)/gen
 
 
@@ -20,9 +24,16 @@ PYTHON := python
 MKTEST := $(TEST_SRC_DIR)/mktest.py
 
 # Flags
-CXXFLAGS := -O0 -g3 -fno-inline -Werror -Wall -Wno-invalid-offsetof
-DEFINES := -DWORDSIZE=64 -DPAGESIZE=4096 -DDEBUG
+CXXFLAGS := -Werror -Wall -Wno-invalid-offsetof
 LDFLAGS :=
+ifeq ($(mode),debug)
+  CXXFLAGS += -O0 -g3
+endif
+ifeq ($(mode),release)
+  CXXFLAGS += -O3 -flto
+  LDFLAGS += -O3 -flto
+endif
+DEFINES := -DWORDSIZE=64 -DPAGESIZE=4096 -DDEBUG
 INCLUDES := -I$(INCLUDE_DIR) $(addprefix -iquote,$(LIB_SRC_DIR) $(TEST_SRC_DIR) $(GEN_DIR))
 
 # Sources and intermediates
@@ -69,7 +80,7 @@ GEN := $(LIB_GEN)
 all: $(PROGRAMS) test
 
 clean:
-	$(RM) $(OUT_DIR)
+	$(RM) $(OUT_BASE_DIR)
 
 test: $(TEST)
 	@$(TEST)

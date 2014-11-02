@@ -65,15 +65,15 @@ class Roots {
   BASIC_ROOT_LIST(DEFINE_BASIC_GETTER)
   #undef DEFINE_BASIC_GETTER
 
-  inline Meta* getMetaForBlockType(int type);
+  Meta* getMetaForBlockType(int type);
 
-  inline Class* getBuiltinClass(BuiltinId id) const;
-  inline Meta* getBuiltinMeta(BuiltinId id) const;
-  inline Type* getBuiltinType(BuiltinId id) const;
-  inline Function* getBuiltinFunction(BuiltinId id) const;
+  Class* getBuiltinClass(BuiltinId id) const;
+  Meta* getBuiltinMeta(BuiltinId id) const;
+  Type* getBuiltinType(BuiltinId id) const;
+  Function* getBuiltinFunction(BuiltinId id) const;
 
   template <class Callback>
-  void visit(Callback callback);
+  void visitPointers(Callback callback);
 
  private:
   enum BasicRootIndex {
@@ -95,6 +95,26 @@ class Roots {
 
   #undef BASIC_META_LIST
 };
+
+
+template <class Callback>
+void Roots::visitPointers(Callback callback) {
+  for (int i = 0; i < BASIC_ROOT_COUNT; i++) {
+    callback(reinterpret_cast<Block**>(&basicRoots_[i]));
+  }
+  for (auto& p : builtinClasses_) {
+    callback(reinterpret_cast<Block**>(&p));
+  }
+  for (auto& p : builtinMetas_) {
+    callback(reinterpret_cast<Block**>(&p));
+  }
+  for (auto& p : builtinTypes_) {
+    callback(reinterpret_cast<Block**>(&p));
+  }
+  for (auto& p : builtinFunctions_) {
+    callback(reinterpret_cast<Block**>(&p));
+  }
+}
 
 }
 }

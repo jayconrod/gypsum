@@ -41,14 +41,14 @@ inline word_t sizeFromWidth(Width width) {
 // sign-extended to 64-bits.
 i64 readVbn(u8** pc);
 
-inline i64 readVbn(u8* basePc, word_t* offset) {
+inline i64 readVbn(u8* basePc, length_t* offset) {
   u8* pc = basePc + *offset;
   i64 value = readVbn(&pc);
   *offset = pc - basePc;
   return value;
 }
 
-inline i64 readVbn(u8* pc, word_t offset) {
+inline i64 readVbn(u8* pc, length_t offset) {
   return readVbn(pc, &offset);
 }
 

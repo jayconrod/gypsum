@@ -58,6 +58,11 @@ class Tagged {
   word_t value_;
 };
 
+template <class T>
+std::ostream& operator << (std::ostream& os, const Tagged<T>& tagged) {
+  return os << (tagged.isNumber() ? tagged.getNumber() : brief(tagged.getPointer()));
+}
+
 }
 }
 

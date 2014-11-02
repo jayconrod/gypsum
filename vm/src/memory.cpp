@@ -16,7 +16,6 @@
 #include "error.h"
 #include "handle.h"
 #include "heap.h"
-#include "remembered-set.h"
 #include "vm.h"
 
 using namespace std;
@@ -119,6 +118,12 @@ size_t Chunk::bitmapSize() const {
 }
 
 
+word_t Chunk::bitIndexForAddress(Address addr) const {
+  ASSERT(isAligned(addr, kWordSize));
+  return (addr - storageBase()) / kWordSize;
+}
+
+
 Address Chunk::storageBase() const {
   ASSERT(isAligned(bitmapSize(), kWordSize));
   return bitmapBase() + bitmapSize();
@@ -127,6 +132,49 @@ Address Chunk::storageBase() const {
 
 Address Chunk::storageLimit() const {
   return limit();
+}
+
+
+Chunk::iterator::iterator(Chunk* chunk, word_t index)
+    : storageBase_(chunk->storageBase()),
+      bitmap_(chunk->getBitmap()),
+      index_(index) { }
+
+
+Address Chunk::iterator::operator * () {
+  return storageBase_ + index_ * kWordSize;
+}
+
+
+bool Chunk::iterator::operator == (const iterator& other) const {
+  ASSERT(storageBase_ == other.storageBase_);
+  return index_ == other.index_;
+}
+
+
+Chunk::iterator& Chunk::iterator::operator ++ () {
+  index_ = findNextIndex(bitmap_, index_ + 1, bitmap_.bitCount());
+  return *this;
+}
+
+
+word_t Chunk::iterator::findNextIndex(Bitmap bitmap, word_t from, word_t limit) {
+  auto i = from;
+  for (i = from; i < limit; i++) {
+    if (bitmap[i])
+      break;
+  }
+  return i;
+}
+
+
+Chunk::iterator Chunk::begin() {
+  return iterator(this, iterator::findNextIndex(getBitmap(), 0, storageSize() / kWordSize));
+}
+
+
+Chunk::iterator Chunk::end() {
+  return iterator(this, getBitmap().bitCount());
 }
 
 }
