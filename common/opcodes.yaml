@@ -40,7 +40,7 @@
 - {name: "cls", iops: 1, term: false}
 - {name: "tycs", iops: 1, term: false}
 - {name: "tyvs", iops: 1, term: false}
-- {name: "callg", iops: 2, term: false}
+- {name: "callg", iops: 1, term: false}
 - {name: "callv", iops: 2, term: false}
 - {name: "eqp", iops: 0, term: false}
 - {name: "nep", iops: 0, term: false}

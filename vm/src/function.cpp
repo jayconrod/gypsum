@@ -487,7 +487,6 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         }
 
         case CALLG: {
-          auto paramCount = static_cast<word_t>(readVbn(bytecode, &pcOffset));
           i64 functionId = readVbn(bytecode, &pcOffset);
           currentMap.pcOffset = pcOffset;
           maps.push_back(currentMap);
@@ -497,8 +496,7 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           } else {
             callee = handle(package->getFunction(functionId));
           }
-          ASSERT(paramCount == callee->parameterCount());
-          for (word_t i = 0; i < paramCount; i++)
+          for (word_t i = 0; i < callee->parameterCount(); i++)
             currentMap.pop();
           auto returnType = currentMap.substituteReturnType(callee);
           currentMap.popTypeArgs();

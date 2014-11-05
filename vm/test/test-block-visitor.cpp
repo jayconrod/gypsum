@@ -130,14 +130,12 @@ static Local<Package> createTestPackage(Heap* heap) {
     LDLOCAL,
     kPtrIndex,
     CALLG,
-    2,
     0,
     LDLOCAL,
     kByteIndex,
     LDLOCAL,
     kPtrIndex,
     CALLG,
-    2,
     0,
     RET,
   };
@@ -166,8 +164,8 @@ struct ExpectedPointerMap {
 
 const ExpectedPointerMap kExpectedPointerMaps[] = {
   { 6, 2, 0x0 },
-  { 15, 4, 0xa },
-  { 22, 5, 0x16 },
+  { 14, 4, 0xa },
+  { 20, 5, 0x16 },
 };
 
 

@@ -96,7 +96,7 @@ class CompileVisitor(AstNodeVisitor):
                 raise CompileException("no default constructor in superclass %s" %
                                        superClass.name)
             self.loadThis()
-            self.callg(1, defaultSuperCtors[0].id)
+            self.callg(defaultSuperCtors[0].id)
             self.drop()
 
         # If this is a primary constructor, unpack the parameters before calling the
@@ -113,7 +113,7 @@ class CompileVisitor(AstNodeVisitor):
             irInitializer = self.function.clas.initializer
             if irInitializer is not None:
                 self.loadThis()
-                self.callg(1, irInitializer.id)
+                self.callg(irInitializer.id)
                 self.drop()
 
         # Compile those statements.
@@ -676,7 +676,7 @@ class CompileVisitor(AstNodeVisitor):
         contextCtor = contextClass.constructors[0]
         self.allocobj(contextClass.id)
         self.dup()
-        self.callg(1, contextCtor.id)
+        self.callg(contextCtor.id)
         self.drop()
         irContextVar = self.info.getClosureInfo(contextId).irClosureContexts[contextId]
         self.storeVariable(irContextVar)
@@ -698,7 +698,7 @@ class CompileVisitor(AstNodeVisitor):
                 self.dup()
                 for id in capturedScopeIds:
                     self.loadContext(id)
-                self.callg(len(closureCtor.parameterTypes), closureCtor.id)
+                self.callg(closureCtor.id)
                 self.drop()
                 self.storeVariable(closureInfo.irClosureVar)
             elif isinstance(stmt, AstClassDefinition):
@@ -730,7 +730,7 @@ class CompileVisitor(AstNodeVisitor):
             # Global or static function
             assert receiver is None
             compileArgs()
-            self.callg(argCount, irDefn.id)
+            self.callg(irDefn.id)
 
         elif receiver is None and irDefn.isConstructor():
             # Constructor
@@ -739,7 +739,7 @@ class CompileVisitor(AstNodeVisitor):
             if mode is COMPILE_FOR_VALUE:
                 self.dup()
             compileArgs()
-            self.callg(argCount + 1, irDefn.id)
+            self.callg(irDefn.id)
             self.drop()
             shouldDropForEffect = False
         else:
@@ -784,7 +784,7 @@ class CompileVisitor(AstNodeVisitor):
             elif irDefn.isFinal():
                 # Calls to final methods can be made directly. This includes constructors and
                 # primitive methods which can't be called virtually.
-                self.callg(argCount + 1, irDefn.id)
+                self.callg(irDefn.id)
             else:
                 index = irDefn.clas.getMethodIndex(irDefn)
                 self.callv(argCount + 1, index)
@@ -811,7 +811,7 @@ class CompileVisitor(AstNodeVisitor):
         self.allocarri(BUILTIN_TYPE_CLASS_ID, 1)
         self.dup()
         self.cls(ty.clas.id)
-        self.callg(2, BUILTIN_TYPE_CTOR_ID)
+        self.callg(BUILTIN_TYPE_CTOR_ID)
         self.drop()
 
     def buildStaticTypeArgument(self, ty):

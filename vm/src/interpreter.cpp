@@ -363,7 +363,6 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
 
       case CALLG: {
-        readVbn();   // arg count is unused
         auto functionId = readVbn();
         ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
         if (isBuiltinId(functionId)) {
