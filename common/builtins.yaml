@@ -1,20 +1,17 @@
 ---
 # Classes and primitive types
--
-  name: Object
+- name: Object
   id: BUILTIN_ROOT_CLASS_ID
   isPrimitive: false
   supertype: null
   constructors:
-    -
-      id: BUILTIN_ROOT_CLASS_CTOR_ID
+    - id: BUILTIN_ROOT_CLASS_CTOR_ID
       returnType: unit
       parameterTypes:
         - Object
   fields: []
   methods:
-    -
-      name: ===
+    - name: ===
       id: BUILTIN_ROOT_CLASS_EQ_OP_ID
       returnType: boolean
       parameterTypes:
@@ -22,8 +19,7 @@
         - Object?
       insts:
         - eqp
-    -
-      name: "!=="
+    - name: "!=="
       id: BUILTIN_ROOT_CLASS_NE_OP_ID
       returnType: boolean
       parameterTypes:
@@ -31,172 +27,145 @@
         - Object?
       insts:
         - nep
-    -
-      name: typeof
+    - name: typeof
       id: BUILTIN_ROOT_CLASS_TYPEOF_ID
       returnType: Type
       parameterTypes:
         - Object
--
-  name: Nothing
+- name: Nothing
   id: BUILTIN_NOTHING_CLASS_ID
   isPrimitive: false
   supertype: Object
   constructors: []
   fields: []
   methods: []
--
-  name: Exception
+- name: Exception
   id: BUILTIN_EXCEPTION_CLASS_ID
   isPrimitive: false
   supertype: Object
   constructors:
-    -
-      id: BUILTIN_EXCEPTION_CTOR_ID
+    - id: BUILTIN_EXCEPTION_CTOR_ID
       returnType: unit
       parameterTypes:
         - Exception
   fields: []
   methods: []
--
-  name: NullPointerException
+- name: NullPointerException
   id: BUILTIN_NULL_POINTER_EXCEPTION_CLASS_ID
   isPrimitive: false
   supertype: Exception
   constructors:
-    -
-      id: BUILTIN_NULL_POINTER_EXCEPTION_CTOR_ID
+    - id: BUILTIN_NULL_POINTER_EXCEPTION_CTOR_ID
       returnType: unit
       parameterTypes:
         - NullPointerException
   fields: []
   methods: []
--
-  name: UninitializedException
+- name: UninitializedException
   id: BUILTIN_UNINITIALIZED_EXCEPTION_CLASS_ID
   isPrimitive: false
   supertype: Exception
   constructors:
-    -
-      id: BUILTIN_UNINITIALIZED_EXCEPTION_CTOR_ID
+    - id: BUILTIN_UNINITIALIZED_EXCEPTION_CTOR_ID
       returnType: unit
       parameterTypes:
         - UninitializedException
   fields: []
   methods: []
--
-  name: Type
+- name: Type
   id: BUILTIN_TYPE_CLASS_ID
   isPrimitive: false
   supertype: Object
   constructors:
-    -
-      id: BUILTIN_TYPE_CTOR_ID
+    - id: BUILTIN_TYPE_CTOR_ID
       returnType: unit
       parameterTypes:
         - Type
         - Object
   fields:
-    -
-      name: length
+    - name: length
       type: i32
-    -
-      name: flags
+    - name: flags
       type: i32
   elements: Object
   methods:
-    -
-      name: is-subtype-of
+    - name: is-subtype-of
       id: BUILTIN_TYPE_IS_SUBTYPE_OF_ID
       returnType: boolean
       parameterTypes:
         - Type
         - Type
--
-  name: String
+- name: String
   id: BUILTIN_STRING_CLASS_ID
   isPrimitive: false
   supertype: Object
   constructors: []
   fields:
-    -
-      name: length
+    - name: length
       type: i32
   elements: i32
   methods:
-    -
-      name: "+"
+    - name: "+"
       id: BUILTIN_STRING_CONCAT_OP_ID
       returnType: String
       parameterTypes:
         - String
         - String
-    -
-      name: "<"
+    - name: "<"
       id: BUILTIN_STRING_LT_OP_ID
       returnType: boolean
       parameterTypes:
         - String
         - String
-    -
-      name: "<="
+    - name: "<="
       id: BUILTIN_STRING_LE_OP_ID
       returnType: boolean
       parameterTypes:
         - String
         - String
-    -
-      name: ">"
+    - name: ">"
       id: BUILTIN_STRING_GT_OP_ID
       returnType: boolean
       parameterTypes:
         - String
         - String
-    -
-      name: ">="
+    - name: ">="
       id: BUILTIN_STRING_GE_OP_ID
       returnType: boolean
       parameterTypes:
         - String
         - String
-    -
-      name: "=="
+    - name: "=="
       id: BUILTIN_STRING_EQ_OP_ID
       returnType: boolean
       parameterTypes:
         - String
         - String
-    -
-      name: "!="
+    - name: "!="
       id: BUILTIN_STRING_NE_OP_ID
       returnType: boolean
       parameterTypes:
         - String
         - String
--
-  name: unit
+- name: unit
   id: BUILTIN_UNIT_TYPE_ID
   isPrimitive: true
   methods:
-    -
-      name: to-string
+    - name: to-string
       id: BUILTIN_UNIT_TO_STRING_ID
       returnType: String
       parameterTypes:
         - unit
--
-  name: boolean
+- name: boolean
   id: BUILTIN_BOOLEAN_TYPE_ID
   isPrimitive: true
   methods:
-    -
-      name: to-string
+    - name: to-string
       id: BUILTIN_BOOLEAN_TO_STRING_ID
       returnType: String
       parameterTypes:
         - boolean
-    -
-      name: ==
+    - name: ==
       id: BUILTIN_BOOLEAN_EQ_OP_ID
       returnType: boolean
       parameterTypes:
@@ -204,8 +173,7 @@
         - boolean
       insts:
         - eqi8
-    -
-      name: "!="
+    - name: "!="
       id: BUILTIN_BOOLEAN_NE_OP_ID
       returnType: boolean
       parameterTypes:
@@ -213,27 +181,23 @@
         - boolean
       insts:
         - nei8
-    -
-      name: "!"
+    - name: "!"
       id: BUILTIN_BOOLEAN_NOT_OP_ID
       returnType: boolean
       parameterTypes:
         - boolean
       insts:
         - notb
--
-  name: i8
+- name: i8
   id: BUILTIN_I8_TYPE_ID
   isPrimitive: true
   methods:
-    -
-      name: to-string
+    - name: to-string
       id: BUILTIN_I8_TO_STRING_ID
       returnType: String
       parameterTypes:
         - i8
-    -
-      name: "+"
+    - name: "+"
       id: BUILTIN_I8_ADD_OP_ID
       returnType: i8
       parameterTypes:
@@ -241,8 +205,7 @@
         - i8
       insts:
         - addi8
-    -
-      name: "-"
+    - name: "-"
       id: BUILTIN_I8_SUB_OP_ID
       returnType: i8
       parameterTypes:
@@ -250,8 +213,7 @@
         - i8
       insts:
         - subi8
-    -
-      name: "*"
+    - name: "*"
       id: BUILTIN_I8_MUL_OP_ID
       returnType: i8
       parameterTypes:
@@ -259,8 +221,7 @@
         - i8
       insts:
         - muli8
-    -
-      name: "/"
+    - name: "/"
       id: BUILTIN_I8_DIV_OP_ID
       returnType: i8
       parameterTypes:
@@ -268,8 +229,7 @@
         - i8
       insts:
         - divi8
-    -
-      name: "%"
+    - name: "%"
       id: BUILTIN_I8_MOD_OP_ID
       returnType: i8
       parameterTypes:
@@ -277,8 +237,7 @@
         - i8
       insts:
         - modi8
-    -
-      name: "<<"
+    - name: "<<"
       id: BUILTIN_I8_LSL_OP_ID
       returnType: i8
       parameterTypes:
@@ -286,8 +245,7 @@
         - i8
       insts:
         - lsli8
-    -
-      name: ">>>"
+    - name: ">>>"
       id: BUILTIN_I8_LSR_OP_ID
       returnType: i8
       parameterTypes:
@@ -295,8 +253,7 @@
         - i8
       insts:
         - lsri8
-    -
-      name: ">>"
+    - name: ">>"
       id: BUILTIN_I8_ASR_OP_ID
       returnType: i8
       parameterTypes:
@@ -304,8 +261,7 @@
         - i8
       insts:
         - asri8
-    -
-      name: "&"
+    - name: "&"
       id: BUILTIN_I8_AND_OP_ID
       returnType: i8
       parameterTypes:
@@ -313,8 +269,7 @@
         - i8
       insts:
         - andi8
-    -
-      name: "|"
+    - name: "|"
       id: BUILTIN_I8_OR_OP_ID
       returnType: i8
       parameterTypes:
@@ -322,8 +277,7 @@
         - i8
       insts:
         - ori8
-    -
-      name: "^"
+    - name: "^"
       id: BUILTIN_I8_XOR_OP_ID
       returnType: i8
       parameterTypes:
@@ -331,8 +285,7 @@
         - i8
       insts:
         - xori8
-    -
-      name: "<"
+    - name: "<"
       id: BUILTIN_I8_LT_OP_ID
       returnType: boolean
       parameterTypes:
@@ -340,8 +293,7 @@
         - i8
       insts:
         - lti8
-    -
-      name: "<="
+    - name: "<="
       id: BUILTIN_I8_LE_OP_ID
       returnType: boolean
       parameterTypes:
@@ -349,8 +301,7 @@
         - i8
       insts:
         - lei8
-    -
-      name: ">"
+    - name: ">"
       id: BUILTIN_I8_GT_OP_ID
       returnType: boolean
       parameterTypes:
@@ -358,8 +309,7 @@
         - i8
       insts:
         - gti8
-    -
-      name: ">="
+    - name: ">="
       id: BUILTIN_I8_GE_OP_ID
       returnType: boolean
       parameterTypes:
@@ -367,8 +317,7 @@
         - i8
       insts:
         - gei8
-    -
-      name: "=="
+    - name: "=="
       id: BUILTIN_I8_EQ_OP_ID
       returnType: boolean
       parameterTypes:
@@ -376,8 +325,7 @@
         - i8
       insts:
         - eqi8
-    -
-      name: "!="
+    - name: "!="
       id: BUILTIN_I8_NE_OP_ID
       returnType: boolean
       parameterTypes:
@@ -385,72 +333,63 @@
         - i8
       insts:
         - nei8
-    -
-      name: "-"
+    - name: "-"
       id: BUILTIN_I8_NEG_OP_ID
       returnType: i8
       parameterTypes:
         - i8
       insts:
         - negi8
-    -
-      name: "~"
+    - name: "~"
       id: BUILTIN_I8_INV_OP_ID
       returnType: i8
       parameterTypes:
         - i8
       insts:
         - invi8
-    -
-      name: "to-i16"
+    - name: "to-i16"
       id: BUILTIN_I8_SEXTI16_OP_ID
       returnType: i16
       parameterTypes:
         - i8
       insts:
         - sexti16_8
-    -
-      name: "to-u16"
+    - name: "to-u16"
       id: BUILTIN_I8_ZEXTI16_OP_ID
       returnType: i16
       parameterTypes:
         - i8
       insts:
         - zexti16
-    -
-      name: "to-i32"
+    - name: "to-i32"
       id: BUILTIN_I8_SEXTI32_OP_ID
       returnType: i32
       parameterTypes:
         - i8
       insts:
         - sexti32_8
-    -
-      name: "to-u32"
+    - name: "to-u32"
       id: BUILTIN_I8_ZEXTI32_OP_ID
       returnType: i32
       parameterTypes:
         - i8
       insts:
         - zexti32
-    -
-      name: "to-i64"
+    - name: "to-i64"
       id: BUILTIN_I8_SEXTI64_OP_ID
       returnType: i64
       parameterTypes:
         - i8
       insts:
         - sexti64_8
-    -
-      name: "to-u64"
+    - name: "to-u64"
       id: BUILTIN_I8_ZEXTI64_OP_ID
       returnType: i64
       parameterTypes:
         - i8
       insts:
         - zexti64
-    -
-      name: "to-f32"
+    - name: "to-f32"
       id: BUILTIN_I8_ICVTF32_OP_ID
       returnType: f32
       parameterTypes:
@@ -458,8 +397,7 @@
       insts:
         - sexti32_8
         - icvtf32
-    -
-      name: "to-f64"
+    - name: "to-f64"
       id: BUILTIN_I8_ICVTF64_OP_ID
       returnType: f64
       parameterTypes:
@@ -467,19 +405,16 @@
       insts:
         - sexti64_8
         - icvtf64
--
-  name: i16
+- name: i16
   id: BUILTIN_I16_TYPE_ID
   isPrimitive: true
   methods:
-    -
-      name: to-string
+    - name: to-string
       id: BUILTIN_I16_TO_STRING_ID
       returnType: String
       parameterTypes:
         - i16
-    -
-      name: "+"
+    - name: "+"
       id: BUILTIN_I16_ADD_OP_ID
       returnType: i16
       parameterTypes:
@@ -487,8 +422,7 @@
         - i16
       insts:
         - addi16
-    -
-      name: "-"
+    - name: "-"
       id: BUILTIN_I16_SUB_OP_ID
       returnType: i16
       parameterTypes:
@@ -496,8 +430,7 @@
         - i16
       insts:
         - subi16
-    -
-      name: "*"
+    - name: "*"
       id: BUILTIN_I16_MUL_OP_ID
       returnType: i16
       parameterTypes:
@@ -505,8 +438,7 @@
         - i16
       insts:
         - muli16
-    -
-      name: "/"
+    - name: "/"
       id: BUILTIN_I16_DIV_OP_ID
       returnType: i16
       parameterTypes:
@@ -514,8 +446,7 @@
         - i16
       insts:
         - divi16
-    -
-      name: "%"
+    - name: "%"
       id: BUILTIN_I16_MOD_OP_ID
       returnType: i16
       parameterTypes:
@@ -523,8 +454,7 @@
         - i16
       insts:
         - modi16
-    -
-      name: "<<"
+    - name: "<<"
       id: BUILTIN_I16_LSL_OP_ID
       returnType: i16
       parameterTypes:
@@ -532,8 +462,7 @@
         - i16
       insts:
         - lsli16
-    -
-      name: ">>>"
+    - name: ">>>"
       id: BUILTIN_I16_LSR_OP_ID
       returnType: i16
       parameterTypes:
@@ -541,8 +470,7 @@
         - i16
       insts:
         - lsri16
-    -
-      name: ">>"
+    - name: ">>"
       id: BUILTIN_I16_ASR_OP_ID
       returnType: i16
       parameterTypes:
@@ -550,8 +478,7 @@
         - i16
       insts:
         - asri16
-    -
-      name: "&"
+    - name: "&"
       id: BUILTIN_I16_AND_OP_ID
       returnType: i16
       parameterTypes:
@@ -559,8 +486,7 @@
         - i16
       insts:
         - andi16
-    -
-      name: "|"
+    - name: "|"
       id: BUILTIN_I16_OR_OP_ID
       returnType: i16
       parameterTypes:
@@ -568,8 +494,7 @@
         - i16
       insts:
         - ori16
-    -
-      name: "^"
+    - name: "^"
       id: BUILTIN_I16_XOR_OP_ID
       returnType: i16
       parameterTypes:
@@ -577,8 +502,7 @@
         - i16
       insts:
         - xori16
-    -
-      name: "<"
+    - name: "<"
       id: BUILTIN_I16_LT_OP_ID
       returnType: boolean
       parameterTypes:
@@ -586,8 +510,7 @@
         - i16
       insts:
         - lti16
-    -
-      name: "<="
+    - name: "<="
       id: BUILTIN_I16_LE_OP_ID
       returnType: boolean
       parameterTypes:
@@ -595,8 +518,7 @@
         - i16
       insts:
         - lei16
-    -
-      name: ">"
+    - name: ">"
       id: BUILTIN_I16_GT_OP_ID
       returnType: boolean
       parameterTypes:
@@ -604,8 +526,7 @@
         - i16
       insts:
         - gti16
-    -
-      name: ">="
+    - name: ">="
       id: BUILTIN_I16_GE_OP_ID
       returnType: boolean
       parameterTypes:
@@ -613,8 +534,7 @@
         - i16
       insts:
         - gei16
-    -
-      name: "=="
+    - name: "=="
       id: BUILTIN_I16_EQ_OP_ID
       returnType: boolean
       parameterTypes:
@@ -622,8 +542,7 @@
         - i16
       insts:
         - eqi16
-    -
-      name: "!="
+    - name: "!="
       id: BUILTIN_I16_NE_OP_ID
       returnType: boolean
       parameterTypes:
@@ -631,64 +550,56 @@
         - i16
       insts:
         - nei16
-    -
-      name: "-"
+    - name: "-"
       id: BUILTIN_I16_NEG_OP_ID
       returnType: i16
       parameterTypes:
         - i16
       insts:
         - negi16
-    -
-      name: "~"
+    - name: "~"
       id: BUILTIN_I16_INV_OP_ID
       returnType: i16
       parameterTypes:
         - i16
       insts:
         - invi16
-    -
-      name: "to-i8"
+    - name: "to-i8"
       id: BUILTIN_I16_TRUNCI8_OP_ID
       returnType: i8
       parameterTypes:
         - i16
       insts:
         - trunci8
-    -
-      name: "to-i32"
+    - name: "to-i32"
       id: BUILTIN_I16_SEXTI32_OP_ID
       returnType: i32
       parameterTypes:
         - i16
       insts:
         - sexti32_16
-    -
-      name: "to-u32"
+    - name: "to-u32"
       id: BUILTIN_I16_ZEXTI32_OP_ID
       returnType: i32
       parameterTypes:
         - i16
       insts:
         - zexti32
-    -
-      name: "to-i64"
+    - name: "to-i64"
       id: BUILTIN_I16_SEXTI64_OP_ID
       returnType: i64
       parameterTypes:
         - i16
       insts:
         - sexti64_16
-    -
-      name: "to-u64"
+    - name: "to-u64"
       id: BUILTIN_I16_ZEXTI64_OP_ID
       returnType: i64
       parameterTypes:
         - i16
       insts:
         - zexti64
-    -
-      name: "to-f32"
+    - name: "to-f32"
       id: BUILTIN_I16_ICVTF32_OP_ID
       returnType: f32
       parameterTypes:
@@ -696,8 +607,7 @@
       insts:
         - sexti32_16
         - icvtf32
-    -
-      name: "to-f64"
+    - name: "to-f64"
       id: BUILTIN_I16_ICVTF64_OP_ID
       returnType: f64
       parameterTypes:
@@ -705,19 +615,16 @@
       insts:
         - sexti64_16
         - icvtf64
--
-  name: i32
+- name: i32
   id: BUILTIN_I32_TYPE_ID
   isPrimitive: true
   methods:
-    -
-      name: to-string
+    - name: to-string
       id: BUILTIN_I32_TO_STRING_ID
       returnType: String
       parameterTypes:
         - i32
-    -
-      name: "+"
+    - name: "+"
       id: BUILTIN_I32_ADD_OP_ID
       returnType: i32
       parameterTypes:
@@ -725,8 +632,7 @@
         - i32
       insts:
         - addi32
-    -
-      name: "-"
+    - name: "-"
       id: BUILTIN_I32_SUB_OP_ID
       returnType: i32
       parameterTypes:
@@ -734,8 +640,7 @@
         - i32
       insts:
         - subi32
-    -
-      name: "*"
+    - name: "*"
       id: BUILTIN_I32_MUL_OP_ID
       returnType: i32
       parameterTypes:
@@ -743,8 +648,7 @@
         - i32
       insts:
         - muli32
-    -
-      name: "/"
+    - name: "/"
       id: BUILTIN_I32_DIV_OP_ID
       returnType: i32
       parameterTypes:
@@ -752,8 +656,7 @@
         - i32
       insts:
         - divi32
-    -
-      name: "%"
+    - name: "%"
       id: BUILTIN_I32_MOD_OP_ID
       returnType: i32
       parameterTypes:
@@ -761,8 +664,7 @@
         - i32
       insts:
         - modi32
-    -
-      name: "<<"
+    - name: "<<"
       id: BUILTIN_I32_LSL_OP_ID
       returnType: i32
       parameterTypes:
@@ -770,8 +672,7 @@
         - i32
       insts:
         - lsli32
-    -
-      name: ">>>"
+    - name: ">>>"
       id: BUILTIN_I32_LSR_OP_ID
       returnType: i32
       parameterTypes:
@@ -779,8 +680,7 @@
         - i32
       insts:
         - lsri32
-    -
-      name: ">>"
+    - name: ">>"
       id: BUILTIN_I32_ASR_OP_ID
       returnType: i32
       parameterTypes:
@@ -788,8 +688,7 @@
         - i32
       insts:
         - asri32
-    -
-      name: "&"
+    - name: "&"
       id: BUILTIN_I32_AND_OP_ID
       returnType: i32
       parameterTypes:
@@ -797,8 +696,7 @@
         - i32
       insts:
         - andi32
-    -
-      name: "|"
+    - name: "|"
       id: BUILTIN_I32_OR_OP_ID
       returnType: i32
       parameterTypes:
@@ -806,8 +704,7 @@
         - i32
       insts:
         - ori32
-    -
-      name: "^"
+    - name: "^"
       id: BUILTIN_I32_XOR_OP_ID
       returnType: i32
       parameterTypes:
@@ -815,8 +712,7 @@
         - i32
       insts:
         - xori32
-    -
-      name: "<"
+    - name: "<"
       id: BUILTIN_I32_LT_OP_ID
       returnType: boolean
       parameterTypes:
@@ -824,8 +720,7 @@
         - i32
       insts:
         - lti32
-    -
-      name: "<="
+    - name: "<="
       id: BUILTIN_I32_LE_OP_ID
       returnType: boolean
       parameterTypes:
@@ -833,8 +728,7 @@
         - i32
       insts:
         - lei32
-    -
-      name: ">"
+    - name: ">"
       id: BUILTIN_I32_GT_OP_ID
       returnType: boolean
       parameterTypes:
@@ -842,8 +736,7 @@
         - i32
       insts:
         - gti32
-    -
-      name: ">="
+    - name: ">="
       id: BUILTIN_I32_GE_OP_ID
       returnType: boolean
       parameterTypes:
@@ -851,8 +744,7 @@
         - i32
       insts:
         - gei32
-    -
-      name: "=="
+    - name: "=="
       id: BUILTIN_I32_EQ_OP_ID
       returnType: boolean
       parameterTypes:
@@ -860,8 +752,7 @@
         - i32
       insts:
         - eqi32
-    -
-      name: "!="
+    - name: "!="
       id: BUILTIN_I32_NE_OP_ID
       returnType: boolean
       parameterTypes:
@@ -869,64 +760,56 @@
         - i32
       insts:
         - nei32
-    -
-      name: "-"
+    - name: "-"
       id: BUILTIN_I32_NEG_OP_ID
       returnType: i32
       parameterTypes:
         - i32
       insts:
         - negi32
-    -
-      name: "~"
+    - name: "~"
       id: BUILTIN_I32_INV_OP_ID
       returnType: i32
       parameterTypes:
         - i32
       insts:
         - invi32
-    -
-      name: "to-i8"
+    - name: "to-i8"
       id: BUILTIN_I32_TRUNCI8_OP_ID
       returnType: i8
       parameterTypes:
         - i32
       insts:
         - trunci8
-    -
-      name: "to-i16"
+    - name: "to-i16"
       id: BUILTIN_I32_TRUNCI16_OP_ID
       returnType: i16
       parameterTypes:
         - i32
       insts:
         - trunci16
-    -
-      name: "to-i64"
+    - name: "to-i64"
       id: BUILTIN_I32_SEXTI64_OP_ID
       returnType: i64
       parameterTypes:
         - i32
       insts:
         - sexti64_32
-    -
-      name: "to-u64"
+    - name: "to-u64"
       id: BUILTIN_I32_ZEXTI64_OP_ID
       returnType: i64
       parameterTypes:
         - i32
       insts:
         - zexti64
-    -
-      name: "to-f32"
+    - name: "to-f32"
       id: BUILTIN_I32_ICVTF32_OP_ID
       returnType: f32
       parameterTypes:
         - i32
       insts:
         - icvtf32
-    -
-      name: "to-f64"
+    - name: "to-f64"
       id: BUILTIN_I32_ICVTF64_OP_ID
       returnType: f64
       parameterTypes:
@@ -934,27 +817,23 @@
       insts:
         - sexti64_32
         - icvtf64
-    -
-      name: "to-f32-bits"
+    - name: "to-f32-bits"
       id: BUILTIN_I32_ITOF32_OP_ID
       returnType: f32
       parameterTypes:
         - i32
       insts:
         - itof32
--
-  name: i64
+- name: i64
   id: BUILTIN_I64_TYPE_ID
   isPrimitive: true
   methods:
-    -
-      name: to-string
+    - name: to-string
       id: BUILTIN_I64_TO_STRING_ID
       returnType: String
       parameterTypes:
         - i64
-    -
-      name: "+"
+    - name: "+"
       id: BUILTIN_I64_ADD_OP_ID
       returnType: i64
       parameterTypes:
@@ -962,8 +841,7 @@
         - i64
       insts:
         - addi64
-    -
-      name: "-"
+    - name: "-"
       id: BUILTIN_I64_SUB_OP_ID
       returnType: i64
       parameterTypes:
@@ -971,8 +849,7 @@
         - i64
       insts:
         - subi64
-    -
-      name: "*"
+    - name: "*"
       id: BUILTIN_I64_MUL_OP_ID
       returnType: i64
       parameterTypes:
@@ -980,8 +857,7 @@
         - i64
       insts:
         - muli64
-    -
-      name: "/"
+    - name: "/"
       id: BUILTIN_I64_DIV_OP_ID
       returnType: i64
       parameterTypes:
@@ -989,8 +865,7 @@
         - i64
       insts:
         - divi64
-    -
-      name: "%"
+    - name: "%"
       id: BUILTIN_I64_MOD_OP_ID
       returnType: i64
       parameterTypes:
@@ -998,8 +873,7 @@
         - i64
       insts:
         - modi64
-    -
-      name: "<<"
+    - name: "<<"
       id: BUILTIN_I64_LSL_OP_ID
       returnType: i64
       parameterTypes:
@@ -1007,8 +881,7 @@
         - i64
       insts:
         - lsli64
-    -
-      name: ">>>"
+    - name: ">>>"
       id: BUILTIN_I64_LSR_OP_ID
       returnType: i64
       parameterTypes:
@@ -1016,8 +889,7 @@
         - i64
       insts:
         - lsri64
-    -
-      name: ">>"
+    - name: ">>"
       id: BUILTIN_I64_ASR_OP_ID
       returnType: i64
       parameterTypes:
@@ -1025,8 +897,7 @@
         - i64
       insts:
         - asri64
-    -
-      name: "&"
+    - name: "&"
       id: BUILTIN_I64_AND_OP_ID
       returnType: i64
       parameterTypes:
@@ -1034,8 +905,7 @@
         - i64
       insts:
         - andi64
-    -
-      name: "|"
+    - name: "|"
       id: BUILTIN_I64_OR_OP_ID
       returnType: i64
       parameterTypes:
@@ -1043,8 +913,7 @@
         - i64
       insts:
         - ori64
-    -
-      name: "^"
+    - name: "^"
       id: BUILTIN_I64_XOR_OP_ID
       returnType: i64
       parameterTypes:
@@ -1052,8 +921,7 @@
         - i64
       insts:
         - xori64
-    -
-      name: "<"
+    - name: "<"
       id: BUILTIN_I64_LT_OP_ID
       returnType: boolean
       parameterTypes:
@@ -1061,8 +929,7 @@
         - i64
       insts:
         - lti64
-    -
-      name: "<="
+    - name: "<="
       id: BUILTIN_I64_LE_OP_ID
       returnType: boolean
       parameterTypes:
@@ -1070,8 +937,7 @@
         - i64
       insts:
         - lei64
-    -
-      name: ">"
+    - name: ">"
       id: BUILTIN_I64_GT_OP_ID
       returnType: boolean
       parameterTypes:
@@ -1079,8 +945,7 @@
         - i64
       insts:
         - gti64
-    -
-      name: ">="
+    - name: ">="
       id: BUILTIN_I64_GE_OP_ID
       returnType: boolean
       parameterTypes:
@@ -1088,8 +953,7 @@
         - i64
       insts:
         - gei64
-    -
-      name: "=="
+    - name: "=="
       id: BUILTIN_I64_EQ_OP_ID
       returnType: boolean
       parameterTypes:
@@ -1097,8 +961,7 @@
         - i64
       insts:
         - eqi64
-    -
-      name: "!="
+    - name: "!="
       id: BUILTIN_I64_NE_OP_ID
       returnType: boolean
       parameterTypes:
@@ -1106,48 +969,42 @@
         - i64
       insts:
         - nei64
-    -
-      name: "-"
+    - name: "-"
       id: BUILTIN_I64_NEG_OP_ID
       returnType: i64
       parameterTypes:
         - i64
       insts:
         - negi64
-    -
-      name: "~"
+    - name: "~"
       id: BUILTIN_I64_INV_OP_ID
       returnType: i64
       parameterTypes:
         - i64
       insts:
         - invi64
-    -
-      name: "to-i8"
+    - name: "to-i8"
       id: BUILTIN_I64_TRUNCI8_OP_ID
       returnType: i8
       parameterTypes:
         - i64
       insts:
         - trunci8
-    -
-      name: "to-i16"
+    - name: "to-i16"
       id: BUILTIN_I64_TRUNCI16_OP_ID
       returnType: i16
       parameterTypes:
         - i64
       insts:
         - trunci16
-    -
-      name: "to-i32"
+    - name: "to-i32"
       id: BUILTIN_I64_TRUNCI32_OP_ID
       returnType: i32
       parameterTypes:
         - i64
       insts:
         - trunci32
-    -
-      name: "to-f32"
+    - name: "to-f32"
       id: BUILTIN_I64_ICVTF32_OP_ID
       returnType: f32
       parameterTypes:
@@ -1155,35 +1012,30 @@
       insts:
         - icvtf64
         - truncf32
-    -
-      name: "to-f64"
+    - name: "to-f64"
       id: BUILTIN_I64_ICVTF64_OP_ID
       returnType: f64
       parameterTypes:
         - i64
       insts:
         - icvtf64
-    -
-      name: "to-f64-bits"
+    - name: "to-f64-bits"
       id: BUILTIN_I64_ITOF64_OP_ID
       returnType: f64
       parameterTypes:
         - i64
       insts:
         - itof64
--
-  name: f32
+- name: f32
   id: BUILTIN_F32_TYPE_ID
   isPrimitive: true
   methods:
-    -
-      name: to-string
+    - name: to-string
       id: BUILTIN_F32_TO_STRING_ID
       returnType: String
       parameterTypes:
         - f32
-    -
-      name: "+"
+    - name: "+"
       id: BUILTIN_F32_ADD_OP_ID
       returnType: f32
       parameterTypes:
@@ -1191,8 +1043,7 @@
         - f32
       insts:
         - addf32
-    -
-      name: "-"
+    - name: "-"
       id: BUILTIN_F32_SUB_OP_ID
       returnType: f32
       parameterTypes:
@@ -1200,8 +1051,7 @@
         - f32
       insts:
         - subf32
-    -
-      name: "*"
+    - name: "*"
       id: BUILTIN_F32_MUL_OP_ID
       returnType: f32
       parameterTypes:
@@ -1209,8 +1059,7 @@
         - f32
       insts:
         - mulf32
-    -
-      name: "/"
+    - name: "/"
       id: BUILTIN_F32_DIV_OP_ID
       returnType: f32
       parameterTypes:
@@ -1218,8 +1067,7 @@
         - f32
       insts:
         - divf32
-    -
-      name: "<"
+    - name: "<"
       id: BUILTIN_F32_LT_OP_ID
       returnType: boolean
       parameterTypes:
@@ -1227,8 +1075,7 @@
         - f32
       insts:
         - ltf32
-    -
-      name: "<="
+    - name: "<="
       id: BUILTIN_F32_LE_OP_ID
       returnType: boolean
       parameterTypes:
@@ -1236,8 +1083,7 @@
         - f32
       insts:
         - lef32
-    -
-      name: ">"
+    - name: ">"
       id: BUILTIN_F32_GT_OP_ID
       returnType: boolean
       parameterTypes:
@@ -1245,8 +1091,7 @@
         - f32
       insts:
         - gtf32
-    -
-      name: ">="
+    - name: ">="
       id: BUILTIN_F32_GE_OP_ID
       returnType: boolean
       parameterTypes:
@@ -1254,8 +1099,7 @@
         - f32
       insts:
         - gef32
-    -
-      name: "=="
+    - name: "=="
       id: BUILTIN_F32_EQ_OP_ID
       returnType: boolean
       parameterTypes:
@@ -1263,8 +1107,7 @@
         - f32
       insts:
         - eqf32
-    -
-      name: "!="
+    - name: "!="
       id: BUILTIN_F32_NE_OP_ID
       returnType: boolean
       parameterTypes:
@@ -1272,24 +1115,21 @@
         - f32
       insts:
         - nef32
-    -
-      name: "-"
+    - name: "-"
       id: BUILTIN_F32_NEG_OP_ID
       returnType: f32
       parameterTypes:
         - f32
       insts:
         - negf32
-    -
-      name: "to-f64"
+    - name: "to-f64"
       id: BUILTIN_F32_EXTF64_OP_ID
       returnType: f64
       parameterTypes:
         - f32
       insts:
         - extf64
-    -
-      name: "to-i8"
+    - name: "to-i8"
       id: BUILTIN_F32_FCVTI8_OP_ID
       returnType: i8
       parameterTypes:
@@ -1297,8 +1137,7 @@
       insts:
         - fcvti32
         - trunci8
-    -
-      name: "to-i16"
+    - name: "to-i16"
       id: BUILTIN_F32_FCVTI16_OP_ID
       returnType: i16
       parameterTypes:
@@ -1306,16 +1145,14 @@
       insts:
         - fcvti32
         - trunci16
-    -
-      name: "to-i32"
+    - name: "to-i32"
       id: BUILTIN_F32_FCVTI32_OP_ID
       returnType: i32
       parameterTypes:
         - f32
       insts:
         - fcvti32
-    -
-      name: "to-i64"
+    - name: "to-i64"
       id: BUILTIN_F32_FCVTI64_OP_ID
       returnType: i64
       parameterTypes:
@@ -1323,27 +1160,23 @@
       insts:
         - fcvti32
         - sexti64_32
-    -
-      name: "to-i32-bits"
+    - name: "to-i32-bits"
       id: BUILTIN_F32_FTOI32_OP_ID
       returnType: i32
       parameterTypes:
         - f32
       insts:
         - ftoi32
--
-  name: f64
+- name: f64
   id: BUILTIN_F64_TYPE_ID
   isPrimitive: true
   methods:
-    -
-      name: to-string
+    - name: to-string
       id: BUILTIN_F64_TO_STRING_ID
       returnType: String
       parameterTypes:
         - f64
-    -
-      name: "+"
+    - name: "+"
       id: BUILTIN_F64_ADD_OP_ID
       returnType: f64
       parameterTypes:
@@ -1351,8 +1184,7 @@
         - f64
       insts:
         - addf64
-    -
-      name: "-"
+    - name: "-"
       id: BUILTIN_F64_SUB_OP_ID
       returnType: f64
       parameterTypes:
@@ -1360,8 +1192,7 @@
         - f64
       insts:
         - subf64
-    -
-      name: "*"
+    - name: "*"
       id: BUILTIN_F64_MUL_OP_ID
       returnType: f64
       parameterTypes:
@@ -1369,8 +1200,7 @@
         - f64
       insts:
         - mulf64
-    -
-      name: "/"
+    - name: "/"
       id: BUILTIN_F64_DIV_OP_ID
       returnType: f64
       parameterTypes:
@@ -1378,8 +1208,7 @@
         - f64
       insts:
         - divf64
-    -
-      name: "<"
+    - name: "<"
       id: BUILTIN_F64_LT_OP_ID
       returnType: boolean
       parameterTypes:
@@ -1387,8 +1216,7 @@
         - f64
       insts:
         - ltf64
-    -
-      name: "<="
+    - name: "<="
       id: BUILTIN_F64_LE_OP_ID
       returnType: boolean
       parameterTypes:
@@ -1396,8 +1224,7 @@
         - f64
       insts:
         - lef64
-    -
-      name: ">"
+    - name: ">"
       id: BUILTIN_F64_GT_OP_ID
       returnType: boolean
       parameterTypes:
@@ -1405,8 +1232,7 @@
         - f64
       insts:
         - gtf64
-    -
-      name: ">="
+    - name: ">="
       id: BUILTIN_F64_GE_OP_ID
       returnType: boolean
       parameterTypes:
@@ -1414,8 +1240,7 @@
         - f64
       insts:
         - gef64
-    -
-      name: "=="
+    - name: "=="
       id: BUILTIN_F64_EQ_OP_ID
       returnType: boolean
       parameterTypes:
@@ -1423,8 +1248,7 @@
         - f64
       insts:
         - eqf64
-    -
-      name: "!="
+    - name: "!="
       id: BUILTIN_F64_NE_OP_ID
       returnType: boolean
       parameterTypes:
@@ -1432,24 +1256,21 @@
         - f64
       insts:
         - nef64
-    -
-      name: "-"
+    - name: "-"
       id: BUILTIN_F64_NEG_OP_ID
       returnType: f64
       parameterTypes:
         - f64
       insts:
         - negf64
-    -
-      name: "to-f32"
+    - name: "to-f32"
       id: BUILTIN_F64_TRUNCF32_OP_ID
       returnType: f32
       parameterTypes:
         - f64
       insts:
         - truncf32
-    -
-      name: "to-i8"
+    - name: "to-i8"
       id: BUILTIN_F64_FCVTI8_OP_ID
       returnType: i8
       parameterTypes:
@@ -1457,8 +1278,7 @@
       insts:
         - fcvti64
         - trunci8
-    -
-      name: "to-i16"
+    - name: "to-i16"
       id: BUILTIN_F64_FCVTI16_OP_ID
       returnType: i16
       parameterTypes:
@@ -1466,8 +1286,7 @@
       insts:
         - fcvti64
         - trunci16
-    -
-      name: "to-i32"
+    - name: "to-i32"
       id: BUILTIN_F64_FCVTI32_OP_ID
       returnType: i32
       parameterTypes:
@@ -1475,16 +1294,14 @@
       insts:
         - fcvti64
         - trunci32
-    -
-      name: "to-i64"
+    - name: "to-i64"
       id: BUILTIN_F64_FCVTI64_OP_ID
       returnType: i64
       parameterTypes:
         - f64
       insts:
         - fcvti64
-    -
-      name: "to-i64-bits"
+    - name: "to-i64-bits"
       id: BUILTIN_F64_FTOI64_OP_ID
       returnType: i64
       parameterTypes:
@@ -1493,14 +1310,12 @@
         - ftoi64
 ---
 # Other functions
--
-  name: print
+- name: print
   id: BUILTIN_PRINT_FUNCTION_ID
   returnType: unit
   parameterTypes:
     - String
--
-  name: read
+- name: read
   id: BUILTIN_READ_FUNCTION_ID
   returnType: String
   parameterTypes: []
