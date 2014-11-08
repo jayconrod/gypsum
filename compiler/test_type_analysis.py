@@ -702,12 +702,29 @@ class TestTypeAnalysis(unittest.TestCase):
     def testUseTypeParameterInnerFunctionExplicit(self):
         source = "def id-outer[static T] =\n" + \
                  "  def id-inner(x: T) = x"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
+        info = self.analyzeFromSource(source)
+        paramType = info.getType(info.ast.definitions[0].body.statements[0].parameters[0])
+        T = info.package.findTypeParameter(name="T")
+        self.assertEquals(VariableType(T), paramType)
+        retTy = info.package.findFunction(name="id-inner").returnType
+        self.assertEquals(VariableType(T), retTy)
 
     def testUseTypeParameterInnerFunctionImplicit(self):
         source = "def id-outer[static T](x: T) =\n" + \
                  "  def id-inner = x"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
+        info = self.analyzeFromSource(source)
+        xType = info.getType(info.ast.definitions[0].body.statements[0].body)
+        T = info.package.findTypeParameter(name="T")
+        self.assertEquals(VariableType(T), xType)
+
+    def testCallInnerFunctionWithImplicitTypeParameter(self):
+        source = "def id-outer[static T](x: T) =\n" + \
+                 "  def id-inner = x\n" + \
+                 "  id-inner"
+        info = self.analyzeFromSource(source)
+        callType = info.getType(info.ast.definitions[0].body.statements[1])
+        T = info.package.findTypeParameter(name="T")
+        self.assertEquals(VariableType(T), callType)
 
     # Tests for usage
     def testUseClassBeforeDefinition(self):

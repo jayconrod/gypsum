@@ -79,6 +79,9 @@ class Type(Data):
     def substitute(self, parameters, replacements):
         raise NotImplementedError
 
+    def getTypeArguments(self):
+        raise NotImplementedError
+
     def size(self):
         raise NotImplementedError
 
@@ -122,6 +125,9 @@ class SimpleType(Type):
 
     def defaultValue(self):
         return self.defaultValue_
+
+    def getTypeArguments(self):
+        return ()
 
 
 NoType = SimpleType("_", None)
@@ -189,6 +195,9 @@ class ClassType(ObjectType):
                                for arg in self.typeArguments),
                          self.flags)
 
+    def getTypeArguments(self):
+        return self.typeArguments
+
     def isNullable(self):
         return NULLABLE_TYPE_FLAG in self.flags
 
@@ -221,6 +230,12 @@ class VariableType(ObjectType):
             if param is self.typeParameter:
                 return repl
         return self
+
+    def getTypeArguments(self):
+        if self.typeParameter.upperBound is not None:
+            return self.typeParameter.upperBound.getTypeArguments()
+        else:
+            return ()
 
     def isNullable(self):
         return self.typeParameter.upperBound is not None and \

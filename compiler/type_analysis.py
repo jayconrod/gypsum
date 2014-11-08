@@ -477,6 +477,7 @@ class TypeVisitor(AstNodeVisitor):
         receiverIsExplicit = receiverType is not None
         if not receiverIsExplicit and len(self.receiverTypeStack) > 0:
             receiverType = self.receiverTypeStack[-1]   # may still be None
+
         if name == "$constructor":
             assert receiverIsExplicit
             useKind = USE_AS_CONSTRUCTOR
@@ -494,8 +495,9 @@ class TypeVisitor(AstNodeVisitor):
             useKind = USE_AS_CONSTRUCTOR
         for overload in nameInfo.iterOverloads():
             self.ensureParamTypeInfoForDefn(overload.irDefn)
-        defnInfo = nameInfo.findDefnInfoWithArgTypes(receiverType, receiverIsExplicit,
-                                                     typeArgs, argTypes)
+        (defnInfo, allTypeArgs, allArgTypes) = \
+            nameInfo.findDefnInfoWithArgTypes(receiverType, receiverIsExplicit,
+                                              typeArgs, argTypes)
         self.scope().use(defnInfo, useAstId, useKind)
         irDefn = defnInfo.irDefn
         self.ensureTypeInfoForDefn(irDefn)
@@ -503,8 +505,8 @@ class TypeVisitor(AstNodeVisitor):
             if irDefn.isConstructor():
                 return irDefn.parameterTypes[0]
             else:
-                assert len(typeArgs) == len(irDefn.typeParameters)
-                ty = irDefn.returnType.substitute(irDefn.typeParameters, typeArgs)
+                assert len(allTypeArgs) == len(irDefn.typeParameters)
+                ty = irDefn.returnType.substitute(irDefn.typeParameters, allTypeArgs)
                 return ty
         else:
             assert isinstance(irDefn, Variable) or \

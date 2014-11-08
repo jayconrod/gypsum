@@ -215,3 +215,11 @@ class TestDeclarations(unittest.TestCase):
         f = info.package.findFunction(name="f")
         self.assertEquals(1, len(f.typeParameters))
         self.assertIs(T, f.typeParameters[0])
+
+    def testFunctionOuterTypeParameter(self):
+        info = self.analyzeFromSource("def f[static T](t: T) =\n" +
+                                      "  def g = t")
+        g = info.package.findFunction(name="g")
+        self.assertEquals(1, len(g.typeParameters))
+        T = info.package.findTypeParameter(name="T")
+        self.assertIs(T, g.typeParameters[0])

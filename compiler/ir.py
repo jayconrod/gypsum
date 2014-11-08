@@ -309,7 +309,7 @@ class TypeParameter(IrDefinition):
             (self.name, self.upperBound, self.lowerBound, self.flags)
 
     def __str__(self):
-        return "%s type %s#%d <: %s >: %s\n" % \
+        return "%s type %s#%d <: %s >: %s" % \
             (" ".join(self.flags), self.name, self.id, self.upperBound, self.lowerBound)
 
 

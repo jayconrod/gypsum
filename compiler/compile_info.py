@@ -244,6 +244,37 @@ class ClassInfo(Data):
         return "ClassInfo(%s, %s)" % (irDefnStr, superclassInfoStr)
 
 
+def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes):
+    """Checks compatibility of arguments with the given function.
+
+    In Gypsum, some type arguments and argument types may be implied. Currently, this is
+    limited to arguments for parameters that were implied by the enclosing scope of the
+    function. This function checks compatibility with the given (explicit) type arguments and
+    argument types, including the receiver type (which may be None for regular function calls).
+    If the function is compatible, this function returns a (list(Type), list(Type)) tuple
+    containing the full list of type arguments and argument types (including the receiver).
+    If the function is not compatible, returns None."""
+    if receiverType is not None:
+        implicitTypeArgs = list(receiverType.getTypeArguments())
+        allArgTypes = [receiverType] + argTypes
+    else:
+        if hasattr(irFunction, "astDefn") and \
+           isinstance(irFunction.astDefn, AstFunctionDefinition):
+            explicitTypeParamCount = len(irFunction.astDefn.typeParameters)
+        else:
+            explicitTypeParamCount = 0
+        last = len(irFunction.typeParameters) - explicitTypeParamCount
+        implicitTypeParams = irFunction.typeParameters[:last]
+        implicitTypeArgs = [VariableType(t) for t in implicitTypeParams]
+        allArgTypes = argTypes
+    allTypeArgs = implicitTypeArgs + typeArgs
+
+    if irFunction.canCallWith(allTypeArgs, allArgTypes):
+        return (allTypeArgs, allArgTypes)
+    else:
+        return None
+
+
 class InfoPrinter(AstPrinter):
     def __init__(self, out, info):
         super(InfoPrinter, self).__init__(out)

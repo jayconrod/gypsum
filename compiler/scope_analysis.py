@@ -360,9 +360,10 @@ class NameInfo(object):
         """Determines which overloaded or overriding function should be called, based on
         argument types.
 
-        This is safe to call on any NameInfo, even if it doesn't refer to a function. Returns
-        DefnInfo if there is exactly one match. Raises ScopeException if there zero or
-        multiple matches."""
+        This is safe to call on any NameInfo, even if it doesn't refer to a function. If there
+        is exactly one match, returns (DefnInfo, list(Type), list(Type)) containing the matched
+        definition, the full list of type arguments, and the full list of argument types. If
+        there are zero or multiple matches, raises ScopeException."""
         self.resolveOverrides()
         candidate = None
         for defnInfo in self.overloads:
@@ -370,29 +371,29 @@ class NameInfo(object):
             if isinstance(irDefn, Function) and irDefn.id in self.overrides:
                 continue
 
-            isNonFunction = not isinstance(irDefn, Function) and \
-                            len(typeArgs) == 0 and len(argTypes) == 0
-            isFunction = not receiverIsExplicit and \
-                         isinstance(irDefn, Function) and \
-                         not irDefn.isMethod() and \
-                         irDefn.canCallWith(typeArgs, argTypes)
-            isImplicitMethod = not receiverIsExplicit and \
-                               isinstance(irDefn, Function) and \
-                               irDefn.isMethod() and \
-                               irDefn.canCallWith(typeArgs, [receiverType] + argTypes)
-            isExplicitMethod = receiverIsExplicit and \
-                               isinstance(irDefn, Function) and \
-                               irDefn.isMethod() and \
-                               irDefn.canCallWith(typeArgs, [receiverType] + argTypes)
+            if not isinstance(irDefn, Function) and \
+               len(typeArgs) == 0 and len(argTypes) == 0:
+                # Non-function
+                typesAndArgs = (None, None)
+                match = True
+            elif not receiverIsExplicit and \
+                 isinstance(irDefn, Function) and \
+                 not irDefn.isMethod():
+                # Regular function
+                typesAndArgs = getAllArgumentTypes(irDefn, None, typeArgs, argTypes)
+                match = typesAndArgs is not None
+            elif isinstance(irDefn, Function) and \
+                 irDefn.isMethod():
+                # Method call
+                typesAndArgs = getAllArgumentTypes(irDefn, receiverType, typeArgs, argTypes)
+                match = typesAndArgs is not None
 
-            if isNonFunction or \
-               isFunction or \
-               isImplicitMethod or \
-               isExplicitMethod:
+            if match:
                 if candidate is not None:
                     raise TypeException("ambiguous call to overloaded function: %s" % \
                                         self.name)
-                candidate = defnInfo
+                allTypeArgs, allArgTypes = typesAndArgs
+                candidate = (defnInfo, allTypeArgs, allArgTypes)
 
         if candidate is None:
             raise TypeException("could not find compatible definition: %s" % self.name)
@@ -478,14 +479,26 @@ class Scope(AstNodeVisitor):
         """Creates an IR definition and adds it to the package."""
         raise NotImplementedError
 
+    def getImplicitTypeParameters(self):
+        """Returns a list of type parameters implied by this scope and outer scopes. These
+        can be used when declaring or calling functions or classes. Outer-most type parameters
+        are listed first."""
+        if self.parent is None:
+            # No type parameters implied by global scope
+            return []
+        else:
+            return list(self.getIrDefn().typeParameters)
+
     def createIrClassDefn(self, astDefn):
         """Convenience method for creating a class definition."""
+        implicitTypeParams = self.getImplicitTypeParameters()
         flags = getFlagsFromAstDefn(astDefn, None)
         checkFlags(flags, frozenset())
-        irDefn = Class(astDefn.name, None, None, None, [], [], [], flags)
+        irDefn = Class(astDefn.name, implicitTypeParams, None, None, [], [], [], flags)
         self.info.package.addClass(irDefn)
 
-        irInitializer = Function("$initializer", None, [], None, [], None, frozenset())
+        irInitializer = Function("$initializer", list(implicitTypeParams),
+                                 [], None, [], None, frozenset())
         irInitializer.astDefn = astDefn
         self.makeMethod(irInitializer, irDefn)
         self.info.package.addFunction(irInitializer)
@@ -494,7 +507,8 @@ class Scope(AstNodeVisitor):
         if astDefn.hasConstructors():
             irDefaultCtor = None
         else:
-            irDefaultCtor = Function("$constructor", None, [], None, [], None, frozenset())
+            irDefaultCtor = Function("$constructor", list(implicitTypeParams),
+                                     [], None, [], None, frozenset())
             irDefaultCtor.astDefn = astDefn
             self.makeMethod(irDefaultCtor, irDefn)
             self.info.package.addFunction(irDefaultCtor)
@@ -716,7 +730,8 @@ class GlobalScope(Scope):
             self.info.package.addGlobal(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
             checkFlags(flags, frozenset())
-            irDefn = Function(astDefn.name, None, [], None, [], None, flags)
+            irDefn = Function(astDefn.name, None, self.getImplicitTypeParameters(),
+                              None, [], None, flags)
             self.info.package.addFunction(irDefn)
             if astDefn.name == "main":
                 assert self.info.package.entryFunction == -1
@@ -799,7 +814,8 @@ class FunctionScope(Scope):
             irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
             checkFlags(flags, frozenset())
-            irDefn = Function(astDefn.name, None, [], None, [], None, flags)
+            implicitTypeParams = self.getImplicitTypeParameters()
+            irDefn = Function(astDefn.name, None, implicitTypeParams, None, [], None, flags)
             self.info.package.addFunction(irDefn)
         elif isinstance(astDefn, AstClassDefinition):
             irDefn = self.createIrClassDefn(astDefn)
@@ -817,11 +833,12 @@ class FunctionScope(Scope):
             return
 
         # Create the context class.
-        irContextClass = Class("$context", [], [getRootClassType()], None,
+        implicitTypeParams = self.getImplicitTypeParameters()
+        irContextClass = Class("$context", list(implicitTypeParams), [getRootClassType()], None,
                                [], [], [], frozenset())
         self.info.package.addClass(irContextClass)
         irContextType = ClassType(irContextClass, ())
-        ctor = Function("$contextCtor", UnitType, [], [irContextType],
+        ctor = Function("$contextCtor", UnitType, list(implicitTypeParams), [irContextType],
                         [Variable("$this", irContextType, PARAMETER, frozenset())],
                         [], frozenset())
         ctor.compileHint = CONTEXT_CONSTRUCTOR_HINT
@@ -867,12 +884,14 @@ class FunctionScope(Scope):
             return
 
         # Create a closure class to hold this method and its contexts.
-        irClosureClass = Class("$closure", None, [getRootClassType()], None,
+        implicitTypeParams = self.getImplicitTypeParameters()
+        irClosureClass = Class("$closure", list(implicitTypeParams), [getRootClassType()], None,
                                [], [], [], frozenset())
         self.info.package.addClass(irClosureClass)
         closureInfo.irClosureClass = irClosureClass
         irClosureType = ClassType(irClosureClass)
-        irClosureCtor = Function("$closureCtor", UnitType, [], [irClosureType],
+        irClosureCtor = Function("$closureCtor", UnitType,
+                                 list(implicitTypeParams), [irClosureType],
                                  [Variable("$this", irClosureType, PARAMETER, frozenset())],
                                  None, frozenset())
         irClosureCtor.clas = irClosureClass
@@ -945,17 +964,21 @@ class ClassScope(Scope):
             irScopeDefn.fields.append(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
             checkFlags(flags, frozenset([PROTECTED, PRIVATE]))
+            implicitTypeParams = self.getImplicitTypeParameters()
             if astDefn.name == "this":
-                irDefn = Function("$constructor", None, [], None, [], None, flags)
+                irDefn = Function("$constructor", None, implicitTypeParams,
+                                  None, [], None, flags)
                 irScopeDefn.constructors.append(irDefn)
             else:
-                irDefn = Function(astDefn.name, None, [], None, [], None, flags)
+                irDefn = Function(astDefn.name, None, implicitTypeParams,
+                                  None, [], None, flags)
                 irScopeDefn.methods.append(irDefn)
             # We don't need to call makeMethod here because the inner FunctionScope will do it.
             self.info.package.addFunction(irDefn)
         elif isinstance(astDefn, AstPrimaryConstructorDefinition):
             checkFlags(flags, frozenset([PROTECTED, PRIVATE]))
-            irDefn = Function("$constructor", None, [], None, [], None, flags)
+            implicitTypeParams = self.getImplicitTypeParameters()
+            irDefn = Function("$constructor", None, implicitTypeParams, None, [], None, flags)
             irScopeDefn.constructors.append(irDefn)
             self.makeMethod(irDefn, irScopeDefn)
             self.info.package.addFunction(irDefn)
