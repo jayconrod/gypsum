@@ -726,6 +726,39 @@ class TestTypeAnalysis(unittest.TestCase):
         T = info.package.findTypeParameter(name="T")
         self.assertEquals(VariableType(T), callType)
 
+    def testClassWithTypeParameter(self):
+        source = "class Box[static T](x: T)\n" + \
+                 "  def get = x\n" + \
+                 "  def set(y: T) =\n" + \
+                 "    x = y\n" + \
+                 "    {}"
+        info = self.analyzeFromSource(source)
+        Box = info.package.findClass(name="Box")
+        T = info.package.findTypeParameter(name="T")
+        get = info.package.findFunction(name="get")
+        set = info.package.findFunction(name="set")
+        TTy = VariableType(T)
+        BoxTy = ClassType(Box, (TTy,), None)
+
+        self.assertEquals([BoxTy], Box.initializer.parameterTypes)
+        self.assertEquals([BoxTy, TTy], Box.constructors[0].parameterTypes)
+        self.assertEquals([BoxTy], get.parameterTypes)
+        self.assertEquals(TTy, get.returnType)
+        self.assertEquals([BoxTy, TTy], set.parameterTypes)
+        self.assertEquals(UnitType, set.returnType)
+
+    def testCallCtorWithTypeParameter(self):
+        source = "class C\n" + \
+                 "class Box[static T](x: T)\n" + \
+                 "def f(c: C) = Box[C](c)"
+        info = self.analyzeFromSource(source)
+        Box = info.package.findClass(name="Box")
+        C = info.package.findClass(name="C")
+        f = info.package.findFunction(name="f")
+        ty = ClassType(Box, (ClassType(C),))
+        self.assertEquals(ty, f.returnType)
+        self.assertEquals(ty, info.getType(info.ast.definitions[2].body))
+
     # Tests for usage
     def testUseClassBeforeDefinition(self):
         source = "def f = C\n" + \

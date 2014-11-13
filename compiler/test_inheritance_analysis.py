@@ -14,7 +14,7 @@ from lexer import *
 from parser import *
 from scope_analysis import *
 
-class TestInheritance(unittest.TestCase):
+class TestInheritanceAnalysis(unittest.TestCase):
     def parseFromSource(self, source):
         filename = "(test)"
         rawTokens = lex(filename, source)

@@ -164,20 +164,26 @@ class ClassType(ObjectType):
         self.clas = clas
         self.typeArguments = typeArguments
 
+    @staticmethod
+    def forReceiver(clas):
+        typeArgs = tuple(VariableType(t) for t in clas.typeParameters)
+        return ClassType(clas, typeArgs, None)
+
     def __str__(self):
         if len(self.typeArguments) == 0:
             return self.clas.name
         else:
             return "%s[%s]%s" % \
                    (self.clas.name,
-                    ",".join(self.typeArguments),
+                    ",".join(map(str, self.typeArguments)),
                     "?" if self.isNullable() else "")
 
     def __repr__(self):
-        return "ClassType(%s, (%s), %s)" % \
-               (self.clas.name,
-                ", ".join(repr(ta) for ta in self.typeArguments),
-                ", ".join(self.flags))
+        typeArgsStr = (", (" + ", ".join(map(repr, self.typeArguments)) + ")") \
+                      if self.typeArguments is not () \
+                      else ""
+        flagsStr = (", " + ", ".join(self.flags)) if len(self.flags) > 0 else ""
+        return "ClassType(%s%s%s)" % (self.clas.name, typeArgsStr, flagsStr)
 
     def __hash__(self):
         return hashList([getattr(self, name) for name in Type.propertyNames] + \

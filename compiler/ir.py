@@ -304,6 +304,9 @@ class TypeParameter(IrDefinition):
     def isTypeDefn(self):
         return True
 
+    def contains(self, ty):
+        return ty.isSubtypeOf(self.upperBound) and self.lowerBound.isSubtypeOf(ty)
+
     def __repr__(self):
         return "TypeParameter(%s, %s, %s, %s)" % \
             (self.name, self.upperBound, self.lowerBound, self.flags)

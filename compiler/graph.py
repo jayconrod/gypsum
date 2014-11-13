@@ -19,13 +19,12 @@ class Graph(object):
                 self.addEdge(v, w)
 
     def addVertex(self, v):
-        assert v not in self.associations
-        self.associations[v] = set()
+        if v not in self.associations:
+            self.associations[v] = set()
 
     def addEdge(self, v, w):
-        assert v in self.associations
-        assert w in self.associations
-        assert v != w
+        self.addVertex(v)
+        self.addVertex(w)
         self.associations[v].add(w)
 
     def vertices(self):

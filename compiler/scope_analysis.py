@@ -64,45 +64,50 @@ def analyzeDeclarations(info):
 
 
 def analyzeInheritance(info):
-    """Construct and analyze graph of inheritance between classes.
+    """Construct and analyze graph of inheritance between classes and type parameters.
 
-    This pass visits and links the class in the AST with their base classes. It constructs
-    an inheritance graph and verifies there are no cycles. Finally, it copies symbol bindings
-    to each class from its bases. At this point, overrides are treated as overloads, since
-    we cannot distinguish between them until after type analysis."""
+    This pass visits classes and type parameters in the AST and links them with their base
+    classes and bounds. It constructs a dependency graph and verifies there are no cycles.
+    It also constructs an inheritance graph for classes only. This is used to copy symbol
+    bindings from each class to its derived classes. At this point, overrides are treated as
+    overloads, since we cannot distinguish between them until after type analysis."""
 
-    # Add edges for inheritance between builtin classes, since these are in the AST.
+    # Create two empty graphs. The inheritance graph is used later for copying symbols. Its
+    # node ids are AST ids. The subtype graph is used to check for cyclic definitions. Its
+    # node ids are IR ids. The inheritance graph is a subgraph (with different nodes) of the
+    # subtype graph; it contains only classes while the subtype graph contains classes and
+    # type parameters. Edges in the subtype graph represent any dependency (including
+    # inheritance, type arguments, type parameters). Edges in the inheritance graph only
+    # represent inheritance.
     inheritanceGraph = Graph(info.classInfo.keys())
-    def handleBuiltinInheritance(name, clas):
-        if not isinstance(clas, Class):
-            return
-        assert len(clas.supertypes) <= 1
-        if len(clas.supertypes) == 1:
-            classInfo = info.getClassInfo(clas)
-            irSuperclass = clas.supertypes[0].clas
-            classInfo.superclassInfo = info.getClassInfo(irSuperclass)
-            inheritanceGraph.addEdge(clas.id, irSuperclass.id)
+    subtypeGraph = Graph()
+
+    # Add edges for builtin classes. Still need to track these, even though they aren't in AST.
+    def handleBuiltinInheritance(name, irDefn):
+        if isinstance(irDefn, Class):
+            assert len(irDefn.supertypes) <= 1
+            if len(irDefn.supertypes) == 1:
+                classInfo = info.getClassInfo(irDefn)
+                irSuperclass = irDefn.supertypes[0].clas
+                classInfo.superclassInfo = info.getClassInfo(irSuperclass)
+                inheritanceGraph.addEdge(irDefn.id, irSuperclass.id)
+                subtypeGraph.addEdge(irDefn.id, irSuperclass.id)
+        elif isinstance(irDefn, TypeParameter):
+            raise NotImplementedError
     registerBuiltins(handleBuiltinInheritance)
 
-    # Populate the graph by traversing the AST.
-    visitor = InheritanceVisitor(info.globalScope, inheritanceGraph)
+    # Populate the rest of the graph by traversing the AST.
+    visitor = InheritanceVisitor(info.globalScope, inheritanceGraph, subtypeGraph)
     visitor.visitChildren(info.ast)
 
     # Check for cycles.
-    if inheritanceGraph.isCyclic():
+    if subtypeGraph.isCyclic():
         raise ScopeException("inheritance cycle detected")
 
     # Copy bindings from superclasses to subclasses. This must be done in topological order
     # to ensure we don't miss anything, i.e., if S <: T, we must ensure all bindings have been
     # copied to T before copying from T to S. Builtin classes are already flattened, so this
     # is not necessary for them.
-    def bind(scope, name, defnInfo):
-        if scope.isBound(name) and \
-           not scope.getDefinition(name).isOverloadable(defnInfo):
-            raise ScopeException("%s: conflicts with inherited definition" % name)
-        scope.bind(name, defnInfo)
-        scope.define(name)
-
     topologicalClassIds = inheritanceGraph.reverseEdges().topologicalSort()
     for classId in topologicalClassIds:
         if isBuiltinId(classId):
@@ -115,7 +120,12 @@ def analyzeInheritance(info):
         for name, defnInfo in superclassScope.getBindings():
             if defnInfo.inheritanceDepth == NOT_HERITABLE:
                 continue
-            bind(scope, name, defnInfo.inherit(scope.scopeId))
+            inheritedDefnInfo = defnInfo.inherit(scope.scopeId)
+            if scope.isBound(name) and \
+               not scope.getDefinition(name).isOverloadable(inheritedDefnInfo):
+                raise ScopeException("%s: conflicts with inherited definition" % name)
+            scope.bind(name, inheritedDefnInfo)
+            scope.define(name)
 
 
 def convertClosures(info):
@@ -532,7 +542,7 @@ class Scope(AstNodeVisitor):
         This is only false for local variables in function scopes."""
         raise NotImplementedError
 
-    def lookup(self, name, localOnly, mayBeAssignment):
+    def lookup(self, name, localOnly=False, mayBeAssignment=False, ignoreDefnOrder=False):
         """Resolves a reference to a symbol, possibly in a parent scope.
 
         Returns NameInfo. For overloaded symbols, there may be several functions in there."""
@@ -546,7 +556,9 @@ class Scope(AstNodeVisitor):
                 return self.lookup(name[:-1], localOnly, False)
             else:
                 raise ScopeException("%s: not found" % name)
-        if not defnScope.isDefined(name) and self.isLocalWithin(defnScope):
+        if not ignoreDefnOrder and \
+           not defnScope.isDefined(name) and \
+           self.isLocalWithin(defnScope):
             raise ScopeException("%s: used before being defined" % name)
         return defnScope.bindings[name]
 
@@ -617,6 +629,11 @@ class Scope(AstNodeVisitor):
         while scope != defnScope and scope.isLocal():
             scope = scope.parent
         return scope
+
+    def findEnclosingClass(self):
+        """Returns the IR class enclosing this scope, if there is one. If this is a class scope,
+        this will return the class itself."""
+        raise NotImplementedError
 
     def capture(self, useInfo):
         """Makes the named non-local value defined in defnScope accessible in this scope.
@@ -745,6 +762,9 @@ class GlobalScope(Scope):
     def isDefinedAutomatically(self, astDefn):
         return True
 
+    def findEnclosingClass(self):
+        return None
+
     def captureScopeContext(self):
         raise NotImplementedError("global scope does not need a context")
 
@@ -826,6 +846,9 @@ class FunctionScope(Scope):
     def isDefinedAutomatically(self, astDefn):
         return isinstance(astDefn, AstClassDefinition) or \
                isinstance(astDefn, AstFunctionDefinition)
+
+    def findEnclosingClass(self):
+        return self.parent.findEnclosingClass()
 
     def captureScopeContext(self):
         contextInfo = self.info.getContextInfo(self.scopeId)
@@ -982,6 +1005,16 @@ class ClassScope(Scope):
             irScopeDefn.constructors.append(irDefn)
             self.makeMethod(irDefn, irScopeDefn)
             self.info.package.addFunction(irDefn)
+        elif isinstance(astDefn, AstTypeParameter):
+            checkFlags(flags, frozenset([STATIC]))
+            if STATIC not in flags:
+                raise NotImplementedError
+            irDefn = TypeParameter(astDefn.name, None, None, flags)
+            self.info.package.addTypeParameter(irDefn)
+            irScopeDefn.typeParameters.append(irDefn)
+            irScopeDefn.initializer.typeParameters.append(irDefn)
+            for ctor in irScopeDefn.constructors:
+                ctor.typeParameters.append(irDefn)
         elif isinstance(astDefn, AstParameter):
             # Parameters in a class scope can only belong to a primary constructor. They are
             # never treated as local variables, so we don't need to create definitions here.
@@ -992,7 +1025,14 @@ class ClassScope(Scope):
         return irDefn
 
     def isDefinedAutomatically(self, astDefn):
-        return True
+        return isinstance(astDefn, AstPrimaryConstructorDefinition) or \
+               isinstance(astDefn, AstFunctionDefinition) or \
+               isinstance(astDefn, AstClassDefinition) or \
+               isinstance(astDefn, AstVariableDefinition) or \
+               isinstance(astDefn, AstVariablePattern)
+
+    def findEnclosingClass(self):
+        return self.getIrDefn()
 
     def captureScopeContext(self):
         pass
@@ -1132,42 +1172,62 @@ class DeclarationVisitor(ScopeVisitor):
 
 
 class InheritanceVisitor(ScopeVisitor):
-    def __init__(self, scope, graph):
+    def __init__(self, scope, inheritanceGraph, subtypeGraph):
         super(InheritanceVisitor, self).__init__(scope)
-        self.graph = graph
+        self.inheritanceGraph = inheritanceGraph
+        self.subtypeGraph = subtypeGraph
 
     def createChildVisitor(self, scope):
-        return InheritanceVisitor(scope, self.graph)
+        return InheritanceVisitor(scope, self.inheritanceGraph, self.subtypeGraph)
 
     def visitAstClassDefinition(self, node):
         classInfo = self.scope.info.getClassInfo(node)
+        irClass = classInfo.irDefn
         if len(node.supertypes) == 0:
             classInfo.superclassInfo = self.scope.info.getClassInfo(BUILTIN_ROOT_CLASS_ID)
-            self.graph.addEdge(node.id, BUILTIN_ROOT_CLASS_ID)
+            self.inheritanceGraph.addEdge(node.id, BUILTIN_ROOT_CLASS_ID)
+            self.subtypeGraph.addEdge(irClass.id, BUILTIN_ROOT_CLASS_ID)
         else:
             if len(node.supertypes) > 1:
                 raise NotImplementedError
             supertype = node.supertypes[0]
-            if not isinstance(supertype, AstClassType):
+            supertypeIrDefn = self.addTypeToSubtypeGraph(irClass.id, supertype)
+            if not isinstance(supertypeIrDefn, Class):
                 raise ScopeException("inheritance from non-class type")
-            supertypeDefnInfo = self.scope.lookup(supertype.name,
-                                                  localOnly=False,
-                                                  mayBeAssignment=False).getDefnInfo()
-            self.scope.use(supertypeDefnInfo, supertype.id, USE_AS_TYPE)
-            supertypeIrDefn = supertypeDefnInfo.irDefn
 
             superclassId = supertypeIrDefn.id
             if isBuiltinId(superclassId):
                 classInfo.superclassInfo = self.scope.info.getClassInfo(superclassId)
-                self.graph.addEdge(node.id, superclassId)
+                self.inheritanceGraph.addEdge(node.id, superclassId)
             else:
                 superclassAst = supertypeIrDefn.astDefn
                 superclassInfo = self.scope.info.getClassInfo(superclassAst)
                 if classInfo is superclassInfo:
                     raise ScopeException("class cannot inherit from itself")
                 classInfo.superclassInfo = superclassInfo
-                self.graph.addEdge(node.id, superclassAst.id)
+                self.inheritanceGraph.addEdge(node.id, superclassAst.id)
         super(InheritanceVisitor, self).visitAstClassDefinition(node)
+
+    def visitAstTypeParameter(self, node):
+        irParam = self.scope.info.getDefnInfo(node).irDefn
+        if node.upperBound is not None:
+            self.addTypeToSubtypeGraph(irParam.id, node.upperBound)
+        if node.lowerBound is not None:
+            self.addTypeToSubtypeGraph(irParam.id, node.lowerBound)
+
+    def addTypeToSubtypeGraph(self, id, astType):
+        if not isinstance(astType, AstClassType):
+            raise ScopeException("inheritance from non-class type")
+        nameInfo = self.scope.lookup(astType.name, ignoreDefnOrder=True)
+        if nameInfo.isOverloaded():
+            raise ScopeException("inheritance from overloaded symbol")
+        defnInfo = nameInfo.getDefnInfo()
+        irDefn = defnInfo.irDefn
+        assert irDefn.isTypeDefn()
+        self.subtypeGraph.addEdge(id, irDefn.id)
+        for astTypeArg in astType.typeArguments:
+            self.addTypeToSubtypeGraph(id, astTypeArg)
+        return irDefn
 
 
 def getFlagsFromAstDefn(astDefn, astVarDefn):

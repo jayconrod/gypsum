@@ -223,3 +223,20 @@ class TestDeclarations(unittest.TestCase):
         self.assertEquals(1, len(g.typeParameters))
         T = info.package.findTypeParameter(name="T")
         self.assertIs(T, g.typeParameters[0])
+
+    def testClassTypeParameter(self):
+        source = "class Box[static T](x: T)\n" + \
+                 "  def get = x\n" + \
+                 "  def set(y: T) =\n" + \
+                 "    x = y\n" + \
+                 "    {}"
+        info = self.analyzeFromSource(source)
+        Box = info.package.findClass(name="Box")
+        T = info.package.findTypeParameter(name="T")
+        get = info.package.findFunction(name="get")
+        set = info.package.findFunction(name="set")
+        self.assertEquals([T], Box.typeParameters)
+        self.assertEquals([T], Box.initializer.typeParameters)
+        self.assertEquals([T], Box.constructors[0].typeParameters)
+        self.assertEquals([T], get.typeParameters)
+        self.assertEquals([T], set.typeParameters)

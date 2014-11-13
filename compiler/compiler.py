@@ -234,7 +234,8 @@ class CompileVisitor(AstNodeVisitor):
             self.dropForEffect(mode)
         else:
             assert isinstance(irDefn, Function) or isinstance(irDefn, Class)
-            self.buildCall(useInfo, None, [], [], mode)
+            callInfo = self.info.getCallInfo(expr)
+            self.buildCall(useInfo, callInfo, None, [], [], mode)
 
     def visitAstThisExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)
@@ -263,28 +264,34 @@ class CompileVisitor(AstNodeVisitor):
             self.dropForEffect(mode)
         else:
             assert isinstance(irDefn, Function)
-            self.buildCall(useInfo, expr.receiver, [], [], mode)
+            callInfo = self.info.getCallInfo(expr)
+            self.buildCall(useInfo, callInfo, expr.receiver, [], [], mode)
 
     def visitAstCallExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)
+        callInfo = self.info.getCallInfo(expr) if self.info.hasCallInfo(expr) else None
         if isinstance(expr.callee, AstVariableExpression):
-            self.buildCall(useInfo, None, expr.typeArguments, expr.arguments, mode)
+            self.buildCall(useInfo, callInfo, None, expr.typeArguments, expr.arguments, mode)
         elif isinstance(expr.callee, AstPropertyExpression):
-            self.buildCall(useInfo, expr.callee, expr.typeArguments, expr.arguments, mode)
+            self.buildCall(useInfo, callInfo, expr.callee.receiver,
+                           expr.typeArguments, expr.arguments, mode)
         else:
             raise CompileException("uncallable expression")
 
     def visitCallThisExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)
-        self.buildCall(useInfo, expr.callee, [], expr.arguments, mode)
+        callInfo = self.info.getCallInfo(expr)
+        self.buildCall(useInfo, callInfo, expr.callee, [], expr.arguments, mode)
 
     def visitCallSuperExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)
-        self.buildCall(useInfo, expr.callee, [], expr.arguments, mode)
+        callInfo = self.info.getCallInfo(expr)
+        self.buildCall(useInfo, callInfo, expr.callee, [], expr.arguments, mode)
 
     def visitAstUnaryExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)
-        self.buildCall(useInfo, expr.expr, [], [], mode)
+        callInfo = self.info.getCallInfo(expr)
+        self.buildCall(useInfo, callInfo, expr.expr, [], [], mode)
 
     def visitAstBinaryExpression(self, expr, mode):
         opName = expr.operator
@@ -307,12 +314,13 @@ class CompileVisitor(AstNodeVisitor):
         else:
             # regular operators (handled like methods)
             useInfo = self.info.getUseInfo(expr)
+            callInfo = self.info.getCallInfo(expr)
             isCompoundAssignment = opName == useInfo.defnInfo.irDefn.name + "="
             if isCompoundAssignment:
                 receiver = self.compileLValue(expr.left)
             else:
                 receiver = expr.left
-            self.buildCall(useInfo, receiver, [], [expr.right], mode)
+            self.buildCall(useInfo, callInfo, receiver, [], [expr.right], mode)
 
     def visitAstIfExpression(self, expr, mode):
         self.visit(expr.condition, COMPILE_FOR_VALUE)
@@ -709,7 +717,7 @@ class CompileVisitor(AstNodeVisitor):
         self.callv(len(method.parameterTypes), index)
         self.dropForEffect(mode)
 
-    def buildCall(self, useInfo, receiver, argTypes, argExprs, mode):
+    def buildCall(self, useInfo, callInfo, receiver, typeArgs, argExprs, mode):
         shouldDropForEffect = mode is COMPILE_FOR_EFFECT
         defnInfo = useInfo.defnInfo
         irDefn = defnInfo.irDefn
@@ -722,9 +730,8 @@ class CompileVisitor(AstNodeVisitor):
         def compileArgs():
             for arg in argExprs:
                 self.visit(arg, COMPILE_FOR_VALUE)
-            assert len(argTypes) == len(irDefn.typeParameters)
-            for arg, param in zip(argTypes, irDefn.typeParameters):
-                self.visit(arg, param)
+            for typeArg in callInfo.typeArguments:
+                self.buildStaticTypeArgument(typeArg)
 
         if not irDefn.isConstructor() and not irDefn.isMethod():
             # Global or static function

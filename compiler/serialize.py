@@ -50,7 +50,7 @@ class Serializer(object):
         self.outFile.write(struct.pack("<Ihhqiiiii",
                                        0x676b7073,   # magic number
                                        0,            # major version
-                                       7,            # minor version
+                                       8,            # minor version
                                        0,            # flags
                                        len(self.package.strings),
                                        len(self.package.functions),

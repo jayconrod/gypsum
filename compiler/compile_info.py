@@ -34,6 +34,7 @@ class CompileInfo(object):
         self.useInfo = {}
         self.classInfo = {}
         self.typeInfo = {}
+        self.callInfo = {}
 
     def _get(self, key, dictionary):
         return dictionary[self._key(key)]
@@ -65,7 +66,8 @@ _dictNames = [("Scope", "scopes"),
               ("DefnInfo", "defnInfo"),
               ("UseInfo", "useInfo"),
               ("ClassInfo", "classInfo"),
-              ("Type", "typeInfo")]
+              ("Type", "typeInfo"),
+              ("CallInfo", "callInfo")]
 def _addDictMethods(elemName, dictName):
     setattr(CompileInfo, "get" + elemName,
             lambda self, key: self._get(key, getattr(self, dictName)))
@@ -244,6 +246,34 @@ class ClassInfo(Data):
         return "ClassInfo(%s, %s)" % (irDefnStr, superclassInfoStr)
 
 
+class CallInfo(Data):
+    """Defined at each call site during type/use analysis. Tracks information needed for the
+    compiler to generate the call."""
+
+    propertyNames = [
+        # A list of type arguments to be passed to the callee.
+        "typeArguments",
+    ]
+
+
+def getExplicitTypeParameterCount(irDefn):
+    if hasattr(irDefn, "astDefn") and \
+       hasattr(irDefn.astDefn, "typeParameters"):
+        return len(irDefn.astDefn.typeParameters)
+    else:
+        return 0
+
+
+def getExplicitTypeParameters(irDefn):
+    firstExplicit = len(irDefn.typeParameters) - getExplicitTypeParameterCount(irDefn)
+    return irDefn.typeParameters[firstExplicit:]
+
+
+def getImplicitTypeParameters(irDefn):
+    firstExplicit = len(irDefn.typeParameters) - getExplicitTypeParameterCount(irDefn)
+    return irDefn.typeParameters[:firstExplicit]
+
+
 def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes):
     """Checks compatibility of arguments with the given function.
 
@@ -258,13 +288,7 @@ def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes):
         implicitTypeArgs = list(receiverType.getTypeArguments())
         allArgTypes = [receiverType] + argTypes
     else:
-        if hasattr(irFunction, "astDefn") and \
-           isinstance(irFunction.astDefn, AstFunctionDefinition):
-            explicitTypeParamCount = len(irFunction.astDefn.typeParameters)
-        else:
-            explicitTypeParamCount = 0
-        last = len(irFunction.typeParameters) - explicitTypeParamCount
-        implicitTypeParams = irFunction.typeParameters[:last]
+        implicitTypeParams = getImplicitTypeParameters(irFunction)
         implicitTypeArgs = [VariableType(t) for t in implicitTypeParams]
         allArgTypes = argTypes
     allTypeArgs = implicitTypeArgs + typeArgs
