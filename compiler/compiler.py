@@ -825,9 +825,9 @@ class CompileVisitor(AstNodeVisitor):
         if isinstance(ty, ClassType):
             for arg in ty.typeArguments:
                 self.buildStaticTypeArgument(arg)
-            self.tycs(ty.clas.id)
+            self.tyc(ty.clas.id)
         elif isinstance(ty, VariableType):
-            self.tyvs(ty.typeParameter.id)
+            self.tyv(ty.typeParameter.id)
         else:
             raise NotImplementedError
 

@@ -357,8 +357,8 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
-      case TYCS:
-      case TYVS:
+      case TYC:
+      case TYV:
         readVbn();
         break;
 

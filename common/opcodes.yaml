@@ -38,8 +38,8 @@
 - {name: "allocobj", iops: 1, term: false}
 - {name: "allocarri", iops: 2, term: false}
 - {name: "cls", iops: 1, term: false}
-- {name: "tycs", iops: 1, term: false}
-- {name: "tyvs", iops: 1, term: false}
+- {name: "tyc", iops: 1, term: false}
+- {name: "tyv", iops: 1, term: false}
 - {name: "callg", iops: 1, term: false}
 - {name: "callv", iops: 2, term: false}
 - {name: "eqp", iops: 0, term: false}

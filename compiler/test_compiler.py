@@ -1205,7 +1205,7 @@ class TestCompiler(unittest.TestCase):
         f = package.findFunction(name="f")
         expected = self.makeSimpleFunction("f", Cty, [[
                        ldlocal(0),
-                       tycs(C.id),
+                       tyc(C.id),
                        callg(id.id),
                        ret()]],
                      variables=[Variable("o", Cty, PARAMETER, frozenset())],
@@ -1222,7 +1222,7 @@ class TestCompiler(unittest.TestCase):
         outer = package.findFunction(name="id-outer")
         expected = self.makeSimpleFunction("id-outer", Tty, [[
             ldlocal(0),
-            tyvs(T.id),
+            tyv(T.id),
             callg(inner.id),
             ret()]],
           variables=[Variable("x", Tty, PARAMETER, frozenset())],
@@ -1241,7 +1241,7 @@ class TestCompiler(unittest.TestCase):
         idInner = package.findFunction(name="id-inner")
         expected = self.makeSimpleFunction("id-outer", Tty, [[
             ldlocal(0),
-            tyvs(T.id),
+            tyv(T.id),
             callg(idInner.id),
             ret()]],
           variables=[Variable("x", Tty, PARAMETER, frozenset())],
@@ -1277,7 +1277,7 @@ class TestCompiler(unittest.TestCase):
             drop(),
             stlocal(-2),
             ldlocal(-2),
-            tyvs(T.id),
+            tyv(T.id),
             callv(1, idInnerMethodIndex),
             ret()]],
           variables=[Variable("$context", ClassType(contextClass), LOCAL, frozenset()),
@@ -1304,9 +1304,9 @@ class TestCompiler(unittest.TestCase):
         expectedF = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
             ldlocal(0),
-            tycs(C.id),
+            tyc(C.id),
             callv(1, Box.getMethodIndex(get)),
-            tycs(C.id),
+            tyc(C.id),
             callv(2, Box.getMethodIndex(set)),
             ret()]],
           variables=[Variable("box", boxType, PARAMETER, frozenset())],

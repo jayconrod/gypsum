@@ -465,7 +465,7 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
-        case TYCS: {
+        case TYC: {
           i64 classId = readVbn(bytecode, &pcOffset);
           Local<Class> clas;
           if (isBuiltinId(classId)) {
@@ -477,7 +477,7 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
-        case TYVS: {
+        case TYV: {
           auto typeParamId = readVbn(bytecode, &pcOffset);
           ASSERT(!isBuiltinId(typeParamId));
           Local<TypeParameter> param(package->getTypeParameter(typeParamId));
