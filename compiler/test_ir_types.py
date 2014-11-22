@@ -36,20 +36,70 @@ class TestIrTypes(unittest.TestCase):
         self.assertTrue(ClassType(self.B).isSubtypeOf(ClassType(self.A)))
         self.assertFalse(ClassType(self.A).isSubtypeOf(ClassType(self.B)))
 
-    def testParameterSelf(self):
+    def testSubtypeParameterSelf(self):
         T = TypeParameter("T", ClassType(self.A), ClassType(self.B), frozenset())
         ty = VariableType(T)
         self.assertTrue(ty.isSubtypeOf(ty))
 
-    def testParametersOverlapping(self):
+    def testSubtypeParametersOverlapping(self):
         T = TypeParameter("T", ClassType(self.A), ClassType(self.C), frozenset())
         S = TypeParameter("S", ClassType(self.B), ClassType(self.C), frozenset())
         self.assertFalse(VariableType(S).isSubtypeOf(VariableType(T)))
 
-    def testParametersNonOverlapping(self):
+    def testSubtypeParametersNonOverlapping(self):
         T = TypeParameter("T", ClassType(self.A), ClassType(self.B), frozenset())
         S = TypeParameter("S", ClassType(self.B), ClassType(self.C), frozenset())
         self.assertTrue(VariableType(S).isSubtypeOf(VariableType(T)))
+
+    def testSubtypeClassWithParametersSelf(self):
+        T = TypeParameter("T", getRootClassType(), getNothingClassType(), frozenset())
+        T.id = 0
+        S = TypeParameter("S", getRootClassType(), getNothingClassType(), frozenset())
+        S.id = 1
+        A = Class("A", [T], [getRootClassType()], None, [], [], [], frozenset())
+        A.id = 0
+        X = Class("X", [], [getRootClassType()], None, [], [], [], frozenset())
+        X.id = 1
+        Y = Class("Y", [], [getRootClassType()], None, [], [], [], frozenset())
+        Y.id = 2
+        ATty = ClassType(A, (VariableType(T),))
+        ASty = ClassType(A, (VariableType(S),))
+        AXty = ClassType(A, (ClassType(X),))
+        AYty = ClassType(A, (ClassType(Y),))
+        self.assertTrue(ATty.isSubtypeOf(ATty))
+        self.assertFalse(ATty.isSubtypeOf(ASty))
+        self.assertTrue(AXty.isSubtypeOf(AXty))
+        self.assertFalse(AXty.isSubtypeOf(AYty))
+
+    def testSubtypeClassWithParametersSubclass(self):
+        T = TypeParameter("T", getRootClassType(), getNothingClassType(), frozenset())
+        T.id = 0
+        A = Class("A", [T], [getRootClassType()], None, [], [], [], frozenset())
+        A.id = 0
+        X = Class("X", [], [getRootClassType()], None, [], [], [], frozenset())
+        X.id = 1
+        Y = Class("Y", [], [getRootClassType()], None, [], [], [], frozenset())
+        Y.id = 2
+        AXty = ClassType(A, (ClassType(X),))
+        B = Class("B", [], [AXty], None, [], [], [], frozenset())
+        B.id = 3
+        Bty = ClassType(B)
+        AYty = ClassType(A, (ClassType(Y),))
+        self.assertTrue(Bty.isSubtypeOf(AXty))
+        self.assertFalse(Bty.isSubtypeOf(AYty))
+
+    def testSubtypeClassWithParametersSuperclass(self):
+        T = TypeParameter("T", getRootClassType(), getNothingClassType(), frozenset())
+        T.id = 0
+        A = Class("A", [], [getRootClassType()], None, [], [], [], frozenset())
+        A.id = 0
+        Aty = ClassType(A)
+        B = Class("B", [T], [Aty], None, [], [], [], frozenset())
+        B.id = 1
+        X = Class("X", [], [getRootClassType()], None, [], [], [], frozenset())
+        X.id = 2
+        BXty = ClassType(B, (ClassType(X),))
+        self.assertTrue(BXty.isSubtypeOf(Aty))
 
     def testSubstitute(self):
         T = TypeParameter("T", ClassType(self.A), ClassType(self.B), frozenset())

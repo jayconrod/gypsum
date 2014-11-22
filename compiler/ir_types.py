@@ -38,18 +38,21 @@ class Type(Data):
     def isSubtypeOf(self, other):
         if self == other:
             return True
-        elif self.isObject() and other.isObject():
-            def topBottomClasses(ty):
-                if isinstance(ty, ClassType):
-                    return ty.clas, ty.clas
-                else:
-                    assert isinstance(ty, VariableType)
-                    return (topBottomClasses(ty.typeParameter.upperBound)[0],
-                            topBottomClasses(ty.typeParameter.lowerBound)[1])
-            topSelfClass = topBottomClasses(self)[0]
-            bottomOtherClass = topBottomClasses(other)[1]
-            return topSelfClass.isSubclassOf(bottomOtherClass) and \
-                   (not self.isNullable() or other.isNullable())
+        elif isinstance(self, VariableType):
+            return self.typeParameter.upperBound.isSubtypeOf(other)
+        elif isinstance(other, VariableType):
+            return self.isSubtypeOf(other.typeParameter.lowerBound)
+        elif isinstance(self, ClassType) and \
+             isinstance(other, ClassType) and \
+             (not self.isNullable() or other.isNullable()) and \
+             self.clas.isSubclassOf(other.clas):
+            if self.clas is builtins.getNothingClass():
+                return True
+            else:
+                selfTypeArgs = self.substituteForBaseClass(other.clas).typeArguments
+                otherTypeArgs = other.typeArguments
+                assert len(selfTypeArgs) == len(otherTypeArgs)
+                return all(a == b for a, b in zip(selfTypeArgs, otherTypeArgs))
         else:
             return False
 
