@@ -71,3 +71,31 @@ class TestIntermediateRepresentation(unittest.TestCase):
         f2.clas = self.base
         self.assertFalse(f2.mayOverride(f1))
         self.assertFalse(f1.mayOverride(f2))
+
+    def testFindPathToBaseClassMissing(self):
+        A = Class("A", [], [], None, [], [], [], frozenset())
+        A.id = 0
+        B = Class("B", [], [], None, [], [], [], frozenset())
+        B.id = 1
+        self.assertEquals(None, A.findPathToBaseClass(B))
+
+    def testFindPathToBaseClassSelf(self):
+        A = Class("A", [], [], None, [], [], [], frozenset())
+        A.id = 0
+        self.assertEquals([], A.findPathToBaseClass(A))
+
+    def testFindPathToBaseClassShort(self):
+        A = Class("A", [], [], None, [], [], [], frozenset())
+        A.id = 0
+        B = Class("B", [], [ClassType(A)], None, [], [], [], frozenset())
+        B.id = 1
+        self.assertEquals([A], B.findPathToBaseClass(A))
+
+    def testFindPathToBaseClassLong(self):
+        A = Class("A", [], [], None, [], [], [], frozenset())
+        A.id = 0
+        B = Class("B", [], [ClassType(A)], None, [], [], [], frozenset())
+        B.id = 1
+        C = Class("C", [], [ClassType(B)], None, [], [], [], frozenset())
+        C.id = 2
+        self.assertEquals([B, A], C.findPathToBaseClass(A))

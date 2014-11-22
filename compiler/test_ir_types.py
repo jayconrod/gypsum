@@ -62,3 +62,21 @@ class TestIrTypes(unittest.TestCase):
         self.assertEquals(a, VariableType(T).substitute([T], [a]))
         self.assertEquals(ClassType(self.P, (a, b)),
                           p.substitute(self.P.typeParameters, [a, b]))
+
+    def testSubstituteForBaseClass(self):
+        T = TypeParameter("T", getRootClassType(), getNothingClassType(), frozenset())
+        T.id = 0
+        A = Class("A", [T], [getRootClassType()], None, [], [], [], frozenset())
+        A.id = 0
+        U = TypeParameter("U", getRootClassType(), getNothingClassType(), frozenset())
+        U.id = 1
+        B = Class("B", [U], [ClassType(A, (VariableType(U),))], None, [], [], [], frozenset())
+        B.id = 1
+        C = Class("C", [], [getRootClassType()], None, [], [], [], frozenset())
+        C.id = 2
+        D = Class("D", [], [ClassType(B, (ClassType(C),))], None, [], [], [], frozenset())
+        D.id = 3
+        V = TypeParameter("V", ClassType(D), getNothingClassType(), frozenset())
+        V.id = 2
+        self.assertEquals(ClassType(A, (ClassType(C),)),
+                          VariableType(V).substituteForBaseClass(A))

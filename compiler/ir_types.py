@@ -154,6 +154,12 @@ class ObjectType(Type):
     def size(self):
         return WORDSIZE
 
+    def substituteForBaseClass(self, base):
+        """Returns a base type of the corresponding class with type arguments substituted
+        appropriately. For example, if we have class A[T] and class B <: A[C], then if we
+        call this method on B, we will get A[C]."""
+        raise NotImplementedError
+
 
 class ClassType(ObjectType):
     propertyNames = Type.propertyNames + ("clas", "typeArguments")
@@ -201,6 +207,15 @@ class ClassType(ObjectType):
                                for arg in self.typeArguments),
                          self.flags)
 
+    def substituteForBaseClass(self, base):
+        path = self.clas.findPathToBaseClass(base)
+        assert path is not None
+        ty = self
+        for clas in path:
+            sty = next(sty for sty in ty.clas.supertypes if sty.clas is clas)
+            ty = sty.substitute(ty.clas.typeParameters, ty.typeArguments)
+        return ty
+
     def getTypeArguments(self):
         return self.typeArguments
 
@@ -246,6 +261,9 @@ class VariableType(ObjectType):
     def isNullable(self):
         return self.typeParameter.upperBound is not None and \
                self.typeParameter.upperBound.isNullable()
+
+    def substituteForBaseClass(self, base):
+        return self.typeParameter.upperBound.substituteForBaseClass(base)
 
 
 def getClassFromType(ty):

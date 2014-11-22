@@ -759,6 +759,19 @@ class TestTypeAnalysis(unittest.TestCase):
         self.assertEquals(ty, f.returnType)
         self.assertEquals(ty, info.getType(info.ast.definitions[2].body))
 
+    def testCallInheritedMethodWithTypeParameter(self):
+        source = "class A[static T](val: T)\n" + \
+                 "  def get = val\n" + \
+                 "class B <: A[Object]\n" + \
+                 "  def this(val: Object) =\n" + \
+                 "    super(val)\n" + \
+                 "def f(b: B) = b.get"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        ty = getRootClassType()
+        self.assertEquals(ty, f.returnType)
+        self.assertEquals([ty], info.getCallInfo(info.ast.definitions[2].body).typeArguments)
+
     # Tests for usage
     def testUseClassBeforeDefinition(self):
         source = "def f = C\n" + \

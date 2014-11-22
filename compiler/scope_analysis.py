@@ -532,7 +532,7 @@ class Scope(AstNodeVisitor):
 
         Note that this does not add the function to the class's methods or constructors lists.
         """
-        function.clas= clas
+        function.clas = clas
         this = Variable("$this", None, PARAMETER, frozenset())
         function.variables.insert(0, this)
 
@@ -1067,13 +1067,11 @@ class BuiltinScope(Scope):
             for ctor in irClass.constructors:
                 defnInfo = DefnInfo(ctor, irClass.id)
                 self.info.setDefnInfo(ctor, defnInfo)
-                ctor.clas = irClass
         for method in irClass.methods:
             defnInfo = DefnInfo(method, irClass.id)
             self.info.setDefnInfo(method, defnInfo)
             self.bind(method.name, defnInfo)
             self.define(method.name)
-            method.clas = irClass
         for field in irClass.fields:
             defnInfo = DefnInfo(field, irClass.id)
             self.bind(field.name, defnInfo)
