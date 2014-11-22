@@ -53,7 +53,21 @@ Type::Type(Class* clas, Flags flags)
       form_(CLASS_TYPE),
       flags_(flags) {
   ASSERT(length_ == 1);
-  elements_[0] = clas;
+  // The class may not be initialized yet, so we can't check its parameter count.
+  elements_[0].set(this, clas);
+}
+
+
+Type::Type(Class* clas, const vector<Local<Type>>& typeArgs, Flags flags)
+    : Object(TYPE_BLOCK_TYPE),
+      form_(CLASS_TYPE),
+      flags_(flags) {
+  ASSERT(length_ == 1 + typeArgs.size());
+  // The class may not be initialized yet, so we can't check its parameter count.
+  elements_[0].set(this, clas);
+  for (length_t i = 0; i < typeArgs.size(); i++) {
+    elements_[i + 1].set(this, *typeArgs[i]);
+  }
 }
 
 
@@ -62,7 +76,7 @@ Type::Type(TypeParameter* param, Flags flags)
       form_(VARIABLE_TYPE),
       flags_(flags) {
   ASSERT(length_ == 1);
-  elements_[0] = param;
+  elements_[0].set(this, param);
 }
 
 
@@ -73,6 +87,15 @@ Local<Type> Type::create(Heap* heap, Form primitive, Flags flags) {
 
 Local<Type> Type::create(Heap* heap, const Handle<Class>& clas, Flags flags) {
   RETRY_WITH_GC(heap, return Local<Type>(new(heap, 1) Type(*clas, flags)));
+}
+
+
+Local<Type> Type::create(Heap* heap,
+                         const Handle<Class>& clas,
+                         const vector<Local<Type>>& typeArgs,
+                         Flags flags) {
+  RETRY_WITH_GC(heap, return Local<Type>(
+      new(heap, 1 + typeArgs.size()) Type(*clas, typeArgs, flags)));
 }
 
 
@@ -195,7 +218,7 @@ bool Type::isClass() const {
 
 Class* Type::asClass() const {
   ASSERT(isClass() && length() > 0);
-  return block_cast<Class>(elements_[0]);
+  return block_cast<Class>(elements_[0].get());
 }
 
 
@@ -206,7 +229,7 @@ bool Type::isVariable() const {
 
 TypeParameter* Type::asVariable() const {
   ASSERT(isVariable() && length() > 0);
-  return block_cast<TypeParameter>(elements_[0]);
+  return block_cast<TypeParameter>(elements_[0].get());
 }
 
 

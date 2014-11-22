@@ -22,6 +22,7 @@ namespace codeswitch {
 namespace internal {
 
 #define CLASS_POINTER_LIST(F) \
+  F(Class, typeParameters_)   \
   F(Class, supertype_)        \
   F(Class, fields_)           \
   F(Class, constructors_)     \
@@ -41,6 +42,7 @@ void* Class::operator new (size_t, Heap* heap) {
 
 
 Class::Class(u32 flags,
+             TaggedArray<TypeParameter>* typeParameters,
              Type* supertype,
              BlockArray<Field>* fields,
              IdArray* constructors,
@@ -51,6 +53,7 @@ Class::Class(u32 flags,
              length_t lengthFieldIndex)
     : Block(CLASS_BLOCK_TYPE),
       flags_(flags),
+      typeParameters_(this, typeParameters),
       supertype_(this, supertype),
       fields_(this, fields),
       constructors_(this, constructors),
@@ -65,6 +68,7 @@ Class::Class(u32 flags,
 
 Local<Class> Class::create(Heap* heap,
                            u32 flags,
+                           const Handle<TaggedArray<TypeParameter>>& typeParameters,
                            const Handle<Type>& supertype,
                            const Handle<BlockArray<Field>>& fields,
                            const Handle<IdArray>& constructors,
@@ -74,7 +78,7 @@ Local<Class> Class::create(Heap* heap,
                            const Handle<Type>& elementType,
                            length_t lengthFieldIndex) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
-      flags, *supertype, *fields, *constructors, *methods,
+      flags, *typeParameters, *supertype, *fields, *constructors, *methods,
       package.getOrNull(), instanceMeta.getOrNull(),
       elementType.getOrNull(), lengthFieldIndex)));
 }
@@ -82,8 +86,23 @@ Local<Class> Class::create(Heap* heap,
 
 Local<Class> Class::create(Heap* heap) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
-      0, nullptr, nullptr, nullptr, nullptr,
+      0, nullptr, nullptr, nullptr, nullptr, nullptr,
       nullptr, nullptr, nullptr, kIndexNotSet)));
+}
+
+
+TypeParameter* Class::typeParameter(length_t index) const {
+  auto paramTag = typeParameters()->get(index);
+  if (paramTag.isNumber()) {
+    return package()->getTypeParameter(paramTag.getNumber());
+  } else {
+    return paramTag.getPointer();
+  }
+}
+
+
+length_t Class::typeParameterCount() const {
+  return typeParameters()->length();
 }
 
 

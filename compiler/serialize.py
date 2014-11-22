@@ -50,7 +50,7 @@ class Serializer(object):
         self.outFile.write(struct.pack("<Ihhqiiiii",
                                        0x676b7073,   # magic number
                                        0,            # major version
-                                       8,            # minor version
+                                       9,            # minor version
                                        0,            # flags
                                        len(self.package.strings),
                                        len(self.package.functions),
@@ -107,16 +107,11 @@ class Serializer(object):
 
     def writeClass(self, clas):
         self.writeFlags(clas.flags)
+        self.writeIdList(clas.typeParameters)
         self.writeType(clas.supertypes[0])
-        self.writeVbn(len(clas.fields))
-        for field in clas.fields:
-            self.writeField(field)
-        self.writeVbn(len(clas.constructors))
-        for ctor in clas.constructors:
-            self.writeVbn(ctor.id)
-        self.writeVbn(len(clas.methods))
-        for method in clas.methods:
-            self.writeVbn(method.id)
+        self.writeList(self.writeField, clas.fields)
+        self.writeIdList(clas.constructors)
+        self.writeIdList(clas.methods)
 
     def writeField(self, field):
         self.writeFlags(field.flags)
@@ -160,10 +155,15 @@ class Serializer(object):
         self.writeVbn(bits)
         if id is not None:
             self.writeVbn(id)
+        if isinstance(type, ClassType):
+            self.writeList(self.writeType, type.typeArguments)
 
     def writeFlags(self, flags):
         bits = flagSetToFlagBits(flags)
         self.outFile.write(struct.pack("<I", bits))
+
+    def writeIdList(self, list):
+        self.writeList(lambda elem: self.writeVbn(elem.id), list)
 
     def writeList(self, writer, list):
         self.writeVbn(len(list))

@@ -25,6 +25,7 @@ class Package;
 template <class T>
 class TaggedArray;
 class Type;
+class TypeParameter;
 
 class Class: public Block {
  public:
@@ -32,6 +33,7 @@ class Class: public Block {
 
   void* operator new(size_t, Heap* heap);
   Class(u32 flags,
+        TaggedArray<TypeParameter>* typeParameters,
         Type* supertype,
         BlockArray<Field>* fields,
         IdArray* constructors,
@@ -43,6 +45,7 @@ class Class: public Block {
   static Local<Class> create(Heap* heap);
   static Local<Class> create(Heap* heap,
                              u32 flags,
+                             const Handle<TaggedArray<TypeParameter>>& typeParameters,
                              const Handle<Type>& supertype,
                              const Handle<BlockArray<Field>>& fields,
                              const Handle<IdArray>& constructors,
@@ -59,6 +62,13 @@ class Class: public Block {
 
   u32 flags() const { return flags_; }
   void setFlags(u32 flags) { flags_ = flags; }
+
+  TaggedArray<TypeParameter>* typeParameters() const { return typeParameters_.get(); }
+  void setTypeParameters(TaggedArray<TypeParameter>* newTypeParameters) {
+    typeParameters_.set(this, newTypeParameters);
+  }
+  TypeParameter* typeParameter(length_t index) const;
+  length_t typeParameterCount() const;
 
   Type* supertype() const { return supertype_.get(); }
   void setSupertype(Type* newSupertype) { supertype_.set(this, newSupertype); }
@@ -103,6 +113,7 @@ class Class: public Block {
 
   DECLARE_POINTER_MAP()
   u32 flags_;
+  Ptr<TaggedArray<TypeParameter>> typeParameters_;
   Ptr<Type> supertype_;
   Ptr<BlockArray<Field>> fields_;
   Ptr<IdArray> constructors_;

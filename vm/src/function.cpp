@@ -188,6 +188,12 @@ struct FrameState {
     typeArgs.clear();
   }
 
+  void popTypeArgs(length_t count, vector<Local<Type>>* poppedArgs) {
+    if (poppedArgs != nullptr)
+      poppedArgs->assign(typeArgs.end() - count, typeArgs.end());
+    typeArgs.erase(typeArgs.end() - count, typeArgs.end());
+  }
+
   Local<Type> substituteReturnType(const Local<Function>& callee) {
     ASSERT(typeArgs.size() == callee->typeParameterCount());
     vector<pair<Local<TypeParameter>, Local<Type>>> typeBindings;
@@ -473,7 +479,10 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           } else {
             clas = handle(package->getClass(classId));
           }
-          currentMap.pushTypeArg(Type::create(heap, clas));
+          vector<Local<Type>> typeArgs;
+          currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
+          auto type = Type::create(heap, clas, typeArgs);
+          currentMap.pushTypeArg(type);
           break;
         }
 
