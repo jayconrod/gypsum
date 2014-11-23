@@ -146,7 +146,12 @@ class SubtypeVisitor(TypeVisitorCommon):
         if len(node.supertypes) == 0:
             irClass.supertypes = [getRootClassType()]
         else:
-            irClass.supertypes = map(self.visit, node.supertypes)
+            def visitSupertype(sty):
+                ty = self.visit(sty)
+                if ty.isNullable():
+                    raise TypeException("%s: supertype may not be nullable" % node.name)
+                return ty
+            irClass.supertypes = map(visitSupertype, node.supertypes)
         for member in node.members:
             self.visit(member)
 

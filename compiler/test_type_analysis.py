@@ -506,6 +506,10 @@ class TestTypeAnalysis(unittest.TestCase):
         barClass = info.package.findClass(name="Bar")
         self.assertEquals([ClassType(fooClass, ())], barClass.supertypes)
 
+    def testNullableSupertype(self):
+        source = "class Foo <: Object?"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     def testCallWithSubtype(self):
         source = "class Foo\n" + \
                  "class Bar <: Foo\n" + \
