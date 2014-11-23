@@ -35,8 +35,12 @@ TEST(ClassTypeEquals) {
   HandleScope handleScope(&vm);
   AllowAllocationScope allowAllocation(vm.heap(), true);
 
-  auto S = TypeParameter::create(vm.heap());
-  auto T = TypeParameter::create(vm.heap());
+  auto S = TypeParameter::create(vm.heap(), 0,
+                                 handle(Type::rootClassType(vm.roots())),
+                                 handle(Type::nothingType(vm.roots())));
+  auto T = TypeParameter::create(vm.heap(), 0,
+                                 handle(Type::rootClassType(vm.roots())),
+                                 handle(Type::nothingType(vm.roots())));
   auto C = Class::create(vm.heap());
   auto typeParameters = TaggedArray<TypeParameter>::create(vm.heap(), 1);
   typeParameters->set(0, tag(*S));
@@ -62,9 +66,13 @@ TEST(VariableTypeEquals) {
   HandleScope handleScope(&vm);
   AllowAllocationScope allowAllocation(vm.heap(), true);
 
-  auto S = TypeParameter::create(vm.heap());
+  auto S = TypeParameter::create(vm.heap(), 0,
+                                 handle(Type::rootClassType(vm.roots())),
+                                 handle(Type::nothingType(vm.roots())));
   auto SType = Type::create(vm.heap(), S);
-  auto T = TypeParameter::create(vm.heap());
+  auto T = TypeParameter::create(vm.heap(), 0,
+                                 handle(Type::rootClassType(vm.roots())),
+                                 handle(Type::nothingType(vm.roots())));
   auto TType = Type::create(vm.heap(), T);
 
   ASSERT_TRUE(SType->equals(*SType));
@@ -78,9 +86,13 @@ TEST(SubstituteTypeParameter) {
   HandleScope handleScope(&vm);
   AllowAllocationScope allowAllocation(vm.heap(), true);
 
-  auto S = TypeParameter::create(vm.heap());
+  auto S = TypeParameter::create(vm.heap(), 0,
+                                 handle(Type::rootClassType(vm.roots())),
+                                 handle(Type::nothingType(vm.roots())));
   auto SType = Type::create(vm.heap(), S);
-  auto T = TypeParameter::create(vm.heap());
+  auto T = TypeParameter::create(vm.heap(), 0,
+                                 handle(Type::rootClassType(vm.roots())),
+                                 handle(Type::nothingType(vm.roots())));
   auto TType = Type::create(vm.heap(), T);
   vector<pair<Local<TypeParameter>, Local<Type>>> bindings { { S, TType } };
 
@@ -94,7 +106,9 @@ TEST(SubstituteClassWithTypeParameter) {
   HandleScope handleScope(&vm);
   AllowAllocationScope allowAllocation(vm.heap(), true);
 
-  auto S = TypeParameter::create(vm.heap());
+  auto S = TypeParameter::create(vm.heap(), 0,
+                                 handle(Type::rootClassType(vm.roots())),
+                                 handle(Type::nothingType(vm.roots())));
   auto C = Class::create(vm.heap());
   auto typeParameters = TaggedArray<TypeParameter>::create(vm.heap(), 1);
   typeParameters->set(0, tag(*S));
@@ -102,7 +116,9 @@ TEST(SubstituteClassWithTypeParameter) {
   vector<Local<Type>> CTypeArgs { Type::create(vm.heap(), S) };
   auto CType = Type::create(vm.heap(), C, CTypeArgs);
 
-  auto T = TypeParameter::create(vm.heap());
+  auto T = TypeParameter::create(vm.heap(), 0,
+                                 handle(Type::rootClassType(vm.roots())),
+                                 handle(Type::nothingType(vm.roots())));
   auto TType = Type::create(vm.heap(), T);
   vector<pair<Local<TypeParameter>, Local<Type>>> bindings { { S, TType } };
   vector<Local<Type>> expectedTypeArgs { TType };
@@ -118,7 +134,9 @@ TEST(SubstituteForBaseClass) {
   AllowAllocationScope allowAllocation(vm.heap(), true);
 
   // class A[T]
-  auto T = TypeParameter::create(vm.heap());
+  auto T = TypeParameter::create(vm.heap(), 0,
+                                 handle(Type::rootClassType(vm.roots())),
+                                 handle(Type::nothingType(vm.roots())));
   auto ATypeParams = TaggedArray<TypeParameter>::create(vm.heap(), 1);
   ATypeParams->set(0, tag(*T));
   auto A = Class::create(vm.heap());
@@ -126,7 +144,9 @@ TEST(SubstituteForBaseClass) {
   A->setSupertype(Type::rootClassType(vm.roots()));
 
   // class B[U] <: A[U]
-  auto U = TypeParameter::create(vm.heap());
+  auto U = TypeParameter::create(vm.heap(), 0,
+                                 handle(Type::rootClassType(vm.roots())),
+                                 handle(Type::nothingType(vm.roots())));
   auto BTypeParams = TaggedArray<TypeParameter>::create(vm.heap(), 1);
   BTypeParams->set(0, tag(*U));
   auto B = Class::create(vm.heap());
