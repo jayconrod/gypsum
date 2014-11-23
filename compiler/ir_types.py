@@ -95,7 +95,7 @@ class Type(Data):
         return None
 
     def isNullable(self):
-        return NULLABLE_TYPE_FLAG in self.flags
+        raise NotImplementedError
 
 
 class SimpleType(Type):
@@ -131,6 +131,10 @@ class SimpleType(Type):
 
     def getTypeArguments(self):
         return ()
+
+    def isNullable(self):
+        assert NULLABLE_TYPE_FLAG not in self.flags
+        return False
 
 
 NoType = SimpleType("_", None)
