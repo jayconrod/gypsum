@@ -776,6 +776,14 @@ class TestTypeAnalysis(unittest.TestCase):
         self.assertEquals(ty, f.returnType)
         self.assertEquals([ty], info.getCallInfo(info.ast.definitions[2].body).typeArguments)
 
+    def testTypeParameterWithReversedBounds(self):
+        source = "class A[static T <: Nothing >: Object]"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testTypeParameterWithUnrelatedBound(self):
+        source = "class A[static S, static T, static U <: S >: T]"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     # Tests for usage
     def testUseClassBeforeDefinition(self):
         source = "def f = C\n" + \

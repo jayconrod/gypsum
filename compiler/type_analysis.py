@@ -166,6 +166,8 @@ class SubtypeVisitor(TypeVisitorCommon):
         irParam.lowerBound = self.visit(node.lowerBound) \
                              if node.lowerBound is not None \
                              else getNothingClassType()
+        if not irParam.lowerBound.isSubtypeOf(irParam.upperBound):
+            raise TypeException("%s: lower bound is not subtype of upper bound" % node.name)
 
     def visitAstBlockExpression(self, node):
         self.visitChildren(node)
