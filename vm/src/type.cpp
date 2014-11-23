@@ -195,8 +195,27 @@ Type* Type::rootClassType(Roots* roots) {
 }
 
 
+Type* Type::nothingType(Roots* roots) {
+  return roots->getBuiltinType(BUILTIN_NOTHING_CLASS_ID);
+}
+
+
 Type* Type::nullType(Roots* roots) {
   return roots->nullType();
+}
+
+
+length_t Type::typeArgumentCount() const {
+  ASSERT(isClass());
+  return length() - 1;
+}
+
+
+Type* Type::typeArgument(length_t index) const {
+  ASSERT(isClass());
+  auto typeArgIndex = index + 1;
+  ASSERT(typeArgIndex < length());
+  return block_cast<Type>(elements_[typeArgIndex].get());
 }
 
 
@@ -322,15 +341,25 @@ bool Type::isSubtypeOf(Type* other) const {
 bool Type::equals(Type* other) const {
   if (form() != other->form() || flags() != other->flags())
     return false;
-  if (isClass()) {
-    return asClass() == other->asClass();
-  } else {
+  if (isPrimitive()) {
     return true;
+  } else if (isClass()) {
+    if (asClass() != other->asClass())
+      return false;
+    ASSERT(typeArgumentCount() == other->typeArgumentCount());
+    for (length_t i = 0; i < typeArgumentCount(); i++) {
+      if (!typeArgument(i)->equals(other->typeArgument(i)))
+        return false;
+    }
+    return true;
+  } else {
+    ASSERT(isVariable());
+    return asVariable() == other->asVariable();
   }
 }
 
 
-Local<Type> Type::substitute(const Local<Type>& type,
+Local<Type> Type::substitute(const Handle<Type>& type,
                              const vector<pair<Local<TypeParameter>, Local<Type>>>& bindings) {
   if (type->isVariable()) {
     Local<TypeParameter> param(type->asVariable());
@@ -340,9 +369,47 @@ Local<Type> Type::substitute(const Local<Type>& type,
       }
     }
   } else if (type->isClass()) {
-    // TODO: handle type parameters in class types
+    vector<Local<Type>> newTypeArgs;
+    newTypeArgs.reserve(type->typeArgumentCount());
+    bool changed = false;
+    for (length_t i = 0; i < type->typeArgumentCount(); i++) {
+      auto oldArg = handle(type->typeArgument(i));
+      auto newArg = substitute(oldArg, bindings);
+      changed |= *oldArg != *newArg;
+      newTypeArgs.push_back(newArg);
+    }
+    if (!changed)
+      return type;
+    return create(type->getHeap(), handle(type->asClass()), newTypeArgs);
   }
   return type;
+}
+
+
+Local<Type> Type::substituteForBaseClass(const Handle<Type>& type,
+                                         const Handle<Class>& clas) {
+  ASSERT(type->isObject());
+  Local<Type> currentType(type);
+  while (currentType->isVariable()) {
+    currentType = handle(currentType->asVariable()->upperBound());
+  }
+  ASSERT(currentType->isClass());
+  ASSERT(currentType->asClass()->isSubclassOf(*clas));
+
+  while (currentType->asClass() != *clas) {
+    auto currentClass = handle(currentType->asClass());
+    ASSERT(currentType->typeArgumentCount() == currentClass->typeParameterCount());
+    auto count = currentType->typeArgumentCount();
+    vector<pair<Local<TypeParameter>, Local<Type>>> bindings;
+    bindings.reserve(count);
+    for (length_t i = 0; i < currentType->typeArgumentCount(); i++) {
+      pair<Local<TypeParameter>, Local<Type>> binding(handle(currentClass->typeParameter(i)),
+                                                      handle(currentType->typeArgument(i)));
+      bindings.push_back(binding);
+    }
+    currentType = Type::substitute(handle(currentClass->supertype()), bindings);
+  }
+  return currentType;
 }
 
 

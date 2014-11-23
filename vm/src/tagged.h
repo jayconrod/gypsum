@@ -63,6 +63,12 @@ std::ostream& operator << (std::ostream& os, const Tagged<T>& tagged) {
   return os << (tagged.isNumber() ? tagged.getNumber() : brief(tagged.getPointer()));
 }
 
+
+template <class T>
+Tagged<T> tag(T* pointer) {
+  return Tagged<T>(pointer);
+}
+
 }
 }
 

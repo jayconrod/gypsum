@@ -85,9 +85,12 @@ class Type: public Object {
   static Type* f64Type(Roots* roots);
   static Type* wordType(Roots* roots);
   static Type* rootClassType(Roots* roots);
+  static Type* nothingType(Roots* roots);
   static Type* nullType(Roots* roots);
 
   length_t length() const { return elementsLength(); }
+  length_t typeArgumentCount() const;
+  Type* typeArgument(length_t index) const;
 
   Form form() const { return form_; }
   Flags flags() const { return flags_; }
@@ -113,9 +116,11 @@ class Type: public Object {
 
   bool isSubtypeOf(Type* other) const;
   bool equals(Type* other) const;
-  static Local<Type> substitute(const Local<Type>& type,
+  static Local<Type> substitute(const Handle<Type>& type,
                                 const std::vector<std::pair<Local<TypeParameter>,
                                                             Local<Type>>>& bindings);
+  static Local<Type> substituteForBaseClass(const Handle<Type>& type,
+                                            const Handle<Class>& baseClass);
 
  private:
   friend class Roots;
