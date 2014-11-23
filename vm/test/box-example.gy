@@ -1,0 +1,35 @@
+// Copyright 2014 Jay Conrod. All rights reserved.
+
+// This file is part of CodeSwitch. Use of this source code is governed by
+// the 3-clause BSD license that can be found in the LICENSE.txt file.
+
+
+class Box[static T <: Object >: Nothing](private value: T)
+  def get = value
+
+  def set(new-value: T) =
+    value = new-value
+    {}
+
+  def contains-same-value[static S](other: Box[S]) = value === other.value
+
+
+def get-box-value[static T](box: Box[T]) = box.get
+
+def set-box-value[static T](box: Box[T], new-value: T) = box.set(new-value)
+
+
+def main =
+  var original-string = "original string"
+  var replacement-string = "replacement string"
+
+  var box1 = Box[String](original-string)
+  var box2 = Box[Object](original-string)
+
+  if (!box1.contains-same-value[Object](box2))
+    throw Exception
+
+  set-box-value[String](box1, replacement-string)
+  if (get-box-value[String](box1) !== replacement-string)
+    throw Exception
+  0
