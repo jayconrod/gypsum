@@ -1286,6 +1286,27 @@ class TestCompiler(unittest.TestCase):
           parameterTypes=[Tty])
         self.assertEquals(expected, idOuter)
 
+    def testConstructorCallInitializerInClassWithStaticTypeArgs(self):
+        source = "class C[static T]"
+        package = self.compileFromSource(source)
+        C = package.findClass(name="C")
+        T = package.findTypeParameter(name="T")
+        Ctype = ClassType(C, (VariableType(T),))
+        expectedCtor = self.makeSimpleFunction("$constructor", UnitType, [[
+            ldlocal(0),
+            callg(BUILTIN_ROOT_CLASS_CTOR_ID),
+            drop(),
+            ldlocal(0),
+            tyv(T.id),
+            callg(C.initializer.id),
+            drop(),
+            unit(),
+            ret()]],
+          variables=[Variable("$this", Ctype, PARAMETER, frozenset())],
+          typeParameters=[T],
+          parameterTypes=[Ctype])
+        self.assertEquals(expectedCtor, C.constructors[0])
+
     def testCallClassMethodsWithStaticTypeArgs(self):
         source = "class C\n" + \
                  "class Box[static T](val: T)\n" + \

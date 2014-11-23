@@ -113,6 +113,8 @@ class CompileVisitor(AstNodeVisitor):
             irInitializer = self.function.clas.initializer
             if irInitializer is not None:
                 self.loadThis()
+                for typeParam in self.function.typeParameters:
+                    self.buildStaticTypeArgument(VariableType(typeParam))
                 self.callg(irInitializer.id)
                 self.drop()
 
