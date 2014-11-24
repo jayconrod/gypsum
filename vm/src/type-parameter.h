@@ -39,6 +39,8 @@ class TypeParameter: public Block {
   Type* lowerBound() const { return lowerBound_.get(); }
   void setLowerBound(Type* newLowerBound) { lowerBound_.set(this, newLowerBound); }
 
+  bool hasCommonBound(TypeParameter* other) const;
+
  private:
   DECLARE_POINTER_MAP()
 

@@ -64,45 +64,50 @@ def analyzeDeclarations(info):
 
 
 def analyzeInheritance(info):
-    """Construct and analyze graph of inheritance between classes.
+    """Construct and analyze graph of inheritance between classes and type parameters.
 
-    This pass visits and links the class in the AST with their base classes. It constructs
-    an inheritance graph and verifies there are no cycles. Finally, it copies symbol bindings
-    to each class from its bases. At this point, overrides are treated as overloads, since
-    we cannot distinguish between them until after type analysis."""
+    This pass visits classes and type parameters in the AST and links them with their base
+    classes and bounds. It constructs a dependency graph and verifies there are no cycles.
+    It also constructs an inheritance graph for classes only. This is used to copy symbol
+    bindings from each class to its derived classes. At this point, overrides are treated as
+    overloads, since we cannot distinguish between them until after type analysis."""
 
-    # Add edges for inheritance between builtin classes, since these are in the AST.
+    # Create two empty graphs. The inheritance graph is used later for copying symbols. Its
+    # node ids are AST ids. The subtype graph is used to check for cyclic definitions. Its
+    # node ids are IR ids. The inheritance graph is a subgraph (with different nodes) of the
+    # subtype graph; it contains only classes while the subtype graph contains classes and
+    # type parameters. Edges in the subtype graph represent any dependency (including
+    # inheritance, type arguments, type parameters). Edges in the inheritance graph only
+    # represent inheritance.
     inheritanceGraph = Graph(info.classInfo.keys())
-    def handleBuiltinInheritance(name, clas):
-        if not isinstance(clas, Class):
-            return
-        assert len(clas.supertypes) <= 1
-        if len(clas.supertypes) == 1:
-            classInfo = info.getClassInfo(clas)
-            irSuperclass = clas.supertypes[0].clas
-            classInfo.superclassInfo = info.getClassInfo(irSuperclass)
-            inheritanceGraph.addEdge(clas.id, irSuperclass.id)
+    subtypeGraph = Graph()
+
+    # Add edges for builtin classes. Still need to track these, even though they aren't in AST.
+    def handleBuiltinInheritance(name, irDefn):
+        if isinstance(irDefn, Class):
+            assert len(irDefn.supertypes) <= 1
+            if len(irDefn.supertypes) == 1:
+                classInfo = info.getClassInfo(irDefn)
+                irSuperclass = irDefn.supertypes[0].clas
+                classInfo.superclassInfo = info.getClassInfo(irSuperclass)
+                inheritanceGraph.addEdge(irDefn.id, irSuperclass.id)
+                subtypeGraph.addEdge(irDefn.id, irSuperclass.id)
+        elif isinstance(irDefn, TypeParameter):
+            raise NotImplementedError
     registerBuiltins(handleBuiltinInheritance)
 
-    # Populate the graph by traversing the AST.
-    visitor = InheritanceVisitor(info.globalScope, inheritanceGraph)
+    # Populate the rest of the graph by traversing the AST.
+    visitor = InheritanceVisitor(info.globalScope, inheritanceGraph, subtypeGraph)
     visitor.visitChildren(info.ast)
 
     # Check for cycles.
-    if inheritanceGraph.isCyclic():
+    if subtypeGraph.isCyclic():
         raise ScopeException("inheritance cycle detected")
 
     # Copy bindings from superclasses to subclasses. This must be done in topological order
     # to ensure we don't miss anything, i.e., if S <: T, we must ensure all bindings have been
     # copied to T before copying from T to S. Builtin classes are already flattened, so this
     # is not necessary for them.
-    def bind(scope, name, defnInfo):
-        if scope.isBound(name) and \
-           not scope.getDefinition(name).isOverloadable(defnInfo):
-            raise ScopeException("%s: conflicts with inherited definition" % name)
-        scope.bind(name, defnInfo)
-        scope.define(name)
-
     topologicalClassIds = inheritanceGraph.reverseEdges().topologicalSort()
     for classId in topologicalClassIds:
         if isBuiltinId(classId):
@@ -115,7 +120,12 @@ def analyzeInheritance(info):
         for name, defnInfo in superclassScope.getBindings():
             if defnInfo.inheritanceDepth == NOT_HERITABLE:
                 continue
-            bind(scope, name, defnInfo.inherit(scope.scopeId))
+            inheritedDefnInfo = defnInfo.inherit(scope.scopeId)
+            if scope.isBound(name) and \
+               not scope.getDefinition(name).isOverloadable(inheritedDefnInfo):
+                raise ScopeException("%s: conflicts with inherited definition" % name)
+            scope.bind(name, inheritedDefnInfo)
+            scope.define(name)
 
 
 def convertClosures(info):
@@ -360,9 +370,10 @@ class NameInfo(object):
         """Determines which overloaded or overriding function should be called, based on
         argument types.
 
-        This is safe to call on any NameInfo, even if it doesn't refer to a function. Returns
-        DefnInfo if there is exactly one match. Raises ScopeException if there zero or
-        multiple matches."""
+        This is safe to call on any NameInfo, even if it doesn't refer to a function. If there
+        is exactly one match, returns (DefnInfo, list(Type), list(Type)) containing the matched
+        definition, the full list of type arguments, and the full list of argument types. If
+        there are zero or multiple matches, raises ScopeException."""
         self.resolveOverrides()
         candidate = None
         for defnInfo in self.overloads:
@@ -370,29 +381,29 @@ class NameInfo(object):
             if isinstance(irDefn, Function) and irDefn.id in self.overrides:
                 continue
 
-            isNonFunction = not isinstance(irDefn, Function) and \
-                            len(typeArgs) == 0 and len(argTypes) == 0
-            isFunction = not receiverIsExplicit and \
-                         isinstance(irDefn, Function) and \
-                         not irDefn.isMethod() and \
-                         irDefn.canCallWith(typeArgs, argTypes)
-            isImplicitMethod = not receiverIsExplicit and \
-                               isinstance(irDefn, Function) and \
-                               irDefn.isMethod() and \
-                               irDefn.canCallWith(typeArgs, [receiverType] + argTypes)
-            isExplicitMethod = receiverIsExplicit and \
-                               isinstance(irDefn, Function) and \
-                               irDefn.isMethod() and \
-                               irDefn.canCallWith(typeArgs, [receiverType] + argTypes)
+            if not isinstance(irDefn, Function) and \
+               len(typeArgs) == 0 and len(argTypes) == 0:
+                # Non-function
+                typesAndArgs = (None, None)
+                match = True
+            elif not receiverIsExplicit and \
+                 isinstance(irDefn, Function) and \
+                 not irDefn.isMethod():
+                # Regular function
+                typesAndArgs = getAllArgumentTypes(irDefn, None, typeArgs, argTypes)
+                match = typesAndArgs is not None
+            elif isinstance(irDefn, Function) and \
+                 irDefn.isMethod():
+                # Method call
+                typesAndArgs = getAllArgumentTypes(irDefn, receiverType, typeArgs, argTypes)
+                match = typesAndArgs is not None
 
-            if isNonFunction or \
-               isFunction or \
-               isImplicitMethod or \
-               isExplicitMethod:
+            if match:
                 if candidate is not None:
                     raise TypeException("ambiguous call to overloaded function: %s" % \
                                         self.name)
-                candidate = defnInfo
+                allTypeArgs, allArgTypes = typesAndArgs
+                candidate = (defnInfo, allTypeArgs, allArgTypes)
 
         if candidate is None:
             raise TypeException("could not find compatible definition: %s" % self.name)
@@ -478,14 +489,26 @@ class Scope(AstNodeVisitor):
         """Creates an IR definition and adds it to the package."""
         raise NotImplementedError
 
+    def getImplicitTypeParameters(self):
+        """Returns a list of type parameters implied by this scope and outer scopes. These
+        can be used when declaring or calling functions or classes. Outer-most type parameters
+        are listed first."""
+        if self.parent is None:
+            # No type parameters implied by global scope
+            return []
+        else:
+            return list(self.getIrDefn().typeParameters)
+
     def createIrClassDefn(self, astDefn):
         """Convenience method for creating a class definition."""
+        implicitTypeParams = self.getImplicitTypeParameters()
         flags = getFlagsFromAstDefn(astDefn, None)
         checkFlags(flags, frozenset())
-        irDefn = Class(astDefn.name, None, None, None, [], [], [], flags)
+        irDefn = Class(astDefn.name, implicitTypeParams, None, None, [], [], [], flags)
         self.info.package.addClass(irDefn)
 
-        irInitializer = Function("$initializer", None, [], None, [], None, frozenset())
+        irInitializer = Function("$initializer", list(implicitTypeParams),
+                                 [], None, [], None, frozenset())
         irInitializer.astDefn = astDefn
         self.makeMethod(irInitializer, irDefn)
         self.info.package.addFunction(irInitializer)
@@ -494,7 +517,8 @@ class Scope(AstNodeVisitor):
         if astDefn.hasConstructors():
             irDefaultCtor = None
         else:
-            irDefaultCtor = Function("$constructor", None, [], None, [], None, frozenset())
+            irDefaultCtor = Function("$constructor", list(implicitTypeParams),
+                                     [], None, [], None, frozenset())
             irDefaultCtor.astDefn = astDefn
             self.makeMethod(irDefaultCtor, irDefn)
             self.info.package.addFunction(irDefaultCtor)
@@ -508,7 +532,7 @@ class Scope(AstNodeVisitor):
 
         Note that this does not add the function to the class's methods or constructors lists.
         """
-        function.clas= clas
+        function.clas = clas
         this = Variable("$this", None, PARAMETER, frozenset())
         function.variables.insert(0, this)
 
@@ -518,7 +542,7 @@ class Scope(AstNodeVisitor):
         This is only false for local variables in function scopes."""
         raise NotImplementedError
 
-    def lookup(self, name, localOnly, mayBeAssignment):
+    def lookup(self, name, localOnly=False, mayBeAssignment=False, ignoreDefnOrder=False):
         """Resolves a reference to a symbol, possibly in a parent scope.
 
         Returns NameInfo. For overloaded symbols, there may be several functions in there."""
@@ -532,7 +556,9 @@ class Scope(AstNodeVisitor):
                 return self.lookup(name[:-1], localOnly, False)
             else:
                 raise ScopeException("%s: not found" % name)
-        if not defnScope.isDefined(name) and self.isLocalWithin(defnScope):
+        if not ignoreDefnOrder and \
+           not defnScope.isDefined(name) and \
+           self.isLocalWithin(defnScope):
             raise ScopeException("%s: used before being defined" % name)
         return defnScope.bindings[name]
 
@@ -603,6 +629,11 @@ class Scope(AstNodeVisitor):
         while scope != defnScope and scope.isLocal():
             scope = scope.parent
         return scope
+
+    def findEnclosingClass(self):
+        """Returns the IR class enclosing this scope, if there is one. If this is a class scope,
+        this will return the class itself."""
+        raise NotImplementedError
 
     def capture(self, useInfo):
         """Makes the named non-local value defined in defnScope accessible in this scope.
@@ -716,7 +747,8 @@ class GlobalScope(Scope):
             self.info.package.addGlobal(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
             checkFlags(flags, frozenset())
-            irDefn = Function(astDefn.name, None, [], None, [], None, flags)
+            irDefn = Function(astDefn.name, None, self.getImplicitTypeParameters(),
+                              None, [], None, flags)
             self.info.package.addFunction(irDefn)
             if astDefn.name == "main":
                 assert self.info.package.entryFunction == -1
@@ -729,6 +761,9 @@ class GlobalScope(Scope):
 
     def isDefinedAutomatically(self, astDefn):
         return True
+
+    def findEnclosingClass(self):
+        return None
 
     def captureScopeContext(self):
         raise NotImplementedError("global scope does not need a context")
@@ -799,7 +834,8 @@ class FunctionScope(Scope):
             irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
             checkFlags(flags, frozenset())
-            irDefn = Function(astDefn.name, None, [], None, [], None, flags)
+            implicitTypeParams = self.getImplicitTypeParameters()
+            irDefn = Function(astDefn.name, None, implicitTypeParams, None, [], None, flags)
             self.info.package.addFunction(irDefn)
         elif isinstance(astDefn, AstClassDefinition):
             irDefn = self.createIrClassDefn(astDefn)
@@ -811,17 +847,21 @@ class FunctionScope(Scope):
         return isinstance(astDefn, AstClassDefinition) or \
                isinstance(astDefn, AstFunctionDefinition)
 
+    def findEnclosingClass(self):
+        return self.parent.findEnclosingClass()
+
     def captureScopeContext(self):
         contextInfo = self.info.getContextInfo(self.scopeId)
         if contextInfo.irContextClass is not None:
             return
 
         # Create the context class.
-        irContextClass = Class("$context", [], [getRootClassType()], None,
+        implicitTypeParams = self.getImplicitTypeParameters()
+        irContextClass = Class("$context", list(implicitTypeParams), [getRootClassType()], None,
                                [], [], [], frozenset())
         self.info.package.addClass(irContextClass)
         irContextType = ClassType(irContextClass, ())
-        ctor = Function("$contextCtor", UnitType, [], [irContextType],
+        ctor = Function("$contextCtor", UnitType, list(implicitTypeParams), [irContextType],
                         [Variable("$this", irContextType, PARAMETER, frozenset())],
                         [], frozenset())
         ctor.compileHint = CONTEXT_CONSTRUCTOR_HINT
@@ -867,12 +907,14 @@ class FunctionScope(Scope):
             return
 
         # Create a closure class to hold this method and its contexts.
-        irClosureClass = Class("$closure", None, [getRootClassType()], None,
+        implicitTypeParams = self.getImplicitTypeParameters()
+        irClosureClass = Class("$closure", list(implicitTypeParams), [getRootClassType()], None,
                                [], [], [], frozenset())
         self.info.package.addClass(irClosureClass)
         closureInfo.irClosureClass = irClosureClass
         irClosureType = ClassType(irClosureClass)
-        irClosureCtor = Function("$closureCtor", UnitType, [], [irClosureType],
+        irClosureCtor = Function("$closureCtor", UnitType,
+                                 list(implicitTypeParams), [irClosureType],
                                  [Variable("$this", irClosureType, PARAMETER, frozenset())],
                                  None, frozenset())
         irClosureCtor.clas = irClosureClass
@@ -945,20 +987,34 @@ class ClassScope(Scope):
             irScopeDefn.fields.append(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
             checkFlags(flags, frozenset([PROTECTED, PRIVATE]))
+            implicitTypeParams = self.getImplicitTypeParameters()
             if astDefn.name == "this":
-                irDefn = Function("$constructor", None, [], None, [], None, flags)
+                irDefn = Function("$constructor", None, implicitTypeParams,
+                                  None, [], None, flags)
                 irScopeDefn.constructors.append(irDefn)
             else:
-                irDefn = Function(astDefn.name, None, [], None, [], None, flags)
+                irDefn = Function(astDefn.name, None, implicitTypeParams,
+                                  None, [], None, flags)
                 irScopeDefn.methods.append(irDefn)
             # We don't need to call makeMethod here because the inner FunctionScope will do it.
             self.info.package.addFunction(irDefn)
         elif isinstance(astDefn, AstPrimaryConstructorDefinition):
             checkFlags(flags, frozenset([PROTECTED, PRIVATE]))
-            irDefn = Function("$constructor", None, [], None, [], None, flags)
+            implicitTypeParams = self.getImplicitTypeParameters()
+            irDefn = Function("$constructor", None, implicitTypeParams, None, [], None, flags)
             irScopeDefn.constructors.append(irDefn)
             self.makeMethod(irDefn, irScopeDefn)
             self.info.package.addFunction(irDefn)
+        elif isinstance(astDefn, AstTypeParameter):
+            checkFlags(flags, frozenset([STATIC]))
+            if STATIC not in flags:
+                raise NotImplementedError
+            irDefn = TypeParameter(astDefn.name, None, None, flags)
+            self.info.package.addTypeParameter(irDefn)
+            irScopeDefn.typeParameters.append(irDefn)
+            irScopeDefn.initializer.typeParameters.append(irDefn)
+            for ctor in irScopeDefn.constructors:
+                ctor.typeParameters.append(irDefn)
         elif isinstance(astDefn, AstParameter):
             # Parameters in a class scope can only belong to a primary constructor. They are
             # never treated as local variables, so we don't need to create definitions here.
@@ -969,7 +1025,14 @@ class ClassScope(Scope):
         return irDefn
 
     def isDefinedAutomatically(self, astDefn):
-        return True
+        return isinstance(astDefn, AstPrimaryConstructorDefinition) or \
+               isinstance(astDefn, AstFunctionDefinition) or \
+               isinstance(astDefn, AstClassDefinition) or \
+               isinstance(astDefn, AstVariableDefinition) or \
+               isinstance(astDefn, AstVariablePattern)
+
+    def findEnclosingClass(self):
+        return self.getIrDefn()
 
     def captureScopeContext(self):
         pass
@@ -1004,13 +1067,11 @@ class BuiltinScope(Scope):
             for ctor in irClass.constructors:
                 defnInfo = DefnInfo(ctor, irClass.id)
                 self.info.setDefnInfo(ctor, defnInfo)
-                ctor.clas = irClass
         for method in irClass.methods:
             defnInfo = DefnInfo(method, irClass.id)
             self.info.setDefnInfo(method, defnInfo)
             self.bind(method.name, defnInfo)
             self.define(method.name)
-            method.clas = irClass
         for field in irClass.fields:
             defnInfo = DefnInfo(field, irClass.id)
             self.bind(field.name, defnInfo)
@@ -1109,42 +1170,62 @@ class DeclarationVisitor(ScopeVisitor):
 
 
 class InheritanceVisitor(ScopeVisitor):
-    def __init__(self, scope, graph):
+    def __init__(self, scope, inheritanceGraph, subtypeGraph):
         super(InheritanceVisitor, self).__init__(scope)
-        self.graph = graph
+        self.inheritanceGraph = inheritanceGraph
+        self.subtypeGraph = subtypeGraph
 
     def createChildVisitor(self, scope):
-        return InheritanceVisitor(scope, self.graph)
+        return InheritanceVisitor(scope, self.inheritanceGraph, self.subtypeGraph)
 
     def visitAstClassDefinition(self, node):
         classInfo = self.scope.info.getClassInfo(node)
+        irClass = classInfo.irDefn
         if len(node.supertypes) == 0:
             classInfo.superclassInfo = self.scope.info.getClassInfo(BUILTIN_ROOT_CLASS_ID)
-            self.graph.addEdge(node.id, BUILTIN_ROOT_CLASS_ID)
+            self.inheritanceGraph.addEdge(node.id, BUILTIN_ROOT_CLASS_ID)
+            self.subtypeGraph.addEdge(irClass.id, BUILTIN_ROOT_CLASS_ID)
         else:
             if len(node.supertypes) > 1:
                 raise NotImplementedError
             supertype = node.supertypes[0]
-            if not isinstance(supertype, AstClassType):
+            supertypeIrDefn = self.addTypeToSubtypeGraph(irClass.id, supertype)
+            if not isinstance(supertypeIrDefn, Class):
                 raise ScopeException("inheritance from non-class type")
-            supertypeDefnInfo = self.scope.lookup(supertype.name,
-                                                  localOnly=False,
-                                                  mayBeAssignment=False).getDefnInfo()
-            self.scope.use(supertypeDefnInfo, supertype.id, USE_AS_TYPE)
-            supertypeIrDefn = supertypeDefnInfo.irDefn
 
             superclassId = supertypeIrDefn.id
             if isBuiltinId(superclassId):
                 classInfo.superclassInfo = self.scope.info.getClassInfo(superclassId)
-                self.graph.addEdge(node.id, superclassId)
+                self.inheritanceGraph.addEdge(node.id, superclassId)
             else:
                 superclassAst = supertypeIrDefn.astDefn
                 superclassInfo = self.scope.info.getClassInfo(superclassAst)
                 if classInfo is superclassInfo:
                     raise ScopeException("class cannot inherit from itself")
                 classInfo.superclassInfo = superclassInfo
-                self.graph.addEdge(node.id, superclassAst.id)
+                self.inheritanceGraph.addEdge(node.id, superclassAst.id)
         super(InheritanceVisitor, self).visitAstClassDefinition(node)
+
+    def visitAstTypeParameter(self, node):
+        irParam = self.scope.info.getDefnInfo(node).irDefn
+        if node.upperBound is not None:
+            self.addTypeToSubtypeGraph(irParam.id, node.upperBound)
+        if node.lowerBound is not None:
+            self.addTypeToSubtypeGraph(irParam.id, node.lowerBound)
+
+    def addTypeToSubtypeGraph(self, id, astType):
+        if not isinstance(astType, AstClassType):
+            raise ScopeException("inheritance from non-class type")
+        nameInfo = self.scope.lookup(astType.name, ignoreDefnOrder=True)
+        if nameInfo.isOverloaded():
+            raise ScopeException("inheritance from overloaded symbol")
+        defnInfo = nameInfo.getDefnInfo()
+        irDefn = defnInfo.irDefn
+        assert irDefn.isTypeDefn()
+        self.subtypeGraph.addEdge(id, irDefn.id)
+        for astTypeArg in astType.typeArguments:
+            self.addTypeToSubtypeGraph(id, astTypeArg)
+        return irDefn
 
 
 def getFlagsFromAstDefn(astDefn, astVarDefn):

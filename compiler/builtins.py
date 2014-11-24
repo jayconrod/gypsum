@@ -113,6 +113,11 @@ def _initialize():
             function.insts = functionData["insts"]
         return function
 
+    def buildMethod(functionData, clas):
+        function = buildFunction(functionData)
+        function.clas = clas
+        return function
+
     def buildField(fieldData):
         name = fieldData["name"]
         ty = buildType(fieldData["type"])
@@ -135,14 +140,14 @@ def _initialize():
                 clas.supertypes = []
                 clas.fields = []
                 clas.methods = []
-            clas.constructors = map(buildFunction, classData["constructors"])
+            clas.constructors = [buildMethod(c, clas) for c in classData["constructors"]]
             clas.fields += map(buildField, classData["fields"])
         else:
             clas.supertypes = []
             clas.fields = []
             clas.methods = []
             clas.isPrimitive = True
-        clas.methods += map(buildFunction, classData["methods"])
+        clas.methods += [buildMethod(m, clas) for m in classData["methods"]]
 
         _builtinClassTypeMap[buildType(clas.name)] = clas
 

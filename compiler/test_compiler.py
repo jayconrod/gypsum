@@ -1205,7 +1205,7 @@ class TestCompiler(unittest.TestCase):
         f = package.findFunction(name="f")
         expected = self.makeSimpleFunction("f", Cty, [[
                        ldlocal(0),
-                       tycs(C.id),
+                       tyc(C.id),
                        callg(id.id),
                        ret()]],
                      variables=[Variable("o", Cty, PARAMETER, frozenset())],
@@ -1222,13 +1222,117 @@ class TestCompiler(unittest.TestCase):
         outer = package.findFunction(name="id-outer")
         expected = self.makeSimpleFunction("id-outer", Tty, [[
             ldlocal(0),
-            tyvs(T.id),
+            tyv(T.id),
             callg(inner.id),
             ret()]],
           variables=[Variable("x", Tty, PARAMETER, frozenset())],
           typeParameters=[T],
           parameterTypes=[Tty])
         self.assertEquals(expected, outer)
+
+    def testCallWithExplicitTypeArgument(self):
+        source = "def id-outer[static T](x: T) =\n" + \
+                 "  def id-inner(x: T) = x\n" + \
+                 "  id-inner(x)"
+        package = self.compileFromSource(source)
+        T = package.findTypeParameter(name="T")
+        Tty = VariableType(T)
+        idOuter = package.findFunction(name="id-outer")
+        idInner = package.findFunction(name="id-inner")
+        expected = self.makeSimpleFunction("id-outer", Tty, [[
+            ldlocal(0),
+            tyv(T.id),
+            callg(idInner.id),
+            ret()]],
+          variables=[Variable("x", Tty, PARAMETER, frozenset())],
+          typeParameters=[T],
+          parameterTypes=[Tty])
+        self.assertEquals(expected, idOuter)
+
+    def testCallWithImplicitTypeArgument(self):
+        source = "def id-outer[static T](x: T) =\n" + \
+                 "  def id-inner = x\n" + \
+                 "  id-inner"
+        package = self.compileFromSource(source)
+        T = package.findTypeParameter(name="T")
+        Tty = VariableType(T)
+        idOuter = package.findFunction(name="id-outer")
+        contextClass = package.findClass(name="$context")
+        closureClass = package.findClass(name="$closure")
+        idInner = package.findFunction(name="id-inner")
+        idInnerMethodIndex = closureClass.getMethodIndex(idInner)
+        expected = self.makeSimpleFunction("id-outer", Tty, [[
+            allocobj(contextClass.id),
+            dup(),
+            callg(contextClass.constructors[0].id),
+            drop(),
+            stlocal(-1),
+            ldlocal(0),
+            ldlocal(-1),
+            stp(0),
+            allocobj(closureClass.id),
+            dup(),
+            ldlocal(-1),
+            callg(closureClass.constructors[0].id),
+            drop(),
+            stlocal(-2),
+            ldlocal(-2),
+            tyv(T.id),
+            callv(1, idInnerMethodIndex),
+            ret()]],
+          variables=[Variable("$context", ClassType(contextClass), LOCAL, frozenset()),
+                     Variable("id-inner", ClassType(closureClass), LOCAL, frozenset())],
+          typeParameters=[T],
+          parameterTypes=[Tty])
+        self.assertEquals(expected, idOuter)
+
+    def testConstructorCallInitializerInClassWithStaticTypeArgs(self):
+        source = "class C[static T]"
+        package = self.compileFromSource(source)
+        C = package.findClass(name="C")
+        T = package.findTypeParameter(name="T")
+        Ctype = ClassType(C, (VariableType(T),))
+        expectedCtor = self.makeSimpleFunction("$constructor", UnitType, [[
+            ldlocal(0),
+            callg(BUILTIN_ROOT_CLASS_CTOR_ID),
+            drop(),
+            ldlocal(0),
+            tyv(T.id),
+            callg(C.initializer.id),
+            drop(),
+            unit(),
+            ret()]],
+          variables=[Variable("$this", Ctype, PARAMETER, frozenset())],
+          typeParameters=[T],
+          parameterTypes=[Ctype])
+        self.assertEquals(expectedCtor, C.constructors[0])
+
+    def testCallClassMethodsWithStaticTypeArgs(self):
+        source = "class C\n" + \
+                 "class Box[static T](val: T)\n" + \
+                 "  def get = val\n" + \
+                 "  def set(val: T) =\n" + \
+                 "    this.val = val\n" + \
+                 "    {}\n" + \
+                 "def f(box: Box[C]) = box.set(box.get)"
+        package = self.compileFromSource(source)
+        C = package.findClass(name="C")
+        Box = package.findClass(name="Box")
+        boxType = ClassType(Box, (ClassType(C),))
+        get = package.findFunction(name="get")
+        set = package.findFunction(name="set")
+        f = package.findFunction(name="f")
+        expectedF = self.makeSimpleFunction("f", UnitType, [[
+            ldlocal(0),
+            ldlocal(0),
+            tyc(C.id),
+            callv(1, Box.getMethodIndex(get)),
+            tyc(C.id),
+            callv(2, Box.getMethodIndex(set)),
+            ret()]],
+          variables=[Variable("box", boxType, PARAMETER, frozenset())],
+          parameterTypes=[boxType])
+        self.assertEquals(expectedF, f)
 
     def testBlockOrdering(self):
         sys.setrecursionlimit(2000)

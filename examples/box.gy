@@ -1,0 +1,56 @@
+// This is a simple Gypsum program.
+// You can compile it with this command:
+//   ../compiler/compiler list.gy -o list.csp
+// You can run it with this command:
+//   ../vm/out/driver list.csp
+// (If you haven't build the VM yet, run this first):
+//   (cd ../vm; make -j)
+
+// This program shows how to use type parameters with functions and classes. Type parameters
+// are just like generics in Java. Right now, there are only static type parameters, which are
+// erased at compile-time. These must be declared with the `static` keyword. In the future,
+// there will be dynamic type parameters, which will be available for reflection at run-time.
+
+// Class type parameters are declared in brackets after the class name. Multiple parameters
+// may be declared, separated by commas. Each parameter may have an upper and lower bound.
+// In this example, the bounds are explicit, but these are they default bounds, and they
+// can be omitted as they are for the functions below. Bounds must be object types (classes
+// or other type parameters); primitive types are not allowed.
+class Box[static T <: Object >: Nothing](private value: T)
+  // Definitions inside a class with type parameters can use those type parameters. When called,
+  // the type arguments are passed to them implicitly (inferred from the receiver).
+  def get = value
+
+  def set(new-value: T) =
+    value = new-value
+    {}
+
+  // Of course methods may have their own type parameters.
+  def contains-same-value[static S](other: Box[S]) = value === other.value
+
+
+// Function type parameters are declared the same way as classes. Note that when we write a
+// class type for `Box`, we must include type arguments.
+def get-box-value[static T](box: Box[T]) = box.get
+
+def set-box-value[static T](box: Box[T], new-value: T) = box.set(new-value)
+
+
+def main =
+  var original-string = "original string"
+  var replacement-string = "replacement string"
+
+  // We have to pass type arguments explcitly to the constructor. In the future,
+  // this may be inferred.
+  var box1 = Box[String](original-string)
+  var box2 = Box[Object](original-string)
+
+  // When we call a method, we have to explicit pass type arguments for the type parameters
+  // that were declared with that method (S in this case). We don't need to explicitly pass
+  // type arguments for the parameters declared with the class though (T).
+  if (box1.contains-same-value[Object](box2))
+    print("boxes contain the same value.\n")
+
+  set-box-value[String](box1, replacement-string)
+  print("box1 now contains '" + get-box-value[String](box1) + "'.\n")
+  0

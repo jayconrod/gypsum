@@ -173,7 +173,7 @@ Local<Package> PackageLoader::load() {
       throw Error("package file is corrupt");
     auto majorVersion = readValue<u16>();
     auto minorVersion = readValue<u16>();
-    if (majorVersion != 0 || minorVersion != 7)
+    if (majorVersion != 0 || minorVersion != 9)
       throw Error("package file has wrong format version");
 
     package_ = handleScope.escape(*Package::create(heap()));
@@ -282,6 +282,14 @@ Local<Function> PackageLoader::readFunction() {
 
 void PackageLoader::readClass(const Local<Class>& clas) {
   auto flags = readValue<u32>();
+
+  auto typeParamCount = readLengthVbn();
+  auto typeParameters = TaggedArray<TypeParameter>::create(heap(), typeParamCount);
+  for (length_t i = 0; i < typeParamCount; i++) {
+    auto id = readIdVbn();
+    typeParameters->set(i, Tagged<TypeParameter>(id));
+  }
+
   auto supertype = readType();
 
   auto fieldCount = readLengthVbn();
@@ -306,6 +314,7 @@ void PackageLoader::readClass(const Local<Class>& clas) {
   }
 
   clas->setFlags(flags);
+  clas->setTypeParameters(*typeParameters);
   clas->setSupertype(*supertype);
   clas->setFields(*fields);
   clas->setConstructors(*constructors);
@@ -347,18 +356,26 @@ Local<Type> PackageLoader::readType() {
     return handle(Type::primitiveTypeFromForm(roots(), form));
   } else {
     auto code = readVbn();
-    if (form == Type::CLASS_TYPE &&
-        flags == Type::NULLABLE_FLAG &&
-        code == BUILTIN_NOTHING_CLASS_ID) {
-      return handle(roots()->nullType());
-    } else if (form == Type::CLASS_TYPE) {
+    if (form == Type::CLASS_TYPE) {
+      auto typeArgCount = readLengthVbn();
+      if (flags == Type::NULLABLE_FLAG &&
+          code == BUILTIN_NOTHING_CLASS_ID) {
+        ASSERT(typeArgCount == 0);
+        return handle(roots()->nullType());
+      }
       Local<Class> clas;
       if (isBuiltinId(code)) {
         clas = handle(roots()->getBuiltinClass(static_cast<BuiltinId>(code)));
       } else {
         clas = handle(package_->getClass(code));
       }
-      auto ty = Type::create(heap(), clas, flags);
+      vector<Local<Type>> typeArgs;
+      typeArgs.reserve(typeArgCount);
+      for (length_t i = 0; i < typeArgCount; i++) {
+        auto typeArg = readType();
+        typeArgs.push_back(typeArg);
+      }
+      auto ty = Type::create(heap(), clas, typeArgs, flags);
       return ty;
     } else {
       ASSERT(form == Type::VARIABLE_TYPE);

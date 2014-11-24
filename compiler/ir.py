@@ -200,6 +200,32 @@ class Class(IrDefinition):
             clas = clas.supertypes[0].clas
             yield clas
 
+    def findPathToBaseClass(self, base):
+        """Returns a path through the class DAG to a particular base class. The path does not
+        include this class. If the given class is not a base, returns None."""
+        path = []
+        indexStack = [0]
+        assert self.id is not None
+        visited = set([self.id])
+
+        while len(indexStack) > 0:
+            index = indexStack[-1]
+            indexStack[-1] += 1
+            clas = path[-1] if len(path) > 0 else self
+            if clas is base:
+                return path
+            elif index == len(clas.supertypes):
+                if len(path) > 0:
+                    path.pop()
+                indexStack.pop()
+            elif clas.supertypes[index].clas.id not in visited:
+                assert clas.supertypes[index].clas.id is not None
+                visited.add(clas.supertypes[index].clas.id)
+                path.append(clas.supertypes[index].clas)
+                indexStack[-1] += 1
+                indexStack.append(0)
+        return None
+
     def isSubclassOf(self, other):
         nothingClassId = -2   # avoid circular import dependency with builtins
         if self is other or self.id == nothingClassId:
@@ -304,13 +330,31 @@ class TypeParameter(IrDefinition):
     def isTypeDefn(self):
         return True
 
+    def contains(self, ty):
+        return ty.isSubtypeOf(self.upperBound) and self.lowerBound.isSubtypeOf(ty)
+
     def __repr__(self):
         return "TypeParameter(%s, %s, %s, %s)" % \
             (self.name, self.upperBound, self.lowerBound, self.flags)
 
     def __str__(self):
-        return "%s type %s#%d <: %s >: %s\n" % \
+        return "%s type %s#%d <: %s >: %s" % \
             (" ".join(self.flags), self.name, self.id, self.upperBound, self.lowerBound)
+
+    def hasCommonBound(self, other):
+        """Returns true if there is some type parameter reachable by following upper bounds
+        of this parameter which is also reachable by following lower bounds of `other`. This
+        is used by Type.isSubtypeOf."""
+        otherLowerBounds = [other]
+        while isinstance(otherLowerBounds[-1].lowerBound, VariableType):
+            otherLowerBounds.append(otherLowerBounds[-1].lowerBound.typeParameter)
+        current = self
+        while True:
+            if any(bound is current for bound in otherLowerBounds):
+                return True
+            if not isinstance(current.upperBound, VariableType):
+                return False
+            current = current.upperBound.typeParameter
 
 
 # List of variable kinds

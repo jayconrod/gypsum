@@ -60,9 +60,14 @@ class Type: public Object {
   void* operator new (size_t, void* place, length_t length);
   explicit Type(Form primitive, Flags flags = NO_FLAGS);
   explicit Type(Class* clas, Flags flags = NO_FLAGS);
+  explicit Type(Class* clas, const std::vector<Local<Type>>& typeArgs, Flags flags = NO_FLAGS);
   explicit Type(TypeParameter* param, Flags flags = NO_FLAGS);
   static Local<Type> create(Heap* heap, Form primitive, Flags flags = NO_FLAGS);
   static Local<Type> create(Heap* heap, const Handle<Class>& clas, Flags fags = NO_FLAGS);
+  static Local<Type> create(Heap* heap,
+                            const Handle<Class>& clas,
+                            const std::vector<Local<Type>>& typeArgs,
+                            Flags flags = NO_FLAGS);
   static Local<Type> create(Heap* heap,
                             const Handle<TypeParameter>& param,
                             Flags flags = NO_FLAGS);
@@ -80,9 +85,12 @@ class Type: public Object {
   static Type* f64Type(Roots* roots);
   static Type* wordType(Roots* roots);
   static Type* rootClassType(Roots* roots);
+  static Type* nothingType(Roots* roots);
   static Type* nullType(Roots* roots);
 
   length_t length() const { return elementsLength(); }
+  length_t typeArgumentCount() const;
+  Type* typeArgument(length_t index) const;
 
   Form form() const { return form_; }
   Flags flags() const { return flags_; }
@@ -106,11 +114,13 @@ class Type: public Object {
   word_t typeSize() const;
   word_t alignment() const;
 
-  bool isSubtypeOf(Type* other) const;
+  static bool isSubtypeOf(Local<Type> left, Local<Type> right);
   bool equals(Type* other) const;
-  static Local<Type> substitute(const Local<Type>& type,
+  static Local<Type> substitute(const Handle<Type>& type,
                                 const std::vector<std::pair<Local<TypeParameter>,
                                                             Local<Type>>>& bindings);
+  static Local<Type> substituteForBaseClass(const Handle<Type>& type,
+                                            const Handle<Class>& baseClass);
 
  private:
   friend class Roots;
@@ -119,7 +129,7 @@ class Type: public Object {
   length_t length_;
   Form form_ : 4;
   Flags flags_ : 28;
-  Block* elements_[0];
+  Ptr<Block> elements_[0];
 };
 
 std::ostream& operator << (std::ostream& os, const Type* type);

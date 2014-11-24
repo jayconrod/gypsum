@@ -357,8 +357,8 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
-      case TYCS:
-      case TYVS:
+      case TYC:
+      case TYV:
         readVbn();
         break;
 
@@ -525,9 +525,9 @@ void Interpreter::handleBuiltin(BuiltinId id) {
     }
 
     case BUILTIN_TYPE_IS_SUBTYPE_OF_ID: {
-      auto other = block_cast<Type>(pop<Block*>());
-      auto receiver = block_cast<Type>(pop<Block*>());
-      auto result = receiver->isSubtypeOf(other);
+      auto other = handle(block_cast<Type>(pop<Block*>()));
+      auto receiver = handle(block_cast<Type>(pop<Block*>()));
+      auto result = Type::isSubtypeOf(other, receiver);
       push<i8>(result ? 1 : 0);
       break;
     }
@@ -535,13 +535,8 @@ void Interpreter::handleBuiltin(BuiltinId id) {
     case BUILTIN_STRING_CONCAT_OP_ID: {
       Local<String> right(block_cast<String>(pop<Block*>()));
       Local<String> left(block_cast<String>(pop<Block*>()));
-      auto cons = left->tryConcat(vm_->heap(), *right);
-      if (cons == nullptr) {
-        collectGarbage();
-        cons = left->tryConcat(vm_->heap(), *right);
-        CHECK(cons != nullptr);
-      }
-      push<Block*>(cons);
+      auto cons = String::concat(vm_->heap(), left, right);
+      push<Block*>(*cons);
       break;
     }
 

@@ -506,6 +506,16 @@ class TestTypeAnalysis(unittest.TestCase):
         barClass = info.package.findClass(name="Bar")
         self.assertEquals([ClassType(fooClass, ())], barClass.supertypes)
 
+    def testNullableSupertype(self):
+        source = "class Foo <: Object?"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testNullableBounds(self):
+        upperSource = "class Foo[static T <: Object?]"
+        self.assertRaises(TypeException, self.analyzeFromSource, upperSource)
+        lowerSource = "class Bar[static T >: Nothing?]"
+        self.assertRaises(TypeException, self.analyzeFromSource, lowerSource)
+
     def testCallWithSubtype(self):
         source = "class Foo\n" + \
                  "class Bar <: Foo\n" + \
@@ -702,11 +712,82 @@ class TestTypeAnalysis(unittest.TestCase):
     def testUseTypeParameterInnerFunctionExplicit(self):
         source = "def id-outer[static T] =\n" + \
                  "  def id-inner(x: T) = x"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
+        info = self.analyzeFromSource(source)
+        paramType = info.getType(info.ast.definitions[0].body.statements[0].parameters[0])
+        T = info.package.findTypeParameter(name="T")
+        self.assertEquals(VariableType(T), paramType)
+        retTy = info.package.findFunction(name="id-inner").returnType
+        self.assertEquals(VariableType(T), retTy)
 
     def testUseTypeParameterInnerFunctionImplicit(self):
         source = "def id-outer[static T](x: T) =\n" + \
                  "  def id-inner = x"
+        info = self.analyzeFromSource(source)
+        xType = info.getType(info.ast.definitions[0].body.statements[0].body)
+        T = info.package.findTypeParameter(name="T")
+        self.assertEquals(VariableType(T), xType)
+
+    def testCallInnerFunctionWithImplicitTypeParameter(self):
+        source = "def id-outer[static T](x: T) =\n" + \
+                 "  def id-inner = x\n" + \
+                 "  id-inner"
+        info = self.analyzeFromSource(source)
+        callType = info.getType(info.ast.definitions[0].body.statements[1])
+        T = info.package.findTypeParameter(name="T")
+        self.assertEquals(VariableType(T), callType)
+
+    def testClassWithTypeParameter(self):
+        source = "class Box[static T](x: T)\n" + \
+                 "  def get = x\n" + \
+                 "  def set(y: T) =\n" + \
+                 "    x = y\n" + \
+                 "    {}"
+        info = self.analyzeFromSource(source)
+        Box = info.package.findClass(name="Box")
+        T = info.package.findTypeParameter(name="T")
+        get = info.package.findFunction(name="get")
+        set = info.package.findFunction(name="set")
+        TTy = VariableType(T)
+        BoxTy = ClassType(Box, (TTy,), None)
+
+        self.assertEquals([BoxTy], Box.initializer.parameterTypes)
+        self.assertEquals([BoxTy, TTy], Box.constructors[0].parameterTypes)
+        self.assertEquals([BoxTy], get.parameterTypes)
+        self.assertEquals(TTy, get.returnType)
+        self.assertEquals([BoxTy, TTy], set.parameterTypes)
+        self.assertEquals(UnitType, set.returnType)
+
+    def testCallCtorWithTypeParameter(self):
+        source = "class C\n" + \
+                 "class Box[static T](x: T)\n" + \
+                 "def f(c: C) = Box[C](c)"
+        info = self.analyzeFromSource(source)
+        Box = info.package.findClass(name="Box")
+        C = info.package.findClass(name="C")
+        f = info.package.findFunction(name="f")
+        ty = ClassType(Box, (ClassType(C),))
+        self.assertEquals(ty, f.returnType)
+        self.assertEquals(ty, info.getType(info.ast.definitions[2].body))
+
+    def testCallInheritedMethodWithTypeParameter(self):
+        source = "class A[static T](val: T)\n" + \
+                 "  def get = val\n" + \
+                 "class B <: A[Object]\n" + \
+                 "  def this(val: Object) =\n" + \
+                 "    super(val)\n" + \
+                 "def f(b: B) = b.get"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        ty = getRootClassType()
+        self.assertEquals(ty, f.returnType)
+        self.assertEquals([ty], info.getCallInfo(info.ast.definitions[2].body).typeArguments)
+
+    def testTypeParameterWithReversedBounds(self):
+        source = "class A[static T <: Nothing >: Object]"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testTypeParameterWithUnrelatedBound(self):
+        source = "class A[static S, static T, static U <: S >: T]"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     # Tests for usage

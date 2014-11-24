@@ -34,6 +34,7 @@ class CompileInfo(object):
         self.useInfo = {}
         self.classInfo = {}
         self.typeInfo = {}
+        self.callInfo = {}
 
     def _get(self, key, dictionary):
         return dictionary[self._key(key)]
@@ -65,7 +66,8 @@ _dictNames = [("Scope", "scopes"),
               ("DefnInfo", "defnInfo"),
               ("UseInfo", "useInfo"),
               ("ClassInfo", "classInfo"),
-              ("Type", "typeInfo")]
+              ("Type", "typeInfo"),
+              ("CallInfo", "callInfo")]
 def _addDictMethods(elemName, dictName):
     setattr(CompileInfo, "get" + elemName,
             lambda self, key: self._get(key, getattr(self, dictName)))
@@ -242,6 +244,61 @@ class ClassInfo(Data):
         superclassInfoStr = self.superclassInfo.irDefn.name \
                             if self.superclassInfo is not None else "None"
         return "ClassInfo(%s, %s)" % (irDefnStr, superclassInfoStr)
+
+
+class CallInfo(Data):
+    """Defined at each call site during type/use analysis. Tracks information needed for the
+    compiler to generate the call."""
+
+    propertyNames = [
+        # A list of type arguments to be passed to the callee.
+        "typeArguments",
+    ]
+
+
+def getExplicitTypeParameterCount(irDefn):
+    if hasattr(irDefn, "astDefn") and \
+       hasattr(irDefn.astDefn, "typeParameters"):
+        return len(irDefn.astDefn.typeParameters)
+    else:
+        return 0
+
+
+def getExplicitTypeParameters(irDefn):
+    firstExplicit = len(irDefn.typeParameters) - getExplicitTypeParameterCount(irDefn)
+    return irDefn.typeParameters[firstExplicit:]
+
+
+def getImplicitTypeParameters(irDefn):
+    firstExplicit = len(irDefn.typeParameters) - getExplicitTypeParameterCount(irDefn)
+    return irDefn.typeParameters[:firstExplicit]
+
+
+def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes):
+    """Checks compatibility of arguments with the given function.
+
+    In Gypsum, some type arguments and argument types may be implied. Currently, this is
+    limited to arguments for parameters that were implied by the enclosing scope of the
+    function. This function checks compatibility with the given (explicit) type arguments and
+    argument types, including the receiver type (which may be None for regular function calls).
+    If the function is compatible, this function returns a (list(Type), list(Type)) tuple
+    containing the full list of type arguments and argument types (including the receiver).
+    If the function is not compatible, returns None."""
+    if receiverType is not None:
+        if isinstance(receiverType, ObjectType):
+            receiverType = receiverType.substituteForBaseClass(irFunction.clas)
+        implicitTypeArgs = list(receiverType.getTypeArguments())
+        allArgTypes = [receiverType] + argTypes
+    else:
+        implicitTypeParams = getImplicitTypeParameters(irFunction)
+        implicitTypeArgs = [VariableType(t) for t in implicitTypeParams]
+        allArgTypes = argTypes
+    allTypeArgs = implicitTypeArgs + typeArgs
+
+    if irFunction.canCallWith(allTypeArgs, allArgTypes):
+        return (allTypeArgs, allArgTypes)
+    else:
+        return None
 
 
 class InfoPrinter(AstPrinter):

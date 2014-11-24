@@ -38,18 +38,25 @@ class Type(Data):
     def isSubtypeOf(self, other):
         if self == other:
             return True
-        elif self.isObject() and other.isObject():
-            def topBottomClasses(ty):
-                if isinstance(ty, ClassType):
-                    return ty.clas, ty.clas
-                else:
-                    assert isinstance(ty, VariableType)
-                    return (topBottomClasses(ty.typeParameter.upperBound)[0],
-                            topBottomClasses(ty.typeParameter.lowerBound)[1])
-            topSelfClass = topBottomClasses(self)[0]
-            bottomOtherClass = topBottomClasses(other)[1]
-            return topSelfClass.isSubclassOf(bottomOtherClass) and \
-                   (not self.isNullable() or other.isNullable())
+        elif isinstance(self, VariableType) and \
+             isinstance(other, VariableType) and \
+             self.typeParameter.hasCommonBound(other.typeParameter):
+            return True
+        elif isinstance(self, VariableType):
+            return self.typeParameter.upperBound.isSubtypeOf(other)
+        elif isinstance(other, VariableType):
+            return self.isSubtypeOf(other.typeParameter.lowerBound)
+        elif isinstance(self, ClassType) and \
+             isinstance(other, ClassType) and \
+             (not self.isNullable() or other.isNullable()) and \
+             self.clas.isSubclassOf(other.clas):
+            if self.clas is builtins.getNothingClass():
+                return True
+            else:
+                selfTypeArgs = self.substituteForBaseClass(other.clas).typeArguments
+                otherTypeArgs = other.typeArguments
+                assert len(selfTypeArgs) == len(otherTypeArgs)
+                return all(a == b for a, b in zip(selfTypeArgs, otherTypeArgs))
         else:
             return False
 
@@ -79,6 +86,9 @@ class Type(Data):
     def substitute(self, parameters, replacements):
         raise NotImplementedError
 
+    def getTypeArguments(self):
+        raise NotImplementedError
+
     def size(self):
         raise NotImplementedError
 
@@ -89,7 +99,7 @@ class Type(Data):
         return None
 
     def isNullable(self):
-        return NULLABLE_TYPE_FLAG in self.flags
+        raise NotImplementedError
 
 
 class SimpleType(Type):
@@ -123,6 +133,13 @@ class SimpleType(Type):
     def defaultValue(self):
         return self.defaultValue_
 
+    def getTypeArguments(self):
+        return ()
+
+    def isNullable(self):
+        assert NULLABLE_TYPE_FLAG not in self.flags
+        return False
+
 
 NoType = SimpleType("_", None)
 UnitType = SimpleType("unit", W8, UnitValue())
@@ -148,6 +165,12 @@ class ObjectType(Type):
     def size(self):
         return WORDSIZE
 
+    def substituteForBaseClass(self, base):
+        """Returns a base type of the corresponding class with type arguments substituted
+        appropriately. For example, if we have class A[T] and class B <: A[C], then if we
+        call this method on B, we will get A[C]."""
+        raise NotImplementedError
+
 
 class ClassType(ObjectType):
     propertyNames = Type.propertyNames + ("clas", "typeArguments")
@@ -158,20 +181,26 @@ class ClassType(ObjectType):
         self.clas = clas
         self.typeArguments = typeArguments
 
+    @staticmethod
+    def forReceiver(clas):
+        typeArgs = tuple(VariableType(t) for t in clas.typeParameters)
+        return ClassType(clas, typeArgs, None)
+
     def __str__(self):
         if len(self.typeArguments) == 0:
             return self.clas.name
         else:
             return "%s[%s]%s" % \
                    (self.clas.name,
-                    ",".join(self.typeArguments),
+                    ",".join(map(str, self.typeArguments)),
                     "?" if self.isNullable() else "")
 
     def __repr__(self):
-        return "ClassType(%s, (%s), %s)" % \
-               (self.clas.name,
-                ", ".join(repr(ta) for ta in self.typeArguments),
-                ", ".join(self.flags))
+        typeArgsStr = (", (" + ", ".join(map(repr, self.typeArguments)) + ")") \
+                      if self.typeArguments is not () \
+                      else ""
+        flagsStr = (", " + ", ".join(self.flags)) if len(self.flags) > 0 else ""
+        return "ClassType(%s%s%s)" % (self.clas.name, typeArgsStr, flagsStr)
 
     def __hash__(self):
         return hashList([getattr(self, name) for name in Type.propertyNames] + \
@@ -188,6 +217,18 @@ class ClassType(ObjectType):
                          tuple(arg.substitute(parameters, replacements)
                                for arg in self.typeArguments),
                          self.flags)
+
+    def substituteForBaseClass(self, base):
+        path = self.clas.findPathToBaseClass(base)
+        assert path is not None
+        ty = self
+        for clas in path:
+            sty = next(sty for sty in ty.clas.supertypes if sty.clas is clas)
+            ty = sty.substitute(ty.clas.typeParameters, ty.typeArguments)
+        return ty
+
+    def getTypeArguments(self):
+        return self.typeArguments
 
     def isNullable(self):
         return NULLABLE_TYPE_FLAG in self.flags
@@ -222,9 +263,18 @@ class VariableType(ObjectType):
                 return repl
         return self
 
+    def getTypeArguments(self):
+        if self.typeParameter.upperBound is not None:
+            return self.typeParameter.upperBound.getTypeArguments()
+        else:
+            return ()
+
     def isNullable(self):
         return self.typeParameter.upperBound is not None and \
                self.typeParameter.upperBound.isNullable()
+
+    def substituteForBaseClass(self, base):
+        return self.typeParameter.upperBound.substituteForBaseClass(base)
 
 
 def getClassFromType(ty):

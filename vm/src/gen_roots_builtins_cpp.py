@@ -55,6 +55,8 @@ def initClass(out, classData):
     assert not classData["isPrimitive"]
     out.write("\n  { // %s\n" % classData["id"])
     out.write("    auto clas = getBuiltinClass(%s);\n" % classData["id"])
+    out.write("    auto typeParameters = reinterpret_cast<TaggedArray<TypeParameter>*>(" +
+              "emptyTaggedArray());\n")
     if classData["supertype"] is None:
         out.write("    Type* supertype = nullptr;\n")
     else:
@@ -93,8 +95,8 @@ def initClass(out, classData):
         out.write("    auto methods = new(heap, %d) IdArray;\n" % len(allMethodIds))
         for i, id in enumerate(allMethodIds):
             out.write("    methods->set(%d, %s);\n" % (i, id))
-    out.write("    ::new(clas) Class(0, supertype, fields, constructors, methods, " +
-              "nullptr, nullptr, elementType, lengthFieldIndex);\n")
+    out.write("    ::new(clas) Class(0, typeParameters, supertype, fields, constructors, " +
+              "methods, nullptr, nullptr, elementType, lengthFieldIndex);\n")
     out.write("    auto meta = clas->buildInstanceMeta();\n")
     out.write("    clas->setInstanceMeta(meta);\n")
     out.write("    builtinMetas_.push_back(meta);\n  }")

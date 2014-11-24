@@ -6,6 +6,7 @@
 
 #include "type-parameter.h"
 
+#include <unordered_set>
 #include "block.h"
 #include "gc.h"
 #include "handle.h"
@@ -50,6 +51,24 @@ Local<TypeParameter> TypeParameter::create(Heap* heap,
                                            const Handle<Type>& lowerBound) {
   RETRY_WITH_GC(heap, return Local<TypeParameter>(
       new(heap) TypeParameter(flags, upperBound.getOrNull(), lowerBound.getOrNull())));
+}
+
+
+bool TypeParameter::hasCommonBound(TypeParameter* other) const {
+  unordered_set<const TypeParameter*> otherLowerBounds{other};
+  auto last = other;
+  while (last->lowerBound()->isVariable()) {
+    last = last->lowerBound()->asVariable();
+    otherLowerBounds.insert(last);
+  }
+  auto current = this;
+  while (true) {
+    if (otherLowerBounds.find(current) != otherLowerBounds.end())
+      return true;
+    if (!current->upperBound()->isVariable())
+      return false;
+    current = current->upperBound()->asVariable();
+  }
 }
 
 
