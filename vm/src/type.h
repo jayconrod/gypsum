@@ -114,7 +114,7 @@ class Type: public Object {
   word_t typeSize() const;
   word_t alignment() const;
 
-  bool isSubtypeOf(Type* other) const;
+  static bool isSubtypeOf(Local<Type> left, Local<Type> right);
   bool equals(Type* other) const;
   static Local<Type> substitute(const Handle<Type>& type,
                                 const std::vector<std::pair<Local<TypeParameter>,

@@ -51,6 +51,24 @@ class TestIrTypes(unittest.TestCase):
         S = TypeParameter("S", ClassType(self.B), ClassType(self.C), frozenset())
         self.assertTrue(VariableType(S).isSubtypeOf(VariableType(T)))
 
+    def testSubtypeParametersTransitiveUpper(self):
+        U = TypeParameter("U", getRootClassType(), getNothingClassType(), frozenset())
+        T = TypeParameter("T", VariableType(U), getNothingClassType(), frozenset())
+        S = TypeParameter("S", VariableType(T), getNothingClassType(), frozenset())
+        self.assertTrue(VariableType(S).isSubtypeOf(VariableType(U)))
+
+    def testSubtypeParametersTransitivieLower(self):
+        U = TypeParameter("U", getRootClassType(), getNothingClassType(), frozenset())
+        T = TypeParameter("T", getRootClassType(), VariableType(U), frozenset())
+        S = TypeParameter("S", getRootClassType(), VariableType(T), frozenset())
+        self.assertTrue(VariableType(U).isSubtypeOf(VariableType(T)))
+
+    def testSubtypeParametersTransitiveMiddle(self):
+        M = TypeParameter("M", getRootClassType(), getNothingClassType(), frozenset())
+        S = TypeParameter("S", VariableType(M), getNothingClassType(), frozenset())
+        T = TypeParameter("T", getRootClassType(), VariableType(M), frozenset())
+        self.assertTrue(VariableType(S).isSubtypeOf(VariableType(T)))
+
     def testSubtypeClassWithParametersSelf(self):
         T = TypeParameter("T", getRootClassType(), getNothingClassType(), frozenset())
         T.id = 0

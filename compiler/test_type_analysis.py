@@ -510,6 +510,12 @@ class TestTypeAnalysis(unittest.TestCase):
         source = "class Foo <: Object?"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
+    def testNullableBounds(self):
+        upperSource = "class Foo[static T <: Object?]"
+        self.assertRaises(TypeException, self.analyzeFromSource, upperSource)
+        lowerSource = "class Bar[static T >: Nothing?]"
+        self.assertRaises(TypeException, self.analyzeFromSource, lowerSource)
+
     def testCallWithSubtype(self):
         source = "class Foo\n" + \
                  "class Bar <: Foo\n" + \

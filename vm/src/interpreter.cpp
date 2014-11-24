@@ -525,9 +525,9 @@ void Interpreter::handleBuiltin(BuiltinId id) {
     }
 
     case BUILTIN_TYPE_IS_SUBTYPE_OF_ID: {
-      auto other = block_cast<Type>(pop<Block*>());
-      auto receiver = block_cast<Type>(pop<Block*>());
-      auto result = receiver->isSubtypeOf(other);
+      auto other = handle(block_cast<Type>(pop<Block*>()));
+      auto receiver = handle(block_cast<Type>(pop<Block*>()));
+      auto result = Type::isSubtypeOf(other, receiver);
       push<i8>(result ? 1 : 0);
       break;
     }

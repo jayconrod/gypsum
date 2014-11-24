@@ -341,6 +341,21 @@ class TypeParameter(IrDefinition):
         return "%s type %s#%d <: %s >: %s" % \
             (" ".join(self.flags), self.name, self.id, self.upperBound, self.lowerBound)
 
+    def hasCommonBound(self, other):
+        """Returns true if there is some type parameter reachable by following upper bounds
+        of this parameter which is also reachable by following lower bounds of `other`. This
+        is used by Type.isSubtypeOf."""
+        otherLowerBounds = [other]
+        while isinstance(otherLowerBounds[-1].lowerBound, VariableType):
+            otherLowerBounds.append(otherLowerBounds[-1].lowerBound.typeParameter)
+        current = self
+        while True:
+            if any(bound is current for bound in otherLowerBounds):
+                return True
+            if not isinstance(current.upperBound, VariableType):
+                return False
+            current = current.upperBound.typeParameter
+
 
 # List of variable kinds
 LOCAL = "local"

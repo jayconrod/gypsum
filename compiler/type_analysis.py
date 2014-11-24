@@ -160,12 +160,17 @@ class SubtypeVisitor(TypeVisitorCommon):
         if irParam.upperBound is not None:
             return
 
-        irParam.upperBound = self.visit(node.upperBound) \
-                             if node.upperBound is not None \
-                             else getRootClassType()
-        irParam.lowerBound = self.visit(node.lowerBound) \
-                             if node.lowerBound is not None \
-                             else getNothingClassType()
+        def visitBound(bound, default):
+            if bound is None:
+                return default
+            else:
+                ty = self.visit(bound)
+                if ty.isNullable():
+                    raise TypeException("%s: bound may not be nullable" % node.name)
+                return ty
+
+        irParam.upperBound = visitBound(node.upperBound, getRootClassType())
+        irParam.lowerBound = visitBound(node.lowerBound, getNothingClassType())
         if not irParam.lowerBound.isSubtypeOf(irParam.upperBound):
             raise TypeException("%s: lower bound is not subtype of upper bound" % node.name)
 

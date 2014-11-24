@@ -38,6 +38,10 @@ class Type(Data):
     def isSubtypeOf(self, other):
         if self == other:
             return True
+        elif isinstance(self, VariableType) and \
+             isinstance(other, VariableType) and \
+             self.typeParameter.hasCommonBound(other.typeParameter):
+            return True
         elif isinstance(self, VariableType):
             return self.typeParameter.upperBound.isSubtypeOf(other)
         elif isinstance(other, VariableType):

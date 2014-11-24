@@ -327,14 +327,43 @@ word_t Type::alignment() const {
 }
 
 
-bool Type::isSubtypeOf(Type* other) const {
-  if (equals(other))
+bool Type::isSubtypeOf(Local<Type> left, Local<Type> right) {
+  if (left->equals(*right))
     return true;
-  if (isPrimitive() || other->isPrimitive())
+  if (left->isPrimitive() || right->isPrimitive())
     return false;
-  Class* clas = asClass();
-  Class* otherClass = other->asClass();
-  return clas->isSubclassOf(otherClass);
+  if (left->isVariable() &&
+      right->isVariable() &&
+      left->asVariable()->hasCommonBound(right->asVariable())) {
+    return true;
+  }
+
+  ASSERT(left->isObject() && right->isObject());
+  while (left->isVariable()) {
+    left = handle(left->asVariable()->upperBound());
+  }
+  while (right->isVariable()) {
+    right = handle(right->asVariable()->lowerBound());
+  }
+  ASSERT(left->isClass() && right->isClass());
+  if (left->isNullable() && !right->isNullable())
+    return false;
+  auto leftClass = handle(left->asClass());
+  auto rightClass = handle(right->asClass());
+
+  if (*leftClass == left->getVM()->roots()->getBuiltinClass(BUILTIN_NOTHING_CLASS_ID))
+    return true;
+
+  if (!leftClass->isSubclassOf(*rightClass))
+    return false;
+
+  auto leftEquiv = substituteForBaseClass(left, rightClass);
+  ASSERT(leftEquiv->typeArgumentCount() == right->typeArgumentCount());
+  for (length_t i = 0; i < leftEquiv->typeArgumentCount(); i++) {
+    if (!leftEquiv->typeArgument(i)->equals(right->typeArgument(i)))
+      return false;
+  }
+  return true;
 }
 
 
