@@ -535,13 +535,8 @@ void Interpreter::handleBuiltin(BuiltinId id) {
     case BUILTIN_STRING_CONCAT_OP_ID: {
       Local<String> right(block_cast<String>(pop<Block*>()));
       Local<String> left(block_cast<String>(pop<Block*>()));
-      auto cons = left->tryConcat(vm_->heap(), *right);
-      if (cons == nullptr) {
-        collectGarbage();
-        cons = left->tryConcat(vm_->heap(), *right);
-        CHECK(cons != nullptr);
-      }
-      push<Block*>(cons);
+      auto cons = String::concat(vm_->heap(), left, right);
+      push<Block*>(*cons);
       break;
     }
 
