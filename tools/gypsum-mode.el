@@ -69,7 +69,11 @@
     "lambda"
     "match"
     "null"
+    "private"
+    "protected"
+    "public"
     "return"
+    "static"
     "super"
     "this"
     "throw"
@@ -92,14 +96,16 @@
 (setq gypsum-constant-keywords-regexp (regexp-opt
   '("false"
     "null"
-    "true")))
+    "true"
+    "{}")))
 
 (setq gypsum-patterns
   `(("//.*$" . font-lock-comment-face)
     (,gypsum-constant-keywords-regexp . font-lock-constant-face)
     (,gypsum-type-keywords-regexp . font-lock-type-face)
-    ("[+-]?\\(?:[0-9]+\\.?[0-9]*|\\.[0-9]+\\)\\(?:[eE][0-9]+\\)?" . font-lock-constant-face)
-    ("[0-9.]+" . font-lock-constant-face)
+    ("\\<[+-]?[0-9]+\\.[0-9]*\\(?:[eE][+-]?[0-9]+\\)?\\>" . font-lock-constant-face)
+    ("\\<[+-]?\\.[0-9]+\\(?:[eE][+-]?[0-9]+\\)?\\>" . font-lock-constant-face)
+    ("\\<[+-]?[0-9]+\\(?:[eE][+-]?[0-9]+\\)?\\>" . font-lock-constant-face)
     ("\"[^\"]*?\"" . font-lock-string-face)
     ("\\(?:def\\|var\\|class\\) *\\([A-Za-z0-9_-]+\\)" 1 font-lock-variable-name-face)
     (,gypsum-keywords-regexp . font-lock-keyword-face)))
