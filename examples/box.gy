@@ -1,8 +1,8 @@
 // This is a simple Gypsum program.
 // You can compile it with this command:
-//   ../compiler/compiler list.gy -o list.csp
+//   ../compiler/compiler box.gy -o box.csp
 // You can run it with this command:
-//   ../vm/out/driver list.csp
+//   ../vm/out/driver box.csp
 // (If you haven't build the VM yet, run this first):
 //   (cd ../vm; make -j)
 
