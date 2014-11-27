@@ -571,6 +571,36 @@ class TestTypeAnalysis(unittest.TestCase):
         self.assertEquals(len(fooClass.methods), len(barClass.methods))
         self.assertIs(barClass, barClass.methods[-1].clas)
 
+    def testBuiltinOverride(self):
+        source = "def f = \"foo\".to-string"
+        info = self.analyzeFromSource(source)
+        useInfo = info.getUseInfo(info.ast.definitions[0].body)
+        receiverClass = useInfo.defnInfo.irDefn.clas
+        self.assertIs(getStringClass(), receiverClass)
+
+    def testRecursiveOverrideBuiltinWithoutReturnType(self):
+        source = "class List(value: String, next: List?)\n" + \
+                 "  def to-string = value + if (next !== null) next.to-string else \"\""
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testRecursiveOverrideBuiltin(self):
+        source = "class List(value: String, next: List?)\n" + \
+                 "  def to-string: String = value + if (next !== null) next.to-string else \"\""
+        info = self.analyzeFromSource(source)
+        List = info.package.findClass(name="List")
+        useInfo = info.getUseInfo(info.ast.definitions[0].members[0].body.right.trueExpr)
+        receiverClass = useInfo.defnInfo.irDefn.clas
+        self.assertIs(List, receiverClass)
+
+    def testOverrideWithImplicitTypeParameters(self):
+        source = "class A[static T]\n" + \
+                 "  def to-string = \"A\"\n"
+        info = self.analyzeFromSource(source)
+        A = info.package.findClass(name="A")
+        toString = A.getMethod("to-string")
+        self.assertIs(A, toString.clas)
+        self.assertIs(toString.override, getRootClass().getMethod("to-string"))
+
     def testOverrideCovariantParameters(self):
         source = "class A\n" + \
                  "class B <: A\n" + \
@@ -768,6 +798,21 @@ class TestTypeAnalysis(unittest.TestCase):
         ty = ClassType(Box, (ClassType(C),))
         self.assertEquals(ty, f.returnType)
         self.assertEquals(ty, info.getType(info.ast.definitions[2].body))
+
+    def testLoadFieldWithTypeParameter(self):
+        source = "class Box[static T](value: T)\n" + \
+                 "def f(box: Box[String]) = box.value"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(getStringType(), info.getType(info.ast.definitions[1].body))
+
+    def testStoreSubtypeToTypeParameterField(self):
+        source = "class A\n" + \
+                 "class B <: A\n" + \
+                 "class Box[static T](value: T)\n" + \
+                 "def f(box: Box[A], b: B) = box.value = b"
+        info = self.analyzeFromSource(source)
+        A = info.package.findClass(name="A")
+        self.assertEquals(ClassType(A), info.getType(info.ast.definitions[3].body))
 
     def testCallInheritedMethodWithTypeParameter(self):
         source = "class A[static T](val: T)\n" + \

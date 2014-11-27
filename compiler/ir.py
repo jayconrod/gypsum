@@ -4,7 +4,9 @@
 # the GPL license that can be found in the LICENSE.txt file.
 
 
+import builtins
 from bytecode import *
+import compile_info
 from data import *
 from ir_types import *
 
@@ -137,18 +139,18 @@ class Function(IrDefinition):
 
     def mayOverride(self, other):
         assert self.isMethod() and other.isMethod()
+        selfExplicitTypeParameters = compile_info.getExplicitTypeParameters(self)
+        otherExplicitTypeParameters = compile_info.getExplicitTypeParameters(other)
         typeParametersAreCompatible = \
-            len(self.typeParameters) == len(other.typeParameters) and \
+            len(selfExplicitTypeParameters) == len(otherExplicitTypeParameters) and \
             all(atp.isEquivalent(btp) for atp, btp in
-                zip(self.typeParameters, other.typeParameters))
+                zip(selfExplicitTypeParameters, otherExplicitTypeParameters))
         parameterTypesAreCompatible = \
             len(self.parameterTypes) == len(other.parameterTypes) and \
             all(bt.isSubtypeOf(at) for at, bt in
                 zip(self.parameterTypes[1:], other.parameterTypes[1:]))
-        returnTypeIsCompatible = self.returnType.isSubtypeOf(other.returnType)
         return typeParametersAreCompatible and \
-               parameterTypesAreCompatible and \
-               returnTypeIsCompatible
+               parameterTypesAreCompatible
 
     def __repr__(self):
         return "Function(%s, %s, %s, %s, %s, %s, %s)" % \
@@ -192,8 +194,7 @@ class Class(IrDefinition):
 
     def superclasses(self):
         """Returns a generator of superclasses in depth-first order, including this class."""
-        nothingClassId = -2   # avoid circular import dependency with builtins
-        assert self.id is not nothingClassId
+        assert self.id is not builtins.BUILTIN_NOTHING_CLASS_ID
         yield self
         clas = self
         while len(clas.supertypes) > 0:
@@ -203,6 +204,7 @@ class Class(IrDefinition):
     def findPathToBaseClass(self, base):
         """Returns a path through the class DAG to a particular base class. The path does not
         include this class. If the given class is not a base, returns None."""
+        assert self is not builtins.getNothingClass()
         path = []
         indexStack = [0]
         assert self.id is not None
@@ -226,6 +228,9 @@ class Class(IrDefinition):
                 indexStack.append(0)
         return None
 
+    def findDistanceToBaseClass(self, base):
+        return len(self.findPathToBaseClass(base))
+
     def isSubclassOf(self, other):
         nothingClassId = -2   # avoid circular import dependency with builtins
         if self is other or self.id == nothingClassId:
@@ -239,6 +244,10 @@ class Class(IrDefinition):
         """Returns a class which (a) is a superclass of both classes, and (b) has no subclasses
         which are superclasses of both classes."""
         if self is other:
+            return self
+        if self is builtins.getNothingClass():
+            return other
+        if other is builtins.getNothingClass():
             return self
         selfBases = list(self.superclasses())
         selfLast = -len(selfBases) - 1

@@ -24,9 +24,12 @@ class TestIrTypes(unittest.TestCase):
         self.A = self.makeClass("A", getRootClass())
         self.B = self.makeClass("B", self.A)
         self.C = self.makeClass("C", self.B)
-        X = TypeParameter("X", getRootClassType(), getNothingClassType(), frozenset())
-        Y = TypeParameter("Y", getRootClassType(), getNothingClassType(), frozenset())
-        self.P = Class("P", [X, Y], [getRootClassType()], None, None, None, None, frozenset())
+        self.X = TypeParameter("X", getRootClassType(), getNothingClassType(), frozenset())
+        self.X.id = 0
+        self.Y = TypeParameter("Y", getRootClassType(), getNothingClassType(), frozenset())
+        self.Y.id = 1
+        self.P = Class("P", [self.X, self.Y], [getRootClassType()],
+                       None, None, None, None, frozenset())
         self.P.id = self.nextId()
 
     def testSubtypeSelf(self):
@@ -148,3 +151,22 @@ class TestIrTypes(unittest.TestCase):
         V.id = 2
         self.assertEquals(ClassType(A, (ClassType(C),)),
                           VariableType(V).substituteForBaseClass(A))
+
+    def testCombineNothing(self):
+        aTy = ClassType(self.A)
+        nothingTy = getNothingClassType()
+        self.assertEquals(aTy, aTy.combine(nothingTy))
+        self.assertEquals(aTy, nothingTy.combine(aTy))
+
+    def testCombineNull(self):
+        aTy = ClassType(self.A)
+        nullTy = getNullType()
+        aNullTy = ClassType(self.A, (), frozenset([NULLABLE_TYPE_FLAG]))
+        self.assertEquals(aNullTy, aTy.combine(nullTy))
+        self.assertEquals(aNullTy, nullTy.combine(aTy))
+
+    def testCombineWithTypeArgs(self):
+        pxy = ClassType(self.P, (VariableType(self.X), VariableType(self.Y)))
+        pyx = ClassType(self.P, (VariableType(self.Y), VariableType(self.X)))
+        self.assertEquals(pxy, pxy.combine(pxy))
+        self.assertRaises(TypeException, pxy.combine, pyx)

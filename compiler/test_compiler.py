@@ -694,7 +694,13 @@ class TestCompiler(unittest.TestCase):
                              variables=[Variable("exn", exnTy, PARAMETER, frozenset())]))
 
     def testThrowInTry(self):
-        exnTy = ClassType(getExceptionClass())
+        exnClass = getExceptionClass()
+        exnTy = ClassType(exnClass)
+        typeClass = getTypeClass()
+        typeofMethodIndex = next(i for i, m in enumerate(exnClass.methods)
+                                 if m.name == "typeof")
+        subtypeMethodIndex = next(i for i, m in enumerate(typeClass.methods)
+                             if m.name == "is-subtype-of")
         self.checkFunction("def f = try throw Exception catch\n" +
                            "  case exn => 1",
                            self.makeSimpleFunction("f", I64Type, [[
@@ -707,14 +713,14 @@ class TestCompiler(unittest.TestCase):
                                throw(),
                              ], [
                                dup(),
-                               callv(1, 2),
+                               callv(1, typeofMethodIndex),
                                dup(),
                                allocarri(BUILTIN_TYPE_CLASS_ID, 1),
                                dup(),
                                cls(BUILTIN_EXCEPTION_CLASS_ID),
                                callg(BUILTIN_TYPE_CTOR_ID),
                                drop(),
-                               callv(2, 3),
+                               callv(2, subtypeMethodIndex),
                                branchif(3, 5),
                              ], [
                                stlocal(-1),
@@ -1046,13 +1052,14 @@ class TestCompiler(unittest.TestCase):
                  "  def get = 12\n" + \
                  "def f(foo: Foo) = foo.get"
         package = self.compileFromSource(source)
-        clas = package.classes[0]
-        method = clas.methods[0]
+        clas = package.findClass(name="Foo")
+        method = package.findFunction(name="get")
+        index = clas.getMethodIndex(method)
         objType = ClassType(clas, ())
         self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
                                ldlocal(0),
-                               callv(1, 3),
+                               callv(1, index),
                                ret()
                              ]],
                              variables=[Variable("foo", objType, PARAMETER, frozenset())]))

@@ -502,6 +502,12 @@ void Interpreter::ensurePointerMap(const Handle<Function>& function) {
 
 void Interpreter::handleBuiltin(BuiltinId id) {
   switch (id) {
+    case BUILTIN_ROOT_CLASS_TO_STRING_ID: {
+      auto result = String::fromUtf8CString(vm_->heap(), "Object");
+      pop<Block*>();
+      push<Block*>(*result);
+      break;
+    }
     case BUILTIN_ROOT_CLASS_TYPEOF_ID: {
       auto receiver = block_cast<Object>(pop<Block*>());
       Local<Class> clas(receiver->meta()->clas());
@@ -529,6 +535,11 @@ void Interpreter::handleBuiltin(BuiltinId id) {
       auto receiver = handle(block_cast<Type>(pop<Block*>()));
       auto result = Type::isSubtypeOf(other, receiver);
       push<i8>(result ? 1 : 0);
+      break;
+    }
+
+    case BUILTIN_STRING_TO_STRING_ID: {
+      // return receiver
       break;
     }
 

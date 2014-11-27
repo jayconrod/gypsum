@@ -29,6 +29,12 @@ def analyzeTypes(info):
     for scope in info.scopes.values():
         scope.resolveOverrides()
 
+    for func in info.package.functions:
+        if hasattr(func, "override") and \
+           not func.returnType.isSubtypeOf(func.override.returnType):
+            raise TypeException("%s: return type is not subtype of overriden function" %
+                                func.name)
+
 
 class TypeVisitorCommon(AstNodeVisitor):
     """Provides common functionality for SubtypeVisitor and TypeVisitor, namely the visitor
@@ -642,9 +648,13 @@ class TypeVisitor(TypeVisitorCommon):
                 assert len(allTypeArgs) == len(irDefn.typeParameters)
                 ty = irDefn.returnType.substitute(irDefn.typeParameters, allTypeArgs)
                 return ty
+        elif isinstance(irDefn, Field):
+            ty = irDefn.type
+            if receiverIsExplicit and isinstance(receiverType, ClassType):
+                ty = ty.substitute(receiverType.clas.typeParameters, receiverType.typeArguments)
+            return ty
         else:
             assert isinstance(irDefn, Variable) or \
-                   isinstance(irDefn, Field) or \
                    isinstance(irDefn, Global)
             return irDefn.type
 

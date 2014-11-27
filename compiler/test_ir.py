@@ -30,6 +30,11 @@ class TestIntermediateRepresentation(unittest.TestCase):
         commonClass = self.A.findCommonBaseClass(self.B)
         self.assertIs(self.base, commonClass)
 
+    def testFindCommonBaseClassWithNothing(self):
+        nothing = getNothingClass()
+        self.assertIs(self.A, self.A.findCommonBaseClass(nothing))
+        self.assertIs(self.A, nothing.findCommonBaseClass(self.A))
+
     def testFunctionCanCallWithWrongArgCount(self):
         f = Function("f", UnitType, [], [UnitType], None, None, frozenset())
         self.assertFalse(f.canCallWith([], []))

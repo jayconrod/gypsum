@@ -7,7 +7,7 @@
 from ast import *
 from builtins import *
 from data import *
-from ir import Package
+import ir
 
 
 BUILTIN_SCOPE_ID = -1
@@ -23,7 +23,7 @@ class CompileInfo(object):
 
     def __init__(self, ast, package=None):
         if package is None:
-            package = Package()
+            package = ir.Package()
         self.ast = ast
         self.package = package
         self.scopes = {}
@@ -261,7 +261,7 @@ def getExplicitTypeParameterCount(irDefn):
        hasattr(irDefn.astDefn, "typeParameters"):
         return len(irDefn.astDefn.typeParameters)
     else:
-        return 0
+        return len(irDefn.typeParameters)
 
 
 def getExplicitTypeParameters(irDefn):

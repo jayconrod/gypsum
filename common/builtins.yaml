@@ -32,6 +32,11 @@
       returnType: Type
       parameterTypes:
         - Object
+    - name: to-string
+      id: BUILTIN_ROOT_CLASS_TO_STRING_ID
+      returnType: String
+      parameterTypes:
+        - Object
 - name: Nothing
   id: BUILTIN_NOTHING_CLASS_ID
   isPrimitive: false
@@ -105,6 +110,11 @@
       type: i32
   elements: i32
   methods:
+    - name: "to-string"
+      id: BUILTIN_STRING_TO_STRING_ID
+      returnType: String
+      parameterTypes:
+        - String
     - name: "+"
       id: BUILTIN_STRING_CONCAT_OP_ID
       returnType: String

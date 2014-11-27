@@ -88,7 +88,7 @@ def initClass(out, classData):
         for i, ctorData in enumerate(classData["constructors"]):
             out.write("    constructors->set(%d, %s);\n" %
                       (i, ctorData["id"]))
-    allMethodIds = findInheritedMethodIds(classData)
+    allMethodIds = [method["id"] for method in findInheritedMethods(classData)]
     if len(allMethodIds) == 0:
         out.write("    auto methods = emptyi32Array();\n")
     else:
@@ -120,14 +120,20 @@ def findClass(name):
     return next(classData for classData in classesData if classData["name"] == name)
 
 
-def findInheritedMethodIds(classData):
-    ownMethods = [methodData["id"] for methodData in classData["methods"]]
+def findInheritedMethods(classData):
+    ownMethods = classData["methods"]
     if classData["supertype"] is None:
         return ownMethods
     else:
         superclassData = findClass(classData["supertype"])
-        methods = findInheritedMethodIds(superclassData)
-        methods += ownMethods
+        inheritedMethods = findInheritedMethods(superclassData)
+        methods = list(inheritedMethods)
+        indexMap = {method["name"]: index for index, method in enumerate(methods)}
+        for method in ownMethods:
+            if method["name"] in indexMap:
+                methods[indexMap[method["name"]]] = method
+            else:
+                methods.append(method)
         return methods
 
 

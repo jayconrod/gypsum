@@ -1068,7 +1068,10 @@ class BuiltinScope(Scope):
                 defnInfo = DefnInfo(ctor, irClass.id)
                 self.info.setDefnInfo(ctor, defnInfo)
         for method in irClass.methods:
-            defnInfo = DefnInfo(method, irClass.id)
+            inheritanceDepth = method.clas.findDistanceToBaseClass(method.override.clas) \
+                               if hasattr(method, "override") \
+                               else 0
+            defnInfo = DefnInfo(method, irClass.id, inheritanceDepth)
             self.info.setDefnInfo(method, defnInfo)
             self.bind(method.name, defnInfo)
             self.define(method.name)

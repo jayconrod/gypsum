@@ -74,9 +74,18 @@ class Type(Data):
         elif ty is NoType:
             return self
         elif isinstance(self, ClassType) and isinstance(ty, ClassType):
-            commonBase = self.clas.findCommonBaseClass(ty.clas)
             commonFlags = self.combineFlags(ty)
-            return ClassType(commonBase, (), commonFlags)
+            if self.clas is builtins.getNothingClass():
+                return ClassType(ty.clas, ty.typeArguments, commonFlags)
+            elif ty.clas is builtins.getNothingClass():
+                return ClassType(self.clas, self.typeArguments, commonFlags)
+            commonBase = self.clas.findCommonBaseClass(ty.clas)
+            selfTypeArgs = self.substituteForBaseClass(commonBase).typeArguments
+            otherTypeArgs = ty.substituteForBaseClass(commonBase).typeArguments
+            if selfTypeArgs != otherTypeArgs:
+                # TODO: support co/contra-variance
+                raise TypeException("type error: could not combine; incompatible type args")
+            return ClassType(commonBase, selfTypeArgs, commonFlags)
         else:
             raise TypeException("type error: could not combine")
 
@@ -219,6 +228,7 @@ class ClassType(ObjectType):
                          self.flags)
 
     def substituteForBaseClass(self, base):
+        assert base is not builtins.getNothingClass()
         path = self.clas.findPathToBaseClass(base)
         assert path is not None
         ty = self

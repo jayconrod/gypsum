@@ -147,9 +147,19 @@ def _initialize():
             clas.fields = []
             clas.methods = []
             clas.isPrimitive = True
-        clas.methods += [buildMethod(m, clas) for m in classData["methods"]]
+        inheritedMethodCount = len(clas.methods)
+        for m in classData["methods"]:
+            addMethod(clas.methods, inheritedMethodCount, buildMethod(m, clas))
 
         _builtinClassTypeMap[buildType(clas.name)] = clas
+
+    def addMethod(methods, inheritedCount, method):
+        for i, m in enumerate(methods[:inheritedCount]):
+            if method.name == m.name and method.mayOverride(m):
+                method.override = m
+                methods[i] = method
+                return
+        methods.append(method)
 
     def defineFunction(functionData):
         function = buildFunction(functionData)
