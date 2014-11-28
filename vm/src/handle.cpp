@@ -127,5 +127,21 @@ HandleScope::~HandleScope() {
   storage_->canCreateLocal_ = oldCanCreateLocal_;
 }
 
+
+SealHandleScope::SealHandleScope(HandleStorage* storage)
+    : storage_(storage),
+      oldCanCreateLocal_(storage_->canCreateLocal_) {
+  storage_->canCreateLocal_ = false;
+}
+
+
+SealHandleScope::SealHandleScope(VM* vm)
+    : SealHandleScope(&vm->handleStorage()) { }
+
+
+SealHandleScope::~SealHandleScope() {
+  storage_->canCreateLocal_ = oldCanCreateLocal_;
+}
+
 }
 }

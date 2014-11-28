@@ -23,6 +23,7 @@ class I8Array;
 class I32Array;
 class I64Array;
 class Meta;
+class String;
 template <class T>
 class TaggedArray;
 class Type;
@@ -57,6 +58,8 @@ class Roots {
     F(Type, nullType, NULL_TYPE)                                      \
     F(Meta, typeMeta, TYPE_META)                                      \
     F(Meta, stringMeta, STRING_META)                                  \
+    F(String, trueString, TRUE_STRING)                                \
+    F(String, falseString, FALSE_STRING)                              \
 
   #define DEFINE_BASIC_GETTER(type, name, NAME)                       \
   type* name() const {                                                \
@@ -70,6 +73,7 @@ class Roots {
   Class* getBuiltinClass(BuiltinId id) const;
   Meta* getBuiltinMeta(BuiltinId id) const;
   Type* getBuiltinType(BuiltinId id) const;
+  String* getBuiltinName(BuiltinId id) const;
   Function* getBuiltinFunction(BuiltinId id) const;
 
   template <class Callback>
@@ -91,6 +95,7 @@ class Roots {
   std::vector<Class*> builtinClasses_;
   std::vector<Meta*> builtinMetas_;
   std::vector<Type*> builtinTypes_;
+  std::vector<String*> builtinNames_;
   std::vector<Function*> builtinFunctions_;
 
   #undef BASIC_META_LIST
@@ -109,6 +114,9 @@ void Roots::visitPointers(Callback callback) {
     callback(reinterpret_cast<Block**>(&p));
   }
   for (auto& p : builtinTypes_) {
+    callback(reinterpret_cast<Block**>(&p));
+  }
+  for (auto& p : builtinNames_) {
     callback(reinterpret_cast<Block**>(&p));
   }
   for (auto& p : builtinFunctions_) {

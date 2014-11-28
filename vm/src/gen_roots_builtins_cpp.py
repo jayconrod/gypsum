@@ -51,6 +51,12 @@ def initType(out, classData):
     out.write("  }")
 
 
+def initName(out, classData):
+    out.write("\n  { // %s\n" % classData["id"])
+    out.write("    auto name = String::rawFromUtf8CString(heap, \"%s\");\n" % classData["name"])
+    out.write("    builtinNames_.push_back(name);\n  }")
+
+
 def initClass(out, classData):
     assert not classData["isPrimitive"]
     out.write("\n  { // %s\n" % classData["id"])
@@ -162,6 +168,7 @@ with open(rootsBuiltinsName, "w") as rootsBuiltinsFile:
 #include "class.h"
 #include "field.h"
 #include "function.h"
+#include "string.h"
 #include "type.h"
 
 using namespace std;
@@ -196,6 +203,14 @@ void Roots::initializeBuiltins(Heap* heap) {
 
   auto nullableRootClassType = new(heap, 1) Type(getBuiltinClass(BUILTIN_ROOT_CLASS_ID),
                                                  Type::NULLABLE_FLAG);""")
+
+    rootsBuiltinsFile.write("""
+
+  //
+  // Initialize names
+  //""")
+    for classData in classesData:
+        initName(rootsBuiltinsFile, classData)
 
     rootsBuiltinsFile.write("""
 

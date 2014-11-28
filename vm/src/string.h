@@ -24,6 +24,7 @@ class String: public Object {
   void* operator new (size_t, Heap* heap, length_t length);
   explicit String(const u32* chars);
   static Local<String> create(Heap* heap, length_t length, const u32* chars);
+  static String* rawFromUtf8CString(Heap* heap, const char* utf8Chars);
   static Local<String> fromUtf8CString(Heap* heap, const char* utf8Chars);
   static Local<String> fromUtf8String(Heap* heap, const u8* utf8Chars, word_t size);
   static Local<String> fromUtf8String(Heap* heap, const u8* utf8Chars,

@@ -33,12 +33,14 @@ namespace internal {
 Interpreter::Interpreter(VM* vm, const Handle<Stack>& stack)
     : vm_(vm),
       stack_(stack),
-      pcOffset_(kDonePcOffset) { }
+      pcOffset_(kDonePcOffset),
+      isPreparedForGC_(false) { }
 
 
 // Stack methods need to go before instantiation so they can be specialized.
 template <typename T>
 void Interpreter::push(T value) {
+  ASSERT(!isPreparedForGC());
   typename std::make_unsigned<T>::type unsignedValue = value;
   stack_->push(static_cast<u64>(unsignedValue));
 }
@@ -46,12 +48,14 @@ void Interpreter::push(T value) {
 
 template <>
 void Interpreter::push<bool>(bool value) {
+  ASSERT(!isPreparedForGC());
   stack_->push(static_cast<u64>(value));
 }
 
 
 template <>
 void Interpreter::push<f32>(f32 value) {
+  ASSERT(!isPreparedForGC());
   auto bits = static_cast<u64>(f32ToBits(value));
   stack_->push(bits);
 }
@@ -59,6 +63,7 @@ void Interpreter::push<f32>(f32 value) {
 
 template <>
 void Interpreter::push<f64>(f64 value) {
+  ASSERT(!isPreparedForGC());
   stack_->push(value);
 }
 
@@ -66,6 +71,7 @@ void Interpreter::push<f64>(f64 value) {
 template <>
 void Interpreter::push<void*>(void* value) {
   static_assert(sizeof(void*) == sizeof(i64), "Specialization requires 64-bit");
+  ASSERT(!isPreparedForGC());
   stack_->push(value);
 }
 
@@ -73,18 +79,21 @@ void Interpreter::push<void*>(void* value) {
 template <>
 void Interpreter::push<Block*>(Block* value) {
   static_assert(sizeof(Block*) == sizeof(i64), "Specialization requires 64-bit");
+  ASSERT(!isPreparedForGC());
   stack_->push(value);
 }
 
 
 template <typename T>
 T Interpreter::pop() {
+  ASSERT(!isPreparedForGC());
   return static_cast<T>(stack_->pop<u64>());
 }
 
 
 template <>
 f32 Interpreter::pop<f32>() {
+  ASSERT(!isPreparedForGC());
   auto bits = static_cast<u32>(stack_->pop<u64>());
   return f32FromBits(bits);
 }
@@ -92,6 +101,7 @@ f32 Interpreter::pop<f32>() {
 
 template <>
 f64 Interpreter::pop<f64>() {
+  ASSERT(!isPreparedForGC());
   return stack_->pop<f64>();
 }
 
@@ -99,8 +109,28 @@ f64 Interpreter::pop<f64>() {
 template <>
 Block* Interpreter::pop<Block*>() {
   static_assert(sizeof(Block*) == sizeof(i64), "Specialization requires 64-bit");
+  ASSERT(!isPreparedForGC());
   return stack_->pop<Block*>();
 }
+
+
+class Interpreter::GCSafeScope {
+ public:
+  explicit GCSafeScope(Interpreter* interpreter)
+      : interpreter_(interpreter),
+        pcOffset_(interpreter_->pcOffset_) {
+    interpreter_->prepareForGC();
+  }
+
+  ~GCSafeScope() {
+    ASSERT(pcOffset_ == interpreter_->pcOffset_);
+    interpreter_->unprepareForGC();
+  }
+
+ private:
+  Interpreter* interpreter_;
+  length_t pcOffset_;
+};
 
 
 #define CHECK_NON_NULL(block)                                         \
@@ -119,7 +149,7 @@ Block* Interpreter::pop<Block*>() {
 
 i64 Interpreter::call(const Handle<Function>& callee) {
   // TODO: figure out a reasonable way to manage locals here.
-  HandleScope handleScope(vm_);
+  SealHandleScope disallowHandles(vm_);
   AllowAllocationScope disallowAllocation(vm_->heap(), false);
 
   // Set up initial stack frame.
@@ -327,11 +357,13 @@ i64 Interpreter::call(const Handle<Function>& callee) {
 
       case ALLOCOBJ: {
         auto classId = readVbn();
-        ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
-        AllowAllocationScope allowAllocation(vm_->heap(), true);
-        auto meta = getMetaForClassId(classId);
         Object* obj = nullptr;
-        RETRY_WITH_GC(vm_->heap(), obj = new(vm_->heap(), *meta) Object);
+        {
+          GCSafeScope gcSafe(this);
+          HandleScope handleScope(vm_);
+          auto meta = getMetaForClassId(classId);
+          obj = *Object::create(vm_->heap(), meta);
+        }
         push<Block*>(obj);
         break;
       }
@@ -339,11 +371,13 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       case ALLOCARRI: {
         auto classId = readVbn();
         auto length = readVbn();
-        ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
-        AllowAllocationScope allowAllocation(vm_->heap(), true);
-        auto meta = getMetaForClassId(classId);
         Object* obj = nullptr;
-        RETRY_WITH_GC(vm_->heap(), obj = new(vm_->heap(), *meta, length) Object);
+        {
+          GCSafeScope gcSafe(this);
+          HandleScope handleScope(vm_);
+          auto meta = getMetaForClassId(classId);
+          obj = *Object::create(vm_->heap(), meta, length);
+        }
         push<Block*>(obj);
         break;
       }
@@ -366,11 +400,10 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         auto functionId = readVbn();
         ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
         if (isBuiltinId(functionId)) {
-          AllowAllocationScope allowAllocation(vm_->heap(), true);
           handleBuiltin(static_cast<BuiltinId>(functionId));
         } else {
           auto functionIndex = toLength(functionId);
-          Local<Function> callee(function_->package()->getFunction(functionIndex));
+          Persistent<Function> callee(function_->package()->getFunction(functionIndex));
           enter(callee);
         }
         break;
@@ -382,9 +415,9 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
         auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
         CHECK_NON_NULL(receiver);
-        Local<Function> callee(block_cast<Function>(receiver->meta()->getData(methodIndex)));
+        Persistent<Function> callee(block_cast<Function>(
+            receiver->meta()->getData(methodIndex)));
         if (callee->hasBuiltinId()) {
-          AllowAllocationScope allowAllocation(vm_->heap(), true);
           handleBuiltin(callee->builtinId());
         } else {
           enter(callee);
@@ -491,9 +524,9 @@ void Interpreter::ensurePointerMap(const Handle<Function>& function) {
   // be generated if all the other functions called by this function are accessible (so we
   // can't do it before all packages are loaded and validated). Since this requires some
   // analysis, we only do it for functions which are actually called.
-  ASSERT(pcOffset_ == kDonePcOffset || function_->hasPointerMapAtPcOffset(pcOffset_));
-  AllowAllocationScope allowAllocation(vm_->heap(), true);
   if (function->stackPointerMap() == nullptr) {
+    GCSafeScope gcSafe(this);
+    HandleScope handleScope(vm_);
     auto stackPointerMap = StackPointerMap::buildFrom(vm_->heap(), function);
     function->setStackPointerMap(*stackPointerMap);
   }
@@ -501,18 +534,34 @@ void Interpreter::ensurePointerMap(const Handle<Function>& function) {
 
 
 void Interpreter::handleBuiltin(BuiltinId id) {
+  // Builtin functions are implemented here, in C++, but the rest of the code behaves as if
+  // they are normal functions. Some of these functions may trigger the garbage collector, so
+  // it is important to maintain the stack in a way that the garbage collector expects. All
+  // arguments should stay on the stack until we are prepared to return. GCSafeScope should
+  // be used when needed.
   switch (id) {
     case BUILTIN_ROOT_CLASS_TO_STRING_ID: {
-      auto result = String::fromUtf8CString(vm_->heap(), "Object");
-      pop<Block*>();
-      push<Block*>(*result);
+      String* result = nullptr;
+      {
+        GCSafeScope gcSafe(this);
+        HandleScope handleScope(vm_);
+        result = *String::fromUtf8CString(vm_->heap(), "Object");
+      }
+      pop<Block*>();  // receiver
+      push<Block*>(result);
       break;
     }
     case BUILTIN_ROOT_CLASS_TYPEOF_ID: {
-      auto receiver = block_cast<Object>(pop<Block*>());
-      Local<Class> clas(receiver->meta()->clas());
-      auto type = Type::create(vm_->heap(), clas);
-      push<Block*>(*type);
+      Type* type = nullptr;
+      {
+        GCSafeScope gcSafe(this);
+        HandleScope handleScope(vm_);
+        auto receiver = handle(mem<Block*>(stack_->sp() + kPrepareForGCSize));
+        auto clas = handle(receiver->meta()->clas());
+        type = *Type::create(vm_->heap(), clas);
+      }
+      pop<Block*>();  // receiver
+      push<Block*>(type);
       break;
     }
 
@@ -531,9 +580,16 @@ void Interpreter::handleBuiltin(BuiltinId id) {
     }
 
     case BUILTIN_TYPE_IS_SUBTYPE_OF_ID: {
-      auto other = handle(block_cast<Type>(pop<Block*>()));
-      auto receiver = handle(block_cast<Type>(pop<Block*>()));
-      auto result = Type::isSubtypeOf(other, receiver);
+      bool result = false;
+      {
+        GCSafeScope gcSafe(this);
+        HandleScope handleScope(vm_);
+        auto other = handle(mem<Type*>(stack_->sp() + kPrepareForGCSize));
+        auto receiver = handle(mem<Type*>(stack_->sp() + kPrepareForGCSize + kSlotSize));
+        result = Type::isSubtypeOf(other, receiver);
+      }
+      pop<Block*>();  // other
+      pop<Block*>();  // receiver
       push<i8>(result ? 1 : 0);
       break;
     }
@@ -544,10 +600,17 @@ void Interpreter::handleBuiltin(BuiltinId id) {
     }
 
     case BUILTIN_STRING_CONCAT_OP_ID: {
-      Local<String> right(block_cast<String>(pop<Block*>()));
-      Local<String> left(block_cast<String>(pop<Block*>()));
-      auto cons = String::concat(vm_->heap(), left, right);
-      push<Block*>(*cons);
+      String* result = nullptr;
+      {
+        GCSafeScope gcSafe(this);
+        HandleScope handleScope(vm_);
+        auto right = handle(mem<String*>(stack_->sp() + kPrepareForGCSize));
+        auto left = handle(mem<String*>(stack_->sp() + kPrepareForGCSize + kSlotSize));
+        result = *String::concat(vm_->heap(), left, right);
+      }
+      pop<Block*>();  // right
+      pop<Block*>();  // left
+      push<Block*>(result);
       break;
     }
 
@@ -576,15 +639,15 @@ void Interpreter::handleBuiltin(BuiltinId id) {
       break;
 
     case BUILTIN_UNIT_TO_STRING_ID: {
-      auto string = String::fromUtf8CString(vm_->heap(), "unit");
-      mem<Block*>(stack_->sp()) = *string;
+      pop<Block*>();  // receiver
+      push<Block*>(vm_->roots()->getBuiltinName(BUILTIN_UNIT_TYPE_ID));
       break;
     }
 
     case BUILTIN_BOOLEAN_TO_STRING_ID: {
       bool value = pop<bool>();
-      auto string = String::fromUtf8CString(vm_->heap(), value ? "true" : "false");
-      push<Block*>(*string);
+      auto string = value ? vm_->roots()->trueString() : vm_->roots()->falseString();
+      push<Block*>(string);
       break;
     }
 
@@ -627,10 +690,15 @@ void Interpreter::handleBuiltin(BuiltinId id) {
         throwBuiltinException(BUILTIN_EXCEPTION_CLASS_ID);
         break;
       }
-      auto string = String::fromUtf8String(vm_->heap(),
-                                           reinterpret_cast<const u8*>(stlString.data()),
-                                           stlString.length());
-      push<Block*>(*string);
+      String* result = nullptr;
+      {
+        GCSafeScope gcSafe(this);
+        HandleScope handleScope(vm_);
+        result = *String::fromUtf8String(vm_->heap(),
+                                         reinterpret_cast<const u8*>(stlString.data()),
+                                         stlString.length());
+      }
+      push<Block*>(result);
       break;
     }
 
@@ -641,6 +709,7 @@ void Interpreter::handleBuiltin(BuiltinId id) {
 
 
 Local<Meta> Interpreter::getMetaForClassId(i64 classId) {
+  ASSERT(isPreparedForGC());
   if (isBuiltinId(classId)) {
     return handle(vm_->roots()->getBuiltinMeta(classId));
   }
@@ -735,19 +804,33 @@ i64 Interpreter::readVbn() {
 }
 
 
+void Interpreter::prepareForGC() {
+  ASSERT(!isPreparedForGC());
+  if (pcOffset_ != kDonePcOffset) {
+    ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
+    stack_->push(static_cast<word_t>(pcOffset_));
+  }
+  ASSERT(!vm_->heap()->isAllocationAllowed());
+  vm_->heap()->setIsAllocationAllowed(true);
+  isPreparedForGC_ = true;
+}
+
+
+void Interpreter::unprepareForGC() {
+  ASSERT(isPreparedForGC());
+  ASSERT(vm_->heap()->isAllocationAllowed());
+  if (pcOffset_ != kDonePcOffset)
+    stack_->pop<word_t>();
+  vm_->heap()->setIsAllocationAllowed(false);
+  isPreparedForGC_ = false;
+}
+
+
 void Interpreter::throwBuiltinException(BuiltinId id) {
   // TODO: ensure this allocation succeeds because we don't have a pointer map here.
   auto exnMeta = vm_->roots()->getBuiltinMeta(id);
   auto exn = new(vm_->heap(), exnMeta) Object;
   doThrow(exn);
-}
-
-
-void Interpreter::collectGarbage() {
-  stack_->push(static_cast<word_t>(pcOffset_));
-  GC gc(vm_->heap());
-  gc.collectGarbage();
-  stack_->pop<word_t>();
 }
 
 
@@ -855,29 +938,43 @@ int Interpreter::strcmp() {
 
 template <typename T>
 void Interpreter::intToString() {
-  auto value = static_cast<i64>(pop<T>());
-  stringstream stream;
-  stream << value;
-  auto stlString = stream.str();
-  auto size = stlString.length();   // same as length since these should be ascii chars
-  auto csString = String::fromUtf8String(vm_->heap(),
-                                         reinterpret_cast<const u8*>(stlString.data()),
-                                         size, size);
-  push<Block*>(*csString);
+  auto value = pop<T>();
+  push<T>(value);  // hack to restore the stack
+  String* result = nullptr;
+  {
+    GCSafeScope gcSafe(this);
+    HandleScope handleScope(vm_);
+    stringstream stream;
+    stream << value;
+    auto stlString = stream.str();
+    auto size = stlString.length();   // same as length since these should be ascii chars
+    result = *String::fromUtf8String(vm_->heap(),
+                                     reinterpret_cast<const u8*>(stlString.data()),
+                                     size, size);
+  }
+  pop<T>();  // receiver
+  push<Block*>(result);
 }
 
 
 template <typename T>
 void Interpreter::floatToString() {
   auto value = pop<T>();
-  stringstream stream;
-  stream << value;
-  auto stlString = stream.str();
-  auto size = stlString.length();
-  auto csString = String::fromUtf8String(vm_->heap(),
-                                         reinterpret_cast<const u8*>(stlString.data()),
-                                         size, size);
-  push<Block*>(*csString);
+  push<T>(value);  // hack to restore the stack
+  String* result = nullptr;
+  {
+    GCSafeScope gcSafe(this);
+    HandleScope handleScope(vm_);
+    stringstream stream;
+    stream << value;
+    auto stlString = stream.str();
+    auto size = stlString.length();
+    result = *String::fromUtf8String(vm_->heap(),
+                                     reinterpret_cast<const u8*>(stlString.data()),
+                                     size, size);
+  }
+  pop<T>();  // receiver
+  push<Block*>(result);
 }
 
 }

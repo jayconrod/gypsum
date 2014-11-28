@@ -47,13 +47,19 @@ class Interpreter {
 
   template <typename T> void push(T value);
   template <typename T> T pop();
+  static const size_t kSlotSize = 8;
+  static const size_t kPrepareForGCSize = kSlotSize;
 
   ptrdiff_t localOffsetFromIndex(i64 index);
   Address localAddressFromOffset(ptrdiff_t offset);
   Address localAddressFromIndex(i64 index);
   i64 readVbn();
 
-  void collectGarbage();
+  void prepareForGC();
+  void unprepareForGC();
+  bool isPreparedForGC() const { return isPreparedForGC_; }
+  class GCSafeScope;
+  friend GCSafeScope;
 
   template <typename T> void loadObject();
   template <typename T> void storeObject();
@@ -99,6 +105,8 @@ class Interpreter {
   length_t pcOffset_;
 
   std::vector<Handler> handlers_;
+
+  bool isPreparedForGC_;
 
   NON_COPYABLE(Interpreter)
 };

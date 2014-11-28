@@ -175,6 +175,7 @@ class HandleStorage {
 
   friend class GC;
   friend class HandleScope;
+  friend class SealHandleScope;
 };
 
 
@@ -201,6 +202,18 @@ class HandleScope {
 
   Block** escapeSlot_;
   bool escapeSlotUsed_;
+};
+
+
+class SealHandleScope {
+ public:
+  explicit SealHandleScope(HandleStorage* storage);
+  explicit SealHandleScope(VM* vm);
+  ~SealHandleScope();
+
+ private:
+  HandleStorage* storage_;
+  bool oldCanCreateLocal_;
 };
 
 

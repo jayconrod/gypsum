@@ -55,8 +55,31 @@ Local<String> String::create(Heap* heap, length_t length) {
 }
 
 
+String* String::rawFromUtf8CString(Heap* heap, const char* utf8Chars) {
+  word_t size = strlen(utf8Chars);
+  length_t length = 0;
+  auto p = reinterpret_cast<const u8*>(utf8Chars);
+  auto end = p + size;
+  while (p != end) {
+    auto ch = utf8Decode(&p, end);
+    if (ch == UTF8_DECODE_ERROR)
+      throw Error("invalid utf8 string");
+    length++;
+  }
+  auto string = new(heap, length) String;
+  auto chars = string->chars_;
+  p = reinterpret_cast<const u8*>(utf8Chars);
+  for (length_t i = 0; i < length; i++) {
+    auto ch = utf8Decode(&p, end);
+    ASSERT(ch != UTF8_DECODE_ERROR);
+    chars[i] = ch;
+  }
+  return string;
+}
+
+
 Local<String> String::fromUtf8String(Heap* heap, const u8* utf8Chars,
-                                      length_t length, word_t size) {
+                                     length_t length, word_t size) {
   auto string = String::create(heap, length);
   u32* chars = string->chars_;
   auto end = utf8Chars + size;

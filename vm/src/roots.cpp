@@ -13,6 +13,7 @@
 #include "handle.h"
 #include "package.h"
 #include "stack.h"
+#include "string.h"
 #include "type.h"
 #include "type-parameter.h"
 
@@ -127,6 +128,12 @@ void Roots::initialize(Heap* heap) {
   Meta* stringMeta = getBuiltinClass(BUILTIN_STRING_CLASS_ID)->instanceMeta();
   stringMeta->blockType_ = STRING_BLOCK_TYPE;
   basicRoots_[STRING_META_ROOT_INDEX] = stringMeta;
+
+  auto trueString = String::rawFromUtf8CString(heap, "true");
+  basicRoots_[TRUE_STRING_ROOT_INDEX] = trueString;
+
+  auto falseString = String::rawFromUtf8CString(heap, "false");
+  basicRoots_[FALSE_STRING_ROOT_INDEX] = falseString;
 }
 
 
@@ -172,6 +179,13 @@ Type* Roots::getBuiltinType(BuiltinId id) const {
   auto index = builtinIdToIndex(id);
   ASSERT(index < builtinTypes_.size());
   return builtinTypes_[index];
+}
+
+
+String* Roots::getBuiltinName(BuiltinId id) const {
+  auto index = builtinIdToIndex(id);
+  ASSERT(index < builtinNames_.size());
+  return builtinNames_[index];
 }
 
 

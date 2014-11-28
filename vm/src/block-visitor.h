@@ -114,6 +114,9 @@ void BlockVisitorBase<BlockVisitor>::visitBlockWithCustomPointers(Block* block, 
 
 template <class BlockVisitor>
 void BlockVisitorBase<BlockVisitor>::visitStack(Stack* stack) {
+  if (stack->sp() == stack->limit())
+    return;
+
   // Before invoking the garbage collector, execution should push the current pc offset on
   // top of the stack.
   word_t pcOffset = *reinterpret_cast<word_t*>(stack->sp());
