@@ -3,7 +3,7 @@
 //   ../compiler/compiler box.gy -o box.csp
 // You can run it with this command:
 //   ../vm/out/driver box.csp
-// (If you haven't build the VM yet, run this first):
+// (If you haven't built the VM yet, run this first):
 //   (cd ../vm; make -j)
 
 // This program shows how to use type parameters with functions and classes. Type parameters

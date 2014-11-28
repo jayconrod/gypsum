@@ -3,7 +3,7 @@
 //   ../compiler/compiler factorial.gy -o factorial.csp
 // You can run it with this command:
 //   ../vm/out/driver factorial.csp
-// (If you haven't build the VM yet, run this first):
+// (If you haven't built the VM yet, run this first):
 //   (cd ../vm; make -j)
 
 // This program demonstrates two functions which calculate a factorial.

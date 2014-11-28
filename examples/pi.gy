@@ -3,7 +3,7 @@
 //   ../compiler/compiler pi.gy -o pi.csp
 // You can run it with this command:
 //   ../vm/out/driver pi.csp
-// (If you haven't build the VM yet, run this first):
+// (If you haven't built the VM yet, run this first):
 //   (cd ../vm; make -j)
 
 // This program approximates the value of pi by numerically measuring the area of a
