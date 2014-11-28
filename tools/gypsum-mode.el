@@ -55,7 +55,8 @@
 ;;; Code:
 
 (setq gypsum-keywords-regexp (regexp-opt
-  '("break"
+  '("abstract"
+    "break"
     "case"
     "catch"
     "class"
