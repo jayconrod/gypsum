@@ -154,3 +154,8 @@ class TestUseAnalysis(unittest.TestCase):
         use = info.getUseInfo(useScopeAst.body)
         self.assertEquals(info.getScope(useScopeAst).scopeId, use.useScopeId)
         self.assertEquals(USE_AS_VALUE, use.kind)
+
+    def testCallAbstractClassCtor(self):
+        source = "abstract class A\n" + \
+                 "def f = A"
+        self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)

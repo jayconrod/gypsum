@@ -62,7 +62,9 @@ class TestTypeAnalysis(unittest.TestCase):
         # pass if this does not raise an error
 
     def testNoReturnTypeRequiresBody(self):
-        self.assertRaises(TypeException, self.analyzeFromSource, "def f")
+        source = "abstract class C\n" + \
+                 "  abstract def f"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     # Definitions
     def testConstructorsMayNotHaveReturnType(self):

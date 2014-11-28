@@ -207,6 +207,41 @@ class TestDeclarations(unittest.TestCase):
         f = info.package.findFunction(name="f")
         self.assertEquals(frozenset([PRIVATE]), f.flags)
 
+    def testFunctionMustHaveBody(self):
+        self.assertRaises(ScopeException, self.analyzeFromSource, "def f: i64")
+
+    def testFunctionMayNotBeAbstract(self):
+        self.assertRaises(ScopeException, self.analyzeFromSource, "abstract def f: i64 = 12")
+        self.assertRaises(ScopeException, self.analyzeFromSource, "abstract def f: i64")
+
+    def testMethodWithoutBodyMustBeAbstract(self):
+        self.assertRaises(ScopeException, self.analyzeFromSource,
+                          "abstract class C\n" +
+                          "  def f: i64")
+        info = self.analyzeFromSource("abstract class C\n" +
+                                      "  abstract def f: i64")
+        C = info.package.findClass(name="C")
+        self.assertEquals(frozenset([ABSTRACT]), C.flags)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(frozenset([ABSTRACT]), f.flags)
+
+    def testAbstractMethodMustNotHaveBody(self):
+        self.assertRaises(ScopeException, self.analyzeFromSource,
+                          "abstract class C\n" +
+                          "  abstract def f = 12")
+
+    def testClassWithAbstractMethodMustBeAbstract(self):
+        self.assertRaises(ScopeException, self.analyzeFromSource,
+                          "class C\n" +
+                          "  abstract def f: i64")
+
+    def testConstructorMustNotBeAbstract(self):
+        self.assertRaises(ScopeException, self.analyzeFromSource,
+                          "abstract class C\n" +
+                          "  abstract def this = {}")
+        self.assertRaises(ScopeException, self.analyzeFromSource,
+                          "abstract class C abstract ()")
+
     def testFunctionTypeParameterStatic(self):
         info = self.analyzeFromSource("def f[static T] = {}")
         T = info.package.findTypeParameter(name="T")

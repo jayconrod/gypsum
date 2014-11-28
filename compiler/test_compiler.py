@@ -7,7 +7,6 @@
 import unittest
 import sys
 
-from builtins import *
 from lexer import *
 from layout import *
 from parser import *
@@ -856,9 +855,6 @@ class TestCompiler(unittest.TestCase):
 
     def testRequireParameterTypes(self):
         self.assertRaises(TypeException, self.compileFromSource, "def f(x) = 12")
-
-    def testTypeRequiresBody(self):
-        self.assertRaises(CompileException, self.compileFromSource, "def f: i64")
 
     def testNullaryCall(self):
         source = "def f: i64 = 12\n" + \

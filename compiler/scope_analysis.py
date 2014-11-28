@@ -296,7 +296,16 @@ class NameInfo(object):
         assert self.isClass()
         irClass = self.getDefnInfo().irDefn
         ctorNameInfo = NameInfo(self.name)
-        ctorNameInfo.overloads = [info.getDefnInfo(ctor) for ctor in irClass.constructors]
+        if hasattr(irClass, "astDefn") and \
+           not irClass.astDefn.hasConstructors():
+            irDefaultCtor = irClass.constructors[0]
+            assert len(irClass.constructors) == 1 and \
+                   irDefaultCtor.astDefn is irClass.astDefn
+            defaultCtorDefnInfo = DefnInfo(irDefaultCtor, irClass.astDefn.id,
+                                           irClass.astDefn.id, NOT_HERITABLE)
+            ctorNameInfo.overloads = [defaultCtorDefnInfo]
+        else:
+            ctorNameInfo.overloads = [info.getDefnInfo(ctor) for ctor in irClass.constructors]
         return ctorNameInfo
 
     def didResolveOverrides(self):
@@ -503,7 +512,7 @@ class Scope(AstNodeVisitor):
         """Convenience method for creating a class definition."""
         implicitTypeParams = self.getImplicitTypeParameters()
         flags = getFlagsFromAstDefn(astDefn, None)
-        checkFlags(flags, frozenset())
+        checkFlags(flags, frozenset([ABSTRACT]))
         irDefn = Class(astDefn.name, implicitTypeParams, None, None, [], [], [], flags)
         self.info.package.addClass(irDefn)
 
@@ -514,9 +523,7 @@ class Scope(AstNodeVisitor):
         self.info.package.addFunction(irInitializer)
         irDefn.initializer = irInitializer
 
-        if astDefn.hasConstructors():
-            irDefaultCtor = None
-        else:
+        if not astDefn.hasConstructors():
             irDefaultCtor = Function("$constructor", list(implicitTypeParams),
                                      [], None, [], None, frozenset())
             irDefaultCtor.astDefn = astDefn
@@ -588,6 +595,10 @@ class Scope(AstNodeVisitor):
             not self.isWithin(defnInfo.scopeId)):
             raise ScopeException("%s: not allowed to be used in this scope" %
                                  defnInfo.irDefn.name)
+        if useKind is USE_AS_CONSTRUCTOR and \
+           ABSTRACT in defnInfo.irDefn.clas.flags:
+            raise ScopeException("%s: cannot instantiate abstract class" %
+                                 defnInfo.irDefn.clas.name)
 
         useInfo = UseInfo(defnInfo, self.scopeId, useKind)
         self.info.useInfo[useAstId] = useInfo
@@ -747,6 +758,8 @@ class GlobalScope(Scope):
             self.info.package.addGlobal(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
             checkFlags(flags, frozenset())
+            if astDefn.body is None:
+                raise ScopeException("%s: global function must have body" % astDefn.name)
             irDefn = Function(astDefn.name, None, self.getImplicitTypeParameters(),
                               None, [], None, flags)
             self.info.package.addFunction(irDefn)
@@ -834,6 +847,8 @@ class FunctionScope(Scope):
             irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
             checkFlags(flags, frozenset())
+            if astDefn.body is None:
+                raise ScopeException("%s: function must have body" % astDefn.name)
             implicitTypeParams = self.getImplicitTypeParameters()
             irDefn = Function(astDefn.name, None, implicitTypeParams, None, [], None, flags)
             self.info.package.addFunction(irDefn)
@@ -986,13 +1001,21 @@ class ClassScope(Scope):
             irDefn = Field(astDefn.name, None, flags, id=len(irScopeDefn.fields,))
             irScopeDefn.fields.append(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
-            checkFlags(flags, frozenset([PROTECTED, PRIVATE]))
             implicitTypeParams = self.getImplicitTypeParameters()
+            if ABSTRACT in flags and astDefn.body is not None:
+                raise ScopeException("%s: abstract method must not have body" % astDefn.name)
+            if ABSTRACT not in flags and astDefn.body is None:
+                raise ScopeException("%s: non-abstract method must have body" % astDefn.name)
+            if ABSTRACT in flags and ABSTRACT not in irScopeDefn.flags:
+                raise ScopeException("%s: abstract function not allowed in non-abstract class" %
+                                     astDefn.name)
             if astDefn.name == "this":
+                checkFlags(flags, frozenset([PROTECTED, PRIVATE]))
                 irDefn = Function("$constructor", None, implicitTypeParams,
                                   None, [], None, flags)
                 irScopeDefn.constructors.append(irDefn)
             else:
+                checkFlags(flags, frozenset([ABSTRACT, PROTECTED, PRIVATE]))
                 irDefn = Function(astDefn.name, None, implicitTypeParams,
                                   None, [], None, flags)
                 irScopeDefn.methods.append(irDefn)
