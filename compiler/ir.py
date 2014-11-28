@@ -84,6 +84,8 @@ class Package(object):
                 return isinstance(defn, Function) and \
                        hasattr(defn, "clas") and \
                        defn.clas is value
+            elif key == "flag":
+                return value in defn.flags
             elif key == "pred":
                 return value(defn)
             else:
@@ -145,10 +147,12 @@ class Function(IrDefinition):
             len(selfExplicitTypeParameters) == len(otherExplicitTypeParameters) and \
             all(atp.isEquivalent(btp) for atp, btp in
                 zip(selfExplicitTypeParameters, otherExplicitTypeParameters))
+        selfParameterTypes = self.parameterTypes[1:]
+        otherParameterTypes = [pty.substituteForInheritance(self.clas, other.clas) \
+                               for pty in other.parameterTypes[1:]]
         parameterTypesAreCompatible = \
-            len(self.parameterTypes) == len(other.parameterTypes) and \
-            all(bt.isSubtypeOf(at) for at, bt in
-                zip(self.parameterTypes[1:], other.parameterTypes[1:]))
+            len(selfParameterTypes) == len(otherParameterTypes) and \
+            all(bt.isSubtypeOf(at) for at, bt in zip(selfParameterTypes, otherParameterTypes))
         return typeParametersAreCompatible and \
                parameterTypesAreCompatible
 
@@ -201,9 +205,12 @@ class Class(IrDefinition):
             clas = clas.supertypes[0].clas
             yield clas
 
-    def findPathToBaseClass(self, base):
-        """Returns a path through the class DAG to a particular base class. The path does not
-        include this class. If the given class is not a base, returns None."""
+    def findTypePathToBaseClass(self, base):
+        """Returns a list of supertypes (ClassTypes), which represent a path through the class
+        DAG from this class to the given base class. The path does not include a type for this
+        class, but it does include the supertype for the base. If the given class is not a
+        base, returns None. This class must not but Nothing, since there is no well-defined
+        class in that case."""
         assert self is not builtins.getNothingClass()
         path = []
         indexStack = [0]
@@ -213,7 +220,7 @@ class Class(IrDefinition):
         while len(indexStack) > 0:
             index = indexStack[-1]
             indexStack[-1] += 1
-            clas = path[-1] if len(path) > 0 else self
+            clas = path[-1].clas if len(path) > 0 else self
             if clas is base:
                 return path
             elif index == len(clas.supertypes):
@@ -223,13 +230,20 @@ class Class(IrDefinition):
             elif clas.supertypes[index].clas.id not in visited:
                 assert clas.supertypes[index].clas.id is not None
                 visited.add(clas.supertypes[index].clas.id)
-                path.append(clas.supertypes[index].clas)
+                path.append(clas.supertypes[index])
                 indexStack[-1] += 1
                 indexStack.append(0)
         return None
 
+    def findClassPathToBaseClass(self, base):
+        path = self.findTypePathToBaseClass(base)
+        if path is None:
+            return path
+        else:
+            return [sty.clas for sty in path]
+
     def findDistanceToBaseClass(self, base):
-        return len(self.findPathToBaseClass(base))
+        return len(self.findClassPathToBaseClass(base))
 
     def isSubclassOf(self, other):
         nothingClassId = -2   # avoid circular import dependency with builtins
@@ -300,10 +314,16 @@ class Class(IrDefinition):
         return None
 
     def getMethodIndex(self, method):
-        for i in xrange(len(self.methods)):
-            if self.methods[i] is method:
+        for i, m in enumerate(self.methods):
+            if m is method:
                 return i
         raise KeyError("method does not belong to this class")
+
+    def getFieldIndex(self, field):
+        for i, f in enumerate(self.fields):
+            if f is field:
+                return i
+        raise KeyError("field does not belong to this class")
 
     def isTypeDefn(self):
         return True

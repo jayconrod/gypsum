@@ -95,6 +95,14 @@ class Type(Data):
     def substitute(self, parameters, replacements):
         raise NotImplementedError
 
+    def substituteForInheritance(self, clas, base):
+        assert clas.isSubclassOf(base)
+        supertypePath = clas.findTypePathToBaseClass(base)
+        ty = self
+        for sty in reversed(supertypePath):
+            ty = ty.substitute(sty.clas.typeParameters, sty.typeArguments)
+        return ty
+
     def getTypeArguments(self):
         raise NotImplementedError
 
@@ -177,7 +185,8 @@ class ObjectType(Type):
     def substituteForBaseClass(self, base):
         """Returns a base type of the corresponding class with type arguments substituted
         appropriately. For example, if we have class A[T] and class B <: A[C], then if we
-        call this method on B, we will get A[C]."""
+        call this method on B, we will get A[C]. Note that this goes in the reverse direction
+        from `substituteForInheritance`."""
         raise NotImplementedError
 
 
@@ -229,11 +238,10 @@ class ClassType(ObjectType):
 
     def substituteForBaseClass(self, base):
         assert base is not builtins.getNothingClass()
-        path = self.clas.findPathToBaseClass(base)
-        assert path is not None
+        assert self.clas is not builtins.getNothingClass()
+        supertypePath = self.clas.findTypePathToBaseClass(base)
         ty = self
-        for clas in path:
-            sty = next(sty for sty in ty.clas.supertypes if sty.clas is clas)
+        for sty in supertypePath:
             ty = sty.substitute(ty.clas.typeParameters, ty.typeArguments)
         return ty
 

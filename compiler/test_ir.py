@@ -82,19 +82,19 @@ class TestIntermediateRepresentation(unittest.TestCase):
         A.id = 0
         B = Class("B", [], [], None, [], [], [], frozenset())
         B.id = 1
-        self.assertEquals(None, A.findPathToBaseClass(B))
+        self.assertEquals(None, A.findClassPathToBaseClass(B))
 
     def testFindPathToBaseClassSelf(self):
         A = Class("A", [], [], None, [], [], [], frozenset())
         A.id = 0
-        self.assertEquals([], A.findPathToBaseClass(A))
+        self.assertEquals([], A.findClassPathToBaseClass(A))
 
     def testFindPathToBaseClassShort(self):
         A = Class("A", [], [], None, [], [], [], frozenset())
         A.id = 0
         B = Class("B", [], [ClassType(A)], None, [], [], [], frozenset())
         B.id = 1
-        self.assertEquals([A], B.findPathToBaseClass(A))
+        self.assertEquals([A], B.findClassPathToBaseClass(A))
 
     def testFindPathToBaseClassLong(self):
         A = Class("A", [], [], None, [], [], [], frozenset())
@@ -103,4 +103,4 @@ class TestIntermediateRepresentation(unittest.TestCase):
         B.id = 1
         C = Class("C", [], [ClassType(B)], None, [], [], [], frozenset())
         C.id = 2
-        self.assertEquals([B, A], C.findPathToBaseClass(A))
+        self.assertEquals([B, A], C.findClassPathToBaseClass(A))

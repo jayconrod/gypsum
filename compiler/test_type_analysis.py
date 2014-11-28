@@ -807,6 +807,14 @@ class TestTypeAnalysis(unittest.TestCase):
         info = self.analyzeFromSource(source)
         self.assertEquals(getStringType(), info.getType(info.ast.definitions[1].body))
 
+    def testLoadInheritedFieldWithTypeParameter(self):
+        source = "class Box[static T](value: T)\n" + \
+                 "class SubBox <: Box[String]\n" + \
+                 "  def this(s: String) = super(s)\n" + \
+                 "def f(box: SubBox) = box.value"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(getStringType(), info.getType(info.ast.definitions[2].body))
+
     def testStoreSubtypeToTypeParameterField(self):
         source = "class A\n" + \
                  "class B <: A\n" + \
@@ -828,6 +836,17 @@ class TestTypeAnalysis(unittest.TestCase):
         ty = getRootClassType()
         self.assertEquals(ty, f.returnType)
         self.assertEquals([ty], info.getCallInfo(info.ast.definitions[2].body).typeArguments)
+
+    def testOverrideInheritedMethodWithTypeParameter(self):
+        source = "abstract class Function[static P, static R]\n" + \
+                 "  abstract def apply(x: P): R\n" + \
+                 "class AppendString <: Function[String, String]\n" + \
+                 "  def apply(x: String): String = x + \"foo\"\n"
+        info = self.analyzeFromSource(source)
+        abstractApply = info.package.findFunction(name="apply", flag=ABSTRACT)
+        AppendString = info.package.findClass(name="AppendString")
+        concreteApply = info.package.findFunction(name="apply", clas=AppendString)
+        self.assertIs(abstractApply, concreteApply.override)
 
     def testTypeParameterWithReversedBounds(self):
         source = "class A[static T <: Nothing >: Object]"

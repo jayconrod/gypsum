@@ -33,10 +33,12 @@ def analyzeTypes(info):
     # overriden function. The return type is not used to make override decisions, so this needs
     # to be done after overrides are resolved.
     for func in info.package.functions:
-        if hasattr(func, "override") and \
-           not func.returnType.isSubtypeOf(func.override.returnType):
-            raise TypeException("%s: return type is not subtype of overriden function" %
-                                func.name)
+        if hasattr(func, "override"):
+            overridenReturnType = func.override.returnType.substituteForInheritance(
+                func.clas, func.override.clas)
+            if not func.returnType.isSubtypeOf(overridenReturnType):
+                raise TypeException("%s: return type is not subtype of overriden function" %
+                                    func.name)
 
 
 class TypeVisitorCommon(AstNodeVisitor):
@@ -654,12 +656,22 @@ class TypeVisitor(TypeVisitorCommon):
         elif isinstance(irDefn, Field):
             ty = irDefn.type
             if receiverIsExplicit and isinstance(receiverType, ClassType):
+                fieldClass = self.findBaseClassForField(receiverType.clas, irDefn)
+                ty = ty.substituteForInheritance(receiverType.clas, fieldClass)
                 ty = ty.substitute(receiverType.clas.typeParameters, receiverType.typeArguments)
             return ty
         else:
             assert isinstance(irDefn, Variable) or \
                    isinstance(irDefn, Global)
             return irDefn.type
+
+    def findBaseClassForField(self, receiverClass, field):
+        # At this point, classes haven't been flattened yet, so we have to search up the
+        # inheritance chain for the first class that contains the field.
+        for clas in receiverClass.superclasses():
+            if any(True for f in clas.fields if f is field):
+                return clas
+        assert False, "field is not defined in this class or any superclass"
 
     def isTypeParameterAvailable(self, irTypeParameter):
         if self.functionStack[-1] is None:
