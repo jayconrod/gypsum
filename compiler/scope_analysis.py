@@ -254,6 +254,11 @@ def flattenClasses(info):
             else:
                 methods.append(ownMethod)
         irClass.methods = methods
+        if ABSTRACT not in irClass.flags:
+            for m in methods:
+                if ABSTRACT in m.flags:
+                    raise ScopeException("must override inherited abstract method `%s` in concrete class `%s`" %
+                                         (m.name, irClass.name))
 
 
 NOT_HERITABLE = -1

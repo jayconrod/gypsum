@@ -29,6 +29,9 @@ def analyzeTypes(info):
     for scope in info.scopes.values():
         scope.resolveOverrides()
 
+    # Check that each overriding function has a return type which is a subtype of the
+    # overriden function. The return type is not used to make override decisions, so this needs
+    # to be done after overrides are resolved.
     for func in info.package.functions:
         if hasattr(func, "override") and \
            not func.returnType.isSubtypeOf(func.override.returnType):

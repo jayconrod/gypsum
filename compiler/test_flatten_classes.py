@@ -64,3 +64,9 @@ class TestFlattenClasses(unittest.TestCase):
         info = self.analyzeFromSource(source)
         B = info.package.findClass(name="B")
         self.assertEquals(self.rootMethodNames + ["f"], [m.name for m in B.methods])
+
+    def testMustOverrideInheritedAbstractMethod(self):
+        source = "abstract class A\n" + \
+                 "  abstract def f: i64\n" + \
+                 "class B <: A"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
