@@ -78,7 +78,7 @@ Local<Function> Function::create(Heap* heap,
                                  const Handle<Package>& package) {
   RETRY_WITH_GC(heap, return Local<Function>(new(heap, instructions.size()) Function(
       flags, *typeParameters, *types, localsSize, instructions,
-      *blockOffsets, *package, nullptr)));
+      blockOffsets.getOrNull(), package.getOrNull(), nullptr)));
 }
 
 
@@ -422,13 +422,24 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         case LD8:
         case LD16:
         case LD32:
-        case LD64:
-        case LDP:
-        case LDPC: {
+        case LD64: {
           auto index = readVbn(bytecode, &pcOffset);
           Local<Class> clas(currentMap.pop()->asClass());
           Local<Type> type(block_cast<Field>(clas->fields()->get(index))->type());
           currentMap.push(type);
+          break;
+        }
+
+        case LDP:
+        case LDPC: {
+          auto index = readVbn(bytecode, &pcOffset);
+          Local<Type> receiverType(currentMap.pop());
+          Local<Class> receiverClass(receiverType->asClass());
+          Local<Class> fieldClass(receiverClass->findFieldClass(index));
+          Local<Type> fieldType(receiverClass->fields()->get(index)->type());
+          fieldType = Type::substituteForInheritance(fieldType, receiverClass, fieldClass);
+          fieldType = Type::substitute(fieldType, receiverType->getTypeArgumentBindings());
+          currentMap.push(fieldType);
           break;
         }
 
@@ -450,7 +461,10 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           if (isBuiltinId(classId)) {
             type = handle(roots->getBuiltinType(classId));
           } else {
-            type = Type::create(heap, handle(package->getClass(classId)));
+            Local<Class> clas(package->getClass(classId));
+            vector<Local<Type>> typeArgs;
+            currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
+            type = Type::create(heap, clas, typeArgs);
           }
           currentMap.push(type);
           break;
@@ -465,7 +479,10 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           if (isBuiltinId(classId)) {
             type = handle(roots->getBuiltinType(classId));
           } else {
-            type = Type::create(heap, handle(package->getClass(classId)));
+            Local<Class> clas(package->getClass(classId));
+            vector<Local<Type>> typeArgs;
+            currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
+            type = Type::create(heap, clas, typeArgs);
           }
           currentMap.push(type);
           break;
@@ -525,7 +542,7 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           currentMap.pcOffset = pcOffset;
           maps.push_back(currentMap);
           word_t slot = currentMap.size() - argCount;
-          Local<Class> clas(currentMap.typeMap[slot]->asClass());
+          Local<Class> clas(currentMap.typeMap[slot]->effectiveClass());
           Local<Function> callee(clas->getMethod(methodIndex));
 
           for (word_t i = 0, n = callee->parameterCount(); i < n; i++)
@@ -788,7 +805,7 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
     }
   }
 
-  return stackPointerMap;
+  return handleScope.escape(*stackPointerMap);
 }
 
 

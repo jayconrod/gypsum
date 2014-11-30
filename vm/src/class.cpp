@@ -132,6 +132,22 @@ word_t Class::findFieldOffset(length_t index) const {
 }
 
 
+Class* Class::findFieldClass(length_t index) {
+  ASSERT(index < fields()->length());
+  auto clas = this;
+  while (true) {
+    if (clas->supertype() == nullptr)
+      return clas;
+    auto base = clas->supertype()->asClass();
+    if (index >= base->fields()->length())
+      return clas;
+    clas = base;
+  }
+  UNREACHABLE();
+  return nullptr;
+}
+
+
 Function* Class::getConstructor(length_t index) const {
   auto id = constructors()->get(index);
   auto ctor = package()->getFunction(id);

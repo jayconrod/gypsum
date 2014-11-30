@@ -1265,17 +1265,21 @@ class TestCompiler(unittest.TestCase):
         idInner = package.findFunction(name="id-inner")
         idInnerMethodIndex = closureClass.getMethodIndex(idInner)
         expected = self.makeSimpleFunction("id-outer", Tty, [[
+            tyv(T.id),
             allocobj(contextClass.id),
             dup(),
+            tyv(T.id),
             callg(contextClass.constructors[0].id),
             drop(),
             stlocal(-1),
             ldlocal(0),
             ldlocal(-1),
             stp(0),
+            tyv(T.id),
             allocobj(closureClass.id),
             dup(),
             ldlocal(-1),
+            tyv(T.id),
             callg(closureClass.constructors[0].id),
             drop(),
             stlocal(-2),

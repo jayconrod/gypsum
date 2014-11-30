@@ -15,6 +15,7 @@
 #include "block.h"
 #include "builtins.h"
 #include "bytecode.h"
+#include "flags.h"
 #include "function.h"
 #include "gc.h"
 #include "handle.h"
@@ -722,6 +723,7 @@ void Interpreter::enter(const Handle<Function>& callee) {
   // Make sure we have pointer maps for the callee before we build a stack frame for it.
   // This may trigger garbage collection (since pointer maps are allocated like everything
   // else), but that's fine since we're at a safepoint, and we haven't built the frame yet.
+  ASSERT((callee->flags() & ABSTRACT_FLAG) == 0);
   ensurePointerMap(callee);
 
   stack_->align(kWordSize);

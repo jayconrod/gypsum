@@ -264,6 +264,19 @@ def flattenClasses(info):
 NOT_HERITABLE = -1
 
 
+def isHeritable(irDefn):
+    """Returns true if the given irDefn can be inherited from a base class by a
+    deriving class."""
+    if isinstance(irDefn, Function) and irDefn.name == "$constructor":
+        # Constructors are not heritable. At this time when this function is called, the
+        # function may not have been made into a method yet, so Function.isConstructor would
+        # return false. So we check the name instead, which is a hack.
+        return False
+    if isinstance(irDefn, TypeParameter):
+        return False
+    return True
+
+
 class NameInfo(object):
     def __init__(self, name):
         # A str for the name being tracked.
@@ -300,17 +313,9 @@ class NameInfo(object):
     def getInfoForConstructors(self, info):
         assert self.isClass()
         irClass = self.getDefnInfo().irDefn
-        ctorNameInfo = NameInfo(self.name)
-        if hasattr(irClass, "astDefn") and \
-           not irClass.astDefn.hasConstructors():
-            irDefaultCtor = irClass.constructors[0]
-            assert len(irClass.constructors) == 1 and \
-                   irDefaultCtor.astDefn is irClass.astDefn
-            defaultCtorDefnInfo = DefnInfo(irDefaultCtor, irClass.astDefn.id,
-                                           irClass.astDefn.id, NOT_HERITABLE)
-            ctorNameInfo.overloads = [defaultCtorDefnInfo]
-        else:
-            ctorNameInfo.overloads = [info.getDefnInfo(ctor) for ctor in irClass.constructors]
+        classScope = info.getScope(irClass)
+        ctorNameInfo = classScope.getDefinition("$constructor")
+        assert ctorNameInfo is not None
         return ctorNameInfo
 
     def didResolveOverrides(self):
@@ -468,7 +473,8 @@ class Scope(AstNodeVisitor):
         irDefn.astDefn = astDefn
         if astVarDefn is not None:
             irDefn.astVarDefn = astVarDefn
-        defnInfo = DefnInfo(irDefn, self.scopeId)
+        inheritanceDepth = 0 if isHeritable(irDefn) else NOT_HERITABLE
+        defnInfo = DefnInfo(irDefn, self.scopeId, self.scopeId, inheritanceDepth)
         self.info.setDefnInfo(astDefn, defnInfo)
 
         # If the definition has a user-specified name, bind it in this scope.
@@ -994,7 +1000,7 @@ class ClassScope(Scope):
 
         # Bind default constructors.
         for ctor in irDefn.constructors:
-            defnInfo = DefnInfo(ctor, self.scopeId)
+            defnInfo = DefnInfo(ctor, self.scopeId, self.scopeId, NOT_HERITABLE)
             self.bind(ctor.name, defnInfo)
             self.define(ctor.name)
 
@@ -1093,13 +1099,17 @@ class BuiltinScope(Scope):
         if not hasattr(irClass, "isPrimitive"):
             parent.info.setClassInfo(irClass, ClassInfo(irClass))
             for ctor in irClass.constructors:
-                defnInfo = DefnInfo(ctor, irClass.id)
+                defnInfo = DefnInfo(ctor, irClass.id, irClass.id, NOT_HERITABLE)
                 self.info.setDefnInfo(ctor, defnInfo)
+                self.bind("$constructor", defnInfo)
+                self.define("$constructor")
         for method in irClass.methods:
-            inheritanceDepth = method.clas.findDistanceToBaseClass(method.override.clas) \
-                               if hasattr(method, "override") \
-                               else 0
-            defnInfo = DefnInfo(method, irClass.id, inheritanceDepth)
+            if hasattr(method, "override"):
+                inheritanceDepth = method.clas.findDistanceToBaseClass(method.override.clas)
+                defnInfo = DefnInfo(method, irClass.id,
+                                    method.override.clas.id, inheritanceDepth)
+            else:
+                defnInfo = DefnInfo(method, irClass.id, irClass.id, 0)
             self.info.setDefnInfo(method, defnInfo)
             self.bind(method.name, defnInfo)
             self.define(method.name)
@@ -1210,6 +1220,7 @@ class InheritanceVisitor(ScopeVisitor):
         return InheritanceVisitor(scope, self.inheritanceGraph, self.subtypeGraph)
 
     def visitAstClassDefinition(self, node):
+        scope = self.scope.scopeForClass(node)
         classInfo = self.scope.info.getClassInfo(node)
         irClass = classInfo.irDefn
         if len(node.supertypes) == 0:
@@ -1220,7 +1231,7 @@ class InheritanceVisitor(ScopeVisitor):
             if len(node.supertypes) > 1:
                 raise NotImplementedError
             supertype = node.supertypes[0]
-            supertypeIrDefn = self.addTypeToSubtypeGraph(irClass.id, supertype)
+            supertypeIrDefn = self.addTypeToSubtypeGraph(irClass.id, scope, supertype)
             if not isinstance(supertypeIrDefn, Class):
                 raise ScopeException("inheritance from non-class type")
 
@@ -1240,14 +1251,14 @@ class InheritanceVisitor(ScopeVisitor):
     def visitAstTypeParameter(self, node):
         irParam = self.scope.info.getDefnInfo(node).irDefn
         if node.upperBound is not None:
-            self.addTypeToSubtypeGraph(irParam.id, node.upperBound)
+            self.addTypeToSubtypeGraph(irParam.id, self.scope, node.upperBound)
         if node.lowerBound is not None:
-            self.addTypeToSubtypeGraph(irParam.id, node.lowerBound)
+            self.addTypeToSubtypeGraph(irParam.id, self.scope, node.lowerBound)
 
-    def addTypeToSubtypeGraph(self, id, astType):
+    def addTypeToSubtypeGraph(self, id, scope, astType):
         if not isinstance(astType, AstClassType):
             raise ScopeException("inheritance from non-class type")
-        nameInfo = self.scope.lookup(astType.name, ignoreDefnOrder=True)
+        nameInfo = scope.lookup(astType.name, ignoreDefnOrder=True)
         if nameInfo.isOverloaded():
             raise ScopeException("inheritance from overloaded symbol")
         defnInfo = nameInfo.getDefnInfo()
@@ -1255,7 +1266,7 @@ class InheritanceVisitor(ScopeVisitor):
         assert irDefn.isTypeDefn()
         self.subtypeGraph.addEdge(id, irDefn.id)
         for astTypeArg in astType.typeArguments:
-            self.addTypeToSubtypeGraph(id, astTypeArg)
+            self.addTypeToSubtypeGraph(id, scope, astTypeArg)
         return irDefn
 
 

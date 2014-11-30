@@ -55,6 +55,9 @@ class Type: public Object {
     LAST_FLAG = NULLABLE_FLAG
   };
 
+  typedef std::pair<Local<TypeParameter>, Local<Type>> Binding;
+  typedef std::vector<Binding> BindingList;
+
   static word_t sizeForLength(length_t length);
   void* operator new (size_t, Heap* heap, length_t length);
   void* operator new (size_t, void* place, length_t length);
@@ -91,6 +94,7 @@ class Type: public Object {
   length_t length() const { return elementsLength(); }
   length_t typeArgumentCount() const;
   Type* typeArgument(length_t index) const;
+  BindingList getTypeArgumentBindings() const;
 
   Form form() const { return form_; }
   Flags flags() const { return flags_; }
@@ -100,6 +104,7 @@ class Type: public Object {
   Class* asClass() const;
   bool isVariable() const;
   TypeParameter* asVariable() const;
+  Class* effectiveClass() const;
   bool isRootClass() const;
   bool isObject() const;
   bool isBoolean() const;
@@ -116,11 +121,12 @@ class Type: public Object {
 
   static bool isSubtypeOf(Local<Type> left, Local<Type> right);
   bool equals(Type* other) const;
-  static Local<Type> substitute(const Handle<Type>& type,
-                                const std::vector<std::pair<Local<TypeParameter>,
-                                                            Local<Type>>>& bindings);
+  static Local<Type> substitute(const Handle<Type>& type, const BindingList& bindings);
   static Local<Type> substituteForBaseClass(const Handle<Type>& type,
                                             const Handle<Class>& baseClass);
+  static Local<Type> substituteForInheritance(const Handle<Type>& type,
+                                              const Handle<Class>& receiverClass,
+                                              const Handle<Class>& baseClass);
 
  private:
   friend class Roots;

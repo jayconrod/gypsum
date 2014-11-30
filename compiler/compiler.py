@@ -35,7 +35,7 @@ class CompileVisitor(AstNodeVisitor):
         self.astDefn = function.astDefn if hasattr(function, "astDefn") else None
         self.compileHint = function.compileHint if hasattr(function, "compileHint") else None
         self.info = info
-        self.function.blocks = []
+        self.blocks = []
         self.nextBlockId = Counter()
         self.currentBlock = None
         self.unreachable = False
@@ -51,7 +51,8 @@ class CompileVisitor(AstNodeVisitor):
         # Get the body of the function as a list of statements. Also parameters.
         if isinstance(self.astDefn, AstFunctionDefinition):
             if self.astDefn.body is None:
-                raise CompileException("%s: body must be specified" % self.astDefn.name)
+                assert ABSTRACT in self.function.flags
+                return
             parameters = self.astDefn.parameters
             if isinstance(self.astDefn.body, AstBlockExpression):
                 statements = self.astDefn.body.statements
@@ -88,14 +89,16 @@ class CompileVisitor(AstNodeVisitor):
         # If this is a constructor that doesn't call any alternate constructor or super
         # constructor, try to find a default super constructor, and call that.
         if self.function.isConstructor() and not superCtorCalled:
-            superClass = self.function.clas.supertypes[0].clas
-            defaultSuperCtors = [ctor for ctor in superClass.constructors if
+            supertype = self.function.clas.supertypes[0]
+            superclass = supertype.clas
+            defaultSuperCtors = [ctor for ctor in superclass.constructors if
                                  len(ctor.parameterTypes) == 1]
             assert len(defaultSuperCtors) <= 1
             if len(defaultSuperCtors) == 0:
                 raise CompileException("no default constructor in superclass %s" %
-                                       superClass.name)
+                                       superclass.name)
             self.loadThis()
+            self.buildStaticTypeArguments(supertype.typeArguments)
             self.callg(defaultSuperCtors[0].id)
             self.drop()
 
@@ -113,8 +116,7 @@ class CompileVisitor(AstNodeVisitor):
             irInitializer = self.function.clas.initializer
             if irInitializer is not None:
                 self.loadThis()
-                for typeParam in self.function.typeParameters:
-                    self.buildStaticTypeArgument(VariableType(typeParam))
+                self.buildImplicitStaticTypeArguments(self.function.typeParameters)
                 self.callg(irInitializer.id)
                 self.drop()
 
@@ -130,6 +132,7 @@ class CompileVisitor(AstNodeVisitor):
 
         # Sort the blocks in reverse-post-order and remove any unreachable blocks.
         self.orderBlocks()
+        self.function.blocks = self.blocks
 
     def compileWithHint(self):
         if self.compileHint is CONTEXT_CONSTRUCTOR_HINT:
@@ -148,6 +151,7 @@ class CompileVisitor(AstNodeVisitor):
                 self.storeField(fields[i])
             self.unit()
             self.ret()
+        self.function.blocks = self.blocks
 
     def visitAstVariableDefinition(self, defn, mode):
         assert mode is COMPILE_FOR_EFFECT
@@ -509,7 +513,7 @@ class CompileVisitor(AstNodeVisitor):
         if self.unreachable:
             return BasicBlock(-1, [])
         block = BasicBlock(self.nextBlockId(), [])
-        self.function.blocks.append(block)
+        self.blocks.append(block)
         return block
 
     def setCurrentBlock(self, block):
@@ -681,11 +685,13 @@ class CompileVisitor(AstNodeVisitor):
     def createContext(self, contextInfo):
         contextClass = contextInfo.irContextClass
         contextId = contextInfo.id
-        contextType = ClassType(contextClass, ())
         assert len(contextClass.constructors) == 1
         contextCtor = contextClass.constructors[0]
+        assert contextClass.typeParameters == contextCtor.typeParameters
+        self.buildImplicitStaticTypeArguments(contextClass.typeParameters)
         self.allocobj(contextClass.id)
         self.dup()
+        self.buildImplicitStaticTypeArguments(contextCtor.typeParameters)
         self.callg(contextCtor.id)
         self.drop()
         irContextVar = self.info.getClosureInfo(contextId).irClosureContexts[contextId]
@@ -702,12 +708,15 @@ class CompileVisitor(AstNodeVisitor):
                     continue
                 assert len(closureClass.constructors) == 1
                 closureCtor = closureClass.constructors[0]
+                assert closureClass.typeParameters == closureCtor.typeParameters
                 capturedScopeIds = closureInfo.capturedScopeIds()
                 assert len(closureCtor.parameterTypes) == len(capturedScopeIds) + 1
+                self.buildImplicitStaticTypeArguments(closureClass.typeParameters)
                 self.allocobj(closureClass.id)
                 self.dup()
                 for id in capturedScopeIds:
                     self.loadContext(id)
+                self.buildImplicitStaticTypeArguments(closureCtor.typeParameters)
                 self.callg(closureCtor.id)
                 self.drop()
                 self.storeVariable(closureInfo.irClosureVar)
@@ -732,22 +741,26 @@ class CompileVisitor(AstNodeVisitor):
         def compileArgs():
             for arg in argExprs:
                 self.visit(arg, COMPILE_FOR_VALUE)
-            for typeArg in callInfo.typeArguments:
-                self.buildStaticTypeArgument(typeArg)
+
+        def compileTypeArgs():
+            self.buildStaticTypeArguments(callInfo.typeArguments)
 
         if not irDefn.isConstructor() and not irDefn.isMethod():
             # Global or static function
             assert receiver is None
             compileArgs()
+            compileTypeArgs()
             self.callg(irDefn.id)
 
         elif receiver is None and irDefn.isConstructor():
             # Constructor
             assert receiver is None
+            compileTypeArgs()
             self.allocobj(irDefn.clas.id)
             if mode is COMPILE_FOR_VALUE:
                 self.dup()
             compileArgs()
+            compileTypeArgs()
             self.callg(irDefn.id)
             self.drop()
             shouldDropForEffect = False
@@ -786,6 +799,7 @@ class CompileVisitor(AstNodeVisitor):
 
             # Compile the arguments and call the method.
             compileArgs()
+            compileTypeArgs()
             if hasattr(irDefn, "insts"):
                 for instName in irDefn.insts:
                     inst = globals()[instName]
@@ -823,6 +837,14 @@ class CompileVisitor(AstNodeVisitor):
         self.callg(BUILTIN_TYPE_CTOR_ID)
         self.drop()
 
+    def buildImplicitStaticTypeArguments(self, typeParams):
+        for param in typeParams:
+            self.tyv(param.id)
+
+    def buildStaticTypeArguments(self, types):
+        for ty in types:
+            self.buildStaticTypeArgument(ty)
+
     def buildStaticTypeArgument(self, ty):
         if isinstance(ty, ClassType):
             for arg in ty.typeArguments:
@@ -843,7 +865,7 @@ class CompileVisitor(AstNodeVisitor):
         # Clear the "id" attribute of each block. None will indicate a block has not been
         # been visited yet. -1 indicates a block is being visited but doesn't have an id yet.
         # Other values are new ids.
-        for block in self.function.blocks:
+        for block in self.blocks:
             block.id = None
 
         # Assign new ids to the blocks. Ids are assigned in post-order, and we reverse this
@@ -855,30 +877,30 @@ class CompileVisitor(AstNodeVisitor):
                 return
             block.id = -1
             for succ in reversed(block.successorIds()):
-                visitBlock(self.function.blocks[succ])
+                visitBlock(self.blocks[succ])
             block.id = self.nextBlockId()
-        visitBlock(self.function.blocks[0])
+        visitBlock(self.blocks[0])
 
         # Reverse the order. The first block should come first.
         liveBlockCount = self.nextBlockId.value()
-        for block in self.function.blocks:
+        for block in self.blocks:
             if block.id is not None:
                 block.id = liveBlockCount - block.id - 1
 
         # Update terminating instructions to point to the new block ids.
-        for block in self.function.blocks:
+        for block in self.blocks:
             if block.id is None:   # dead block
                 continue
             inst = block.instructions[-1]
-            successorIds = [self.function.blocks[id].id for id in inst.successorIds()]
+            successorIds = [self.blocks[id].id for id in inst.successorIds()]
             inst.setSuccessorIds(successorIds)
 
         # Rebuild the block list with the new order.
         orderedBlockList = [None] * liveBlockCount
-        for block in self.function.blocks:
+        for block in self.blocks:
             if block.id is not None:
                 orderedBlockList[block.id] = block
-        self.function.blocks = orderedBlockList
+        self.blocks = orderedBlockList
 
 
 def _makeInstBuilder(inst):

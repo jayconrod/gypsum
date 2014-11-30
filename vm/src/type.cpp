@@ -219,6 +219,21 @@ Type* Type::typeArgument(length_t index) const {
 }
 
 
+Type::BindingList Type::getTypeArgumentBindings() const {
+  ASSERT(isClass());
+  Local<Class> clas(asClass());
+  ASSERT(typeArgumentCount() == clas->typeParameterCount());
+  BindingList bindings;
+  auto count = typeArgumentCount();
+  bindings.reserve(count);
+  for (length_t i = 0; i < count; i++) {
+    Binding binding(handle(clas->typeParameter(i)), handle(typeArgument(i)));
+    bindings.push_back(binding);
+  }
+  return bindings;
+}
+
+
 bool Type::isPrimitive() const {
   return FIRST_PRIMITIVE_TYPE <= form() && form() <= LAST_PRIMITIVE_TYPE;
 }
@@ -249,6 +264,16 @@ bool Type::isVariable() const {
 TypeParameter* Type::asVariable() const {
   ASSERT(isVariable() && length() > 0);
   return block_cast<TypeParameter>(elements_[0].get());
+}
+
+
+Class* Type::effectiveClass() const {
+  ASSERT(isClass() || isVariable());
+  auto ty = this;
+  while (!ty->isClass()) {
+    ty = ty->asVariable()->upperBound();
+  }
+  return ty->asClass();
 }
 
 
@@ -388,8 +413,7 @@ bool Type::equals(Type* other) const {
 }
 
 
-Local<Type> Type::substitute(const Handle<Type>& type,
-                             const vector<pair<Local<TypeParameter>, Local<Type>>>& bindings) {
+Local<Type> Type::substitute(const Handle<Type>& type, const BindingList& bindings) {
   if (type->isVariable()) {
     Local<TypeParameter> param(type->asVariable());
     for (auto binding : bindings) {
@@ -426,19 +450,36 @@ Local<Type> Type::substituteForBaseClass(const Handle<Type>& type,
   ASSERT(currentType->asClass()->isSubclassOf(*clas));
 
   while (currentType->asClass() != *clas) {
-    auto currentClass = handle(currentType->asClass());
-    ASSERT(currentType->typeArgumentCount() == currentClass->typeParameterCount());
-    auto count = currentType->typeArgumentCount();
-    vector<pair<Local<TypeParameter>, Local<Type>>> bindings;
-    bindings.reserve(count);
-    for (length_t i = 0; i < currentType->typeArgumentCount(); i++) {
-      pair<Local<TypeParameter>, Local<Type>> binding(handle(currentClass->typeParameter(i)),
-                                                      handle(currentType->typeArgument(i)));
-      bindings.push_back(binding);
-    }
+    auto bindings = currentType->getTypeArgumentBindings();
+    Local<Class> currentClass(currentType->asClass());
     currentType = Type::substitute(handle(currentClass->supertype()), bindings);
   }
   return currentType;
+}
+
+
+Local<Type> Type::substituteForInheritance(const Handle<Type>& type,
+                                           const Handle<Class>& receiverClass,
+                                           const Handle<Class>& baseClass) {
+  ASSERT(receiverClass->isSubclassOf(*baseClass));
+
+  // Build a list of supertypes on the path from receiverClass to base. We will need to iterate over
+  // this in reverse. Note that this does not include receiverClass.
+  vector<Local<Type>> supertypes;
+  Local<Class> clas(receiverClass);
+  while (*clas != *baseClass) {
+    supertypes.push_back(handle(clas->supertype()));
+    clas = handle(clas->supertype()->asClass());
+  }
+
+  // Perform a substitution for each type in reverse.
+  Local<Type> substituted(type);
+  for (auto it = supertypes.rbegin(); it != supertypes.rend(); it++) {
+    auto supertype = *it;
+    BindingList bindings = supertype->getTypeArgumentBindings();
+    substituted = substitute(substituted, bindings);
+  }
+  return substituted;
 }
 
 

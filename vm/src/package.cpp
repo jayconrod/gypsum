@@ -17,6 +17,7 @@
 #include "bytecode.h"
 #include "error.h"
 #include "field.h"
+#include "flags.h"
 #include "function.h"
 #include "handle.h"
 #include "heap.h"
@@ -173,7 +174,7 @@ Local<Package> PackageLoader::load() {
       throw Error("package file is corrupt");
     auto majorVersion = readValue<u16>();
     auto minorVersion = readValue<u16>();
-    if (majorVersion != 0 || minorVersion != 9)
+    if (majorVersion != 0 || minorVersion != 10)
       throw Error("package file has wrong format version");
 
     package_ = handleScope.escape(*Package::create(heap()));
@@ -262,16 +263,20 @@ Local<Function> PackageLoader::readFunction() {
     types->set(i + 1, *readType());
   }
 
-  auto localsSize = readWordVbn();
+  word_t localsSize = kNotSet;
+  Local<LengthArray> blockOffsets;
+  vector<u8> instructions;
+  if ((flags & ABSTRACT_FLAG) == 0) {
+    localsSize = readWordVbn();
+    auto instructionsSize = readLengthVbn();
+    instructions = readData(instructionsSize);
 
-  auto instructionsSize = readLengthVbn();
-  vector<u8> instructions = readData(instructionsSize);
-
-  auto blockOffsetCount = readLengthVbn();
-  auto blockOffsets = LengthArray::create(heap(), blockOffsetCount);
-  for (length_t i = 0; i < blockOffsetCount; i++) {
-    auto offset = readLengthVbn();
-    blockOffsets->set(i, offset);
+    auto blockOffsetCount = readLengthVbn();
+    blockOffsets = LengthArray::create(heap(), blockOffsetCount);
+    for (length_t i = 0; i < blockOffsetCount; i++) {
+      auto offset = readLengthVbn();
+      blockOffsets->set(i, offset);
+    }
   }
 
   auto function = Function::create(heap(), flags, typeParameters, types,

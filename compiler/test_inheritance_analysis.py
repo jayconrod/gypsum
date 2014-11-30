@@ -108,3 +108,20 @@ class TestInheritanceAnalysis(unittest.TestCase):
         info = self.analyzeFromSource(source)
         scope = info.getScope(info.ast.definitions[0])
         self.assertEquals(2, len(scope.getDefinition("typeof").overloads))
+
+    def testConstructorsNotHeritable(self):
+        source = "class A[static S](value: S)\n" + \
+                 "class B[static T] <: A[T]\n" + \
+                 "  def this(value: T) = super(value)\n" + \
+                 "class C[static U] <: B[U]\n" + \
+                 "  def this(value: U) = super(value)\n"
+        info = self.analyzeFromSource(source)
+        scope = info.getScope(info.ast.definitions[0])
+        self.assertEquals(1, len(scope.getDefinition("$constructor").overloads))
+
+    def testTypeParametersNotHeritable(self):
+        source = "class A[static T]\n" + \
+                 "class B <: A[String]"
+        info = self.analyzeFromSource(source)
+        scope = info.getScope(info.ast.definitions[1])
+        self.assertIs(None, scope.getDefinition("T"))

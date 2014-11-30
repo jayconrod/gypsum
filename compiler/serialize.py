@@ -50,7 +50,7 @@ class Serializer(object):
         self.outFile.write(struct.pack("<Ihhqiiiii",
                                        0x676b7073,   # magic number
                                        0,            # major version
-                                       9,            # minor version
+                                       10,            # minor version
                                        0,            # flags
                                        len(self.package.strings),
                                        len(self.package.functions),
@@ -78,14 +78,16 @@ class Serializer(object):
         self.writeVbn(len(function.parameterTypes))
         for ty in function.parameterTypes:
             self.writeType(ty)
-        localsSize = 8 * len(filter(lambda v: v.kind is LOCAL, function.variables))
-        self.writeVbn(localsSize)
-        instructions, blockOffsetTable = self.encodeInstructions(function)
-        self.writeVbn(len(instructions))
-        self.outFile.write(instructions)
-        self.writeVbn(len(blockOffsetTable))
-        for offset in blockOffsetTable:
-            self.writeVbn(offset)
+        assert function.blocks is not None or ABSTRACT in function.flags
+        if function.blocks is not None:
+            localsSize = 8 * len(filter(lambda v: v.kind is LOCAL, function.variables))
+            self.writeVbn(localsSize)
+            instructions, blockOffsetTable = self.encodeInstructions(function)
+            self.writeVbn(len(instructions))
+            self.outFile.write(instructions)
+            self.writeVbn(len(blockOffsetTable))
+            for offset in blockOffsetTable:
+                self.writeVbn(offset)
 
     def encodeInstructions(self, function):
         buf = bytearray()

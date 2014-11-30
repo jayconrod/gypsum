@@ -462,3 +462,52 @@ TEST(SubstituteForBaseClass) {
   auto actual = Type::substituteForBaseClass(VType, A);
   ASSERT_TRUE(expected->equals(*actual));
 }
+
+
+TEST(SubstituteForInheritance) {
+  VM vm;
+  HandleScope handleScope(&vm);
+  AllowAllocationScope allowAllocation(vm.heap(), true);
+
+  // Type parameters S, T, U
+  auto S = TypeParameter::create(vm.heap(), 0,
+                                 handle(Type::rootClassType(vm.roots())),
+                                 handle(Type::nothingType(vm.roots())));
+  auto SType = Type::create(vm.heap(), S);
+  auto T = TypeParameter::create(vm.heap(), 0,
+                                 handle(Type::rootClassType(vm.roots())),
+                                 handle(Type::nothingType(vm.roots())));
+  auto TType = Type::create(vm.heap(), T);
+  auto U = TypeParameter::create(vm.heap(), 0,
+                                 handle(Type::rootClassType(vm.roots())),
+                                 handle(Type::nothingType(vm.roots())));
+  auto UType = Type::create(vm.heap(), U);
+
+  // class A[S]
+  //   var x: S
+  auto A = Class::create(vm.heap());
+  auto ATypeParams = TaggedArray<TypeParameter>::create(vm.heap(), 1);
+  ATypeParams->set(0, tag(*S));
+  A->setTypeParameters(*ATypeParams);
+  A->setSupertype(Type::rootClassType(vm.roots()));
+
+  // class B[T] <: A[T]
+  auto B = Class::create(vm.heap());
+  auto BTypeParams = TaggedArray<TypeParameter>::create(vm.heap(), 1);
+  BTypeParams->set(0, tag(*T));
+  B->setTypeParameters(*BTypeParams);
+  auto ATType = Type::create(vm.heap(), A, vector<Local<Type>>{TType});
+  B->setSupertype(*ATType);
+
+  // class C[U] <: B[U]
+  auto C = Class::create(vm.heap());
+  auto CTypeParams = TaggedArray<TypeParameter>::create(vm.heap(), 1);
+  CTypeParams->set(0, tag(*U));
+  C->setTypeParameters(*CTypeParams);
+  auto BUType = Type::create(vm.heap(), B, vector<Local<Type>>{UType});
+  C->setSupertype(*BUType);
+
+  // If we load x out of C, it should have type U.
+  auto fieldType = Type::substituteForInheritance(SType, C, A);
+  ASSERT_TRUE(UType->equals(*fieldType));
+}

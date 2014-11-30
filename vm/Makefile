@@ -45,7 +45,7 @@ programs = $(addprefix $(OUT_DIR)/,$(notdir $(basename $1)))
 
 LIB_NAME := codeswitch
 LIB_SOURCES := $(wildcard $(LIB_SRC_DIR)/*.cpp)
-LIB_GEN := $(GEN_DIR)/opcodes.h $(GEN_DIR)/builtins.h $(GEN_DIR)/roots-builtins.cpp
+LIB_GEN := $(GEN_DIR)/opcodes.h $(GEN_DIR)/builtins.h $(GEN_DIR)/flags.h $(GEN_DIR)/roots-builtins.cpp
 LIB_GEN_OBJS := $(call objects,$(filter %.cpp,$(LIB_GEN)))
 LIB_OBJECTS := $(call objects,$(LIB_SOURCES)) $(LIB_GEN_OBJS)
 LIB_DEPS := $(call deps,$(LIB_SOURCES))
@@ -116,6 +116,7 @@ $(GEN):
 # Dependencies
 $(GEN_DIR)/opcodes.h: $(LIB_SRC_DIR)/gen_opcodes.py $(COMMON_DIR)/opcodes.yaml
 $(GEN_DIR)/builtins.h: $(LIB_SRC_DIR)/gen_builtins_h.py $(COMMON_DIR)/builtins.yaml
+$(GEN_DIR)/flags.h: $(LIB_SRC_DIR)/gen_flags_h.py $(COMMON_DIR)/flags.yaml
 $(GEN_DIR)/roots-builtins.cpp: $(LIB_SRC_DIR)/gen_roots_builtins_cpp.py $(COMMON_DIR)/builtins.yaml
 
 $(LIB): $(LIB_OBJECTS)

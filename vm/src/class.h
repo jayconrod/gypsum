@@ -77,6 +77,7 @@ class Class: public Block {
   void setFields(BlockArray<Field>* newFields) { fields_.set(this, newFields); }
   length_t findFieldIndex(word_t offset) const;
   word_t findFieldOffset(length_t index) const;
+  Class* findFieldClass(length_t index);
 
   IdArray* constructors() const { return constructors_.get(); }
   void setConstructors(IdArray* newConstructors) { constructors_.set(this, newConstructors); }
