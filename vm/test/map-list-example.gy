@@ -1,0 +1,32 @@
+// Copyright 2014 Jay Conrod. All rights reserved.
+
+// This file is part of CodeSwitch. Use of this source code is governed by
+// the 3-clause BSD license that can be found in the LICENSE.txt file.
+
+
+class List[static E](value: E, next: List[E]?)
+  def to-string: String =
+    value.to-string + (if (next !== null) " " + next.to-string else "")
+
+
+abstract class Function[static P, static R]
+  abstract def apply(param: P): R
+
+
+class AppendString(suffix: String) <: Function[String, String]
+  def apply(param: String): String = param + suffix
+
+
+def map[static T](fn: Function[T, T], list: List[T]?): List[T]? =
+  if (list === null)
+    null
+  else
+    List[T](fn.apply(list.value), map[T](fn, list.next))
+
+
+def main =
+  var old-list = List[String]("foo", List[String]("bar", List[String]("baz", null)))
+  var new-list = map[String](AppendString("x"), old-list)
+  if ("foox barx bazx" != new-list.to-string)
+    throw Exception
+  0

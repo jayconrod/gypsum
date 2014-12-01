@@ -1,0 +1,54 @@
+// This is a simple Gypsum program.
+// You can compile it with this command:
+//   ../compiler/compiler map-list.gy -o map-list.csp
+// You can run it with this command:
+//   ../vm/out/driver map-list.csp
+// (If you haven't built the VM yet, run this first):
+//   (cd ../vm; make -j)
+
+// This program shows how to use type parameters with classes and functions.
+
+// This class defines a generic linked list. We define a type parameter `E` for the type of
+// data each node of the list contains. `next` points to the next node in the list, which
+// may be `null`.
+// TODO: when we support covariant type parameters, `E` will be covariant, and we'll have a
+// global `Nil` object, which will be a subtype of `List[Nothing]`. Then we won't need `null`.
+class List[static E](value: E, next: List[E]?)
+  // All classes inherit a `to-string` method from the root class, `Object`, which can be
+  // overriden. We can call `to-string` on `value`, since we know `E` must be a subtype
+  // of `Object`.
+  def to-string: String =
+    value.to-string + (if (next !== null) " " + next.to-string else "")
+
+
+// This is a generic function class. It has a parameter type `P` and a return type `R`. The
+// abstract `apply` method has these types. Note that a class must be `abstract` if it contains
+// any `abstract` methods. `abstract` classes cannot be instantiated.
+// TODO: we will have some version of this in the core library, and closures will automatically
+// subclass it.
+abstract class Function[static P, static R]
+  abstract def apply(param: P): R
+
+
+// `AppendString` acts kind of like a closure here. It acts as a function which takes a `String`
+// as a parameter and returns another `String`. It is a subclass of `Function[String, String]`.
+class AppendString(suffix: String) <: Function[String, String]
+  def apply(param: String): String = param + suffix
+
+
+// This is the traditional `map` function. It takes a function and a list, and creates a new
+// list by applying the function to each element of the input list.
+def map[static T](fn: Function[T, T], list: List[T]?): List[T]? =
+  if (list === null)
+    null
+  else
+    List[T](fn.apply(list.value), map[T](fn, list.next))
+
+
+def main =
+  // To demonstrate, we create a `List` of `String`s, and call `map` with `AppendString`,
+  // then print the result.
+  // TODO: type parameters can be inferred.
+  var old-list = List[String]("foo", List[String]("bar", List[String]("baz", null)))
+  var new-list = map[String](AppendString("x"), old-list)
+  print(new-list.to-string + "\n")
