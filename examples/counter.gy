@@ -2,7 +2,7 @@
 // You can compile it with this command:
 //   ../compiler/compiler list.gy -o list.csp
 // You can run it with this command:
-//   ../vm/out/driver list.csp
+//   ../vm/out/debug/driver list.csp
 // (If you haven't built the VM yet, run this first):
 //   (cd ../vm; make -j)
 
