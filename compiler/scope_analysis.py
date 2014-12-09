@@ -416,6 +416,8 @@ class NameInfo(object):
                 # Method call
                 typesAndArgs = getAllArgumentTypes(irDefn, receiverType, typeArgs, argTypes)
                 match = typesAndArgs is not None
+            else:
+                match = False
 
             if match:
                 if candidate is not None:
