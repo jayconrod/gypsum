@@ -25,6 +25,7 @@
 #include "stack.h"
 #include "string.h"
 #include "type.h"
+#include "type-parameter.h"
 
 using namespace std;
 
@@ -559,7 +560,13 @@ void Interpreter::handleBuiltin(BuiltinId id) {
         HandleScope handleScope(vm_);
         auto receiver = handle(mem<Block*>(stack_->sp() + kPrepareForGCSize));
         auto clas = handle(receiver->meta()->clas());
-        type = *Type::create(vm_->heap(), clas);
+        vector<Local<Type>> typeArgs;
+        typeArgs.reserve(clas->typeParameterCount());
+        for (length_t i = 0; i < clas->typeParameterCount(); i++) {
+          ASSERT((clas->typeParameter(i)->flags() & STATIC_FLAG) != 0);
+          typeArgs.push_back(handle(vm_->roots()->erasedType()));
+        }
+        type = *Type::create(vm_->heap(), clas, typeArgs);
       }
       pop<Block*>();  // receiver
       push<Block*>(type);

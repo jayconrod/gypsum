@@ -121,6 +121,9 @@ void Roots::initialize(Heap* heap) {
                                     Type::NULLABLE_FLAG);
   basicRoots_[NULL_TYPE_ROOT_INDEX] = nullType;
 
+  auto erasedType = new(heap, 0) Type(Type::ERASED_TYPE, Type::NO_FLAGS);
+  basicRoots_[ERASED_TYPE_ROOT_INDEX] = erasedType;
+
   Meta* typeMeta = getBuiltinClass(BUILTIN_TYPE_CLASS_ID)->instanceMeta();
   typeMeta->blockType_ = TYPE_BLOCK_TYPE;
   basicRoots_[TYPE_META_ROOT_INDEX] = typeMeta;

@@ -831,6 +831,8 @@ class CompileVisitor(AstNodeVisitor):
 
     def buildType(self, ty):
         assert isinstance(ty, ClassType)
+        if any(STATIC in param.flags for param in ty.clas.typeParameters):
+            raise CompileException("cannot match type with static parameters")
         self.allocarri(BUILTIN_TYPE_CLASS_ID, 1)
         self.dup()
         self.cls(ty.clas.id)

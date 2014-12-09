@@ -102,7 +102,7 @@ class TypeVisitorCommon(AstNodeVisitor):
             explicitTypeParams = getExplicitTypeParameters(irDefn)
             if len(typeArgs) != len(explicitTypeParams):
                 raise TypeException("%s: wrong number of type arguments; expected %d but have %d\n" %
-                                    (len(explicitTypeParams), len(typeArgs)))
+                                    (node.name, len(explicitTypeParams), len(typeArgs)))
             for ta, tp in zip(typeArgs, explicitTypeParams):
                 if not (tp.lowerBound.isSubtypeOf(ta) and
                         ta.isSubtypeOf(tp.upperBound)):

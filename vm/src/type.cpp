@@ -267,6 +267,11 @@ TypeParameter* Type::asVariable() const {
 }
 
 
+bool Type::isErased() const {
+  return form() == ERASED_TYPE;
+}
+
+
 Class* Type::effectiveClass() const {
   ASSERT(isClass() || isVariable());
   auto ty = this;
@@ -395,7 +400,7 @@ bool Type::isSubtypeOf(Local<Type> left, Local<Type> right) {
 bool Type::equals(Type* other) const {
   if (form() != other->form() || flags() != other->flags())
     return false;
-  if (isPrimitive()) {
+  if (isPrimitive() || isErased()) {
     return true;
   } else if (isClass()) {
     if (asClass() != other->asClass())
@@ -443,6 +448,9 @@ Local<Type> Type::substituteForBaseClass(const Handle<Type>& type,
                                          const Handle<Class>& clas) {
   ASSERT(type->isObject());
   Local<Type> currentType(type);
+  if (currentType->isErased())
+    return currentType;
+
   while (currentType->isVariable()) {
     currentType = handle(currentType->asVariable()->upperBound());
   }

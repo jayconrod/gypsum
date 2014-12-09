@@ -56,6 +56,7 @@ class Roots {
     F(TaggedArray<Block>, emptyTaggedArray, EMPTY_TAGGED_ARRAY)       \
     F(BlockArray<Block>, emptyBlockArray, EMPTY_BLOCK_ARRAY)          \
     F(Type, nullType, NULL_TYPE)                                      \
+    F(Type, erasedType, ERASED_TYPE)                                  \
     F(Meta, typeMeta, TYPE_META)                                      \
     F(Meta, stringMeta, STRING_META)                                  \
     F(String, trueString, TRUE_STRING)                                \

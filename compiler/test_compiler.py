@@ -817,6 +817,15 @@ class TestCompiler(unittest.TestCase):
                              ]],
                              variables=[Variable("exn", exnTy, LOCAL, frozenset())]))
 
+    def testMatchExceptionWithArgument(self):
+        source = "class E[static T] <: Exception\n" + \
+                 "def f =\n" + \
+                 "  try\n" + \
+                 "    0\n" + \
+                 "  catch\n" + \
+                 "    case x: E[String] => 1"
+        self.assertRaises(CompileException, self.compileFromSource, source)
+
     def testFactorial(self):
         self.checkFunction("def f(n: i64): i64 = {\n" +
                            "  var p = 1;\n" +
