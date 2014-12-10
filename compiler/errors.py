@@ -4,6 +4,10 @@
 # the GPL license that can be found in the LICENSE.txt file.
 
 
+class LexException(Exception):
+    pass
+
+
 class ScopeException(Exception):
     pass
 

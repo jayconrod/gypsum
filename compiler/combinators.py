@@ -4,7 +4,8 @@
 # the GPL license that can be found in the LICENSE.txt file.
 
 
-from token import Location
+from location import *
+
 
 class Reader(object):
     def __init__(self, filename, tokens, pos=0):
@@ -94,7 +95,7 @@ class Reserved(Parser):
         else:
             return Success(token.location, token.text, reader.next())
 
-        
+
 class Tag(Parser):
     def __init__(self, tag):
         self.tag = tag

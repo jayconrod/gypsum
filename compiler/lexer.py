@@ -6,6 +6,8 @@
 
 import re
 
+from errors import *
+from location import *
 from token import *
 
 __opchars = r"[!#%&*+\-/:<=>?@\\^|~]"
