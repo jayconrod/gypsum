@@ -29,7 +29,7 @@
 
 import re
 
-from token import *
+from tok import *
 
 class LayoutException(Exception):
     def __init__(self, location, message):

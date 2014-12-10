@@ -6,17 +6,26 @@
 
 import StringIO
 
-from equality import Equality
 from visitor import Visitor
 from utils import *
 
 
-class AstNode(Equality):
+class AstNode(object):
+    def __init__(self, location):
+        self.location = location
+
     def __str__(self):
         buf = StringIO.StringIO()
         printer = AstPrinter(buf)
         printer.visit(self)
         return buf.getvalue()
+
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and \
+            all(v == other.__dict__[k] for k, v in self.__dict__.iteritems() if k != "location")
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def data(self):
         return ""
@@ -26,7 +35,8 @@ class AstNode(Equality):
 
 
 class AstModule(AstNode):
-    def __init__(self, definitions):
+    def __init__(self, definitions, location):
+        super(AstModule, self).__init__(location)
         self.definitions = definitions
 
     def __repr__(self):
@@ -40,7 +50,8 @@ class AstModule(AstNode):
 
 
 class AstAttribute(AstNode):
-    def __init__(self, name):
+    def __init__(self, name, location):
+        super(AstAttribute, self).__init__(location)
         self.name = name
 
     def __repr__(self):
@@ -54,13 +65,14 @@ class AstAttribute(AstNode):
 
 
 class AstDefinition(AstNode):
-    def __init__(self, attribs):
+    def __init__(self, attribs, location):
+        super(AstDefinition, self).__init__(location)
         self.attribs = attribs
 
 
 class AstVariableDefinition(AstDefinition):
-    def __init__(self, attribs, pattern, expression):
-        super(AstVariableDefinition, self).__init__(attribs)
+    def __init__(self, attribs, pattern, expression, location):
+        super(AstVariableDefinition, self).__init__(attribs, location)
         self.pattern = pattern
         self.expression = expression
 
@@ -75,8 +87,8 @@ class AstVariableDefinition(AstDefinition):
 
 
 class AstFunctionDefinition(AstDefinition):
-    def __init__(self, attribs, name, typeParameters, parameters, returnType, body):
-        super(AstFunctionDefinition, self).__init__(attribs)
+    def __init__(self, attribs, name, typeParameters, parameters, returnType, body, location):
+        super(AstFunctionDefinition, self).__init__(attribs, location)
         self.name = name
         self.typeParameters = typeParameters
         self.parameters = parameters
@@ -103,8 +115,9 @@ class AstFunctionDefinition(AstDefinition):
 
 
 class AstClassDefinition(AstDefinition):
-    def __init__(self, attribs, name, typeParameters, constructor, supertypes, members):
-        super(AstClassDefinition, self).__init__(attribs)
+    def __init__(self, attribs, name, typeParameters, constructor,
+                 supertypes, members, location):
+        super(AstClassDefinition, self).__init__(attribs, location)
         self.name = name
         self.typeParameters = typeParameters
         self.constructor = constructor
@@ -136,8 +149,8 @@ class AstClassDefinition(AstDefinition):
 
 
 class AstPrimaryConstructorDefinition(AstDefinition):
-    def __init__(self, attribs, parameters):
-        super(AstPrimaryConstructorDefinition, self).__init__(attribs)
+    def __init__(self, attribs, parameters, location):
+        super(AstPrimaryConstructorDefinition, self).__init__(attribs, location)
         self.parameters = parameters
 
     def __repr__(self):
@@ -151,8 +164,8 @@ class AstPrimaryConstructorDefinition(AstDefinition):
 
 
 class AstTypeParameter(AstDefinition):
-    def __init__(self, attribs, name, upperBound, lowerBound):
-        super(AstTypeParameter, self).__init__(attribs)
+    def __init__(self, attribs, name, upperBound, lowerBound, location):
+        super(AstTypeParameter, self).__init__(attribs, location)
         self.name = name
         self.upperBound = upperBound
         self.lowerBound = lowerBound
@@ -172,8 +185,8 @@ class AstTypeParameter(AstDefinition):
 
 
 class AstParameter(AstDefinition):
-    def __init__(self, attribs, pattern):
-        super(AstParameter, self).__init__(attribs)
+    def __init__(self, attribs, pattern, location):
+        super(AstParameter, self).__init__(attribs, location)
         self.pattern = pattern
 
     def __repr__(self):
@@ -191,7 +204,8 @@ class AstPattern(AstNode):
 
 
 class AstVariablePattern(AstNode):
-    def __init__(self, name, ty):
+    def __init__(self, name, ty, location):
+        super(AstVariablePattern, self).__init__(location)
         self.name = name
         self.ty = ty
 
@@ -277,9 +291,8 @@ class AstBooleanType(AstType):
 
 
 class AstClassType(AstType):
-    def __init__(self, name, typeArguments, flags=None):
-        if flags is None:
-            flags = set()
+    def __init__(self, name, typeArguments, flags, location):
+        super(AstClassType, self).__init__(location)
         self.name = name
         self.typeArguments = typeArguments
         self.flags = flags
@@ -304,7 +317,8 @@ class AstExpression(AstNode):
 
 
 class AstLiteralExpression(AstExpression):
-    def __init__(self, literal):
+    def __init__(self, literal, location):
+        super(AstLiteralExpression, self).__init__(location)
         self.literal = literal
 
     def __repr__(self):
@@ -318,7 +332,8 @@ class AstLiteralExpression(AstExpression):
 
 
 class AstVariableExpression(AstExpression):
-    def __init__(self, name):
+    def __init__(self, name, location):
+        super(AstVariableExpression, self).__init__(location)
         self.name = name
 
     def __repr__(self):
@@ -348,7 +363,8 @@ class AstSuperExpression(AstExpression):
 
 
 class AstBlockExpression(AstExpression):
-    def __init__(self, statements):
+    def __init__(self, statements, location):
+        super(AstBlockExpression, self).__init__(location)
         self.statements = statements
 
     def __repr__(self):
@@ -362,7 +378,8 @@ class AstBlockExpression(AstExpression):
 
 
 class AstAssignExpression(AstExpression):
-    def __init__(self, left, right):
+    def __init__(self, left, right, location):
+        super(AstAssignExpression, self).__init__(location)
         self.left = left
         self.right = right
 
@@ -377,7 +394,8 @@ class AstAssignExpression(AstExpression):
 
 
 class AstPropertyExpression(AstExpression):
-    def __init__(self, receiver, propertyName):
+    def __init__(self, receiver, propertyName, location):
+        super(AstPropertyExpression, self).__init__(location)
         self.receiver = receiver
         self.propertyName = propertyName
 
@@ -395,7 +413,8 @@ class AstPropertyExpression(AstExpression):
 
 
 class AstCallExpression(AstExpression):
-    def __init__(self, callee, typeArguments, arguments):
+    def __init__(self, callee, typeArguments, arguments, location):
+        super(AstCallExpression, self).__init__(location)
         self.callee = callee
         self.typeArguments = typeArguments
         self.arguments = arguments
@@ -412,7 +431,8 @@ class AstCallExpression(AstExpression):
 
 
 class AstUnaryExpression(AstExpression):
-    def __init__(self, operator, expr):
+    def __init__(self, operator, expr, location):
+        super(AstUnaryExpression, self).__init__(location)
         self.operator = operator
         self.expr = expr
 
@@ -430,7 +450,8 @@ class AstUnaryExpression(AstExpression):
 
 
 class AstBinaryExpression(AstExpression):
-    def __init__(self, operator, left, right):
+    def __init__(self, operator, left, right, location):
+        super(AstBinaryExpression, self).__init__(location)
         self.operator = operator
         self.left = left
         self.right = right
@@ -449,7 +470,8 @@ class AstBinaryExpression(AstExpression):
 
 
 class AstFunctionValueExpression(AstExpression):
-    def __init__(self, expr):
+    def __init__(self, expr, location):
+        super(AstFunctionValueExpression, self).__init__(location)
         self.expr = expr
 
     def __repr__(self):
@@ -463,7 +485,8 @@ class AstFunctionValueExpression(AstExpression):
 
 
 class AstIfExpression(AstExpression):
-    def __init__(self, condition, trueExpr, falseExpr):
+    def __init__(self, condition, trueExpr, falseExpr, location):
+        super(AstIfExpression, self).__init__(location)
         self.condition = condition
         self.trueExpr = trueExpr
         self.falseExpr = falseExpr
@@ -480,7 +503,8 @@ class AstIfExpression(AstExpression):
 
 
 class AstWhileExpression(AstExpression):
-    def __init__(self, condition, body):
+    def __init__(self, condition, body, location):
+        super(AstWhileExpression, self).__init__(location)
         self.condition = condition
         self.body = body
 
@@ -512,7 +536,8 @@ class AstContinueExpression(AstExpression):
 
 
 class AstPartialFunctionExpression(AstExpression):
-    def __init__(self, cases):
+    def __init__(self, cases, location):
+        super(AstPartialFunctionExpression, self).__init__(location)
         self.cases = cases
 
     def __repr__(self):
@@ -526,7 +551,8 @@ class AstPartialFunctionExpression(AstExpression):
 
 
 class AstPartialFunctionCase(AstNode):
-    def __init__(self, pattern, condition, expression):
+    def __init__(self, pattern, condition, expression, location):
+        super(AstPartialFunctionCase, self).__init__(location)
         self.pattern = pattern
         self.condition = condition
         self.expression = expression
@@ -543,7 +569,8 @@ class AstPartialFunctionCase(AstNode):
 
 
 class AstMatchExpression(AstExpression):
-    def __init__(self, expression, matcher):
+    def __init__(self, expression, matcher, location):
+        super(AstMatchExpression, self).__init__(location)
         self.expression = expression
         self.matcher = matcher
 
@@ -559,7 +586,8 @@ class AstMatchExpression(AstExpression):
 
 
 class AstThrowExpression(AstExpression):
-    def __init__(self, exception):
+    def __init__(self, exception, location):
+        super(AstThrowExpression, self).__init__(location)
         self.exception = exception
 
     def __repr__(self):
@@ -573,7 +601,8 @@ class AstThrowExpression(AstExpression):
 
 
 class AstTryCatchExpression(AstExpression):
-    def __init__(self, expression, catchHandler, finallyHandler):
+    def __init__(self, expression, catchHandler, finallyHandler, location):
+        super(AstTryCatchExpression, self).__init__(location)
         self.expression = expression
         self.catchHandler = catchHandler
         self.finallyHandler = finallyHandler
@@ -590,7 +619,8 @@ class AstTryCatchExpression(AstExpression):
 
 
 class AstLambdaExpression(AstExpression):
-    def __init__(self, name, typeParameters, parameters, body):
+    def __init__(self, name, typeParameters, parameters, body, location):
+        super(AstLambdaExpression, self).__init__(location)
         self.name = name
         self.typeParameters = typeParameters
         self.parameters = parameters
@@ -611,7 +641,8 @@ class AstLambdaExpression(AstExpression):
 
 
 class AstReturnExpression(AstExpression):
-    def __init__(self, expression):
+    def __init__(self, expression, location):
+        super(AstReturnExpression, self).__init__(location)
         self.expression = expression
 
     def __repr__(self):
@@ -629,7 +660,8 @@ class AstLiteral(AstNode):
 
 
 class AstIntegerLiteral(AstLiteral):
-    def __init__(self, value, width=64):
+    def __init__(self, value, width, location):
+        super(AstIntegerLiteral, self).__init__(location)
         self.value = value
         self.width = width
 
@@ -644,7 +676,8 @@ class AstIntegerLiteral(AstLiteral):
 
 
 class AstFloatLiteral(AstLiteral):
-    def __init__(self, value, width=64):
+    def __init__(self, value, width, location):
+        super(AstFloatLiteral, self).__init__(location)
         self.value = value
         self.width = width
 
@@ -659,7 +692,8 @@ class AstFloatLiteral(AstLiteral):
 
 
 class AstBooleanLiteral(AstLiteral):
-    def __init__(self, value):
+    def __init__(self, value, location):
+        super(AstBooleanLiteral, self).__init__(location)
         self.value = value
 
     def __repr__(self):
@@ -681,7 +715,8 @@ class AstNullLiteral(AstLiteral):
 
 
 class AstStringLiteral(AstLiteral):
-    def __init__(self, value):
+    def __init__(self, value, location):
+        super(AstStringLiteral, self).__init__(location)
         self.value = value
 
     def __repr__(self):

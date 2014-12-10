@@ -155,7 +155,7 @@ class Process(Parser):
         result = self.parser(reader)
         if not result:
             return result
-        value = self.process(result.value)
+        value = self.process(result.value, result.location)
         if isinstance(value, FailValue):
             return Failure(result.location, value.message)
         else:
@@ -163,7 +163,7 @@ class Process(Parser):
 
 
 def If(parser, f):
-    return Process(parser, lambda p: p if f(p) else FailValue())
+    return Process(parser, lambda p, _: p if f(p) else FailValue())
 
 
 class Opt(Parser):
@@ -232,23 +232,23 @@ class Rep(Parser):
 
 
 def Rep1(parser):
-    def process(parsed):
+    def process(parsed, _):
         (l, r) = parsed
         return [l] + r
     return parser + Rep(parser) ^ process
 
 
 def Rep1Sep(parser, separator):
-    def processElem(parsed):
+    def processElem(parsed, _):
         return parsed[1]
-    def process(parsed):
+    def process(parsed, _):
         (l, r) = parsed
         return [l] + r
     return parser + Rep(separator + parser ^ processElem) ^ process
 
 
 def RepSep(parser, separator):
-    return Opt(Rep1Sep(parser, separator)) ^ (lambda p: [] if p is None else p)
+    return Opt(Rep1Sep(parser, separator)) ^ (lambda p, _: [] if p is None else p)
 
 
 class LeftRec(Parser):
@@ -268,7 +268,8 @@ class LeftRec(Parser):
             if not nextResult:
                 break
 
-            nextValue = self.combine(result.value, nextResult.value)
+            loc = result.location.combine(nextResult.location)
+            nextValue = self.combine(result.value, nextResult.value, loc)
             if isinstance(nextValue, FailValue):
                 break
 

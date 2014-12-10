@@ -7,7 +7,7 @@
 import unittest
 
 from lexer import *
-from token import *
+from tok import *
 
 class TestLexer(unittest.TestCase):
     def checkTags(self, expected, text):

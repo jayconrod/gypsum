@@ -7,7 +7,7 @@
 import unittest
 
 from combinators import *
-from token import *
+from tok import *
 from lexer import *
 
 symbol = Tag(SYMBOL)
@@ -60,12 +60,12 @@ class TestCombinators(unittest.TestCase):
         self.assertFalse(result)
 
     def testProcess(self):
-        parser = symbol ^ len
+        parser = symbol ^ (lambda p, loc: len(p))
         self.checkParse(3, parser, "abc")
 
     def testProcessFailure(self):
         message = "starts with a"
-        def process(parsed):
+        def process(parsed, _):
             if parsed[0] == "a":
                 return FailValue(message)
             else:
@@ -141,13 +141,13 @@ class TestCombinators(unittest.TestCase):
         self.checkParse(["a", "b", "c"], parser, "a,b,c")
 
     def testLeftRec(self):
-        def combine(sym, next):
+        def combine(sym, next, loc):
             return sym + next[1]
         parser = LeftRec(symbol, Reserved(RESERVED, ",") + symbol, combine)
         self.checkParse("abc", parser, "a,b,c")
 
     def testLeftRecStopInCombine(self):
-        def combine(sym, next):
+        def combine(sym, next, _):
             if next is None:
                 return FailValue()
             else:
