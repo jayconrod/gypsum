@@ -1,8 +1,10 @@
 # Configurations
 mode ?= debug
+use_pch ?= yes
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
   OS := osx
+  use_pch := no
 else
 ifeq ($(UNAME_S),Linux)
   OS := linux
@@ -29,8 +31,7 @@ GEN_DIR := $(OUT_DIR)/gen
 CXX ?= g++
 CXX_COMPILE := $(CXX) -c -std=c++11
 CXX_DEPENDS := $(CXX) -std=c++11 -MM
-LD ?= $(CXX)
-CXX_LINK_EXEC := $(LD)
+CXX_LINK_EXEC := $(CXX)
 AR ?= ar
 CXX_LINK_STATIC := $(AR) rcs
 RM ?= rm
@@ -77,8 +78,13 @@ LIB_DEPS := $(call deps,$(LIB_SOURCES))
 LIB := $(OUT_DIR)/$(LIB_NAME).a
 
 LIB_PREFIX := $(LIB_SRC_DIR)/prefix.h
-LIB_PREFIX_PCH := prefix_.h
-LIB_PREFIX_COMPILED := $(GEN_DIR)/$(LIB_PREFIX_PCH).gch
+ifeq ($(use_pch),yes)
+  LIB_PREFIX_PCH := prefix_.h
+  LIB_PREFIX_COMPILED := $(GEN_DIR)/$(LIB_PREFIX_PCH).gch
+  INCLUDES += -inlcude $(LIB_PREFIX_PCH)
+else
+  INCLUDES += -include $(LIB_PREFIX)
+endif
 
 TEST_GY_SOURCES := $(wildcard $(TEST_SRC_DIR)/*.gy)
 TEST_CSP_PACKAGES := $(call csp_packages,$(TEST_GY_SOURCES))
@@ -116,14 +122,16 @@ $(PROGRAMS) $(TEST):
 $(LIB):
 	$(CXX_LINK_STATIC) $@ $^
 
+ifeq ($(use_pch),yes)
 $(LIB_PREFIX_COMPILED): $(LIB_PREFIX)
 	@mkdir -p $(dir $@)
 	$(CXX_COMPILE) $(CXXFLAGS) -x c++-header $(DEFINES) $(INCLUDES) $< -o $@
+endif
 
 $(OBJECTS):
 	@mkdir -p $(dir $@)
 	@$(CXX_DEPENDS) $(CXXFLAGS) $(DEFINES) $(INCLUDES) -MT $@ $(filter %.cpp,$^) >$(call deps,$(filter %.cpp,$^))
-	$(CXX_COMPILE) $(CXXFLAGS) $(DEFINES) $(INCLUDES) -include $(LIB_PREFIX_PCH) $(filter %.cpp,$^) -o $@
+	$(CXX_COMPILE) $(CXXFLAGS) $(DEFINES) $(INCLUDES) $(filter %.cpp,$^) -o $@
 
 $(TEST_CSP_PACKAGES):
 	@mkdir -p $(dir $@)
@@ -147,6 +155,12 @@ $(GEN_DIR)/roots-builtins.cpp: $(LIB_SRC_DIR)/gen_roots_builtins_cpp.py $(COMMON
 $(LIB): $(LIB_OBJECTS)
 
 $(TEST): $(TEST_OBJECTS) $(LIB)
+
+$(OBJECTS): $(filter %.h,$(GEN))
+ifeq ($(use_pch),yes)
+$(LIB_PREFIX_COMPILED): $(filter %.h,$(GEN))
+$(OBJECTS): $(LIB_PREFIX_COMPILED)
+endif
 
 $(OBJECTS) $(LIB_PREFIX_COMPILED): $(filter %.h,$(GEN))
 $(OBJECTS): $(LIB_PREFIX_COMPILED)
