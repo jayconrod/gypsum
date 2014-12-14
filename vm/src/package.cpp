@@ -149,7 +149,7 @@ TypeParameter* Package::getTypeParameter(length_t index) {
 
 Function* Package::entryFunction() {
   auto index = entryFunctionIndex();
-  if (index == kNotSet)
+  if (index == kLengthNotSet)
     return nullptr;
   return getFunction(index);
 }
@@ -404,7 +404,7 @@ T PackageLoader::readValue() {
 
 length_t PackageLoader::readLength() {
   auto len = readValue<length_t>();
-  if (len != kNotSet && len > kMaxLength)
+  if (len != kLengthNotSet && len > kMaxLength)
     throw Error("could not read length");
   return len;
 }
