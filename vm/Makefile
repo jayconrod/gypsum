@@ -1,5 +1,17 @@
 # Configurations
 mode ?= debug
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+  OS := osx
+else
+ifeq ($(UNAME_S),Linux)
+  OS := linux
+else
+  $(warning Unknown OS: $(UNAME_S))
+  OS := linux
+endif
+endif
+
 
 # Places
 HERE := $(realpath $(dir $(lastword $(MAKEFILE_LIST))))
@@ -13,27 +25,40 @@ OUT_DIR := $(OUT_BASE_DIR)/$(mode)
 GEN_DIR := $(OUT_DIR)/gen
 
 
-# Tools
-CXX := g++ -c -std=c++11
-LD := g++
-AR := ar rcs
-DEPENDS := g++ -std=c++11 -MM
-RM := rm -rf
-COMPILER := $(HERE)/../compiler/compiler
-PYTHON := python
+# Tools and commands
+CXX ?= g++
+CXX_COMPILE := $(CXX) -c -std=c++11
+CXX_DEPENDS := $(CXX) -std=c++11 -MM
+LD ?= $(CXX)
+CXX_LINK_EXEC := $(LD)
+AR ?= ar
+CXX_LINK_STATIC := $(AR) rcs
+RM ?= rm
+REMOVE := $(RM) -r
+PYTHON ?= python
+GY_COMPILER ?= $(HERE)/../compiler/compiler
 MKTEST := $(TEST_SRC_DIR)/mktest.py
+
 
 # Flags
 CXXFLAGS := -Werror -Wall -Wno-invalid-offsetof
 LDFLAGS :=
+DEFINES := -DWORDSIZE=64 -DPAGESIZE=4096
 ifeq ($(mode),debug)
   CXXFLAGS += -O0 -g3
+  DEFINES += -DDEBUG
 endif
 ifeq ($(mode),release)
   CXXFLAGS += -O3 -flto
   LDFLAGS += -O3 -flto
 endif
-DEFINES := -DWORDSIZE=64 -DPAGESIZE=4096 -DDEBUG
+ifeq ($(OS),linux)
+  DEFINES += -DCS_PLATFORM_LINUX
+endif
+ifeq ($(OS),osx)
+  DEFINES += -DCS_PLATFORM_OSX
+endif
+
 INCLUDES := -I$(INCLUDE_DIR) $(addprefix -iquote,$(LIB_SRC_DIR) $(TEST_SRC_DIR) $(GEN_DIR))
 
 # Sources and intermediates
@@ -44,7 +69,7 @@ deps = $(addprefix $(OUT_DIR)/obj/,$(addsuffix .d,$(notdir $(basename $1))))
 programs = $(addprefix $(OUT_DIR)/,$(notdir $(basename $1)))
 
 LIB_NAME := codeswitch
-LIB_SOURCES := $(wildcard $(LIB_SRC_DIR)/*.cpp)
+LIB_SOURCES := $(wildcard $(LIB_SRC_DIR)/*.cpp) $(wildcard $(LIB_SRC_DIR)/$(OS)/*.cpp)
 LIB_GEN := $(GEN_DIR)/opcodes.h $(GEN_DIR)/builtins.h $(GEN_DIR)/flags.h $(GEN_DIR)/roots-builtins.cpp
 LIB_GEN_OBJS := $(call objects,$(filter %.cpp,$(LIB_GEN)))
 LIB_OBJECTS := $(call objects,$(LIB_SOURCES)) $(LIB_GEN_OBJS)
@@ -80,29 +105,29 @@ GEN := $(LIB_GEN)
 all: $(PROGRAMS) test
 
 clean:
-	$(RM) $(OUT_BASE_DIR)
+	$(REMOVE) $(OUT_BASE_DIR)
 
 test: $(TEST)
 	@$(TEST)
 
 $(PROGRAMS) $(TEST):
-	$(LD) $(LDFLAGS) $^ -o $@
+	$(CXX_LINK_EXEC) $(LDFLAGS) $^ -o $@
 
 $(LIB):
-	$(AR) $@ $^
+	$(CXX_LINK_STATIC) $@ $^
 
 $(LIB_PREFIX_COMPILED): $(LIB_PREFIX)
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -x c++-header $(DEFINES) $(INCLUDES) $< -o $@
+	$(CXX_COMPILE) $(CXXFLAGS) -x c++-header $(DEFINES) $(INCLUDES) $< -o $@
 
 $(OBJECTS):
 	@mkdir -p $(dir $@)
-	@$(DEPENDS) $(CXXFLAGS) $(DEFINES) $(INCLUDES) -MT $@ $(filter %.cpp,$^) >$(call deps,$(filter %.cpp,$^))
-	$(CXX) $(CXXFLAGS) $(DEFINES) $(INCLUDES) -include $(LIB_PREFIX_PCH) $(filter %.cpp,$^) -o $@
+	@$(CXX_DEPENDS) $(CXXFLAGS) $(DEFINES) $(INCLUDES) -MT $@ $(filter %.cpp,$^) >$(call deps,$(filter %.cpp,$^))
+	$(CXX_COMPILE) $(CXXFLAGS) $(DEFINES) $(INCLUDES) -include $(LIB_PREFIX_PCH) $(filter %.cpp,$^) -o $@
 
 $(TEST_CSP_PACKAGES):
 	@mkdir -p $(dir $@)
-	$(COMPILER) $< -o $@
+	$(GY_COMPILER) $< -o $@
 
 $(TEST_CSP_TESTS):
 	@mkdir -p $(dir $@)

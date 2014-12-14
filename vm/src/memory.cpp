@@ -9,13 +9,13 @@
 #include <algorithm>
 #include <utility>
 #include <unistd.h>
-#include <sys/mman.h>
 #include <sys/fcntl.h>
 #include "bitmap.h"
 #include "block.h"
 #include "error.h"
 #include "handle.h"
 #include "heap.h"
+#include "platform.h"
 #include "vm.h"
 
 using namespace std;
@@ -50,29 +50,22 @@ void* Chunk::operator new (size_t unused, size_t size, Executable executable) {
   // TODO: support large allocations
   ASSERT(size == kDefaultSize);
 
-  // TODO: ASLR
-  Address base = 0;
-
   // We can't guarantee the kernel will give us an aligned chunk, so we ask for some extra
   // and align the chunk within the region given to us.
+  // TODO: ASLR
   auto alignedSize = size + kDefaultSize;
-  auto prot = PROT_READ | PROT_WRITE | (executable == EXECUTABLE ? PROT_EXEC : 0);
-  auto addr = mmap(reinterpret_cast<void*>(base), alignedSize, prot,
-                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  if (addr == MAP_FAILED) {
-    throw Error("could not allocate memory");
-  }
-  base = reinterpret_cast<Address>(addr);
+  auto prot = kReadable | kWritable | (executable == EXECUTABLE ? kExecutable : 0);
+  auto base = allocateMemory(alignedSize, prot);
 
   // Free the extra memory at the beginning and end.
   auto start = align(base, kDefaultSize);
   auto end = start + size;
   auto extraBefore = start - base;
   if (extraBefore > 0)
-    munmap(reinterpret_cast<void*>(base), extraBefore);
+    releaseMemory(base, extraBefore);
   auto extraAfter = (base + alignedSize) - end;
   if (extraAfter > 0)
-    munmap(reinterpret_cast<void*>(end), extraAfter);
+    releaseMemory(end, extraAfter);
 
   Chunk* chunk = reinterpret_cast<Chunk*>(start);
   chunk->size_ = size;
@@ -95,7 +88,7 @@ Chunk::Chunk(VM* vm, u32 id)
 
 void Chunk::operator delete (void* addr) {
   auto size = reinterpret_cast<Chunk*>(addr)->size();
-  munmap(addr, size);
+  releaseMemory(reinterpret_cast<Address>(addr), size);
 }
 
 
