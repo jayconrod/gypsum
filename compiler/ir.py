@@ -102,6 +102,9 @@ class IrDefinition(Data):
     def isTypeDefn(self):
         return False
 
+    def getLocation(self):
+        return self.astDefn.location if hasattr(self, "astDefn") else None
+
 
 class Global(IrDefinition):
     propertyNames = ("name", "type", "value", "flags")
@@ -390,5 +393,9 @@ class TypeParameter(IrDefinition):
 LOCAL = "local"
 PARAMETER = "parameter"
 
-Variable = Data.makeClass("Variable", ("name", "type", "kind", "flags"))
-Field = Data.makeClass("Field", ("name", "type", "flags"))
+class Variable(IrDefinition):
+    propertyNames = ["name", "type", "kind", "flags"]
+
+
+class Field(IrDefinition):
+    propertyNames = ["name", "type", "flags"]

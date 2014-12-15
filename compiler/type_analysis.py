@@ -37,7 +37,8 @@ def analyzeTypes(info):
             overridenReturnType = func.override.returnType.substituteForInheritance(
                 func.clas, func.override.clas)
             if not func.returnType.isSubtypeOf(overridenReturnType):
-                raise TypeException("%s: return type is not subtype of overriden function" %
+                raise TypeException(func.getLocation(),
+                                    "%s: return type is not subtype of overriden function" %
                                     func.name)
 
 
@@ -88,11 +89,12 @@ class TypeVisitorCommon(AstNodeVisitor):
 
     def visitAstClassType(self, node):
         typeArgs = map(self.visit, node.typeArguments)
-        nameInfo = self.scope().lookup(node.name, ignoreDefnOrder=self.shouldIgnoreDefnOrder())
+        nameInfo = self.scope().lookup(node.name, node.location,
+                                       ignoreDefnOrder=self.shouldIgnoreDefnOrder())
         if nameInfo.isOverloaded() or not nameInfo.getDefnInfo().irDefn.isTypeDefn():
-            raise TypeException("%s: does not refer to a type" % node.name)
+            raise TypeException(node.location, "%s: does not refer to a type" % node.name)
         defnInfo = nameInfo.getDefnInfo()
-        self.scope().use(defnInfo, node.id, USE_AS_TYPE)
+        self.scope().use(defnInfo, node.id, USE_AS_TYPE, node.location)
         irDefn = nameInfo.getDefnInfo().irDefn
         self.ensureTypeInfoForDefn(irDefn)
 
@@ -101,20 +103,23 @@ class TypeVisitorCommon(AstNodeVisitor):
         if isinstance(irDefn, Class):
             explicitTypeParams = getExplicitTypeParameters(irDefn)
             if len(typeArgs) != len(explicitTypeParams):
-                raise TypeException("%s: wrong number of type arguments; expected %d but have %d\n" %
+                raise TypeException(node.location,
+                                    "%s: wrong number of type arguments; expected %d but have %d\n" %
                                     (node.name, len(explicitTypeParams), len(typeArgs)))
             for ta, tp in zip(typeArgs, explicitTypeParams):
                 if not (tp.lowerBound.isSubtypeOf(ta) and
                         ta.isSubtypeOf(tp.upperBound)):
-                    raise TypeException("%s: type argument is not in bounds" % irDefn.name)
+                    raise TypeException(node.location,
+                                        "%s: type argument is not in bounds" % irDefn.name)
             allTypeArgs = tuple(map(VariableType, getImplicitTypeParameters(irDefn)) + typeArgs)
             return ClassType(irDefn, allTypeArgs, flags)
         else:
             assert isinstance(irDefn, TypeParameter)
             if flags != frozenset():
-                raise TypeException("invalid flags for variable type")
+                raise TypeException(node.location, "invalid flags for variable type")
             if len(typeArgs) > 0:
-                raise TypeException("%s: type parameter cannot accept type arguments",
+                raise TypeException(node.location,
+                                    "%s: type parameter cannot accept type arguments" %
                                     irDefn.name)
             return VariableType(irDefn)
 
@@ -160,7 +165,8 @@ class SubtypeVisitor(TypeVisitorCommon):
             def visitSupertype(sty):
                 ty = self.visit(sty)
                 if ty.isNullable():
-                    raise TypeException("%s: supertype may not be nullable" % node.name)
+                    raise TypeException(node.location,
+                                        "%s: supertype may not be nullable" % node.name)
                 return ty
             irClass.supertypes = map(visitSupertype, node.supertypes)
         for member in node.members:
@@ -177,13 +183,15 @@ class SubtypeVisitor(TypeVisitorCommon):
             else:
                 ty = self.visit(bound)
                 if ty.isNullable():
-                    raise TypeException("%s: bound may not be nullable" % node.name)
+                    raise TypeException(bound.location,
+                                        "%s: bound may not be nullable" % node.name)
                 return ty
 
         irParam.upperBound = visitBound(node.upperBound, getRootClassType())
         irParam.lowerBound = visitBound(node.lowerBound, getNothingClassType())
         if not irParam.lowerBound.isSubtypeOf(irParam.upperBound):
-            raise TypeException("%s: lower bound is not subtype of upper bound" % node.name)
+            raise TypeException(node.location,
+                                "%s: lower bound is not subtype of upper bound" % node.name)
 
     def visitAstBlockExpression(self, node):
         self.visitChildren(node)
@@ -310,12 +318,13 @@ class TypeVisitor(TypeVisitorCommon):
         else:
             varTy = None
         if varTy is None and exprTy is None:
-            raise TypeException("%s: type not specified" % node.name)
+            raise TypeException(node.location, "%s: type not specified" % node.name)
         elif varTy is not None:
             if mode is COMPILE_FOR_VALUE and \
                exprTy is not None and \
                not exprTy.isSubtypeOf(varTy):
-                raise TypeException("%s: expression doesn't match declared type" % node.name)
+                raise TypeException(node.location,
+                                    "%s: expression doesn't match declared type" % node.name)
             patTy = varTy
         else:
             patTy = exprTy
@@ -329,22 +338,23 @@ class TypeVisitor(TypeVisitorCommon):
         return ty
 
     def visitAstVariableExpression(self, node):
-        ty = self.handlePossibleCall(self.scope(), node.name, node.id, None, [], [], False)
+        ty = self.handlePossibleCall(self.scope(), node.name, node.id, None,
+                                     [], [], False, node.location)
         return ty
 
     def visitAstThisExpression(self, node):
         scope = self.scope()
-        nameInfo = scope.lookup("this", localOnly=False, mayBeAssignment=False)
+        nameInfo = scope.lookup("this", node.location, localOnly=False, mayBeAssignment=False)
         defnInfo = nameInfo.getDefnInfo()
-        scope.use(defnInfo, node.id, USE_AS_VALUE)
+        scope.use(defnInfo, node.id, USE_AS_VALUE, node.location)
         ty = defnInfo.irDefn.type
         return ty
 
     def visitAstSuperExpression(self, node):
         scope = self.scope()
-        nameInfo = scope.lookup("this", localOnly=False, mayBeAssignment=False)
+        nameInfo = scope.lookup("this", node.location, localOnly=False, mayBeAssignment=False)
         defnInfo = nameInfo.getDefnInfo()
-        scope.use(defnInfo, node.id, USE_AS_VALUE)
+        scope.use(defnInfo, node.id, USE_AS_VALUE, node.location)
         thisType = defnInfo.irDefn.type
         assert isinstance(thisType, ClassType) and \
                len(thisType.clas.supertypes) > 0
@@ -363,13 +373,13 @@ class TypeVisitor(TypeVisitorCommon):
         rightTy = self.visit(node.right)
         leftTy = self.visit(node.left)
         if not rightTy.isSubtypeOf(leftTy):
-            raise TypeException("type error")
+            raise TypeException(node.location, "type error")
         return leftTy
 
     def visitAstPropertyExpression(self, node):
         receiverTy = self.visit(node.receiver)
         ty = self.handleMethodCall(node.propertyName, node.id,
-                                   receiverTy, [], [], mayAssign=False)
+                                   receiverTy, [], [], False, node.location)
         return ty
 
     def visitAstCallExpression(self, node):
@@ -377,16 +387,16 @@ class TypeVisitor(TypeVisitorCommon):
         argTypes = map(self.visit, node.arguments)
         if isinstance(node.callee, AstVariableExpression):
             ty = self.handlePossibleCall(self.scope(), node.callee.name, node.id,
-                                         None, typeArgs, argTypes, False)
+                                         None, typeArgs, argTypes, False, node.location)
         elif isinstance(node.callee, AstPropertyExpression):
             receiverType = self.visit(node.callee.receiver)
             ty = self.handleMethodCall(node.callee.propertyName, node.id,
-                                       receiverType, typeArgs, argTypes, False)
+                                       receiverType, typeArgs, argTypes, False, node.location)
         elif isinstance(node.callee, AstThisExpression) or \
              isinstance(node.callee, AstSuperExpression):
             receiverType = self.visit(node.callee)
             self.handleMethodCall("$constructor", node.id,
-                                  receiverType, typeArgs, argTypes, False)
+                                  receiverType, typeArgs, argTypes, False, node.location)
             ty = UnitType
         else:
             # TODO: callable expression
@@ -395,7 +405,8 @@ class TypeVisitor(TypeVisitorCommon):
 
     def visitAstUnaryExpression(self, node):
         receiverType = self.visit(node.expr)
-        ty = self.handleMethodCall(node.operator, node.id, receiverType, [], [], False)
+        ty = self.handleMethodCall(node.operator, node.id, receiverType,
+                                   [], [], False, node.location)
         return ty
 
     def visitAstBinaryExpression(self, node):
@@ -405,20 +416,22 @@ class TypeVisitor(TypeVisitorCommon):
             # Logic operators are handled separately from other builtins because of
             # short circuiting.
             if not self.isConditionType(leftTy) or not self.isConditionType(rightTy):
-                raise TypeException("type error: expected condition types for logic operands")
+                raise TypeException(node.location,
+                                    "expected condition types for logic operands")
             ty = BooleanType
         else:
-            ty = self.handleMethodCall(node.operator, node.id, leftTy, [], [rightTy], True)
+            ty = self.handleMethodCall(node.operator, node.id, leftTy,
+                                       [], [rightTy], True, node.location)
         return ty
 
     def visitAstIfExpression(self, node):
         condTy = self.visit(node.condition)
         if not self.isConditionType(condTy):
-            raise TypeException("type error: condition must be boolean")
+            raise TypeException(node.location, "condition must be boolean")
         trueTy = self.visit(node.trueExpr)
         if node.falseExpr is not None:
             falseTy = self.visit(node.falseExpr)
-            ifTy = trueTy.combine(falseTy)
+            ifTy = trueTy.combine(falseTy, node.location)
         else:
             ifTy = UnitType
         return ifTy
@@ -426,14 +439,14 @@ class TypeVisitor(TypeVisitorCommon):
     def visitAstWhileExpression(self, node):
         condTy = self.visit(node.condition)
         if not self.isConditionType(condTy):
-            raise TypeException("type error: condition must be boolean")
+            raise TypeException(node.condition.location, "condition must be boolean")
         self.visit(node.body)
         return UnitType
 
     def visitAstThrowExpression(self, node):
         exnTy = self.visit(node.exception)
         if not exnTy.isSubtypeOf(ClassType(getExceptionClass())):
-            raise TypeException("type error: throw expression must produce an Exception")
+            raise TypeException(node.location, "throw expression must produce an Exception")
         return NoType
 
     def visitAstTryCatchExpression(self, node):
@@ -445,14 +458,14 @@ class TypeVisitor(TypeVisitorCommon):
             catchTy = self.visit(node.catchHandler, exnTy)
         if node.finallyHandler is not None:
             self.visit(node.finallyHandler)
-        ty = tryTy.combine(catchTy)
+        ty = tryTy.combine(catchTy, node.location)
         return ty
 
     def visitAstPartialFunctionExpression(self, node, valueTy):
         ty = NoType
         for case in node.cases:
             caseTy = self.visit(case, valueTy)
-            ty = ty.combine(caseTy)
+            ty = ty.combine(caseTy, node.location)
         return ty
 
     def visitAstPartialFunctionCase(self, node, valueTy):
@@ -460,14 +473,14 @@ class TypeVisitor(TypeVisitorCommon):
         if node.condition is not None:
             conditionTy = self.visit(node.condition)
             if not self.isConditionType(conditionTy):
-                raise TypeException("type error: condition must have boolean type")
+                raise TypeException(node.condition.location, "condition must have boolean type")
         ty = self.visit(node.expression)
         return ty
 
     def visitAstReturnExpression(self, node):
         if not self.isAnalyzingFunction() or \
            (self.functionStack[-1].irDefn.isConstructor() and node.expression is not None):
-            raise TypeException("type error: return not valid in this position")
+            raise TypeException(node.location, "return not valid in this position")
         if node.expression is None:
             retTy = UnitType
         else:
@@ -478,18 +491,19 @@ class TypeVisitor(TypeVisitorCommon):
     def visitAstIntegerLiteral(self, node):
         typeMap = { 8: I8Type, 16: I16Type, 32: I32Type, 64: I64Type }
         if node.width not in typeMap:
-            raise TypeException("invalid integer literal width: %d" % node.width)
+            raise TypeException(node.location, "invalid integer literal width: %d" % node.width)
         minValue = -2 ** (node.width - 1)
         maxValue = 2 ** (node.width - 1) - 1
         if node.value < minValue or maxValue < node.value:
-            raise TypeException("interger literal value %d does not fit in %d bits" %
+            raise TypeException(node.location,
+                                "interger literal value %d does not fit in %d bits" %
                                 (node.value, node.width))
         return typeMap[node.width]
 
     def visitAstFloatLiteral(self, node):
         typeMap = { 32: F32Type, 64: F64Type }
         if node.width not in typeMap:
-            raise TypeException("invalid float literal width: %d" % node.width)
+            raise TypeException(node.location, "invalid float literal width: %d" % node.width)
         return typeMap[node.width]
 
     def visitAstStringLiteral(self, node):
@@ -509,7 +523,8 @@ class TypeVisitor(TypeVisitorCommon):
             return
         elif self.isRecursiveFunctionWithoutType(irFunction):
             # Recursive or mutually recursive function without full type info
-            raise TypeException("recursive function must have full type specified")
+            raise TypeException(node.location,
+                                "recursive function must have full type specified")
         else:
             # Found function with unknown type, process it. We can't patiently wait until we
             # get to its AST node, since we need to know its return type.
@@ -520,7 +535,8 @@ class TypeVisitor(TypeVisitorCommon):
             # Process return type, if specified.
             if astReturnType is not None:
                 if irFunction.isConstructor():
-                    raise TypeException("constructors must not declare return type")
+                    raise TypeException(node.location,
+                                        "constructors must not declare return type")
                 irFunction.returnType = self.visit(astReturnType)
             self.functionStack[-1].declaredReturnType = irFunction.returnType
 
@@ -531,7 +547,8 @@ class TypeVisitor(TypeVisitorCommon):
                 elif astReturnType is not None:
                     bodyType = irFunction.returnType
                 else:
-                    raise TypeException("return type must be specified for abstract function")
+                    raise TypeException(node.location,
+                                        "return type must be specified for abstract function")
             else:
                 bodyType = self.visit(astBody)
                 if bodyType is not NoType:
@@ -545,7 +562,8 @@ class TypeVisitor(TypeVisitorCommon):
                     irFunction.returnType = bodyType
             else:
                 if irFunction.returnType != bodyType:
-                    raise TypeException("body type does not match declared return type")
+                    raise TypeException(node.location,
+                                        "body type does not match declared return type")
 
     def isConditionType(self, ty):
         return ty == BooleanType or ty == NoType
@@ -596,16 +614,17 @@ class TypeVisitor(TypeVisitorCommon):
     def shouldIgnoreDefnOrder(self):
         return False
 
-    def handleMethodCall(self, name, useAstId, receiverType, typeArgs, argTypes, mayAssign):
+    def handleMethodCall(self, name, useAstId, receiverType,
+                         typeArgs, argTypes, mayAssign, loc):
         irClass = getClassFromType(receiverType)
         scope = self.info.getScope(irClass)
         return self.handlePossibleCall(scope, name, useAstId,
                                        receiverType, typeArgs, argTypes,
-                                       mayAssign)
+                                       mayAssign, loc)
 
     def handlePossibleCall(self, scope, name, useAstId,
                            receiverType, typeArgs, argTypes,
-                           mayAssign):
+                           mayAssign, loc):
         receiverIsExplicit = receiverType is not None
         if not receiverIsExplicit and len(self.receiverTypeStack) > 0:
             receiverType = self.receiverTypeStack[-1]   # may still be None
@@ -618,16 +637,18 @@ class TypeVisitor(TypeVisitorCommon):
         else:
             useKind = USE_AS_VALUE
 
-        nameInfo = scope.lookup(name, localOnly=receiverIsExplicit, mayBeAssignment=mayAssign)
+        nameInfo = scope.lookup(name, loc,
+                                localOnly=receiverIsExplicit, mayBeAssignment=mayAssign)
         if nameInfo.isClass():
             irClass = nameInfo.getDefnInfo().irDefn
             self.ensureParamTypeInfoForDefn(irClass)
             explicitTypeParams = getExplicitTypeParameters(irClass)
             if len(typeArgs) != len(explicitTypeParams):
-                raise TypeException("wrong number of type arguments: expected %d but have %d" % \
+                raise TypeException(loc,
+                                    "wrong number of type arguments: expected %d but have %d" %
                                     (len(typeArgs), len(explicitTypeParams)))
             if not all(tp.contains(ta) for tp, ta in zip(explicitTypeParams, typeArgs)):
-                raise TypeException("type error in type arguments for constructor")
+                raise TypeException(loc, "type error in type arguments for constructor")
             implicitTypeParams = getImplicitTypeParameters(irClass)
             classTypeArgs = tuple([VariableType(tp) for tp in implicitTypeParams] + typeArgs)
             receiverType = ClassType(irClass, classTypeArgs, None)
@@ -640,10 +661,10 @@ class TypeVisitor(TypeVisitorCommon):
             self.ensureParamTypeInfoForDefn(overload.irDefn)
         (defnInfo, allTypeArgs, allArgTypes) = \
             nameInfo.findDefnInfoWithArgTypes(receiverType, receiverIsExplicit,
-                                              typeArgs, argTypes)
+                                              typeArgs, argTypes, loc)
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
 
-        self.scope().use(defnInfo, useAstId, useKind)
+        self.scope().use(defnInfo, useAstId, useKind, loc)
         irDefn = defnInfo.irDefn
         self.ensureTypeInfoForDefn(irDefn)
         if isinstance(irDefn, Function):
@@ -705,13 +726,14 @@ class FunctionState(object):
     def handleReturn(self, returnType):
         if self.declaredReturnType:
             if not returnType.isSubtypeOf(self.declaredReturnType):
-                raise TypeException("type error: incorrect return type")
+                raise TypeException(self.irDefn.getLocation(), "incorrect return type")
             return self.declaredReturnType
         elif self.bodyReturnType is None:
             self.bodyReturnType = returnType
             return self.bodyReturnType
         else:
-            combinedType = self.bodyReturnType.combine(returnType)  # will raise if incompatible
+            # combine will raise if incompatible
+            combinedType = self.bodyReturnType.combine(returnType, self.irDefn.getLocation())
             self.bodyReturnType = combinedType
             return self.bodyReturnType
 

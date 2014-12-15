@@ -7,6 +7,7 @@
 import unittest
 
 import ast
+from errors import *
 from parser import *
 from layout import *
 from lexer import *

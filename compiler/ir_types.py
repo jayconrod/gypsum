@@ -66,7 +66,7 @@ class Type(Data):
     def isObject(self):
         raise NotImplementedError
 
-    def combine(self, ty):
+    def combine(self, ty, loc):
         if self == ty:
             return self
         elif self is NoType:
@@ -84,10 +84,10 @@ class Type(Data):
             otherTypeArgs = ty.substituteForBaseClass(commonBase).typeArguments
             if selfTypeArgs != otherTypeArgs:
                 # TODO: support co/contra-variance
-                raise TypeException("type error: could not combine; incompatible type args")
+                raise TypeException(loc, "could not combine; incompatible type args")
             return ClassType(commonBase, selfTypeArgs, commonFlags)
         else:
-            raise TypeException("type error: could not combine")
+            raise TypeException(loc, "could not combine")
 
     def combineFlags(self, other):
         return self.flags.union(other.flags)

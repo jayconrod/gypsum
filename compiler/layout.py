@@ -31,15 +31,6 @@ import re
 
 from tok import *
 
-class LayoutException(Exception):
-    def __init__(self, location, message):
-        self.location = location
-        self.message = message
-
-    def __str__(self):
-        return "%s: error: %s\n" % (self.location, self.message)
-
-
 def layout(tokensIn, skipAnalysis=False):
     if skipAnalysis:
         tokensOut = filter(lambda t: t.isPrintable(), tokensIn)

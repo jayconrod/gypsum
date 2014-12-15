@@ -10,8 +10,12 @@ class Location(Data):
     propertyNames = ["fileName", "beginRow", "beginColumn", "endRow", "endColumn"]
 
     def __str__(self):
-        return "%s:%d.%d-%d.%d" % \
-            (self.fileName, self.beginRow, self.beginColumn, self.endRow, self.endColumn)
+        if self is NoLoc:
+            return "<unknown>"
+        else:
+            return "%s:%d.%d-%d.%d" % \
+                (self.fileName, self.beginRow, self.beginColumn,
+                 self.endRow, self.endColumn)
 
     def __cmp__(self, other):
         l = (self.filename, self.beginLine, self.beginColumn, self.endLine, self.endColumn)
@@ -25,3 +29,6 @@ class Location(Data):
         endRow, endColumn = max((self.endRow, self.endColumn),
                                 (other.endRow, other.endColumn))
         return Location(self.fileName, beginRow, beginColumn, endRow, endColumn)
+
+
+NoLoc = Location("<unknown>", 1, 1, 1, 1)

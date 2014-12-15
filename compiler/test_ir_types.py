@@ -8,6 +8,7 @@ import unittest
 
 from builtins import *
 from ir_types import *
+from location import *
 from utils import *
 
 
@@ -155,18 +156,18 @@ class TestIrTypes(unittest.TestCase):
     def testCombineNothing(self):
         aTy = ClassType(self.A)
         nothingTy = getNothingClassType()
-        self.assertEquals(aTy, aTy.combine(nothingTy))
-        self.assertEquals(aTy, nothingTy.combine(aTy))
+        self.assertEquals(aTy, aTy.combine(nothingTy, NoLoc))
+        self.assertEquals(aTy, nothingTy.combine(aTy, NoLoc))
 
     def testCombineNull(self):
         aTy = ClassType(self.A)
         nullTy = getNullType()
         aNullTy = ClassType(self.A, (), frozenset([NULLABLE_TYPE_FLAG]))
-        self.assertEquals(aNullTy, aTy.combine(nullTy))
-        self.assertEquals(aNullTy, nullTy.combine(aTy))
+        self.assertEquals(aNullTy, aTy.combine(nullTy, NoLoc))
+        self.assertEquals(aNullTy, nullTy.combine(aTy, NoLoc))
 
     def testCombineWithTypeArgs(self):
         pxy = ClassType(self.P, (VariableType(self.X), VariableType(self.Y)))
         pyx = ClassType(self.P, (VariableType(self.Y), VariableType(self.X)))
-        self.assertEquals(pxy, pxy.combine(pxy))
-        self.assertRaises(TypeException, pxy.combine, pyx)
+        self.assertEquals(pxy, pxy.combine(pxy, NoLoc))
+        self.assertRaises(TypeException, pxy.combine, pyx, NoLoc)

@@ -27,6 +27,7 @@ from flags import *
 from graph import *
 from ir import *
 from ir_types import *
+from location import *
 from builtins import *
 from utils import *
 
@@ -102,7 +103,8 @@ def analyzeInheritance(info):
 
     # Check for cycles.
     if subtypeGraph.isCyclic():
-        raise ScopeException("inheritance cycle detected")
+        # TODO: need to report an error for each cycle
+        raise ScopeException(NoLoc, "inheritance cycle detected")
 
     # Copy bindings from superclasses to subclasses. This must be done in topological order
     # to ensure we don't miss anything, i.e., if S <: T, we must ensure all bindings have been
@@ -123,7 +125,8 @@ def analyzeInheritance(info):
             inheritedDefnInfo = defnInfo.inherit(scope.scopeId)
             if scope.isBound(name) and \
                not scope.getDefinition(name).isOverloadable(inheritedDefnInfo):
-                raise ScopeException("%s: conflicts with inherited definition" % name)
+                raise ScopeException(defnInfo.irDefn.getLocation(),
+                                     "%s: conflicts with inherited definition" % name)
             scope.bind(name, inheritedDefnInfo)
             scope.define(name)
 
@@ -257,7 +260,8 @@ def flattenClasses(info):
         if ABSTRACT not in irClass.flags:
             for m in methods:
                 if ABSTRACT in m.flags:
-                    raise ScopeException("must override inherited abstract method `%s` in concrete class `%s`" %
+                    raise ScopeException(irClass.getLocation(),
+                                         "must override inherited abstract method `%s` in concrete class `%s`" %
                                          (m.name, irClass.name))
 
 
@@ -365,7 +369,8 @@ class NameInfo(object):
                 if aIrDefn.mayOverride(bIrDefn):
                     # Check that nothing else is already overriding this function.
                     if bIrDefn.id in self.overrides:
-                        raise TypeException("multiple definitions may override: %s" %
+                        raise TypeException(aIrDefn.getLocation(),
+                                            "multiple definitions may override: %s" %
                                             self.name)
 
                     aIrDefn.override = bIrDefn
@@ -382,10 +387,12 @@ class NameInfo(object):
                     if bDepth > overrideDepth:
                         break
                     if aDefnInfo.irDefn.mayOverride(bDefnInfo.irDefn):
-                        raise TypeException("may override multiple definitions: %s" %
+                        raise TypeException(aDefnInfo.irDefn.getLocation(),
+                                            "may override multiple definitions: %s" %
                                             self.name)
 
-    def findDefnInfoWithArgTypes(self, receiverType, receiverIsExplicit, typeArgs, argTypes):
+    def findDefnInfoWithArgTypes(self, receiverType, receiverIsExplicit,
+                                 typeArgs, argTypes, loc):
         """Determines which overloaded or overriding function should be called, based on
         argument types.
 
@@ -421,13 +428,13 @@ class NameInfo(object):
 
             if match:
                 if candidate is not None:
-                    raise TypeException("ambiguous call to overloaded function: %s" % \
+                    raise TypeException(loc, "ambiguous call to overloaded function: %s" % \
                                         self.name)
                 allTypeArgs, allArgTypes = typesAndArgs
                 candidate = (defnInfo, allTypeArgs, allArgTypes)
 
         if candidate is None:
-            raise TypeException("could not find compatible definition: %s" % self.name)
+            raise TypeException(loc, "could not find compatible definition: %s" % self.name)
         return candidate
 
 
@@ -482,7 +489,7 @@ class Scope(AstNodeVisitor):
         # If the definition has a user-specified name, bind it in this scope.
         name = irDefn.name
         if self.isBound(name) and not self.bindings[name].isOverloadable(defnInfo):
-            raise ScopeException("%s: already declared" % name)
+            raise ScopeException(astDefn.location, "%s: already declared" % name)
         self.bind(name, defnInfo)
         if self.isDefinedAutomatically(astDefn):
             self.define(name)
@@ -525,7 +532,7 @@ class Scope(AstNodeVisitor):
         """Convenience method for creating a class definition."""
         implicitTypeParams = self.getImplicitTypeParameters()
         flags = getFlagsFromAstDefn(astDefn, None)
-        checkFlags(flags, frozenset([ABSTRACT]))
+        checkFlags(flags, frozenset([ABSTRACT]), astDefn.location)
         irDefn = Class(astDefn.name, implicitTypeParams, None, None, [], [], [], flags)
         self.info.package.addClass(irDefn)
 
@@ -562,7 +569,7 @@ class Scope(AstNodeVisitor):
         This is only false for local variables in function scopes."""
         raise NotImplementedError
 
-    def lookup(self, name, localOnly=False, mayBeAssignment=False, ignoreDefnOrder=False):
+    def lookup(self, name, loc, localOnly=False, mayBeAssignment=False, ignoreDefnOrder=False):
         """Resolves a reference to a symbol, possibly in a parent scope.
 
         Returns NameInfo. For overloaded symbols, there may be several functions in there."""
@@ -573,13 +580,14 @@ class Scope(AstNodeVisitor):
             defnScope = defnScope.parent
         if defnScope is None or (localOnly and not self.isLocalWithin(defnScope)):
             if mayBeAssignment and name.endswith("=") and name != "==":
-                return self.lookup(name[:-1], localOnly, False)
+                return self.lookup(name[:-1], loc, localOnly=localOnly,
+                                   mayBeAssignment=False, ignoreDefnOrder=ignoreDefnOrder)
             else:
-                raise ScopeException("%s: not found" % name)
+                raise ScopeException(loc, "%s: not found" % name)
         if not ignoreDefnOrder and \
            not defnScope.isDefined(name) and \
            self.isLocalWithin(defnScope):
-            raise ScopeException("%s: used before being defined" % name)
+            raise ScopeException(loc, "%s: used before being defined" % name)
         return defnScope.bindings[name]
 
     def isBound(self, name):
@@ -597,7 +605,7 @@ class Scope(AstNodeVisitor):
     def define(self, name):
         self.defined.add(name)
 
-    def use(self, defnInfo, useAstId, useKind):
+    def use(self, defnInfo, useAstId, useKind, loc):
         """Creates, registers, and returns UseInfo for a given definition.
 
         Also checks whether the definition is allowed to be used in this scope and raises an
@@ -606,11 +614,11 @@ class Scope(AstNodeVisitor):
             not self.isWithin(defnInfo.inheritedScopeId)) or \
            (PROTECTED in defnInfo.irDefn.flags and \
             not self.isWithin(defnInfo.scopeId)):
-            raise ScopeException("%s: not allowed to be used in this scope" %
+            raise ScopeException(loc, "%s: not allowed to be used in this scope" %
                                  defnInfo.irDefn.name)
         if useKind is USE_AS_CONSTRUCTOR and \
            ABSTRACT in defnInfo.irDefn.clas.flags:
-            raise ScopeException("%s: cannot instantiate abstract class" %
+            raise ScopeException(loc, "%s: cannot instantiate abstract class" %
                                  defnInfo.irDefn.clas.name)
 
         useInfo = UseInfo(defnInfo, self.scopeId, useKind)
@@ -766,13 +774,14 @@ class GlobalScope(Scope):
     def createIrDefn(self, astDefn, astVarDefn):
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         if isinstance(astDefn, AstVariablePattern):
-            checkFlags(flags, frozenset())
+            checkFlags(flags, frozenset(), astDefn.location)
             irDefn = Global(astDefn.name, None, None, flags)
             self.info.package.addGlobal(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
-            checkFlags(flags, frozenset())
+            checkFlags(flags, frozenset(), astDefn.location)
             if astDefn.body is None:
-                raise ScopeException("%s: global function must have body" % astDefn.name)
+                raise ScopeException(astDefn.location,
+                                     "%s: global function must have body" % astDefn.name)
             irDefn = Function(astDefn.name, None, self.getImplicitTypeParameters(),
                               None, [], None, flags)
             self.info.package.addFunction(irDefn)
@@ -838,14 +847,14 @@ class FunctionScope(Scope):
 
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         if isinstance(astDefn, AstTypeParameter):
-            checkFlags(flags, frozenset([STATIC]))
+            checkFlags(flags, frozenset([STATIC]), astDefn.location)
             if STATIC not in flags:
                 raise NotImplementedError
             irDefn = TypeParameter(astDefn.name, None, None, flags)
             self.info.package.addTypeParameter(irDefn)
             irScopeDefn.typeParameters.append(irDefn)
         elif isinstance(astDefn, AstParameter):
-            checkFlags(flags, frozenset())
+            checkFlags(flags, frozenset(), astDefn.location)
             if isinstance(astDefn.pattern, AstVariablePattern):
                 # If the parameter is a simple variable which doesn't need unpacking, we don't
                 # need to create a separate definition here.
@@ -854,14 +863,15 @@ class FunctionScope(Scope):
                 irDefn = Variable("$parameter", None, PARAMETER, flags)
                 irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, AstVariablePattern):
-            checkFlags(flags, frozenset())
+            checkFlags(flags, frozenset(), astDefn.location)
             kind = PARAMETER if isinstance(astVarDefn, AstParameter) else LOCAL
             irDefn = Variable(astDefn.name, None, kind, flags)
             irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
-            checkFlags(flags, frozenset())
+            checkFlags(flags, frozenset(), astDefn.location)
             if astDefn.body is None:
-                raise ScopeException("%s: function must have body" % astDefn.name)
+                raise ScopeException(astDefn.location,
+                                     "%s: function must have body" % astDefn.name)
             implicitTypeParams = self.getImplicitTypeParameters()
             irDefn = Function(astDefn.name, None, implicitTypeParams, None, [], None, flags)
             self.info.package.addFunction(irDefn)
@@ -1010,39 +1020,42 @@ class ClassScope(Scope):
         irScopeDefn = self.getIrDefn()
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         if isinstance(astDefn, AstVariablePattern):
-            checkFlags(flags, frozenset([PROTECTED, PRIVATE]))
+            checkFlags(flags, frozenset([PROTECTED, PRIVATE]), astDefn.location)
             irDefn = Field(astDefn.name, None, flags, id=len(irScopeDefn.fields,))
             irScopeDefn.fields.append(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
             implicitTypeParams = self.getImplicitTypeParameters()
             if ABSTRACT in flags and astDefn.body is not None:
-                raise ScopeException("%s: abstract method must not have body" % astDefn.name)
+                raise ScopeException(astDefn.location,
+                                     "%s: abstract method must not have body" % astDefn.name)
             if ABSTRACT not in flags and astDefn.body is None:
-                raise ScopeException("%s: non-abstract method must have body" % astDefn.name)
+                raise ScopeException(astDefn.location,
+                                     "%s: non-abstract method must have body" % astDefn.name)
             if ABSTRACT in flags and ABSTRACT not in irScopeDefn.flags:
-                raise ScopeException("%s: abstract function not allowed in non-abstract class" %
+                raise ScopeException(astDefn.location,
+                                     "%s: abstract function not allowed in non-abstract class" %
                                      astDefn.name)
             if astDefn.name == "this":
-                checkFlags(flags, frozenset([PROTECTED, PRIVATE]))
+                checkFlags(flags, frozenset([PROTECTED, PRIVATE]), astDefn.location)
                 irDefn = Function("$constructor", None, implicitTypeParams,
                                   None, [], None, flags)
                 irScopeDefn.constructors.append(irDefn)
             else:
-                checkFlags(flags, frozenset([ABSTRACT, PROTECTED, PRIVATE]))
+                checkFlags(flags, frozenset([ABSTRACT, PROTECTED, PRIVATE]), astDefn.location)
                 irDefn = Function(astDefn.name, None, implicitTypeParams,
                                   None, [], None, flags)
                 irScopeDefn.methods.append(irDefn)
             # We don't need to call makeMethod here because the inner FunctionScope will do it.
             self.info.package.addFunction(irDefn)
         elif isinstance(astDefn, AstPrimaryConstructorDefinition):
-            checkFlags(flags, frozenset([PROTECTED, PRIVATE]))
+            checkFlags(flags, frozenset([PROTECTED, PRIVATE]), astDefn.location)
             implicitTypeParams = self.getImplicitTypeParameters()
             irDefn = Function("$constructor", None, implicitTypeParams, None, [], None, flags)
             irScopeDefn.constructors.append(irDefn)
             self.makeMethod(irDefn, irScopeDefn)
             self.info.package.addFunction(irDefn)
         elif isinstance(astDefn, AstTypeParameter):
-            checkFlags(flags, frozenset([STATIC]))
+            checkFlags(flags, frozenset([STATIC]), astDefn.location)
             if STATIC not in flags:
                 raise NotImplementedError
             irDefn = TypeParameter(astDefn.name, None, None, flags)
@@ -1235,7 +1248,7 @@ class InheritanceVisitor(ScopeVisitor):
             supertype = node.supertypes[0]
             supertypeIrDefn = self.addTypeToSubtypeGraph(irClass.id, scope, supertype)
             if not isinstance(supertypeIrDefn, Class):
-                raise ScopeException("inheritance from non-class type")
+                raise ScopeException(node.location, "inheritance from non-class type")
 
             superclassId = supertypeIrDefn.id
             if isBuiltinId(superclassId):
@@ -1245,7 +1258,7 @@ class InheritanceVisitor(ScopeVisitor):
                 superclassAst = supertypeIrDefn.astDefn
                 superclassInfo = self.scope.info.getClassInfo(superclassAst)
                 if classInfo is superclassInfo:
-                    raise ScopeException("class cannot inherit from itself")
+                    raise ScopeException(node.location, "class cannot inherit from itself")
                 classInfo.superclassInfo = superclassInfo
                 self.inheritanceGraph.addEdge(node.id, superclassAst.id)
         super(InheritanceVisitor, self).visitAstClassDefinition(node)
@@ -1259,10 +1272,10 @@ class InheritanceVisitor(ScopeVisitor):
 
     def addTypeToSubtypeGraph(self, id, scope, astType):
         if not isinstance(astType, AstClassType):
-            raise ScopeException("inheritance from non-class type")
-        nameInfo = scope.lookup(astType.name, ignoreDefnOrder=True)
+            raise ScopeException(astType.location, "inheritance from non-class type")
+        nameInfo = scope.lookup(astType.name, astType.location, ignoreDefnOrder=True)
         if nameInfo.isOverloaded():
-            raise ScopeException("inheritance from overloaded symbol")
+            raise ScopeException(astType.location, "inheritance from overloaded symbol")
         defnInfo = nameInfo.getDefnInfo()
         irDefn = defnInfo.irDefn
         assert irDefn.isTypeDefn()
@@ -1284,18 +1297,18 @@ def getFlagsFromAstDefn(astDefn, astVarDefn):
     for attrib in attribs:
         flag = getFlagByName(attrib.name)
         if flag in flags:
-            raise ScopeException("duplicate flag: %s" % attrib.name)
+            raise ScopeException(astDefn.location, "duplicate flag: %s" % attrib.name)
         flags.add(flag)
     return frozenset(flags)
 
 
-def checkFlags(flags, mask):
+def checkFlags(flags, mask, loc):
     conflict = checkFlagConflicts(flags)
     if conflict is not None:
-        raise ScopeException("flags cannot be used together: %s" % ", ".join(conflict))
+        raise ScopeException(loc, "flags cannot be used together: %s" % ", ".join(conflict))
     diff = flags - mask
     if len(diff) > 0:
-        raise ScopeException("invalid flags: %s" % ", ".join(diff))
+        raise ScopeException(loc, "invalid flags: %s" % ", ".join(diff))
 
 
 def isInternalName(name):

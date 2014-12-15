@@ -824,7 +824,7 @@ class TestCompiler(unittest.TestCase):
                  "    0\n" + \
                  "  catch\n" + \
                  "    case x: E[String] => 1"
-        self.assertRaises(CompileException, self.compileFromSource, source)
+        self.assertRaises(SemanticException, self.compileFromSource, source)
 
     def testFactorial(self):
         self.checkFunction("def f(n: i64): i64 = {\n" +
@@ -1142,7 +1142,7 @@ class TestCompiler(unittest.TestCase):
                  "  def this =\n" + \
                  "    var x = 12\n" + \
                  "    this(x)"
-        self.assertRaises(CompileException, self.compileFromSource, source)
+        self.assertRaises(SemanticException, self.compileFromSource, source)
 
     def testCallSuperCtor(self):
         source = "class Foo(a: i64)\n" + \
@@ -1188,7 +1188,7 @@ class TestCompiler(unittest.TestCase):
     def testNoDefaultSuperCtor(self):
         source = "class Foo(x: i64)\n" + \
                  "class Bar <: Foo"
-        self.assertRaises(CompileException, self.compileFromSource, source)
+        self.assertRaises(SemanticException, self.compileFromSource, source)
 
     def testCallBuiltinFunction(self):
         source = "def f = print(\"foo\")"

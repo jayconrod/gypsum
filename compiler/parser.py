@@ -8,6 +8,7 @@ import re
 
 from ast import *
 from combinators import *
+from errors import *
 from tok import *
 from utils import *
 
@@ -22,15 +23,6 @@ def parse(filename, tokens):
     else:
         addNodeIds(result.value)
         return result.value
-
-
-class ParseException(Exception):
-    def __init__(self, location, message):
-        self.location = location
-        self.message = message
-
-    def __str__(self):
-        return "%s: error: %s\n" % (self.location, self.message)
 
 
 # Top level

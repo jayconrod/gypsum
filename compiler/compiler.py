@@ -95,8 +95,9 @@ class CompileVisitor(AstNodeVisitor):
                                  len(ctor.parameterTypes) == 1]
             assert len(defaultSuperCtors) <= 1
             if len(defaultSuperCtors) == 0:
-                raise CompileException("no default constructor in superclass %s" %
-                                       superclass.name)
+                raise SemanticException(self.function.clas.getLocation(),
+                                        "no default constructor in superclass %s" %
+                                          superclass.name)
             self.loadThis()
             self.buildStaticTypeArguments(supertype.typeArguments)
             self.callg(defaultSuperCtors[0].id)
@@ -181,7 +182,7 @@ class CompileVisitor(AstNodeVisitor):
             patTy = self.info.getType(pat)
             typeClass = getTypeClass()
             self.dup()
-            self.buildType(patTy)
+            self.buildType(patTy, pat.location)
             isSubtypeOfMethod = typeClass.getMethod("is-subtype-of")
             index = typeClass.getMethodIndex(isSubtypeOfMethod)
             self.callv(2, index)
@@ -251,7 +252,7 @@ class CompileVisitor(AstNodeVisitor):
         self.dropForEffect(mode)
 
     def visitAstSuperExpression(self, expr, mode):
-        raise CompileException("`super` is only valid as part of a call")
+        raise SemanticException(expr.location, "`super` is only valid as part of a call")
 
     def visitAstBlockExpression(self, expr, mode):
         self.compileStatements(expr.id, None, expr.statements, mode)
@@ -282,7 +283,7 @@ class CompileVisitor(AstNodeVisitor):
             self.buildCall(useInfo, callInfo, expr.callee.receiver,
                            expr.typeArguments, expr.arguments, mode)
         else:
-            raise CompileException("uncallable expression")
+            raise SemanticException(expr.location, "uncallable expression")
 
     def visitCallThisExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)
@@ -531,7 +532,7 @@ class CompileVisitor(AstNodeVisitor):
             self.visit(expr.receiver, COMPILE_FOR_VALUE)
             return PropertyLValue(expr, self, useInfo)
         else:
-            raise CompileException("left side of assignment is unassignable")
+            raise SemanticException(expr.location, "left side of assignment is unassignable")
 
     def enumerateLocals(self):
         nextLocalIndex = Counter(-1, -1)
@@ -829,10 +830,10 @@ class CompileVisitor(AstNodeVisitor):
                 self.swap()
         lvalue.assign()
 
-    def buildType(self, ty):
+    def buildType(self, ty, location):
         assert isinstance(ty, ClassType)
         if any(STATIC in param.flags for param in ty.clas.typeParameters):
-            raise CompileException("cannot match type with static parameters")
+            raise SemanticException(location, "cannot match type with static parameters")
         self.allocarri(BUILTIN_TYPE_CLASS_ID, 1)
         self.dup()
         self.cls(ty.clas.id)

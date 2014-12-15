@@ -88,15 +88,6 @@ __expressions = [
 __expressions = [(re.compile(expr[0]), expr[1]) for expr in __expressions]
 
 
-class LexException(Exception):
-    def __init__(self, location, char):
-        self.location = location
-        self.char = char
-
-    def __str__(self):
-        return "%s: error: Illegal character: '%s'" % (self.location, self.char)
-
-
 def lex(filename, source):
     tokens = []
     pos = 0
@@ -117,7 +108,7 @@ def lex(filename, source):
                 token = Token(m.group(0), tag, location)
         if not token:
             location = Location(filename, line, column, line, column + 1)
-            raise LexException(location, source[pos:pos+1])
+            raise LexException(location, "illegal character: %s" % source[pos:pos+1])
         tokens.append(token)
         if token.tag is NEWLINE:
             line += 1

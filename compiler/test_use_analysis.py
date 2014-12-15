@@ -38,17 +38,17 @@ class TestUseAnalysis(unittest.TestCase):
     def testUndefinedReference(self):
         info = self.analyzeFromSource("var x = y")
         self.assertRaises(ScopeException,
-                          info.getScope(GLOBAL_SCOPE_ID).lookup, "y", False, False)
+                          info.getScope(GLOBAL_SCOPE_ID).lookup, "y", NoLoc)
 
     def testUseVarBeforeDefinition(self):
         info = self.analyzeFromSource("def f = { var x = y; var y = 12; }")
         scope = info.getScope(info.ast.definitions[0])
-        self.assertRaises(ScopeException, scope.lookup, "y", False, False)
+        self.assertRaises(ScopeException, scope.lookup, "y", NoLoc)
 
     def testUseFunctionBeforeDefinition(self):
         info = self.analyzeFromSource("def f = g; def g = 12;")
         gDefnInfo = info.getDefnInfo(info.ast.definitions[1])
-        gNameInfo = info.getScope(info.ast.definitions[0]).lookup("g", False, False)
+        gNameInfo = info.getScope(info.ast.definitions[0]).lookup("g", NoLoc)
         self.assertIs(gDefnInfo, gNameInfo.getDefnInfo())
 
     def testUseCapturedVarBeforeDefinition(self):
@@ -58,13 +58,13 @@ class TestUseAnalysis(unittest.TestCase):
         statements = info.ast.definitions[0].body.statements
         iDefnInfo = info.getDefnInfo(statements[1].pattern)
         gScope = info.getScope(statements[0])
-        iNameInfo = gScope.lookup("i", False, False)
+        iNameInfo = gScope.lookup("i", NoLoc)
         self.assertIs(iDefnInfo, iNameInfo.getDefnInfo())
 
     def testUseClassBeforeDefinition(self):
         info = self.analyzeFromSource("def f = C; class C;")
         cDefnInfo = info.getDefnInfo(info.ast.definitions[1])
-        cNameInfo = info.getScope(GLOBAL_SCOPE_ID).lookup("C", False, False)
+        cNameInfo = info.getScope(GLOBAL_SCOPE_ID).lookup("C", NoLoc)
         self.assertIs(cDefnInfo, cNameInfo.getDefnInfo())
 
     def testUseInLocalScope(self):
@@ -73,13 +73,13 @@ class TestUseAnalysis(unittest.TestCase):
         fScope.define("x")
         xDefnInfo = info.getDefnInfo(info.ast.definitions[0].parameters[0].pattern)
         localScope = info.getScope(info.ast.definitions[0].body.statements[0])
-        xNameInfo = localScope.lookup("x", False, False)
+        xNameInfo = localScope.lookup("x", NoLoc)
         self.assertIs(xDefnInfo, xNameInfo.getDefnInfo())
 
     def testUseThisInInitializer(self):
         info = self.analyzeFromSource("class Foo { var x = this; };")
         classScope = info.getScope(info.ast.definitions[0])
-        thisNameInfo = classScope.lookup("this", False, False)
+        thisNameInfo = classScope.lookup("this", NoLoc)
         self.assertEquals(DefnInfo(Variable("$this", None, PARAMETER, frozenset()),
                                    classScope.scopeId, classScope.scopeId, NOT_HERITABLE),
                           thisNameInfo.getDefnInfo())

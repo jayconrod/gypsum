@@ -4,17 +4,35 @@
 # the GPL license that can be found in the LICENSE.txt file.
 
 
-class LexException(Exception):
-    pass
-
-
-class ScopeException(Exception):
-    pass
-
-
-class TypeException(Exception):
-    pass
-
-
 class CompileException(Exception):
+    def __init__(self, location, message):
+        self.location = location
+        self.message = message
+
+    def __str__(self):
+        locStr = str(self.location) if self.location is not None else "<unknown>"
+        return "%s: %s" % (self.location, self.message)
+
+
+class LexException(CompileException):
+    pass
+
+
+class LayoutException(CompileException):
+    pass
+
+
+class ParseException(CompileException):
+    pass
+
+
+class ScopeException(CompileException):
+    pass
+
+
+class TypeException(CompileException):
+    pass
+
+
+class SemanticException(CompileException):
     pass
