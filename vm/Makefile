@@ -81,9 +81,9 @@ LIB_PREFIX := $(LIB_SRC_DIR)/prefix.h
 ifeq ($(use_pch),yes)
   LIB_PREFIX_PCH := prefix_.h
   LIB_PREFIX_COMPILED := $(GEN_DIR)/$(LIB_PREFIX_PCH).gch
-  INCLUDES += -inlcude $(LIB_PREFIX_PCH)
+  LIB_PREFIX_INCLUDE := -include $(LIB_PREFIX_PCH)
 else
-  INCLUDES += -include $(LIB_PREFIX)
+  LIB_PREFIX_INCLUDE := -include $(LIB_PREFIX)
 endif
 
 TEST_GY_SOURCES := $(wildcard $(TEST_SRC_DIR)/*.gy)
@@ -131,7 +131,7 @@ endif
 $(OBJECTS):
 	@mkdir -p $(dir $@)
 	@$(CXX_DEPENDS) $(CXXFLAGS) $(DEFINES) $(INCLUDES) -MT $@ $(filter %.cpp,$^) >$(call deps,$(filter %.cpp,$^))
-	$(CXX_COMPILE) $(CXXFLAGS) $(DEFINES) $(INCLUDES) $(filter %.cpp,$^) -o $@
+	$(CXX_COMPILE) $(CXXFLAGS) $(DEFINES) $(INCLUDES) $(LIB_PREFIX_INCLUDE) $(filter %.cpp,$^) -o $@
 
 $(TEST_CSP_PACKAGES):
 	@mkdir -p $(dir $@)
@@ -162,8 +162,7 @@ $(LIB_PREFIX_COMPILED): $(filter %.h,$(GEN))
 $(OBJECTS): $(LIB_PREFIX_COMPILED)
 endif
 
-$(OBJECTS) $(LIB_PREFIX_COMPILED): $(filter %.h,$(GEN))
-$(OBJECTS): $(LIB_PREFIX_COMPILED)
+$(OBJECTS): $(filter %.h,$(GEN))
 
 $(foreach src,$(PROGRAM_SOURCES),\
 	$(eval $(call programs,$(src)): $(call objects,$(src)) $(LIB)))
