@@ -11,28 +11,28 @@ class CompileException(Exception):
 
     def __str__(self):
         locStr = str(self.location) if self.location is not None else "<unknown>"
-        return "%s: %s" % (self.location, self.message)
+        return "%s: %s error: %s" % (self.location, self.kind, self.message)
 
 
 class LexException(CompileException):
-    pass
+    kind = "lexical"
 
 
 class LayoutException(CompileException):
-    pass
+    kind = "layout"
 
 
 class ParseException(CompileException):
-    pass
+    kind = "syntax"
 
 
 class ScopeException(CompileException):
-    pass
+    kind = "scope"
 
 
 class TypeException(CompileException):
-    pass
+    kind = "type"
 
 
 class SemanticException(CompileException):
-    pass
+    kind = "semantic"

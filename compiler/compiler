@@ -41,6 +41,8 @@ cmdline.add_argument("--print-types", action="store_true",
                      help="Print types after type analysis")
 cmdline.add_argument("--print-ir", action="store_true",
                      help="Print intermediate representation after compilation")
+cmdline.add_argument("--print-stack", action="store_true",
+                     help="Print compiler stack on error")
 args = cmdline.parse_args()
 
 for sourceFilename in args.sources:
@@ -79,6 +81,11 @@ for sourceFilename in args.sources:
         if args.print_ir:
             sys.stdout.write("%s\n" % str(package))
         serialize(package, args.output)
-    except IOError, err:
-        sys.stderr.write("%s: error: %s\n" % (sourceFilename, str(err)))
+    except BaseException, err:
+        if args.print_stack:
+            raise
+        if isinstance(err, CompileException):
+            sys.stderr.write("%s\n" % str(err))
+        else:
+            sys.stderr.write("%s: error: %s\n" % (sourceFilename, str(err)))
         sys.exit(1)
