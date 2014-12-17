@@ -856,6 +856,42 @@ class TestTypeAnalysis(unittest.TestCase):
         source = "class A[static S, static T, static U <: S >: T]"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
+    def testNoDefaultSuperCtor(self):
+        source = "class Foo(x: i64)\n" + \
+                 "class Bar <: Foo"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testOverloadedDefaultSuperCtor(self):
+        source = "class Foo\n" + \
+                 "  def this(x: i64) = {}\n" + \
+                 "  def this(x: boolean) = {}\n" + \
+                 "class Bar <: Foo(true)"
+        info = self.analyzeFromSource(source)
+        Foo = info.package.findClass(name="Foo")
+        superctor = Foo.constructors[1]
+        self.assertIs(superctor, info.getUseInfo(info.ast.definitions[1]).defnInfo.irDefn)
+
+    def testOverloadedPrimarySuperCtor(self):
+        source = "class Foo\n" + \
+                 "  def this(x: i64) = {}\n" + \
+                 "  def this(x: boolean) = {}\n" + \
+                 "class Bar(x: boolean) <: Foo(x)"
+        info = self.analyzeFromSource(source)
+        Foo = info.package.findClass(name="Foo")
+        superctor = Foo.constructors[1]
+        self.assertIs(superctor, info.getUseInfo(info.ast.definitions[1]).defnInfo.irDefn)
+
+    def testOverloadedAlternateCtor(self):
+        source = "class Foo\n" + \
+                 "  def this = this(true)\n" + \
+                 "  def this(x: i64) = {}\n" + \
+                 "  def this(x: boolean) = {}\n"
+        info = self.analyzeFromSource(source)
+        Foo = info.package.findClass(name="Foo")
+        call = info.ast.definitions[0].members[0].body
+        calleeCtor = Foo.constructors[2]
+        self.assertIs(calleeCtor, info.getUseInfo(call).defnInfo.irDefn)
+
     # Tests for usage
     def testUseClassBeforeDefinition(self):
         source = "def f = C\n" + \

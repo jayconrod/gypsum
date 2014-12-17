@@ -1185,11 +1185,6 @@ class TestCompiler(unittest.TestCase):
                                              variables=[Variable("$this", barTy, PARAMETER, frozenset())],
                                              parameterTypes=[barTy])
 
-    def testNoDefaultSuperCtor(self):
-        source = "class Foo(x: i64)\n" + \
-                 "class Bar <: Foo"
-        self.assertRaises(SemanticException, self.compileFromSource, source)
-
     def testCallBuiltinFunction(self):
         source = "def f = print(\"foo\")"
         self.checkFunction(source,

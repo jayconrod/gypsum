@@ -116,18 +116,20 @@ class AstFunctionDefinition(AstDefinition):
 
 class AstClassDefinition(AstDefinition):
     def __init__(self, attribs, name, typeParameters, constructor,
-                 supertypes, members, location):
+                 supertype, superArgs, members, location):
         super(AstClassDefinition, self).__init__(attribs, location)
         self.name = name
         self.typeParameters = typeParameters
         self.constructor = constructor
-        self.supertypes = supertypes
+        self.supertype = supertype
+        self.superArgs = superArgs
         self.members = members
 
     def __repr__(self):
-        return "AstClassDefinition(%s, %s, %s, %s, %s)" % \
+        return "AstClassDefinition(%s, %s, %s, %s, %s, %s)" % \
             (repr(self.name), repr(self.typeParameters), repr(self.constructor),
-             repr(self.supertypes), repr(self.members))
+             repr(self.supertype), repr(self.superArgs),
+             repr(self.members))
 
     def tag(self):
         return "ClassDefinition"
@@ -136,9 +138,13 @@ class AstClassDefinition(AstDefinition):
         return self.name
 
     def children(self):
-        children = self.attribs + self.typeParameters + self.supertypes
+        children = self.attribs + self.typeParameters
         if self.constructor is not None:
             children.append(self.constructor)
+        if self.supertype is not None:
+            children.append(self.supertype)
+        if self.superArgs is not None:
+            children.extend(self.superArgs)
         children.extend(self.members)
         return children
 

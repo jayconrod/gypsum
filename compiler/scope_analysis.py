@@ -1238,14 +1238,12 @@ class InheritanceVisitor(ScopeVisitor):
         scope = self.scope.scopeForClass(node)
         classInfo = self.scope.info.getClassInfo(node)
         irClass = classInfo.irDefn
-        if len(node.supertypes) == 0:
+        if node.supertype is None:
             classInfo.superclassInfo = self.scope.info.getClassInfo(BUILTIN_ROOT_CLASS_ID)
             self.inheritanceGraph.addEdge(node.id, BUILTIN_ROOT_CLASS_ID)
             self.subtypeGraph.addEdge(irClass.id, BUILTIN_ROOT_CLASS_ID)
         else:
-            if len(node.supertypes) > 1:
-                raise NotImplementedError
-            supertype = node.supertypes[0]
+            supertype = node.supertype
             supertypeIrDefn = self.addTypeToSubtypeGraph(irClass.id, scope, supertype)
             if not isinstance(supertypeIrDefn, Class):
                 raise ScopeException(node.location, "inheritance from non-class type")

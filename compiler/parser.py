@@ -65,20 +65,33 @@ def functionDefn():
 
 def classDefn():
     def process(parsed, loc):
-        [ats, _, name, tps, ctor, stys, ms, _] = untangle(parsed)
-        return AstClassDefinition(ats, name, tps, ctor, stys, ms, loc)
+        [ats, _, name, tps, ctor, sty, sargs, ms, _] = untangle(parsed)
+        return AstClassDefinition(ats, name, tps, ctor, sty, sargs, ms, loc)
     classBodyOpt = Opt(layoutBlock(Rep(Lazy(definition)))) ^ \
                    (lambda p, _: p if p is not None else [])
     return attribs() + keyword("class") + Commit(symbol + typeParameters() +
-           Opt(constructor()) + supertypes() + classBodyOpt + semi) ^ process
+           constructor() + superclass() + classBodyOpt + semi) ^ process
 
 
 def constructor():
     def process(parsed, loc):
         [ats, _, params, _] = untangle(parsed)
         return AstPrimaryConstructorDefinition(ats, params, loc)
-    return attribs() + keyword("(") + \
-           Commit(RepSep(parameter(), keyword(",")) + keyword(")")) ^ process
+    return Opt(attribs() + keyword("(") + \
+               Commit(RepSep(parameter(), keyword(",")) + keyword(")")) ^ process)
+
+
+def superclass():
+    def processArgs(parsed, loc):
+        return untangle(parsed)[1] if parsed is not None else []
+    args = Opt(keyword("(") + RepSep(expression(), keyword(",")) + keyword(")")) ^ processArgs
+    def process(parsed, loc):
+        if parsed is None:
+            return None, None
+        else:
+            [_, supertype, args] = untangle(parsed)
+            return supertype, args
+    return Opt(keyword("<:") + classType() + args) ^ process
 
 
 def supertypes():

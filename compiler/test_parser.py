@@ -88,36 +88,50 @@ class TestParser(unittest.TestCase):
                         "public def f;")
 
     def testClassDefnSimple(self):
-        self.checkParse(astClassDefinition([], "C", [], None, [], []),
+        self.checkParse(astClassDefinition([], "C", [], None, None, None, []),
                         classDefn(),
                         "class C;")
 
     def testClassDefnSimpleWithBody(self):
         ctorast = astFunctionDefinition([], "this", [], [], None,
                                         astLiteralExpression(astIntegerLiteral(12, 64)))
-        ast = astClassDefinition([], "C", [], None, [], [ctorast])
+        ast = astClassDefinition([], "C", [], None, None, None, [ctorast])
         self.checkParse(ast, classDefn(), "class C { def this = 12; };")
 
     def testClassDefnWithAttribs(self):
-        self.checkParse(astClassDefinition([astAttribute("public")], "C", [], None, [], []),
+        self.checkParse(astClassDefinition([astAttribute("public")], "C", [],
+                                           None, None, None, []),
                         classDefn(),
                         "public class C;")
 
     def testSubclass(self):
-        ast = astClassDefinition([], "Sub", [], None, [astClassType("Base", [], set())], [])
+        ast = astClassDefinition([], "Sub", [], None, astClassType("Base", [], set()), [], [])
         self.checkParse(ast, classDefn(), "class Sub <: Base;")
+
+    def testSubclassWithTypeArgs(self):
+        ast = astClassDefinition([], "Sub", [], None,
+                                 astClassType("Base", [astClassType("X", [], set()),
+                                                       astClassType("Y", [], set())], set()),
+                                 [], [])
+        self.checkParse(ast, classDefn(), "class Sub <: Base[X, Y];")
+
+    def testSubclassWithSuperArgs(self):
+        ast = astClassDefinition([], "Sub", [], None,
+                                 astClassType("Base", [], set()),
+                                 [astVariableExpression("x"), astVariableExpression("y")], [])
+        self.checkParse(ast, classDefn(), "class Sub <: Base(x, y);")
 
     def testClassWithNullaryCtor(self):
         ast = astClassDefinition([], "C", [],
                                  astPrimaryConstructorDefinition([], []),
-                                 [], [])
+                                 None, None, [])
         self.checkParse(ast, classDefn(), "class C();")
 
     def testClassWithUnaryCtor(self):
         ast = astClassDefinition([], "C", [],
                                  astPrimaryConstructorDefinition([],
                                                                  [astParameter([], astVariablePattern("x", astI32Type()))]),
-                                 [], [])
+                                 None, None, [])
         self.checkParse(ast, classDefn(), "class C(x: i32);")
 
     def testClassWithBinaryCtor(self):
@@ -125,13 +139,13 @@ class TestParser(unittest.TestCase):
                                  astPrimaryConstructorDefinition([],
                                                                  [astParameter([], astVariablePattern("x", astI32Type())),
                                                                   astParameter([], astVariablePattern("y", astI32Type()))]),
-                                 [], [])
+                                 None, None, [])
         self.checkParse(ast, classDefn(), "class C(x: i32, y: i32);")
 
     def testClassWithCtorWithAttribs(self):
         self.checkParse(astClassDefinition([], "C", [],
                                            astPrimaryConstructorDefinition([astAttribute("public")], []),
-                                           [], []),
+                                           None, None, []),
                         classDefn(),
                         "class C public ();")
 

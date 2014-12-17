@@ -159,16 +159,14 @@ class SubtypeVisitor(TypeVisitorCommon):
 
         for param in node.typeParameters:
             self.visit(param)
-        if len(node.supertypes) == 0:
+        if node.supertype is None:
             irClass.supertypes = [getRootClassType()]
         else:
-            def visitSupertype(sty):
-                ty = self.visit(sty)
-                if ty.isNullable():
-                    raise TypeException(node.location,
-                                        "%s: supertype may not be nullable" % node.name)
-                return ty
-            irClass.supertypes = map(visitSupertype, node.supertypes)
+            supertype = self.visit(node.supertype)
+            if supertype.isNullable():
+                raise TypeException(node.location,
+                                    "%s: supertype may not be nullable" % node.name)
+            irClass.supertypes = [supertype]
         for member in node.members:
             self.visit(member)
 
@@ -284,10 +282,20 @@ class TypeVisitor(TypeVisitorCommon):
             irDefaultCtor.variables[0].type = thisType
             irDefaultCtor.returnType = UnitType
 
+        hasPrimaryOrDefaultCtor = node.constructor is not None or \
+                                  not node.hasConstructors()
+        if node.superArgs is not None and \
+           (len(node.superArgs) > 0 or hasPrimaryOrDefaultCtor):
+            supertype = irClass.supertypes[0]
+            superArgTypes = map(self.visit, node.superArgs)
+            self.handleMethodCall("$constructor", node.id, supertype,
+                                  [], superArgTypes, False, node.location)
+
         irInitializer = irClass.initializer
         irInitializer.parameterTypes = [thisType]
         irInitializer.variables[0].type = thisType
         irInitializer.returnType = UnitType
+
         for member in node.members:
             self.visit(member)
 
@@ -629,10 +637,8 @@ class TypeVisitor(TypeVisitorCommon):
         if not receiverIsExplicit and len(self.receiverTypeStack) > 0:
             receiverType = self.receiverTypeStack[-1]   # may still be None
 
-        if name == "$constructor":
-            assert receiverIsExplicit
-            useKind = USE_AS_CONSTRUCTOR
-        elif receiverIsExplicit:
+        assert name != "$constructor" or receiverIsExplicit
+        if name == "$constructor" or receiverIsExplicit:
             useKind = USE_AS_PROPERTY
         else:
             useKind = USE_AS_VALUE
