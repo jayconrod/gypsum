@@ -47,19 +47,31 @@ class TestParser(unittest.TestCase):
 
     # Definitions
     def testVarDefnEmpty(self):
-        self.checkParse(astVariableDefinition([], astVariablePattern("x", None), None),
+        self.checkParse(astVariableDefinition([], "var", astVariablePattern("x", None), None),
                         varDefn(),
                         "var x;")
 
+    def testLetDefnEmpty(self):
+        self.checkParse(astVariableDefinition([], "let", astVariablePattern("x", None), None),
+                        varDefn(),
+                        "let x;")
+
     def testVarDefn(self):
-        self.checkParse(astVariableDefinition([],
+        self.checkParse(astVariableDefinition([], "var",
                                               astVariablePattern("x", None),
                                               astVariableExpression("y")),
                         varDefn(),
                         "var x = y;")
 
+    def testLetDefn(self):
+        self.checkParse(astVariableDefinition([], "let",
+                                              astVariablePattern("x", None),
+                                              astVariableExpression("y")),
+                        varDefn(),
+                        "let x = y;")
+
     def testVarDefnWithAttribs(self):
-        self.checkParse(astVariableDefinition([astAttribute("public")],
+        self.checkParse(astVariableDefinition([astAttribute("public")], "var",
                                               astVariablePattern("x", None),
                                               None),
                         varDefn(),

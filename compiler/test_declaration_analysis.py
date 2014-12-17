@@ -35,6 +35,13 @@ class TestDeclarations(unittest.TestCase):
         self.assertEquals(DefnInfo(Global("a", None, None, frozenset()), ast.id),
                           info.getDefnInfo(astDefn))
 
+    def testDefineGlobalConst(self):
+        info = self.analyzeFromSource("let a = 12")
+        ast = info.ast
+        astDefn = ast.definitions[0].pattern
+        self.assertEquals(DefnInfo(Global("a", None, None, frozenset([LET])), ast.id),
+                          info.getDefnInfo(astDefn))
+
     def testDefineGlobalFunction(self):
         info = self.analyzeFromSource("def f = 12")
         ast = info.ast
@@ -107,6 +114,14 @@ class TestDeclarations(unittest.TestCase):
                                    ast.definitions[0].id),
                           info.getDefnInfo(astDefn))
 
+    def testDefineFunctionConst(self):
+        info = self.analyzeFromSource("def f = { let x = 12; }")
+        ast = info.ast
+        astDefn = ast.definitions[0].body.statements[0].pattern
+        self.assertEquals(DefnInfo(Variable("x", None, LOCAL, frozenset([LET])),
+                                   ast.definitions[0].id),
+                          info.getDefnInfo(astDefn))
+
     def testDefineFunctionFunction(self):
         info = self.analyzeFromSource("def f = { def g = 12; };")
         ast = info.ast
@@ -129,6 +144,14 @@ class TestDeclarations(unittest.TestCase):
         astDefn = ast.definitions[0].members[0].pattern
         self.assertEquals(DefnInfo(Field("x", None, frozenset()), ast.definitions[0].id),
                           info.getDefnInfo(astDefn))
+
+    def testDefineClassConst(self):
+        info = self.analyzeFromSource("class C { let x: i32; };")
+        ast = info.ast
+        astDefn = ast.definitions[0].members[0].pattern
+        self.assertEquals(DefnInfo(Field("x", None, frozenset([LET])), ast.definitions[0].id),
+                          info.getDefnInfo(astDefn))
+
 
     def testDefineClassVarWithLocals(self):
         source = "class C() { var x = { var y = 12; y; }; };"

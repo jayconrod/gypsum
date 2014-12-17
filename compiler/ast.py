@@ -71,16 +71,21 @@ class AstDefinition(AstNode):
 
 
 class AstVariableDefinition(AstDefinition):
-    def __init__(self, attribs, pattern, expression, location):
+    def __init__(self, attribs, keyword, pattern, expression, location):
         super(AstVariableDefinition, self).__init__(attribs, location)
+        self.keyword = keyword
         self.pattern = pattern
         self.expression = expression
 
     def __repr__(self):
-        return "AstVariableDefinition(%s, %s)" % (repr(self.pattern), repr(self.expression))
+        return "AstVariableDefinition(%s, %s, %s)" % \
+            (self.keyword, repr(self.pattern), repr(self.expression))
 
     def tag(self):
         return "VariableDefinition"
+
+    def data(self):
+        return self.keyword
 
     def children(self):
         return self.attribs + [self.pattern, self.expression]

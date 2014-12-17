@@ -157,6 +157,9 @@ class CompileVisitor(AstNodeVisitor):
     def visitAstVariableDefinition(self, defn, mode):
         assert mode is COMPILE_FOR_EFFECT
         if defn.expression is None:
+            if defn.keyword == "let":
+                raise SemanticException(defn.location,
+                                        "constant definition must have assignment")
             self.visit(defn.pattern, COMPILE_FOR_UNINITIALIZED)
         else:
             self.visit(defn.expression, COMPILE_FOR_VALUE)
@@ -525,6 +528,8 @@ class CompileVisitor(AstNodeVisitor):
     def compileLValue(self, expr):
         useInfo = self.info.getUseInfo(expr)
         irDefn = useInfo.defnInfo.irDefn
+        if LET in irDefn.flags:
+            raise SemanticException(expr.location, "left side of assignment is constant")
         if isinstance(expr, AstVariableExpression) and \
            (isinstance(irDefn, Variable) or isinstance(irDefn, Field)):
             return VarLValue(expr, self, useInfo)

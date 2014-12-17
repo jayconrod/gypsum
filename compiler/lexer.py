@@ -34,7 +34,7 @@ __expressions = [
   (r"=",   RESERVED),
 
   (r"var", RESERVED),
-  (r"const", RESERVED),
+  (r"let", RESERVED),
   (r"def", RESERVED),
   (r"class", RESERVED),
   (r"trait", RESERVED),

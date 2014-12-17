@@ -121,6 +121,10 @@ class TestCompiler(unittest.TestCase):
                                ret()]],
                              variables=[Variable("x", I64Type, LOCAL, frozenset())]))
 
+    def testConstMustBeAssigned(self):
+        source = "def f = { let x: i64; }"
+        self.assertRaises(SemanticException, self.compileFromSource, source)
+
     def testSimpleParameter(self):
         self.checkFunction("def f(x: i64) = x",
                            self.makeSimpleFunction("f", I64Type, [[
@@ -161,6 +165,12 @@ class TestCompiler(unittest.TestCase):
                                stlocal(-1),
                                ret()]],
                              variables=[Variable("x", I64Type, LOCAL, frozenset())]))
+
+    def testAssignConst(self):
+        source = "def f =\n" + \
+                 "  let x = 12\n" + \
+                 "  x = 34"
+        self.assertRaises(SemanticException, self.compileFromSource, source)
 
     def testAssignShortProps(self):
         package = self.compileFromSource("class Foo\n" +
@@ -210,6 +220,23 @@ class TestCompiler(unittest.TestCase):
                      parameterTypes=[clasTy],
                      variables=[Variable("$this", clasTy, PARAMETER, frozenset())])
         self.assertEquals(expected, clas.constructors[0])
+
+    def testAssignConstField(self):
+        source = "class Foo\n" + \
+                 "  let x = 12\n" + \
+                 "def f(obj: Foo) = obj.x = 34"
+        self.assertRaises(SemanticException, self.compileFromSource, source)
+
+    def testAssignLocalConstField(self):
+        source = "class Foo\n" + \
+                 "  let x = 12\n" + \
+                 "  def set = x = 34"
+        self.assertRaises(SemanticException, self.compileFromSource, source)
+
+    def testConstFieldMustBeAssigned(self):
+        source = "class Foo\n" + \
+                 "  let x: i64"
+        self.assertRaises(SemanticException, self.compileFromSource, source)
 
     def testLoadPtrField(self):
         package = self.compileFromSource("class Foo\n" +

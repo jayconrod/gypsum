@@ -47,10 +47,11 @@ def attrib():
 
 def varDefn():
     def process(parsed, loc):
-        [ats, _, pat, expr, _] = untangle(parsed)
-        return AstVariableDefinition(ats, pat, expr, loc)
+        [ats, kw, pat, expr, _] = untangle(parsed)
+        return AstVariableDefinition(ats, kw, pat, expr, loc)
     exprOpt = Opt(keyword("=") + expression() ^ (lambda p, _: p[1]))
-    return attribs() + keyword("var") + Commit(pattern() + exprOpt + semi) ^ process
+    kw = keyword("var") | keyword("let")
+    return attribs() + kw + Commit(pattern() + exprOpt + semi) ^ process
 
 
 def functionDefn():

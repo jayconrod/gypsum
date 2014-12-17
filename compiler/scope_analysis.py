@@ -774,7 +774,7 @@ class GlobalScope(Scope):
     def createIrDefn(self, astDefn, astVarDefn):
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         if isinstance(astDefn, AstVariablePattern):
-            checkFlags(flags, frozenset(), astDefn.location)
+            checkFlags(flags, frozenset([LET]), astDefn.location)
             irDefn = Global(astDefn.name, None, None, flags)
             self.info.package.addGlobal(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
@@ -863,7 +863,7 @@ class FunctionScope(Scope):
                 irDefn = Variable("$parameter", None, PARAMETER, flags)
                 irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, AstVariablePattern):
-            checkFlags(flags, frozenset(), astDefn.location)
+            checkFlags(flags, frozenset([LET]), astDefn.location)
             kind = PARAMETER if isinstance(astVarDefn, AstParameter) else LOCAL
             irDefn = Variable(astDefn.name, None, kind, flags)
             irScopeDefn.variables.append(irDefn)
@@ -1020,7 +1020,7 @@ class ClassScope(Scope):
         irScopeDefn = self.getIrDefn()
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         if isinstance(astDefn, AstVariablePattern):
-            checkFlags(flags, frozenset([PROTECTED, PRIVATE]), astDefn.location)
+            checkFlags(flags, frozenset([LET, PROTECTED, PRIVATE]), astDefn.location)
             irDefn = Field(astDefn.name, None, flags, id=len(irScopeDefn.fields,))
             irScopeDefn.fields.append(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
@@ -1284,14 +1284,17 @@ class InheritanceVisitor(ScopeVisitor):
 
 
 def getFlagsFromAstDefn(astDefn, astVarDefn):
+    flags = set()
     if isinstance(astDefn, AstDefinition):
         attribs = astDefn.attribs
     elif isinstance(astVarDefn, AstDefinition):
         attribs = astVarDefn.attribs
+        if isinstance(astVarDefn, AstVariableDefinition) and \
+           astVarDefn.keyword == "let":
+            flags.add(LET)
     else:
         attribs = []
 
-    flags = set()
     for attrib in attribs:
         flag = getFlagByName(attrib.name)
         if flag in flags:
