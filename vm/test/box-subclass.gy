@@ -4,7 +4,7 @@
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
 
-class A[static S](value: S)
+class A[static S](var value: S)
 
 class B[static T] <: A[T]
   def this(value: T) = super(value)

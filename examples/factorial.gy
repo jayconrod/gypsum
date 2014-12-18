@@ -8,8 +8,10 @@
 
 // This program demonstrates two functions which calculate a factorial.
 
-// This function uses an iterative method.
-def factorial-iterative(n: i64) =
+// This function uses an iterative method. It has one parameter, `n`. We define `n` using the
+// `var` keyword, which allows us to re-assign it later.
+def factorial-iterative(var n: i64) =
+  // We declare a local variable with `var`. Again, this allows us to re-assign it.
   var p = 1
 
   // `while` loops are currently the only kind of loop Gypsum supports. A `while` loop has
@@ -28,7 +30,8 @@ def factorial-iterative(n: i64) =
 
 
 // This function uses a recursive method. Recursive functions must have an explicit return
-// type. The compiler will complain if you don't write one.
+// type. The compiler will complain if you don't write one. Note that we don't need to use
+// the `var` keyword when declaring the parameter `n`. Parameters are constant by default.
 def factorial-recursive(n: i64): i64 =
   if (n == 0)
     1
@@ -38,9 +41,11 @@ def factorial-recursive(n: i64): i64 =
 
 
 def main =
-  var n = 5
-  var p-iter = factorial-iterative(n)
-  var p-rec = factorial-recursive(n)
+  // Here, we define local constants using `let` instead of `var`. `let` does not allows these
+  // variables to be re-assigned. It is usually preferred over `var`.
+  let n = 5
+  let p-iter = factorial-iterative(n)
+  let p-rec = factorial-recursive(n)
 
   // Numbers and other primitive values can be formatted as strings by calling the to-string
   // method. This can be called on literals too, e.g., `5.to-string`.

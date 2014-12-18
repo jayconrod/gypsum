@@ -13,7 +13,7 @@ class List(n: i64, next: List?)
       current = current.next
     sum
 
-def make-list(n: i64) =
+def make-list(var n: i64) =
   var list: List? = null
   while (n > 0)
     list = List(n, list)
@@ -21,8 +21,8 @@ def make-list(n: i64) =
   list
 
 def main =
-  var list = make-list(7)
-  var sum = list.sum
+  let list = make-list(7)
+  let sum = list.sum
   if (sum != 28)
     throw Exception
   0

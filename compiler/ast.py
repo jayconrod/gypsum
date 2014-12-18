@@ -196,15 +196,19 @@ class AstTypeParameter(AstDefinition):
 
 
 class AstParameter(AstDefinition):
-    def __init__(self, attribs, pattern, location):
+    def __init__(self, attribs, var, pattern, location):
         super(AstParameter, self).__init__(attribs, location)
+        self.var = var
         self.pattern = pattern
 
     def __repr__(self):
-        return "AstParameter(%s)" % repr(self.pattern)
+        return "AstParameter(%s, %s)" % (self.var if self.var else "let", repr(self.pattern))
 
     def tag(self):
         return "Parameter"
+
+    def data(self):
+        return self.var
 
     def children(self):
         return self.attribs + [self.pattern]

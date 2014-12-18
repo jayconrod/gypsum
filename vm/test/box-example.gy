@@ -4,7 +4,7 @@
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
 
-class Box[static T <: Object >: Nothing](private value: T)
+class Box[static T <: Object >: Nothing](private var value: T)
   def get = value
 
   def set(new-value: T) =

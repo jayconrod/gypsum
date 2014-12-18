@@ -215,7 +215,7 @@ class ClassType(ObjectType):
 
     def __repr__(self):
         typeArgsStr = (", (" + ", ".join(map(repr, self.typeArguments)) + ")") \
-                      if self.typeArguments is not () \
+                      if len(self.typeArguments) > 0 \
                       else ""
         flagsStr = (", " + ", ".join(self.flags)) if len(self.flags) > 0 else ""
         return "ClassType(%s%s%s)" % (self.clas.name, typeArgsStr, flagsStr)

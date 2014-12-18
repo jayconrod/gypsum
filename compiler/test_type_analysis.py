@@ -106,11 +106,11 @@ class TestTypeAnalysis(unittest.TestCase):
         thisType = ClassType(clas)
         ctor = clas.constructors[0]
         self.assertEquals([thisType], clas.constructors[0].parameterTypes)
-        self.assertEquals(Variable("$this", thisType, PARAMETER, frozenset()),
+        self.assertEquals(Variable("$this", thisType, PARAMETER, frozenset([LET])),
                           ctor.variables[0])
         init = clas.initializer
         self.assertEquals([thisType], clas.constructors[0].parameterTypes)
-        self.assertEquals(Variable("$this", thisType, PARAMETER, frozenset()),
+        self.assertEquals(Variable("$this", thisType, PARAMETER, frozenset([LET])),
                           init.variables[0])
 
     def testVariableWithoutType(self):

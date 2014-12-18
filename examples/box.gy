@@ -16,7 +16,7 @@
 // In this example, the bounds are explicit, but these are they default bounds, and they
 // can be omitted as they are for the functions below. Bounds must be object types (classes
 // or other type parameters); primitive types are not allowed.
-class Box[static T <: Object >: Nothing](private value: T)
+class Box[static T <: Object >: Nothing](private var value: T)
   // Definitions inside a class with type parameters can use those type parameters. When called,
   // the type arguments are passed to them implicitly (inferred from the receiver).
   def get = value

@@ -39,7 +39,7 @@ class List(n: i64, next: List?)
 
 
 // This function constructs a list of the given length.
-def make-list(n: i64) =
+def make-list(var n: i64) =
   var list: List? = null
   while (n > 0)
     // We allocate a `List` object and call its constructor using its class name. No need to
@@ -50,6 +50,6 @@ def make-list(n: i64) =
 
 
 def main =
-  var list = make-list(7)
-  var sum = list.sum
+  let list = make-list(7)
+  let sum = list.sum
   print("The sum of the list is " + sum.to-string + "\n")

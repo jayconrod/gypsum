@@ -560,7 +560,7 @@ class Scope(AstNodeVisitor):
         Note that this does not add the function to the class's methods or constructors lists.
         """
         function.clas = clas
-        this = Variable("$this", None, PARAMETER, frozenset())
+        this = Variable("$this", None, PARAMETER, frozenset([LET]))
         function.variables.insert(0, this)
 
     def isDefinedAutomatically(self, astDefn):
@@ -900,7 +900,7 @@ class FunctionScope(Scope):
         self.info.package.addClass(irContextClass)
         irContextType = ClassType(irContextClass, ())
         ctor = Function("$contextCtor", UnitType, list(implicitTypeParams), [irContextType],
-                        [Variable("$this", irContextType, PARAMETER, frozenset())],
+                        [Variable("$this", irContextType, PARAMETER, frozenset([LET]))],
                         [], frozenset())
         ctor.compileHint = CONTEXT_CONSTRUCTOR_HINT
         self.info.package.addFunction(ctor)
@@ -953,7 +953,8 @@ class FunctionScope(Scope):
         irClosureType = ClassType(irClosureClass)
         irClosureCtor = Function("$closureCtor", UnitType,
                                  list(implicitTypeParams), [irClosureType],
-                                 [Variable("$this", irClosureType, PARAMETER, frozenset())],
+                                 [Variable("$this", irClosureType,
+                                           PARAMETER, frozenset([LET]))],
                                  None, frozenset())
         irClosureCtor.clas = irClosureClass
         irClosureCtor.compileHint = CLOSURE_CONSTRUCTOR_HINT
@@ -964,7 +965,8 @@ class FunctionScope(Scope):
         irDefn = self.getIrDefn()
         assert not irDefn.isMethod()
         irDefn.clas = irClosureClass
-        irDefn.variables.insert(0, Variable("$this", irClosureType, PARAMETER, frozenset()))
+        irDefn.variables.insert(0, Variable("$this", irClosureType,
+                                            PARAMETER, frozenset([LET])))
         irDefn.parameterTypes.insert(0, irClosureType)
         irClosureClass.methods.append(irDefn)
 
@@ -1289,11 +1291,13 @@ def getFlagsFromAstDefn(astDefn, astVarDefn):
         attribs = astDefn.attribs
     elif isinstance(astVarDefn, AstDefinition):
         attribs = astVarDefn.attribs
-        if isinstance(astVarDefn, AstVariableDefinition) and \
-           astVarDefn.keyword == "let":
-            flags.add(LET)
     else:
         attribs = []
+
+    if isinstance(astDefn, AstVariablePattern) and \
+       not ((isinstance(astVarDefn, AstVariableDefinition) and astVarDefn.keyword == "var") or \
+            (isinstance(astVarDefn, AstParameter) and astVarDefn.var == "var")):
+        flags.add(LET)
 
     for attrib in attribs:
         flag = getFlagByName(attrib.name)

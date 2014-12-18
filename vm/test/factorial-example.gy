@@ -4,15 +4,24 @@
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
 
-def main =
-  var x = fac(5)
-  if (x != 120)
-    throw Exception
-  0
-
-def fac(n: i64) =
+def factorial-iterative(var n: i64) =
   var p = 1
-  while (n > 1)
+  while (n > 0)
     p *= n
     n -= 1
   p
+
+
+def factorial-recursive(n: i64): i64 =
+  if (n == 0)
+    1
+  else
+    n * factorial-recursive(n - 1)
+
+
+def main =
+  let n = 5
+  if (120 != factorial-iterative(n))
+    throw Exception
+  if (120 != factorial-recursive(n))
+    throw Exception

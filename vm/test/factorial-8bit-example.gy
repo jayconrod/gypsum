@@ -10,7 +10,7 @@ def main =
     throw Exception
   0i32
 
-def fac(n: i8) =
+def fac(var n: i8) =
   var p = 1i8
   while (n > 1i8)
     p *= n

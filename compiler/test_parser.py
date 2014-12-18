@@ -86,12 +86,19 @@ class TestParser(unittest.TestCase):
         self.checkParse(astFunctionDefinition([], "f",
                                               [astTypeParameter([], "S", None, None),
                                                astTypeParameter([], "T", None, None)],
-                                              [astParameter([], astVariablePattern("x", astClassType("S", [], set()))),
-                                               astParameter([], astVariablePattern("y", astClassType("T", [], set())))],
+                                              [astParameter([], None, astVariablePattern("x", astClassType("S", [], set()))),
+                                               astParameter([], None, astVariablePattern("y", astClassType("T", [], set())))],
                                               astClassType("A", [], set()),
                                               astVariableExpression("x")),
                         functionDefn(),
                         "def f[S, T](x: S, y: T): A = x;")
+
+    def testFunctionDefnWithVarParam(self):
+        self.checkParse(astFunctionDefinition([], "f", [],
+                                              [astParameter([], "var", astVariablePattern("x", astUnitType()))],
+                                              None, None),
+                        functionDefn(),
+                        "def f(var x: unit);")
 
     def testFunctionDefnWithAttribs(self):
         self.checkParse(astFunctionDefinition([astAttribute("public")],
@@ -142,15 +149,22 @@ class TestParser(unittest.TestCase):
     def testClassWithUnaryCtor(self):
         ast = astClassDefinition([], "C", [],
                                  astPrimaryConstructorDefinition([],
-                                                                 [astParameter([], astVariablePattern("x", astI32Type()))]),
+                                                                 [astParameter([], None, astVariablePattern("x", astI32Type()))]),
                                  None, None, [])
         self.checkParse(ast, classDefn(), "class C(x: i32);")
+
+    def testClassWithUnaryCtorWithVarParam(self):
+        ast = astClassDefinition([], "C", [],
+                                 astPrimaryConstructorDefinition([],
+                                                                 [astParameter([], "var", astVariablePattern("x", astI32Type()))]),
+                                 None, None, [])
+        self.checkParse(ast, classDefn(), "class C(var x: i32);")
 
     def testClassWithBinaryCtor(self):
         ast = astClassDefinition([], "C", [],
                                  astPrimaryConstructorDefinition([],
-                                                                 [astParameter([], astVariablePattern("x", astI32Type())),
-                                                                  astParameter([], astVariablePattern("y", astI32Type()))]),
+                                                                 [astParameter([], None, astVariablePattern("x", astI32Type())),
+                                                                  astParameter([], None, astVariablePattern("y", astI32Type()))]),
                                  None, None, [])
         self.checkParse(ast, classDefn(), "class C(x: i32, y: i32);")
 
@@ -195,10 +209,15 @@ class TestParser(unittest.TestCase):
         self.checkParse([], parameters(), "")
 
     def testParameters(self):
-        self.checkParse([astParameter([], astVariablePattern("x", None)),
-                         astParameter([], astVariablePattern("y", None))],
+        self.checkParse([astParameter([], None, astVariablePattern("x", None)),
+                         astParameter([], None, astVariablePattern("y", None))],
                         parameters(),
                         "(x, y)")
+
+    def testVarParameter(self):
+        self.checkParse(astParameter([], "var", astVariablePattern("x", None)),
+                        parameter(),
+                        "var x")
 
     # Patterns
     def testVarPatternNoType(self):

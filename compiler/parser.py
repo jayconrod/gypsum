@@ -124,9 +124,9 @@ def parameters():
 
 def parameter():
     def process(parsed, loc):
-        [ats, pat] = untangle(parsed)
-        return AstParameter(ats, pat, loc)
-    return attribs() + pattern() ^ process
+        [ats, var, pat] = untangle(parsed)
+        return AstParameter(ats, var, pat, loc)
+    return attribs() + Opt(keyword("var")) + pattern() ^ process
 
 
 # Patterns
