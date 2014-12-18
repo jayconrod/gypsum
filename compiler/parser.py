@@ -109,11 +109,12 @@ def typeParameters():
 
 def typeParameter():
     def process(parsed, loc):
-        (((ats, name), upper), lower) = parsed
-        upper = upper[1] if upper else None
-        lower = lower[1] if lower else None
-        return AstTypeParameter(ats, name, upper, lower, loc)
-    return attribs() + symbol + Opt(keyword("<:") + ty()) + Opt(keyword(">:") + ty()) ^ process
+        [ats, var, name, upper, lower] = untangle(parsed)
+        return AstTypeParameter(ats, var, name, upper, lower, loc)
+    variance = Opt(Reserved(OPERATOR, "+") | Reserved(OPERATOR, "-"))
+    upperBound = Opt(keyword("<:") + ty() ^ (lambda p, _: p[1]))
+    lowerBound = Opt(keyword(">:") + ty() ^ (lambda p, _: p[1]))
+    return attribs() + variance + symbol + upperBound + lowerBound ^ process
 
 
 def parameters():

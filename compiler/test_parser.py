@@ -84,8 +84,8 @@ class TestParser(unittest.TestCase):
 
     def testFunctionDefn(self):
         self.checkParse(astFunctionDefinition([], "f",
-                                              [astTypeParameter([], "S", None, None),
-                                               astTypeParameter([], "T", None, None)],
+                                              [astTypeParameter([], None, "S", None, None),
+                                               astTypeParameter([], None, "T", None, None)],
                                               [astParameter([], None, astVariablePattern("x", astClassType("S", [], set()))),
                                                astParameter([], None, astVariablePattern("y", astClassType("T", [], set())))],
                                               astClassType("A", [], set()),
@@ -179,31 +179,39 @@ class TestParser(unittest.TestCase):
         self.checkParse([], typeParameters(), "")
 
     def testTypeParameters(self):
-        self.checkParse([astTypeParameter([], "S", None, None),
-                         astTypeParameter([], "T", None, None)],
+        self.checkParse([astTypeParameter([], None, "S", None, None),
+                         astTypeParameter([], None, "T", None, None)],
                         typeParameters(),
                         "[S, T]")
 
     def testTypeParameter(self):
-        self.checkParse(astTypeParameter([], "T",
+        self.checkParse(astTypeParameter([], None, "T",
                                          astClassType("U", [], set()),
                                          astClassType("L", [], set())),
                         typeParameter(),
                         "T <: U >: L")
 
     def testTypeParameterSimple(self):
-        self.checkParse(astTypeParameter([], "T", None, None),
+        self.checkParse(astTypeParameter([], None, "T", None, None),
                         typeParameter(),
                         "T")
 
     def testTypeParametersWithFlags(self):
-        self.checkParse(astTypeParameter([astAttribute("static")], "T", None, None),
+        self.checkParse(astTypeParameter([astAttribute("static")], None, "T", None, None),
                         typeParameter(),
                         "static T")
         self.checkParse(astTypeParameter([astAttribute("public"), astAttribute("private")],
-                                         "T", None, None),
+                                         None, "T", None, None),
                         typeParameter(),
                         "public private T")
+
+    def testTypeParametersWithVariance(self):
+        self.checkParse(astTypeParameter([], "+", "T", None, None),
+                        typeParameter(),
+                        "+T")
+        self.checkParse(astTypeParameter([], "-", "T", None, None),
+                        typeParameter(),
+                        "-T")
 
     def testParametersEmpty(self):
         self.checkParse([], parameters(), "")
@@ -597,8 +605,8 @@ class TestParser(unittest.TestCase):
 
     def testLambdaExprWithTypeParams(self):
         self.checkParse(astLambdaExpression(None,
-                                            [astTypeParameter([], "S", None, None),
-                                             astTypeParameter([], "T", None, None)],
+                                            [astTypeParameter([], None, "S", None, None),
+                                             astTypeParameter([], None, "T", None, None)],
                                             [astVariablePattern("x", astClassType("S", [], set())),
                                              astVariablePattern("y", astClassType("T", [], set()))],
                                             astVariableExpression("x")),
@@ -607,7 +615,7 @@ class TestParser(unittest.TestCase):
 
     def testLambdaExprWithName(self):
         self.checkParse(astLambdaExpression("f",
-                                            [astTypeParameter([], "T", None, None)],
+                                            [astTypeParameter([], None, "T", None, None)],
                                             [astVariablePattern("x", astClassType("T", [], set()))],
                                             astCallExpression(astVariableExpression("f"),
                                                               [],

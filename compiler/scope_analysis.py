@@ -1057,7 +1057,7 @@ class ClassScope(Scope):
             self.makeMethod(irDefn, irScopeDefn)
             self.info.package.addFunction(irDefn)
         elif isinstance(astDefn, AstTypeParameter):
-            checkFlags(flags, frozenset([STATIC]), astDefn.location)
+            checkFlags(flags, frozenset([STATIC, COVARIANT, CONTRAVARIANT]), astDefn.location)
             if STATIC not in flags:
                 raise NotImplementedError
             irDefn = TypeParameter(astDefn.name, None, None, flags)
@@ -1298,6 +1298,12 @@ def getFlagsFromAstDefn(astDefn, astVarDefn):
        not ((isinstance(astVarDefn, AstVariableDefinition) and astVarDefn.keyword == "var") or \
             (isinstance(astVarDefn, AstParameter) and astVarDefn.var == "var")):
         flags.add(LET)
+
+    if isinstance(astDefn, AstTypeParameter):
+        if astDefn.variance == "+":
+            flags.add(COVARIANT)
+        elif astDefn.variance == "-":
+            flags.add(CONTRAVARIANT)
 
     for attrib in attribs:
         flag = getFlagByName(attrib.name)

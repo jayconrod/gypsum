@@ -297,6 +297,10 @@ class TestDeclarations(unittest.TestCase):
         T = info.package.findTypeParameter(name="T")
         self.assertIs(T, g.typeParameters[0])
 
+    def testFunctionVariantTypeParameter(self):
+        self.assertRaises(ScopeException, self.analyzeFromSource, "def f[static +T] = {}")
+        self.assertRaises(ScopeException, self.analyzeFromSource, "def f[static -T] = {}")
+
     def testClassTypeParameter(self):
         source = "class Box[static T](x: T)\n" + \
                  "  def get = x\n" + \
@@ -313,3 +317,12 @@ class TestDeclarations(unittest.TestCase):
         self.assertEquals([T], Box.constructors[0].typeParameters)
         self.assertEquals([T], get.typeParameters)
         self.assertEquals([T], set.typeParameters)
+
+    def testClassVariantTypeParameter(self):
+        source = "class Foo[static +S, static -T, static U]"
+        info = self.analyzeFromSource(source)
+        Foo = info.package.findClass(name="Foo")
+        [S, T, U] = Foo.typeParameters
+        self.assertEquals(frozenset([COVARIANT, STATIC]), S.flags)
+        self.assertEquals(frozenset([CONTRAVARIANT, STATIC]), T.flags)
+        self.assertEquals(frozenset([STATIC]), U.flags)

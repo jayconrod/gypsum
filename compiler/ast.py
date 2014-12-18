@@ -175,21 +175,23 @@ class AstPrimaryConstructorDefinition(AstDefinition):
 
 
 class AstTypeParameter(AstDefinition):
-    def __init__(self, attribs, name, upperBound, lowerBound, location):
+    def __init__(self, attribs, variance, name, upperBound, lowerBound, location):
         super(AstTypeParameter, self).__init__(attribs, location)
         self.name = name
+        self.variance = variance
         self.upperBound = upperBound
         self.lowerBound = lowerBound
 
     def __repr__(self):
-        return "AstTypeParameter(%s, %s, %s)" % \
-            (repr(self.name), repr(self.upperBound), repr(self.lowerBound))
+        return "AstTypeParameter(%s, %s, %s, %s)" % \
+            (repr(self.variance), repr(self.name), repr(self.upperBound), repr(self.lowerBound))
 
     def tag(self):
         return "TypeParameter"
 
     def data(self):
-        return self.name
+        varianceStr = self.variance if self.variance else ""
+        return varianceStr + self.name
 
     def children(self):
         return self.attribs + [self.upperBound, self.lowerBound]
