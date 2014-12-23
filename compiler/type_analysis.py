@@ -88,7 +88,6 @@ class TypeVisitorCommon(AstNodeVisitor):
         return F64Type
 
     def visitAstClassType(self, node):
-        typeArgs = map(self.visit, node.typeArguments)
         nameInfo = self.scope().lookup(node.name, node.location,
                                        ignoreDefnOrder=self.shouldIgnoreDefnOrder())
         if nameInfo.isOverloaded() or not nameInfo.getDefnInfo().irDefn.isTypeDefn():
@@ -102,10 +101,11 @@ class TypeVisitorCommon(AstNodeVisitor):
 
         if isinstance(irDefn, Class):
             explicitTypeParams = getExplicitTypeParameters(irDefn)
-            if len(typeArgs) != len(explicitTypeParams):
+            if len(node.typeArguments) != len(explicitTypeParams):
                 raise TypeException(node.location,
                                     "%s: wrong number of type arguments; expected %d but have %d\n" %
                                     (node.name, len(explicitTypeParams), len(typeArgs)))
+            typeArgs = self.handleAstClassTypeArgs(irDefn, node.typeArguments)
             for ta, tp in zip(typeArgs, explicitTypeParams):
                 if not (tp.lowerBound.isSubtypeOf(ta) and
                         ta.isSubtypeOf(tp.upperBound)):
@@ -117,11 +117,14 @@ class TypeVisitorCommon(AstNodeVisitor):
             assert isinstance(irDefn, TypeParameter)
             if flags != frozenset():
                 raise TypeException(node.location, "invalid flags for variable type")
-            if len(typeArgs) > 0:
+            if len(node.typeArguments) > 0:
                 raise TypeException(node.location,
                                     "%s: type parameter cannot accept type arguments" %
                                     irDefn.name)
             return VariableType(irDefn)
+
+    def handleAstClassTypeArgs(self, irClass, nodes):
+        return map(self.visit, nodes)
 
     def handleResult(self, node, result, *unused):
         if result is not None:
@@ -223,6 +226,19 @@ class TypeVisitor(TypeVisitorCommon):
         # receiverTypeStack keeps track of the receiver type for the current class.
         self.receiverTypeStack = []
 
+        # varianceClass indicates what class is being visited, for the purpose of restricting
+        # variance for type parameters. May be `None` when variance doesn't matter.
+        self.varianceClass = None
+
+        # variance restricts which type parameters can be used. May be one of:
+        # COVARIANT: covariant or invariant type parameters may be used
+        # CONTRAVARIANT: contravariant or invariant type parameters may be used
+        # INVARIANT: invariant type parameters may be used
+        # BIVARIANT: any type parameters may be used
+        # Type parameters from outer scopes are not affected by this restriction; only type
+        # parameters defined in `varianceClass` are restricted.
+        self.variance = BIVARIANT
+
     def preVisit(self, node, *unused):
         super(TypeVisitor, self).preVisit(node, *unused)
         if not self.info.hasDefnInfo(node):
@@ -297,7 +313,12 @@ class TypeVisitor(TypeVisitorCommon):
         irInitializer.returnType = UnitType
 
         for member in node.members:
-            self.visit(member)
+            if isinstance(member, AstVariableDefinition):
+                variance = INVARIANT if member.keyword == "var" else COVARIANT
+                with VarianceScope(self, variance, irClass):
+                    self.visit(member)
+            else:
+                self.visit(member)
 
     def visitAstPrimaryConstructorDefinition(self, node):
         self.handleFunctionCommon(node, None, None)
@@ -315,7 +336,14 @@ class TypeVisitor(TypeVisitorCommon):
             irTypeParam.lowerBound = getNothingClassType()
 
     def visitAstParameter(self, node):
-        ty = self.visit(node.pattern, None)
+        if self.variance is COVARIANT and node.var == "var":
+            # A `var` parameter in a primary constructor. Since this defines a mutable field,
+            # we have to go invariant.
+            variance = INVARIANT
+        else:
+            variance = self.variance
+        with VarianceScope(self, variance):
+            ty = self.visit(node.pattern, None)
         if self.info.hasDefnInfo(node):
             self.info.getDefnInfo(node).irDefn.type = ty
         return ty
@@ -493,7 +521,7 @@ class TypeVisitor(TypeVisitorCommon):
             retTy = UnitType
         else:
             retTy = self.visit(node.expression)
-        self.functionStack[-1].handleReturn(retTy)
+        self.checkAndHandleReturnType(retTy, node.location)
         return NoType
 
     def visitAstIntegerLiteral(self, node):
@@ -523,6 +551,30 @@ class TypeVisitor(TypeVisitorCommon):
     def visitAstNullLiteral(self, node):
         return getNullType()
 
+    def visitAstClassType(self, node):
+        ty = super(TypeVisitor, self).visitAstClassType(node)
+        if isinstance(ty, VariableType):
+            param = ty.typeParameter
+            if self.variance is not None and param.clas is self.varianceClass:
+                if CONTRAVARIANT in param.flags and \
+                   self.variance not in [CONTRAVARIANT, BIVARIANT]:
+                    raise TypeException(node.location,
+                                        "contravariant type parameter used in invalid position")
+                if COVARIANT in param.flags and \
+                   self.variance not in [COVARIANT, BIVARIANT]:
+                    raise TypeException(node.location,
+                                        "covariant type parameter used in invalid position")
+        return ty
+
+    def handleAstClassTypeArgs(self, irClass, typeArgs):
+        typeParams = getExplicitTypeParameters(irClass)
+        assert len(typeParams) == len(typeArgs)
+        types = []
+        for tp, ta in zip(typeParams, typeArgs):
+            with VarianceScope.forArgument(self, tp.variance()):
+                types.append(self.visit(ta))
+        return types
+
     def handleFunctionCommon(self, node, astReturnType, astBody):
         defnInfo = self.info.getDefnInfo(node)
         irFunction = defnInfo.irDefn
@@ -538,14 +590,26 @@ class TypeVisitor(TypeVisitorCommon):
             # get to its AST node, since we need to know its return type.
 
             # Process parameter types first, including "this".
-            self.ensureParamTypeInfoForDefn(irFunction)
+            if isinstance(node, AstPrimaryConstructorDefinition):
+                vscope = VarianceScope(self, COVARIANT, irFunction.clas)
+            elif irFunction.isMethod() and not irFunction.isConstructor():
+                vscope = VarianceScope(self, CONTRAVARIANT, irFunction.clas)
+            else:
+                vscope = VarianceScope.clear(self)
+            with vscope:
+                self.ensureParamTypeInfoForDefn(irFunction)
 
             # Process return type, if specified.
             if astReturnType is not None:
                 if irFunction.isConstructor():
                     raise TypeException(node.location,
                                         "constructors must not declare return type")
-                irFunction.returnType = self.visit(astReturnType)
+                if irFunction.isMethod():
+                    vscope = VarianceScope(self, COVARIANT, irFunction.clas)
+                else:
+                    vscope = VarianceScope.clear(self)
+                with vscope:
+                    irFunction.returnType = self.visit(astReturnType)
             self.functionStack[-1].declaredReturnType = irFunction.returnType
 
             # Process body.
@@ -560,7 +624,12 @@ class TypeVisitor(TypeVisitorCommon):
             else:
                 bodyType = self.visit(astBody)
                 if bodyType is not NoType:
-                    bodyType = self.functionStack[-1].handleReturn(bodyType)
+                    if irFunction.isMethod() and not irFunction.isConstructor():
+                        vscope = VarianceScope(self, COVARIANT, irFunction.clas)
+                    else:
+                        vscope = VarianceScope.clear(self)
+                    with vscope:
+                        bodyType = self.checkAndHandleReturnType(bodyType, astBody.location)
                 else:
                     bodyType = self.functionStack[-1].getReturnType()
             if irFunction.returnType is None:
@@ -596,9 +665,7 @@ class TypeVisitor(TypeVisitorCommon):
                 irDefn.parameterTypes.append(receiverType)
                 assert irDefn.variables[0].name == "$this"
                 irDefn.variables[0].type = receiverType
-            for param in irDefn.astDefn.parameters:
-                paramTy = self.visit(param)
-                irDefn.parameterTypes.append(paramTy)
+            irDefn.parameterTypes.extend(map(self.visit, irDefn.astDefn.parameters))
 
             self.postVisit(astDefn)
 
@@ -700,6 +767,27 @@ class TypeVisitor(TypeVisitorCommon):
                 return clas
         assert False, "field is not defined in this class or any superclass"
 
+    def checkAndHandleReturnType(self, ty, loc):
+        self.checkTypeVariance(ty, loc)
+        return self.functionStack[-1].handleReturn(ty)
+
+    def checkTypeVariance(self, ty, loc):
+        if isinstance(ty, VariableType) and \
+           ty.typeParameter.clas is self.varianceClass:
+            variance = ty.typeParameter.variance()
+            if variance is COVARIANT and \
+               self.variance not in [COVARIANT, BIVARIANT]:
+                raise TypeException(loc, "covariant type prameter used in invalid position")
+            elif variance is CONTRAVARIANT and \
+                 self.variance not in [CONTRAVARIANT, BIVARIANT]:
+                raise TypeException(loc, "contravariant type parameter used in invalid position")
+        elif isinstance(ty, ClassType):
+            typeParams = getExplicitTypeParameters(ty.clas)
+            typeArgs = ty.typeArguments[-len(typeParams):]
+            for tp, ta in zip(typeParams, typeArgs):
+                with VarianceScope(self, tp.variance(), tp.clas):
+                    self.checkTypeVariance(ta, loc)
+
     def isTypeParameterAvailable(self, irTypeParameter):
         if self.functionStack[-1] is None:
             return False
@@ -750,3 +838,51 @@ class FunctionState(object):
             return self.bodyReturnType
         else:
             return ClassType.forReceiver(getNothingClass())
+
+
+class VarianceScope(object):
+    def __init__(self, visitor, variance, varianceClass=None):
+        self.visitor = visitor
+        self.oldVarianceClass = self.visitor.varianceClass
+        self.oldVariance = self.visitor.variance
+        self.variance = variance
+        self.varianceClass = varianceClass if varianceClass is not None \
+                             else self.oldVarianceClass
+
+    @staticmethod
+    def forArgument(visitor, variance):
+        oldVariance = visitor.variance
+        if (oldVariance is COVARIANT and \
+            variance is CONTRAVARIANT) or \
+           (oldVariance is CONTRAVARIANT and \
+            variance is COVARIANT):
+            newVariance = CONTRAVARIANT
+        elif oldVariance is CONTRAVARIANT and \
+             variance is CONTRAVARIANT:
+            newVariance = COVARIANT
+        elif oldVariance is INVARIANT:
+            newVariance = INVARIANT
+        else:
+            newVariance = variance
+        return VarianceScope(visitor, newVariance, None)
+
+    @staticmethod
+    def clear(visitor):
+        return VarianceScope(visitor, BIVARIANT, None)
+
+    def __enter__(self):
+        self.visitor.varianceClass = self.varianceClass
+        self.visitor.variance = self.variance
+
+    def __exit__(self, *unused):
+        self.visitor.varianceClass = self.oldVarianceClass
+        self.visitor.variance = self.oldVariance
+
+    def varianceValue(self, flag):
+        if flag is COVARIANT:
+            return +1
+        elif flag is CONTRAVARIANT:
+            return -1
+        else:
+            assert flag is INVARIANT
+            return 0

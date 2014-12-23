@@ -856,6 +856,104 @@ class TestTypeAnalysis(unittest.TestCase):
         source = "class A[static S, static T, static U <: S >: T]"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
+    def testCovariantTypeParameterInConstField(self):
+        source = "class Foo[static +T](x: T)"
+        self.analyzeFromSource(source)
+        # pass if no error
+
+    def testCovariantTypeParameterInVarField(self):
+        source = "class Foo[static +T](var x: T)"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testCovariantTypeParameterInMethodParam(self):
+        source = "class Foo[static +T]\n" + \
+                 "  def m(x: T) = {}"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testCovariantTypeParameterInMethodReturn(self):
+        source = "abstract class Foo[static +T]\n" + \
+                 "  abstract def m: T"
+        self.analyzeFromSource(source)
+        # pass if no error
+
+    def testCovariantTypeParameterInCtor(self):
+        source = "class Foo[static +T]\n" + \
+                 "  def this(x: T) = {}"
+        self.analyzeFromSource(source)
+        # pass if no error
+
+    def testContravariantTypeParameterInField(self):
+        source = "class Foo[static -T](x: T)\n"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testContravariantTypeParameterInMethodParam(self):
+        source = "class Foo[static -T]\n" + \
+                 "  def m(x: T) = {}"
+        self.analyzeFromSource(source)
+        # pass if no error
+
+    def testContravariantTypeParameterInMethodReturn(self):
+        source = "abstract class Foo[static -T]\n" + \
+                 "  abstract def m: T"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testContravariantTypeParameterInInferredMethodReturn(self):
+        source = "class Foo[static -T]\n" + \
+                 "  def m(x: T) = x"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testCovariantParamInCovariantClass(self):
+        source = "class Source[static +S]\n" + \
+                 "class Foo[static +T]\n" + \
+                 "  def m(x: Source[T]) = {}"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testCovariantParamInContravariantClass(self):
+        source = "class Source[static +S]\n" + \
+                 "class Foo[static -T]\n" + \
+                 "  def m(x: Source[T]) = {}"
+        self.analyzeFromSource(source)
+        # pass if no error
+
+    def testCovariantReturnInCovariantClass(self):
+        source = "class Source[static +S]\n" + \
+                 "abstract class Foo[static +T]\n" + \
+                 "  abstract def m: Source[T]"
+        self.analyzeFromSource(source)
+        # pass if no error
+
+    def testCovariantReturnInContravariantClass(self):
+        source = "class Source[static +S]\n" + \
+                 "abstract class Foo[static -T]\n" + \
+                 "  abstract def m: Source[T]"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testContravariantParamInCovariantClass(self):
+        source = "class Sink[static -S]\n" + \
+                 "class Foo[static +T]\n" + \
+                 "  def m(x: Sink[T]) = {}"
+        self.analyzeFromSource(source)
+        # pass if no error
+
+    def testContravariantParamInContravariantClass(self):
+        source = "class Sink[static -S]\n" + \
+                 "class Foo[static -T]\n" + \
+                 "  def m(x: Sink[T]) = {}"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testContravariantReturnInCovariantClass(self):
+        source = "class Sink[static -S]\n" + \
+                 "abstract class Foo[static +T]\n" + \
+                 "  abstract def m: Sink[T]"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testContravariantReturnInContravariantClass(self):
+        source = "class Sink[static -S]\n" + \
+                 "abstract class Foo[static -T]\n" + \
+                 "  abstract def m: Sink[T]"
+        self.analyzeFromSource(source)
+        # pass if no error
+
     def testNoDefaultSuperCtor(self):
         source = "class Foo(x: i64)\n" + \
                  "class Bar <: Foo"

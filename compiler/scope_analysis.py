@@ -1060,7 +1060,7 @@ class ClassScope(Scope):
             checkFlags(flags, frozenset([STATIC, COVARIANT, CONTRAVARIANT]), astDefn.location)
             if STATIC not in flags:
                 raise NotImplementedError
-            irDefn = TypeParameter(astDefn.name, None, None, flags)
+            irDefn = TypeParameter(astDefn.name, None, None, flags, clas=irScopeDefn)
             self.info.package.addTypeParameter(irDefn)
             irScopeDefn.typeParameters.append(irDefn)
             irScopeDefn.initializer.typeParameters.append(irDefn)

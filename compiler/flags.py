@@ -24,6 +24,12 @@ def flagSetToFlagBits(flagSet):
     return reduce(lambda bits, flag: bits | _flagCodes[flag], flagSet, 0)
 
 
+# INVARIANT is not a real flag. It just means neither COVARIANT nor CONTRAVARIANT.
+# It's handy to have the symbol in some places.
+INVARIANT = "invariant"
+# BIVARIANT means either COVARIANT or CONTRAVARIANT.
+BIVARIANT = "bivariant"
+
 _flagCodes = {}
 _flagNames = {}
 _flagGroups = []
@@ -45,4 +51,5 @@ def _initialize():
         _flagNames[flagName.lower()] = flagName
         code <<= 1
     _flagGroups.append(frozenset([PUBLIC, PROTECTED, PRIVATE]))
+    _flagGroups.append(frozenset([COVARIANT, CONTRAVARIANT]))
 _initialize()
