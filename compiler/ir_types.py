@@ -10,6 +10,7 @@ import builtins
 from bytecode import *
 from data import *
 from errors import *
+from flags import *
 from ir_values import *
 
 NULLABLE_TYPE_FLAG = "nullable"
@@ -48,15 +49,11 @@ class Type(Data):
             return self.isSubtypeOf(other.typeParameter.lowerBound)
         elif isinstance(self, ClassType) and \
              isinstance(other, ClassType) and \
-             (not self.isNullable() or other.isNullable()) and \
-             self.clas.isSubclassOf(other.clas):
+             (not self.isNullable() or other.isNullable()):
             if self.clas is builtins.getNothingClass():
                 return True
             else:
-                selfTypeArgs = self.substituteForBaseClass(other.clas).typeArguments
-                otherTypeArgs = other.typeArguments
-                assert len(selfTypeArgs) == len(otherTypeArgs)
-                return all(a == b for a, b in zip(selfTypeArgs, otherTypeArgs))
+                return self.isSubtypeOfWithVariance(other, BIVARIANT)
         else:
             return False
 
@@ -230,6 +227,27 @@ class ClassType(ObjectType):
                self.clas is other.clas and \
                self.typeArguments == other.typeArguments
 
+    def isSubtypeOfWithVariance(self, other, variance):
+        if not self.clas.isSubclassOf(other.clas):
+            return False
+        selfTypeArgs = self.substituteForBaseClass(other.clas).typeArguments
+        otherTypeArgs = other.typeArguments
+        typeParams = other.clas.typeParameters
+        assert len(selfTypeArgs) == len(otherTypeArgs)
+
+        def checkArg(a, b, param):
+            argVariance = changeVariance(variance, param.variance())
+            if argVariance is COVARIANT:
+                return a.isSubtypeOfWithVariance(b, argVariance)
+            elif argVariance is CONTRAVARIANT:
+                return b.isSubtypeOfWithVariance(a, argVariance)
+            else:
+                assert argVariance is INVARIANT
+                return a == b
+
+        return all(checkArg(a, b, param) for a, b, param in
+                   zip(selfTypeArgs, otherTypeArgs, typeParams))
+
     def substitute(self, parameters, replacements):
         return ClassType(self.clas,
                          tuple(arg.substitute(parameters, replacements)
@@ -319,3 +337,26 @@ def getNullType():
 
 def getStringType():
     return ClassType(builtins.getStringClass())
+
+
+# Extra variance symbols
+# Invariant means neither covariant nor contravariant.
+INVARIANT = "invariant"
+# BIVARIANT means either COVARIANT or CONTRAVARIANT.
+BIVARIANT = "bivariant"
+
+
+def changeVariance(old, new):
+    assert new is not BIVARIANT
+    if old is INVARIANT:
+        return INVARIANT
+    elif old in [BIVARIANT, COVARIANT]:
+        return new
+    else:
+        if new is CONTRAVARIANT:
+            return COVARIANT
+        elif new is COVARIANT:
+            return CONTRAVARIANT
+        else:
+            assert new is INVARIANT
+            return INVARIANT

@@ -7,6 +7,7 @@
 import unittest
 
 from builtins import *
+from ir import *
 from ir_types import *
 from location import *
 from utils import *
@@ -122,6 +123,42 @@ class TestIrTypes(unittest.TestCase):
         X.id = 2
         BXty = ClassType(B, (ClassType(X),))
         self.assertTrue(BXty.isSubtypeOf(Aty))
+
+    def testSubtypeWithCovariantParameter(self):
+        # Source[A] <: Source[B] with class Source[+T] and A <: B
+        T = TypeParameter("T", getRootClassType(), getNothingClassType(),
+                          frozenset([COVARIANT]))
+        T.id = 0
+        B = Class("B", [], [getRootClassType()], None, [], [], [], frozenset())
+        B.id = 0
+        Bty = ClassType(B)
+        A = Class("A", [], [Bty], None, [], [], [], frozenset())
+        A.id = 1
+        Aty = ClassType(A)
+        Source = Class("Source", [T], [getRootClassType()], None, [], [], [], frozenset())
+        Source.id = 2
+        SourceAty = ClassType(Source, (Aty,))
+        SourceBty = ClassType(Source, (Bty,))
+        self.assertTrue(SourceAty.isSubtypeOf(SourceBty))
+        self.assertFalse(SourceBty.isSubtypeOf(SourceAty))
+
+    def testSubtypeWithContravariantParameter(self):
+        # Sink[A] <: Sink[B] with class Sink[-T] and B <: A
+        T = TypeParameter("T", getRootClassType(), getNothingClassType(),
+                          frozenset([CONTRAVARIANT]))
+        T.id = 0
+        A = Class("A", [], [getRootClassType()], None, [], [], [], frozenset())
+        A.id = 0
+        Aty = ClassType(A)
+        B = Class("B", [], [Aty], None, [], [], [], frozenset())
+        B.id = 1
+        Bty = ClassType(B)
+        Sink = Class("Sink", [T], [getRootClassType()], None, [], [], [], frozenset())
+        Sink.id = 2
+        SinkAty = ClassType(Sink, (Aty,))
+        SinkBty = ClassType(Sink, (Bty,))
+        self.assertTrue(SinkAty.isSubtypeOf(SinkBty))
+        self.assertFalse(SinkBty.isSubtypeOf(SinkAty))
 
     def testSubstitute(self):
         T = TypeParameter("T", ClassType(self.A), ClassType(self.B), frozenset())

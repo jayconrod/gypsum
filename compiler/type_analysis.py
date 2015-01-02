@@ -851,19 +851,7 @@ class VarianceScope(object):
 
     @staticmethod
     def forArgument(visitor, variance):
-        oldVariance = visitor.variance
-        if (oldVariance is COVARIANT and \
-            variance is CONTRAVARIANT) or \
-           (oldVariance is CONTRAVARIANT and \
-            variance is COVARIANT):
-            newVariance = CONTRAVARIANT
-        elif oldVariance is CONTRAVARIANT and \
-             variance is CONTRAVARIANT:
-            newVariance = COVARIANT
-        elif oldVariance is INVARIANT:
-            newVariance = INVARIANT
-        else:
-            newVariance = variance
+        newVariance = changeVariance(visitor.variance, variance)
         return VarianceScope(visitor, newVariance, None)
 
     @staticmethod
