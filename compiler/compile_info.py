@@ -6,6 +6,7 @@
 
 from ast import *
 from builtins import *
+import builtins
 from data import *
 import ir
 
@@ -52,7 +53,7 @@ class CompileInfo(object):
             return k.id
         elif hasattr(k, "astDefn"):
             return k.astDefn.id
-        elif isBuiltinId(k.id) and isinstance(k, Function):
+        elif builtins.isBuiltinId(k.id) and isinstance(k, ir.Function):
             # TODO: fix this hack. We add an offset to builtin function ids to disambiguate
             # them from class ids.
             return k.id - 100
@@ -285,13 +286,13 @@ def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes):
     containing the full list of type arguments and argument types (including the receiver).
     If the function is not compatible, returns None."""
     if receiverType is not None:
-        if isinstance(receiverType, ObjectType):
+        if isinstance(receiverType, ir.ObjectType):
             receiverType = receiverType.substituteForBaseClass(irFunction.clas)
         implicitTypeArgs = list(receiverType.getTypeArguments())
         allArgTypes = [receiverType] + argTypes
     else:
         implicitTypeParams = getImplicitTypeParameters(irFunction)
-        implicitTypeArgs = [VariableType(t) for t in implicitTypeParams]
+        implicitTypeArgs = [ir.VariableType(t) for t in implicitTypeParams]
         allArgTypes = argTypes
     allTypeArgs = implicitTypeArgs + typeArgs
 
