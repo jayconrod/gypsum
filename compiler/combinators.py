@@ -4,7 +4,7 @@
 # the GPL license that can be found in the LICENSE.txt file.
 
 
-from location import *
+from location import Location
 
 
 class Reader(object):
@@ -297,3 +297,7 @@ def untangle(parsed):
         for element in parsed:
             elements.extend(untangle(element))
         return elements
+
+__all__ = ["Reader", "Rep", "Rep1", "RepSep", "Rep1Sep", "Phrase", "Tag",
+           "Reserved", "Opt", "Lazy", "LeftRec", "Commit", "If", "FailValue",
+           "untangle"]
