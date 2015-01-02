@@ -4,10 +4,9 @@
 # the GPL license that can be found in the LICENSE.txt file.
 
 
-from ast import *
-from builtins import *
+import ast
 import builtins
-from data import *
+import data
 import ir
 
 
@@ -50,7 +49,7 @@ class CompileInfo(object):
     def _key(self, k):
         if isinstance(k, int):
             return k
-        elif isinstance(k, AstNode):
+        elif isinstance(k, ast.AstNode):
             return k.id
         elif hasattr(k, "astDefn"):
             return k.astDefn.id
@@ -81,7 +80,7 @@ for _elemName, _dictName in _dictNames:
     _addDictMethods(_elemName, _dictName)
 
 
-class ContextInfo(Data):
+class ContextInfo(data.Data):
     """Created for every AST node which creates a scope.
 
     This includes classes and functions, but it also includes block expressions, lambda
@@ -107,7 +106,7 @@ class ContextInfo(Data):
         return "ContextInfo(%d, %s)" % (self.id, irContextClassStr)
 
 
-class ClosureInfo(Data):
+class ClosureInfo(data.Data):
     """Created for nodes which create a scope and use something defined in an outer scope.
 
     The use may be in an inner scope. Note that ClosureInfo is not created for local scopes."""
@@ -151,7 +150,7 @@ NOT_HERITABLE = -1
 # DefnInfo is available for every AST node which defines something, such as classes, functions,
 # parameters, and individual variables. This is used to map AST definitions to their
 # IR definition stubs.
-class DefnInfo(Data):
+class DefnInfo(data.Data):
     """Created for every AST node which defines something.
 
     This includes classes, functions, and individual variables. This is used to map AST
@@ -204,7 +203,7 @@ USE_AS_PROPERTY = "USE_AS_PROPERTY"
 USE_AS_CONSTRUCTOR = "USE_AS_CONSTRUCTOR"
 
 
-class UseInfo(Data):
+class UseInfo(data.Data):
     """Created for every AST node which refers to a definition using a symbol."""
 
     propertyNames = [
@@ -229,7 +228,7 @@ class UseInfo(Data):
                not useScope.isLocalWithin(defnScope)
 
 
-class ClassInfo(Data):
+class ClassInfo(data.Data):
     """Defined for each class. Keeps track of superclass."""
 
     propertyNames = [
@@ -248,7 +247,7 @@ class ClassInfo(Data):
         return "ClassInfo(%s, %s)" % (irDefnStr, superclassInfoStr)
 
 
-class CallInfo(Data):
+class CallInfo(data.Data):
     """Defined at each call site during type/use analysis. Tracks information needed for the
     compiler to generate the call."""
 
@@ -303,7 +302,7 @@ def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes):
         return None
 
 
-class InfoPrinter(AstPrinter):
+class InfoPrinter(ast.AstPrinter):
     def __init__(self, out, info):
         super(InfoPrinter, self).__init__(out)
         self.info = info
@@ -329,3 +328,12 @@ class InfoPrinter(AstPrinter):
 
         for s in infoStrs:
             self.out.write("%s- %s\n" % (indent, s))
+
+
+__all__ = [ "CompileInfo", "ContextInfo", "ClosureInfo", "DefnInfo",
+            "ClassInfo", "UseInfo", "getAllArgumentTypes",
+            "GLOBAL_SCOPE_ID", "BUILTIN_SCOPE_ID",
+            "USE_AS_VALUE", "USE_AS_TYPE", "USE_AS_PROPERTY", "USE_AS_CONSTRUCTOR",
+            "CONTEXT_CONSTRUCTOR_HINT", "CLOSURE_CONSTRUCTOR_HINT",
+            "getExplicitTypeParameters", "getImplicitTypeParameters",
+            "NOT_HERITABLE"]
