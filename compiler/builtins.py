@@ -11,6 +11,7 @@ import yaml
 import ir
 import ir_types
 
+import bytecode
 
 def registerBuiltins(bind):
     _initialize()
@@ -105,7 +106,7 @@ def _initialize():
                                [],
                                map(buildType, functionData["parameterTypes"]),
                                [], [], frozenset())
-        function.id = getattr(ir_types,functionData["id"])
+        function.id = getattr(bytecode,functionData["id"])
         if "insts" in functionData:
             function.insts = functionData["insts"]
         return function
@@ -126,7 +127,7 @@ def _initialize():
 
     def defineClass(classData):
         clas = _builtinClassNameMap[classData["name"]]
-        clas.id = getattr(ir_types,classData["id"])
+        clas.id = getattr(bytecode,classData["id"])
         if not classData["isPrimitive"]:
             if classData["supertype"] is not None:
                 superclass = _builtinClassNameMap[classData["supertype"]]

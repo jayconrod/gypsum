@@ -30,6 +30,7 @@ from ir_types import *
 from location import *
 from builtins import *
 from utils import *
+from bytecode import *
 
 def analyzeDeclarations(info):
     """Traverses the AST, creating a scope tree and DefnInfo for definition nodes.
