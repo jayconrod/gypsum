@@ -8,11 +8,11 @@ from collections import namedtuple
 import os.path
 import yaml
 
-from utils import *
+import utils
 
 InstInfo = namedtuple("InstInfo", ["name", "opcode", "operandCount", "isTerminator"])
 
-_c = Counter()
+_c = utils.Counter()
 instInfoByName = {}
 instInfoByCode = []
 
@@ -35,8 +35,8 @@ WORDSIZE = 8
 
 # Builtin definitions are accessible to the compiler, but are not included in packages. They
 # are referenced by negative ids. The VM implements these.
-_nextClassId = Counter(-1, -1)
-_nextFunctionId = Counter(-1, -1)
+_nextClassId = utils.Counter(-1, -1)
+_nextFunctionId = utils.Counter(-1, -1)
 
 _builtinsPath = os.path.join(os.path.dirname(__file__), "..", "common", "builtins.yaml")
 with open(_builtinsPath) as _builtinsFile:
