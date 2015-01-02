@@ -12,6 +12,7 @@ from data import *
 from errors import *
 from flags import *
 from ir_values import *
+import utils
 
 NULLABLE_TYPE_FLAG = "nullable"
 
@@ -218,7 +219,7 @@ class ClassType(ObjectType):
         return "ClassType(%s%s%s)" % (self.clas.name, typeArgsStr, flagsStr)
 
     def __hash__(self):
-        return hashList([getattr(self, name) for name in Type.propertyNames] + \
+        return utils.hashList([getattr(self, name) for name in Type.propertyNames] + \
                         [self.clas.name, self.typeArguments])
 
     def __eq__(self, other):
@@ -288,7 +289,7 @@ class VariableType(ObjectType):
         return "VariableType(%s)" % self.typeParameter.name
 
     def __hash__(self):
-        return hashList([self.typeParameter.name])
+        return utils.hashList([self.typeParameter.name])
 
     def __eq__(self, other):
         return self.__class__ is other.__class__ and \

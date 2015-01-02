@@ -4,7 +4,7 @@
 # the GPL license that can be found in the LICENSE.txt file.
 
 
-from utils import *
+import utils
 
 class Data(object):
     @staticmethod
@@ -37,4 +37,6 @@ class Data(object):
         return not (self == other)
 
     def __hash__(self):
-        return hashList(getattr(self, name) for name in self.propertyNames)
+        return utils.hashList(getattr(self, name) for name in self.propertyNames)
+
+__all__ = ["Data"]
