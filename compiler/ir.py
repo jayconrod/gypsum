@@ -5,11 +5,10 @@
 
 
 import builtins
-from bytecode import *
 import compile_info
-from data import *
-from flags import *
-from ir_types import *
+import data
+import flags
+import ir_types
 
 import StringIO
 
@@ -98,7 +97,7 @@ class Package(object):
         return (d for d in defns if matchAll(d))
 
 
-class IrDefinition(Data):
+class IrDefinition(data.Data):
     def isBuiltin(self):
         return self.id < 0
 
@@ -134,7 +133,7 @@ class Function(IrDefinition):
             return False
         if self.isMethod():
             # Nullable receivers are fine, since they are checked when a method is called.
-            argTypes = [argTypes[0].withoutFlag(NULLABLE_TYPE_FLAG)] + argTypes[1:]
+            argTypes = [argTypes[0].withoutFlag(ir_types.NULLABLE_TYPE_FLAG)] + argTypes[1:]
         paramTypes = [pt.substitute(self.typeParameters, typeArgs)
                       for pt in self.parameterTypes]
         return all(at.isSubtypeOf(pt) for at, pt in zip(argTypes, paramTypes))
@@ -213,7 +212,7 @@ class Class(IrDefinition):
 
     def superclasses(self):
         """Returns a generator of superclasses in depth-first order, including this class."""
-        assert self.id is not BUILTIN_NOTHING_CLASS_ID
+        assert self.id is not ir_types.BUILTIN_NOTHING_CLASS_ID
         yield self
         clas = self
         while len(clas.supertypes) > 0:
@@ -390,25 +389,25 @@ class TypeParameter(IrDefinition):
             (" ".join(self.flags), self.name, self.id, self.upperBound, self.lowerBound)
 
     def variance(self):
-        if COVARIANT in self.flags:
-            return COVARIANT
-        elif CONTRAVARIANT in self.flags:
-            return CONTRAVARIANT
+        if flags.COVARIANT in self.flags:
+            return flags.COVARIANT
+        elif flags.CONTRAVARIANT in self.flags:
+            return flags.CONTRAVARIANT
         else:
-            return INVARIANT
+            return ir_types.INVARIANT
 
     def hasCommonBound(self, other):
         """Returns true if there is some type parameter reachable by following upper bounds
         of this parameter which is also reachable by following lower bounds of `other`. This
         is used by Type.isSubtypeOf."""
         otherLowerBounds = [other]
-        while isinstance(otherLowerBounds[-1].lowerBound, VariableType):
+        while isinstance(otherLowerBounds[-1].lowerBound, ir_types.VariableType):
             otherLowerBounds.append(otherLowerBounds[-1].lowerBound.typeParameter)
         current = self
         while True:
             if any(bound is current for bound in otherLowerBounds):
                 return True
-            if not isinstance(current.upperBound, VariableType):
+            if not isinstance(current.upperBound, ir_types.VariableType):
                 return False
             current = current.upperBound.typeParameter
 
@@ -423,3 +422,6 @@ class Variable(IrDefinition):
 
 class Field(IrDefinition):
     propertyNames = ["name", "type", "flags"]
+
+__all__ = ["Package", "Global", "Function", "Class", "TypeParameter",
+           "Variable", "Field", "LOCAL", "PARAMETER"]

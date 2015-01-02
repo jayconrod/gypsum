@@ -105,7 +105,7 @@ def _initialize():
                                [],
                                map(buildType, functionData["parameterTypes"]),
                                [], [], frozenset())
-        function.id = getattr(ir,functionData["id"])
+        function.id = getattr(ir_types,functionData["id"])
         if "insts" in functionData:
             function.insts = functionData["insts"]
         return function
@@ -126,7 +126,7 @@ def _initialize():
 
     def defineClass(classData):
         clas = _builtinClassNameMap[classData["name"]]
-        clas.id = getattr(ir,classData["id"])
+        clas.id = getattr(ir_types,classData["id"])
         if not classData["isPrimitive"]:
             if classData["supertype"] is not None:
                 superclass = _builtinClassNameMap[classData["supertype"]]

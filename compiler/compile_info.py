@@ -8,6 +8,7 @@ import ast
 import builtins
 import data
 import ir
+import ir_types
 
 
 BUILTIN_SCOPE_ID = -1
@@ -286,13 +287,13 @@ def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes):
     containing the full list of type arguments and argument types (including the receiver).
     If the function is not compatible, returns None."""
     if receiverType is not None:
-        if isinstance(receiverType, ir.ObjectType):
+        if isinstance(receiverType, ir_types.ObjectType):
             receiverType = receiverType.substituteForBaseClass(irFunction.clas)
         implicitTypeArgs = list(receiverType.getTypeArguments())
         allArgTypes = [receiverType] + argTypes
     else:
         implicitTypeParams = getImplicitTypeParameters(irFunction)
-        implicitTypeArgs = [ir.VariableType(t) for t in implicitTypeParams]
+        implicitTypeArgs = [ir_types.VariableType(t) for t in implicitTypeParams]
         allArgTypes = argTypes
     allTypeArgs = implicitTypeArgs + typeArgs
 
