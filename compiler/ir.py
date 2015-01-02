@@ -213,7 +213,7 @@ class Class(IrDefinition):
 
     def superclasses(self):
         """Returns a generator of superclasses in depth-first order, including this class."""
-        assert self.id is not builtins.BUILTIN_NOTHING_CLASS_ID
+        assert self.id is not BUILTIN_NOTHING_CLASS_ID
         yield self
         clas = self
         while len(clas.supertypes) > 0:

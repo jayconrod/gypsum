@@ -9,6 +9,7 @@ import unittest
 from builtins import *
 from ir import *
 from ir_types import *
+from ir import * # Needed for Class()
 from location import *
 from utils import *
 
