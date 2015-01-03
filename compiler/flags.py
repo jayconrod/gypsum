@@ -45,4 +45,5 @@ def _initialize():
         _flagNames[flagName.lower()] = flagName
         code <<= 1
     _flagGroups.append(frozenset([PUBLIC, PROTECTED, PRIVATE]))
+    _flagGroups.append(frozenset([COVARIANT, CONTRAVARIANT]))
 _initialize()

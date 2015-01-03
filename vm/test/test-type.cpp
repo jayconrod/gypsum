@@ -268,6 +268,7 @@ TEST(SubtypeClassWithParametersSelf) {
   A->setSupertype(*rootType);
   auto ATypeParameters = TaggedArray<TypeParameter>::create(vm.heap(), 1);
   ATypeParameters->set(0, tag(*T));
+  A->setTypeParameters(*ATypeParameters);
 
   auto emptyTypeParameters = handle(reinterpret_cast<TaggedArray<TypeParameter>*>(
       vm.roots()->emptyTaggedArray()));
@@ -361,6 +362,76 @@ TEST(SubtypeSuperclassWithParameters) {
 
   auto BXType = Type::create(vm.heap(), B, vector<Local<Type>>{XType});
   ASSERT_TRUE(Type::isSubtypeOf(BXType, AType));
+}
+
+
+TEST(SubtypeClassWithCovariantParameter) {
+  // Source[A] <: Source[B] with class Source[+T] and A <: B
+  VM vm;
+  HandleScope handleScope(&vm);
+  AllowAllocationScope allowAllocation(vm.heap(), true);
+
+  auto rootType = handle(Type::rootClassType(vm.roots()));
+  auto nothingType = handle(Type::nothingType(vm.roots()));
+  auto T = TypeParameter::create(vm.heap(), COVARIANT_FLAG, rootType, nothingType);
+
+  auto B = Class::create(vm.heap());
+  auto emptyTypeParameters = handle(reinterpret_cast<TaggedArray<TypeParameter>*>(
+      vm.roots()->emptyTaggedArray()));
+  B->setTypeParameters(*emptyTypeParameters);
+  B->setSupertype(*rootType);
+  auto BType = Type::create(vm.heap(), B);
+
+  auto A = Class::create(vm.heap());
+  A->setTypeParameters(*emptyTypeParameters);
+  A->setSupertype(*BType);
+  auto AType = Type::create(vm.heap(), A);
+
+  auto Source = Class::create(vm.heap());
+  auto sourceTypeParameters = TaggedArray<TypeParameter>::create(vm.heap(), 1);
+  sourceTypeParameters->set(0, tag(*T));
+  Source->setTypeParameters(*sourceTypeParameters);
+  Source->setSupertype(*rootType);
+
+  auto SourceAType = Type::create(vm.heap(), Source, vector<Local<Type>>{AType});
+  auto SourceBType = Type::create(vm.heap(), Source, vector<Local<Type>>{BType});
+  ASSERT_TRUE(Type::isSubtypeOf(SourceAType, SourceBType));
+  ASSERT_FALSE(Type::isSubtypeOf(SourceBType, SourceAType));
+}
+
+
+TEST(SubtypeClassWithContravariantParameter) {
+  // Sink[A] <: Sink[B] with class Sink[-A] and A >: B
+  VM vm;
+  HandleScope handleScope(&vm);
+  AllowAllocationScope allowAllocation(vm.heap(), true);
+
+  auto rootType = handle(Type::rootClassType(vm.roots()));
+  auto nothingType = handle(Type::nothingType(vm.roots()));
+  auto T = TypeParameter::create(vm.heap(), CONTRAVARIANT_FLAG, rootType, nothingType);
+
+  auto A = Class::create(vm.heap());
+  auto emptyTypeParameters = handle(reinterpret_cast<TaggedArray<TypeParameter>*>(
+      vm.roots()->emptyTaggedArray()));
+  A->setTypeParameters(*emptyTypeParameters);
+  A->setSupertype(*rootType);
+  auto AType = Type::create(vm.heap(), A);
+
+  auto B = Class::create(vm.heap());
+  B->setTypeParameters(*emptyTypeParameters);
+  B->setSupertype(*AType);
+  auto BType = Type::create(vm.heap(), B);
+
+  auto Sink = Class::create(vm.heap());
+  auto sinkTypeParameters = TaggedArray<TypeParameter>::create(vm.heap(), 1);
+  sinkTypeParameters->set(0, tag(*T));
+  Sink->setTypeParameters(*sinkTypeParameters);
+  Sink->setSupertype(*rootType);
+
+  auto SinkAType = Type::create(vm.heap(), Sink, vector<Local<Type>>{AType});
+  auto SinkBType = Type::create(vm.heap(), Sink, vector<Local<Type>>{BType});
+  ASSERT_TRUE(Type::isSubtypeOf(SinkAType, SinkBType));
+  ASSERT_FALSE(Type::isSubtypeOf(SinkBType, SinkAType));
 }
 
 

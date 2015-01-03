@@ -11,6 +11,7 @@
 #include <vector>
 #include "bytecode.h"
 #include "class.h"
+#include "flags.h"
 #include "handle.h"
 #include "object.h"
 #include "tagged.h"
@@ -21,6 +22,12 @@ namespace internal {
 
 class Roots;
 class TypeParameter;
+
+typedef u32 Variance;
+const Variance INVARIANT = 0;
+const Variance COVARIANT = COVARIANT_FLAG;
+const Variance CONTRAVARIANT = CONTRAVARIANT_FLAG;
+const Variance BIVARIANT = COVARIANT | CONTRAVARIANT;
 
 class Type: public Object {
  public:
@@ -122,6 +129,7 @@ class Type: public Object {
   word_t alignment() const;
 
   static bool isSubtypeOf(Local<Type> left, Local<Type> right);
+  static bool isSubtypeOfWithVariance(Local<Type> left, Local<Type> right, Variance variance);
   bool equals(Type* other) const;
   static Local<Type> substitute(const Handle<Type>& type, const BindingList& bindings);
   static Local<Type> substituteForBaseClass(const Handle<Type>& type,

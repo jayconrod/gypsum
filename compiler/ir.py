@@ -8,6 +8,7 @@ import builtins
 from bytecode import *
 import compile_info
 from data import *
+from flags import *
 from ir_types import *
 
 import StringIO
@@ -355,6 +356,10 @@ class Class(IrDefinition):
 class TypeParameter(IrDefinition):
     propertyNames = ("name", "upperBound", "lowerBound", "flags")
 
+    def __init__(self, name, upperBound, lowerBound, flags, clas=None):
+        super(TypeParameter, self).__init__(name, upperBound, lowerBound, flags)
+        self.clas = clas
+
     def isEquivalent(self, other):
         return self.upperBound == other.upperBound and \
                self.lowerBound == other.lowerBound
@@ -372,6 +377,14 @@ class TypeParameter(IrDefinition):
     def __str__(self):
         return "%s type %s#%d <: %s >: %s" % \
             (" ".join(self.flags), self.name, self.id, self.upperBound, self.lowerBound)
+
+    def variance(self):
+        if COVARIANT in self.flags:
+            return COVARIANT
+        elif CONTRAVARIANT in self.flags:
+            return CONTRAVARIANT
+        else:
+            return INVARIANT
 
     def hasCommonBound(self, other):
         """Returns true if there is some type parameter reachable by following upper bounds
