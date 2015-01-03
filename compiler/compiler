@@ -18,6 +18,8 @@ from scope_analysis import *
 from type_analysis import *
 from compiler import compile
 from serialize import serialize
+from compile_info import CompileInfo
+from errors import CompileException
 
 sys.setrecursionlimit(10000)
 

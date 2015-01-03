@@ -20,7 +20,10 @@ from ir_types import *
 import ir_instructions
 from ir_instructions import *
 from bytecode import *
-
+from flags import LET
+from compile_info import CompileInfo
+from builtins import *
+from errors import *
 
 class TestCompiler(unittest.TestCase):
     def compileFromSource(self, source):

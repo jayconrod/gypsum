@@ -16,7 +16,8 @@ from lexer import *
 from parser import *
 from scope_analysis import *
 from type_analysis import *
-
+from flags import *
+from builtins import getRootClass, getStringClass, getNothingClass, getExceptionClass
 
 class TestTypeAnalysis(unittest.TestCase):
     def analyzeFromSource(self, source):

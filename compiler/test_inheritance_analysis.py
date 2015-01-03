@@ -9,10 +9,14 @@ import unittest
 from ast import *
 from compile_info import *
 from ir import *
+from ir_types import *
+from errors import *
 from layout import layout
 from lexer import *
 from parser import *
 from scope_analysis import *
+from builtins import getRootClass, getExceptionClass
+from bytecode import BUILTIN_ROOT_CLASS_ID
 
 class TestInheritanceAnalysis(unittest.TestCase):
     def parseFromSource(self, source):

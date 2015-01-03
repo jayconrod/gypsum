@@ -13,6 +13,8 @@ from ast import *
 from compile_info import *
 from scope_analysis import *
 from ir import *
+from errors import *
+from flags import *
 
 class TestDeclarations(unittest.TestCase):
     def parseFromSource(self, source):

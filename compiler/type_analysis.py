@@ -10,6 +10,9 @@ from scope_analysis import *
 from ir import *
 from ir_types import *
 from builtins import *
+from utils import COMPILE_FOR_VALUE, COMPILE_FOR_MATCH
+from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, CallInfo, getExplicitTypeParameters, getImplicitTypeParameters
+from flags import COVARIANT, CONTRAVARIANT
 
 
 def analyzeTypes(info):
