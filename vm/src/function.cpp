@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -416,6 +416,12 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           auto type = currentMap.pop();
           if (slot < 0)
             currentMap.typeMap[-slot - 1] = type;
+          break;
+        }
+
+        case LDG:
+        case STG: {
+          UNIMPLEMENTED();
           break;
         }
 

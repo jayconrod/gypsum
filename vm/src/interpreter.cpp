@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -320,6 +320,12 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         auto addr = localAddressFromIndex(index);
         auto value = pop<i64>();
         mem<i64>(addr) = value;
+        break;
+      }
+
+      case LDG:
+      case STG: {
+        UNIMPLEMENTED();
         break;
       }
 
