@@ -228,6 +228,8 @@ class ClassType(ObjectType):
                self.typeArguments == other.typeArguments
 
     def isSubtypeOfWithVariance(self, other, variance):
+        if self.clas is builtins.getNothingClass():
+            return True
         if not self.clas.isSubclassOf(other.clas):
             return False
         selfTypeArgs = self.substituteForBaseClass(other.clas).typeArguments
