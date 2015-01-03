@@ -1,0 +1,52 @@
+// This is a simple Gypsum program.
+// You can compile it with this command:
+//   ../compiler/compiler list.gy -o list.csp
+// You can run it with this command:
+//   ../vm/out/debug/driver list.csp
+// (If you haven't built the VM yet, run this first):
+//   (cd ../vm; make -j)
+
+// This program demonstrates how covariant type parameters can be used to build an immutable
+// linked list.
+
+// Gypsum supports covariant and contravariant type parameters. Below, we'll define a class
+// List[+T]. Because T is covariant, we can say that List[A] <: List[B] for some types A and B
+// if A <: B. If T were contravariant, we would define it with a - instead of a +, and the
+// subtyping rule would work backward. If T were invariant (not + or -), then
+// List[A] <: List[B] only if A = B.
+
+abstract class List[static +T]
+  abstract def head: T
+  abstract def tail: List[T]
+
+// Here, we define Nil, a special object which terminates all Lists. Nil is derived from
+// List[Nothing]. Nothing is a built-in class which acts as a sub-class of all classes. That
+// means Nil is a member of every List type.
+class Nil-class <: List[Nothing]
+  def head = throw Exception
+  def tail = throw Exception
+
+let Nil = Nil-class
+
+// Next, we define Cons, which is a single element in a List.
+class Cons[static +T](value: T, next: List[T]) <: List[T]
+  def head = value
+  def tail = next
+
+
+// Here is a function which takes a List[Object]. Since List's type parameter is covariant,
+// we can actually call it with any kind of list.
+def length(var list: List[Object]) =
+  var n = 0
+  while (list !== Nil)
+    n += 1
+    list = list.tail
+  n
+
+
+def main =
+  // Here we build a List and call length with it. Note that the type of list is Cons[String].
+  // This is a subtype of List[Object].
+  let list = Cons[String]("foo", Cons[String]("bar", Cons[String]("baz", Nil)))
+  let len = length(list)
+  print(len.to-string + "\n")

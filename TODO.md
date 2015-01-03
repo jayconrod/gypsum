@@ -8,7 +8,6 @@
 - annotations
 - require "get", "set" for implicit calls
 - define getters, setters for fields automatically
-- global variables
 - dynamic type parameterization
 - template type parameterization
 - arrays
