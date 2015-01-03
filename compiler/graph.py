@@ -160,3 +160,5 @@ class Graph(object):
     def isCyclic(self):
         sccGraph = self.stronglyConnectedComponents()
         return len(sccGraph.vertices()) < len(self.vertices())
+
+__all__ = ["Graph"]
