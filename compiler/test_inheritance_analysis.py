@@ -9,7 +9,7 @@ import unittest
 from ast import *
 from compile_info import *
 from ir import *
-from layout import *
+from layout import layout
 from lexer import *
 from parser import *
 from scope_analysis import *

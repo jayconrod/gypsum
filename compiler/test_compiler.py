@@ -8,7 +8,7 @@ import unittest
 import sys
 
 from lexer import *
-from layout import *
+from layout import layout
 from parser import *
 from ast import *
 from compile_info import *

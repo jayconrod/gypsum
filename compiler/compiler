@@ -12,7 +12,7 @@ import os.path
 import argparse
 
 from lexer import *
-from layout import *
+from layout import layout
 from parser import *
 from scope_analysis import *
 from type_analysis import *

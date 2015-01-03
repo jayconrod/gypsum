@@ -9,7 +9,7 @@ import unittest
 import ast
 from errors import *
 from parser import *
-from layout import *
+from layout import layout
 from lexer import *
 from combinators import *
 
