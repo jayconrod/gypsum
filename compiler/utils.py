@@ -150,3 +150,8 @@ COMPILE_FOR_VALUE = "compile-for-value"
 COMPILE_FOR_EFFECT = "compile-for-effect"
 COMPILE_FOR_MATCH = "compile-for-match"
 COMPILE_FOR_UNINITIALIZED = "compile-for-uninitialized"
+
+
+__all__ = ["encodeString", "tryDecodeString", "Counter", "hashList",
+           "COMPILE_FOR_VALUE", "COMPILE_FOR_EFFECT", "COMPILE_FOR_MATCH",
+           "COMPILE_FOR_UNINITIALIZED"]
