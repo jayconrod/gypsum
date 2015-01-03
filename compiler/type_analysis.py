@@ -4,12 +4,11 @@
 # the GPL license that can be found in the LICENSE.txt file.
 
 
-from ast import *
-from errors import *
-from scope_analysis import *
-from ir import *
-from ir_types import *
-from builtins import *
+import ast
+from errors import TypeException
+import ir
+import ir_types as ir_t
+from builtins import getExceptionClass, getNothingClass
 from utils import COMPILE_FOR_VALUE, COMPILE_FOR_MATCH
 from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, CallInfo, getExplicitTypeParameters, getImplicitTypeParameters
 from flags import COVARIANT, CONTRAVARIANT
@@ -45,7 +44,7 @@ def analyzeTypes(info):
                                     func.name)
 
 
-class TypeVisitorCommon(AstNodeVisitor):
+class TypeVisitorCommon(ast.AstNodeVisitor):
     """Provides common functionality for SubtypeVisitor and TypeVisitor, namely the visitor
     functions for the various AstType subclasses. Also tracks the current scope. Both visitors
     may jump around the AST randomly, and this is needed to keep track of which scope we were
@@ -67,28 +66,28 @@ class TypeVisitorCommon(AstNodeVisitor):
             self.scopeStack.pop()
 
     def visitAstUnitType(self, node):
-        return UnitType
+        return ir_t.UnitType
 
     def visitAstBooleanType(self, node):
-        return BooleanType
+        return ir_t.BooleanType
 
     def visitAstI8Type(self, node):
-        return I8Type
+        return ir_t.I8Type
 
     def visitAstI16Type(self, node):
-        return I16Type
+        return ir_t.I16Type
 
     def visitAstI32Type(self, node):
-        return I32Type
+        return ir_t.I32Type
 
     def visitAstI64Type(self, node):
-        return I64Type
+        return ir_t.I64Type
 
     def visitAstF32Type(self, node):
-        return F32Type
+        return ir_t.F32Type
 
     def visitAstF64Type(self, node):
-        return F64Type
+        return ir_t.F64Type
 
     def visitAstClassType(self, node):
         nameInfo = self.scope().lookup(node.name, node.location,
@@ -102,7 +101,7 @@ class TypeVisitorCommon(AstNodeVisitor):
 
         flags = frozenset(map(astTypeFlagToIrTypeFlag, node.flags))
 
-        if isinstance(irDefn, Class):
+        if isinstance(irDefn, ir.Class):
             explicitTypeParams = getExplicitTypeParameters(irDefn)
             if len(node.typeArguments) != len(explicitTypeParams):
                 raise TypeException(node.location,
@@ -114,17 +113,17 @@ class TypeVisitorCommon(AstNodeVisitor):
                         ta.isSubtypeOf(tp.upperBound)):
                     raise TypeException(node.location,
                                         "%s: type argument is not in bounds" % irDefn.name)
-            allTypeArgs = tuple(map(VariableType, getImplicitTypeParameters(irDefn)) + typeArgs)
-            return ClassType(irDefn, allTypeArgs, flags)
+            allTypeArgs = tuple(map(ir_t.VariableType, getImplicitTypeParameters(irDefn)) + typeArgs)
+            return ir_t.ClassType(irDefn, allTypeArgs, flags)
         else:
-            assert isinstance(irDefn, TypeParameter)
+            assert isinstance(irDefn, ir.TypeParameter)
             if flags != frozenset():
                 raise TypeException(node.location, "invalid flags for variable type")
             if len(node.typeArguments) > 0:
                 raise TypeException(node.location,
                                     "%s: type parameter cannot accept type arguments" %
                                     irDefn.name)
-            return VariableType(irDefn)
+            return ir_t.VariableType(irDefn)
 
     def handleAstClassTypeArgs(self, irClass, nodes):
         return map(self.visit, nodes)
@@ -155,7 +154,7 @@ class SubtypeVisitor(TypeVisitorCommon):
     def visitAstFunctionDefinition(self, node):
         for param in node.typeParameters:
             self.visit(param)
-        if isinstance(node.body, AstBlockExpression):
+        if isinstance(node.body, ast.AstBlockExpression):
             self.visit(node.body)
 
     def visitAstClassDefinition(self, node):
@@ -166,7 +165,7 @@ class SubtypeVisitor(TypeVisitorCommon):
         for param in node.typeParameters:
             self.visit(param)
         if node.supertype is None:
-            irClass.supertypes = [getRootClassType()]
+            irClass.supertypes = [ir_t.getRootClassType()]
         else:
             supertype = self.visit(node.supertype)
             if supertype.isNullable():
@@ -191,8 +190,8 @@ class SubtypeVisitor(TypeVisitorCommon):
                                         "%s: bound may not be nullable" % node.name)
                 return ty
 
-        irParam.upperBound = visitBound(node.upperBound, getRootClassType())
-        irParam.lowerBound = visitBound(node.lowerBound, getNothingClassType())
+        irParam.upperBound = visitBound(node.upperBound, ir_t.getRootClassType())
+        irParam.lowerBound = visitBound(node.lowerBound, ir_t.getNothingClassType())
         if not irParam.lowerBound.isSubtypeOf(irParam.upperBound):
             raise TypeException(node.location,
                                 "%s: lower bound is not subtype of upper bound" % node.name)
@@ -240,25 +239,25 @@ class TypeVisitor(TypeVisitorCommon):
         # BIVARIANT: any type parameters may be used
         # Type parameters from outer scopes are not affected by this restriction; only type
         # parameters defined in `varianceClass` are restricted.
-        self.variance = BIVARIANT
+        self.variance = ir_t.BIVARIANT
 
     def preVisit(self, node, *unused):
         super(TypeVisitor, self).preVisit(node, *unused)
         if not self.info.hasDefnInfo(node):
             return
         irDefn = self.info.getDefnInfo(node).irDefn
-        if isinstance(irDefn, Class) or isinstance(irDefn, Function):
+        if isinstance(irDefn, ir.Class) or isinstance(irDefn, ir.Function):
             irDefn = self.info.getDefnInfo(node).irDefn
-            if isinstance(irDefn, Function):
+            if isinstance(irDefn, ir.Function):
                 functionState = FunctionState(irDefn)
                 enclosingClass = self.scope().findEnclosingClass()
-                receiverType = ClassType.forReceiver(enclosingClass) \
+                receiverType = ir_t.ClassType.forReceiver(enclosingClass) \
                                if enclosingClass is not None \
                                else None
             else:
-                assert isinstance(irDefn, Class)
+                assert isinstance(irDefn, ir.Class)
                 functionState = None
-                receiverType = ClassType.forReceiver(irDefn)
+                receiverType = ir_t.ClassType.forReceiver(irDefn)
             self.functionStack.append(functionState)
             self.receiverTypeStack.append(receiverType)
 
@@ -267,7 +266,7 @@ class TypeVisitor(TypeVisitorCommon):
         if not self.info.hasDefnInfo(node):
             return
         irDefn = self.info.getDefnInfo(node).irDefn
-        if isinstance(irDefn, Class) or isinstance(irDefn, Function):
+        if isinstance(irDefn, ir.Class) or isinstance(irDefn, ir.Function):
             self.functionStack.pop()
             self.receiverTypeStack.pop()
 
@@ -286,7 +285,7 @@ class TypeVisitor(TypeVisitorCommon):
 
     def visitAstClassDefinition(self, node):
         irClass = self.info.getDefnInfo(node).irDefn
-        thisType = ClassType.forReceiver(irClass)
+        thisType = ir_t.ClassType.forReceiver(irClass)
 
         for typeParam in node.typeParameters:
             self.visit(typeParam)
@@ -299,7 +298,7 @@ class TypeVisitor(TypeVisitorCommon):
             irDefaultCtor = irClass.constructors[0]
             irDefaultCtor.parameterTypes = [thisType]
             irDefaultCtor.variables[0].type = thisType
-            irDefaultCtor.returnType = UnitType
+            irDefaultCtor.returnType = ir_t.UnitType
 
         hasPrimaryOrDefaultCtor = node.constructor is not None or \
                                   not node.hasConstructors()
@@ -313,11 +312,11 @@ class TypeVisitor(TypeVisitorCommon):
         irInitializer = irClass.initializer
         irInitializer.parameterTypes = [thisType]
         irInitializer.variables[0].type = thisType
-        irInitializer.returnType = UnitType
+        irInitializer.returnType = ir_t.UnitType
 
         for member in node.members:
-            if isinstance(member, AstVariableDefinition):
-                variance = INVARIANT if member.keyword == "var" else COVARIANT
+            if isinstance(member, ast.AstVariableDefinition):
+                variance = ir_t.INVARIANT if member.keyword == "var" else COVARIANT
                 with VarianceScope(self, variance, irClass):
                     self.visit(member)
             else:
@@ -332,17 +331,17 @@ class TypeVisitor(TypeVisitorCommon):
         if node.upperBound is not None:
             irTypeParam.upperBound = self.visit(node.upperBound)
         else:
-            irTypeParam.upperBound = getRootClassType()
+            irTypeParam.upperBound = ir_t.getRootClassType()
         if node.lowerBound is not None:
             irTypeParam.lowerBound = self.visit(node.lowerBound)
         else:
-            irTypeParam.lowerBound = getNothingClassType()
+            irTypeParam.lowerBound = ir_t.getNothingClassType()
 
     def visitAstParameter(self, node):
         if self.variance is COVARIANT and node.var == "var":
             # A `var` parameter in a primary constructor. Since this defines a mutable field,
             # we have to go invariant.
-            variance = INVARIANT
+            variance = ir_t.INVARIANT
         else:
             variance = self.variance
         with VarianceScope(self, variance):
@@ -395,17 +394,17 @@ class TypeVisitor(TypeVisitorCommon):
         defnInfo = nameInfo.getDefnInfo()
         scope.use(defnInfo, node.id, USE_AS_VALUE, node.location)
         thisType = defnInfo.irDefn.type
-        assert isinstance(thisType, ClassType) and \
+        assert isinstance(thisType, ir_t.ClassType) and \
                len(thisType.clas.supertypes) > 0
         superType = thisType.clas.supertypes[0]
         return superType
 
     def visitAstBlockExpression(self, node):
-        lastTy = UnitType
+        lastTy = ir_t.UnitType
         for stmt in node.statements:
             stmtTy = self.visit(stmt)
-            assert stmtTy is not None or isinstance(stmt, AstDefinition)
-            lastTy = stmtTy if stmtTy else UnitType
+            assert stmtTy is not None or isinstance(stmt, ast.AstDefinition)
+            lastTy = stmtTy if stmtTy else ir_t.UnitType
         return lastTy
 
     def visitAstAssignExpression(self, node):
@@ -424,19 +423,19 @@ class TypeVisitor(TypeVisitorCommon):
     def visitAstCallExpression(self, node):
         typeArgs = map(self.visit, node.typeArguments)
         argTypes = map(self.visit, node.arguments)
-        if isinstance(node.callee, AstVariableExpression):
+        if isinstance(node.callee, ast.AstVariableExpression):
             ty = self.handlePossibleCall(self.scope(), node.callee.name, node.id,
                                          None, typeArgs, argTypes, False, node.location)
-        elif isinstance(node.callee, AstPropertyExpression):
+        elif isinstance(node.callee, ast.AstPropertyExpression):
             receiverType = self.visit(node.callee.receiver)
             ty = self.handleMethodCall(node.callee.propertyName, node.id,
                                        receiverType, typeArgs, argTypes, False, node.location)
-        elif isinstance(node.callee, AstThisExpression) or \
-             isinstance(node.callee, AstSuperExpression):
+        elif isinstance(node.callee, ast.AstThisExpression) or \
+             isinstance(node.callee, ast.AstSuperExpression):
             receiverType = self.visit(node.callee)
             self.handleMethodCall("$constructor", node.id,
                                   receiverType, typeArgs, argTypes, False, node.location)
-            ty = UnitType
+            ty = ir_t.UnitType
         else:
             # TODO: callable expression
             raise NotImplementedError
@@ -457,7 +456,7 @@ class TypeVisitor(TypeVisitorCommon):
             if not self.isConditionType(leftTy) or not self.isConditionType(rightTy):
                 raise TypeException(node.location,
                                     "expected condition types for logic operands")
-            ty = BooleanType
+            ty = ir_t.BooleanType
         else:
             ty = self.handleMethodCall(node.operator, node.id, leftTy,
                                        [], [rightTy], True, node.location)
@@ -472,7 +471,7 @@ class TypeVisitor(TypeVisitorCommon):
             falseTy = self.visit(node.falseExpr)
             ifTy = trueTy.combine(falseTy, node.location)
         else:
-            ifTy = UnitType
+            ifTy = ir_t.UnitType
         return ifTy
 
     def visitAstWhileExpression(self, node):
@@ -480,19 +479,19 @@ class TypeVisitor(TypeVisitorCommon):
         if not self.isConditionType(condTy):
             raise TypeException(node.condition.location, "condition must be boolean")
         self.visit(node.body)
-        return UnitType
+        return ir_t.UnitType
 
     def visitAstThrowExpression(self, node):
         exnTy = self.visit(node.exception)
-        if not exnTy.isSubtypeOf(ClassType(getExceptionClass())):
+        if not exnTy.isSubtypeOf(ir_t.ClassType(getExceptionClass())):
             raise TypeException(node.location, "throw expression must produce an Exception")
-        return NoType
+        return ir_t.NoType
 
     def visitAstTryCatchExpression(self, node):
         tryTy = self.visit(node.expression)
-        exnTy = ClassType.forReceiver(getExceptionClass())
+        exnTy = ir_t.ClassType.forReceiver(getExceptionClass())
         if node.catchHandler is None:
-            catchTy = NoType
+            catchTy = ir_t.NoType
         else:
             catchTy = self.visit(node.catchHandler, exnTy)
         if node.finallyHandler is not None:
@@ -501,7 +500,7 @@ class TypeVisitor(TypeVisitorCommon):
         return ty
 
     def visitAstPartialFunctionExpression(self, node, valueTy):
-        ty = NoType
+        ty = ir_t.NoType
         for case in node.cases:
             caseTy = self.visit(case, valueTy)
             ty = ty.combine(caseTy, node.location)
@@ -521,14 +520,14 @@ class TypeVisitor(TypeVisitorCommon):
            (self.functionStack[-1].irDefn.isConstructor() and node.expression is not None):
             raise TypeException(node.location, "return not valid in this position")
         if node.expression is None:
-            retTy = UnitType
+            retTy = ir_t.UnitType
         else:
             retTy = self.visit(node.expression)
         self.checkAndHandleReturnType(retTy, node.location)
-        return NoType
+        return ir_t.NoType
 
     def visitAstIntegerLiteral(self, node):
-        typeMap = { 8: I8Type, 16: I16Type, 32: I32Type, 64: I64Type }
+        typeMap = { 8: ir_t.I8Type, 16: ir_t.I16Type, 32: ir_t.I32Type, 64: ir_t.I64Type }
         if node.width not in typeMap:
             raise TypeException(node.location, "invalid integer literal width: %d" % node.width)
         minValue = -2 ** (node.width - 1)
@@ -540,31 +539,31 @@ class TypeVisitor(TypeVisitorCommon):
         return typeMap[node.width]
 
     def visitAstFloatLiteral(self, node):
-        typeMap = { 32: F32Type, 64: F64Type }
+        typeMap = { 32: ir_t.F32Type, 64: ir_t.F64Type }
         if node.width not in typeMap:
             raise TypeException(node.location, "invalid float literal width: %d" % node.width)
         return typeMap[node.width]
 
     def visitAstStringLiteral(self, node):
-        return getStringType()
+        return ir_t.getStringType()
 
     def visitAstBooleanLiteral(self, node):
-        return BooleanType
+        return ir_t.BooleanType
 
     def visitAstNullLiteral(self, node):
-        return getNullType()
+        return ir_t.getNullType()
 
     def visitAstClassType(self, node):
         ty = super(TypeVisitor, self).visitAstClassType(node)
-        if isinstance(ty, VariableType):
+        if isinstance(ty, ir_t.VariableType):
             param = ty.typeParameter
             if self.variance is not None and param.clas is self.varianceClass:
                 if CONTRAVARIANT in param.flags and \
-                   self.variance not in [CONTRAVARIANT, BIVARIANT]:
+                   self.variance not in [CONTRAVARIANT, ir_t.BIVARIANT]:
                     raise TypeException(node.location,
                                         "contravariant type parameter used in invalid position")
                 if COVARIANT in param.flags and \
-                   self.variance not in [COVARIANT, BIVARIANT]:
+                   self.variance not in [COVARIANT, ir_t.BIVARIANT]:
                     raise TypeException(node.location,
                                         "covariant type parameter used in invalid position")
         return ty
@@ -593,7 +592,7 @@ class TypeVisitor(TypeVisitorCommon):
             # get to its AST node, since we need to know its return type.
 
             # Process parameter types first, including "this".
-            if isinstance(node, AstPrimaryConstructorDefinition):
+            if isinstance(node, ast.AstPrimaryConstructorDefinition):
                 vscope = VarianceScope(self, COVARIANT, irFunction.clas)
             elif irFunction.isMethod() and not irFunction.isConstructor():
                 vscope = VarianceScope(self, CONTRAVARIANT, irFunction.clas)
@@ -618,7 +617,7 @@ class TypeVisitor(TypeVisitorCommon):
             # Process body.
             if astBody is None:
                 if irFunction.isConstructor():
-                    bodyType = UnitType
+                    bodyType = ir_t.UnitType
                 elif astReturnType is not None:
                     bodyType = irFunction.returnType
                 else:
@@ -626,7 +625,7 @@ class TypeVisitor(TypeVisitorCommon):
                                         "return type must be specified for abstract function")
             else:
                 bodyType = self.visit(astBody)
-                if bodyType is not NoType:
+                if bodyType is not ir_t.NoType:
                     if irFunction.isMethod() and not irFunction.isConstructor():
                         vscope = VarianceScope(self, COVARIANT, irFunction.clas)
                     else:
@@ -637,7 +636,7 @@ class TypeVisitor(TypeVisitorCommon):
                     bodyType = self.functionStack[-1].getReturnType()
             if irFunction.returnType is None:
                 if irFunction.isConstructor():
-                    irFunction.returnType = UnitType
+                    irFunction.returnType = ir_t.UnitType
                 else:
                     irFunction.returnType = bodyType
             else:
@@ -646,19 +645,19 @@ class TypeVisitor(TypeVisitorCommon):
                                         "body type does not match declared return type")
 
     def isConditionType(self, ty):
-        return ty == BooleanType or ty == NoType
+        return ty == ir_t.BooleanType or ty == ir_t.NoType
 
     def ensureParamTypeInfoForDefn(self, irDefn):
-        if isinstance(irDefn, Class):
+        if isinstance(irDefn, ir.Class):
             for ctor in irDefn.constructors:
                 self.ensureParamTypeInfoForDefn(ctor)
-        elif isinstance(irDefn, Function):
+        elif isinstance(irDefn, ir.Function):
             if irDefn.parameterTypes is not None:
                 return
             astDefn = irDefn.astDefn
             self.preVisit(astDefn)
 
-            if isinstance(astDefn, AstFunctionDefinition):
+            if isinstance(astDefn, ast.AstFunctionDefinition):
                 for typeParam in astDefn.typeParameters:
                     self.visit(typeParam)
 
@@ -673,18 +672,18 @@ class TypeVisitor(TypeVisitorCommon):
             self.postVisit(astDefn)
 
     def ensureTypeInfoForDefn(self, irDefn):
-        if isinstance(irDefn, Function):
+        if isinstance(irDefn, ir.Function):
             if irDefn.returnType is None:
                 self.visit(irDefn.astDefn)
-        elif isinstance(irDefn, Field) or \
-             isinstance(irDefn, Variable) or \
-             isinstance(irDefn, Global):
+        elif isinstance(irDefn, ir.Field) or \
+             isinstance(irDefn, ir.Variable) or \
+             isinstance(irDefn, ir.Global):
             if irDefn.type is None:
                 self.visit(irDefn.astVarDefn)
-        elif isinstance(irDefn, Class):
+        elif isinstance(irDefn, ir.Class):
             for ctor in irDefn.constructors:
                 self.ensureParamTypeInfoForDefn(ctor)
-        elif isinstance(irDefn, TypeParameter):
+        elif isinstance(irDefn, ir.TypeParameter):
             pass   # already done in SubtypeVisitor
         else:
             raise NotImplementedError
@@ -694,7 +693,7 @@ class TypeVisitor(TypeVisitorCommon):
 
     def handleMethodCall(self, name, useAstId, receiverType,
                          typeArgs, argTypes, mayAssign, loc):
-        irClass = getClassFromType(receiverType)
+        irClass = ir_t.getClassFromType(receiverType)
         scope = self.info.getScope(irClass)
         return self.handlePossibleCall(scope, name, useAstId,
                                        receiverType, typeArgs, argTypes,
@@ -726,8 +725,8 @@ class TypeVisitor(TypeVisitorCommon):
             if not all(tp.contains(ta) for tp, ta in zip(explicitTypeParams, typeArgs)):
                 raise TypeException(loc, "type error in type arguments for constructor")
             implicitTypeParams = getImplicitTypeParameters(irClass)
-            classTypeArgs = tuple([VariableType(tp) for tp in implicitTypeParams] + typeArgs)
-            receiverType = ClassType(irClass, classTypeArgs, None)
+            classTypeArgs = tuple([ir_t.VariableType(tp) for tp in implicitTypeParams] + typeArgs)
+            receiverType = ir_t.ClassType(irClass, classTypeArgs, None)
             typeArgs = []
             nameInfo = nameInfo.getInfoForConstructors(self.info)
             receiverIsExplicit = True
@@ -743,23 +742,23 @@ class TypeVisitor(TypeVisitorCommon):
         self.scope().use(defnInfo, useAstId, useKind, loc)
         irDefn = defnInfo.irDefn
         self.ensureTypeInfoForDefn(irDefn)
-        if isinstance(irDefn, Function):
+        if isinstance(irDefn, ir.Function):
             if irDefn.isConstructor():
                 return receiverType
             else:
                 assert len(allTypeArgs) == len(irDefn.typeParameters)
                 ty = irDefn.returnType.substitute(irDefn.typeParameters, allTypeArgs)
                 return ty
-        elif isinstance(irDefn, Field):
+        elif isinstance(irDefn, ir.Field):
             ty = irDefn.type
-            if receiverIsExplicit and isinstance(receiverType, ClassType):
+            if receiverIsExplicit and isinstance(receiverType, ir_t.ClassType):
                 fieldClass = self.findBaseClassForField(receiverType.clas, irDefn)
                 ty = ty.substituteForInheritance(receiverType.clas, fieldClass)
                 ty = ty.substitute(receiverType.clas.typeParameters, receiverType.typeArguments)
             return ty
         else:
-            assert isinstance(irDefn, Variable) or \
-                   isinstance(irDefn, Global)
+            assert isinstance(irDefn, ir.Variable) or \
+                   isinstance(irDefn, ir.Global)
             return irDefn.type
 
     def findBaseClassForField(self, receiverClass, field):
@@ -775,16 +774,16 @@ class TypeVisitor(TypeVisitorCommon):
         return self.functionStack[-1].handleReturn(ty)
 
     def checkTypeVariance(self, ty, loc):
-        if isinstance(ty, VariableType) and \
+        if isinstance(ty, ir_t.VariableType) and \
            ty.typeParameter.clas is self.varianceClass:
             variance = ty.typeParameter.variance()
             if variance is COVARIANT and \
-               self.variance not in [COVARIANT, BIVARIANT]:
+               self.variance not in [COVARIANT, ir_t.BIVARIANT]:
                 raise TypeException(loc, "covariant type prameter used in invalid position")
             elif variance is CONTRAVARIANT and \
-                 self.variance not in [CONTRAVARIANT, BIVARIANT]:
+                 self.variance not in [CONTRAVARIANT, ir_t.BIVARIANT]:
                 raise TypeException(loc, "contravariant type parameter used in invalid position")
-        elif isinstance(ty, ClassType):
+        elif isinstance(ty, ir_t.ClassType):
             typeParams = getExplicitTypeParameters(ty.clas)
             typeArgs = ty.typeArguments[-len(typeParams):]
             for tp, ta in zip(typeParams, typeArgs):
@@ -809,7 +808,7 @@ class TypeVisitor(TypeVisitorCommon):
 
 def astTypeFlagToIrTypeFlag(flag):
     if flag == "?":
-        return NULLABLE_TYPE_FLAG
+        return ir_t.NULLABLE_TYPE_FLAG
     else:
         raise NotImplementedError
 
@@ -840,7 +839,7 @@ class FunctionState(object):
         elif self.bodyReturnType:
             return self.bodyReturnType
         else:
-            return ClassType.forReceiver(getNothingClass())
+            return ir_t.ClassType.forReceiver(getNothingClass())
 
 
 class VarianceScope(object):
@@ -854,12 +853,12 @@ class VarianceScope(object):
 
     @staticmethod
     def forArgument(visitor, variance):
-        newVariance = changeVariance(visitor.variance, variance)
+        newVariance = ir_t.changeVariance(visitor.variance, variance)
         return VarianceScope(visitor, newVariance, None)
 
     @staticmethod
     def clear(visitor):
-        return VarianceScope(visitor, BIVARIANT, None)
+        return VarianceScope(visitor, ir_t.BIVARIANT, None)
 
     def __enter__(self):
         self.visitor.varianceClass = self.varianceClass
@@ -875,5 +874,7 @@ class VarianceScope(object):
         elif flag is CONTRAVARIANT:
             return -1
         else:
-            assert flag is INVARIANT
+            assert flag is ir_t.INVARIANT
             return 0
+
+__all__ = ["analyzeTypes"]
