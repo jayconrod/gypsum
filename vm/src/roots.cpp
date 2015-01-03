@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -10,6 +10,7 @@
 #include "block.h"
 #include "field.h"
 #include "function.h"
+#include "global.h"
 #include "handle.h"
 #include "package.h"
 #include "stack.h"
@@ -47,6 +48,11 @@ void Roots::initialize(Heap* heap) {
   stackMeta->hasWordSizeLength_ = true;
   stackMeta->lengthOffset_ = offsetof(Stack, stackSize_);
   basicRoots_[STACK_META_ROOT_INDEX] = stackMeta;
+
+  auto globalMeta = new(heap, 0, sizeof(Global), 0) Meta(GLOBAL_BLOCK_TYPE);
+  globalMeta->hasPointers_ = true;
+  globalMeta->hasCustomPointers_ = true;
+  basicRoots_[GLOBAL_META_ROOT_INDEX] = globalMeta;
 
   auto functionMeta = new(heap, 0, sizeof(Function), 1) Meta(FUNCTION_BLOCK_TYPE);
   functionMeta->hasPointers_ = true;
@@ -146,6 +152,7 @@ Meta* Roots::getMetaForBlockType(int type) {
     case FREE_BLOCK_TYPE: return freeMeta();
     case PACKAGE_BLOCK_TYPE: return packageMeta();
     case STACK_BLOCK_TYPE: return stackMeta();
+    case GLOBAL_BLOCK_TYPE: return globalMeta();
     case FUNCTION_BLOCK_TYPE: return functionMeta();
     case CLASS_BLOCK_TYPE: return classMeta();
     case FIELD_BLOCK_TYPE: return fieldMeta();

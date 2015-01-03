@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014-2015, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -18,6 +18,10 @@ from utils import *
 def compile(info):
     for clas in info.package.classes:
         assignFieldIndices(clas, info)
+    init = Function("$init", UnitType, [], [], [], None, frozenset())
+    init.compileHint = PACKAGE_INITIALIZER_HINT
+    info.package.addFunction(init)
+    info.package.initFunction = init.id
     for function in info.package.functions:
         compiler = CompileVisitor(function, info)
         compiler.compile()
@@ -152,6 +156,14 @@ class CompileVisitor(AstNodeVisitor):
                 self.storeField(fields[i])
             self.unit()
             self.ret()
+        elif self.compileHint is PACKAGE_INITIALIZER_HINT:
+            # This function initializes all the global variables.
+            for defn in self.info.ast.definitions:
+                if isinstance(defn, AstVariableDefinition):
+                    self.visit(defn, COMPILE_FOR_EFFECT)
+            self.unit()
+            self.ret()
+
         self.function.blocks = self.blocks
 
     def visitAstVariableDefinition(self, defn, mode):
@@ -181,6 +193,11 @@ class CompileVisitor(AstNodeVisitor):
 
     def visitAstVariablePattern(self, pat, mode, successBlock=None, failBlock=None):
         defnInfo = self.info.getDefnInfo(pat)
+        if mode is COMPILE_FOR_UNINITIALIZED and \
+           isinstance(defnInfo.irDefn, Global):
+            # Globals are automatically uninitialized.
+            return
+
         if mode is COMPILE_FOR_MATCH:
             patTy = self.info.getType(pat)
             typeClass = getTypeClass()
@@ -235,10 +252,9 @@ class CompileVisitor(AstNodeVisitor):
     def visitAstVariableExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)
         irDefn = useInfo.defnInfo.irDefn
-        if isinstance(irDefn, Global):
-            # Global variable
-            raise NotImplementedError
-        elif isinstance(irDefn, Variable) or isinstance(irDefn, Field):
+        if isinstance(irDefn, Variable) or \
+           isinstance(irDefn, Field) or \
+           isinstance(irDefn, Global):
             # Parameter, local, or context variable.
             self.loadVariable(useInfo.defnInfo)
             self.dropForEffect(mode)
@@ -531,7 +547,9 @@ class CompileVisitor(AstNodeVisitor):
         if LET in irDefn.flags:
             raise SemanticException(expr.location, "left side of assignment is constant")
         if isinstance(expr, AstVariableExpression) and \
-           (isinstance(irDefn, Variable) or isinstance(irDefn, Field)):
+           (isinstance(irDefn, Variable) or \
+            isinstance(irDefn, Field) or \
+            isinstance(irDefn, Global)):
             return VarLValue(expr, self, useInfo)
         elif isinstance(expr, AstPropertyExpression) and isinstance(irDefn, Field):
             self.visit(expr.receiver, COMPILE_FOR_VALUE)
@@ -623,10 +641,12 @@ class CompileVisitor(AstNodeVisitor):
             defnInfo = varOrDefnInfo
             if isinstance(defnInfo.irDefn, Variable):
                 self.loadVariable(defnInfo.irDefn)
-            else:
-                assert isinstance(defnInfo.irDefn, Field)
+            elif isinstance(defnInfo.irDefn, Field):
                 self.loadContext(defnInfo.scopeId)
                 self.loadField(defnInfo.irDefn)
+            else:
+                assert isinstance(defnInfo.irDefn, Global)
+                self.ldg(defnInfo.irDefn.id)
 
     def storeVariable(self, varOrDefnInfo):
         if isinstance(varOrDefnInfo, Variable):
@@ -637,10 +657,12 @@ class CompileVisitor(AstNodeVisitor):
             defnInfo = varOrDefnInfo
             if isinstance(defnInfo.irDefn, Variable):
                 self.storeVariable(defnInfo.irDefn)
-            else:
-                assert isinstance(defnInfo.irDefn, Field)
+            elif isinstance(defnInfo.irDefn, Field):
                 self.loadContext(defnInfo.scopeId)
                 self.storeField(defnInfo.irDefn)
+            else:
+                assert isinstance(defnInfo.irDefn, Global)
+                self.stg(defnInfo.irDefn.id)
 
     def loadContext(self, scopeId):
         closureInfo = self.info.getClosureInfo(self.getScopeAstDefn())

@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -18,6 +18,7 @@ namespace internal {
 template <class T>
 class BlockArray;
 class Function;
+class Global;
 class Heap;
 class String;
 class TypeParameter;
@@ -39,6 +40,9 @@ class Package: public Block {
   BlockArray<String>* strings() const { return strings_.get(); }
   void setStrings(BlockArray<String>* newStrings) { strings_.set(this, newStrings); }
   String* getString(length_t index);
+  BlockArray<Global>* globals() const { return globals_.get(); }
+  void setGlobals(BlockArray<Global>* newGlobals) { globals_.set(this, newGlobals); }
+  Global* getGlobal(length_t index);
   BlockArray<Function>* functions() const { return functions_.get(); }
   void setFunctions(BlockArray<Function>* newFunctions) { functions_.set(this, newFunctions); }
   Function* getFunction(length_t index);
@@ -52,16 +56,20 @@ class Package: public Block {
   TypeParameter* getTypeParameter(length_t index);
   DEFINE_INL_ACCESSORS2(length_t, entryFunctionIndex, setEntryFunctionIndex)
   Function* entryFunction();
+  DEFINE_INL_ACCESSORS2(length_t, initFunctionIndex, setInitFunctionIndex)
+  Function* initFunction();
 
  private:
   DECLARE_POINTER_MAP()
 
   u64 flags_;
   Ptr<BlockArray<String>> strings_;
+  Ptr<BlockArray<Global>> globals_;
   Ptr<BlockArray<Function>> functions_;
   Ptr<BlockArray<Class>> classes_;
   Ptr<BlockArray<TypeParameter>> typeParameters_;
   length_t entryFunctionIndex_;
+  length_t initFunctionIndex_;
   // Update PACKAGE_POINTER_LIST if pointers change.
 };
 

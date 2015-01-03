@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014-2015, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -32,14 +32,14 @@ class TestDeclarations(unittest.TestCase):
         info = self.analyzeFromSource("var a = 12")
         ast = info.ast
         astDefn = ast.definitions[0].pattern
-        self.assertEquals(DefnInfo(Global("a", None, None, frozenset()), ast.id),
+        self.assertEquals(DefnInfo(Global("a", None, frozenset()), ast.id),
                           info.getDefnInfo(astDefn))
 
     def testDefineGlobalConst(self):
         info = self.analyzeFromSource("let a = 12")
         ast = info.ast
         astDefn = ast.definitions[0].pattern
-        self.assertEquals(DefnInfo(Global("a", None, None, frozenset([LET])), ast.id),
+        self.assertEquals(DefnInfo(Global("a", None, frozenset([LET])), ast.id),
                           info.getDefnInfo(astDefn))
 
     def testDefineGlobalFunction(self):

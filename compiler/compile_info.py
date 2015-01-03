@@ -17,6 +17,7 @@ GLOBAL_SCOPE_ID = 0
 CONTEXT_CONSTRUCTOR_HINT = "context-constructor-hint"
 CLOSURE_CONSTRUCTOR_HINT = "closure-constructor-hint"
 CLOSURE_CLASS_HINT = "closure-class-hint"
+PACKAGE_INITIALIZER_HINT = "package-initializer-hint"
 
 
 class CompileInfo(object):

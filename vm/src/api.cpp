@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -197,11 +197,17 @@ Package VM::loadPackage(const char* fileName) {
   try {
     i::AllowAllocationScope allowAllocation(impl_->vm()->heap(), true);
     package = i::Package::loadFromFile(impl_->vm(), fileName);
+    impl_->vm()->addPackage(package);
+    if (package->initFunctionIndex() != i::kLengthNotSet) {
+      i::Persistent<i::Function> init(package->initFunction());
+      Function::Impl func(impl_->vm(), init);
+      Arguments::Impl args(impl_->vm(), init);
+      func.call(args.data(), 0);
+    }
   } catch (i::Error error) {
     throw Error(error.message());
   }
 
-  impl_->vm()->addPackage(package);
   return Package(new Package::Impl(impl_->vm(), move(package)));
 }
 

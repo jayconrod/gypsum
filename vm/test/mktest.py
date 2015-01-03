@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2014 Jay Conrod. All rights reserved.
+# Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 # This file is part of CodeSwitch. Use of this source code is governed by
 # the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -46,11 +46,15 @@ TEST({testName}) {{
   HandleScope handleScope(&vm);
   auto package = Package::loadFromBytes(&vm, bytes, sizeof(bytes));
   vm.addPackage(package);
-  Local<Function> function(package->getFunction(package->entryFunctionIndex()));
+
   Local<Stack> stack(vm.stack());
   Interpreter interpreter(&vm, stack);
+  Local<Function> init(package->initFunction());
+  Local<Function> entry(package->entryFunction());
   try {{
-    interpreter.call(function);
+    if (*init)
+      interpreter.call(init);
+    interpreter.call(entry);
   }} catch (Error exn) {{
     // Test will throw an exception on failure.
     throw TestException(exn.message());

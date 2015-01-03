@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014-2015, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -39,6 +39,8 @@ class Serializer(object):
         self.writeHeader()
         for s in self.package.strings:
             self.writeString(s)
+        for g in self.package.globals:
+            self.writeGlobal(g)
         for f in self.package.functions:
             self.writeFunction(f)
         for c in self.package.classes:
@@ -47,16 +49,18 @@ class Serializer(object):
             self.writeTypeParameter(p)
 
     def writeHeader(self):
-        self.outFile.write(struct.pack("<Ihhqiiiii",
+        self.outFile.write(struct.pack("<Ihhqiiiiiii",
                                        0x676b7073,   # magic number
                                        0,            # major version
-                                       10,            # minor version
+                                       11,           # minor version
                                        0,            # flags
                                        len(self.package.strings),
+                                       len(self.package.globals),
                                        len(self.package.functions),
                                        len(self.package.classes),
                                        len(self.package.typeParameters),
-                                       self.package.entryFunction))
+                                       self.package.entryFunction,
+                                       self.package.initFunction))
 
     def rewrite(self, format, value, offset, whence=os.SEEK_SET):
         self.outFile.seek(offset, whence)
@@ -70,6 +74,10 @@ class Serializer(object):
         self.writeVbn(length)
         self.writeVbn(size)
         self.outFile.write(encoded)
+
+    def writeGlobal(self, globl):
+        self.writeFlags(globl.flags)
+        self.writeType(globl.type)
 
     def writeFunction(self, function):
         self.writeFlags(function.flags)

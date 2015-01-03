@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014-2015, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -65,6 +65,28 @@ class TestCompiler(unittest.TestCase):
         function = package.findFunction(name=expected.name)
         self.assertEquals(expected, function)
 
+    def testEmptyGlobalInit(self):
+        self.checkFunction("",
+                           self.makeSimpleFunction("$init", UnitType, [[
+                               unit(),
+                               ret()]]))
+
+    def testDontInitGlobalsWithoutValue(self):
+        source = "var o: Object\n" + \
+                 "var i: i32"
+        self.checkFunction(source,
+                           self.makeSimpleFunction("$init", UnitType, [[
+                               unit(),
+                               ret()]]))
+
+    def testInitGlobal(self):
+        self.checkFunction("let x = 42",
+                           self.makeSimpleFunction("$init", UnitType, [[
+                               i64(42),
+                               stg(0),
+                               unit(),
+                               ret()]]))
+
     def testBasicFunction(self):
         self.checkFunction("def f = 12",
                            self.makeSimpleFunction("f", I64Type, [[
@@ -120,6 +142,24 @@ class TestCompiler(unittest.TestCase):
                                ldlocal(-1),
                                ret()]],
                              variables=[Variable("x", I64Type, LOCAL, frozenset())]))
+
+    def testLoadGlobal(self):
+        source = "let x = 42\n" + \
+                 "def f = x"
+        self.checkFunction(source,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               ldg(0),
+                               ret()]]))
+
+    def testStoreGlobal(self):
+        source = "var x: i64\n" + \
+                 "def f = { x = 12; {}; }"
+        self.checkFunction(source,
+                           self.makeSimpleFunction("f", UnitType, [[
+                               i64(12),
+                               stg(0),
+                               unit(),
+                               ret()]]))
 
     def testConstMustBeAssigned(self):
         source = "def f = { let x: i64; }"
