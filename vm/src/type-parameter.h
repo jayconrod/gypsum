@@ -9,6 +9,7 @@
 
 #include <iostream>
 #include "block.h"
+#include "type.h"
 
 namespace codeswitch {
 namespace internal {
@@ -40,6 +41,8 @@ class TypeParameter: public Block {
   void setLowerBound(Type* newLowerBound) { lowerBound_.set(this, newLowerBound); }
 
   bool hasCommonBound(TypeParameter* other) const;
+
+  Variance variance() const;
 
  private:
   DECLARE_POINTER_MAP()

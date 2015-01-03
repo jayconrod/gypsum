@@ -72,6 +72,17 @@ bool TypeParameter::hasCommonBound(TypeParameter* other) const {
 }
 
 
+Variance TypeParameter::variance() const {
+  if (COVARIANT_FLAG & flags()) {
+    return COVARIANT;
+  } else if (CONTRAVARIANT_FLAG & flags()) {
+    return CONTRAVARIANT;
+  } else {
+    return INVARIANT;
+  }
+}
+
+
 ostream& operator << (ostream& os, const TypeParameter* tp) {
   os << brief(tp)
      << "\n  upper bound: " << brief(tp->upperBound())

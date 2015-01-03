@@ -378,6 +378,13 @@ bool Type::isSubtypeOf(Local<Type> left, Local<Type> right) {
   ASSERT(left->isClass() && right->isClass());
   if (left->isNullable() && !right->isNullable())
     return false;
+  return isSubtypeOfWithVariance(left, right, BIVARIANT);
+}
+
+
+bool Type::isSubtypeOfWithVariance(Local<Type> left, Local<Type> right, Variance variance) {
+  ASSERT(left->isClass() && right->isClass());
+  ASSERT(!(left->isNullable() && !right->isNullable()));
   auto leftClass = handle(left->asClass());
   auto rightClass = handle(right->asClass());
 
@@ -390,8 +397,37 @@ bool Type::isSubtypeOf(Local<Type> left, Local<Type> right) {
   auto leftEquiv = substituteForBaseClass(left, rightClass);
   ASSERT(leftEquiv->typeArgumentCount() == right->typeArgumentCount());
   for (length_t i = 0; i < leftEquiv->typeArgumentCount(); i++) {
-    if (!leftEquiv->typeArgument(i)->equals(right->typeArgument(i)))
-      return false;
+    auto la = handle(leftEquiv->typeArgument(i));
+    auto ra = handle(right->typeArgument(i));
+
+    auto paramVariance = leftEquiv->asClass()->typeParameter(i)->variance();
+    u32 argVariance;
+    if (variance == INVARIANT) {
+      argVariance = INVARIANT;
+    } else if (variance & COVARIANT) {
+      argVariance = paramVariance;
+    } else {
+      ASSERT(variance & CONTRAVARIANT);
+      if (paramVariance == CONTRAVARIANT) {
+        argVariance = COVARIANT;
+      } else if (paramVariance == COVARIANT) {
+        argVariance = CONTRAVARIANT;
+      } else {
+        ASSERT(paramVariance == INVARIANT);
+        argVariance = INVARIANT;
+      }
+    }
+
+    if (argVariance == COVARIANT) {
+      if (!isSubtypeOfWithVariance(la, ra, argVariance))
+        return false;
+    } else if (argVariance == CONTRAVARIANT) {
+      if (!isSubtypeOfWithVariance(ra, la, argVariance))
+        return false;
+    } else {
+      if (!la->equals(*ra))
+        return false;
+    }
   }
   return true;
 }
