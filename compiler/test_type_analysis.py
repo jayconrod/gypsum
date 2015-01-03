@@ -43,6 +43,11 @@ class TestTypeAnalysis(unittest.TestCase):
         source = "def f(x): i32 = f(x)"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
+    def testRecursiveGlobal(self):
+        source = "def f = x\n" + \
+                 "let x = f"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     def testRecursiveFullType(self):
         source = "def f(x: i32): i32 = f(x)"
         info = self.analyzeFromSource(source)

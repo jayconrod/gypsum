@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014-2015, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -21,11 +21,12 @@ class Package(object):
         self.typeParameters = []
         self.strings = []
         self.entryFunction = -1
+        self.initFunction = -1
 
     def __str__(self):
         buf = StringIO.StringIO()
         for g in self.globals:
-            buf.write("%s\n\n\n\n" % g)
+            buf.write("%s\n\n" % g)
         for f in self.functions:
             buf.write("%s\n\n" % f)
         for c in self.classes:
@@ -33,6 +34,7 @@ class Package(object):
         for p in self.typeParameters:
             buf.write("%s\n\n" % p)
         buf.write("entry function: %d\n" % self.entryFunction)
+        buf.write("init function: %d\n" % self.initFunction)
         return buf.getvalue()
 
     def addFunction(self, function):
@@ -110,6 +112,15 @@ class IrDefinition(Data):
 class Global(IrDefinition):
     propertyNames = ("name", "type", "value", "flags")
 
+    def __str__(self):
+        buf = StringIO.StringIO()
+        if len(self.flags) > 0:
+            buf.write(" ".join(self.flags) + " ")
+        buf.write("var %s#%d" % (self.name, self.id))
+        if self.value is not None:
+            buf.write(" = " + str(self.value))
+        return buf.getvalue()
+
 
 class Function(IrDefinition):
     propertyNames = ("name", "returnType", "typeParameters", "parameterTypes",
@@ -168,7 +179,9 @@ class Function(IrDefinition):
 
     def __str__(self):
         buf = StringIO.StringIO()
-        buf.write("%s def %s#%d" % (" ".join(self.flags), self.name, self.id))
+        if len(self.flags) > 0:
+            buf.write(" ".join(self.flags) + " ")
+        buf.write("def %s#%d" % (self.name, self.id))
         if self.typeParameters is not None and len(self.typeParameters) > 0:
             buf.write("[%s]" % ", ".join([str(tp) for tp in self.typeParameters]))
         if self.parameterTypes is not None and len(self.parameterTypes) > 0:
