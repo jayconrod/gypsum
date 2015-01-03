@@ -998,3 +998,5 @@ class PropertyLValue(LValue):
 
     def evaluate(self):
         self.compiler.loadField(self.field)
+
+__all__ = ["compile"]

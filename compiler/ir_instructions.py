@@ -69,3 +69,5 @@ for info in bytecode.instInfoByCode:
     globals()[info.name] = type(info.name,
                                 (Instruction,),
                                 {"info": info})
+
+__all__ = ["BasicBlock", "Instruction"] + [info.name for info in bytecode.instInfoByCode]
