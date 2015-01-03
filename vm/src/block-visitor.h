@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -10,6 +10,7 @@
 #include "array.h"
 #include "block.h"
 #include "function.h"
+#include "global.h"
 #include "stack.h"
 #include "utils.h"
 
@@ -35,6 +36,7 @@ class BlockVisitorBase {
   inline void visitBlockWithPointerMap(Block* block, Meta* meta);
   inline void visitBlockWithCustomPointers(Block* block, Meta* meta);
   inline void visitStack(Stack* stack);
+  inline void visitGlobal(Global* global);
   inline void visitTaggedArray(TaggedArray<Block>* array);
 };
 
@@ -98,6 +100,10 @@ template <class BlockVisitor>
 void BlockVisitorBase<BlockVisitor>::visitBlockWithCustomPointers(Block* block, Meta* meta) {
   auto type = meta->blockType();
   switch (type) {
+    case GLOBAL_BLOCK_TYPE:
+      self()->visitGlobal(static_cast<Global*>(block));
+      break;
+
     case STACK_BLOCK_TYPE:
       self()->visitStack(static_cast<Stack*>(block));
       break;
@@ -108,6 +114,16 @@ void BlockVisitorBase<BlockVisitor>::visitBlockWithCustomPointers(Block* block, 
 
     default:
       UNREACHABLE();
+  }
+}
+
+
+template <class BlockVisitor>
+void BlockVisitorBase<BlockVisitor>::visitGlobal(Global* global) {
+  self()->visitBlockWithPointerMap(global, global->meta());
+  if (global->isObject()) {
+    auto slot = reinterpret_cast<Block**>(global->objectSlot());
+    self()->visitPointer(slot);
   }
 }
 

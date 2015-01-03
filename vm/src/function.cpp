@@ -12,6 +12,7 @@
 #include "bytecode.h"
 #include "class.h"
 #include "field.h"
+#include "global.h"
 #include "package.h"
 #include "roots.h"
 #include "type.h"
@@ -419,9 +420,16 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
-        case LDG:
+        case LDG: {
+          auto index = readVbn(bytecode, &pcOffset);
+          auto type = handle(package->getGlobal(index)->type());
+          currentMap.push(type);
+          break;
+        }
+
         case STG: {
-          UNIMPLEMENTED();
+          readVbn(bytecode, &pcOffset);
+          currentMap.pop();
           break;
         }
 

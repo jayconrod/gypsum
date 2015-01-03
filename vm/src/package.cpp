@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -19,6 +19,7 @@
 #include "field.h"
 #include "flags.h"
 #include "function.h"
+#include "global.h"
 #include "handle.h"
 #include "heap.h"
 #include "roots.h"
@@ -33,6 +34,7 @@ namespace internal {
 
 #define PACKAGE_POINTER_LIST(F) \
   F(Package, strings_)          \
+  F(Package, globals_)          \
   F(Package, functions_)        \
   F(Package, classes_)          \
   F(Package, typeParameters_)   \
@@ -55,6 +57,7 @@ class PackageLoader {
   Roots* roots() { return vm_->roots(); }
 
   Local<String> readString();
+  Local<Global> readGlobal();
   Local<Function> readFunction();
   void readClass(const Local<Class>& clas);
   Local<Field> readField();
@@ -81,12 +84,14 @@ Package::Package(VM* vm)
     : Block(PACKAGE_BLOCK_TYPE),
       flags_(0),
       strings_(this, reinterpret_cast<BlockArray<String>*>(vm->roots()->emptyBlockArray())),
+      globals_(this, reinterpret_cast<BlockArray<Global>*>(vm->roots()->emptyBlockArray())),
       functions_(this, reinterpret_cast<BlockArray<Function>*>(vm->roots()->emptyBlockArray())),
       classes_(this, reinterpret_cast<BlockArray<Class>*>(vm->roots()->emptyBlockArray())),
       typeParameters_(this,
                       reinterpret_cast<BlockArray<TypeParameter>*>(
                           vm->roots()->emptyBlockArray())),
-      entryFunctionIndex_(kIndexNotSet) { }
+      entryFunctionIndex_(kIndexNotSet),
+      initFunctionIndex_(kIndexNotSet) { }
 
 
 Local<Package> Package::create(Heap* heap) {
@@ -132,6 +137,11 @@ String* Package::getString(length_t index) {
 }
 
 
+Global* Package::getGlobal(length_t index) {
+  return block_cast<Global>(globals()->get(index));
+}
+
+
 Function* Package::getFunction(length_t index) {
   return block_cast<Function>(functions()->get(index));
 }
@@ -155,13 +165,23 @@ Function* Package::entryFunction() {
 }
 
 
+Function* Package::initFunction() {
+  auto index = initFunctionIndex();
+  if (index == kLengthNotSet)
+    return nullptr;
+  return getFunction(index);
+}
+
+
 ostream& operator << (ostream& os, const Package* pkg) {
   os << brief(pkg)
      << "\n  strings: " << brief(pkg->strings())
      << "\n  functions: " << brief(pkg->functions())
+     << "\n  globals: " << brief(pkg->globals())
      << "\n  classes: " << brief(pkg->classes())
      << "\n  type parameters: " << brief(pkg->typeParameters())
-     << "\n  entry function index: " << pkg->entryFunctionIndex();
+     << "\n  entry function index: " << pkg->entryFunctionIndex()
+     << "\n  init function index: " << pkg->initFunctionIndex();
   return os;
 }
 
@@ -174,7 +194,7 @@ Local<Package> PackageLoader::load() {
       throw Error("package file is corrupt");
     auto majorVersion = readValue<u16>();
     auto minorVersion = readValue<u16>();
-    if (majorVersion != 0 || minorVersion != 10)
+    if (majorVersion != 0 || minorVersion != 11)
       throw Error("package file has wrong format version");
 
     package_ = handleScope.escape(*Package::create(heap()));
@@ -185,6 +205,10 @@ Local<Package> PackageLoader::load() {
     auto stringCount = readLength();
     auto stringArray = BlockArray<String>::create(heap(), stringCount);
     package_->setStrings(*stringArray);
+
+    auto globalCount = readLength();
+    auto globalArray = BlockArray<Global>::create(heap(), globalCount);
+    package_->setGlobals(*globalArray);
 
     auto functionCount = readLength();
     auto functionArray = BlockArray<Function>::create(heap(), functionCount);
@@ -213,9 +237,16 @@ Local<Package> PackageLoader::load() {
     auto entryFunctionIndex = readLength();
     package_->setEntryFunctionIndex(entryFunctionIndex);
 
+    auto initFunctionIndex = readLength();
+    package_->setInitFunctionIndex(initFunctionIndex);
+
     for (length_t i = 0; i < stringCount; i++) {
       auto string = readString();
       stringArray->set(i, *string);
+    }
+    for (length_t i = 0; i < globalCount; i++) {
+      auto global = readGlobal();
+      globalArray->set(i, *global);
     }
     for (length_t i = 0; i < functionCount; i++) {
       auto function = readFunction();
@@ -242,6 +273,13 @@ Local<String> PackageLoader::readString() {
   auto size = readLengthVbn();
   vector<u8> utf8Chars = readData(size);
   return String::fromUtf8String(heap(), utf8Chars.data(), length, size);
+}
+
+
+Local<Global> PackageLoader::readGlobal() {
+  auto flags = readValue<u32>();
+  auto type = readType();
+  return Global::create(heap(), flags, type);
 }
 
 

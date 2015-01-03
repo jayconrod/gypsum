@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -41,6 +41,7 @@ class Roots {
     F(Meta, freeMeta, FREE_META)                                      \
     F(Meta, packageMeta, PACKAGE_META)                                \
     F(Meta, stackMeta, STACK_META)                                    \
+    F(Meta, globalMeta, GLOBAL_META)                                  \
     F(Meta, functionMeta, FUNCTION_META)                              \
     F(Meta, classMeta, CLASS_META)                                    \
     F(Meta, fieldMeta, FIELD_META)                                    \

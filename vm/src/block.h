@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -23,6 +23,7 @@ V(Meta, META)                          \
 V(Free, FREE)                          \
 V(Package, PACKAGE)                    \
 V(Stack, STACK)                        \
+V(Global, GLOBAL)                      \
 V(Function, FUNCTION)                  \
 V(Class, CLASS)                        \
 V(Field, FIELD)                        \

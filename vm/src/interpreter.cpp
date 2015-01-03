@@ -18,6 +18,7 @@
 #include "flags.h"
 #include "function.h"
 #include "gc.h"
+#include "global.h"
 #include "handle.h"
 #include "object.h"
 #include "package.h"
@@ -323,9 +324,19 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
-      case LDG:
+      case LDG: {
+        auto index = toLength(readVbn());
+        auto global = function_->package()->getGlobal(index);
+        auto value = global->getRaw();
+        push(value);
+        break;
+      }
+
       case STG: {
-        UNIMPLEMENTED();
+        auto index = toLength(readVbn());
+        auto value = pop<i64>();
+        auto global = function_->package()->getGlobal(index);
+        global->setRaw(value);
         break;
       }
 
