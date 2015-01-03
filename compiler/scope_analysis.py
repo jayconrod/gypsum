@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014-2015, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -775,7 +775,7 @@ class GlobalScope(Scope):
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         if isinstance(astDefn, AstVariablePattern):
             checkFlags(flags, frozenset([LET]), astDefn.location)
-            irDefn = Global(astDefn.name, None, None, flags)
+            irDefn = Global(astDefn.name, None, flags)
             self.info.package.addGlobal(irDefn)
         elif isinstance(astDefn, AstFunctionDefinition):
             checkFlags(flags, frozenset(), astDefn.location)

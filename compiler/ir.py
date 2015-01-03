@@ -110,15 +110,13 @@ class IrDefinition(Data):
 
 
 class Global(IrDefinition):
-    propertyNames = ("name", "type", "value", "flags")
+    propertyNames = ("name", "type", "flags")
 
     def __str__(self):
         buf = StringIO.StringIO()
         if len(self.flags) > 0:
             buf.write(" ".join(self.flags) + " ")
         buf.write("var %s#%d" % (self.name, self.id))
-        if self.value is not None:
-            buf.write(" = " + str(self.value))
         return buf.getvalue()
 
 
