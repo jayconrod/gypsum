@@ -6,8 +6,8 @@
 
 import re
 
-from errors import *
-from location import *
+from errors import LexException
+from location import Location
 from tok import *
 
 __opchars = r"[!#%&*+\-/:<=>?@\\^|~]"
@@ -118,3 +118,5 @@ def lex(filename, source):
         pos += len(token.text)
 
     return tokens
+
+__all__ = ["lex"]
