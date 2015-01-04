@@ -996,6 +996,14 @@ class TestTypeAnalysis(unittest.TestCase):
         calleeCtor = Foo.constructors[2]
         self.assertIs(calleeCtor, info.getUseInfo(call).defnInfo.irDefn)
 
+    def testEnsureParamTypeInfoForDefaultCtor(self):
+        source = "let x = Foo\n" + \
+                 "class Foo"
+        info = self.analyzeFromSource(source)
+        Foo = info.package.findClass(name="Foo")
+        ctor = Foo.constructors[0]
+        self.assertEquals([ClassType(Foo)], ctor.parameterTypes)
+
     # Tests for usage
     def testUseClassBeforeDefinition(self):
         source = "def f = C\n" + \

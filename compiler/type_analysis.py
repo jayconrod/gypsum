@@ -657,7 +657,8 @@ class TypeVisitor(TypeVisitorCommon):
             astDefn = irDefn.astDefn
             self.preVisit(astDefn)
 
-            if isinstance(astDefn, ast.AstFunctionDefinition):
+            if isinstance(astDefn, ast.AstFunctionDefinition) or \
+               isinstance(astDefn, ast.AstClassDefinition):
                 for typeParam in astDefn.typeParameters:
                     self.visit(typeParam)
 
@@ -667,7 +668,9 @@ class TypeVisitor(TypeVisitorCommon):
                 irDefn.parameterTypes.append(receiverType)
                 assert irDefn.variables[0].name == "$this"
                 irDefn.variables[0].type = receiverType
-            irDefn.parameterTypes.extend(map(self.visit, irDefn.astDefn.parameters))
+            if isinstance(astDefn, ast.AstFunctionDefinition) or \
+               isinstance(astDefn, ast.AstPrimaryConstructorDefinition):
+                irDefn.parameterTypes.extend(map(self.visit, irDefn.astDefn.parameters))
 
             self.postVisit(astDefn)
 
