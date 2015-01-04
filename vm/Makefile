@@ -22,6 +22,7 @@ TEST_SRC_DIR := $(HERE)/test
 INCLUDE_DIR := $(HERE)/include
 PROGRAM_SRC_DIR := $(HERE)/programs
 COMMON_DIR := $(HERE)/../common
+COMPILER_DIR := $(HERE)/../compiler
 OUT_BASE_DIR := $(HERE)/out
 OUT_DIR := $(OUT_BASE_DIR)/$(mode)
 GEN_DIR := $(OUT_DIR)/gen
@@ -37,7 +38,7 @@ CXX_LINK_STATIC := $(AR) rcs
 RM ?= rm
 REMOVE := $(RM) -r
 PYTHON ?= python
-GY_COMPILER ?= $(HERE)/../compiler/compiler
+GY_COMPILER ?= $(COMPILER_DIR)/compiler
 MKTEST := $(TEST_SRC_DIR)/mktest.py
 
 
@@ -174,7 +175,7 @@ $(foreach src,$(filter %.cpp,$(LIB_GEN)),\
   $(eval $(call objects,$(src)): $(src)))
 
 $(foreach src,$(TEST_GY_SOURCES),\
-  $(eval $(call csp_packages,$(src)): $(src)))
+  $(eval $(call csp_packages,$(src)): $(src) $(wildcard $(COMPILER_DIR)/*.py) $(GY_COMPILER)))
 
 $(foreach pkg,$(TEST_CSP_PACKAGES),\
   $(eval $(call csp_tests,$(pkg)): $(pkg) $(MKTEST)))
