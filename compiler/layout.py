@@ -29,7 +29,7 @@
 
 import re
 
-from tok import *
+from tok import Token, SYMBOL, OPERATOR, NEWLINE, SPACE, COMMENT, INTERNAL
 
 def layout(tokensIn, skipAnalysis=False):
     if skipAnalysis:
@@ -233,3 +233,5 @@ class PatternManager(object):
 
     def match(self):
         return any(self.stack[-1])
+
+__all__ = ["layout"]

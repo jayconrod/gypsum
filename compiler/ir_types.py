@@ -7,15 +7,16 @@
 import copy
 
 import builtins
-from bytecode import *
-from data import *
-from errors import *
-from flags import *
-from ir_values import *
+import bytecode
+import data
+import errors
+import flags
+import ir_values
+import utils
 
 NULLABLE_TYPE_FLAG = "nullable"
 
-class Type(Data):
+class Type(data.Data):
     propertyNames = ("flags",)
 
     def __init__(self, flags=None):
@@ -81,10 +82,10 @@ class Type(Data):
             otherTypeArgs = ty.substituteForBaseClass(commonBase).typeArguments
             if selfTypeArgs != otherTypeArgs:
                 # TODO: support co/contra-variance
-                raise TypeException(loc, "could not combine; incompatible type args")
+                raise errors.TypeException(loc, "could not combine; incompatible type args")
             return ClassType(commonBase, selfTypeArgs, commonFlags)
         else:
-            raise TypeException(loc, "could not combine")
+            raise errors.TypeException(loc, "could not combine")
 
     def combineFlags(self, other):
         return self.flags.union(other.flags)
@@ -141,7 +142,7 @@ class SimpleType(Type):
         return False
 
     def size(self):
-        widthSizes = { W8: 1, W16: 2, W32: 4, W64: 8 }
+        widthSizes = { bytecode.W8: 1, bytecode.W16: 2, bytecode.W32: 4, bytecode.W64: 8 }
         return widthSizes[self.width]
 
     def defaultValue(self):
@@ -156,14 +157,14 @@ class SimpleType(Type):
 
 
 NoType = SimpleType("_", None)
-UnitType = SimpleType("unit", W8, UnitValue())
-I8Type = SimpleType("i8", W8, I8Value(0))
-I16Type = SimpleType("i16", W16, I16Value(0))
-I32Type = SimpleType("i32", W32, I32Value(0))
-I64Type = SimpleType("i64", W64, I64Value(0))
-F32Type = SimpleType("f32", W32, F32Value(0.))
-F64Type = SimpleType("f64", W64, F64Value(0.))
-BooleanType = SimpleType("boolean", W8, BooleanValue(False))
+UnitType = SimpleType("unit", bytecode.W8, ir_values.UnitValue())
+I8Type = SimpleType("i8", bytecode.W8, ir_values.I8Value(0))
+I16Type = SimpleType("i16", bytecode.W16, ir_values.I16Value(0))
+I32Type = SimpleType("i32", bytecode.W32, ir_values.I32Value(0))
+I64Type = SimpleType("i64", bytecode.W64, ir_values.I64Value(0))
+F32Type = SimpleType("f32", bytecode.W32, ir_values.F32Value(0.))
+F64Type = SimpleType("f64", bytecode.W64, ir_values.F64Value(0.))
+BooleanType = SimpleType("boolean", bytecode.W8, ir_values.BooleanValue(False))
 
 
 class ObjectType(Type):
@@ -177,7 +178,7 @@ class ObjectType(Type):
         return True
 
     def size(self):
-        return WORDSIZE
+        return bytecode.WORDSIZE
 
     def substituteForBaseClass(self, base):
         """Returns a base type of the corresponding class with type arguments substituted
@@ -189,7 +190,7 @@ class ObjectType(Type):
 
 class ClassType(ObjectType):
     propertyNames = Type.propertyNames + ("clas", "typeArguments")
-    width = WORD
+    width = bytecode.WORD
 
     def __init__(self, clas, typeArguments=(), flags=None):
         super(ClassType, self).__init__(flags)
@@ -218,7 +219,7 @@ class ClassType(ObjectType):
         return "ClassType(%s%s%s)" % (self.clas.name, typeArgsStr, flagsStr)
 
     def __hash__(self):
-        return hashList([getattr(self, name) for name in Type.propertyNames] + \
+        return utils.hashList([getattr(self, name) for name in Type.propertyNames] + \
                         [self.clas.name, self.typeArguments])
 
     def __eq__(self, other):
@@ -239,9 +240,9 @@ class ClassType(ObjectType):
 
         def checkArg(a, b, param):
             argVariance = changeVariance(variance, param.variance())
-            if argVariance is COVARIANT:
+            if argVariance is flags.COVARIANT:
                 return a.isSubtypeOfWithVariance(b, argVariance)
-            elif argVariance is CONTRAVARIANT:
+            elif argVariance is flags.CONTRAVARIANT:
                 return b.isSubtypeOfWithVariance(a, argVariance)
             else:
                 assert argVariance is INVARIANT
@@ -275,7 +276,7 @@ class ClassType(ObjectType):
 
 class VariableType(ObjectType):
     propertyNames = Type.propertyNames + ("typeParameter",)
-    width = WORD
+    width = bytecode.WORD
 
     def __init__(self, typeParameter):
         super(VariableType, self).__init__(frozenset())
@@ -288,7 +289,7 @@ class VariableType(ObjectType):
         return "VariableType(%s)" % self.typeParameter.name
 
     def __hash__(self):
-        return hashList([self.typeParameter.name])
+        return utils.hashList([self.typeParameter.name])
 
     def __eq__(self, other):
         return self.__class__ is other.__class__ and \
@@ -352,13 +353,20 @@ def changeVariance(old, new):
     assert new is not BIVARIANT
     if old is INVARIANT:
         return INVARIANT
-    elif old in [BIVARIANT, COVARIANT]:
+    elif old in [BIVARIANT, flags.COVARIANT]:
         return new
     else:
-        if new is CONTRAVARIANT:
-            return COVARIANT
-        elif new is COVARIANT:
-            return CONTRAVARIANT
+        if new is flags.CONTRAVARIANT:
+            return flags.COVARIANT
+        elif new is flags.COVARIANT:
+            return flags.CONTRAVARIANT
         else:
             assert new is INVARIANT
             return INVARIANT
+
+__all__ = ["BIVARIANT","INVARIANT", "UnitType", "BooleanType", "I8Type",
+           "I16Type", "I32Type", "I64Type", "F32Type", "F64Type",
+           "VariableType", "ClassType",  "NoType",
+           "getRootClassType", "getStringType", "getNullType",
+           "getClassFromType", "NULLABLE_TYPE_FLAG", "changeVariance",
+           "getNothingClassType"]

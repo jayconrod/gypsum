@@ -7,6 +7,8 @@
 import unittest
 
 from lexer import *
+from errors import LexException
+from location import Location
 from tok import *
 
 class TestLexer(unittest.TestCase):

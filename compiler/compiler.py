@@ -6,14 +6,16 @@
 
 from functools import partial
 
-from ast import *
-from bytecode import *
-from ir import *
-from ir_types import *
+import ast
+from bytecode import W8, W16, W32, W64, BUILTIN_TYPE_CLASS_ID, BUILTIN_TYPE_CTOR_ID, instInfoByCode
+from ir import Global, Variable, Field, Function, Class, LOCAL
+from ir_types import UnitType, ClassType, VariableType, NULLABLE_TYPE_FLAG
 import ir_instructions
-from ir_instructions import *
-from scope_analysis import *
-from utils import *
+from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PACKAGE_INITIALIZER_HINT, DefnInfo
+from flags import ABSTRACT, STATIC, LET
+from errors import SemanticException
+from builtins import getTypeClass, getExceptionClass, getRootClass
+from utils import Counter, COMPILE_FOR_EFFECT, COMPILE_FOR_VALUE, COMPILE_FOR_UNINITIALIZED, COMPILE_FOR_MATCH
 
 def compile(info):
     for clas in info.package.classes:
@@ -33,7 +35,7 @@ def assignFieldIndices(clas, info):
         field.index = index
 
 
-class CompileVisitor(AstNodeVisitor):
+class CompileVisitor(ast.AstNodeVisitor):
     def __init__(self, function, info):
         self.function = function
         self.astDefn = function.astDefn if hasattr(function, "astDefn") else None
@@ -53,20 +55,20 @@ class CompileVisitor(AstNodeVisitor):
             return
 
         # Get the body of the function as a list of statements. Also parameters.
-        if isinstance(self.astDefn, AstFunctionDefinition):
+        if isinstance(self.astDefn, ast.AstFunctionDefinition):
             if self.astDefn.body is None:
                 assert ABSTRACT in self.function.flags
                 return
             parameters = self.astDefn.parameters
-            if isinstance(self.astDefn.body, AstBlockExpression):
+            if isinstance(self.astDefn.body, ast.AstBlockExpression):
                 statements = self.astDefn.body.statements
             else:
                 statements = [self.astDefn.body]
-        elif isinstance(self.astDefn, AstClassDefinition):
+        elif isinstance(self.astDefn, ast.AstClassDefinition):
             parameters = None
             statements = self.astDefn.members
         else:
-            assert isinstance(self.astDefn, AstPrimaryConstructorDefinition)
+            assert isinstance(self.astDefn, ast.AstPrimaryConstructorDefinition)
             parameters = self.astDefn.parameters
             statements = []
 
@@ -79,13 +81,13 @@ class CompileVisitor(AstNodeVisitor):
         superCtorCalled = False
         if self.function.isConstructor() and \
            len(statements) > 0 and \
-           isinstance(statements[0], AstCallExpression):
-            if isinstance(statements[0].callee, AstThisExpression):
+           isinstance(statements[0], ast.AstCallExpression):
+            if isinstance(statements[0].callee, ast.AstThisExpression):
                 self.visitCallThisExpression(statements[0], COMPILE_FOR_EFFECT)
                 altCtorCalled = True
                 superCtorCalled = True
                 del statements[0]
-            elif isinstance(statements[0].callee, AstSuperExpression):
+            elif isinstance(statements[0].callee, ast.AstSuperExpression):
                 self.visitCallSuperExpression(statements[0], COMPILE_FOR_EFFECT)
                 superCtorCalled = True
                 del statements[0]
@@ -101,7 +103,7 @@ class CompileVisitor(AstNodeVisitor):
             if len(defaultSuperCtors) == 0:
                 raise SemanticException(self.function.clas.getLocation(),
                                         "no default constructor in superclass %s" %
-                                          superclass.name)
+                                        superclass.name)
             self.loadThis()
             self.buildStaticTypeArguments(supertype.typeArguments)
             self.callg(defaultSuperCtors[0].id)
@@ -111,7 +113,7 @@ class CompileVisitor(AstNodeVisitor):
         # initializer. In this case, unpacking the parameters means storing them into the
         # object. The initializer may need to access them.
         if self.function.isConstructor() and \
-           isinstance(self.function.astDefn, AstPrimaryConstructorDefinition):
+           isinstance(self.function.astDefn, ast.AstPrimaryConstructorDefinition):
             self.unpackParameters(parameters)
             parameters = None
 
@@ -159,7 +161,7 @@ class CompileVisitor(AstNodeVisitor):
         elif self.compileHint is PACKAGE_INITIALIZER_HINT:
             # This function initializes all the global variables.
             for defn in self.info.ast.definitions:
-                if isinstance(defn, AstVariableDefinition):
+                if isinstance(defn, ast.AstVariableDefinition):
                     self.visit(defn, COMPILE_FOR_EFFECT)
             self.unit()
             self.ret()
@@ -219,7 +221,7 @@ class CompileVisitor(AstNodeVisitor):
 
     def visitAstLiteralExpression(self, expr, mode):
         lit = expr.literal
-        if isinstance(lit, AstIntegerLiteral):
+        if isinstance(lit, ast.AstIntegerLiteral):
             if lit.width == 8:
                 self.i8(lit.value)
             elif lit.width == 16:
@@ -229,21 +231,21 @@ class CompileVisitor(AstNodeVisitor):
             else:
                 assert lit.width == 64
                 self.i64(lit.value)
-        elif isinstance(lit, AstFloatLiteral):
+        elif isinstance(lit, ast.AstFloatLiteral):
             if lit.width == 32:
                 self.f32(lit.value)
             else:
                 assert lit.width == 64
                 self.f64(lit.value)
-        elif isinstance(lit, AstStringLiteral):
+        elif isinstance(lit, ast.AstStringLiteral):
             id = self.info.package.findOrAddString(lit.value)
             self.string(id)
-        elif isinstance(lit, AstBooleanLiteral):
+        elif isinstance(lit, ast.AstBooleanLiteral):
             if lit.value:
                 self.true()
             else:
                 self.false()
-        elif isinstance(lit, AstNullLiteral):
+        elif isinstance(lit, ast.AstNullLiteral):
             self.null()
         else:
             raise NotImplementedError
@@ -296,9 +298,9 @@ class CompileVisitor(AstNodeVisitor):
     def visitAstCallExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)
         callInfo = self.info.getCallInfo(expr) if self.info.hasCallInfo(expr) else None
-        if isinstance(expr.callee, AstVariableExpression):
+        if isinstance(expr.callee, ast.AstVariableExpression):
             self.buildCall(useInfo, callInfo, None, expr.typeArguments, expr.arguments, mode)
-        elif isinstance(expr.callee, AstPropertyExpression):
+        elif isinstance(expr.callee, ast.AstPropertyExpression):
             self.buildCall(useInfo, callInfo, expr.callee.receiver,
                            expr.typeArguments, expr.arguments, mode)
         else:
@@ -531,8 +533,8 @@ class CompileVisitor(AstNodeVisitor):
 
     def newBlock(self):
         if self.unreachable:
-            return BasicBlock(-1, [])
-        block = BasicBlock(self.nextBlockId(), [])
+            return ir_instructions.BasicBlock(-1, [])
+        block = ir_instructions.BasicBlock(self.nextBlockId(), [])
         self.blocks.append(block)
         return block
 
@@ -546,12 +548,12 @@ class CompileVisitor(AstNodeVisitor):
         irDefn = useInfo.defnInfo.irDefn
         if LET in irDefn.flags:
             raise SemanticException(expr.location, "left side of assignment is constant")
-        if isinstance(expr, AstVariableExpression) and \
+        if isinstance(expr, ast.AstVariableExpression) and \
            (isinstance(irDefn, Variable) or \
             isinstance(irDefn, Field) or \
             isinstance(irDefn, Global)):
             return VarLValue(expr, self, useInfo)
-        elif isinstance(expr, AstPropertyExpression) and isinstance(irDefn, Field):
+        elif isinstance(expr, ast.AstPropertyExpression) and isinstance(irDefn, Field):
             self.visit(expr.receiver, COMPILE_FOR_VALUE)
             return PropertyLValue(expr, self, useInfo)
         else:
@@ -573,7 +575,7 @@ class CompileVisitor(AstNodeVisitor):
             implicitParamCount = 0
         if parameters is not None:
             for index, param in enumerate(parameters):
-                if isinstance(param.pattern, AstVariablePattern):
+                if isinstance(param.pattern, ast.AstVariablePattern):
                     defnInfo = self.info.getDefnInfo(param.pattern)
                     if isinstance(defnInfo.irDefn, Variable):
                        defnInfo.irDefn.index = index + implicitParamCount
@@ -585,7 +587,7 @@ class CompileVisitor(AstNodeVisitor):
 
     def unpackParameter(self, param, index):
         paramType = self.info.getType(param)
-        if isinstance(param.pattern, AstVariablePattern):
+        if isinstance(param.pattern, ast.AstVariablePattern):
             defnInfo = self.info.getDefnInfo(param.pattern)
             if isinstance(defnInfo.irDefn, Variable):
                 defnInfo.irDefn.index = index
@@ -600,7 +602,7 @@ class CompileVisitor(AstNodeVisitor):
         # Create a context if needed.
         if scopeId is not None and \
            not (self.astDefn.id == scopeId and
-                isinstance(self.astDefn, AstClassDefinition)) and \
+                isinstance(self.astDefn, ast.AstClassDefinition)) and \
            self.info.hasContextInfo(scopeId):
             contextInfo = self.info.getContextInfo(scopeId)
             if contextInfo.irContextClass is not None:
@@ -621,7 +623,7 @@ class CompileVisitor(AstNodeVisitor):
         # Compile the last statement. If this is an expression, the result is the result of the
         # whole block. Otherwise, we need to push the unit value.
         if len(statements) > 0:
-            if isinstance(statements[-1], AstExpression):
+            if isinstance(statements[-1], ast.AstExpression):
                 self.visit(statements[-1], mode)
                 needUnit = False
             else:
@@ -680,30 +682,30 @@ class CompileVisitor(AstNodeVisitor):
         ty = field.type
         if ty.isObject():
             if ty.isNullable():
-                inst = ldp
+                inst = ir_instructions.ldp
             else:
-                inst = ldpc
+                inst = ir_instructions.ldpc
         elif ty.width == W8:
-            inst = ld8
+            inst = ir_instructions.ld8
         elif ty.width == W16:
-            inst = ld16
+            inst = ir_instructions.ld16
         elif ty.width == W32:
-            inst = ld32
+            inst = ir_instructions.ld32
         elif ty.width == W64:
-            inst = ld64
+            inst = ir_instructions.ld64
         self.add(inst(field.index))
 
     def storeField(self, field):
         if field.type.isObject():
-            inst = stp
+            inst = ir_instructions.stp
         elif field.type.width == W8:
-            inst = st8
+            inst = ir_instructions.st8
         elif field.type.width == W16:
-            inst = st16
+            inst = ir_instructions.st16
         elif field.type.width == W32:
-            inst = st32
+            inst = ir_instructions.st32
         elif field.type.width == W64:
-            inst = st64
+            inst = ir_instructions.st64
         self.add(inst(field.index))
 
     def loadThis(self):
@@ -728,7 +730,7 @@ class CompileVisitor(AstNodeVisitor):
     def buildDeclarations(self, statements):
         # Handle any non-variable definitions
         for stmt in statements:
-            if isinstance(stmt, AstFunctionDefinition):
+            if isinstance(stmt, ast.AstFunctionDefinition):
                 closureInfo = self.info.getClosureInfo(stmt)
                 closureClass = closureInfo.irClosureClass
                 if closureClass is None or \
@@ -748,7 +750,7 @@ class CompileVisitor(AstNodeVisitor):
                 self.callg(closureCtor.id)
                 self.drop()
                 self.storeVariable(closureInfo.irClosureVar)
-            elif isinstance(stmt, AstClassDefinition):
+            elif isinstance(stmt, ast.AstClassDefinition):
                 raise NotImplementedError
 
     def buildCallSimpleMethod(self, method, mode):
@@ -818,11 +820,11 @@ class CompileVisitor(AstNodeVisitor):
                     if receiver.onStack():
                         self.dup()
                     receiver.evaluate()
-                elif isinstance(receiver, AstSuperExpression):
+                elif isinstance(receiver, ast.AstSuperExpression):
                     # Special case: load `super` as `this`
                     self.visitAstThisExpression(receiver, COMPILE_FOR_VALUE)
                 else:
-                    assert isinstance(receiver, AstExpression)
+                    assert isinstance(receiver, ast.AstExpression)
                     self.visit(receiver, COMPILE_FOR_VALUE)
 
             # Compile the arguments and call the method.
@@ -830,7 +832,7 @@ class CompileVisitor(AstNodeVisitor):
             compileTypeArgs()
             if hasattr(irDefn, "insts"):
                 for instName in irDefn.insts:
-                    inst = globals()[instName]
+                    inst = getattr(ir_instructions,instName)
                     self.add(inst())
             elif irDefn.isFinal():
                 # Calls to final methods can be made directly. This includes constructors and
@@ -886,7 +888,7 @@ class CompileVisitor(AstNodeVisitor):
             raise NotImplementedError
 
     def getScopeAstDefn(self):
-        if isinstance(self.astDefn, AstPrimaryConstructorDefinition):
+        if isinstance(self.astDefn, ast.AstPrimaryConstructorDefinition):
             return self.function.clas.astDefn
         else:
             return self.astDefn
@@ -996,3 +998,5 @@ class PropertyLValue(LValue):
 
     def evaluate(self):
         self.compiler.loadField(self.field)
+
+__all__ = ["compile"]

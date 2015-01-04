@@ -8,12 +8,12 @@ import struct
 import sys
 import os
 
-from builtins import *
-from flags import *
-from ir import *
-from ir_instructions import *
-from ir_types import *
-from utils import *
+import builtins
+import flags
+import ir
+import ir_instructions
+import ir_types
+import utils
 
 def serialize(package, fileName):
     if fileName == "-":
@@ -86,9 +86,9 @@ class Serializer(object):
         self.writeVbn(len(function.parameterTypes))
         for ty in function.parameterTypes:
             self.writeType(ty)
-        assert function.blocks is not None or ABSTRACT in function.flags
+        assert function.blocks is not None or flags.ABSTRACT in function.flags
         if function.blocks is not None:
-            localsSize = 8 * len(filter(lambda v: v.kind is LOCAL, function.variables))
+            localsSize = 8 * len(filter(lambda v: v.kind is ir.LOCAL, function.variables))
             self.writeVbn(localsSize)
             instructions, blockOffsetTable = self.encodeInstructions(function)
             self.writeVbn(len(instructions))
@@ -106,9 +106,9 @@ class Serializer(object):
             blockOffsetTable.append(len(buf))
             for inst in block.instructions:
                 buf.append(inst.opcode())
-                if isinstance(inst, f32):
+                if isinstance(inst, ir_instructions.f32):
                     self.encodeFloat(32, inst.op(0), buf)
-                elif isinstance(inst, f64):
+                elif isinstance(inst, ir_instructions.f64):
                     self.encodeFloat(64, inst.op(0), buf)
                 else:
                     for i in xrange(inst.operandCount()):
@@ -135,41 +135,41 @@ class Serializer(object):
     def writeType(self, type):
         # TODO: serialize this in a way that doesn't couple us so closely to Type::Form
         id = None
-        if type is UnitType:
+        if type is ir_types.UnitType:
             form = 0
-        elif type is BooleanType:
+        elif type is ir_types.BooleanType:
             form = 1
-        elif type is I8Type:
+        elif type is ir_types.I8Type:
             form = 2
-        elif type is I16Type:
+        elif type is ir_types.I16Type:
             form = 3
-        elif type is I32Type:
+        elif type is ir_types.I32Type:
             form = 4
-        elif type is I64Type:
+        elif type is ir_types.I64Type:
             form = 5
-        elif type is F32Type:
+        elif type is ir_types.F32Type:
             form = 6
-        elif type is F64Type:
+        elif type is ir_types.F64Type:
             form = 7
-        elif isinstance(type, ClassType):
+        elif isinstance(type, ir_types.ClassType):
             form = 8
             id = type.clas.id
         else:
-            assert isinstance(type, VariableType)
+            assert isinstance(type, ir_types.VariableType)
             form = 9
             id = type.typeParameter.id
         flags = 0
-        if NULLABLE_TYPE_FLAG in type.flags:
+        if ir_types.NULLABLE_TYPE_FLAG in type.flags:
             flags = flags | 1
         bits = form | flags << 4
         self.writeVbn(bits)
         if id is not None:
             self.writeVbn(id)
-        if isinstance(type, ClassType):
+        if isinstance(type, ir_types.ClassType):
             self.writeList(self.writeType, type.typeArguments)
 
-    def writeFlags(self, flags):
-        bits = flagSetToFlagBits(flags)
+    def writeFlags(self, flags_var):
+        bits = flags.flagSetToFlagBits(flags_var)
         self.outFile.write(struct.pack("<I", bits))
 
     def writeIdList(self, list):
@@ -192,7 +192,7 @@ class Serializer(object):
             bits = value & 0x7F
             value >>= 7
             done = (value == 0 or ~value == 0) and \
-                   bit(bits, 6) == bit(value, 0)
+                   utils.bit(bits, 6) == utils.bit(value, 0)
             if not done:
                 bits |= 0x80
             buf.append(bits)
@@ -201,3 +201,5 @@ class Serializer(object):
         format = "<f" if width == 32 else "<d"
         fbuf = struct.pack(format, value)
         buf += fbuf
+
+__all__ = ["serialize"]

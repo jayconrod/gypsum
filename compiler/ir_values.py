@@ -4,11 +4,10 @@
 # the GPL license that can be found in the LICENSE.txt file.
 
 
-from builtins import *
-from data import *
-from ir_types import *
+import data
+import ir_types
 
-class Value(Data):
+class Value(data.Data):
     propertyNames = ()
 
     def type(self):
@@ -17,58 +16,58 @@ class Value(Data):
 
 class UnitValue(Value):
     def type(self):
-        return UnitType
+        return ir_types.UnitType
 
 
 class BooleanValue(Value):
     propertyNames = Value.propertyNames + ("value",)
 
     def type(self):
-        return BooleanType
+        return ir_types.BooleanType
 
 
 class I8Value(Value):
     propertyNames = Value.propertyNames + ("value",)
 
     def type(self):
-        return I8Type
+        return ir_types.I8Type
 
 
 class I16Value(Value):
     propertyNames = Value.propertyNames + ("value",)
 
     def type(self):
-        return I16Type
+        return ir_types.I16Type
 
 
 class I32Value(Value):
     propertyNames = Value.propertyNames + ("value",)
 
     def type(self):
-        return I32Type
+        return ir_types.I32Type
 
 
 class I64Value(Value):
     propertyNames = Value.propertyNames + ("value",)
 
     def type(self):
-        return I64Type
+        return ir_types.I64Type
 
 
 class F32Value(Value):
     propertyNames = Value.propertyNames + ("value",)
 
     def type(self):
-        return F32Type
+        return ir_types.F32Type
 
 
 class F64Value(Value):
     propertyNames = Value.propertyNames + ("value",)
 
     def type(self):
-        return F64Type
+        return ir_types.F64Type
 
 
 class NullValue(Value):
     def type(self):
-        return getNullType()
+        return ir_types.getNullType()

@@ -7,12 +7,16 @@
 import unittest
 
 from lexer import *
-from layout import *
+from layout import layout
 from parser import *
 from ast import *
 from scope_analysis import *
 from type_analysis import *
 from ir import *
+from compile_info import *
+from location import NoLoc
+from flags import LET
+from errors import *
 
 
 class TestUseAnalysis(unittest.TestCase):

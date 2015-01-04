@@ -9,8 +9,11 @@ import unittest
 from builtins import *
 from ir import *
 from ir_types import *
+from ir import * # Needed for Class()
 from location import *
+from errors import * #For TypeException
 from utils import *
+from flags import * # For CONTRAVARIANT and COVARIANT
 
 
 class TestIrTypes(unittest.TestCase):

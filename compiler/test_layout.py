@@ -7,7 +7,7 @@
 import unittest
 
 from lexer import *
-from layout import *
+from layout import layout
 
 class TestLayout(unittest.TestCase):
     def checkLayout(self, expectedTexts, text):

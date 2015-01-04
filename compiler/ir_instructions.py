@@ -4,11 +4,11 @@
 # the GPL license that can be found in the LICENSE.txt file.
 
 
-from data import *
-from bytecode import *
-from ir_types import *
+import data
+import bytecode
+import utils
 
-BasicBlockBase = Data.makeClass("BasicBlockBase", ("id", "instructions"))
+BasicBlockBase = data.Data.makeClass("BasicBlockBase", ("id", "instructions"))
 class BasicBlock(BasicBlockBase):
     def __init__(self, id, instructions):
         super(BasicBlock, self).__init__(id, instructions)
@@ -24,6 +24,7 @@ class Instruction(object):
 
     @staticmethod
     def forOpcode(opcode, *operands):
+        #TODO: this code is unreachable and seems broken.
         info = getInstInfoForOpcode(opcode)
         return globals()[info.name](*operands)
 
@@ -61,10 +62,12 @@ class Instruction(object):
         return not (self == other)
 
     def __hash__(self):
-        return hashList([self.info.opcode] + self.operands)
+        return utils.hashList([self.info.opcode] + self.operands)
 
 
-for info in instInfoByCode:
+for info in bytecode.instInfoByCode:
     globals()[info.name] = type(info.name,
                                 (Instruction,),
                                 {"info": info})
+
+__all__ = ["BasicBlock", "Instruction"] + [info.name for info in bytecode.instInfoByCode]

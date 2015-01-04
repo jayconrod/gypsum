@@ -6,8 +6,8 @@
 
 import StringIO
 
-from visitor import Visitor
-from utils import *
+import visitor
+import utils
 
 
 class AstNode(object):
@@ -737,16 +737,16 @@ class AstStringLiteral(AstLiteral):
         self.value = value
 
     def __repr__(self):
-        return "AstStringLiteral(%s)" % encodeString(self.value)
+        return "AstStringLiteral(%s)" % utils.encodeString(self.value)
 
     def tag(self):
         return "StringLiteral"
 
     def data(self):
-        return encodeString(self.value)
+        return utils.encodeString(self.value)
 
 
-class AstNodeVisitor(Visitor):
+class AstNodeVisitor(visitor.Visitor):
     def visitChildren(self, node):
         for child in node.children():
             if child is not None:
@@ -773,7 +773,7 @@ class AstPrinter(AstNodeVisitor):
 
 class AstEnumerator(AstNodeVisitor):
     def __init__(self):
-        self.counter = Counter()
+        self.counter = utils.Counter()
 
     def visitDefault(self, node):
         node.id = self.counter()

@@ -6,7 +6,8 @@
 
 import unittest
 
-from combinators import *
+execfile("combinators.py")
+
 from tok import *
 from lexer import *
 

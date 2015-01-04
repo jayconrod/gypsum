@@ -8,12 +8,10 @@ import os.path
 import re
 import yaml
 
-from bytecode import *
-from data import *
-from ir import *
+import ir
 import ir_types
-from utils import *
 
+import bytecode
 
 def registerBuiltins(bind):
     _initialize()
@@ -103,12 +101,12 @@ def _initialize():
 
     def buildFunction(functionData):
         name = functionData.get("name", "$constructor")
-        function = Function(name,
-                            buildType(functionData["returnType"]),
-                            [],
-                            map(buildType, functionData["parameterTypes"]),
-                            [], [], frozenset())
-        function.id = globals()[functionData["id"]]
+        function = ir.Function(name,
+                               buildType(functionData["returnType"]),
+                               [],
+                               map(buildType, functionData["parameterTypes"]),
+                               [], [], frozenset())
+        function.id = getattr(bytecode,functionData["id"])
         if "insts" in functionData:
             function.insts = functionData["insts"]
         return function
@@ -121,15 +119,15 @@ def _initialize():
     def buildField(fieldData):
         name = fieldData["name"]
         ty = buildType(fieldData["type"])
-        return Field(name, ty, frozenset())
+        return ir.Field(name, ty, frozenset())
 
     def declareClass(classData):
-        clas = Class(classData["name"], [], None, None, None, None, None, frozenset())
+        clas = ir.Class(classData["name"], [], None, None, None, None, None, frozenset())
         _builtinClassNameMap[classData["name"]] = clas
 
     def defineClass(classData):
         clas = _builtinClassNameMap[classData["name"]]
-        clas.id = globals()[classData["id"]]
+        clas.id = getattr(bytecode,classData["id"])
         if not classData["isPrimitive"]:
             if classData["supertype"] is not None:
                 superclass = _builtinClassNameMap[classData["supertype"]]
@@ -174,3 +172,8 @@ def _initialize():
         defineClass(ty)
     for fn in functions:
         defineFunction(fn)
+
+__all__ = ["registerBuiltins", "getRootClass", "getNothingClass",
+           "getExceptionClass", "getTypeClass", "getStringClass",
+           "getBuiltinClasses", "getBuiltinClassFromType",
+           "getBuiltinFunctions", "isBuiltinId"]

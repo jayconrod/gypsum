@@ -32,3 +32,5 @@ class Visitor(object):
 
     def handleResult(self, obj, result, *args):
         return result
+
+__all__ = ["Visitor"]

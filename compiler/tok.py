@@ -4,7 +4,7 @@
 # the GPL license that can be found in the LICENSE.txt file.
 
 
-from data import *
+from data import Data
 
 
 RESERVED = "reserved"
@@ -29,3 +29,7 @@ class Token(Data):
 
     def isPrintable(self):
         return self.tag not in [NEWLINE, SPACE, COMMENT]
+
+__all__ = ["Token", "RESERVED", "ATTRIB", "SYMBOL", "OPERATOR",
+           "INTEGER", "FLOAT", "STRING", "NEWLINE", "SPACE",
+           "COMMENT", "INTERNAL"]

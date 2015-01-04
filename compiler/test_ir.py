@@ -6,8 +6,9 @@
 
 import unittest
 
+execfile("ir.py")
+
 from builtins import *
-from ir import *
 from ir_types import *
 
 

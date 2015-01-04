@@ -7,14 +7,15 @@
 import unittest
 
 from lexer import *
-from layout import *
+from layout import layout
 from parser import *
 from ast import *
 from scope_analysis import *
 from type_analysis import *
 from ir import *
 from builtins import *
-
+from compile_info import CompileInfo
+from errors import *
 
 class TestFlattenClasses(unittest.TestCase):
     def setUp(self):

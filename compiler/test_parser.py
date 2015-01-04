@@ -6,11 +6,14 @@
 
 import unittest
 
+execfile("parser.py")
+
+
 import ast
 from errors import *
-from parser import *
-from layout import *
+from layout import layout
 from lexer import *
+from location import Location
 from combinators import *
 
 

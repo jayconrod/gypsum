@@ -4,7 +4,7 @@
 # the GPL license that can be found in the LICENSE.txt file.
 
 
-from data import *
+from data import Data
 
 class Location(Data):
     propertyNames = ["fileName", "beginRow", "beginColumn", "endRow", "endColumn"]
@@ -32,3 +32,5 @@ class Location(Data):
 
 
 NoLoc = Location("<unknown>", 1, 1, 1, 1)
+
+__all__ = ["Location", "NoLoc"]
