@@ -40,7 +40,7 @@
 # Refactoring
 
 ## Compiler
-- fix cyclic dependencies between modules
+- Coding convention
 - improved debug output for scope, types, etc.
 - replace "$..." names with symbols
 - fewer classes should inherit from Data
@@ -56,9 +56,5 @@
 - Remaining TODOs
 - Coding convention
 - Switch enums to enum class, especially flags
-
-## Builtins
-- use tags to format functions, classes, etc
-- get rid of newlines in lists
 
 # Bugs
