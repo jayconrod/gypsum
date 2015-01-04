@@ -1,16 +1,18 @@
 #!/usr/bin/env python2.7
 # -*- mode: python; -*-
 
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014-2015, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
 
 
+import re
 import sys
 import os.path
 import argparse
 
+from ir import Package
 from lexer import *
 from layout import layout
 from parser import *
@@ -23,9 +25,24 @@ from errors import CompileException
 
 sys.setrecursionlimit(10000)
 
+def packageName(name):
+    component = "[A-Za-z][A-Za-z0-9_]*"
+    rex = re.compile("^%s(?:\.%s)*$" % (component, component), re.MULTILINE)
+    if rex.match(name):
+        return name
+    else:
+        raise argparse.ArgumentTypeError("invalid package name: %s" % name)
+
+
 cmdline = argparse.ArgumentParser(description="Compile source files into CodeSwitch packages")
 cmdline.add_argument("sources", metavar="source", type=str, nargs="+",
                      help="Source file names")
+cmdline.add_argument("-p", "--package-name", action="store", type=packageName,
+                     default="default",
+                     help="Name of the package being compiled")
+cmdline.add_argument("-v", "--package-version", action="store", type=str,
+                     default="",
+                     help="Version of the package being compiled")
 cmdline.add_argument("-o", "--output", action="store",
                      default="out.csp",
                      help="Name of the output file")
@@ -66,7 +83,8 @@ for sourceFilename in args.sources:
         if args.print_ast:
             printer = AstPrinter(sys.stdout)
             printer.visit(ast)
-        info = CompileInfo(ast)
+        package = Package(args.package_name, args.package_version)
+        info = CompileInfo(ast, package)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         if args.print_scope:

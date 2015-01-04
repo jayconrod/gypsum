@@ -52,7 +52,7 @@ class Serializer(object):
         self.outFile.write(struct.pack("<Ihhqiiiiiii",
                                        0x676b7073,   # magic number
                                        0,            # major version
-                                       11,           # minor version
+                                       12,           # minor version
                                        0,            # flags
                                        len(self.package.strings),
                                        len(self.package.globals),
@@ -61,6 +61,8 @@ class Serializer(object):
                                        len(self.package.typeParameters),
                                        self.package.entryFunction,
                                        self.package.initFunction))
+        self.writeString(self.package.name)
+        self.writeString(self.package.version)
 
     def rewrite(self, format, value, offset, whence=os.SEEK_SET):
         self.outFile.seek(offset, whence)

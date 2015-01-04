@@ -37,6 +37,10 @@ class Package: public Block {
   static Local<Package> loadFromStream(VM* vm, std::istream& stream);
 
   DEFINE_INL_ACCESSORS2(u64, flags, setFlags)
+  String* name() const { return name_.get(); }
+  void setName(String* newName) { name_.set(this, newName); }
+  String* version() const { return version_.get(); }
+  void setVersion(String* newVersion) { version_.set(this, newVersion); }
   BlockArray<String>* strings() const { return strings_.get(); }
   void setStrings(BlockArray<String>* newStrings) { strings_.set(this, newStrings); }
   String* getString(length_t index);
@@ -63,6 +67,8 @@ class Package: public Block {
   DECLARE_POINTER_MAP()
 
   u64 flags_;
+  Ptr<String> name_;
+  Ptr<String> version_;
   Ptr<BlockArray<String>> strings_;
   Ptr<BlockArray<Global>> globals_;
   Ptr<BlockArray<Function>> functions_;

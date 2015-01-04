@@ -14,7 +14,9 @@ import bytecode
 import StringIO
 
 class Package(object):
-    def __init__(self):
+    def __init__(self, name="default", version=""):
+        self.name = name
+        self.version = version
         self.globals = []
         self.functions = []
         self.classes = []

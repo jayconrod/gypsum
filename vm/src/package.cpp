@@ -33,6 +33,8 @@ namespace codeswitch {
 namespace internal {
 
 #define PACKAGE_POINTER_LIST(F) \
+  F(Package, name_)             \
+  F(Package, version_)          \
   F(Package, strings_)          \
   F(Package, globals_)          \
   F(Package, functions_)        \
@@ -175,6 +177,8 @@ Function* Package::initFunction() {
 
 ostream& operator << (ostream& os, const Package* pkg) {
   os << brief(pkg)
+     << "\n  name: " << brief(pkg->name())
+     << "\n  version: " << brief(pkg->version())
      << "\n  strings: " << brief(pkg->strings())
      << "\n  functions: " << brief(pkg->functions())
      << "\n  globals: " << brief(pkg->globals())
@@ -194,7 +198,7 @@ Local<Package> PackageLoader::load() {
       throw Error("package file is corrupt");
     auto majorVersion = readValue<u16>();
     auto minorVersion = readValue<u16>();
-    if (majorVersion != 0 || minorVersion != 11)
+    if (majorVersion != 0 || minorVersion != 12)
       throw Error("package file has wrong format version");
 
     package_ = handleScope.escape(*Package::create(heap()));
@@ -239,6 +243,12 @@ Local<Package> PackageLoader::load() {
 
     auto initFunctionIndex = readLength();
     package_->setInitFunctionIndex(initFunctionIndex);
+
+    auto name = readString();
+    package_->setName(*name);
+
+    auto version = readString();
+    package_->setVersion(*version);
 
     for (length_t i = 0; i < stringCount; i++) {
       auto string = readString();
