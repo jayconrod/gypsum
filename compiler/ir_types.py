@@ -37,7 +37,7 @@ class Type(data.Data):
         ty.flags -= frozenset((flag,))
         return ty
 
-    def isSubtypeOf(self, other):
+    def isSubtypeOf(self, other, variance=None):
         if self == other:
             return True
         elif isinstance(self, VariableType) and \
@@ -45,16 +45,33 @@ class Type(data.Data):
              self.typeParameter.hasCommonBound(other.typeParameter):
             return True
         elif isinstance(self, VariableType):
-            return self.typeParameter.upperBound.isSubtypeOf(other)
+            return self.typeParameter.upperBound.isSubtypeOf(other, variance)
         elif isinstance(other, VariableType):
-            return self.isSubtypeOf(other.typeParameter.lowerBound)
+            return self.isSubtypeOf(other.typeParameter.lowerBound, variance)
         elif isinstance(self, ClassType) and \
              isinstance(other, ClassType) and \
              (not self.isNullable() or other.isNullable()):
             if self.clas is builtins.getNothingClass():
                 return True
-            else:
-                return self.isSubtypeOfWithVariance(other, BIVARIANT)
+            if not self.clas.isSubclassOf(other.clas):
+                return False
+
+            selfTypeArgs = self.substituteForBaseClass(other.clas).typeArguments
+            otherTypeArgs = other.typeArguments
+            typeParams = other.clas.typeParameters
+            assert len(selfTypeArgs) == len(otherTypeArgs)
+
+            def checkArg(a, b, param):
+                argVariance = changeVariance(variance, param.variance())
+                if argVariance is flags.COVARIANT:
+                    return a.isSubtypeOf(b, argVariance)
+                elif argVariance is flags.CONTRAVARIANT:
+                    return b.isSubtypeOf(a, argVariance)
+                else:
+                    return a == b
+
+            return all(checkArg(a, b, param) for a, b, param in
+                       zip(selfTypeArgs, otherTypeArgs, typeParams))
         else:
             return False
 
@@ -228,29 +245,6 @@ class ClassType(ObjectType):
                self.clas is other.clas and \
                self.typeArguments == other.typeArguments
 
-    def isSubtypeOfWithVariance(self, other, variance):
-        if self.clas is builtins.getNothingClass():
-            return True
-        if not self.clas.isSubclassOf(other.clas):
-            return False
-        selfTypeArgs = self.substituteForBaseClass(other.clas).typeArguments
-        otherTypeArgs = other.typeArguments
-        typeParams = other.clas.typeParameters
-        assert len(selfTypeArgs) == len(otherTypeArgs)
-
-        def checkArg(a, b, param):
-            argVariance = changeVariance(variance, param.variance())
-            if argVariance is flags.COVARIANT:
-                return a.isSubtypeOfWithVariance(b, argVariance)
-            elif argVariance is flags.CONTRAVARIANT:
-                return b.isSubtypeOfWithVariance(a, argVariance)
-            else:
-                assert argVariance is INVARIANT
-                return a == b
-
-        return all(checkArg(a, b, param) for a, b, param in
-                   zip(selfTypeArgs, otherTypeArgs, typeParams))
-
     def substitute(self, parameters, replacements):
         return ClassType(self.clas,
                          tuple(arg.substitute(parameters, replacements)
@@ -351,6 +345,9 @@ BIVARIANT = "bivariant"
 
 def changeVariance(old, new):
     assert new is not BIVARIANT
+    if old is None:
+        old = BIVARIANT
+
     if old is INVARIANT:
         return INVARIANT
     elif old in [BIVARIANT, flags.COVARIANT]:
