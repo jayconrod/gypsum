@@ -247,7 +247,6 @@ class TypeVisitor(TypeVisitorCommon):
             return
         irDefn = self.info.getDefnInfo(node).irDefn
         if isinstance(irDefn, ir.Class) or isinstance(irDefn, ir.Function):
-            irDefn = self.info.getDefnInfo(node).irDefn
             if isinstance(irDefn, ir.Function):
                 functionState = FunctionState(irDefn)
                 enclosingClass = self.scope().findEnclosingClass()

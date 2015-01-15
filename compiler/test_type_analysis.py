@@ -1071,3 +1071,13 @@ class TestTypeAnalysis(unittest.TestCase):
         info = self.analyzeFromSource(source)
         self.assertIs(info.getDefnInfo(info.ast.definitions[0].members[0]),
                       info.getUseInfo(info.ast.definitions[1].members[0].expression).defnInfo)
+
+    # Regression tests
+    def testPrimaryCtorHasCorrectScope(self):
+        source = "class Foo\n" + \
+                 "  def make-bar = Bar(1)\n" + \
+                 "class Bar(x: i64)"
+        info = self.analyzeFromSource(source)
+        barCtor = info.getDefnInfo(info.ast.definitions[1].constructor).irDefn
+        usedCtor = info.getUseInfo(info.ast.definitions[0].members[0].body).defnInfo.irDefn
+        self.assertIs(barCtor, usedCtor)

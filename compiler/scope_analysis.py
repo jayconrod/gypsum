@@ -1054,6 +1054,9 @@ class ClassScope(Scope):
             irScopeDefn.constructors.append(irDefn)
             self.makeMethod(irDefn, irScopeDefn)
             self.info.package.addFunction(irDefn)
+            # Primary constructor doesn't have its own scope, but it needs to be able to
+            # access this scope later.
+            self.info.setScope(astDefn, self)
         elif isinstance(astDefn, ast.AstTypeParameter):
             checkFlags(flags, frozenset([STATIC, COVARIANT, CONTRAVARIANT]), astDefn.location)
             if STATIC not in flags:
