@@ -182,3 +182,12 @@ class TestUseAnalysis(unittest.TestCase):
         info = self.analyzeFromSourceWithTypes(source)
         self.assertEquals(getStringType(),
                           info.getType(info.ast.definitions[0].members[0].body))
+
+    def testUseTypeParameterInLaterField(self):
+        source = "class Foo\n" + \
+                 "  def get(bar: Bar[String]) = bar.value\n" + \
+                 "class Bar[static T]\n" + \
+                 "  var value: T"
+        info = self.analyzeFromSourceWithTypes(source)
+        self.assertEquals(getStringType(),
+                          info.getType(info.ast.definitions[0].members[0].body))

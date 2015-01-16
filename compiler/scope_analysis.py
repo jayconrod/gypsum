@@ -492,6 +492,15 @@ class Scope(ast.AstNodeVisitor):
         if self.isDefinedAutomatically(astDefn):
             self.define(name)
 
+        # Associate the definition with this scope. Type/use analysis doesn't traverse the
+        # AST in order, so this is important for finding the correct scope.
+        self.info.setScope(astDefn, self)
+        if astVarDefn is not None:
+            if not self.info.hasScope(astVarDefn):
+                self.info.setScope(astVarDefn, self)
+            else:
+                assert self.info.getScope(astVarDefn) is self
+
     def bind(self, name, defnInfo):
         """Binds a name in this scope.
 
@@ -1054,9 +1063,6 @@ class ClassScope(Scope):
             irScopeDefn.constructors.append(irDefn)
             self.makeMethod(irDefn, irScopeDefn)
             self.info.package.addFunction(irDefn)
-            # Primary constructor doesn't have its own scope, but it needs to be able to
-            # access this scope later.
-            self.info.setScope(astDefn, self)
         elif isinstance(astDefn, ast.AstTypeParameter):
             checkFlags(flags, frozenset([STATIC, COVARIANT, CONTRAVARIANT]), astDefn.location)
             if STATIC not in flags:
