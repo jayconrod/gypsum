@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014-2015, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -13,6 +13,7 @@ from ast import *
 from scope_analysis import *
 from type_analysis import *
 from ir import *
+from ir_types import *
 from compile_info import *
 from location import NoLoc
 from flags import LET
@@ -163,3 +164,21 @@ class TestUseAnalysis(unittest.TestCase):
         source = "abstract class A\n" + \
                  "def f = A"
         self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
+
+    # Regression tests
+    def testUseTypeParameterInLaterPrimaryCtor(self):
+        source = "class Foo\n" + \
+                 "  def make-bar = Bar[Foo](this)\n" + \
+                 "class Bar[static +T](value: T)"
+        info = self.analyzeFromSourceWithTypes(source)
+        T = info.package.findTypeParameter(name="T")
+        use = info.getUseInfo(info.ast.definitions[1].constructor.parameters[0].pattern.ty)
+        self.assertIs(T, use.defnInfo.irDefn)
+
+    def testUseTypeParameterInLaterPrimaryCtorField(self):
+        source = "class Foo\n" + \
+                 "  def get(bar: Bar[String]) = bar.value\n" + \
+                 "class Bar[static +T](value: T)"
+        info = self.analyzeFromSourceWithTypes(source)
+        self.assertEquals(getStringType(),
+                          info.getType(info.ast.definitions[0].members[0].body))

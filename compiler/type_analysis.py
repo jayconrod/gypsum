@@ -90,8 +90,7 @@ class TypeVisitorCommon(ast.AstNodeVisitor):
         return ir_t.F64Type
 
     def visitAstClassType(self, node):
-        nameInfo = self.scope().lookup(node.name, node.location,
-                                       ignoreDefnOrder=self.shouldIgnoreDefnOrder())
+        nameInfo = self.scope().lookup(node.name, node.location)
         if nameInfo.isOverloaded() or not nameInfo.getDefnInfo().irDefn.isTypeDefn():
             raise TypeException(node.location, "%s: does not refer to a type" % node.name)
         defnInfo = nameInfo.getDefnInfo()
@@ -135,10 +134,6 @@ class TypeVisitorCommon(ast.AstNodeVisitor):
 
     def ensureTypeInfoForDefn(self, irDefn):
         raise NotImplementedError
-
-    def shouldIgnoreDefnOrder(self):
-        raise NotImplementedError
-
 
 
 class SubtypeVisitor(TypeVisitorCommon):
@@ -196,6 +191,8 @@ class SubtypeVisitor(TypeVisitorCommon):
             raise TypeException(node.location,
                                 "%s: lower bound is not subtype of upper bound" % node.name)
 
+        self.scope().define(node.name)
+
     def visitAstBlockExpression(self, node):
         self.visitChildren(node)
 
@@ -205,12 +202,6 @@ class SubtypeVisitor(TypeVisitorCommon):
     def ensureTypeInfoForDefn(self, irDefn):
         if hasattr(irDefn, "astDefn"):
             self.visit(irDefn.astDefn)
-
-    def shouldIgnoreDefnOrder(self):
-        # Type parameters must be defined in order, but they are not marked as defined until
-        # TypeVisitor processes them. In order to avoid tripped over errors now, we ignore
-        # definition order at this time.
-        return True
 
 
 class TypeVisitor(TypeVisitorCommon):
@@ -325,16 +316,9 @@ class TypeVisitor(TypeVisitorCommon):
         self.handleFunctionCommon(node, None, None)
 
     def visitAstTypeParameter(self, node):
-        self.scope().define(node.name)
-        irTypeParam = self.info.getDefnInfo(node).irDefn
-        if node.upperBound is not None:
-            irTypeParam.upperBound = self.visit(node.upperBound)
-        else:
-            irTypeParam.upperBound = ir_t.getRootClassType()
-        if node.lowerBound is not None:
-            irTypeParam.lowerBound = self.visit(node.lowerBound)
-        else:
-            irTypeParam.lowerBound = ir_t.getNothingClassType()
+        # SubtypeVisitor does all the work, including finding the types of the bounds.
+        # We don't need to do anything here.
+        pass
 
     def visitAstParameter(self, node):
         if self.variance is COVARIANT and node.var == "var":
@@ -689,9 +673,6 @@ class TypeVisitor(TypeVisitorCommon):
             pass   # already done in SubtypeVisitor
         else:
             raise NotImplementedError
-
-    def shouldIgnoreDefnOrder(self):
-        return False
 
     def handleMethodCall(self, name, useAstId, receiverType,
                          typeArgs, argTypes, mayAssign, loc):
