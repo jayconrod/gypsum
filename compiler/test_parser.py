@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014-2015, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -479,6 +479,16 @@ class TestParser(unittest.TestCase):
                                             astVariableExpression("x"),
                                             astVariableExpression("y")),
                         expression(), "x += y")
+
+    def testEqLogicBinopPrecedence(self):
+        self.checkParse(astBinaryExpression("&&",
+                                            astBinaryExpression("!==",
+                                                                astVariableExpression("a"),
+                                                                astVariableExpression("b")),
+                                            astBinaryExpression("===",
+                                                                astVariableExpression("c"),
+                                                                astVariableExpression("d"))),
+                        expression(), "a !== b && c === d")
 
     def testIfExpr(self):
         self.checkParse(astIfExpression(astVariableExpression("x"),
