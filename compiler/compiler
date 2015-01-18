@@ -101,7 +101,7 @@ for sourceFilename in args.sources:
         if args.print_ir:
             sys.stdout.write("%s\n" % str(package))
         serialize(package, args.output)
-    except BaseException, err:
+    except (CompileException, IOError) as err:
         if args.print_stack:
             raise
         if isinstance(err, CompileException):
