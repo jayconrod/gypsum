@@ -636,6 +636,21 @@ class TestTypeAnalysis(unittest.TestCase):
         barClass = info.package.findClass(name="Bar")
         self.assertIs(fooClass.methods[-1], barClass.methods[-1].override)
 
+    def testOverrideGrandParent(self):
+        source = "abstract class A\n" + \
+                 "  abstract def to-string: String\n" + \
+                 "class B <: A\n" + \
+                 "  def to-string = \"B\""
+        info = self.analyzeFromSource(source)
+        Object = getRootClass()
+        ObjectToString = Object.getMethod("to-string")
+        A = info.package.findClass(name="A")
+        AToString = info.package.findFunction(name="to-string", clas=A)
+        B = info.package.findClass(name="B")
+        BToString = info.package.findFunction(name="to-string", clas=B)
+        self.assertIs(ObjectToString, AToString.override)
+        self.assertIs(AToString, BToString.override)
+
     def testAmbiguousOverloadWithoutCall(self):
         source = "def f = 12\n" + \
                  "def f = 34\n"

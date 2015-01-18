@@ -373,7 +373,7 @@ class NameInfo(object):
 
                     aIrDefn.override = bIrDefn
                     self.overrides[bIrDefn.id] = aIrDefn.id
-                    overrideIndex = aIndex + bIndex
+                    overrideIndex = bIndex
                     break
 
             # If we found an override, check that there aren't other functions we could
