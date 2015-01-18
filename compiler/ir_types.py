@@ -37,6 +37,11 @@ class Type(data.Data):
         ty.flags -= frozenset((flag,))
         return ty
 
+    def withFlags(self, flags):
+        ty = copy.copy(self)
+        ty.flags = flags
+        return ty
+
     def isSubtypeOf(self, other, variance=None):
         if self == other:
             return True
@@ -82,30 +87,92 @@ class Type(data.Data):
         raise NotImplementedError
 
     def combine(self, ty, loc):
+        combined = self.lub(ty)
+        if combined is None:
+            raise errors.TypeException(loc, "could not combine")
+        return combined
+
+    def lub(self, ty):
+        """Computes the least upper bound of two types on the type lattice. Note that since
+        this is not a true lattice with a top, there may be no shared upper bound (e.g.,
+        for i64 and String). This function returns None in that case."""
+        if self == ty:
+            return self
+        if self is NoType:
+            return ty
+        if ty is NoType:
+            return self
+
+        commonFlags = self.lubFlags(ty)
+
+        if isinstance(self, VariableType) and isinstance(ty, VariableType):
+            commonUpperBound = self.typeParameter.findCommonUpperBound(ty.typeParameter)
+            if commonUpperBound is not None:
+                return VariableType(commonUpperBound, commonFlags)
+
+        if self.isObject() and ty.isObject():
+            if isinstance(self, ClassType) and self.clas == builtins.getNothingClass():
+                return ty.withFlags(commonFlags)
+            if isinstance(ty, ClassType) and ty.clas == builtins.getNothingClass():
+                return self.withFlags(commonFlags)
+
+            left = self
+            while isinstance(left, VariableType):
+                left = left.typeParameter.upperBound
+            right = ty
+            while isinstance(right, VariableType):
+                right = right.typeParameter.upperBound
+
+            assert isinstance(left, ClassType) and isinstance(right, ClassType)
+
+            commonBase = left.clas.findCommonBaseClass(right.clas)
+            leftTypeArgs = left.substituteForBaseClass(commonBase).typeArguments
+            rightTypeArgs = right.substituteForBaseClass(commonBase).typeArguments
+
+            def combineArg(lty, rty, variance):
+                if variance is INVARIANT:
+                    return lty if lty == rty else None
+                elif variance is flags.COVARIANT:
+                    return lty.lub(rty)
+                else:
+                    assert variance is flags.CONTRAVARIANT
+                    return lty.glb(rty)
+
+            commonTypeArgs = tuple(combineArg(lty, rty, param.variance())
+                                   for lty, rty, param in
+                                   zip(leftTypeArgs, rightTypeArgs, commonBase.typeParameters))
+            if None not in commonTypeArgs:
+                return ClassType(commonBase, commonTypeArgs, commonFlags)
+
+        return None
+
+    def glb(self, ty):
+        """Computes the greatest lower bound of two types on the type lattice. Note that since
+        this is not a true lattice with a bottom, there may be no shared lower bound (e.g.,
+        for i64 and String). This function returns None in that case."""
         if self == ty:
             return self
         elif self is NoType:
             return ty
         elif ty is NoType:
             return self
-        elif isinstance(self, ClassType) and isinstance(ty, ClassType):
-            commonFlags = self.combineFlags(ty)
-            if self.clas is builtins.getNothingClass():
-                return ClassType(ty.clas, ty.typeArguments, commonFlags)
-            elif ty.clas is builtins.getNothingClass():
-                return ClassType(self.clas, self.typeArguments, commonFlags)
-            commonBase = self.clas.findCommonBaseClass(ty.clas)
-            selfTypeArgs = self.substituteForBaseClass(commonBase).typeArguments
-            otherTypeArgs = ty.substituteForBaseClass(commonBase).typeArguments
-            if selfTypeArgs != otherTypeArgs:
-                # TODO: support co/contra-variance
-                raise errors.TypeException(loc, "could not combine; incompatible type args")
-            return ClassType(commonBase, selfTypeArgs, commonFlags)
+        elif self.isSubtypeOf(ty):
+            return self
+        elif ty.isSubtypeOf(self):
+            return ty
+        elif self.isObject() and ty.isObject():
+            # Ok, this is kind of a cop-out. Don't judge me.
+            # TODO: once there are intersection types, use them instead.
+            flags = self.glbFlags(ty)
+            return ClassType(builtins.getNothingClass(), (), flags)
         else:
-            raise errors.TypeException(loc, "could not combine")
+            return None
 
-    def combineFlags(self, other):
-        return self.flags.union(other.flags)
+    def lubFlags(self, ty):
+        return self.flags.union(ty.flags)
+
+    def glbFlags(self, ty):
+        return self.flags.intersect(ty.flags)
 
     def substitute(self, parameters, replacements):
         raise NotImplementedError

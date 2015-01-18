@@ -414,6 +414,25 @@ class TypeParameter(IrDefinition):
                 return False
             current = current.upperBound.typeParameter
 
+    def findCommonUpperBound(self, other):
+        """Returns a type parameter which is an upper bound (directly or indirectly) of this
+        type parameter and another one. If no such parameter exists, returns None. This is
+        used by Type.lub."""
+        selfBounds = [self]
+        bound = self.upperBound
+        while isinstance(bound, VariableType):
+            selfBounds.append(bound.typeParameter)
+            bound = bound.typeParameter.upperBound
+
+        if other in selfBounds:
+            return other
+        bound = other.upperBound
+        while isinstance(bound, VariableType):
+            if bound.typeParameter in selfBounds:
+                return bound.typeParameter
+            bound = bound.typeParameter.upperBound
+        return None
+
 
 # List of variable kinds
 LOCAL = "local"
