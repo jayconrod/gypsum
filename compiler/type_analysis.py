@@ -394,7 +394,9 @@ class TypeVisitor(TypeVisitorCommon):
         rightTy = self.visit(node.right)
         leftTy = self.visit(node.left)
         if not rightTy.isSubtypeOf(leftTy):
-            raise TypeException(node.location, "type error")
+            raise TypeException(node.location,
+                                "for assignment, expected %s but was %s" %
+                                (str(leftTy), str(rightTy)))
         return leftTy
 
     def visitAstPropertyExpression(self, node):
