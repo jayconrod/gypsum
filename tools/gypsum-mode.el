@@ -1,6 +1,6 @@
 ;;; gypsum-mode.el --- Syntax highlighting for Gypsum
 
-;; Copyright 2014, Jay Conrod, all rights reserved.
+;; Copyright 2014-2015, Jay Conrod, all rights reserved.
 
 ;; Author: Jay Conrod <jayconrod@gmail.com>
 ;; Description: Syntax highlighting for Gypsum
@@ -108,7 +108,7 @@
     ("\\<[+-]?\\.[0-9]+\\(?:[eE][+-]?[0-9]+\\)?\\>" . font-lock-constant-face)
     ("\\<[+-]?[0-9]+\\(?:[eE][+-]?[0-9]+\\)?\\>" . font-lock-constant-face)
     ("\"[^\"]*?\"" . font-lock-string-face)
-    ("\\(?:def\\|var\\|class\\) *\\([A-Za-z0-9_-]+\\)" 1 font-lock-variable-name-face)
+    ("\\(?:def\\|let\\|var\\|class\\) *\\([A-Za-z0-9_-]+\\)" 1 font-lock-variable-name-face)
     (,gypsum-keywords-regexp . font-lock-keyword-face)))
 
 
