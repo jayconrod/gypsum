@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014-2015, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -67,6 +67,12 @@ class TestInheritanceAnalysis(unittest.TestCase):
     def testInheritCycle(self):
         source = "class Foo <: Bar\n" + \
                  "class Bar <: Foo"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
+    def testTypeParameterCycle(self):
+        source = "class Foo\n" + \
+                 "class Bar <: Foo\n" + \
+                 "def f[static T <: Bar >: Foo] = 12"
         self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
     def testInheritedDefinitionsAreBound(self):
