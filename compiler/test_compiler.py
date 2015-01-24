@@ -218,6 +218,11 @@ class TestCompiler(TestCaseWithDefinitions):
                  "  x = 34"
         self.assertRaises(SemanticException, self.compileFromSource, source)
 
+    def testAssignCapturedConst(self):
+        source = "def f(x: i64) =\n" + \
+                 "  def g = x = 12"
+        self.assertRaises(SemanticException, self.compileFromSource, source)
+
     def testAssignParam(self):
         source = "def f(x: i64) = {x = 12; {};}"
         self.assertRaises(SemanticException, self.compileFromSource, source)
