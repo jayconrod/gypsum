@@ -15,8 +15,10 @@ from scope_analysis import *
 from ir import *
 from errors import *
 from flags import *
+from utils_test import TestCaseWithDefinitions
 
-class TestDeclarations(unittest.TestCase):
+
+class TestDeclarationAnalysis(TestCaseWithDefinitions):
     def parseFromSource(self, source):
         filename = "(test)"
         rawTokens = lex(filename, source)
@@ -34,14 +36,14 @@ class TestDeclarations(unittest.TestCase):
         info = self.analyzeFromSource("var a = 12")
         ast = info.ast
         astDefn = ast.definitions[0].pattern
-        self.assertEquals(DefnInfo(Global("a", None, frozenset()), ast.id),
+        self.assertEquals(DefnInfo(self.makeGlobal("a"), ast.id),
                           info.getDefnInfo(astDefn))
 
     def testDefineGlobalConst(self):
         info = self.analyzeFromSource("let a = 12")
         ast = info.ast
         astDefn = ast.definitions[0].pattern
-        self.assertEquals(DefnInfo(Global("a", None, frozenset([LET])), ast.id),
+        self.assertEquals(DefnInfo(self.makeGlobal("a", flags=frozenset([LET])), ast.id),
                           info.getDefnInfo(astDefn))
 
     def testDefineGlobalFunction(self):
@@ -49,9 +51,9 @@ class TestDeclarations(unittest.TestCase):
         ast = info.ast
         astDefn = ast.definitions[0]
         defnInfo = info.getDefnInfo(astDefn)
-        self.assertEquals(DefnInfo(Function("f", None, [], None, [], None, frozenset()),
-                                   ast.id),
-                          info.getDefnInfo(astDefn))
+        expected = self.makeFunction("f")
+
+        self.assertEquals(DefnInfo(expected, ast.id), info.getDefnInfo(astDefn))
         self.assertTrue(info.getScope(GLOBAL_SCOPE_ID).isDefined("f"))
 
     def testDefineGlobalClass(self):
@@ -94,24 +96,26 @@ class TestDeclarations(unittest.TestCase):
         clas = info.package.findClass(name="C")
         self.assertEquals(1, len(clas.constructors))
         self.assertIs(ctor, clas.constructors[0])
-        self.assertEquals([Variable("$this", None, PARAMETER, frozenset([LET]))],
+        self.assertEquals([self.makeVariable("$this", kind=PARAMETER, flags=frozenset([LET]))],
                           ctor.variables)
-        self.assertEquals([Field("x", None, frozenset([LET])),
-                           Field("y", None, frozenset([LET]))], clas.fields)
+        self.assertEquals([self.makeField("x", flags=frozenset([LET])),
+                           self.makeField("y", flags=frozenset([LET]))],
+                          clas.fields)
         xDefnInfo = info.getDefnInfo(ast.constructor.parameters[0].pattern)
-        self.assertEquals(Field("x", None, frozenset([LET])), xDefnInfo.irDefn)
+        self.assertEquals(self.makeField("x", flags=frozenset([LET])), xDefnInfo.irDefn)
 
     def testDefineClassWithPrimaryCtorWithVarParam(self):
         source = "class C(var x: i32)"
         info = self.analyzeFromSource(source)
         C = info.package.findClass(name="C")
-        self.assertEquals([Field("x", None, frozenset())], C.fields)
+        self.assertEquals([self.makeField("x")], C.fields)
 
     def testDefineFunctionParameter(self):
         info = self.analyzeFromSource("def f(x: i32) = x")
         ast = info.ast
         astDefn = ast.definitions[0].parameters[0].pattern
-        self.assertEquals(DefnInfo(Variable("x", None, PARAMETER, frozenset([LET])),
+        self.assertEquals(DefnInfo(self.makeVariable("x", kind=PARAMETER,
+                                                     flags=frozenset([LET])),
                                    ast.definitions[0].id),
                           info.getDefnInfo(astDefn))
 
@@ -119,7 +123,7 @@ class TestDeclarations(unittest.TestCase):
         info = self.analyzeFromSource("def f(var x: i32) = x")
         ast = info.ast
         astDefn = ast.definitions[0].parameters[0].pattern
-        self.assertEquals(DefnInfo(Variable("x", None, PARAMETER, frozenset()),
+        self.assertEquals(DefnInfo(self.makeVariable("x", kind=PARAMETER),
                                    ast.definitions[0].id),
                           info.getDefnInfo(astDefn))
 
@@ -127,7 +131,7 @@ class TestDeclarations(unittest.TestCase):
         info = self.analyzeFromSource("def f = { var x = 12; }")
         ast = info.ast
         astDefn = ast.definitions[0].body.statements[0].pattern
-        self.assertEquals(DefnInfo(Variable("x", None, LOCAL, frozenset()),
+        self.assertEquals(DefnInfo(self.makeVariable("x", kind=LOCAL),
                                    ast.definitions[0].id),
                           info.getDefnInfo(astDefn))
 
@@ -135,7 +139,7 @@ class TestDeclarations(unittest.TestCase):
         info = self.analyzeFromSource("def f = { let x = 12; }")
         ast = info.ast
         astDefn = ast.definitions[0].body.statements[0].pattern
-        self.assertEquals(DefnInfo(Variable("x", None, LOCAL, frozenset([LET])),
+        self.assertEquals(DefnInfo(self.makeVariable("x", kind=LOCAL, flags=frozenset([LET])),
                                    ast.definitions[0].id),
                           info.getDefnInfo(astDefn))
 
@@ -143,9 +147,8 @@ class TestDeclarations(unittest.TestCase):
         info = self.analyzeFromSource("def f = { def g = 12; };")
         ast = info.ast
         astDefn = ast.definitions[0].body.statements[0]
-        self.assertEquals(DefnInfo(Function("g", None, [], None, [], None, frozenset()),
-                                   ast.definitions[0].id),
-                          info.getDefnInfo(astDefn))
+        expected = self.makeFunction("g")
+        self.assertEquals(DefnInfo(expected, ast.definitions[0].id), info.getDefnInfo(astDefn))
 
     def testDefineFunctionClass(self):
         info = self.analyzeFromSource("def f = { class C {}; };")
@@ -159,14 +162,16 @@ class TestDeclarations(unittest.TestCase):
         info = self.analyzeFromSource("class C { var x: i32; };")
         ast = info.ast
         astDefn = ast.definitions[0].members[0].pattern
-        self.assertEquals(DefnInfo(Field("x", None, frozenset()), ast.definitions[0].id),
+        self.assertEquals(DefnInfo(self.makeField("x"),
+                                   ast.definitions[0].id),
                           info.getDefnInfo(astDefn))
 
     def testDefineClassConst(self):
         info = self.analyzeFromSource("class C { let x: i32; };")
         ast = info.ast
         astDefn = ast.definitions[0].members[0].pattern
-        self.assertEquals(DefnInfo(Field("x", None, frozenset([LET])), ast.definitions[0].id),
+        self.assertEquals(DefnInfo(self.makeField("x", flags=frozenset([LET])),
+                                   ast.definitions[0].id),
                           info.getDefnInfo(astDefn))
 
 
@@ -174,22 +179,22 @@ class TestDeclarations(unittest.TestCase):
         source = "class C() { var x = { var y = 12; y; }; };"
         info = self.analyzeFromSource(source)
         irInitializer = info.package.findClass(name="C").initializer
-        self.assertEquals([Variable("$this", None, PARAMETER, frozenset([LET])),
-                           Variable("y", None, LOCAL, frozenset())],
+        self.assertEquals([self.makeVariable("$this", kind=PARAMETER, flags=frozenset([LET])),
+                           self.makeVariable("y", kind=LOCAL)],
                           irInitializer.variables)
 
     def testDefineClassFunction(self):
         info = self.analyzeFromSource("class C { def f = 12; };")
         ast = info.ast
         astDefn = ast.definitions[0].members[0]
-        expectedFunction = Function("f", None, [], None,
-                                    [Variable("$this", None, PARAMETER, frozenset([LET]))],
-                                    None, frozenset())
+        this = self.makeVariable("$this", kind=PARAMETER, flags=frozenset([LET]))
+        expectedFunction = self.makeFunction("f", variables=[this])
         expectedDefnInfo = DefnInfo(expectedFunction, ast.definitions[0].id)
         self.assertEquals(expectedDefnInfo, info.getDefnInfo(astDefn))
         expectedClosureInfo = ClosureInfo(info.package.findClass(name="C"),
                                           {ast.definitions[0].id:
-                                             Variable("$this", None, PARAMETER, frozenset([LET]))})
+                                             self.makeVariable("$this", kind=PARAMETER,
+                                                               flags=frozenset([LET]))})
         self.assertEquals(expectedClosureInfo, info.getClosureInfo(astDefn))
 
     @unittest.skip("inner classes not supported yet")
@@ -197,8 +202,7 @@ class TestDeclarations(unittest.TestCase):
         info = self.analyzeFromSource("class C { class D; };")
         ast = info.ast
         astDefn = ast.definitions[0].members[0]
-        self.assertEquals(DefnInfo(Class("D", None, None, [], [], [], frozenset())),
-                          info.getDefnInfo(astDefn))
+        self.assertEquals(DefnInfo(self.makeClass("D")), info.getDefnInfo(astDefn))
 
     def testVarDefinedInBlock(self):
         info = self.analyzeFromSource("def f = {\n" +
@@ -208,7 +212,7 @@ class TestDeclarations(unittest.TestCase):
                                       "};")
         ast = info.ast
         defnInfo = info.getDefnInfo(ast.definitions[0].body.statements[0].statements[0].pattern)
-        self.assertEquals(Variable("x", None, LOCAL, frozenset()), defnInfo.irDefn)
+        self.assertEquals(self.makeVariable("x", kind=LOCAL), defnInfo.irDefn)
         self.assertEquals(ast.definitions[0].body.statements[0].id, defnInfo.scopeId)
 
     def testVarDefinedInCatch(self):
@@ -216,7 +220,8 @@ class TestDeclarations(unittest.TestCase):
                                       "  case x => x\n")
         ast = info.ast
         defnInfo = info.getDefnInfo(ast.definitions[0].body.catchHandler.cases[0].pattern)
-        self.assertEquals(Variable("x", None, LOCAL, frozenset([LET])), defnInfo.irDefn)
+        self.assertEquals(self.makeVariable("x", kind=LOCAL, flags=frozenset([LET])),
+                          defnInfo.irDefn)
         self.assertEquals(ast.definitions[0].body.catchHandler.cases[0].id, defnInfo.scopeId)
 
     def testOverloadedFunctions(self):

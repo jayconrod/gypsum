@@ -39,29 +39,29 @@ class Package(object):
         buf.write("init function: %d\n" % self.initFunction)
         return buf.getvalue()
 
-    def addFunction(self, function):
-        assert not hasattr(function, "id")
-        function.id = len(self.functions)
-        self.functions.append(function)
-        return function.id
+    def addGlobal(self, name, astDefn, *args):
+        id = len(self.globals)
+        g = Global(name, astDefn, id, *args)
+        self.globals.append(g)
+        return g
 
-    def addClass(self, clas):
-        assert not hasattr(clas, "id")
-        clas.id = len(self.classes)
-        self.classes.append(clas)
-        return clas.id
+    def addFunction(self, name, astDefn, *args):
+        id = len(self.functions)
+        f = Function(name, astDefn, id, *args)
+        self.functions.append(f)
+        return f
 
-    def addGlobal(self, gbl):
-        assert not hasattr(gbl, "id")
-        gbl.id = len(self.globals)
-        self.globals.append(gbl)
-        return gbl.id
+    def addClass(self, name, astDefn, *args):
+        id = len(self.classes)
+        c = Class(name, astDefn, id, *args)
+        self.classes.append(c)
+        return c
 
-    def addTypeParameter(self, tp):
-        assert not hasattr(tp, "id")
-        tp.id = len(self.typeParameters)
-        self.typeParameters.append(tp)
-        return tp.id
+    def addTypeParameter(self, name, astDefn, *args):
+        id = len(self.typeParameters)
+        p = TypeParameter(name, astDefn, id, *args)
+        self.typeParameters.append(p)
+        return p
 
     def findOrAddString(self, s):
         assert type(s) == unicode
@@ -101,18 +101,26 @@ class Package(object):
 
 
 class IrDefinition(data.Data):
-    def isBuiltin(self):
-        return self.id < 0
+    propertyNames = ("name", "astDefn")
+    skipCompareNames = ("astDefn",)
 
     def isTypeDefn(self):
         return False
 
     def getLocation(self):
-        return self.astDefn.location if hasattr(self, "astDefn") else None
+        return self.astDefn.location if self.astDefn is not None else None
 
 
-class Global(IrDefinition):
-    propertyNames = ("name", "type", "flags")
+class IrTopDefn(IrDefinition):
+    propertyNames = IrDefinition.propertyNames + ("id",)
+    skipCompareNames = IrDefinition.skipCompareNames + ("id",)
+
+    def isBuiltin(self):
+        return self.id < 0
+
+
+class Global(IrTopDefn):
+    propertyNames = IrTopDefn.propertyNames + ("type", "flags")
 
     def __str__(self):
         buf = StringIO.StringIO()
@@ -122,8 +130,9 @@ class Global(IrDefinition):
         return buf.getvalue()
 
 
-class Function(IrDefinition):
-    propertyNames = ("name", "returnType", "typeParameters", "parameterTypes",
+class Function(IrTopDefn):
+    propertyNames = IrTopDefn.propertyNames + \
+                    ("returnType", "typeParameters", "parameterTypes",
                      "variables", "blocks", "flags")
 
     def canCallWith(self, typeArgs, argTypes):
@@ -202,8 +211,8 @@ class Function(IrDefinition):
         return buf.getvalue()
 
 
-class Class(IrDefinition):
-    propertyNames = ("name", "typeParameters", "supertypes", \
+class Class(IrTopDefn):
+    propertyNames = IrTopDefn.propertyNames + ("typeParameters", "supertypes",
                      "initializer", "constructors", "fields", "methods", "flags")
 
     def superclass(self):
@@ -245,10 +254,10 @@ class Class(IrDefinition):
                     path.pop()
                 indexStack.pop()
             elif clas.supertypes[index].clas.id not in visited:
-                assert clas.supertypes[index].clas.id is not None
-                visited.add(clas.supertypes[index].clas.id)
-                path.append(clas.supertypes[index])
-                indexStack[-1] += 1
+                supertype = clas.supertypes[index]
+                assert supertype.clas.id is not None
+                visited.add(supertype.clas.id)
+                path.append(supertype)
                 indexStack.append(0)
         return None
 
@@ -366,12 +375,12 @@ class Class(IrDefinition):
         return buf.getvalue()
 
 
-class TypeParameter(IrDefinition):
-    propertyNames = ("name", "upperBound", "lowerBound", "flags")
+class TypeParameter(IrTopDefn):
+    propertyNames = IrTopDefn.propertyNames + ("upperBound", "lowerBound", "flags")
 
-    def __init__(self, name, upperBound, lowerBound, flags, clas=None):
-        super(TypeParameter, self).__init__(name, upperBound, lowerBound, flags)
-        self.clas = clas
+    def __init__(self, name, astDefn, id, upperBound, lowerBound, flags):
+        super(TypeParameter, self).__init__(name, astDefn, id, upperBound, lowerBound, flags)
+        self.clas = None
 
     def isEquivalent(self, other):
         return self.upperBound == other.upperBound and \
@@ -439,11 +448,11 @@ LOCAL = "local"
 PARAMETER = "parameter"
 
 class Variable(IrDefinition):
-    propertyNames = ["name", "type", "kind", "flags"]
+    propertyNames = IrDefinition.propertyNames + ("type", "kind", "flags")
 
 
 class Field(IrDefinition):
-    propertyNames = ["name", "type", "flags"]
+    propertyNames = IrDefinition.propertyNames + ("type", "flags")
 
 __all__ = ["Package", "Global", "Function", "Class", "TypeParameter",
            "Variable", "Field", "LOCAL", "PARAMETER"]

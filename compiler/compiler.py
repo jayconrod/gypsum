@@ -20,9 +20,8 @@ from utils import Counter, COMPILE_FOR_EFFECT, COMPILE_FOR_VALUE, COMPILE_FOR_UN
 def compile(info):
     for clas in info.package.classes:
         assignFieldIndices(clas, info)
-    init = Function("$init", UnitType, [], [], [], None, frozenset())
+    init = info.package.addFunction("$init", None, UnitType, [], [], [], None, frozenset())
     init.compileHint = PACKAGE_INITIALIZER_HINT
-    info.package.addFunction(init)
     info.package.initFunction = init.id
     for function in info.package.functions:
         compiler = CompileVisitor(function, info)

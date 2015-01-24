@@ -18,9 +18,10 @@ from compile_info import *
 from location import NoLoc
 from flags import LET
 from errors import *
+from utils_test import TestCaseWithDefinitions
 
 
-class TestUseAnalysis(unittest.TestCase):
+class TestUseAnalysis(TestCaseWithDefinitions):
     def parseFromSource(self, source):
         filename = "(test)"
         rawTokens = lex(filename, source)
@@ -85,7 +86,8 @@ class TestUseAnalysis(unittest.TestCase):
         info = self.analyzeFromSource("class Foo { var x = this; };")
         classScope = info.getScope(info.ast.definitions[0])
         thisNameInfo = classScope.lookup("this", NoLoc)
-        self.assertEquals(DefnInfo(Variable("$this", None, PARAMETER, frozenset([LET])),
+        self.assertEquals(DefnInfo(self.makeVariable("$this", kind=PARAMETER,
+                                                     flags=frozenset([LET])),
                                    classScope.scopeId, classScope.scopeId, NOT_HERITABLE),
                           thisNameInfo.getDefnInfo())
 

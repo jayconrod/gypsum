@@ -200,7 +200,7 @@ class SubtypeVisitor(TypeVisitorCommon):
         pass
 
     def ensureTypeInfoForDefn(self, irDefn):
-        if hasattr(irDefn, "astDefn"):
+        if irDefn.astDefn is not None:
             self.visit(irDefn.astDefn)
 
 

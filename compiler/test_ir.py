@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014-2015, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -8,24 +8,29 @@ import unittest
 
 execfile("ir.py")
 
-from builtins import *
+from builtins import registerBuiltins, getNothingClass
 from ir_types import *
+from utils_test import TestCaseWithDefinitions
 
 
-class TestIntermediateRepresentation(unittest.TestCase):
-    registerBuiltins(lambda name, ir: None)
+class TestIr(TestCaseWithDefinitions):
+    builtins.registerBuiltins(lambda name, ir: None)
 
     def setUp(self):
-        self.package = Package()
-        self.base = Class("Base", [], [getRootClassType()], None, [], [], [], frozenset())
-        self.package.addClass(self.base)
+        super(TestIr, self).setUp()
+        self.base = self.makeClass("Base", supertypes=[getRootClassType()])
         baseTy = ClassType(self.base)
-        self.A = Class("A", [], [baseTy], None, [], [], [], frozenset())
-        self.package.addClass(self.A)
-        self.B = Class("B", [], [baseTy], None, [], [], [], frozenset())
-        self.package.addClass(self.B)
-        self.T = TypeParameter("T", getRootClassType(), getNothingClassType(), frozenset())
-        self.package.addTypeParameter(self.T)
+        self.A = self.makeClass("A", supertypes=[baseTy])
+        self.B = self.makeClass("B", supertypes=[baseTy])
+        self.T = self.makeTypeParameter("T")
+
+    def tearDown(self):
+        super(TestIr, self).tearDown()
+        self.package = None
+        self.base = None
+        self.A = None
+        self.B = None
+        self.T = None
 
     def testFindCommonBaseClass(self):
         commonClass = self.A.findCommonBaseClass(self.B)
@@ -37,71 +42,66 @@ class TestIntermediateRepresentation(unittest.TestCase):
         self.assertIs(self.A, nothing.findCommonBaseClass(self.A))
 
     def testFunctionCanCallWithWrongArgCount(self):
-        f = Function("f", UnitType, [], [UnitType], None, None, frozenset())
+        f = self.makeFunction("f", returnType=UnitType, parameterTypes=[UnitType])
         self.assertFalse(f.canCallWith([], []))
 
     def testFunctionCanCallWithWrongArgTypes(self):
-        f = Function("f", UnitType, [], [I64Type], None, None, frozenset())
+        f = self.makeFunction("f", returnType=UnitType, parameterTypes=[I64Type])
         self.assertFalse(f.canCallWith([], [UnitType]))
 
     def testFunctionCanCallWithWrongTypeArgCount(self):
-        f = Function("f", UnitType, [self.T], [], None, None, frozenset())
+        f = self.makeFunction("f", returnType=UnitType, typeParameters=[self.T])
         self.assertFalse(f.canCallWith([], []))
 
     def testFunctionCanCallWithTypeArgOutOfBounds(self):
-        S = TypeParameter("S", ClassType(self.A), getNothingClassType(), frozenset())
-        self.package.addTypeParameter(S)
-        f = Function("f", UnitType, [S], [], None, None, frozenset())
+        S = self.makeTypeParameter("S", upperBound=ClassType(self.A))
+        f = self.makeFunction("f", returnType=UnitType, typeParameters=[S])
         self.assertFalse(f.canCallWith([getRootClassType()], []))
 
     def testFunctionCanCallWithCorrectArgs(self):
         t = VariableType(self.T)
-        f = Function("f", t, [self.T], [t], None, None, frozenset())
+        f = self.makeFunction("f", returnType=t, typeParameters=[self.T], parameterTypes=[t])
         self.assertTrue(f.canCallWith([getRootClassType()], [getRootClassType()]))
 
     def testMayOverrideParamSub(self):
         rt = ClassType(self.base)
-        f1 = Function("f", UnitType, [], [rt, ClassType(self.A)], None, None, frozenset())
+        f1 = self.makeFunction("f", returnType=UnitType, parameterTypes=[rt, ClassType(self.A)])
         f1.clas = self.base
-        f2 = Function("f", UnitType, [], [rt, ClassType(self.base)], None, None, frozenset())
+        f2 = self.makeFunction("f", returnType=UnitType,
+                               parameterTypes=[rt, ClassType(self.base)])
         f2.clas = self.base
         self.assertTrue(f2.mayOverride(f1))
         self.assertFalse(f1.mayOverride(f2))
 
     def testMayOverrideTypeParamsDiff(self):
         rt = ClassType(self.base)
-        f1 = Function("f", UnitType, [self.T], [rt], None, None, frozenset())
+        f1 = self.makeFunction("f", returnType=UnitType,
+                               typeParameters=[self.T], parameterTypes=[rt])
         f1.clas = self.base
-        S = TypeParameter("S", ClassType(self.base), ClassType(self.A), frozenset())
-        f2 = Function("f", UnitType, [S], [rt], None, None, frozenset())
+        S = self.makeTypeParameter("S", upperBound=ClassType(self.base),
+                                   lowerBound=ClassType(self.A))
+        f2 = self.makeFunction("f", returnType=UnitType,
+                               typeParameters=[S], parameterTypes=[rt])
         f2.clas = self.base
         self.assertFalse(f2.mayOverride(f1))
         self.assertFalse(f1.mayOverride(f2))
 
     def testFindPathToBaseClassMissing(self):
-        A = Class("A", [], [], None, [], [], [], frozenset())
-        A.id = 0
-        B = Class("B", [], [], None, [], [], [], frozenset())
-        B.id = 1
+        A = self.makeClass("A", supertypes=[getRootClassType()])
+        B = self.makeClass("B", supertypes=[getRootClassType()])
         self.assertEquals(None, A.findClassPathToBaseClass(B))
 
     def testFindPathToBaseClassSelf(self):
-        A = Class("A", [], [], None, [], [], [], frozenset())
-        A.id = 0
+        A = self.makeClass("A", supertypes=[getRootClassType()])
         self.assertEquals([], A.findClassPathToBaseClass(A))
 
     def testFindPathToBaseClassShort(self):
-        A = Class("A", [], [], None, [], [], [], frozenset())
-        A.id = 0
-        B = Class("B", [], [ClassType(A)], None, [], [], [], frozenset())
-        B.id = 1
+        A = self.makeClass("A", supertypes=[getRootClassType()])
+        B = self.makeClass("B", supertypes=[ClassType(A)])
         self.assertEquals([A], B.findClassPathToBaseClass(A))
 
     def testFindPathToBaseClassLong(self):
-        A = Class("A", [], [], None, [], [], [], frozenset())
-        A.id = 0
-        B = Class("B", [], [ClassType(A)], None, [], [], [], frozenset())
-        B.id = 1
-        C = Class("C", [], [ClassType(B)], None, [], [], [], frozenset())
-        C.id = 2
+        A = self.makeClass("A", supertypes=[getRootClassType()])
+        B = self.makeClass("B", supertypes=[ClassType(A)])
+        C = self.makeClass("C", supertypes=[ClassType(B)])
         self.assertEquals([B, A], C.findClassPathToBaseClass(A))

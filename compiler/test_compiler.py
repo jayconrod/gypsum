@@ -24,8 +24,9 @@ from flags import LET
 from compile_info import CompileInfo
 from builtins import *
 from errors import *
+from utils_test import TestCaseWithDefinitions
 
-class TestCompiler(unittest.TestCase):
+class TestCompiler(TestCaseWithDefinitions):
     def compileFromSource(self, source):
         filename = "(test)"
         rawTokens = lex(filename, source)
@@ -52,6 +53,7 @@ class TestCompiler(unittest.TestCase):
     def makeSimpleFunction(self, name, retTy, blocks,
                            typeParameters=None, parameterTypes=None,
                            variables=None, attribs=frozenset()):
+        dummyPackage = Package()
         if variables is None:
             variables = []
         if typeParameters is None:
@@ -59,8 +61,8 @@ class TestCompiler(unittest.TestCase):
         if parameterTypes is None:
             parameterTypes = [v.type for v in variables if v.kind is PARAMETER]
         blockList = [BasicBlock(i, insts) for i, insts in enumerate(blocks)]
-        function = Function(name, retTy, typeParameters, parameterTypes,
-                            variables, blockList, attribs)
+        function = dummyPackage.addFunction(name, None, retTy, typeParameters, parameterTypes,
+                                            variables, blockList, attribs)
         return function
 
     def checkFunction(self, input, expected):
@@ -135,7 +137,7 @@ class TestCompiler(unittest.TestCase):
                                stlocal(-1),
                                unit(),
                                ret()]],
-                             variables=[Variable("x", I64Type, LOCAL, frozenset())]))
+                             variables=[self.makeVariable("x", type=I64Type)]))
 
     def testSimpleVar(self):
         self.checkFunction("def f = { var x = 12; x; }",
@@ -144,7 +146,7 @@ class TestCompiler(unittest.TestCase):
                                stlocal(-1),
                                ldlocal(-1),
                                ret()]],
-                             variables=[Variable("x", I64Type, LOCAL, frozenset())]))
+                             variables=[self.makeVariable("x", type=I64Type)]))
 
     def testLoadGlobal(self):
         source = "let x = 42\n" + \
@@ -173,7 +175,8 @@ class TestCompiler(unittest.TestCase):
                            self.makeSimpleFunction("f", I64Type, [[
                                ldlocal(0),
                                ret()]],
-                             variables=[Variable("x", I64Type, PARAMETER, frozenset([LET]))]))
+                             variables=[self.makeVariable("x", type=I64Type,
+                                                          kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testSeveralParameters(self):
         self.checkFunction("def f(var a: i32, var b: boolean, var c: boolean, var d: i32) =\n" + \
@@ -191,10 +194,10 @@ class TestCompiler(unittest.TestCase):
                                ldlocal(3),
                                ret()]],
                              variables=[
-                               Variable("a", I32Type, PARAMETER, frozenset()),
-                               Variable("b", BooleanType, PARAMETER, frozenset()),
-                               Variable("c", BooleanType, PARAMETER, frozenset()),
-                               Variable("d", I32Type, PARAMETER, frozenset())]))
+                               self.makeVariable("a", type=I32Type, kind=PARAMETER),
+                               self.makeVariable("b", type=BooleanType, kind=PARAMETER),
+                               self.makeVariable("c", type=BooleanType, kind=PARAMETER),
+                               self.makeVariable("d", type=I32Type, kind=PARAMETER)]))
 
     def testAssign(self):
         self.checkFunction("def f =\n" + \
@@ -207,7 +210,7 @@ class TestCompiler(unittest.TestCase):
                                dup(),
                                stlocal(-1),
                                ret()]],
-                             variables=[Variable("x", I64Type, LOCAL, frozenset())]))
+                             variables=[self.makeVariable("x", type=I64Type)]))
 
     def testAssignConst(self):
         source = "def f =\n" + \
@@ -227,7 +230,7 @@ class TestCompiler(unittest.TestCase):
                                unit(),
                                ret()]],
                              parameterTypes=[I64Type],
-                             variables=[Variable("x", I64Type, PARAMETER, frozenset())]))
+                             variables=[self.makeVariable("x", type=I64Type, kind=PARAMETER)]))
 
     def testAssignShortProps(self):
         package = self.compileFromSource("class Foo\n" +
@@ -237,20 +240,20 @@ class TestCompiler(unittest.TestCase):
                                          "  foo.x = false\n" +
                                          "  foo.y = 12\n")
         clasTy = ClassType(package.classes[0], ())
-        expected = Function("f", I64Type, [], [clasTy], [
-                                Variable("foo", clasTy, PARAMETER, frozenset([LET]))],
-                              [BasicBlock(0, [
-                                ldlocal(0),
-                                false(),
-                                swap(),
-                                st8(0),
-                                ldlocal(0),
-                                i64(12),
-                                dup(),
-                                swap2(),
-                                st64(1),
-                                ret()])],
-                              frozenset())
+        expected = self.makeSimpleFunction("f", I64Type, [[
+                       ldlocal(0),
+                       false(),
+                       swap(),
+                       st8(0),
+                       ldlocal(0),
+                       i64(12),
+                       dup(),
+                       swap2(),
+                       st64(1),
+                       ret()]],
+                     parameterTypes=[clasTy],
+                     variables=[self.makeVariable("foo", type=clasTy,
+                                                  kind=PARAMETER, flags=frozenset([LET]))])
         self.assertEquals(expected, package.findFunction(name="f"))
 
     def testAssignPtrField(self):
@@ -275,7 +278,8 @@ class TestCompiler(unittest.TestCase):
                        unit(),
                        ret()]],
                      parameterTypes=[clasTy],
-                     variables=[Variable("$this", clasTy, PARAMETER, frozenset([LET]))])
+                     variables=[self.makeVariable("$this", type=clasTy,
+                                                  kind=PARAMETER, flags=frozenset([LET]))])
         self.assertEquals(expected, clas.constructors[0])
 
     def testAssignConstField(self):
@@ -306,7 +310,8 @@ class TestCompiler(unittest.TestCase):
                        ldp(0),
                        ret()]],
                      parameterTypes=[clasTy],
-                     variables=[Variable("foo", clasTy, PARAMETER, frozenset([LET]))])
+                     variables=[self.makeVariable("foo", type=clasTy,
+                                                  kind=PARAMETER, flags=frozenset([LET]))])
 
     def testAccumShortPropForEffect(self):
         package = self.compileFromSource("class Foo\n" +
@@ -315,19 +320,19 @@ class TestCompiler(unittest.TestCase):
                                          "  foo.x += 12\n" +
                                          "  34")
         clasTy = ClassType(package.classes[0], ())
-        expected = Function("f", I64Type, [], [clasTy], [
-                              Variable("foo", clasTy, PARAMETER, frozenset([LET]))],
-                            [BasicBlock(0, [
-                              ldlocal(0),
-                              dup(),
-                              ld64(0),
-                              i64(12),
-                              addi64(),
-                              swap(),
-                              st64(0),
-                              i64(34),
-                              ret()])],
-                            frozenset())
+        expected = self.makeSimpleFunction("f", I64Type, [[
+                       ldlocal(0),
+                       dup(),
+                       ld64(0),
+                       i64(12),
+                       addi64(),
+                       swap(),
+                       st64(0),
+                       i64(34),
+                       ret()]],
+                     parameterTypes=[clasTy],
+                     variables=[self.makeVariable("foo", type=clasTy,
+                                                  kind=PARAMETER, flags=frozenset([LET]))])
         self.assertEquals(expected, package.findFunction(name="f"))
 
     def testAccumShortPropForValue(self):
@@ -336,19 +341,19 @@ class TestCompiler(unittest.TestCase):
                                          "def f(foo: Foo) =\n" +
                                          "  foo.x += 12\n")
         clasTy = ClassType(package.classes[0], ())
-        expected = Function("f", I64Type, [], [clasTy], [
-                              Variable("foo", clasTy, PARAMETER, frozenset([LET]))],
-                            [BasicBlock(0, [
-                              ldlocal(0),
-                              dup(),
-                              ld64(0),
-                              i64(12),
-                              addi64(),
-                              dup(),
-                              swap2(),
-                              st64(0),
-                              ret()])],
-                            frozenset())
+        expected = self.makeSimpleFunction("f", I64Type, [[
+                       ldlocal(0),
+                       dup(),
+                       ld64(0),
+                       i64(12),
+                       addi64(),
+                       dup(),
+                       swap2(),
+                       st64(0),
+                       ret()]],
+                     parameterTypes=[clasTy],
+                     variables=[self.makeVariable("foo", type=clasTy,
+                                                  kind=PARAMETER, flags=frozenset([LET]))])
         self.assertEquals(expected, package.findFunction(name="f"))
 
     def testLoadNonNullableObject(self):
@@ -387,8 +392,10 @@ class TestCompiler(unittest.TestCase):
                                ldlocal(1),
                                eqp(),
                                ret()]],
-                             variables=[Variable("foo", ty, PARAMETER, frozenset([LET])),
-                                        Variable("bar", ty, PARAMETER, frozenset([LET]))]))
+                             variables=[self.makeVariable("foo", type=ty,
+                                                          kind=PARAMETER, flags=frozenset([LET])),
+                                        self.makeVariable("bar", type=ty,
+                                                          kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testNullableNe(self):
         ty = ClassType(getRootClass(), (), NULLABLE_TYPE_FLAG)
@@ -398,8 +405,10 @@ class TestCompiler(unittest.TestCase):
                                ldlocal(1),
                                nep(),
                                ret()]],
-                             variables=[Variable("foo", ty, PARAMETER, frozenset([LET])),
-                                        Variable("bar", ty, PARAMETER, frozenset([LET]))]))
+                             variables=[self.makeVariable("foo", type=ty,
+                                                          kind=PARAMETER, flags=frozenset([LET])),
+                                        self.makeVariable("bar", type=ty,
+                                                          kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testTruncI32(self):
         self.checkFunction("def f(n: i64) = n.to-i32",
@@ -407,7 +416,8 @@ class TestCompiler(unittest.TestCase):
                                ldlocal(0),
                                trunci32(),
                                ret()]],
-                             variables=[Variable("n", I64Type, PARAMETER, frozenset([LET]))]))
+                             variables=[self.makeVariable("n", type=I64Type,
+                                                          kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testSext16(self):
         self.checkFunction("def f(n: i8) = n.to-i16",
@@ -415,7 +425,9 @@ class TestCompiler(unittest.TestCase):
                                ldlocal(0),
                                sexti16_8(),
                                ret()]],
-                             variables=[Variable("n", I8Type, PARAMETER, frozenset([LET]))]))
+                             variables=[self.makeVariable("n", type=I8Type,
+                                                          kind=PARAMETER,
+                                                          flags=frozenset([LET]))]))
 
     def testF32ToI64(self):
         self.checkFunction("def f(n: f32) = n.to-i64",
@@ -424,7 +436,9 @@ class TestCompiler(unittest.TestCase):
                                fcvti32(),
                                sexti64_32(),
                                ret()]],
-                             variables=[Variable("n", F32Type, PARAMETER, frozenset([LET]))]))
+                             variables=[self.makeVariable("n", type=F32Type,
+                                                          kind=PARAMETER,
+                                                          flags=frozenset([LET]))]))
 
     def testNeg(self):
         self.checkFunction("def f = - 12",
@@ -456,7 +470,7 @@ class TestCompiler(unittest.TestCase):
                                dup(),
                                stlocal(-1),
                                ret()]],
-                             variables=[Variable("x", I64Type, LOCAL, frozenset())]))
+                             variables=[self.makeVariable("x", type=I64Type)]))
 
     def testAddFloat(self):
         self.checkFunction("def f = 1.2 + 3.4",
@@ -656,7 +670,8 @@ class TestCompiler(unittest.TestCase):
                                drop(),
                                throw(),
                              ]],
-                             variables=[Variable("exn", exnTy, LOCAL, frozenset([LET]))]))
+                             variables=[self.makeVariable("exn", type=exnTy,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
 
     def testTryWithMatchAndFinally(self):
         exnClass = getExceptionClass()
@@ -722,7 +737,8 @@ class TestCompiler(unittest.TestCase):
                                # block 8
                                throw(),
                              ]],
-                             variables=[Variable("exn", exnTy, LOCAL, frozenset([LET]))]))
+                             variables=[self.makeVariable("exn", type=exnTy,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
 
     def testAssignVarDefinedInCatch(self):
         source = "def f =\n" + \
@@ -741,7 +757,8 @@ class TestCompiler(unittest.TestCase):
                                ldlocal(0),
                                throw(),
                              ]],
-                             variables=[Variable("exn", exnTy, PARAMETER, frozenset([LET]))]))
+                             variables=[self.makeVariable("exn", type=exnTy,
+                                                          kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testThrowInIfBody(self):
         exnTy = ClassType(getExceptionClass())
@@ -758,7 +775,8 @@ class TestCompiler(unittest.TestCase):
                              ], [
                                ret(),
                              ]],
-                             variables=[Variable("exn", exnTy, PARAMETER, frozenset([LET]))]))
+                             variables=[self.makeVariable("exn", type=exnTy,
+                                                          kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testThrowInIfCondition(self):
         exnTy = ClassType(getExceptionClass())
@@ -767,7 +785,8 @@ class TestCompiler(unittest.TestCase):
                                ldlocal(0),
                                throw(),
                              ]],
-                             variables=[Variable("exn", exnTy, PARAMETER, frozenset([LET]))]))
+                             variables=[self.makeVariable("exn", type=exnTy,
+                                                          kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testThrowInWhileBody(self):
         exnTy = ClassType(getExceptionClass())
@@ -784,7 +803,8 @@ class TestCompiler(unittest.TestCase):
                                unit(),
                                ret(),
                              ]],
-                             variables=[Variable("exn", exnTy, PARAMETER, frozenset([LET]))]))
+                             variables=[self.makeVariable("exn", type=exnTy,
+                                                          kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testThrowInTry(self):
         exnClass = getExceptionClass()
@@ -827,7 +847,8 @@ class TestCompiler(unittest.TestCase):
                                drop(),
                                throw(),
                              ]],
-                             variables=[Variable("exn", exnTy, LOCAL, frozenset([LET]))]))
+                             variables=[self.makeVariable("exn", type=exnTy,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
 
     def testTryFinallyExpr(self):
         self.checkFunction("def f = try 12 finally 34",
@@ -909,7 +930,8 @@ class TestCompiler(unittest.TestCase):
                                i64(1),
                                ret(),
                              ]],
-                             variables=[Variable("exn", exnTy, LOCAL, frozenset([LET]))]))
+                             variables=[self.makeVariable("exn", type=exnTy,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
 
     def testMatchExceptionWithArgument(self):
         source = "class E[static T] <: Exception\n" + \
@@ -953,8 +975,8 @@ class TestCompiler(unittest.TestCase):
                                ret(),
                              ]],
                            variables=[
-                             Variable("n", I64Type, PARAMETER, frozenset()),
-                             Variable("p", I64Type, LOCAL, frozenset())]))
+                             self.makeVariable("n", type=I64Type, kind=PARAMETER),
+                             self.makeVariable("p", type=I64Type)]))
 
     def testRequireParameterTypes(self):
         self.assertRaises(TypeException, self.compileFromSource, "def f(x) = 12")
@@ -997,7 +1019,8 @@ class TestCompiler(unittest.TestCase):
                                unit(),
                                ret()]],
                              parameterTypes=[thisType],
-                             variables=[Variable("$this", thisType, PARAMETER, frozenset([LET]))]))
+                             variables=[self.makeVariable("$this", type=thisType,
+                                                          kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testDefaultCtorCallsInitializer(self):
         source = "class Foo"
@@ -1016,7 +1039,8 @@ class TestCompiler(unittest.TestCase):
                               unit(),
                               ret()]],
                             parameterTypes=[thisType],
-                            variables=[Variable("$this", thisType, PARAMETER, frozenset([LET]))]),
+                            variables=[self.makeVariable("$this", type=thisType,
+                                                         kind=PARAMETER, flags=frozenset([LET]))]),
                           ctor)
 
     def testPrimaryCtorCallsInitializer(self):
@@ -1040,7 +1064,8 @@ class TestCompiler(unittest.TestCase):
             unit(),
             ret()]],
           parameterTypes=[thisType, I32Type],
-          variables=[Variable("$this", thisType, PARAMETER, frozenset([LET]))])
+          variables=[self.makeVariable("$this", type=thisType,
+                                       kind=PARAMETER, flags=frozenset([LET]))])
         self.assertEquals(expected, ctor)
 
     def testSecondaryCtorCallsInitializer(self):
@@ -1068,8 +1093,10 @@ class TestCompiler(unittest.TestCase):
             unit(),
             ret()]],
           parameterTypes=[thisType, I32Type],
-          variables=[Variable("$this", thisType, PARAMETER, frozenset([LET])),
-                     Variable("x", I32Type, PARAMETER, frozenset([LET]))])
+          variables=[self.makeVariable("$this", type=thisType,
+                                       kind=PARAMETER, flags=frozenset([LET])),
+                     self.makeVariable("x", type=I32Type,
+                                       kind=PARAMETER, flags=frozenset([LET]))])
         self.assertEquals(expected, ctor)
 
     def testNullaryCtor(self):
@@ -1125,7 +1152,8 @@ class TestCompiler(unittest.TestCase):
                               unit(),
                               ret()]],
                             parameterTypes=[thisType, I32Type],
-                            variables=[Variable("$this", thisType, PARAMETER, frozenset([LET]))]),
+                            variables=[self.makeVariable("$this", type=thisType,
+                                                         kind=PARAMETER, flags=frozenset([LET]))]),
                           ctor)
 
     def testCtorWithArgs(self):
@@ -1161,7 +1189,8 @@ class TestCompiler(unittest.TestCase):
                                callv(1, index),
                                ret()
                              ]],
-                             variables=[Variable("foo", objType, PARAMETER, frozenset([LET]))]))
+                             variables=[self.makeVariable("foo", type=objType,
+                                                          kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testCaptureThis(self):
         source = "class Foo\n" + \
@@ -1179,7 +1208,8 @@ class TestCompiler(unittest.TestCase):
                                ld64(0),
                                ret()
                              ]],
-                             variables=[Variable("$this", closureType, PARAMETER, frozenset([LET]))],
+                             variables=[self.makeVariable("$this", type=closureType,
+                                                          kind=PARAMETER, flags=frozenset([LET]))],
                              parameterTypes=[closureType]))
 
     def testCallClosure(self):
@@ -1210,8 +1240,8 @@ class TestCompiler(unittest.TestCase):
                                ldlocal(-2),
                                callv(1, len(closureClass.methods) - 1),
                                ret()]],
-                             variables=[Variable("$context", contextType, LOCAL, frozenset()),
-                                        Variable("bar", closureType, LOCAL, frozenset())],
+                             variables=[self.makeVariable("$context", type=contextType),
+                                        self.makeVariable("bar", type=closureType)],
                              parameterTypes=[I64Type]))
 
     def testCallAlternateCtor(self):
@@ -1227,7 +1257,9 @@ class TestCompiler(unittest.TestCase):
                                                drop(),
                                                unit(),
                                                ret()]],
-                                             variables=[Variable("$this", ty, PARAMETER, frozenset([LET]))],
+                                             variables=[self.makeVariable("$this", type=ty,
+                                                                          kind=PARAMETER,
+                                                                          flags=frozenset([LET]))],
                                              parameterTypes=[ty])
         self.assertEquals(expected, clas.constructors[1])
 
@@ -1256,7 +1288,8 @@ class TestCompiler(unittest.TestCase):
                                                drop(),
                                                unit(),
                                                ret()]],
-                                             variables=[Variable("$this", barTy, PARAMETER, frozenset([LET]))],
+                                             variables=[self.makeVariable("$this", type=barTy,
+                                                                          kind=PARAMETER, flags=frozenset([LET]))],
                                              parameterTypes=[barTy])
         self.assertEquals(expected, bar.constructors[0])
 
@@ -1276,7 +1309,9 @@ class TestCompiler(unittest.TestCase):
                                                drop(),
                                                unit(),
                                                ret()]],
-                                             variables=[Variable("$this", barTy, PARAMETER, frozenset([LET]))],
+                                             variables=[self.makeVariable("$this", type=barTy,
+                                                                          kind=PARAMETER,
+                                                                          flags=frozenset([LET]))],
                                              parameterTypes=[barTy])
 
     def testCallBuiltinFunction(self):
@@ -1309,7 +1344,8 @@ class TestCompiler(unittest.TestCase):
                        tyc(C.id),
                        callg(id.id),
                        ret()]],
-                     variables=[Variable("o", Cty, PARAMETER, frozenset([LET]))],
+                     variables=[self.makeVariable("o", type=Cty,
+                                                  kind=PARAMETER, flags=frozenset([LET]))],
                      parameterTypes=[Cty])
         self.assertEquals(expected, f)
 
@@ -1326,7 +1362,7 @@ class TestCompiler(unittest.TestCase):
             tyv(T.id),
             callg(inner.id),
             ret()]],
-          variables=[Variable("x", Tty, PARAMETER, frozenset([LET]))],
+          variables=[self.makeVariable("x", type=Tty, kind=PARAMETER, flags=frozenset([LET]))],
           typeParameters=[T],
           parameterTypes=[Tty])
         self.assertEquals(expected, outer)
@@ -1345,7 +1381,7 @@ class TestCompiler(unittest.TestCase):
             tyv(T.id),
             callg(idInner.id),
             ret()]],
-          variables=[Variable("x", Tty, PARAMETER, frozenset([LET]))],
+          variables=[self.makeVariable("x", type=Tty, kind=PARAMETER, flags=frozenset([LET]))],
           typeParameters=[T],
           parameterTypes=[Tty])
         self.assertEquals(expected, idOuter)
@@ -1385,8 +1421,8 @@ class TestCompiler(unittest.TestCase):
             tyv(T.id),
             callv(1, idInnerMethodIndex),
             ret()]],
-          variables=[Variable("$context", ClassType(contextClass), LOCAL, frozenset()),
-                     Variable("id-inner", ClassType(closureClass), LOCAL, frozenset())],
+          variables=[self.makeVariable("$context", type=ClassType(contextClass)),
+                     self.makeVariable("id-inner", type=ClassType(closureClass))],
           typeParameters=[T],
           parameterTypes=[Tty])
         self.assertEquals(expected, idOuter)
@@ -1407,7 +1443,8 @@ class TestCompiler(unittest.TestCase):
             drop(),
             unit(),
             ret()]],
-          variables=[Variable("$this", Ctype, PARAMETER, frozenset([LET]))],
+          variables=[self.makeVariable("$this", type=Ctype,
+                                       kind=PARAMETER, flags=frozenset([LET]))],
           typeParameters=[T],
           parameterTypes=[Ctype])
         self.assertEquals(expectedCtor, C.constructors[0])
@@ -1435,7 +1472,8 @@ class TestCompiler(unittest.TestCase):
             tyc(C.id),
             callv(2, Box.getMethodIndex(set)),
             ret()]],
-          variables=[Variable("box", boxType, PARAMETER, frozenset([LET]))],
+          variables=[self.makeVariable("box", type=boxType,
+                                       kind=PARAMETER, flags=frozenset([LET]))],
           parameterTypes=[boxType])
         self.assertEquals(expectedF, f)
 

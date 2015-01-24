@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014-2015, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -17,9 +17,11 @@ from compile_info import CompileInfo
 from ir_types import *
 from errors import *
 from builtins import *
+from flags import LET
+from utils_test import TestCaseWithDefinitions
 
 
-class TestClosureConversion(unittest.TestCase):
+class TestClosureConversion(TestCaseWithDefinitions):
     def analyzeFromSource(self, source):
         filename = "(test)"
         rawTokens = lex(filename, source)
@@ -42,16 +44,16 @@ class TestClosureConversion(unittest.TestCase):
 
         fContextInfo = info.getContextInfo(fAst)
         fContextClass = fContextInfo.irContextClass
-        self.assertEquals([Field("x", I64Type, frozenset())], fContextClass.fields)
+        self.assertEquals([self.makeField("x", type=I64Type)], fContextClass.fields)
         xDefnInfo = info.getDefnInfo(fAst.body.statements[0].pattern)
-        self.assertEquals(Field("x", I64Type, frozenset()), xDefnInfo.irDefn)
+        self.assertEquals(self.makeField("x", type=I64Type), xDefnInfo.irDefn)
         self.assertIs(xDefnInfo, info.getUseInfo(gAst.body).defnInfo)
         gClosureInfo = info.getClosureInfo(gAst)
         gClosureClass = gClosureInfo.irClosureClass
-        self.assertEquals([Field("$context", ClassType(fContextClass), frozenset())],
+        self.assertEquals([self.makeField("$context", type=ClassType(fContextClass))],
                           gClosureClass.fields)
         self.assertEquals({fAst.id: gClosureClass.fields[0]}, gClosureInfo.irClosureContexts)
-        self.assertEquals(Variable("g", ClassType(gClosureClass), LOCAL, frozenset()),
+        self.assertEquals(self.makeVariable("g", type=ClassType(gClosureClass)),
                           gClosureInfo.irClosureVar)
 
     def testUseFieldInMethod(self):
@@ -95,7 +97,8 @@ class TestClosureConversion(unittest.TestCase):
         f = info.package.findFunction(name="f")
         self.assertIs(fContextClass, fContextInfo.irContextClass)
         self.assertEquals(1, len(fContextClass.constructors))
-        self.assertEquals([Field("$this", CType, frozenset())], fContextClass.fields)
+        self.assertEquals([self.makeField("$this", type=CType, flags=frozenset([LET]))],
+                          fContextClass.fields)
         gClosureInfo = info.getClosureInfo(cAst.members[0].body.statements[0])
         gClosureClass = info.package.findClass(name="$closure")
         self.assertIs(gClosureClass, gClosureInfo.irClosureClass)
@@ -106,5 +109,5 @@ class TestClosureConversion(unittest.TestCase):
         self.assertEquals(1, len(gClosureClass.constructors))
         self.assertEquals([ClassType(gClosureClass), ClassType(fContextClass)],
                           gClosureClass.constructors[0].parameterTypes)
-        self.assertEquals([Field("$context", ClassType(fContextClass), frozenset())],
+        self.assertEquals([self.makeField("$context", type=ClassType(fContextClass))],
                           gClosureClass.fields)

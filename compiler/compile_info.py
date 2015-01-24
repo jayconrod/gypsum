@@ -52,7 +52,7 @@ class CompileInfo(object):
             return k
         elif isinstance(k, ast.AstNode):
             return k.id
-        elif hasattr(k, "astDefn"):
+        elif hasattr(k, "astDefn") and k.astDefn is not None:
             return k.astDefn.id
         elif builtins.isBuiltinId(k.id) and isinstance(k, ir.Function):
             # TODO: fix this hack. We add an offset to builtin function ids to disambiguate

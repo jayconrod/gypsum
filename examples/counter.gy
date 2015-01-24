@@ -12,7 +12,9 @@
 // it is defined in or an inner scope.
 
 // This function contains three definitions in its scope: `n`, `inc`, and `counter`.
-def test-counter(n: i64, inc: i64) =
+// `n` and `inc` must be declared as `var` so that they can be assigned inside `counter`.
+// Variables and parameters are immutable by default.
+def test-counter(var n: i64, var inc: i64) =
   // `counter` creates an inner scope within `test-counter`. Definitions in outer scopes can
   // still be referenced.
   def counter =

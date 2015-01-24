@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014-2015, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -12,11 +12,12 @@ class Data(object):
         return type(name, (Data,), {"propertyNames": propertyNames})
 
     def __init__(self, *args, **extra):
-        assert len(args) == len(self.propertyNames)
+        assert len(args) + len(extra) == len(self.propertyNames)
+        assert set(self.propertyNames[len(args):]) == set(extra.keys())
         for key, value in zip(self.propertyNames, args):
             setattr(self, key, value)
-        for key in extra:
-            setattr(self, key, extra[key])
+        for key, value in extra.iteritems():
+            setattr(self, key, value)
 
     def __repr__(self):
         if len(self.propertyNames) == 0:
@@ -30,8 +31,10 @@ class Data(object):
 
     def __eq__(self, other):
         return self.__class__ is other.__class__ and \
-               all([getattr(self, name) == getattr(other, name)
-                    for name in self.propertyNames])
+               all(getattr(self, name) == getattr(other, name)
+                   for name in self.propertyNames
+                   if not hasattr(self, "skipCompareNames") or
+                      name not in self.skipCompareNames)
 
     def __ne__(self, other):
         return not (self == other)

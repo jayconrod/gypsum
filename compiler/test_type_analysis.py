@@ -18,8 +18,9 @@ from scope_analysis import *
 from type_analysis import *
 from flags import *
 from builtins import getRootClass, getStringClass, getNothingClass, getExceptionClass
+from utils_test import TestCaseWithDefinitions
 
-class TestTypeAnalysis(unittest.TestCase):
+class TestTypeAnalysis(TestCaseWithDefinitions):
     def analyzeFromSource(self, source):
         filename = "(test)"
         rawTokens = lex(filename, source)
@@ -112,11 +113,13 @@ class TestTypeAnalysis(unittest.TestCase):
         thisType = ClassType(clas)
         ctor = clas.constructors[0]
         self.assertEquals([thisType], clas.constructors[0].parameterTypes)
-        self.assertEquals(Variable("$this", thisType, PARAMETER, frozenset([LET])),
+        self.assertEquals(self.makeVariable("$this", type=thisType,
+                                            kind=PARAMETER, flags=frozenset([LET])),
                           ctor.variables[0])
         init = clas.initializer
         self.assertEquals([thisType], clas.constructors[0].parameterTypes)
-        self.assertEquals(Variable("$this", thisType, PARAMETER, frozenset([LET])),
+        self.assertEquals(self.makeVariable("$this", type=thisType,
+                                            kind=PARAMETER, flags=frozenset([LET])),
                           init.variables[0])
 
     def testVariableWithoutType(self):

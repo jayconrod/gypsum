@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014-2015, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -101,12 +101,12 @@ def _initialize():
 
     def buildFunction(functionData):
         name = functionData.get("name", "$constructor")
-        function = ir.Function(name,
+        id = getattr(bytecode,functionData["id"])
+        function = ir.Function(name, None, id,
                                buildType(functionData["returnType"]),
                                [],
                                map(buildType, functionData["parameterTypes"]),
                                [], [], frozenset())
-        function.id = getattr(bytecode,functionData["id"])
         if "insts" in functionData:
             function.insts = functionData["insts"]
         return function
@@ -119,10 +119,11 @@ def _initialize():
     def buildField(fieldData):
         name = fieldData["name"]
         ty = buildType(fieldData["type"])
-        return ir.Field(name, ty, frozenset())
+        return ir.Field(name, None, ty, frozenset())
 
     def declareClass(classData):
-        clas = ir.Class(classData["name"], [], None, None, None, None, None, frozenset())
+        clas = ir.Class(classData["name"], None, None, [],
+                        None, None, None, None, None, frozenset())
         _builtinClassNameMap[classData["name"]] = clas
 
     def defineClass(classData):
