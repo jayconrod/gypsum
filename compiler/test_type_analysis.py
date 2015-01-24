@@ -978,6 +978,18 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.analyzeFromSource(source)
         # pass if no error
 
+    @unittest.skip("we don't detect recursion yet, so this blows the stack")
+    def testCovariantInfiniteCombine(self):
+        source = "class A[static +T]\n" + \
+                 "class B <: A[B]\n" + \
+                 "class C <: A[C]\n" + \
+                 "def f(b: B, c: C) = if (true) b else c"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        A = info.package.findClass(name="A")
+        expected = ClassType(A, (getRootClassType(),))
+        self.assertEquals(expected, f.returnType)
+
     def testNoDefaultSuperCtor(self):
         source = "class Foo(x: i64)\n" + \
                  "class Bar <: Foo"

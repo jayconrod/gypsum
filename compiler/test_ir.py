@@ -41,6 +41,11 @@ class TestIr(TestCaseWithDefinitions):
         self.assertIs(self.A, self.A.findCommonBaseClass(nothing))
         self.assertIs(self.A, nothing.findCommonBaseClass(self.A))
 
+    def testFindCommonBaseClassWithNonUnifiedClasses(self):
+        A = self.makeClass("A", supertypes=[])
+        B = self.makeClass("B", supertypes=[])
+        self.assertIsNone(A.findCommonBaseClass(B))
+
     def testFunctionCanCallWithWrongArgCount(self):
         f = self.makeFunction("f", returnType=UnitType, parameterTypes=[UnitType])
         self.assertFalse(f.canCallWith([], []))

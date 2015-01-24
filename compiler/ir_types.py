@@ -42,43 +42,8 @@ class Type(data.Data):
         ty.flags = flags
         return ty
 
-    def isSubtypeOf(self, other, variance=None):
-        if self == other:
-            return True
-        elif isinstance(self, VariableType) and \
-             isinstance(other, VariableType) and \
-             self.typeParameter.hasCommonBound(other.typeParameter):
-            return True
-        elif isinstance(self, VariableType):
-            return self.typeParameter.upperBound.isSubtypeOf(other, variance)
-        elif isinstance(other, VariableType):
-            return self.isSubtypeOf(other.typeParameter.lowerBound, variance)
-        elif isinstance(self, ClassType) and \
-             isinstance(other, ClassType) and \
-             (not self.isNullable() or other.isNullable()):
-            if self.clas is builtins.getNothingClass():
-                return True
-            if not self.clas.isSubclassOf(other.clas):
-                return False
-
-            selfTypeArgs = self.substituteForBaseClass(other.clas).typeArguments
-            otherTypeArgs = other.typeArguments
-            typeParams = other.clas.typeParameters
-            assert len(selfTypeArgs) == len(otherTypeArgs)
-
-            def checkArg(a, b, param):
-                argVariance = changeVariance(variance, param.variance())
-                if argVariance is flags.COVARIANT:
-                    return a.isSubtypeOf(b, argVariance)
-                elif argVariance is flags.CONTRAVARIANT:
-                    return b.isSubtypeOf(a, argVariance)
-                else:
-                    return a == b
-
-            return all(checkArg(a, b, param) for a, b, param in
-                       zip(selfTypeArgs, otherTypeArgs, typeParams))
-        else:
-            return False
+    def isSubtypeOf(self, other):
+        return self.lub(other) == other
 
     def isPrimitive(self):
         raise NotImplementedError
@@ -88,63 +53,96 @@ class Type(data.Data):
 
     def combine(self, ty, loc):
         combined = self.lub(ty)
-        if combined is None:
+        if combined is AnyType:
             raise errors.TypeException(loc, "could not combine")
         return combined
 
-    def lub(self, ty):
+    def lub(self, other):
         """Computes the least upper bound of two types on the type lattice. Note that since
-        this is not a true lattice with a top, there may be no shared upper bound (e.g.,
-        for i64 and String). This function returns None in that case."""
-        if self == ty:
+        AnyType is not a valid type, this function returns AnyType to indicate that the
+        two types couldn't be combined."""
+
+        # Basic rules that apply to all types.
+        if self == other:
+            return self
+        if self is AnyType or other is AnyType:
             return self
         if self is NoType:
-            return ty
-        if ty is NoType:
+            return other
+        if other is NoType:
             return self
 
-        commonFlags = self.lubFlags(ty)
+        # Rules below apply only to object types.
+        if self.isObject() and other.isObject():
+            # If either side is nullable, the result is nullable.
+            if self.isNullable() or other.isNullable():
+                combinedFlags = frozenset([NULLABLE_TYPE_FLAG])
+            else:
+                combinedFlags = frozenset()
 
-        if isinstance(self, VariableType) and isinstance(ty, VariableType):
-            commonUpperBound = self.typeParameter.findCommonUpperBound(ty.typeParameter)
-            if commonUpperBound is not None:
-                return VariableType(commonUpperBound, commonFlags)
+            # If both types are variables with a common variable bound, return that.
+            if isinstance(self, VariableType) and isinstance(other, VariableType):
+                sharedBound = self.typeParameter.findCommonUpperBound(other.typeParameter)
+                if sharedBound is not None:
+                    return VariableType(sharedBound, combinedFlags)
 
-        if self.isObject() and ty.isObject():
-            if isinstance(self, ClassType) and self.clas == builtins.getNothingClass():
-                return ty.withFlags(commonFlags)
-            if isinstance(ty, ClassType) and ty.clas == builtins.getNothingClass():
-                return self.withFlags(commonFlags)
+            # If either type is Nothing, return the other one.
+            if isinstance(self, ClassType) and self.clas is builtins.getNothingClass():
+                return other.withFlags(combinedFlags)
+            if isinstance(other, ClassType) and other.clas is builtins.getNothingClass():
+                return self.withFlags(combinedFlags)
 
+            # Since there is no common bound, the result will be a class type, so we peel back
+            # the bounds until both sides are class types.
             left = self
             while isinstance(left, VariableType):
                 left = left.typeParameter.upperBound
-            right = ty
+            right = other
             while isinstance(right, VariableType):
                 right = right.typeParameter.upperBound
-
             assert isinstance(left, ClassType) and isinstance(right, ClassType)
 
-            commonBase = left.clas.findCommonBaseClass(right.clas)
-            leftTypeArgs = left.substituteForBaseClass(commonBase).typeArguments
-            rightTypeArgs = right.substituteForBaseClass(commonBase).typeArguments
+            # Find a common base class. We don't assume that there is a single root class
+            # (even though there is), so this can fail.
+            baseClass = left.clas.findCommonBaseClass(right.clas)
+            while baseClass is not None:
+                left = left.substituteForBaseClass(baseClass)
+                right = right.substituteForBaseClass(baseClass)
 
-            def combineArg(lty, rty, variance):
-                if variance is INVARIANT:
-                    return lty if lty == rty else None
-                elif variance is flags.COVARIANT:
-                    return lty.lub(rty)
-                else:
-                    assert variance is flags.CONTRAVARIANT
-                    return lty.glb(rty)
+                # We need to combine the type arguments, according to the variance of the
+                # corresponding type parameters. This is not necessarily possible. If we get
+                # stuck, we'll try again with the superclass.
+                leftArgs = left.substituteForBaseClass(baseClass).typeArguments
+                rightArgs = right.substituteForBaseClass(baseClass).typeArguments
 
-            commonTypeArgs = tuple(combineArg(lty, rty, param.variance())
-                                   for lty, rty, param in
-                                   zip(leftTypeArgs, rightTypeArgs, commonBase.typeParameters))
-            if None not in commonTypeArgs:
-                return ClassType(commonBase, commonTypeArgs, commonFlags)
+                combinedArgs = []
+                combineSuccess = True
+                for param, leftArg, rightArg in zip(baseClass.typeParameters,
+                                                    leftArgs, rightArgs):
+                    variance = param.variance()
+                    if variance is INVARIANT:
+                        if leftArg == rightArg:
+                            combined = leftArg
+                        else:
+                            combined = AnyType
+                    elif variance is flags.COVARIANT:
+                        combined = leftArg.lub(rightArg)
+                    else:
+                        assert variance is flags.CONTRAVARIANT
+                        combined = leftArg.glb(rightArg)
+                    if combined is AnyType:
+                        combineSuccess = False
+                        break
+                    combinedArgs.append(combined)
 
-        return None
+                if combineSuccess:
+                    return ClassType(baseClass, tuple(combinedArgs), combinedFlags)
+
+                baseClass = baseClass.superclass()
+
+            # If we get here, then we ran out of superclasses. Fall through.
+
+        return AnyType
 
     def glb(self, ty):
         """Computes the greatest lower bound of two types on the type lattice. Note that since
@@ -163,16 +161,13 @@ class Type(data.Data):
         elif self.isObject() and ty.isObject():
             # Ok, this is kind of a cop-out. Don't judge me.
             # TODO: once there are intersection types, use them instead.
-            flags = self.glbFlags(ty)
+            if self.isNullable() and ty.isNullable():
+                flags = frozenset([NULLABLE_TYPE_FLAG])
+            else:
+                flags = frozenset()
             return ClassType(builtins.getNothingClass(), (), flags)
         else:
-            return None
-
-    def lubFlags(self, ty):
-        return self.flags.union(ty.flags)
-
-    def glbFlags(self, ty):
-        return self.flags.intersect(ty.flags)
+            return NoType
 
     def substitute(self, parameters, replacements):
         raise NotImplementedError
@@ -198,7 +193,7 @@ class Type(data.Data):
         return None
 
     def isNullable(self):
-        raise NotImplementedError
+        return NULLABLE_TYPE_FLAG in self.flags
 
 
 class SimpleType(Type):
@@ -240,7 +235,16 @@ class SimpleType(Type):
         return False
 
 
+# NoType is the bottom of the type lattice. No values have this type. Expressions which don't
+# produce any value (such as return or throw) have this type.
 NoType = SimpleType("_", None)
+
+# AnyType is the top of the type lattice. All values have this type, but this type doesn't
+# contain any values that aren't also part of another value. This type doesn't have a
+# well-defined size, so this is not a valid type for fields, variables, or really anything else.
+# This is mostly used as an error value, e.g. for Type.lub.
+AnyType = SimpleType("*", None)
+
 UnitType = SimpleType("unit", bytecode.W8, ir_values.UnitValue())
 I8Type = SimpleType("i8", bytecode.W8, ir_values.I8Value(0))
 I16Type = SimpleType("i16", bytecode.W16, ir_values.I16Value(0))
@@ -330,17 +334,13 @@ class ClassType(ObjectType):
     def getTypeArguments(self):
         return self.typeArguments
 
-    def isNullable(self):
-        return NULLABLE_TYPE_FLAG in self.flags
-
-
 
 class VariableType(ObjectType):
     propertyNames = Type.propertyNames + ("typeParameter",)
     width = bytecode.WORD
 
-    def __init__(self, typeParameter):
-        super(VariableType, self).__init__(frozenset())
+    def __init__(self, typeParameter, flags=frozenset()):
+        super(VariableType, self).__init__(flags)
         self.typeParameter = typeParameter
 
     def __str__(self):
@@ -368,10 +368,6 @@ class VariableType(ObjectType):
             return self.typeParameter.upperBound.getTypeArguments()
         else:
             return ()
-
-    def isNullable(self):
-        return self.typeParameter.upperBound is not None and \
-               self.typeParameter.upperBound.isNullable()
 
     def substituteForBaseClass(self, base):
         return self.typeParameter.upperBound.substituteForBaseClass(base)

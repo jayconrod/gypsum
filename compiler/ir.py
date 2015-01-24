@@ -216,7 +216,7 @@ class Class(IrTopDefn):
                      "initializer", "constructors", "fields", "methods", "flags")
 
     def superclass(self):
-        assert self is not getNothingClass()
+        assert self is not builtins.getNothingClass()
         if len(self.supertypes) == 0:
             return None
         else:
@@ -289,9 +289,13 @@ class Class(IrTopDefn):
             return other
         if other is builtins.getNothingClass():
             return self
+
         selfBases = list(self.superclasses())
-        selfLast = -len(selfBases) - 1
         otherBases = list(other.superclasses())
+        if selfBases[-1] is not otherBases[-1]:
+            return None
+
+        selfLast = -len(selfBases) - 1
         otherLast = -len(otherBases) - 1
         i = -1
         while i > selfLast and i > otherLast and selfBases[i] is otherBases[i]:
@@ -429,14 +433,14 @@ class TypeParameter(IrTopDefn):
         used by Type.lub."""
         selfBounds = [self]
         bound = self.upperBound
-        while isinstance(bound, VariableType):
+        while isinstance(bound, ir_types.VariableType):
             selfBounds.append(bound.typeParameter)
             bound = bound.typeParameter.upperBound
 
         if other in selfBounds:
             return other
         bound = other.upperBound
-        while isinstance(bound, VariableType):
+        while isinstance(bound, ir_types.VariableType):
             if bound.typeParameter in selfBounds:
                 return bound.typeParameter
             bound = bound.typeParameter.upperBound
