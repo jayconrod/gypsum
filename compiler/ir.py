@@ -136,9 +136,16 @@ class Function(IrTopDefn):
                      "variables", "blocks", "flags")
 
     def canCallWith(self, typeArgs, argTypes):
-        if len(self.typeParameters) != len(typeArgs) or \
-           not all(arg.isSubtypeOf(param.upperBound) and param.lowerBound.isSubtypeOf(arg) \
-                   for param, arg in zip(self.typeParameters, typeArgs)):
+        if len(self.typeParameters) != len(typeArgs):
+            return False
+        upperBounds = [param.upperBound.substitute(self.typeParameters, typeArgs)
+                       for param in self.typeParameters]
+        lowerBounds = [param.lowerBound.substitute(self.typeParameters, typeArgs)
+                       for param in self.typeParameters]
+        if not all(typeArg.isSubtypeOf(upperBound) and
+                   lowerBound.isSubtypeOf(typeArg)
+                   for typeArg, lowerBound, upperBound
+                   in zip(typeArgs, lowerBounds, upperBounds)):
             return False
 
         if len(self.parameterTypes) != len(argTypes):

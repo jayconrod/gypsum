@@ -1110,3 +1110,11 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         barCtor = info.getDefnInfo(info.ast.definitions[1].constructor).irDefn
         usedCtor = info.getUseInfo(info.ast.definitions[0].members[0].body).defnInfo.irDefn
         self.assertIs(barCtor, usedCtor)
+
+    def testSubstituteBoundsWhenCalling(self):
+        source = "class Ordered[static T]\n" + \
+                 "class Integer <: Ordered[Integer]\n" + \
+                 "def sort[static S <: Ordered[S]] = {}\n" + \
+                 "def f = sort[Integer]"
+        self.analyzeFromSource(source)
+        # pass if no error
