@@ -61,6 +61,24 @@ class Type(data.Data):
         """Computes the least upper bound of two types on the type lattice. Note that since
         AnyType is not a valid type, this function returns AnyType to indicate that the
         two types couldn't be combined."""
+        return self._lubRec(other, [])
+
+    def _lubRec(self, other, stack):
+        # We need to be able to detect infinite recursion in order to ensure termination.
+        # Consider the case below:
+        #   class A[+T]
+        #   class B <: A[B]
+        #   class C <: A[C]
+        # Suppose we want to find B lub C.
+        # The correct answer is A[B lub C] = A[A[B lub C]] = A[A[A[B lub C]]] ...
+        # Since we have no way to correctly express the least upper bound in that case, we
+        # settle for returning a close upper bound: A[Object].
+
+        if (self, other) in stack:
+            if self.isObject() and other.isObject():
+                return getRootClassType()
+            else:
+                return AnyType
 
         # Basic rules that apply to all types.
         if self == other:
@@ -125,11 +143,14 @@ class Type(data.Data):
                             combined = leftArg
                         else:
                             combined = AnyType
-                    elif variance is flags.COVARIANT:
-                        combined = leftArg.lub(rightArg)
                     else:
-                        assert variance is flags.CONTRAVARIANT
-                        combined = leftArg.glb(rightArg)
+                        stack.append((self, other))
+                        if variance is flags.COVARIANT:
+                            combined = leftArg._lubRec(rightArg, stack)
+                        else:
+                            assert variance is flags.CONTRAVARIANT
+                            combined = leftArg._glbRec(rightArg, stack)
+                        stack.pop()
                     if combined is AnyType:
                         combineSuccess = False
                         break
@@ -148,6 +169,15 @@ class Type(data.Data):
         """Computes the greatest lower bound of two types on the type lattice. Note that since
         this is not a true lattice with a bottom, there may be no shared lower bound (e.g.,
         for i64 and String). This function returns None in that case."""
+        return self._glbRec(ty, [])
+
+    def _glbRec(self, ty, stack):
+        if (self, ty) in stack:
+            if self.isObject() and ty.isObject():
+                return getNothingClassType()
+            else:
+                return NoType
+
         if self == ty:
             return self
         elif self is NoType:

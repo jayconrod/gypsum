@@ -20,6 +20,7 @@ def analyzeTypes(info):
     # This is needed for Type.isSubtypeOf to work, which is needed to type expressions.
     subtypeVisitor = SubtypeVisitor(info)
     subtypeVisitor.visit(info.ast)
+    subtypeVisitor.checkTypeArgs()
 
     # Add type annotations for AST nodes which need them, and add type information to
     # the package.
@@ -96,7 +97,6 @@ class TypeVisitorCommon(ast.AstNodeVisitor):
         defnInfo = nameInfo.getDefnInfo()
         self.scope().use(defnInfo, node.id, USE_AS_TYPE, node.location)
         irDefn = nameInfo.getDefnInfo().irDefn
-        self.ensureTypeInfoForDefn(irDefn)
 
         flags = frozenset(map(astTypeFlagToIrTypeFlag, node.flags))
 
@@ -106,18 +106,12 @@ class TypeVisitorCommon(ast.AstNodeVisitor):
                 raise TypeException(node.location,
                                     "%s: wrong number of type arguments; expected %d but have %d\n" %
                                     (node.name, len(explicitTypeParams), len(typeArgs)))
-            typeArgs = self.handleAstClassTypeArgs(irDefn, node.typeArguments)
-            for ta, tp in zip(typeArgs, explicitTypeParams):
-                if not (tp.lowerBound.isSubtypeOf(ta) and
-                        ta.isSubtypeOf(tp.upperBound)):
-                    raise TypeException(node.location,
-                                        "%s: type argument is not in bounds" % irDefn.name)
-            allTypeArgs = tuple(map(ir_t.VariableType, getImplicitTypeParameters(irDefn)) + typeArgs)
+            explicitTypeArgs = self.handleAstClassTypeArgs(irDefn, node.typeArguments)
+            implicitTypeArgs = tuple(map(ir_t.VariableType, getImplicitTypeParameters(irDefn)))
+            allTypeArgs = explicitTypeArgs + implicitTypeArgs
             return ir_t.ClassType(irDefn, allTypeArgs, flags)
         else:
             assert isinstance(irDefn, ir.TypeParameter)
-            if flags != frozenset():
-                raise TypeException(node.location, "invalid flags for variable type")
             if len(node.typeArguments) > 0:
                 raise TypeException(node.location,
                                     "%s: type parameter cannot accept type arguments" %
@@ -125,15 +119,12 @@ class TypeVisitorCommon(ast.AstNodeVisitor):
             return ir_t.VariableType(irDefn)
 
     def handleAstClassTypeArgs(self, irClass, nodes):
-        return map(self.visit, nodes)
+        raise NotImplementedError
 
     def handleResult(self, node, result, *unused):
         if result is not None:
             self.info.setType(node, result)
         return result
-
-    def ensureTypeInfoForDefn(self, irDefn):
-        raise NotImplementedError
 
 
 class SubtypeVisitor(TypeVisitorCommon):
@@ -142,6 +133,15 @@ class SubtypeVisitor(TypeVisitorCommon):
     a fully functional Type.isSubtypeOf method, which relies on this information. We use
     isSubtypeOf here, too, but only on definitions we've already processed. This is guaranteed
     to terminate, since we checked the subtype graph for cycles in an earlier phase."""
+
+    def __init__(self, info):
+        super(SubtypeVisitor, self).__init__(info)
+        self.typeArgsToCheck = []
+
+    def checkTypeArgs(self):
+        for a, b, name, loc in self.typeArgsToCheck:
+            if not a.isSubtypeOf(b):
+                raise TypeException(loc, "%s: type argument is not in bounds" % name)
 
     def visitAstModule(self, node):
         self.visitChildren(node)
@@ -198,6 +198,15 @@ class SubtypeVisitor(TypeVisitorCommon):
 
     def visitDefault(self, node):
         pass
+
+    def handleAstClassTypeArgs(self, irClass, nodes):
+        typeArgs = tuple(map(self.visit, nodes))
+        typeParams = getExplicitTypeParameters(irClass)
+        assert len(typeParams) == len(typeArgs)
+        for tp, ta, node in zip(typeParams, typeArgs, nodes):
+            self.typeArgsToCheck += [(tp.lowerBound, ta, tp.name, node.location),
+                                     (ta, tp.upperBound, tp.name, node.location)]
+        return typeArgs
 
     def ensureTypeInfoForDefn(self, irDefn):
         if irDefn.astDefn is not None:
@@ -559,8 +568,12 @@ class TypeVisitor(TypeVisitorCommon):
         types = []
         for tp, ta in zip(typeParams, typeArgs):
             with VarianceScope.forArgument(self, tp.variance()):
-                types.append(self.visit(ta))
-        return types
+                ty = self.visit(ta)
+            if not (tp.lowerBound.isSubtypeOf(ty) and
+                    ty.isSubtypeOf(tp.upperBound)):
+                raise TypeException(ta.location, "%s: type argument is not in bounds" % tp.name)
+            types.append(ty)
+        return tuple(types)
 
     def handleFunctionCommon(self, node, astReturnType, astBody):
         defnInfo = self.info.getDefnInfo(node)

@@ -978,7 +978,6 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.analyzeFromSource(source)
         # pass if no error
 
-    @unittest.skip("we don't detect recursion yet, so this blows the stack")
     def testCovariantInfiniteCombine(self):
         source = "class A[static +T]\n" + \
                  "class B <: A[B]\n" + \
