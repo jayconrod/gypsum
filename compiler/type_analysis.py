@@ -185,13 +185,13 @@ class SubtypeVisitor(TypeVisitorCommon):
                                         "%s: bound may not be nullable" % node.name)
                 return ty
 
+        self.scope().define(node.name)
+
         irParam.upperBound = visitBound(node.upperBound, ir_t.getRootClassType())
         irParam.lowerBound = visitBound(node.lowerBound, ir_t.getNothingClassType())
         if not irParam.lowerBound.isSubtypeOf(irParam.upperBound):
             raise TypeException(node.location,
                                 "%s: lower bound is not subtype of upper bound" % node.name)
-
-        self.scope().define(node.name)
 
     def visitAstBlockExpression(self, node):
         self.visitChildren(node)

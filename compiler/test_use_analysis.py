@@ -193,3 +193,11 @@ class TestUseAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSourceWithTypes(source)
         self.assertEquals(getStringType(),
                           info.getType(info.ast.definitions[0].members[0].body))
+
+    def testUseTypeParameterInBound(self):
+        source = "class A[static T]\n" + \
+                 "def f[static S <: A[S]] = {}"
+        info = self.analyzeFromSourceWithTypes(source)
+        S = info.package.findTypeParameter(name="S")
+        use = info.getUseInfo(info.ast.definitions[1].typeParameters[0].upperBound.typeArguments[0])
+        self.assertIs(S, use.defnInfo.irDefn)
