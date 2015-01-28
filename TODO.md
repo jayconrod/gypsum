@@ -13,6 +13,7 @@
 - arrays
 - native functions
 - packages
+- standard library
 - compile from multiple files
 - downcasting and type testing
 - pattern matching
@@ -58,3 +59,9 @@
 - Switch enums to enum class, especially flags
 
 # Bugs
+
+## VM
+- `read()` breaks when EOF is given. Exception is thrown in non-GC-safe place.
+- pattern matching performs an implicit downcast without telling the interpreter.
+  We probably need a type-check-and-branch pattern.
+- no way to express nullable types for casts in bytecode.
