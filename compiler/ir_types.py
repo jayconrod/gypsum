@@ -421,6 +421,10 @@ def getNothingClassType():
     return ClassType(builtins.getNothingClass())
 
 
+def getExceptionClassType():
+    return ClassType(builtins.getExceptionClass())
+
+
 def getNullType():
     return ClassType(builtins.getNothingClass(), (), frozenset([NULLABLE_TYPE_FLAG]))
 

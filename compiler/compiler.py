@@ -9,7 +9,7 @@ from functools import partial
 import ast
 from bytecode import W8, W16, W32, W64, BUILTIN_TYPE_CLASS_ID, BUILTIN_TYPE_CTOR_ID, instInfoByCode
 from ir import Global, Variable, Field, Function, Class, LOCAL
-from ir_types import UnitType, ClassType, VariableType, NULLABLE_TYPE_FLAG
+from ir_types import UnitType, ClassType, VariableType, NULLABLE_TYPE_FLAG, getExceptionClassType
 import ir_instructions
 from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PACKAGE_INITIALIZER_HINT, DefnInfo
 from flags import ABSTRACT, STATIC, LET
@@ -176,7 +176,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.visit(defn.pattern, COMPILE_FOR_UNINITIALIZED)
         else:
             self.visit(defn.expression, COMPILE_FOR_VALUE)
-            self.visit(defn.pattern, COMPILE_FOR_EFFECT)
+            self.visit(defn.pattern, COMPILE_FOR_EFFECT, self.info.getType(defn.expression))
 
     def visitAstFunctionDefinition(self, defn, mode):
         assert mode is COMPILE_FOR_EFFECT
@@ -192,7 +192,7 @@ class CompileVisitor(ast.AstNodeVisitor):
     def visitAstConstructorParameter(self, param, id):
         self.unpackParameter(param, id)
 
-    def visitAstVariablePattern(self, pat, mode, successBlock=None, failBlock=None):
+    def visitAstVariablePattern(self, pat, mode, ty=None, successBlock=None, failBlock=None):
         defnInfo = self.info.getDefnInfo(pat)
         if mode is COMPILE_FOR_UNINITIALIZED and \
            isinstance(defnInfo.irDefn, Global):
@@ -211,7 +211,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.setCurrentBlock(successBlock)
         elif mode is COMPILE_FOR_UNINITIALIZED:
             self.uninitialized()
-        self.storeVariable(defnInfo)
+        self.storeVariable(defnInfo, ty)
 
     def visitAstClassType(self, node, param):
         assert STATIC in param.flags
@@ -278,7 +278,8 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.compileStatements(expr.id, None, expr.statements, mode)
 
     def visitAstAssignExpression(self, expr, mode):
-        lvalue = self.compileLValue(expr.left)
+        ty = self.info.getType(expr.right)
+        lvalue = self.compileLValue(expr.left, ty)
         self.visit(expr.right, COMPILE_FOR_VALUE)
         self.buildAssignment(lvalue, mode)
 
@@ -344,7 +345,8 @@ class CompileVisitor(ast.AstNodeVisitor):
             callInfo = self.info.getCallInfo(expr)
             isCompoundAssignment = opName == useInfo.defnInfo.irDefn.name + "="
             if isCompoundAssignment:
-                receiver = self.compileLValue(expr.left)
+                ty = self.info.getType(expr.right)
+                receiver = self.compileLValue(expr.left, ty)
             else:
                 receiver = expr.left
             self.buildCall(useInfo, callInfo, receiver, [], [expr.right], mode)
@@ -441,6 +443,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         if expr.catchHandler is not None:
             self.setCurrentBlock(catchBlock)
             self.visitAstPartialFunctionExpression(expr.catchHandler, mode,
+                                                   getExceptionClassType(),
                                                    successBlock, failBlock)
 
         if expr.finallyHandler is not None:
@@ -485,22 +488,22 @@ class CompileVisitor(ast.AstNodeVisitor):
             # Stack at this point: [result, ...]
             self.setCurrentBlock(doneBlock)
 
-    def visitAstPartialFunctionExpression(self, expr, mode, doneBlock, failBlock):
+    def visitAstPartialFunctionExpression(self, expr, mode, ty, doneBlock, failBlock):
         self.dup()
         typeofMethod = getRootClass().getMethod("typeof")
         self.buildCallSimpleMethod(typeofMethod, COMPILE_FOR_VALUE)
         for case in expr.cases[:-1]:
             nextBlock = self.newBlock()
-            self.visitAstPartialFunctionCase(case, mode, doneBlock, nextBlock)
+            self.visitAstPartialFunctionCase(case, mode, ty, doneBlock, nextBlock)
             self.setCurrentBlock(nextBlock)
-        self.visitAstPartialFunctionCase(expr.cases[-1], mode, doneBlock, failBlock)
+        self.visitAstPartialFunctionCase(expr.cases[-1], mode, ty, doneBlock, failBlock)
         self.setCurrentBlock(failBlock)
         self.drop()
         self.setCurrentBlock(None)
 
-    def visitAstPartialFunctionCase(self, expr, mode, doneBlock, failBlock):
+    def visitAstPartialFunctionCase(self, expr, mode, ty, doneBlock, failBlock):
         successBlock = self.newBlock()
-        self.visit(expr.pattern, COMPILE_FOR_MATCH, successBlock, failBlock)
+        self.visit(expr.pattern, COMPILE_FOR_MATCH, ty, successBlock, failBlock)
         assert self.currentBlock is successBlock or self.unreachable
         if expr.condition is not None:
             self.visit(expr.condition, COMPILE_FOR_VALUE)
@@ -542,7 +545,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             return
         self.currentBlock = block
 
-    def compileLValue(self, expr):
+    def compileLValue(self, expr, ty):
         useInfo = self.info.getUseInfo(expr)
         irDefn = useInfo.defnInfo.irDefn
         if LET in irDefn.flags:
@@ -551,7 +554,7 @@ class CompileVisitor(ast.AstNodeVisitor):
            (isinstance(irDefn, Variable) or \
             isinstance(irDefn, Field) or \
             isinstance(irDefn, Global)):
-            return VarLValue(expr, self, useInfo)
+            return VarLValue(expr, self, ty, useInfo)
         elif isinstance(expr, ast.AstPropertyExpression) and isinstance(irDefn, Field):
             self.visit(expr.receiver, COMPILE_FOR_VALUE)
             return PropertyLValue(expr, self, useInfo)
@@ -592,7 +595,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                 defnInfo.irDefn.index = index
             else:
                 self.ldlocal(index)
-                self.storeVariable(defnInfo)
+                self.storeVariable(defnInfo, paramType)
         else:
             self.ldlocal(index)
             self.visit(param.pattern, COMPILE_FOR_EFFECT)
@@ -649,15 +652,17 @@ class CompileVisitor(ast.AstNodeVisitor):
                 assert isinstance(defnInfo.irDefn, Global)
                 self.ldg(defnInfo.irDefn.id)
 
-    def storeVariable(self, varOrDefnInfo):
+    def storeVariable(self, varOrDefnInfo, valueType=None):
         if isinstance(varOrDefnInfo, Variable):
             var = varOrDefnInfo
+            if valueType is not None and valueType != var.type:
+                self.buildCast(var.type)
             self.stlocal(var.index)
         else:
             assert isinstance(varOrDefnInfo, DefnInfo)
             defnInfo = varOrDefnInfo
             if isinstance(defnInfo.irDefn, Variable):
-                self.storeVariable(defnInfo.irDefn)
+                self.storeVariable(defnInfo.irDefn, valueType)
             elif isinstance(defnInfo.irDefn, Field):
                 self.loadContext(defnInfo.scopeId)
                 self.storeField(defnInfo.irDefn)
@@ -886,6 +891,10 @@ class CompileVisitor(ast.AstNodeVisitor):
         else:
             raise NotImplementedError
 
+    def buildCast(self, ty):
+        self.buildStaticTypeArgument(ty)
+        self.cast()
+
     def getScopeAstDefn(self):
         if isinstance(self.astDefn, ast.AstPrimaryConstructorDefinition):
             return self.function.clas.astDefn
@@ -969,8 +978,9 @@ class LValue(object):
 
 
 class VarLValue(LValue):
-    def __init__(self, expr, compiler, useInfo):
+    def __init__(self, expr, compiler, ty, useInfo):
         super(VarLValue, self).__init__(expr, compiler)
+        self.ty = ty
         self.useInfo = useInfo
         self.var = useInfo.defnInfo.irDefn
 
@@ -978,7 +988,7 @@ class VarLValue(LValue):
         return False
 
     def assign(self):
-        self.compiler.storeVariable(self.useInfo.defnInfo)
+        self.compiler.storeVariable(self.useInfo.defnInfo, self.ty)
 
     def evaluate(self):
         self.compiler.loadVariable(self.useInfo.defnInfo)

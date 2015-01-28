@@ -148,6 +148,37 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret()]],
                              variables=[self.makeVariable("x", type=I64Type)]))
 
+    def testVarWithSimpleCast(self):
+        self.checkFunction("def f = { var x: Object = \"foo\"; x; }",
+                           self.makeSimpleFunction("f", getRootClassType(), [[
+                               string(0),
+                               tyc(BUILTIN_ROOT_CLASS_ID),
+                               cast(),
+                               stlocal(-1),
+                               ldlocal(-1),
+                               ret()]],
+                            variables=[self.makeVariable("x", type=getRootClassType())]))
+
+    def testVarWithTypeParameterCast(self):
+        source = "class Foo[static +T]\n" + \
+                 "def f(x: Foo[String]) = { var y: Foo[Object] = x; y; }"
+        package = self.compileFromSource(source)
+        Foo = package.findClass(name="Foo")
+        xType = ClassType(Foo, (getStringType(),))
+        yType = ClassType(Foo, (getRootClassType(),))
+        expected = self.makeSimpleFunction("f", yType, [[
+            ldlocal(0),
+            tyc(BUILTIN_ROOT_CLASS_ID),
+            tyc(Foo.id),
+            cast(),
+            stlocal(-1),
+            ldlocal(-1),
+            ret()]],
+          parameterTypes=[xType],
+          variables=[self.makeVariable("x", type=xType, kind=PARAMETER, flags=frozenset([LET])),
+                     self.makeVariable("y", type=yType)])
+        self.assertEquals(expected, package.findFunction(name="f"))
+
     def testLoadGlobal(self):
         source = "let x = 42\n" + \
                  "def f = x"
@@ -236,6 +267,41 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret()]],
                              parameterTypes=[I64Type],
                              variables=[self.makeVariable("x", type=I64Type, kind=PARAMETER)]))
+
+    def testAssignVarWithSimpleCast(self):
+        package = self.compileFromSource("def f(s: String, var o: Object) = { o = s; {}; }")
+        expected = self.makeSimpleFunction("f", UnitType, [[
+            ldlocal(0),
+            tyc(BUILTIN_ROOT_CLASS_ID),
+            cast(),
+            stlocal(1),
+            unit(),
+            ret()]],
+          parameterTypes=[getStringType(), getRootClassType()],
+          variables=[self.makeVariable("s", type=getStringType(),
+                                       kind=PARAMETER, flags=frozenset([LET])),
+                     self.makeVariable("o", type=getRootClassType(), kind=PARAMETER)])
+        self.assertEquals(expected, package.findFunction(name="f"))
+
+    def testAssignVarWithTypeParameterCast(self):
+        source = "class Foo[static +T]\n" + \
+                 "def f(x: Foo[String], var y: Foo[Object]) = { y = x; {}; }"
+        package = self.compileFromSource(source)
+        Foo = package.findClass(name="Foo")
+        xType = ClassType(Foo, (getStringType(),))
+        yType = ClassType(Foo, (getRootClassType(),))
+        expected = self.makeSimpleFunction("f", UnitType, [[
+            ldlocal(0),
+            tyc(BUILTIN_ROOT_CLASS_ID),
+            tyc(Foo.id),
+            cast(),
+            stlocal(1),
+            unit(),
+            ret()]],
+          parameterTypes=[xType, yType],
+          variables=[self.makeVariable("x", type=xType, kind=PARAMETER, flags=frozenset([LET])),
+                     self.makeVariable("y", type=yType, kind=PARAMETER)])
+        self.assertEquals(expected, package.findFunction(name="f"))
 
     def testAssignShortProps(self):
         package = self.compileFromSource("class Foo\n" +
@@ -1431,6 +1497,52 @@ class TestCompiler(TestCaseWithDefinitions):
           typeParameters=[T],
           parameterTypes=[Tty])
         self.assertEquals(expected, idOuter)
+
+    def testCallInheritedMethodWithoutTypeArgument(self):
+        source = "class Foo[static T]\n" + \
+                 "def f(foo: Foo[Object]) =\n" + \
+                 "  foo.to-string\n" + \
+                 "  {}"
+        package = self.compileFromSource(source)
+        f = package.findFunction(name="f")
+        Foo = package.findClass(name="Foo")
+        FooType = ClassType(Foo, (getRootClassType(),))
+        toString = Foo.getMethod("to-string")
+        toStringIndex = Foo.getMethodIndex(toString)
+        expected = self.makeSimpleFunction("f", UnitType, [[
+            ldlocal(0),
+            callv(1, toStringIndex),
+            drop(),
+            unit(),
+            ret()]],
+          variables=[self.makeVariable("foo", type=FooType,
+                                       kind=PARAMETER, flags=frozenset([LET]))],
+          parameterTypes=[FooType])
+        self.assertEquals(expected, f)
+
+    def testCallOverridenMethodWithTypeArgument(self):
+        source = "class Foo[static T]\n" + \
+                 "  def to-string = \"Foo\"\n" + \
+                 "def f(foo: Foo[Object]) =\n" + \
+                 "  foo.to-string\n" + \
+                 "  {}"
+        package = self.compileFromSource(source)
+        f = package.findFunction(name="f")
+        Foo = package.findClass(name="Foo")
+        FooType = ClassType(Foo, (getRootClassType(),))
+        toString = Foo.getMethod("to-string")
+        toStringIndex = Foo.getMethodIndex(toString)
+        expected = self.makeSimpleFunction("f", UnitType, [[
+            ldlocal(0),
+            tyc(BUILTIN_ROOT_CLASS_ID),
+            callv(1, toStringIndex),
+            drop(),
+            unit(),
+            ret()]],
+          variables=[self.makeVariable("foo", type=FooType,
+                                       kind=PARAMETER, flags=frozenset([LET]))],
+          parameterTypes=[FooType])
+        self.assertEquals(expected, f)
 
     def testConstructorCallInitializerInClassWithStaticTypeArgs(self):
         source = "class C[static T]"

@@ -105,7 +105,9 @@ class TypeVisitorCommon(ast.AstNodeVisitor):
             if len(node.typeArguments) != len(explicitTypeParams):
                 raise TypeException(node.location,
                                     "%s: wrong number of type arguments; expected %d but have %d\n" %
-                                    (node.name, len(explicitTypeParams), len(typeArgs)))
+                                    (node.name,
+                                     len(explicitTypeParams),
+                                     len(node.typeArguments)))
             explicitTypeArgs = self.handleAstClassTypeArgs(irDefn, node.typeArguments)
             implicitTypeArgs = tuple(map(ir_t.VariableType, getImplicitTypeParameters(irDefn)))
             allTypeArgs = explicitTypeArgs + implicitTypeArgs

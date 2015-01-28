@@ -180,9 +180,14 @@ struct FrameState {
 
   void pushTypeArg(const Local<Type>& type) {
     ASSERT(type->isObject());
-    // TODO: support classes with type parameters
-    ASSERT(type->length() == 1);
     typeArgs.push_back(type);
+  }
+
+  Local<Type> popTypeArg() {
+    ASSERT(typeArgs.size() == 1);
+    auto arg = typeArgs.back();
+    typeArgs.pop_back();
+    return arg;
   }
 
   void popTypeArgs() {
@@ -523,6 +528,13 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           Local<TypeParameter> param(package->getTypeParameter(typeParamId));
           auto type = Type::create(heap, param, Type::NO_FLAGS);
           currentMap.pushTypeArg(type);
+          break;
+        }
+
+        case CAST: {
+          auto type = currentMap.popTypeArg();
+          currentMap.pop();
+          currentMap.push(type);
           break;
         }
 

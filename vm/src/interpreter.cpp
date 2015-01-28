@@ -415,6 +415,9 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         readVbn();
         break;
 
+      case CAST:
+        break;
+
       case CALLG: {
         auto functionId = readVbn();
         ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
