@@ -1,0 +1,129 @@
+// Copyright 2015 Jay Conrod. All rights reserved.
+
+// This file is part of CodeSwitch. Use of this source code is governed by
+// the 3-clause BSD license that can be found in the LICENSE.txt file.
+
+abstract class Ordered[static T]
+  abstract def compare(other: T): i64
+
+
+class Integer(value: i64) <: Ordered[Integer]
+  def compare(other: Integer) = value - other.value
+  def to-string = value.to-string
+
+
+abstract class List[static +T]
+  abstract def head: T
+
+  abstract def tail: List[T]
+
+  abstract def length: i64
+
+  abstract def take(n: i64): List[T]
+
+  abstract def drop(n: i64): List[T]
+
+  def reverse: List[T] =
+    var reversed: List[T] = Nil
+    var list: List[T] = this
+    while (list !== Nil)
+      reversed = Cons[T](list.head, reversed)
+      list = list.tail
+    reversed
+
+  abstract def to-string: String
+
+
+class Nil-class <: List[Nothing]
+  def head = throw Exception
+  def tail = throw Exception
+  def length = 0
+
+  def take(n: i64) =
+    if (n == 0)
+      Nil
+    else
+      throw Exception
+
+  def drop(n: i64) =
+    if (n == 0)
+      Nil
+    else
+      throw Exception
+
+  def to-string = "Nil"
+
+let Nil = Nil-class
+
+
+class Cons[static +T](value: T, next: List[T]) <: List[T]
+  def head = value
+  def tail = next
+  def length = 1 + next.length
+
+  def take(n: i64): List[T] =
+    if (n == 0)
+      Nil
+    else
+      Cons[T](value, next.take(n - 1))
+
+  def drop(n: i64): List[T] =
+    if (n == 0)
+      this
+    else
+      next.drop(n - 1)
+
+  def to-string =
+    let value-str = value.to-string
+    if (next === Nil)
+      value-str
+    else
+      value-str + ", " + tail.to-string
+
+
+def sort[static T <: Ordered[T]](list: List[T]): List[T] =
+  if (list.length <= 1)
+    list
+  else
+    let length = list.length
+    let first = list.take(length / 2)
+    let second = list.drop(length / 2)
+
+    var first-sorted = sort[T](first)
+    var second-sorted = sort[T](second)
+
+    var reverse-merged: List[T] = Nil
+    while (first-sorted !== Nil || second-sorted !== Nil)
+      if (first-sorted !== Nil &&
+          (second-sorted === Nil ||
+           first-sorted.head.compare(second-sorted.head) <= 0))
+        reverse-merged = Cons[T](first-sorted.head, reverse-merged)
+        first-sorted = first-sorted.tail
+      else
+        reverse-merged = Cons[T](second-sorted.head, reverse-merged)
+        second-sorted = second-sorted.tail
+
+    reverse-merged.reverse
+
+
+def equals[static T <: Ordered[T]](var left: List[T], var right: List[T]): boolean =
+  while (left !== Nil && right !== Nil)
+    if (left.head.compare(right.head) != 0)
+      return false
+    left = left.tail
+    right = right.tail
+  return left === Nil && right === Nil
+
+
+def main =
+  let list = Cons[Integer](Integer(3),
+                 Cons[Integer](Integer(4),
+                     Cons[Integer](Integer(1),
+                         Cons[Integer](Integer(2), Nil))))
+  let sorted-list = sort[Integer](list)
+  let expected-list = Cons[Integer](Integer(1),
+                          Cons[Integer](Integer(2),
+                              Cons[Integer](Integer(3),
+                                  Cons[Integer](Integer(4), Nil))))
+  if (!equals[Integer](expected-list, sorted-list))
+    throw Exception

@@ -1,0 +1,169 @@
+// This is a simple Gypsum program.
+// You can compile it with this command:
+//   ../compiler/compiler list.gy -o list.csp
+// You can run it with this command:
+//   ../vm/out/debug/driver list.csp
+// (If you haven't built the VM yet, run this first):
+//   (cd ../vm; make -j)
+
+// This program sorts a linked list using a generic merge sort algorithm. This
+// is a more advanced example, which demonstrates two useful aspects of the
+// Gypsum type system: type parameter bounds and variance.
+
+// First, we declare an abstract class for objects that can be compared
+// to each other.
+abstract class Ordered[static T]
+  // This is a standard comparison function. It must return a negative number
+  // if the receiver is less than the argument, 0 if it is equal, and positive
+  // if greater than.
+  abstract def compare(other: T): i64
+
+
+// We'll be sorting a list of integers. Type arguments have to be object types,
+// so we need a wrapper class. It's a subclass of `Ordered[Integer]`, so we can
+// compare integers against other integers.
+class Integer(value: i64) <: Ordered[Integer]
+  def compare(other: Integer) = value - other.value
+  def to-string = value.to-string
+
+
+// Here's our generic, immutable, linked list class. We have two concrete
+// subclasses below for empty and non-empty lists. Note that the type
+// parameter `T` is marked with a `+`. This means `T` is covariant. Because of
+// that, we can say that, for some types `A` and `B`, `List[A]` is a subtype
+// of `List[B]` if `A` is a subtype of `B`. More concretely, `List[Integer]`
+// is a subtype of `List[Object]`. In order for this to be safe, `T` can only
+// be used in covariant positions; it can be used for function return types,
+// immutable field types, and as a covariant type argument. If `T` were
+// contravariant, the subtype relation would be the other way around, and it
+// could only be used for method parameter types and contravariant
+// type arguments.
+abstract class List[static +T]
+  // Returns the first element of the list. If the list is empty, it throws
+  // an exception.
+  abstract def head: T
+
+  // Returns everything after the first element of the list. If the list is
+  // empty, it throws an exception.
+  abstract def tail: List[T]
+
+  // Returns the number of elements in the list.
+  abstract def length: i64
+
+  // Returns the first n elements of the list.
+  abstract def take(n: i64): List[T]
+
+  // Returns a list without the first n elements.
+  abstract def drop(n: i64): List[T]
+
+  // Returns a list with all the elements in reverse order.
+  def reverse: List[T] =
+    var reversed: List[T] = Nil
+    var list: List[T] = this
+    while (list !== Nil)
+      reversed = Cons[T](list.head, reversed)
+      list = list.tail
+    reversed
+
+  abstract def to-string: String
+
+
+// This is a singleton class which represents the empty list. This is a subtype
+// of `List[Nothing]`. `Nothing` is a builtin type which is a subtype of all
+// class types. Therefore, `List[Nothing]` is a subtype of any other `List`
+// type, so `Nil` (the sole instance) can be used as any kind of empty list.
+// There are no instances of `Nothing`.
+class Nil-class <: List[Nothing]
+  def head = throw Exception
+  def tail = throw Exception
+  def length = 0
+
+  def take(n: i64) =
+    if (n == 0)
+      Nil
+    else
+      throw Exception
+
+  def drop(n: i64) =
+    if (n == 0)
+      Nil
+    else
+      throw Exception
+
+  def to-string = "Nil"
+
+// `Nil` is the sole instance of `Nil-class`.
+let Nil = Nil-class
+
+
+// `Cons` represents non-empty lists. It contains an element of the list
+// (value) and a pointer to the rest of the list (next). Like `List`, `Cons`'s
+// type parameter is covariant.
+class Cons[static +T](value: T, next: List[T]) <: List[T]
+  def head = value
+  def tail = next
+  def length = 1 + next.length
+
+  def take(n: i64): List[T] =
+    if (n == 0)
+      Nil
+    else
+      Cons[T](value, next.take(n - 1))
+
+  def drop(n: i64): List[T] =
+    if (n == 0)
+      this
+    else
+      next.drop(n - 1)
+
+  def to-string =
+    let value-str = value.to-string
+    if (next === Nil)
+      value-str
+    else
+      value-str + ", " + tail.to-string
+
+
+// Here is our merge sort algorithm. It can sort any list, as long as its
+// elements can be compared to each other. In order to enforce this constraint,
+// we set an upper bound on `T` to be `Ordered[T]`.
+def sort[static T <: Ordered[T]](list: List[T]): List[T] =
+  if (list.length <= 1)
+    // Base case: empty lists and single element lists are already sorted.
+    list
+  else
+    // Recursive case
+    // Divide the list in half.
+    let length = list.length
+    let first = list.take(length / 2)
+    let second = list.drop(length / 2)
+
+    // Sort each half.
+    var first-sorted = sort[T](first)
+    var second-sorted = sort[T](second)
+
+    // Merge the two halves together in a single, sorted list. Note that
+    // because we know `T` is a subtype of `Ordered[T]`, we can call the
+    // `compare` method.
+    var reverse-merged: List[T] = Nil
+    while (first-sorted !== Nil || second-sorted !== Nil)
+      if (first-sorted !== Nil &&
+          (second-sorted === Nil ||
+           first-sorted.head.compare(second-sorted.head) <= 0))
+        reverse-merged = Cons[T](first-sorted.head, reverse-merged)
+        first-sorted = first-sorted.tail
+      else
+        reverse-merged = Cons[T](second-sorted.head, reverse-merged)
+        second-sorted = second-sorted.tail
+
+    reverse-merged.reverse
+
+
+// The main function sorts the list (3, 4, 1, 2).
+def main =
+  let list = Cons[Integer](Integer(3),
+                 Cons[Integer](Integer(4),
+                     Cons[Integer](Integer(1),
+                         Cons[Integer](Integer(2), Nil))))
+  let sorted-list = sort[Integer](list)
+  print(sorted-list.to-string + "\n")
