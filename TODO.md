@@ -65,3 +65,6 @@
 - pattern matching performs an implicit downcast without telling the interpreter.
   We probably need a type-check-and-branch pattern.
 - no way to express nullable types for casts in bytecode.
+- assertion when trying to instantiate Nothing. This should be a special case.
+
+# TODO: file issues for everything and delete this.
