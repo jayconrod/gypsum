@@ -8,6 +8,7 @@
 #define string_h
 
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <vector>
 #include "object.h"
@@ -15,6 +16,9 @@
 
 namespace codeswitch {
 namespace internal {
+
+template <class T>
+class BlockArray;
 
 class String: public Object {
  public:
@@ -31,6 +35,7 @@ class String: public Object {
                                       length_t length, word_t size);
 
   length_t length() const { return length_; }
+  bool isEmpty() const { return length() == 0; }
   const u32* chars() const { return chars_; }
   u32 get(length_t index) const {
     ASSERT(index < length_);
@@ -42,6 +47,7 @@ class String: public Object {
   std::string toUtf8StlString() const;
 
   bool equals(String* other) const;
+  bool equals(const char* other) const;
   int compare(String* other) const;
 
   String* tryConcat(Heap* heap, String* other);
@@ -51,6 +57,47 @@ class String: public Object {
   String* trySubstring(Heap* heap, length_t begin, length_t end) const;
   static Local<String> substring(Heap* heap, const Handle<String>& string,
                                  length_t begin, length_t end);
+
+  length_t find(u32 needle, length_t start = 0) const;
+  length_t find(String* needle, length_t start = 0) const;
+
+  length_t count(u32 needle) const;
+  length_t count(String* needle) const;
+
+  static Local<BlockArray<String>> split(Heap* heap, const Handle<String>& string, u32 sep);
+  static Local<BlockArray<String>> split(Heap* heap,
+                                         const Handle<String>& string,
+                                         const Handle<String>& sep);
+
+  // Note: iterators contain raw pointers. They should not be used across allocations.
+  class iterator: public std::iterator<std::random_access_iterator_tag, u32> {
+   public:
+    iterator(const String* str, length_t index)
+        : str_(str), index_(index) { }
+
+    u32 operator * () const;
+    bool operator == (const iterator& other) const;
+    bool operator != (const iterator& other) const;
+    bool operator < (const iterator& other) const;
+    bool operator <= (const iterator& other) const;
+    bool operator > (const iterator& other) const;
+    bool operator >= (const iterator& other) const;
+    iterator operator + (ssize_t offset) const;
+    iterator& operator += (ssize_t offset);
+    iterator& operator ++ ();
+    iterator operator - (ssize_t offset) const;
+    iterator& operator -= (ssize_t offset);
+    iterator& operator -- ();
+
+   private:
+    const String* str_;
+    length_t index_;
+
+    friend class String;
+  };
+
+  iterator begin() const;
+  iterator end() const;
 
  private:
   String();

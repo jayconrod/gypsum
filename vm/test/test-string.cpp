@@ -8,24 +8,28 @@
 
 #include <string>
 #include <vector>
+#include "array.h"
 #include "block.h"
 #include "handle.h"
 #include "string.h"
 #include "vm.h"
 
+#define STR(s) String::fromUtf8CString(heap, s)
+
 using namespace std;
 using namespace codeswitch::internal;
 
+
 TEST(StringFromUtf8) {
   VM vm;
+  Heap* heap = vm.heap();
   AllowAllocationScope allowAllocation(vm.heap(), true);
   HandleScope handleScope(&vm);
   const u8 chars[] = { 0x66, 0x6f, 0x6f, 0xe2, 0x98, 0x83, 0x00 };
   word_t size = sizeof(chars) - 1;
   word_t length = 4;
   const u32 expected[] = { 0x66, 0x6f, 0x6f, 0x2603 };
-  auto str1 = String::fromUtf8CString(vm.heap(),
-                                                reinterpret_cast<const char*>(chars));
+  auto str1 = STR(reinterpret_cast<const char*>(chars));
   auto str2 = String::fromUtf8String(vm.heap(), chars, size);
   auto str3 = String::fromUtf8String(vm.heap(), chars, length, size);
   ASSERT_EQ(length, str1->length());
@@ -61,11 +65,12 @@ TEST(StringToStl) {
 
 TEST(StringCompare) {
   VM vm;
-  AllowAllocationScope allowAllocation(vm.heap(), true);
+  Heap* heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
   HandleScope handleScope(&vm);
-  auto foo = String::fromUtf8CString(vm.heap(), "foo");
-  auto foob = String::fromUtf8CString(vm.heap(), "foob");
-  auto bar = String::fromUtf8CString(vm.heap(), "bar");
+  auto foo = STR("foo");
+  auto foob = STR("foob");
+  auto bar = STR("bar");
   ASSERT_TRUE(foo->equals(*foo));
   ASSERT_FALSE(foo->equals(*foob));
   ASSERT_FALSE(foo->equals(*bar));
@@ -80,12 +85,13 @@ TEST(StringCompare) {
 
 TEST(StringConcat) {
   VM vm;
-  AllowAllocationScope allowAllocation(vm.heap(), true);
+  Heap* heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
   HandleScope handleScope(&vm);
-  auto empty = String::fromUtf8CString(vm.heap(), "");
-  auto foo = String::fromUtf8CString(vm.heap(), "foo");
-  auto bar = String::fromUtf8CString(vm.heap(), "bar");
-  auto expected = String::fromUtf8CString(vm.heap(), "foobar");
+  auto empty = STR("");
+  auto foo = STR("foo");
+  auto bar = STR("bar");
+  auto expected = STR("foobar");
   ASSERT_EQ(*foo, *String::concat(vm.heap(), foo, empty));
   ASSERT_EQ(*foo, *String::concat(vm.heap(), empty, foo));
   ASSERT_TRUE(expected->equals(*String::concat(vm.heap(), foo, bar)));
@@ -94,15 +100,161 @@ TEST(StringConcat) {
 
 TEST(StringSubstring) {
   VM vm;
-  AllowAllocationScope allowAllocation(vm.heap(), true);
+  Heap* heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
   HandleScope handleScope(&vm);
 
-  auto hello = String::fromUtf8CString(vm.heap(), "hello");
-  auto empty = String::fromUtf8CString(vm.heap(), "");
+  auto hello = STR("hello");
+  auto empty = STR("");
   ASSERT_TRUE(empty->equals(*String::substring(vm.heap(), hello, 0, 0)));
   ASSERT_TRUE(empty->equals(*String::substring(vm.heap(), hello, 5, 5)));
-  auto hel = String::fromUtf8CString(vm.heap(), "hel");
+  auto hel = STR("hel");
   ASSERT_TRUE(hel->equals(*String::substring(vm.heap(), hello, 0, 3)));
-  auto llo = String::fromUtf8CString(vm.heap(), "llo");
+  auto llo = STR("llo");
   ASSERT_TRUE(llo->equals(*String::substring(vm.heap(), hello, 2, 5)));
+}
+
+
+TEST(StringFindChar) {
+  VM vm;
+  Heap* heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
+  HandleScope handleScope(&vm);
+
+  auto empty = STR("");
+  ASSERT_EQ(kIndexNotSet, empty->find(static_cast<u32>('x')));
+
+  auto hello = STR("hello");
+  ASSERT_EQ(0, hello->find(static_cast<u32>('h')));
+  ASSERT_EQ(2, hello->find(static_cast<u32>('l')));
+  ASSERT_EQ(3, hello->find(static_cast<u32>('l'), 3));
+  ASSERT_EQ(kIndexNotSet, hello->find(static_cast<u32>('x')));
+}
+
+
+TEST(StringFindString) {
+  VM vm;
+  Heap* heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
+  HandleScope handleScope(&vm);
+
+  auto empty = STR("");
+  auto hello = STR("hello");
+  auto helloHello = STR("hello hello");
+  ASSERT_EQ(kIndexNotSet, empty->find(*helloHello));
+  ASSERT_EQ(0, helloHello->find(*empty));
+  ASSERT_EQ(0, helloHello->find(*hello));
+  ASSERT_EQ(6, helloHello->find(*hello, 1));
+}
+
+
+TEST(StringCountChar) {
+  VM vm;
+  Heap* heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
+  HandleScope handleScope(&vm);
+
+  u32 sep = ',';
+  auto empty = STR("");
+  ASSERT_EQ(0, empty->count(sep));
+
+  auto test = STR(",a,bb,,c,");
+  ASSERT_EQ(5, test->count(sep));
+}
+
+
+TEST(StringCountString) {
+  VM vm;
+  Heap* heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
+  HandleScope handleScope(&vm);
+
+  auto empty = STR("");
+  ASSERT_EQ(1, empty->count(*empty));
+  auto sep = STR("||");
+  ASSERT_EQ(0, empty->count(*sep));
+  ASSERT_EQ(3, sep->count(*empty));
+
+  auto test = STR("||a||bb||||c|||");
+  ASSERT_EQ(5, test->count(*sep));
+}
+
+
+TEST(StringSplitChar) {
+  VM vm;
+  Heap* heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
+  HandleScope handleScope(&vm);
+
+  auto empty = STR("");
+  auto sep = static_cast<u32>(',');
+  auto split = String::split(heap, empty, sep);
+  ASSERT_EQ(1, split->length());
+  ASSERT_TRUE(split->get(0)->equals(*empty));
+
+  auto obvious = STR("foo,bar,baz");
+  split = String::split(heap, obvious, sep);
+  ASSERT_EQ(3, split->length());
+  ASSERT_TRUE(split->get(0)->equals("foo"));
+  ASSERT_TRUE(split->get(1)->equals("bar"));
+  ASSERT_TRUE(split->get(2)->equals("baz"));
+
+  auto surrounded = STR(",bar,");
+  split = String::split(heap, surrounded, sep);
+  ASSERT_EQ(3, split->length());
+  ASSERT_TRUE(split->get(0)->equals(""));
+  ASSERT_TRUE(split->get(1)->equals("bar"));
+  ASSERT_TRUE(split->get(2)->equals(""));
+
+  auto dub = STR("foo,,baz");
+  split = String::split(heap, dub, sep);
+  ASSERT_EQ(3, split->length());
+  ASSERT_TRUE(split->get(0)->equals("foo"));
+  ASSERT_TRUE(split->get(1)->equals(""));
+  ASSERT_TRUE(split->get(2)->equals("baz"));
+}
+
+
+TEST(StringSplitString) {
+  VM vm;
+  Heap* heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
+  HandleScope handleScope(&vm);
+
+  auto empty = STR("");
+  auto sep = STR("||");
+  auto split = String::split(heap, empty, sep);
+  ASSERT_EQ(1, split->length());
+  ASSERT_TRUE(split->get(0)->isEmpty());
+  split = String::split(heap, sep, empty);
+  ASSERT_EQ(2, split->length());
+  ASSERT_TRUE(split->get(0)->equals("|"));
+  ASSERT_TRUE(split->get(1)->equals("|"));
+
+  auto obvious = STR("foo||bar||baz");
+  split = String::split(heap, obvious, sep);
+  ASSERT_EQ(3, split->length());
+  ASSERT_TRUE(split->get(0)->equals("foo"));
+  ASSERT_TRUE(split->get(1)->equals("bar"));
+  ASSERT_TRUE(split->get(2)->equals("baz"));
+
+  auto surrounded = STR("||bar||");
+  split = String::split(heap, surrounded, sep);
+  ASSERT_EQ(3, split->length());
+  ASSERT_TRUE(split->get(0)->equals(""));
+  ASSERT_TRUE(split->get(1)->equals("bar"));
+  ASSERT_TRUE(split->get(2)->equals(""));
+
+  auto dub = STR("foo||||baz");
+  split = String::split(heap, dub, sep);
+  ASSERT_EQ(3, split->length());
+  ASSERT_TRUE(split->get(0)->equals("foo"));
+  ASSERT_TRUE(split->get(1)->equals(""));
+  ASSERT_TRUE(split->get(2)->equals("baz"));
+
+  auto almost = STR("foo|||baz");
+  split = String::split(heap, almost, sep);
+  ASSERT_EQ(2, split->length());
+  ASSERT_TRUE(split->get(0)->equals("foo"));
+  ASSERT_TRUE(split->get(1)->equals("|baz"));
 }

@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include "array.h"
 #include "block.h"
 #include "error.h"
 #include "gc.h"
@@ -156,6 +157,16 @@ bool String::equals(String* other) const {
 }
 
 
+bool String::equals(const char* other) const {
+  length_t i;
+  for (i = 0; i < length() && other[i] != '\0'; i++) {
+    if (get(i) != static_cast<u32>(other[i]))
+      return false;
+  }
+  return other[i] == '\0';
+}
+
+
 int String::compare(String* other) const {
   auto minLength = min(length(), other->length());
   int cmp;
@@ -205,6 +216,187 @@ String* String::trySubstring(Heap* heap, length_t begin, length_t end) const {
 Local<String> String::substring(Heap* heap, const Handle<String>& string,
                                 length_t begin, length_t end) {
   RETRY_WITH_GC(heap, return Local<String>(string->trySubstring(heap, begin, end)));
+}
+
+
+length_t String::find(u32 needle, length_t start) const {
+  ASSERT(start <= length());
+
+  for (length_t i = start; i < length(); i++) {
+    if (get(i) == needle)
+      return i;
+  }
+  return kIndexNotSet;
+}
+
+
+length_t String::find(String* needle, length_t start) const {
+  ASSERT(start <= length());
+  if (start + needle->length() > length())
+    return kIndexNotSet;
+
+  // TODO: use Knuth-Morris-Pratt for sufficiently large needles and haystacks.
+  for (length_t i = start; i < length() - needle->length() + 1; i++) {
+    bool found = true;
+    for (length_t j = 0; found && j < needle->length(); j++) {
+      found = get(i + j) == needle->get(j);
+    }
+    if (found)
+      return i;
+  }
+  return kIndexNotSet;
+}
+
+
+length_t String::count(u32 needle) const {
+  length_t pos = 0;
+  length_t count = 0;
+  while ((pos = find(needle, pos)) != kIndexNotSet) {
+    count++;
+    pos++;
+  }
+  return count;
+}
+
+
+length_t String::count(String* needle) const {
+  if (needle->isEmpty()) {
+    // Special case to ensure termination: there is an empty string between every character,
+    // and at the beginning and end of the string.
+    return length() + 1;
+  }
+
+  length_t pos = 0;
+  length_t count = 0;
+  while ((pos = find(needle, pos)) != kIndexNotSet) {
+    count++;
+    pos += needle->length();
+  }
+  return count;
+}
+
+
+Local<BlockArray<String>> String::split(Heap* heap, const Handle<String>& string, u32 sep) {
+  auto count = string->count(sep);
+  auto pieces = BlockArray<String>::create(heap, count + 1);
+  length_t pos = 0;
+  for (length_t i = 0; i < count; i++) {
+    auto next = string->find(sep, pos);
+    auto sub = String::substring(heap, string, pos, next);
+    pieces->set(i, *sub);
+    pos = next + 1;
+  }
+  auto sub = String::substring(heap, string, pos, string->length());
+  pieces->set(count, *sub);
+  return pieces;
+}
+
+
+Local<BlockArray<String>> String::split(Heap* heap,
+                                        const Handle<String>& string,
+                                        const Handle<String>& sep) {
+  if (sep->isEmpty()) {
+    // Special case: if the separator is empty, we return an array of single-character strings.
+    auto pieces = BlockArray<String>::create(heap, string->length());
+    for (length_t i = 0; i < string->length(); i++) {
+      auto ch = string->get(i);
+      auto piece = create(heap, 1, &ch);
+      pieces->set(i, *piece);
+    }
+    return pieces;
+  }
+
+  auto count = string->count(*sep);
+  auto pieces = BlockArray<String>::create(heap, count + 1);
+  length_t pos = 0;
+  for (length_t i = 0; i < count; i++) {
+    auto next = string->find(*sep, pos);
+    auto sub = substring(heap, string, pos, next);
+    pieces->set(i, *sub);
+    pos = next + sep->length();
+  }
+  auto sub = substring(heap, string, pos, string->length());
+  pieces->set(count, *sub);
+  return pieces;
+}
+
+
+u32 String::iterator::operator * () const {
+  return str_->get(index_);
+}
+
+
+bool String::iterator::operator == (const iterator& other) const {
+  return str_ == other.str_ && index_ == other.index_;
+}
+
+
+bool String::iterator::operator != (const iterator& other) const {
+  return !(*this == other);
+}
+
+
+bool String::iterator::operator < (const iterator& other) const {
+  return str_ == other.str_ && index_ < other.index_;
+}
+
+
+bool String::iterator::operator <= (const iterator& other) const {
+  return str_ == other.str_ && index_ <= other.index_;
+}
+
+
+bool String::iterator::operator > (const iterator& other) const {
+  return str_ == other.str_ && index_ > other.index_;
+}
+
+
+bool String::iterator::operator >= (const iterator& other) const {
+  return str_ == other.str_ && index_ >= other.index_;
+}
+
+
+String::iterator String::iterator::operator + (ssize_t offset) const {
+  iterator copy(*this);
+  return copy += offset;
+}
+
+
+String::iterator& String::iterator::operator += (ssize_t offset) {
+  ssize_t index = static_cast<ssize_t>(index_) + offset;
+  ASSERT(index >= 0);
+  index_ = static_cast<length_t>(index);
+  return *this;
+}
+
+
+String::iterator& String::iterator::operator ++ () {
+  return *this += 1;
+}
+
+
+String::iterator String::iterator::operator - (ssize_t offset) const {
+  return *this + -offset;
+}
+
+
+String::iterator& String::iterator::operator -= (ssize_t offset) {
+  return *this += -offset;
+}
+
+
+String::iterator& String::iterator::operator -- () {
+  return *this += -1;
+}
+
+
+String::iterator String::begin() const {
+  return iterator(this, 0);
+}
+
+
+String::iterator String::end() const {
+  return iterator(this, length());
 }
 
 
