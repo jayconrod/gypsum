@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -99,6 +99,12 @@ T min(T a, T b) {
 template <class T>
 T max(T a, T b) {
   return a > b ? a : b;
+}
+
+
+template <class T>
+bool inRange(T x, T low, T high) {
+  return low <= x && x <= high;
 }
 
 

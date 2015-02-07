@@ -8,6 +8,7 @@
 
 #include <string>
 #include <vector>
+#include <cstdint>
 #include "array.h"
 #include "block.h"
 #include "handle.h"
@@ -257,4 +258,37 @@ TEST(StringSplitString) {
   ASSERT_EQ(2, split->length());
   ASSERT_TRUE(split->get(0)->equals("foo"));
   ASSERT_TRUE(split->get(1)->equals("|baz"));
+}
+
+
+TEST(StringToI32) {
+  VM vm;
+  Heap* heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
+  HandleScope handleScope(&vm);
+
+  i32 n;
+  ASSERT_FALSE(STR("")->tryToI32(&n));
+  ASSERT_FALSE(STR("a")->tryToI32(&n));
+  ASSERT_FALSE(STR("0a")->tryToI32(&n));
+  ASSERT_FALSE(STR("a0")->tryToI32(&n));
+  ASSERT_FALSE(STR("+")->tryToI32(&n));
+  ASSERT_FALSE(STR("-")->tryToI32(&n));
+
+  ASSERT_TRUE(STR("0")->tryToI32(&n));
+  ASSERT_EQ(0, n);
+  ASSERT_TRUE(STR("0000")->tryToI32(&n));
+  ASSERT_EQ(0, n);
+  ASSERT_TRUE(STR("1234")->tryToI32(&n));
+  ASSERT_EQ(1234, n);
+  ASSERT_TRUE(STR("+123")->tryToI32(&n));
+  ASSERT_EQ(123, n);
+  ASSERT_TRUE(STR("-123")->tryToI32(&n));
+
+  ASSERT_TRUE(STR("2147483647")->tryToI32(&n));
+  ASSERT_EQ(INT32_MAX, n);
+  ASSERT_FALSE(STR("2147483648")->tryToI32(&n));
+  ASSERT_TRUE(STR("-2147483648")->tryToI32(&n));
+  ASSERT_EQ(INT32_MIN, n);
+  ASSERT_FALSE(STR("-2147483649")->tryToI32(&n));
 }

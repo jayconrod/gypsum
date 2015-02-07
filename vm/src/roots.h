@@ -40,6 +40,9 @@ class Roots {
     F(Meta, metaMeta, META_META)                                      \
     F(Meta, freeMeta, FREE_META)                                      \
     F(Meta, packageMeta, PACKAGE_META)                                \
+    F(Meta, packageNameMeta, PACKAGE_NAME_META)                       \
+    F(Meta, packageVersionMeta, PACKAGE_VERSION_META)                 \
+    F(Meta, packageDependencyMeta, PACKAGE_DEPENDENCY_META)           \
     F(Meta, stackMeta, STACK_META)                                    \
     F(Meta, globalMeta, GLOBAL_META)                                  \
     F(Meta, functionMeta, FUNCTION_META)                              \

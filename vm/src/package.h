@@ -81,6 +81,94 @@ class Package: public Block {
 
 std::ostream& operator << (std::ostream& os, const Package* pkg);
 
+
+class PackageName: public Block {
+ public:
+  static const BlockType kBlockType = PACKAGE_NAME_BLOCK_TYPE;
+
+  static const length_t kMaxComponentLength = 1000;
+  static const length_t kMaxComponentCount = 100;
+
+  DEFINE_NEW(PackageName, PACKAGE_NAME_BLOCK_TYPE)
+  explicit PackageName(BlockArray<String>* components);
+  static Local<PackageName> create(Heap* heap, const Handle<BlockArray<String>>& components);
+
+  static Local<PackageName> fromString(Heap* heap, const Handle<String>& nameString);
+
+  BlockArray<String>* components() const { return components_.get(); }
+
+  int compare(const PackageName* other) const;
+  bool equals(const PackageName* other) const { return compare(other) == 0; }
+
+ private:
+  DECLARE_POINTER_MAP()
+
+  Ptr<BlockArray<String>> components_;
+  // Update PACKAGE_NAME_POINTER_LIST if pointers change.
+};
+
+std::ostream& operator << (std::ostream& os, const PackageName* packageName);
+
+
+class PackageVersion: public Block {
+ public:
+  static const BlockType kBlockType = PACKAGE_VERSION_BLOCK_TYPE;
+
+  static const length_t kMaxComponent = 999999;
+  static const length_t kMaxComponentCount = 100;
+
+  DEFINE_NEW(PackageVersion, PACKAGE_VERSION_BLOCK_TYPE)
+  explicit PackageVersion(I32Array* components);
+  static Local<PackageVersion> create(Heap* heap, const Handle<I32Array>& components);
+
+  static Local<PackageVersion> fromString(Heap* heap, const Handle<String>& versionString);
+
+  I32Array* components() const { return components_.get(); }
+
+  int compare(const PackageVersion* other) const;
+  bool equals(const PackageVersion* other) const { return compare(other) == 0; }
+
+ private:
+  DECLARE_POINTER_MAP()
+
+  Ptr<I32Array> components_;
+  // Update PACKAGE_VERSION_POINTER_LIST if pointers change.
+};
+
+std::ostream& operator << (std::ostream& os, const PackageVersion& packageVersion);
+
+
+class PackageDependency: public Block {
+ public:
+  static const BlockType kBlockType = PACKAGE_DEPENDENCY_BLOCK_TYPE;
+
+  DEFINE_NEW(PackageDependency, PACKAGE_DEPENDENCY_BLOCK_TYPE)
+  PackageDependency(PackageName* name, PackageVersion* minVersion, PackageVersion* maxVersion);
+  static Local<PackageDependency> create(Heap* heap,
+                                         const Handle<PackageName>& name,
+                                         const Handle<PackageVersion>& minVersion,
+                                         const Handle<PackageVersion>& maxVersion);
+
+  static Local<PackageDependency> fromString(Heap* heap, const Handle<String>& depString);
+
+  PackageName* name() const { return name_.get(); }
+  PackageVersion* minVersion() const { return minVersion_.get(); }
+  PackageVersion* maxVersion() const { return maxVersion_.get(); }
+
+  bool equals(const PackageDependency* dep) const;
+  bool isSatisfiedBy(const PackageName* name, const PackageVersion* version) const;
+
+ private:
+  DECLARE_POINTER_MAP()
+
+  Ptr<PackageName> name_;
+  Ptr<PackageVersion> minVersion_;
+  Ptr<PackageVersion> maxVersion_;
+  // Update PACKAGE_DEPENDENCY_POINTER_LIST if pointers change.
+};
+
+std::ostream& operator << (std::ostream& os, const PackageDependency* dep);
+
 }
 }
 

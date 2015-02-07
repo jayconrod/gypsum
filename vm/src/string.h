@@ -69,6 +69,8 @@ class String: public Object {
                                          const Handle<String>& string,
                                          const Handle<String>& sep);
 
+  bool tryToI32(i32* n) const;
+
   // Note: iterators contain raw pointers. They should not be used across allocations.
   class iterator: public std::iterator<std::random_access_iterator_tag, u32> {
    public:

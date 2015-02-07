@@ -321,6 +321,38 @@ Local<BlockArray<String>> String::split(Heap* heap,
 }
 
 
+bool String::tryToI32(i32* n) const {
+  if (isEmpty())
+    return false;
+
+  length_t start = 0;
+  i64 sign = 1;
+  if (get(0) == '-') {
+    sign = -1;
+    start = 1;
+  } else if (get(0) == '+') {
+    start = 1;
+  }
+  if (start == length())
+    return false;
+
+  i64 value = 0;
+  i64 limit = sign < 0 ? -static_cast<i64>(INT32_MIN) : INT32_MAX;
+  for (length_t i = start; i < length(); i++) {
+    auto d = get(i);
+    if (!inRange<u32>(d, '0', '9'))
+      return false;
+    auto v = d - '0';
+    value = 10 * value + v;
+    if (value > limit)
+      return false;
+  }
+  ASSERT(INT32_MIN <= sign * value && sign * value <= INT32_MAX);
+  *n = static_cast<i32>(sign * value);
+  return true;
+}
+
+
 u32 String::iterator::operator * () const {
   return str_->get(index_);
 }

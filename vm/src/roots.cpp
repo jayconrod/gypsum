@@ -41,6 +41,23 @@ void Roots::initialize(Heap* heap) {
   packageMeta->objectPointerMap().setWord(0, Package::kPointerMap);
   basicRoots_[PACKAGE_META_ROOT_INDEX] = packageMeta;
 
+  auto packageNameMeta = new(heap, 0, sizeof(PackageName), 0) Meta(PACKAGE_NAME_BLOCK_TYPE);
+  packageNameMeta->hasPointers_ = true;
+  packageNameMeta->objectPointerMap().setWord(0, PackageName::kPointerMap);
+  basicRoots_[PACKAGE_NAME_META_ROOT_INDEX] = packageNameMeta;
+
+  auto packageVersionMeta = new(heap, 0, sizeof(PackageVersion), 0)
+      Meta(PACKAGE_VERSION_BLOCK_TYPE);
+  packageVersionMeta->hasPointers_ = true;
+  packageVersionMeta->objectPointerMap().setWord(0, PackageVersion::kPointerMap);
+  basicRoots_[PACKAGE_VERSION_META_ROOT_INDEX] = packageVersionMeta;
+
+  auto packageDependencyMeta = new(heap, 0, sizeof(PackageDependency), 0)
+      Meta(PACKAGE_DEPENDENCY_BLOCK_TYPE);
+  packageDependencyMeta->hasPointers_ = true;
+  packageDependencyMeta->objectPointerMap().setWord(0, PackageDependency::kPointerMap);
+  basicRoots_[PACKAGE_DEPENDENCY_META_ROOT_INDEX] = packageDependencyMeta;
+
   auto stackMeta = new(heap, 0, sizeof(Stack), 1) Meta(STACK_BLOCK_TYPE);
   stackMeta->hasPointers_ = true;
   stackMeta->hasCustomPointers_ = true;

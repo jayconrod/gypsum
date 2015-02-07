@@ -190,6 +190,232 @@ ostream& operator << (ostream& os, const Package* pkg) {
 }
 
 
+#define PACKAGE_NAME_POINTER_LIST(F) \
+  F(PackageName, components_)        \
+
+DEFINE_POINTER_MAP(PackageName, PACKAGE_NAME_POINTER_LIST)
+
+#undef PACKAGE_NAME_POINTER_LIST
+
+
+PackageName::PackageName(BlockArray<String>* components)
+    : Block(PACKAGE_NAME_BLOCK_TYPE),
+      components_(this, components) {
+  ASSERT(components->length() <= kMaxComponentCount);
+  #ifdef DEBUG
+  for (auto component : *components) {
+    ASSERT(component->length() <= kMaxComponentLength);
+  }
+  #endif
+}
+
+
+Local<PackageName> PackageName::create(Heap* heap,
+                                       const Handle<BlockArray<String>>& components) {
+  RETRY_WITH_GC(heap, return Local<PackageName>(new(heap) PackageName(*components)));
+}
+
+
+Local<PackageName> PackageName::fromString(Heap* heap, const Handle<String>& nameString) {
+  auto components = String::split(heap, nameString, '.');
+  if (components->length() == 0 || components->length() > kMaxComponentCount)
+    return Local<PackageName>();
+
+  for (auto component : **components) {
+    if (component->length() == 0 || component->length() > kMaxComponentLength)
+      return Local<PackageName>();
+    auto first = component->get(0);
+    if (!inRange<u32>(first, 'A', 'Z') && !inRange<u32>(first, 'a', 'z'))
+      return Local<PackageName>();
+    for (auto it = component->begin() + 1; it != component->end(); ++it) {
+      auto ch = *it;
+      if (!inRange<u32>(ch, 'A', 'Z') &&
+          !inRange<u32>(ch, 'a', 'z') &&
+          !inRange<u32>(ch, '0', '9') &&
+          ch != '_') {
+        return Local<PackageName>();
+      }
+    }
+  }
+
+  return create(heap, components);
+}
+
+
+int PackageName::compare(const PackageName* other) const {
+  auto len = min(components()->length(), other->components()->length());
+  for (length_t i = 0; i < len; i++) {
+    int cmp = components()->get(i)->compare(other->components()->get(i));
+    if (cmp != 0)
+      return cmp;
+  }
+  return static_cast<int>(components()->length()) -
+         static_cast<int>(other->components()->length());
+}
+
+
+ostream& operator << (ostream& os, const PackageName* packageName) {
+  os << brief(packageName) << "\n  ";
+  auto components = packageName->components();
+  auto length = components->length();
+  for (length_t i = 0; i < length - 1; i++) {
+    os << components->get(i) << '.';
+  }
+  os << components->get(length - 1);
+  return os;
+}
+
+
+#define PACKAGE_VERSION_POINTER_LIST(F) \
+  F(PackageVersion, components_)        \
+
+DEFINE_POINTER_MAP(PackageVersion, PACKAGE_VERSION_POINTER_LIST)
+
+#undef PACKAGE_VERSION_POINTER_LIST
+
+
+PackageVersion::PackageVersion(I32Array* components)
+    : Block(PACKAGE_VERSION_BLOCK_TYPE),
+      components_(this, components) {
+  ASSERT(components->length() <= kMaxComponentCount);
+  #ifdef DEBUG
+  for (auto component : *components) {
+    ASSERT(inRange<i32>(component, 0, kMaxComponent));
+  }
+  #endif
+}
+
+
+Local<PackageVersion> PackageVersion::create(Heap* heap, const Handle<I32Array>& components) {
+  RETRY_WITH_GC(heap, return Local<PackageVersion>(new(heap) PackageVersion(*components)));
+}
+
+
+Local<PackageVersion> PackageVersion::fromString(Heap* heap,
+                                                 const Handle<String>& versionString) {
+  auto componentStrings = String::split(heap, versionString, '.');
+  if (componentStrings->length() == 0 || componentStrings->length() > kMaxComponentCount)
+    return Local<PackageVersion>();
+
+  auto components = I32Array::create(heap, componentStrings->length());
+  for (length_t i = 0; i < componentStrings->length(); i++) {
+    auto componentString = handle(componentStrings->get(i));
+    i32 component;
+    if (!componentString->tryToI32(&component) ||
+        !inRange<i32>(component, 0, kMaxComponent)) {
+      return Local<PackageVersion>();
+    }
+    components->set(i, component);
+  }
+
+  return create(heap, components);
+}
+
+
+int PackageVersion::compare(const PackageVersion* other) const {
+  auto len = min(components()->length(), other->components()->length());
+  for (length_t i = 0; i < len; i++) {
+    int cmp = static_cast<int>(components()->get(i) - other->components()->get(i));
+    if (cmp != 0)
+      return cmp;
+  }
+  return static_cast<int>(components()->length()) -
+         static_cast<int>(other->components()->length());
+}
+
+
+ostream& operator << (ostream& os, const PackageVersion* version) {
+  os << brief(version) << "\n  ";
+  auto components = version->components();
+  auto length = components->length();
+  for (length_t i = 0; i < length - 1; i++) {
+    os << components->get(i) << '.';
+  }
+  os << components->get(length - 1);
+  return os;
+}
+
+
+#define PACKAGE_DEPENDENCY_POINTER_LIST(F) \
+  F(PackageDependency, name_)              \
+  F(PackageDependency, minVersion_)        \
+  F(PackageDependency, maxVersion_)        \
+
+DEFINE_POINTER_MAP(PackageDependency, PACKAGE_DEPENDENCY_POINTER_LIST)
+
+#undef PACKAGE_DEPENDENCY_POINTER_LIST
+
+
+PackageDependency::PackageDependency(PackageName* name,
+                                     PackageVersion* minVersion,
+                                     PackageVersion* maxVersion)
+    : Block(PACKAGE_DEPENDENCY_BLOCK_TYPE),
+      name_(this, name),
+      minVersion_(this, minVersion),
+      maxVersion_(this, maxVersion) { }
+
+
+Local<PackageDependency> PackageDependency::create(Heap* heap,
+                                                   const Handle<PackageName>& name,
+                                                   const Handle<PackageVersion>& minVersion,
+                                                   const Handle<PackageVersion>& maxVersion) {
+  RETRY_WITH_GC(heap, return Local<PackageDependency>(new(heap) PackageDependency(
+      *name, minVersion.getOrNull(), maxVersion.getOrNull())));
+}
+
+
+Local<PackageDependency> PackageDependency::fromString(Heap* heap,
+                                                       const Handle<String>& depString) {
+  auto components = String::split(heap, depString, ':');
+  if (!inRange<length_t>(components->length(), 1, 3))
+    return Local<PackageDependency>();
+
+  auto name = PackageName::fromString(heap, handle(components->get(0)));
+  if (!name)
+    return Local<PackageDependency>();
+
+  Local<PackageVersion> minVersion, maxVersion;
+  if (components->length() >= 2 && !components->get(1)->isEmpty()) {
+    minVersion = PackageVersion::fromString(heap, handle(components->get(1)));
+    if (!minVersion)
+      return Local<PackageDependency>();
+  }
+  if (components->length() >= 3 && !components->get(2)->isEmpty()) {
+    maxVersion = PackageVersion::fromString(heap, handle(components->get(2)));
+    if (!maxVersion)
+      return Local<PackageDependency>();
+  }
+
+  return create(heap, name, minVersion, maxVersion);
+}
+
+
+bool PackageDependency::equals(const PackageDependency* other) const {
+  return name()->equals(other->name()) &&
+         ((!minVersion_ && !other->minVersion_) ||
+          (minVersion()->equals(other->minVersion()))) &&
+         ((!maxVersion_ && !other->maxVersion_) ||
+          (maxVersion()->equals(other->maxVersion())));
+}
+
+
+bool PackageDependency::isSatisfiedBy(const PackageName* name,
+                                      const PackageVersion* version) const {
+  return this->name()->equals(name) &&
+         (minVersion() == nullptr || minVersion()->compare(version) <= 0) &&
+         (maxVersion() == nullptr || maxVersion()->compare(version) >= 0);
+}
+
+
+ostream& operator << (ostream& os, const PackageDependency* dep) {
+  os << brief(dep)
+     << "\n  name: " << brief(dep->name())
+     << "\n  minVersion: " << brief(dep->minVersion())
+     << "\n  maxVersion: " << brief(dep->maxVersion());
+  return os;
+}
+
+
 Local<Package> PackageLoader::load() {
   HandleScope handleScope(vm_);
   try {

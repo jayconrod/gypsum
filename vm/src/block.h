@@ -18,24 +18,27 @@
 namespace codeswitch {
 namespace internal {
 
-#define BLOCK_TYPE_LIST(V)             \
-V(Meta, META)                          \
-V(Free, FREE)                          \
-V(Package, PACKAGE)                    \
-V(Stack, STACK)                        \
-V(Global, GLOBAL)                      \
-V(Function, FUNCTION)                  \
-V(Class, CLASS)                        \
-V(Field, FIELD)                        \
-V(TypeParameter, TYPE_PARAMETER)       \
-V(I8Array, I8_ARRAY)                   \
-V(I32Array, I32_ARRAY)                 \
-V(I64Array, I64_ARRAY)                 \
-V(BlockArray, BLOCK_ARRAY)             \
-V(TaggedArray, TAGGED_ARRAY)           \
-V(Object, OBJECT)                      \
-V(Type, TYPE)                          \
-V(String, STRING)                      \
+#define BLOCK_TYPE_LIST(V)                                                     \
+V(Meta, META)                                                                  \
+V(Free, FREE)                                                                  \
+V(Package, PACKAGE)                                                            \
+V(PackageName, PACKAGE_NAME)                                                   \
+V(PackageVersion, PACKAGE_VERSION)                                             \
+V(PackageDependency, PACKAGE_DEPENDENCY)                                       \
+V(Stack, STACK)                                                                \
+V(Global, GLOBAL)                                                              \
+V(Function, FUNCTION)                                                          \
+V(Class, CLASS)                                                                \
+V(Field, FIELD)                                                                \
+V(TypeParameter, TYPE_PARAMETER)                                               \
+V(I8Array, I8_ARRAY)                                                           \
+V(I32Array, I32_ARRAY)                                                         \
+V(I64Array, I64_ARRAY)                                                         \
+V(BlockArray, BLOCK_ARRAY)                                                     \
+V(TaggedArray, TAGGED_ARRAY)                                                   \
+V(Object, OBJECT)                                                              \
+V(Type, TYPE)                                                                  \
+V(String, STRING)                                                              \
 
 
 #define ENUM_BLOCK_TYPE(Name, NAME) NAME##_BLOCK_TYPE,
