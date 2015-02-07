@@ -51,7 +51,7 @@ cmdline.add_argument("-p", "--package-name", action="store", type=packageName,
                      default="default",
                      help="Name of the package being compiled")
 cmdline.add_argument("-v", "--package-version", action="store", type=str,
-                     default="",
+                     default="0",
                      help="Version of the package being compiled")
 cmdline.add_argument("-d", "--depends", action="append", type=dependency,
                      default=[],

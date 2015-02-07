@@ -35,6 +35,7 @@ namespace internal {
 #define PACKAGE_POINTER_LIST(F) \
   F(Package, name_)             \
   F(Package, version_)          \
+  F(Package, dependencies_)     \
   F(Package, strings_)          \
   F(Package, globals_)          \
   F(Package, functions_)        \
@@ -424,13 +425,17 @@ Local<Package> PackageLoader::load() {
       throw Error("package file is corrupt");
     auto majorVersion = readValue<u16>();
     auto minorVersion = readValue<u16>();
-    if (majorVersion != 0 || minorVersion != 12)
+    if (majorVersion != 0 || minorVersion != 13)
       throw Error("package file has wrong format version");
 
     package_ = handleScope.escape(*Package::create(heap()));
 
     auto flags = readValue<u64>();
     package_->setFlags(flags);
+
+    auto depCount = readLength();
+    auto depArray = BlockArray<PackageDependency>::create(heap(), depCount);
+    package_->setDependencies(*depArray);
 
     auto stringCount = readLength();
     auto stringArray = BlockArray<String>::create(heap(), stringCount);
@@ -470,11 +475,25 @@ Local<Package> PackageLoader::load() {
     auto initFunctionIndex = readLength();
     package_->setInitFunctionIndex(initFunctionIndex);
 
-    auto name = readString();
+    auto nameStr = readString();
+    auto name = PackageName::fromString(heap(), nameStr);
+    if (!name)
+      throw Error("invalid package name");
     package_->setName(*name);
 
-    auto version = readString();
+    auto versionStr = readString();
+    auto version = PackageVersion::fromString(heap(), versionStr);
+    if (!version)
+      throw Error("invalid package version");
     package_->setVersion(*version);
+
+    for (length_t i = 0; i < depCount; i++) {
+      auto depStr = readString();
+      auto dep = PackageDependency::fromString(heap(), depStr);
+      if (!dep)
+        throw Error("invalid package dependency");
+      depArray->set(i, *dep);
+    }
 
     for (length_t i = 0; i < stringCount; i++) {
       auto string = readString();
