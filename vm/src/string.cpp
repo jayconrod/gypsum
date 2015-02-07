@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -191,6 +191,20 @@ Local<String> String::concat(Heap* heap,
                              const Handle<String>& left,
                              const Handle<String>& right) {
   RETRY_WITH_GC(heap, return Local<String>(left->tryConcat(heap, *right)));
+}
+
+
+String* String::trySubstring(Heap* heap, length_t begin, length_t end) const {
+  ASSERT(begin <= end && end <= length());
+  auto len = end - begin;
+  auto beginChars = chars() + begin;
+  return new(heap, len) String(beginChars);
+}
+
+
+Local<String> String::substring(Heap* heap, const Handle<String>& string,
+                                length_t begin, length_t end) {
+  RETRY_WITH_GC(heap, return Local<String>(string->trySubstring(heap, begin, end)));
 }
 
 

@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -89,4 +89,20 @@ TEST(StringConcat) {
   ASSERT_EQ(*foo, *String::concat(vm.heap(), foo, empty));
   ASSERT_EQ(*foo, *String::concat(vm.heap(), empty, foo));
   ASSERT_TRUE(expected->equals(*String::concat(vm.heap(), foo, bar)));
+}
+
+
+TEST(StringSubstring) {
+  VM vm;
+  AllowAllocationScope allowAllocation(vm.heap(), true);
+  HandleScope handleScope(&vm);
+
+  auto hello = String::fromUtf8CString(vm.heap(), "hello");
+  auto empty = String::fromUtf8CString(vm.heap(), "");
+  ASSERT_TRUE(empty->equals(*String::substring(vm.heap(), hello, 0, 0)));
+  ASSERT_TRUE(empty->equals(*String::substring(vm.heap(), hello, 5, 5)));
+  auto hel = String::fromUtf8CString(vm.heap(), "hel");
+  ASSERT_TRUE(hel->equals(*String::substring(vm.heap(), hello, 0, 3)));
+  auto llo = String::fromUtf8CString(vm.heap(), "llo");
+  ASSERT_TRUE(llo->equals(*String::substring(vm.heap(), hello, 2, 5)));
 }
