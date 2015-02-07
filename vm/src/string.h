@@ -101,6 +101,10 @@ class String: public Object {
   iterator begin() const;
   iterator end() const;
 
+  #ifdef DEBUG
+  void dump() const;
+  #endif
+
  private:
   String();
   static Local<String> create(Heap* heap, length_t length);

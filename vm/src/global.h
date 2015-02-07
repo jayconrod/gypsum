@@ -53,6 +53,9 @@ class Global: public Block {
 };
 
 
+std::ostream& operator << (std::ostream& os, const Global* global);
+
+
 }
 }
 

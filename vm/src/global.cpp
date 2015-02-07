@@ -9,6 +9,8 @@
 #include "gc.h"
 #include "type.h"
 
+using namespace std;
+
 namespace codeswitch {
 namespace internal {
 
@@ -90,6 +92,19 @@ void Global::setRaw(i64 value) {
   } else {
     setObject(reinterpret_cast<Object*>(static_cast<word_t>(value)));
   }
+}
+
+
+ostream& operator << (ostream& os, const Global* global) {
+  os << brief(global)
+     << "\n  type: " << brief(global->type())
+     << "\n  value: ";
+  if (global->isPrimitive()) {
+    os << global->getPrimitive();
+  } else {
+    os << brief(global->getObject());
+  }
+  return os;
 }
 
 }

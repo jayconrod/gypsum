@@ -175,6 +175,14 @@ struct brief {
 std::ostream& operator << (std::ostream& os, brief b);
 
 
+#ifdef DEBUG
+/** Prints debugging information about any block on stderr. This is intended to be called
+ *  directly from the debugger.
+ */
+void dump(const Block* block);
+#endif
+
+
 // TODO: remove this when no longer needed for compatibility.
 static const int kBlockHeaderSize = sizeof(Block);
 

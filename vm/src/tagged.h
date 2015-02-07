@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -29,8 +29,8 @@ class Tagged {
       setPointer(other.getPointer());
   }
 
-  bool isNumber() { return (value_ & kTagMask) == kTag; }
-  word_t getNumber() {
+  bool isNumber() const { return (value_ & kTagMask) == kTag; }
+  word_t getNumber() const {
     ASSERT(isNumber());
     return static_cast<word_t>(static_cast<intptr_t>(value_) >> kTagSize);
   }
@@ -38,8 +38,8 @@ class Tagged {
     value_ = number << kTagSize | kTag;
   }
 
-  bool isPointer() { return !isNumber(); }
-  T* getPointer() {
+  bool isPointer() const { return !isNumber(); }
+  T* getPointer() const {
     ASSERT(isPointer());
     return reinterpret_cast<T*>(value_);
   }
@@ -48,7 +48,7 @@ class Tagged {
     ASSERT(isPointer());
   }
 
-  word_t raw() { return value_; }
+  word_t raw() const { return value_; }
 
   static const word_t kTag = 1;
   static const word_t kTagMask = 1;
@@ -60,7 +60,7 @@ class Tagged {
 
 template <class T>
 std::ostream& operator << (std::ostream& os, const Tagged<T>& tagged) {
-  return os << (tagged.isNumber() ? tagged.getNumber() : brief(tagged.getPointer()));
+  return (tagged.isNumber() ? os << tagged.getNumber() : os << brief(tagged.getPointer()));
 }
 
 
