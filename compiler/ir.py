@@ -17,6 +17,7 @@ class Package(object):
     def __init__(self, name="default", version=""):
         self.name = name
         self.version = version
+        self.dependencies = []
         self.globals = []
         self.functions = []
         self.classes = []
@@ -27,6 +28,11 @@ class Package(object):
 
     def __str__(self):
         buf = StringIO.StringIO()
+        if len(self.dependencies) > 0:
+            buf.write("dependencies:\n")
+            for dep in self.dependencies:
+                buf.write("  %s\n" % dep)
+            buf.write("\n")
         for g in self.globals:
             buf.write("%s\n\n" % g)
         for f in self.functions:

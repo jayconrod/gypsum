@@ -25,14 +25,24 @@ from errors import CompileException
 
 sys.setrecursionlimit(10000)
 
-def packageName(name):
-    component = "[A-Za-z][A-Za-z0-9_]*"
-    rex = re.compile("^%s(?:\.%s)*$" % (component, component), re.MULTILINE)
-    if rex.match(name):
-        return name
-    else:
-        raise argparse.ArgumentTypeError("invalid package name: %s" % name)
+def makeRexType(rexSrc, typeName):
+    rex = re.compile("^%s$" % rexSrc, re.MULTILINE)
+    def rexType(name):
+        if rex.match(name):
+            return name
+        else:
+            raise argparse.ArgumentTypeError("invalid %s: %s" % (typeName, name))
+    return rexType
 
+packageNameComponent = "[A-Za-z][A-Za-z0-9_]*"
+packageNameRexSrc = r"%s(?:\.%s)*" % (packageNameComponent, packageNameComponent)
+packageName = makeRexType(packageNameRexSrc, "package name")
+
+versionRexSrc = r"[0-9]+(?:\.[0-9]+)*"
+version = makeRexType(versionRexSrc, "version")
+
+dependencyRexSrc = "%s(?::%s(?::%s)?)?" % (packageNameRexSrc, versionRexSrc, versionRexSrc)
+dependency = makeRexType(dependencyRexSrc, "dependency")
 
 cmdline = argparse.ArgumentParser(description="Compile source files into CodeSwitch packages")
 cmdline.add_argument("sources", metavar="source", type=str, nargs="+",
@@ -43,6 +53,9 @@ cmdline.add_argument("-p", "--package-name", action="store", type=packageName,
 cmdline.add_argument("-v", "--package-version", action="store", type=str,
                      default="",
                      help="Version of the package being compiled")
+cmdline.add_argument("-d", "--depends", action="append", type=dependency,
+                     default=[],
+                     help="Additional package dependencies")
 cmdline.add_argument("-o", "--output", action="store",
                      default="out.csp",
                      help="Name of the output file")
@@ -84,6 +97,7 @@ for sourceFilename in args.sources:
             printer = AstPrinter(sys.stdout)
             printer.visit(ast)
         package = Package(args.package_name, args.package_version)
+        package.dependencies.extend(args.depends)
         info = CompileInfo(ast, package)
         analyzeDeclarations(info)
         analyzeInheritance(info)

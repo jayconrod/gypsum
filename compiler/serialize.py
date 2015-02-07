@@ -37,6 +37,8 @@ class Serializer(object):
 
     def serialize(self):
         self.writeHeader()
+        for d in self.package.dependencies:
+            self.writeString(d)
         for s in self.package.strings:
             self.writeString(s)
         for g in self.package.globals:
@@ -49,11 +51,12 @@ class Serializer(object):
             self.writeTypeParameter(p)
 
     def writeHeader(self):
-        self.outFile.write(struct.pack("<Ihhqiiiiiii",
+        self.outFile.write(struct.pack("<Ihhqiiiiiiii",
                                        0x676b7073,   # magic number
                                        0,            # major version
-                                       12,           # minor version
+                                       13,           # minor version
                                        0,            # flags
+                                       len(self.package.dependencies),
                                        len(self.package.strings),
                                        len(self.package.globals),
                                        len(self.package.functions),
