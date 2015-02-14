@@ -63,6 +63,7 @@ class Roots {
     F(Type, erasedType, ERASED_TYPE)                                  \
     F(Meta, typeMeta, TYPE_META)                                      \
     F(Meta, stringMeta, STRING_META)                                  \
+    F(String, emptyString, EMPTY_STRING)                              \
     F(String, trueString, TRUE_STRING)                                \
     F(String, falseString, FALSE_STRING)                              \
 

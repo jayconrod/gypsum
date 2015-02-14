@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -13,6 +13,7 @@
 #include "bytecode.h"
 #include "function.h"
 #include "package.h"
+#include "string.h"
 #include "roots.h"
 #include "type.h"
 
@@ -107,8 +108,8 @@ static u8 makeSmallVbn(i64 value) {
 
 static Local<Package> createTestPackage(Heap* heap) {
   auto roots = heap->vm()->roots();
-  auto typeList = BlockArray<Type>::create(heap, 3);
 
+  auto typeList = BlockArray<Type>::create(heap, 3);
   typeList->set(0, Type::rootClassType(roots));
   typeList->set(1, Type::i8Type(roots));
   typeList->set(2, Type::rootClassType(roots));
@@ -145,7 +146,8 @@ static Local<Package> createTestPackage(Heap* heap) {
   auto functions = BlockArray<Function>::create(heap, 1);
   Local<TaggedArray<TypeParameter>> emptyTypeParameters(
       reinterpret_cast<TaggedArray<TypeParameter>*>(roots->emptyTaggedArray()));
-  auto function = Function::create(heap, 0, emptyTypeParameters, typeList,
+  auto function = Function::create(heap, handle(roots->emptyString()),
+                                   0, emptyTypeParameters, typeList,
                                    2 * kWordSize, instList, blockOffsetList, package);
   functions->set(0, *function);
   package->setFunctions(*functions);
@@ -176,6 +178,7 @@ TEST(BlockVisitorFunction) {
   HandleScope handleScope(&vm);
   auto package = *createTestPackage(heap);
   auto function = package->getFunction(0);
+  auto name = function->name();
   auto typeParameters = function->typeParameters();
   auto types = function->types();
   auto localsSize = function->localsSize();
@@ -185,6 +188,7 @@ TEST(BlockVisitorFunction) {
   visitor.visit(function);
   word_t expected[] = {
       FUNCTION_BLOCK_TYPE << 2,
+      reinterpret_cast<word_t>(name) + 4,
       0,
       0,
       reinterpret_cast<word_t>(typeParameters) + 4,

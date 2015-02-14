@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -22,6 +22,7 @@ class I32Array;
 typedef I32Array LengthArray;
 typedef I32Array IdArray;
 class Package;
+class String;
 template <class T>
 class TaggedArray;
 class Type;
@@ -32,7 +33,8 @@ class Class: public Block {
   static const BlockType kBlockType = CLASS_BLOCK_TYPE;
 
   void* operator new(size_t, Heap* heap);
-  Class(u32 flags,
+  Class(String* name,
+        u32 flags,
         TaggedArray<TypeParameter>* typeParameters,
         Type* supertype,
         BlockArray<Field>* fields,
@@ -44,6 +46,7 @@ class Class: public Block {
         length_t lengthFieldIndex = kIndexNotSet);
   static Local<Class> create(Heap* heap);
   static Local<Class> create(Heap* heap,
+                             const Handle<String>& name,
                              u32 flags,
                              const Handle<TaggedArray<TypeParameter>>& typeParameters,
                              const Handle<Type>& supertype,
@@ -59,6 +62,9 @@ class Class: public Block {
   // as immutable. This is necessary since Class and Type have a cyclic relationship. We may
   // need to allocate empty Class objects early, then fill them after other objects which
   // refer to them have been allocated.
+
+  String* name() const { return name_.get(); }
+  void setName(String* name) { name_.set(this, name); }
 
   u32 flags() const { return flags_; }
   void setFlags(u32 flags) { flags_ = flags; }
@@ -113,6 +119,7 @@ class Class: public Block {
                                        bool* hasPointers, BitSet* pointerMap) const;
 
   DECLARE_POINTER_MAP()
+  Ptr<String> name_;
   u32 flags_;
   Ptr<TaggedArray<TypeParameter>> typeParameters_;
   Ptr<Type> supertype_;

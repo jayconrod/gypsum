@@ -720,7 +720,8 @@ class Scope(ast.AstNodeVisitor):
             irClosureClass = closureInfo.irClosureClass
             irContextClass = self.info.getContextInfo(scopeId).irContextClass
             irContextType = ClassType(irContextClass)
-            irContextField = ir.Field("$context", None, irContextType, frozenset())
+            irContextField = self.info.package.newField("$context", None,
+                                                        irContextType, frozenset())
             irClosureClass.fields.append(irContextField)
             irClosureClass.constructors[0].parameterTypes.append(irContextType)
             closureInfo.irClosureContexts[scopeId] = irContextField
@@ -928,7 +929,8 @@ class FunctionScope(Scope):
             pass
         elif isinstance(irDefn, ir.Variable):
             defnInfo.irDefn.kind = None  # finish() will delete this
-            irCaptureField = ir.Field(irDefn.name, irDefn.astDefn, irDefn.type, irDefn.flags)
+            irCaptureField = self.info.package.newField(irDefn.name, irDefn.astDefn,
+                                                        irDefn.type, irDefn.flags)
             if hasattr(defnInfo.irDefn, "astDefn"):
                 irCaptureField.astDefn = defnInfo.irDefn.astDefn
             if hasattr(defnInfo.irDefn, "astVarDefn"):
@@ -1033,7 +1035,7 @@ class ClassScope(Scope):
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         if isinstance(astDefn, ast.AstVariablePattern):
             checkFlags(flags, frozenset([LET, PROTECTED, PRIVATE]), astDefn.location)
-            irDefn = ir.Field(astDefn.name, astDefn, None, flags)
+            irDefn = self.info.package.newField(astDefn.name, astDefn, None, flags)
             irScopeDefn.fields.append(irDefn)
         elif isinstance(astDefn, ast.AstFunctionDefinition):
             implicitTypeParams = self.getImplicitTypeParameters()

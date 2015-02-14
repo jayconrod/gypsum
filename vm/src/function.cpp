@@ -25,6 +25,7 @@ namespace codeswitch {
 namespace internal {
 
 #define FUNCTION_POINTER_LIST(F) \
+  F(Function, name_)             \
   F(Function, typeParameters_)   \
   F(Function, types_)            \
   F(Function, blockOffsets_)     \
@@ -46,7 +47,8 @@ void* Function::operator new(size_t, Heap* heap, length_t instructionsSize) {
 }
 
 
-Function::Function(u32 flags,
+Function::Function(String* name,
+                   u32 flags,
                    TaggedArray<TypeParameter>* typeParameters,
                    BlockArray<Type>* types,
                    word_t localsSize,
@@ -55,6 +57,7 @@ Function::Function(u32 flags,
                    Package* package,
                    StackPointerMap* stackPointerMap)
     : Block(FUNCTION_BLOCK_TYPE),
+      name_(this, name),
       flags_(flags),
       builtinId_(0),
       typeParameters_(this, typeParameters),
@@ -70,6 +73,7 @@ Function::Function(u32 flags,
 
 
 Local<Function> Function::create(Heap* heap,
+                                 const Handle<String>& name,
                                  u32 flags,
                                  const Handle<TaggedArray<TypeParameter>>& typeParameters,
                                  const Handle<BlockArray<Type>>& types,
@@ -78,7 +82,7 @@ Local<Function> Function::create(Heap* heap,
                                  const Handle<LengthArray>& blockOffsets,
                                  const Handle<Package>& package) {
   RETRY_WITH_GC(heap, return Local<Function>(new(heap, instructions.size()) Function(
-      flags, *typeParameters, *types, localsSize, instructions,
+      *name, flags, *typeParameters, *types, localsSize, instructions,
       blockOffsets.getOrNull(), package.getOrNull(), nullptr)));
 }
 
@@ -135,7 +139,8 @@ ostream& operator << (ostream& os, const Function* fn) {
   os << brief(fn);
   if (fn->hasBuiltinId())
     os << "\n  builtin id: " << fn->builtinId();
-  os << "\n  type parameters: " << brief(fn->typeParameters())
+  os << "\n  name: " << brief(fn->name())
+     << "\n  type parameters: " << brief(fn->typeParameters())
      << "\n  types: " << brief(fn->types())
      << "\n  locals size: " << fn->localsSize()
      << "\n  instructions size: " << fn->instructionsSize()

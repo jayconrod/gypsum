@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -21,6 +21,7 @@ namespace internal {
 class Bitmap;
 class Package;
 class StackPointerMap;
+class String;
 class TypeParameter;
 
 class Function: public Block {
@@ -28,7 +29,8 @@ class Function: public Block {
   static const BlockType kBlockType = FUNCTION_BLOCK_TYPE;
 
   void* operator new(size_t, Heap* heap, length_t instructionsSize);
-  Function(u32 flags,
+  Function(String* name,
+           u32 flags,
            TaggedArray<TypeParameter>* typeParameters,
            BlockArray<Type>* types,
            word_t localsSize,
@@ -37,6 +39,7 @@ class Function: public Block {
            Package* package,
            StackPointerMap* stackPointerMap);
   static Local<Function> create(Heap* heap,
+                                const Handle<String>& name,
                                 u32 flags,
                                 const Handle<TaggedArray<TypeParameter>>& typeParameters,
                                 const Handle<BlockArray<Type>>& types,
@@ -47,6 +50,7 @@ class Function: public Block {
 
   static word_t sizeForFunction(length_t instructionsSize);
 
+  String* name() const { return name_.get(); }
   u32 flags() const { return flags_; }
 
   BuiltinId builtinId() const {
@@ -85,6 +89,7 @@ class Function: public Block {
 
  private:
   DECLARE_POINTER_MAP()
+  Ptr<String> name_;
   u32 flags_;
   BuiltinId builtinId_;
   Ptr<TaggedArray<TypeParameter>> typeParameters_;

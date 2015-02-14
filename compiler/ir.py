@@ -47,30 +47,44 @@ class Package(object):
 
     def addGlobal(self, name, astDefn, *args):
         id = len(self.globals)
+        self.findOrAddString(name)
         g = Global(name, astDefn, id, *args)
         self.globals.append(g)
         return g
 
     def addFunction(self, name, astDefn, *args):
         id = len(self.functions)
+        self.findOrAddString(name)
         f = Function(name, astDefn, id, *args)
         self.functions.append(f)
         return f
 
     def addClass(self, name, astDefn, *args):
         id = len(self.classes)
+        self.findOrAddString(name)
         c = Class(name, astDefn, id, *args)
         self.classes.append(c)
         return c
 
     def addTypeParameter(self, name, astDefn, *args):
         id = len(self.typeParameters)
+        self.findOrAddString(name)
         p = TypeParameter(name, astDefn, id, *args)
         self.typeParameters.append(p)
         return p
 
+    def newField(self, name, *args):
+        self.findOrAddString(name)
+        return Field(name, *args)
+
+    def findString(self, s):
+        if type(s) == str:
+            s = unicode(s)
+        return self.strings.index(s)
+
     def findOrAddString(self, s):
-        assert type(s) == unicode
+        if type(s) == str:
+            s = unicode(s)
         for i in xrange(0, len(self.strings)):
             if self.strings[i] == s:
                 return i

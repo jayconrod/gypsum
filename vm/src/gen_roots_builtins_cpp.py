@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2014 Jay Conrod. All rights reserved.
+# Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 # This file is part of CodeSwitch. Use of this source code is governed by
 # the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -61,6 +61,7 @@ def initClass(out, classData):
     assert not classData["isPrimitive"]
     out.write("\n  { // %s\n" % classData["id"])
     out.write("    auto clas = getBuiltinClass(%s);\n" % classData["id"])
+    out.write("    auto name = getBuiltinName(%s);\n" % classData["id"])
     out.write("    auto typeParameters = reinterpret_cast<TaggedArray<TypeParameter>*>(" +
               "emptyTaggedArray());\n")
     if classData["supertype"] is None:
@@ -73,9 +74,11 @@ def initClass(out, classData):
         out.write("    auto fields = new(heap, %d) BlockArray<Field>;\n" %
                   len(classData["fields"]))
         for i, fieldData in enumerate(classData["fields"]):
+            out.write("    auto field%dName = String::rawFromUtf8CString(heap, \"%s\");\n" %
+                      (i, fieldData["name"]))
             typeName = fieldData["type"]
-            out.write("    auto field%d = new(heap) Field(0, %s);\n" %
-                      (i, getTypeFromName(typeName)))
+            out.write("    auto field%d = new(heap) Field(field%dName, 0, %s);\n" %
+                      (i, i, getTypeFromName(typeName)))
             out.write("    fields->set(%d, field%d);\n" % (i, i))
     if "elements" not in classData:
         out.write("    Type* elementType = nullptr;\n")
@@ -101,8 +104,8 @@ def initClass(out, classData):
         out.write("    auto methods = new(heap, %d) IdArray;\n" % len(allMethodIds))
         for i, id in enumerate(allMethodIds):
             out.write("    methods->set(%d, %s);\n" % (i, id))
-    out.write("    ::new(clas) Class(0, typeParameters, supertype, fields, constructors, " +
-              "methods, nullptr, nullptr, elementType, lengthFieldIndex);\n")
+    out.write("    ::new(clas) Class(name, 0, typeParameters, supertype, fields, " +
+              "constructors, methods, nullptr, nullptr, elementType, lengthFieldIndex);\n")
     out.write("    auto meta = clas->buildInstanceMeta();\n")
     out.write("    clas->setInstanceMeta(meta);\n")
     out.write("    builtinMetas_.push_back(meta);\n  }")
@@ -111,15 +114,19 @@ def initClass(out, classData):
 def initFunction(out, functionData):
     out.write("\n  { // %s\n" % functionData["id"])
     out.write("    auto function = getBuiltinFunction(%s);\n" % functionData["id"])
+    if "name" not in functionData:
+        out.write("    auto name = emptyString();\n")
+    else:
+        out.write("    auto name = String::rawFromUtf8CString(heap, \"%s\");\n" %
+                  functionData["name"])
     typeNames = [functionData["returnType"]] + functionData["parameterTypes"]
     out.write("    auto types = new(heap, %d) BlockArray<Type>;\n" % len(typeNames))
     for i, name in enumerate(typeNames):
         out.write("    types->set(%d, %s);\n" % (i, getTypeFromName(name)))
-    out.write("    ::new(function) Function(0, emptyTypeParameters, types, 0, " +
+    out.write("    ::new(function) Function(name, 0, emptyTypeParameters, types, 0, " +
               "emptyInstructions, nullptr, nullptr, nullptr);\n")
     out.write("    function->setBuiltinId(%s);\n" % functionData["id"])
     out.write("  }")
-
 
 
 def findClass(name):

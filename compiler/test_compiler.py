@@ -149,9 +149,11 @@ class TestCompiler(TestCaseWithDefinitions):
                              variables=[self.makeVariable("x", type=I64Type)]))
 
     def testVarWithSimpleCast(self):
-        self.checkFunction("def f = { var x: Object = \"foo\"; x; }",
+        package = self.compileFromSource("def f = { var x: Object = \"foo\"; x; }")
+        fooIndex = package.findString("foo")
+        self.checkFunction(package,
                            self.makeSimpleFunction("f", getRootClassType(), [[
-                               string(0),
+                               string(fooIndex),
                                tyc(BUILTIN_ROOT_CLASS_ID),
                                cast(),
                                stlocal(-1),
@@ -552,24 +554,30 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret()]]))
 
     def testConcatStrings(self):
+        package = self.compileFromSource("def f = \"foo\" + \"bar\"")
         stringClass = getStringClass()
         concatMethod = stringClass.getMethod("+")
         concatMethodIndex = stringClass.getMethodIndex(concatMethod)
-        self.checkFunction("def f = \"foo\" + \"bar\"",
+        fooIndex = package.findString("foo")
+        barIndex = package.findString("bar")
+        self.checkFunction(package,
                            self.makeSimpleFunction("f", getStringType(), [[
-                               ir_instructions.string(0),
-                               ir_instructions.string(1),
+                               string(fooIndex),
+                               string(barIndex),
                                callv(2, concatMethodIndex),
                                ret()]]))
 
     def testCompareStrings(self):
+        package = self.compileFromSource("def f = \"foo\" == \"bar\"")
         stringClass = getStringClass()
         eqMethod = stringClass.getMethod("==")
         eqMethodIndex = stringClass.getMethodIndex(eqMethod)
-        self.checkFunction("def f = \"foo\" == \"bar\"",
+        fooIndex = package.findString("foo")
+        barIndex = package.findString("bar")
+        self.checkFunction(package,
                            self.makeSimpleFunction("f", BooleanType, [[
-                               ir_instructions.string(0),
-                               ir_instructions.string(1),
+                               string(fooIndex),
+                               string(barIndex),
                                callv(2, eqMethodIndex),
                                ret()]]))
 
@@ -1386,10 +1394,11 @@ class TestCompiler(TestCaseWithDefinitions):
                                              parameterTypes=[barTy])
 
     def testCallBuiltinFunction(self):
-        source = "def f = print(\"foo\")"
-        self.checkFunction(source,
+        package = self.compileFromSource("def f = print(\"foo\")")
+        fooIndex = package.findString("foo")
+        self.checkFunction(package,
                            self.makeSimpleFunction("f", UnitType, [[
-                               ir_instructions.string(0),
+                               string(fooIndex),
                                callg(BUILTIN_PRINT_FUNCTION_ID),
                                ret()]]))
 

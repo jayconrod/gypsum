@@ -19,6 +19,7 @@ namespace codeswitch {
 namespace internal {
 
 #define TYPE_PARAMETERS_POINTER_LIST(F) \
+  F(TypeParameter, name_)               \
   F(TypeParameter, upperBound_)         \
   F(TypeParameter, lowerBound_)         \
 
@@ -32,8 +33,9 @@ void* TypeParameter::operator new (size_t, Heap* heap) {
 }
 
 
-TypeParameter::TypeParameter(u32 flags, Type* upperBound, Type* lowerBound)
+TypeParameter::TypeParameter(String* name, u32 flags, Type* upperBound, Type* lowerBound)
     : Block(TYPE_PARAMETER_BLOCK_TYPE),
+      name_(this, name),
       flags_(flags),
       upperBound_(this, upperBound),
       lowerBound_(this, lowerBound) { }
@@ -41,16 +43,17 @@ TypeParameter::TypeParameter(u32 flags, Type* upperBound, Type* lowerBound)
 
 Local<TypeParameter> TypeParameter::create(Heap* heap) {
   RETRY_WITH_GC(heap, return Local<TypeParameter>(
-      new(heap) TypeParameter(0, nullptr, nullptr)));
+      new(heap) TypeParameter(nullptr, 0, nullptr, nullptr)));
 }
 
 
 Local<TypeParameter> TypeParameter::create(Heap* heap,
+                                           const Handle<String>& name,
                                            u32 flags,
                                            const Handle<Type>& upperBound,
                                            const Handle<Type>& lowerBound) {
   RETRY_WITH_GC(heap, return Local<TypeParameter>(
-      new(heap) TypeParameter(flags, upperBound.getOrNull(), lowerBound.getOrNull())));
+      new(heap) TypeParameter(*name, flags, upperBound.getOrNull(), lowerBound.getOrNull())));
 }
 
 
@@ -85,6 +88,7 @@ Variance TypeParameter::variance() const {
 
 ostream& operator << (ostream& os, const TypeParameter* tp) {
   os << brief(tp)
+     << "\n  name: " << brief(tp->name())
      << "\n  upper bound: " << brief(tp->upperBound())
      << "\n  lower bound: " << brief(tp->lowerBound());
   return os;

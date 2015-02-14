@@ -69,6 +69,7 @@ class PackageLoader {
   Local<Type> readType();
   template <typename T>
   T readValue();
+  Local<String> readName();
   length_t readLength();
   vector<u8> readData(word_t size);
   i64 readVbn();
@@ -437,7 +438,7 @@ Local<Package> PackageLoader::load() {
       throw Error("package file is corrupt");
     auto majorVersion = readValue<u16>();
     auto minorVersion = readValue<u16>();
-    if (majorVersion != 0 || minorVersion != 13)
+    if (majorVersion != 0 || minorVersion != 14)
       throw Error("package file has wrong format version");
 
     package_ = handleScope.escape(*Package::create(heap()));
@@ -546,13 +547,15 @@ Local<String> PackageLoader::readString() {
 
 
 Local<Global> PackageLoader::readGlobal() {
+  auto name = readName();
   auto flags = readValue<u32>();
   auto type = readType();
-  return Global::create(heap(), flags, type);
+  return Global::create(heap(), name, flags, type);
 }
 
 
 Local<Function> PackageLoader::readFunction() {
+  auto name = readName();
   auto flags = readValue<u32>();
 
   auto typeParameterCount = readLengthVbn();
@@ -586,13 +589,14 @@ Local<Function> PackageLoader::readFunction() {
     }
   }
 
-  auto function = Function::create(heap(), flags, typeParameters, types,
+  auto function = Function::create(heap(), name, flags, typeParameters, types,
                                    localsSize, instructions, blockOffsets, package_);
   return function;
 }
 
 
 void PackageLoader::readClass(const Local<Class>& clas) {
+  auto name = readName();
   auto flags = readValue<u32>();
 
   auto typeParamCount = readLengthVbn();
@@ -625,6 +629,7 @@ void PackageLoader::readClass(const Local<Class>& clas) {
     methods->set(i, id);
   }
 
+  clas->setName(*name);
   clas->setFlags(flags);
   clas->setTypeParameters(*typeParameters);
   clas->setSupertype(*supertype);
@@ -636,17 +641,20 @@ void PackageLoader::readClass(const Local<Class>& clas) {
 
 
 Local<Field> PackageLoader::readField() {
+  auto name = readName();
   auto flags = readValue<u32>();
   auto type = readType();
-  auto field = Field::create(heap(), flags, type);
+  auto field = Field::create(heap(), name, flags, type);
   return field;
 }
 
 
 void PackageLoader::readTypeParameter(const Local<TypeParameter>& param) {
+  auto name = readName();
   auto flags = readValue<u32>();
   auto upperBound = readType();
   auto lowerBound = readType();
+  param->setName(*name);
   param->setFlags(flags);
   param->setUpperBound(*upperBound);
   param->setLowerBound(*lowerBound);
@@ -714,6 +722,18 @@ length_t PackageLoader::readLength() {
   if (len != kLengthNotSet && len > kMaxLength)
     throw Error("could not read length");
   return len;
+}
+
+
+Local<String> PackageLoader::readName() {
+  auto index = readLengthVbn();
+  if (index == kIndexNotSet) {
+    return handle(roots()->emptyString());
+  } else if (index >= package_->strings()->length()) {
+    throw Error("name index out of bounds");
+  } else {
+    return handle(package_->strings()->get(index));
+  }
 }
 
 

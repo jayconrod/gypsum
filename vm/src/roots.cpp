@@ -155,6 +155,9 @@ void Roots::initialize(Heap* heap) {
   stringMeta->blockType_ = STRING_BLOCK_TYPE;
   basicRoots_[STRING_META_ROOT_INDEX] = stringMeta;
 
+  auto emptyString = new(heap, 0) String(nullptr);
+  basicRoots_[EMPTY_STRING_ROOT_INDEX] = emptyString;
+
   auto trueString = String::rawFromUtf8CString(heap, "true");
   basicRoots_[TRUE_STRING_ROOT_INDEX] = trueString;
 

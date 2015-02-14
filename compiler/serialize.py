@@ -54,7 +54,7 @@ class Serializer(object):
         self.outFile.write(struct.pack("<Ihhqiiiiiiii",
                                        0x676b7073,   # magic number
                                        0,            # major version
-                                       13,           # minor version
+                                       14,           # minor version
                                        0,            # flags
                                        len(self.package.dependencies),
                                        len(self.package.strings),
@@ -81,10 +81,12 @@ class Serializer(object):
         self.outFile.write(encoded)
 
     def writeGlobal(self, globl):
+        self.writeName(globl.name)
         self.writeFlags(globl.flags)
         self.writeType(globl.type)
 
     def writeFunction(self, function):
+        self.writeName(function.name)
         self.writeFlags(function.flags)
         self.writeList(lambda p: self.writeVbn(p.id), function.typeParameters)
         self.writeType(function.returnType)
@@ -121,6 +123,7 @@ class Serializer(object):
         return buf, blockOffsetTable
 
     def writeClass(self, clas):
+        self.writeName(clas.name)
         self.writeFlags(clas.flags)
         self.writeIdList(clas.typeParameters)
         self.writeType(clas.supertypes[0])
@@ -129,10 +132,12 @@ class Serializer(object):
         self.writeIdList(clas.methods)
 
     def writeField(self, field):
+        self.writeName(field.name)
         self.writeFlags(field.flags)
         self.writeType(field.type)
 
     def writeTypeParameter(self, typeParameter):
+        self.writeName(typeParameter.name)
         self.writeFlags(typeParameter.flags)
         self.writeType(typeParameter.upperBound)
         self.writeType(typeParameter.lowerBound)
@@ -172,6 +177,10 @@ class Serializer(object):
             self.writeVbn(id)
         if isinstance(type, ir_types.ClassType):
             self.writeList(self.writeType, type.typeArguments)
+
+    def writeName(self, name):
+        index = self.package.findString(name)
+        self.writeVbn(index)
 
     def writeFlags(self, flags_var):
         bits = flags.flagSetToFlagBits(flags_var)

@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -22,6 +22,7 @@ namespace codeswitch {
 namespace internal {
 
 #define CLASS_POINTER_LIST(F) \
+  F(Class, name_)             \
   F(Class, typeParameters_)   \
   F(Class, supertype_)        \
   F(Class, fields_)           \
@@ -41,7 +42,8 @@ void* Class::operator new (size_t, Heap* heap) {
 }
 
 
-Class::Class(u32 flags,
+Class::Class(String* name,
+             u32 flags,
              TaggedArray<TypeParameter>* typeParameters,
              Type* supertype,
              BlockArray<Field>* fields,
@@ -52,6 +54,7 @@ Class::Class(u32 flags,
              Type* elementType,
              length_t lengthFieldIndex)
     : Block(CLASS_BLOCK_TYPE),
+      name_(this, name),
       flags_(flags),
       typeParameters_(this, typeParameters),
       supertype_(this, supertype),
@@ -67,6 +70,7 @@ Class::Class(u32 flags,
 
 
 Local<Class> Class::create(Heap* heap,
+                           const Handle<String>& name,
                            u32 flags,
                            const Handle<TaggedArray<TypeParameter>>& typeParameters,
                            const Handle<Type>& supertype,
@@ -78,7 +82,7 @@ Local<Class> Class::create(Heap* heap,
                            const Handle<Type>& elementType,
                            length_t lengthFieldIndex) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
-      flags, *typeParameters, *supertype, *fields, *constructors, *methods,
+      *name, flags, *typeParameters, *supertype, *fields, *constructors, *methods,
       package.getOrNull(), instanceMeta.getOrNull(),
       elementType.getOrNull(), lengthFieldIndex)));
 }
@@ -86,7 +90,7 @@ Local<Class> Class::create(Heap* heap,
 
 Local<Class> Class::create(Heap* heap) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
-      0, nullptr, nullptr, nullptr, nullptr, nullptr,
+      nullptr, 0, nullptr, nullptr, nullptr, nullptr, nullptr,
       nullptr, nullptr, nullptr, kIndexNotSet)));
 }
 
@@ -238,6 +242,7 @@ void Class::computeSizeAndPointerMapForType(Type* type, u32* size,
 
 ostream& operator << (ostream& os, const Class* clas) {
   os << brief(clas)
+     << "\n  name: " << brief(clas->name())
      << "\n  supertype: " << brief(clas->supertype())
      << "\n  fields: " << brief(clas->fields())
      << "\n  constructors: " << brief(clas->constructors())

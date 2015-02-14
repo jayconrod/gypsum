@@ -15,6 +15,7 @@ namespace codeswitch {
 namespace internal {
 
 #define GLOBAL_POINTERS_LIST(F) \
+  F(Global, name_)              \
   F(Global, type_)              \
 
 DEFINE_POINTER_MAP(Global, GLOBAL_POINTERS_LIST)
@@ -22,16 +23,18 @@ DEFINE_POINTER_MAP(Global, GLOBAL_POINTERS_LIST)
 #undef GLOBAL_POINTERS_LIST
 
 
-Global::Global(u32 flags, Type* type)
+Global::Global(String* name, u32 flags, Type* type)
     : Block(GLOBAL_BLOCK_TYPE),
+      name_(this, name),
       flags_(flags),
       type_(this, type) {
   value_.primitive = 0;
 }
 
 
-Local<Global> Global::create(Heap* heap, u32 flags, const Handle<Type>& type) {
-  RETRY_WITH_GC(heap, return Local<Global>(new(heap) Global(flags, *type)));
+Local<Global> Global::create(Heap* heap, const Handle<String>& name,
+                             u32 flags, const Handle<Type>& type) {
+  RETRY_WITH_GC(heap, return Local<Global>(new(heap) Global(*name, flags, *type)));
 }
 
 
@@ -97,6 +100,7 @@ void Global::setRaw(i64 value) {
 
 ostream& operator << (ostream& os, const Global* global) {
   os << brief(global)
+     << "\n  name: " << brief(global->name())
      << "\n  type: " << brief(global->type())
      << "\n  value: ";
   if (global->isPrimitive()) {

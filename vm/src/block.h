@@ -167,8 +167,11 @@ BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
  */
 struct brief {
  public:
-  explicit brief(const Block* block)
-      : block_(block) { }
+  // We bypass the type system here to avoid a lot of extra includes. Whenever possible, we
+  // forward-declare a class instead of including its header. We don't want to include headers
+  // just to use `brief`.
+  explicit brief(const void* block)
+      : block_(reinterpret_cast<const Block*>(block)) { }
   const Block* block_;
 };
 
