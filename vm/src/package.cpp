@@ -35,6 +35,7 @@ namespace internal {
 #define PACKAGE_POINTER_LIST(F) \
   F(Package, name_)             \
   F(Package, version_)          \
+  F(Package, dependencySpecs_)  \
   F(Package, dependencies_)     \
   F(Package, strings_)          \
   F(Package, globals_)          \
@@ -86,6 +87,10 @@ class PackageLoader {
 Package::Package(VM* vm)
     : Block(PACKAGE_BLOCK_TYPE),
       flags_(0),
+      dependencySpecs_(this, reinterpret_cast<BlockArray<PackageDependency>*>(
+          vm->roots()->emptyBlockArray())),
+      dependencies_(this, reinterpret_cast<BlockArray<Package>*>(
+          vm->roots()->emptyBlockArray())),
       strings_(this, reinterpret_cast<BlockArray<String>*>(vm->roots()->emptyBlockArray())),
       globals_(this, reinterpret_cast<BlockArray<Global>*>(vm->roots()->emptyBlockArray())),
       functions_(this, reinterpret_cast<BlockArray<Function>*>(vm->roots()->emptyBlockArray())),
@@ -102,8 +107,8 @@ Local<Package> Package::create(Heap* heap) {
 }
 
 
-Local<Package> Package::loadFromFile(VM* vm, const char* fileName) {
-  ifstream file(fileName, ios::binary);
+Local<Package> Package::loadFromFile(VM* vm, const string& fileName) {
+  ifstream file(fileName.c_str(), ios::binary);
   if (!file.good())
     throw Error("could not open package file");
   file.exceptions(ios::failbit | ios::badbit | ios::eofbit);
@@ -240,6 +245,13 @@ Local<PackageName> PackageName::fromString(Heap* heap, const Handle<String>& nam
   }
 
   return create(heap, components);
+}
+
+
+Local<String> PackageName::toString(Heap* heap, const Handle<PackageName>& name) {
+  auto sep = String::fromUtf8CString(heap, ".");
+  auto nameStr = String::join(heap, handle(name->components()), sep);
+  return nameStr;
 }
 
 
@@ -434,7 +446,9 @@ Local<Package> PackageLoader::load() {
     package_->setFlags(flags);
 
     auto depCount = readLength();
-    auto depArray = BlockArray<PackageDependency>::create(heap(), depCount);
+    auto depSpecArray = BlockArray<PackageDependency>::create(heap(), depCount);
+    package_->setDependencySpecs(*depSpecArray);
+    auto depArray = BlockArray<Package>::create(heap(), depCount);
     package_->setDependencies(*depArray);
 
     auto stringCount = readLength();
@@ -492,7 +506,7 @@ Local<Package> PackageLoader::load() {
       auto dep = PackageDependency::fromString(heap(), depStr);
       if (!dep)
         throw Error("invalid package dependency");
-      depArray->set(i, *dep);
+      depSpecArray->set(i, *dep);
     }
 
     for (length_t i = 0; i < stringCount; i++) {

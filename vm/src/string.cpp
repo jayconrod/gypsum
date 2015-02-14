@@ -79,6 +79,13 @@ String* String::rawFromUtf8CString(Heap* heap, const char* utf8Chars) {
 }
 
 
+Local<String> String::fromUtf8String(Heap* heap, const std::string& stlString) {
+  const u8* chars = reinterpret_cast<const u8*>(stlString.data());
+  word_t size = stlString.size();
+  return fromUtf8String(heap, chars, size);
+}
+
+
 Local<String> String::fromUtf8String(Heap* heap, const u8* utf8Chars,
                                      length_t length, word_t size) {
   auto string = String::create(heap, length);
@@ -318,6 +325,36 @@ Local<BlockArray<String>> String::split(Heap* heap,
   auto sub = substring(heap, string, pos, string->length());
   pieces->set(count, *sub);
   return pieces;
+}
+
+
+Local<String> String::join(Heap* heap,
+                           const Handle<BlockArray<String>>& strings,
+                           const Handle<String>& sep) {
+  if (strings->isEmpty()) {
+    return fromUtf8CString(heap, "");
+  }
+
+  // Calculate the total length of the joined string.
+  length_t totalLength = 0;
+  for (auto str : **strings) {
+    totalLength += str->length();
+  }
+  totalLength += (strings->length() - 1) * sep->length();
+
+  // Allocate a string and fill it in.
+  auto joined = create(heap, totalLength);
+  auto out = joined->chars_;
+  for (length_t i = 0; i < strings->length() - 1; i++) {
+    auto str = strings->get(i);
+    out = copy(str->chars(), str->chars() + str->length(), out);
+    out = copy(sep->chars(), sep->chars() + sep->length(), out);
+  }
+  auto last = strings->get(strings->length() - 1);
+  out = copy(last->chars(), last->chars() + last->length(), out);
+  ASSERT(out == joined->chars() + totalLength);
+
+  return joined;
 }
 
 

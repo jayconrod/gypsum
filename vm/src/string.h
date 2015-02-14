@@ -30,6 +30,7 @@ class String: public Object {
   static Local<String> create(Heap* heap, length_t length, const u32* chars);
   static String* rawFromUtf8CString(Heap* heap, const char* utf8Chars);
   static Local<String> fromUtf8CString(Heap* heap, const char* utf8Chars);
+  static Local<String> fromUtf8String(Heap* heap, const std::string& stlString);
   static Local<String> fromUtf8String(Heap* heap, const u8* utf8Chars, word_t size);
   static Local<String> fromUtf8String(Heap* heap, const u8* utf8Chars,
                                       length_t length, word_t size);
@@ -68,6 +69,10 @@ class String: public Object {
   static Local<BlockArray<String>> split(Heap* heap,
                                          const Handle<String>& string,
                                          const Handle<String>& sep);
+
+  static Local<String> join(Heap* heap,
+                            const Handle<BlockArray<String>>& strings,
+                            const Handle<String>& sep);
 
   bool tryToI32(i32* n) const;
 

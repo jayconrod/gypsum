@@ -261,6 +261,34 @@ TEST(StringSplitString) {
 }
 
 
+TEST(StringJoin) {
+  VM vm;
+  Heap* heap = vm.heap();
+  AllowAllocationScope allowAllocation(heap, true);
+  HandleScope handleScope(&vm);
+
+  auto list = handle(reinterpret_cast<BlockArray<String>*>(vm.roots()->emptyBlockArray()));
+  auto empty = STR("");
+  auto sep = STR(",");
+  ASSERT_TRUE(empty->equals(*String::join(heap, list, empty)));
+  ASSERT_TRUE(empty->equals(*String::join(heap, list, sep)));
+
+  auto foo = STR("foo");
+  list = BlockArray<String>::create(heap, 1);
+  list->set(0, *foo);
+  ASSERT_TRUE(foo->equals(*String::join(heap, list, empty)));
+  ASSERT_TRUE(foo->equals(*String::join(heap, list, sep)));
+
+  auto bar = STR("bar");
+  list = BlockArray<String>::create(heap, 2);
+  list->set(0, *foo);
+  list->set(1, *bar);
+  ASSERT_TRUE(STR("foobar")->equals(*String::join(heap, list, empty)));
+  ASSERT_TRUE(STR("foo,bar")->equals(*String::join(heap, list, sep)));
+  ASSERT_TRUE(STR("foo||bar")->equals(*String::join(heap, list, STR("||"))));
+}
+
+
 TEST(StringToI32) {
   VM vm;
   Heap* heap = vm.heap();

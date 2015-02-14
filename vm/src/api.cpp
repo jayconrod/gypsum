@@ -7,6 +7,7 @@
 #include "codeswitch.h"
 
 #include <algorithm>
+#include <string>
 #include <utility>
 #include <vector>
 #include "block.h"
@@ -191,19 +192,11 @@ VM::~VM() {
 }
 
 
-Package VM::loadPackage(const char* fileName) {
+Package VM::loadPackage(const string& fileName) {
   i::VM::Scope vmScope(impl_->vm());
   i::Persistent<i::Package> package;
   try {
-    i::AllowAllocationScope allowAllocation(impl_->vm()->heap(), true);
-    package = i::Package::loadFromFile(impl_->vm(), fileName);
-    impl_->vm()->addPackage(package);
-    if (package->initFunctionIndex() != i::kLengthNotSet) {
-      i::Persistent<i::Function> init(package->initFunction());
-      Function::Impl func(impl_->vm(), init);
-      Arguments::Impl args(impl_->vm(), init);
-      func.call(args.data(), 0);
-    }
+    package = impl_->vm()->loadPackage(fileName);
   } catch (i::Error error) {
     throw Error(error.message());
   }

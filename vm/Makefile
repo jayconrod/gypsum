@@ -4,13 +4,16 @@ use_pch ?= yes
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
   OS := osx
+  POSIX := yes
   use_pch := no
 else
 ifeq ($(UNAME_S),Linux)
   OS := linux
+  POSIX := yes
 else
   $(warning Unknown OS: $(UNAME_S))
   OS := linux
+  POSIX := yes
 endif
 endif
 
@@ -71,7 +74,11 @@ deps = $(addprefix $(OUT_DIR)/obj/,$(addsuffix .d,$(notdir $(basename $1))))
 programs = $(addprefix $(OUT_DIR)/,$(notdir $(basename $1)))
 
 LIB_NAME := codeswitch
-LIB_SOURCES := $(wildcard $(LIB_SRC_DIR)/*.cpp) $(wildcard $(LIB_SRC_DIR)/$(OS)/*.cpp)
+LIB_SOURCES := $(wildcard $(LIB_SRC_DIR)/*.cpp) \
+  $(wildcard $(LIB_SRC_DIR)/$(OS)/*.cpp)
+ifeq ($(POSIX),yes)
+  LIB_SOURCES += $(wildcard $(LIB_SRC_DIR)/posix/*.cpp)
+endif
 LIB_GEN := $(GEN_DIR)/opcodes.h $(GEN_DIR)/builtins.h $(GEN_DIR)/flags.h $(GEN_DIR)/roots-builtins.cpp
 LIB_GEN_OBJS := $(call objects,$(filter %.cpp,$(LIB_GEN)))
 LIB_OBJECTS := $(call objects,$(LIB_SOURCES)) $(LIB_GEN_OBJS)

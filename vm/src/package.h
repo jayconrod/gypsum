@@ -8,6 +8,7 @@
 #define package_h
 
 #include <iostream>
+#include <string>
 #include "block.h"
 #include "handle.h"
 #include "utils.h"
@@ -35,7 +36,7 @@ class Package: public Block {
   explicit Package(VM* vm);
   static Local<Package> create(Heap* heap);
 
-  static Local<Package> loadFromFile(VM* vm, const char* fileName);
+  static Local<Package> loadFromFile(VM* vm, const std::string& fileName);
   static Local<Package> loadFromBytes(VM* vm, const u8* bytes, word_t size);
   static Local<Package> loadFromStream(VM* vm, std::istream& stream);
 
@@ -44,8 +45,12 @@ class Package: public Block {
   void setName(PackageName* newName) { name_.set(this, newName); }
   PackageVersion* version() const { return version_.get(); }
   void setVersion(PackageVersion* newVersion) { version_.set(this, newVersion); }
-  BlockArray<PackageDependency>* dependencies() const { return dependencies_.get(); }
-  void setDependencies(BlockArray<PackageDependency>* newDependencies) {
+  BlockArray<PackageDependency>* dependencySpecs() const { return dependencySpecs_.get(); }
+  void setDependencySpecs(BlockArray<PackageDependency>* newDependencySpecs) {
+    dependencySpecs_.set(this, newDependencySpecs);
+  }
+  BlockArray<Package>* dependencies() const { return dependencies_.get(); }
+  void setDependencies(BlockArray<Package>* newDependencies) {
     dependencies_.set(this, newDependencies);
   }
   BlockArray<String>* strings() const { return strings_.get(); }
@@ -76,7 +81,8 @@ class Package: public Block {
   u64 flags_;
   Ptr<PackageName> name_;
   Ptr<PackageVersion> version_;
-  Ptr<BlockArray<PackageDependency>> dependencies_;
+  Ptr<BlockArray<PackageDependency>> dependencySpecs_;
+  Ptr<BlockArray<Package>> dependencies_;
   Ptr<BlockArray<String>> strings_;
   Ptr<BlockArray<Global>> globals_;
   Ptr<BlockArray<Function>> functions_;
@@ -102,6 +108,7 @@ class PackageName: public Block {
   static Local<PackageName> create(Heap* heap, const Handle<BlockArray<String>>& components);
 
   static Local<PackageName> fromString(Heap* heap, const Handle<String>& nameString);
+  static Local<String> toString(Heap* heap, const Handle<PackageName>& name);
 
   BlockArray<String>* components() const { return components_.get(); }
 
@@ -164,6 +171,9 @@ class PackageDependency: public Block {
   PackageVersion* maxVersion() const { return maxVersion_.get(); }
 
   bool equals(const PackageDependency* dep) const;
+  bool isSatisfiedBy(const Package* package) const {
+    return isSatisfiedBy(package->name(), package->version());
+  }
   bool isSatisfiedBy(const PackageName* name, const PackageVersion* version) const;
 
  private:
