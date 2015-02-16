@@ -45,12 +45,8 @@ class Package: public Block {
   void setName(PackageName* newName) { name_.set(this, newName); }
   PackageVersion* version() const { return version_.get(); }
   void setVersion(PackageVersion* newVersion) { version_.set(this, newVersion); }
-  BlockArray<PackageDependency>* dependencySpecs() const { return dependencySpecs_.get(); }
-  void setDependencySpecs(BlockArray<PackageDependency>* newDependencySpecs) {
-    dependencySpecs_.set(this, newDependencySpecs);
-  }
-  BlockArray<Package>* dependencies() const { return dependencies_.get(); }
-  void setDependencies(BlockArray<Package>* newDependencies) {
+  BlockArray<PackageDependency>* dependencies() const { return dependencies_.get(); }
+  void setDependencies(BlockArray<PackageDependency>* newDependencies) {
     dependencies_.set(this, newDependencies);
   }
   BlockArray<String>* strings() const { return strings_.get(); }
@@ -81,8 +77,7 @@ class Package: public Block {
   u64 flags_;
   Ptr<PackageName> name_;
   Ptr<PackageVersion> version_;
-  Ptr<BlockArray<PackageDependency>> dependencySpecs_;
-  Ptr<BlockArray<Package>> dependencies_;
+  Ptr<BlockArray<PackageDependency>> dependencies_;
   Ptr<BlockArray<String>> strings_;
   Ptr<BlockArray<Global>> globals_;
   Ptr<BlockArray<Function>> functions_;
@@ -158,19 +153,51 @@ class PackageDependency: public Block {
   static const BlockType kBlockType = PACKAGE_DEPENDENCY_BLOCK_TYPE;
 
   DEFINE_NEW(PackageDependency, PACKAGE_DEPENDENCY_BLOCK_TYPE)
-  PackageDependency(PackageName* name, PackageVersion* minVersion, PackageVersion* maxVersion);
+  PackageDependency(PackageName* name,
+                    PackageVersion* minVersion,
+                    PackageVersion* maxVersion,
+                    BlockArray<Global>* externGlobals,
+                    BlockArray<Global>* linkedGlobals,
+                    BlockArray<Function>* externFunctions,
+                    BlockArray<Function>* linkedFunctions,
+                    BlockArray<Class>* externClasses,
+                    BlockArray<Class>* linkedClasses);
   static Local<PackageDependency> create(Heap* heap,
                                          const Handle<PackageName>& name,
                                          const Handle<PackageVersion>& minVersion,
-                                         const Handle<PackageVersion>& maxVersion);
+                                         const Handle<PackageVersion>& maxVersion,
+                                         const Handle<BlockArray<Global>>& externGlobals,
+                                         const Handle<BlockArray<Global>>& linkedGlobals,
+                                         const Handle<BlockArray<Function>>& externFunctions,
+                                         const Handle<BlockArray<Function>>& linkedFunctions,
+                                         const Handle<BlockArray<Class>>& externClasses,
+                                         const Handle<BlockArray<Class>>& linkedClasses);
+  static Local<PackageDependency> create(Heap* heap,
+                                         const Handle<PackageName>& name,
+                                         const Handle<PackageVersion>& minVersion,
+                                         const Handle<PackageVersion>& maxVersion,
+                                         length_t globalCount,
+                                         length_t functionCount,
+                                         length_t classCount);
 
-  static Local<PackageDependency> fromString(Heap* heap, const Handle<String>& depString);
+  static bool parseNameAndVersion(Heap* heap,
+                                  const Handle<String>& depString,
+                                  Local<PackageName>* outName,
+                                  Local<PackageVersion>* outMinVersion,
+                                  Local<PackageVersion>* outMaxVersion);
 
   PackageName* name() const { return name_.get(); }
   PackageVersion* minVersion() const { return minVersion_.get(); }
   PackageVersion* maxVersion() const { return maxVersion_.get(); }
+  Package* package() const { return package_.get(); }
+  void setPackage(Package* package) { package_.set(this, package); }
+  BlockArray<Global>* externGlobals() const { return externGlobals_.get(); }
+  BlockArray<Global>* linkedGlobals() const { return linkedGlobals_.get(); }
+  BlockArray<Function>* externFunctions() const { return externFunctions_.get(); }
+  BlockArray<Function>* linkedFunctions() const { return linkedFunctions_.get(); }
+  BlockArray<Class>* externClasses() const { return externClasses_.get(); }
+  BlockArray<Class>* linkedClasses() const { return linkedClasses_.get(); }
 
-  bool equals(const PackageDependency* dep) const;
   bool isSatisfiedBy(const Package* package) const {
     return isSatisfiedBy(package->name(), package->version());
   }
@@ -182,6 +209,13 @@ class PackageDependency: public Block {
   Ptr<PackageName> name_;
   Ptr<PackageVersion> minVersion_;
   Ptr<PackageVersion> maxVersion_;
+  Ptr<Package> package_;
+  Ptr<BlockArray<Global>> externGlobals_;
+  Ptr<BlockArray<Global>> linkedGlobals_;
+  Ptr<BlockArray<Function>> externFunctions_;
+  Ptr<BlockArray<Function>> linkedFunctions_;
+  Ptr<BlockArray<Class>> externClasses_;
+  Ptr<BlockArray<Class>> linkedClasses_;
   // Update PACKAGE_DEPENDENCY_POINTER_LIST if pointers change.
 };
 

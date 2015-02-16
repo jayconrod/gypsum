@@ -11,6 +11,7 @@ import flags
 import ir_types
 import bytecode
 
+import re
 import StringIO
 
 class Package(object):
@@ -118,6 +119,95 @@ class Package(object):
         def matchAll(defn):
             return all(matchItem(defn, k, v) for k, v in kwargs.iteritems())
         return (d for d in defns if matchAll(d))
+
+
+class PackageName(object):
+    nameComponentSrc = "[A-Za-z][A-Za-z0-9_]*"
+    nameSrc = r"%s(?:\.%s)*" % (nameComponentSrc, nameComponentSrc)
+    nameRex = re.compile(r"\A%s\Z" % nameSrc)
+
+    def __init__(self, components):
+        self.components = components
+
+    @staticmethod
+    def fromString(s):
+        m = nameRex.match(s)
+        if not m or m.end() != len(s):
+            raise ValueError("invalid package name: " + s)
+        return PackageName(s.split("."))
+
+    def __cmp__(self, other):
+        return cmp(self.components, other.components)
+
+    def __str__(self):
+        return ".".join(self.components)
+
+
+class PackageVersion(object):
+    versionComponentSrc = "[1-9][0-9]*"
+    versionSrc = r"%s(?:\.%s)*" % (versionComponentSrc, versionComponentSrc)
+    versionRex = re.compile(r"\A%s\Z" % versionSrc)
+
+    def __init__(self, components):
+        self.components = components
+
+    @staticmethod
+    def fromString(s):
+        if not versionRex.match(s):
+            raise ValueError("invalid package version: " + s)
+        return PackageVersion([int(c) for c in s.split(".")])
+
+    def __cmp__(self, other):
+        return cmp(self.components, other.components)
+
+    def __str__(self):
+        return ".".join(str(c) for c in self.components)
+
+
+class PackageDependency(object):
+    dependencySrc = "%s(?::(%s)?(?:-(%s))?)?" % \
+                    (PackageName.nameSrc, PackageVersion.versionSrc, PackageVersion.versionSrc)
+    dependencyRex = re.compile(r"\A%s\Z" % dependencySrc)
+
+    def __init__(self, name, minVersion, maxVersion):
+        self.name = name
+        self.minVersion = minVersion
+        self.maxVersion = maxVersion
+        self.package = None
+        self.globals = []
+        self.functions = []
+        self.classes = []
+
+    @staticmethod
+    def fromString(s):
+        m = re.match(s)
+        if not m:
+            raise ValueError("invalid package dependency: " + s)
+        name = PackageName.fromString(m.group(1))
+        minVersion = PackageVersion.fromString(m.group(2)) if m.group(2) else None
+        maxVersion = PackageVersion.fromString(m.group(3)) if m.group(3) else None
+        return PackageDependency(name, minVersion, maxVersion)
+
+    def dependencyString(self):
+        minStr = str(self.minVersion) if self.minVersion is not None else ""
+        maxStr = "-" + str(self.maxVersion) if self.maxVersion is not None else ""
+        versionStr = ":" + minStr + maxStr if minStr or maxStr else ""
+        return self.name + versionStr
+
+    def __str__(self):
+        buf = StringIO.StringIO()
+        buf.write(str(self.name))
+        if self.minVersion:
+            buf.write(":" + str(self.minVersion))
+        if self.maxVersion:
+            buf.write("-" + str(self.maxVersion))
+        buf.write("\n\n")
+        for g in self.globals:
+            buf.write("%s\n\n" % g)
+        for f in self.functions:
+            buf.write("%s\n\n" % f)
+        for c in self.classes:
+            buf.write("%s\n\n" % c)
 
 
 class IrDefinition(data.Data):

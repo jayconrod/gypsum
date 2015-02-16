@@ -35,7 +35,6 @@ namespace internal {
 #define PACKAGE_POINTER_LIST(F) \
   F(Package, name_)             \
   F(Package, version_)          \
-  F(Package, dependencySpecs_)  \
   F(Package, dependencies_)     \
   F(Package, strings_)          \
   F(Package, globals_)          \
@@ -66,6 +65,8 @@ class PackageLoader {
   void readClass(const Local<Class>& clas);
   Local<Field> readField();
   void readTypeParameter(const Local<TypeParameter>& typeParam);
+  Local<PackageDependency> readDependencyHeader();
+  void readDependency(const Local<PackageDependency>& dep);
   Local<Type> readType();
   template <typename T>
   T readValue();
@@ -88,9 +89,7 @@ class PackageLoader {
 Package::Package(VM* vm)
     : Block(PACKAGE_BLOCK_TYPE),
       flags_(0),
-      dependencySpecs_(this, reinterpret_cast<BlockArray<PackageDependency>*>(
-          vm->roots()->emptyBlockArray())),
-      dependencies_(this, reinterpret_cast<BlockArray<Package>*>(
+      dependencies_(this, reinterpret_cast<BlockArray<PackageDependency>*>(
           vm->roots()->emptyBlockArray())),
       strings_(this, reinterpret_cast<BlockArray<String>*>(vm->roots()->emptyBlockArray())),
       globals_(this, reinterpret_cast<BlockArray<Global>*>(vm->roots()->emptyBlockArray())),
@@ -186,6 +185,7 @@ ostream& operator << (ostream& os, const Package* pkg) {
   os << brief(pkg)
      << "\n  name: " << brief(pkg->name())
      << "\n  version: " << brief(pkg->version())
+     << "\n  dependencies: " << brief(pkg->dependencies())
      << "\n  strings: " << brief(pkg->strings())
      << "\n  functions: " << brief(pkg->functions())
      << "\n  globals: " << brief(pkg->globals())
@@ -354,6 +354,13 @@ ostream& operator << (ostream& os, const PackageVersion* version) {
   F(PackageDependency, name_)              \
   F(PackageDependency, minVersion_)        \
   F(PackageDependency, maxVersion_)        \
+  F(PackageDependency, package_)           \
+  F(PackageDependency, externGlobals_)     \
+  F(PackageDependency, linkedGlobals_)     \
+  F(PackageDependency, externFunctions_)   \
+  F(PackageDependency, linkedFunctions_)   \
+  F(PackageDependency, externClasses_)     \
+  F(PackageDependency, linkedClasses_)     \
 
 DEFINE_POINTER_MAP(PackageDependency, PACKAGE_DEPENDENCY_POINTER_LIST)
 
@@ -362,54 +369,124 @@ DEFINE_POINTER_MAP(PackageDependency, PACKAGE_DEPENDENCY_POINTER_LIST)
 
 PackageDependency::PackageDependency(PackageName* name,
                                      PackageVersion* minVersion,
-                                     PackageVersion* maxVersion)
+                                     PackageVersion* maxVersion,
+                                     BlockArray<Global>* externGlobals,
+                                     BlockArray<Global>* linkedGlobals,
+                                     BlockArray<Function>* externFunctions,
+                                     BlockArray<Function>* linkedFunctions,
+                                     BlockArray<Class>* externClasses,
+                                     BlockArray<Class>* linkedClasses)
     : Block(PACKAGE_DEPENDENCY_BLOCK_TYPE),
       name_(this, name),
       minVersion_(this, minVersion),
-      maxVersion_(this, maxVersion) { }
+      maxVersion_(this, maxVersion),
+      externGlobals_(this, externGlobals),
+      linkedGlobals_(this, linkedGlobals),
+      externFunctions_(this, externFunctions),
+      linkedFunctions_(this, linkedFunctions),
+      externClasses_(this, externClasses),
+      linkedClasses_(this, linkedClasses) {
+  ASSERT(minVersion == nullptr || maxVersion == nullptr ||
+         minVersion->compare(maxVersion) <= 0);
+  ASSERT(externGlobals->length() == linkedGlobals->length());
+  ASSERT(externFunctions->length() == linkedFunctions->length());
+  ASSERT(externClasses->length() == linkedClasses->length());
+}
+
+
+Local<PackageDependency> PackageDependency::create(
+    Heap* heap,
+    const Handle<PackageName>& name,
+    const Handle<PackageVersion>& minVersion,
+    const Handle<PackageVersion>& maxVersion,
+    const Handle<BlockArray<Global>>& externGlobals,
+    const Handle<BlockArray<Global>>& linkedGlobals,
+    const Handle<BlockArray<Function>>& externFunctions,
+    const Handle<BlockArray<Function>>& linkedFunctions,
+    const Handle<BlockArray<Class>>& externClasses,
+    const Handle<BlockArray<Class>>& linkedClasses) {
+  RETRY_WITH_GC(heap, return Local<PackageDependency>(new(heap) PackageDependency(
+      *name, minVersion.getOrNull(), maxVersion.getOrNull(),
+      *externGlobals, *linkedGlobals,
+      *externFunctions, *linkedFunctions,
+      *externClasses, *linkedClasses)));
+}
 
 
 Local<PackageDependency> PackageDependency::create(Heap* heap,
                                                    const Handle<PackageName>& name,
                                                    const Handle<PackageVersion>& minVersion,
-                                                   const Handle<PackageVersion>& maxVersion) {
-  RETRY_WITH_GC(heap, return Local<PackageDependency>(new(heap) PackageDependency(
-      *name, minVersion.getOrNull(), maxVersion.getOrNull())));
+                                                   const Handle<PackageVersion>& maxVersion,
+                                                   length_t globalCount,
+                                                   length_t functionCount,
+                                                   length_t classCount) {
+  auto externGlobals = BlockArray<Global>::create(heap, globalCount);
+  auto linkedGlobals = BlockArray<Global>::create(heap, globalCount);
+  auto externFunctions = BlockArray<Function>::create(heap, functionCount);
+  auto linkedFunctions = BlockArray<Function>::create(heap, functionCount);
+  auto externClasses = BlockArray<Class>::create(heap, classCount);
+  auto linkedClasses = BlockArray<Class>::create(heap, classCount);
+  return create(heap, name, minVersion, maxVersion,
+                externGlobals, linkedGlobals,
+                externFunctions, linkedFunctions,
+                externClasses, linkedClasses);
 }
 
 
-Local<PackageDependency> PackageDependency::fromString(Heap* heap,
-                                                       const Handle<String>& depString) {
-  auto components = String::split(heap, depString, ':');
-  if (!inRange<length_t>(components->length(), 1, 3))
-    return Local<PackageDependency>();
+bool PackageDependency::parseNameAndVersion(Heap* heap,
+                                            const Handle<String>& depString,
+                                            Local<PackageName>* outName,
+                                            Local<PackageVersion>* outMinVersion,
+                                            Local<PackageVersion>* outMaxVersion) {
+  auto colonPos = depString->find(':');
 
-  auto name = PackageName::fromString(heap, handle(components->get(0)));
+  if (colonPos == kIndexNotSet) {
+    auto name = PackageName::fromString(heap, depString);
+    if (!name)
+      return false;
+    *outName = name;
+    outMinVersion->clear();
+    outMaxVersion->clear();
+    return true;
+  }
+
+  if (colonPos == depString->length() - 1)
+    return false;
+
+  auto nameStr = String::substring(heap, depString, 0, colonPos);
+  auto name = PackageName::fromString(heap, nameStr);
   if (!name)
-    return Local<PackageDependency>();
+    return false;
 
-  Local<PackageVersion> minVersion, maxVersion;
-  if (components->length() >= 2 && !components->get(1)->isEmpty()) {
-    minVersion = PackageVersion::fromString(heap, handle(components->get(1)));
+  auto dashPos = depString->find('-', colonPos);
+  auto minEnd = dashPos != kIndexNotSet ? dashPos : depString->length();
+  Local<PackageVersion> minVersion;
+  if (minEnd - colonPos > 1) {
+    auto minVersionStr = String::substring(heap, depString, colonPos + 1, minEnd);
+    minVersion = PackageVersion::fromString(heap, minVersionStr);
     if (!minVersion)
-      return Local<PackageDependency>();
+      return false;
   }
-  if (components->length() >= 3 && !components->get(2)->isEmpty()) {
-    maxVersion = PackageVersion::fromString(heap, handle(components->get(2)));
+
+  Local<PackageVersion> maxVersion;
+  if (dashPos == kIndexNotSet) {
+    maxVersion = minVersion;
+  } else if (dashPos < depString->length() - 1) {
+    auto maxVersionStr = String::substring(heap, depString, dashPos + 1, depString->length());
+    maxVersion = PackageVersion::fromString(heap, maxVersionStr);
     if (!maxVersion)
-      return Local<PackageDependency>();
+      return false;
   }
 
-  return create(heap, name, minVersion, maxVersion);
-}
+  if ((!minVersion && !maxVersion) ||
+      (minVersion && maxVersion && minVersion->compare(*maxVersion) > 0)) {
+    return false;
+  }
 
-
-bool PackageDependency::equals(const PackageDependency* other) const {
-  return name()->equals(other->name()) &&
-         ((!minVersion_ && !other->minVersion_) ||
-          (minVersion()->equals(other->minVersion()))) &&
-         ((!maxVersion_ && !other->maxVersion_) ||
-          (maxVersion()->equals(other->maxVersion())));
+  *outName = name;
+  *outMinVersion = minVersion;
+  *outMaxVersion = maxVersion;
+  return true;
 }
 
 
@@ -425,7 +502,14 @@ ostream& operator << (ostream& os, const PackageDependency* dep) {
   os << brief(dep)
      << "\n  name: " << brief(dep->name())
      << "\n  minVersion: " << brief(dep->minVersion())
-     << "\n  maxVersion: " << brief(dep->maxVersion());
+     << "\n  maxVersion: " << brief(dep->maxVersion())
+     << "\n  package: " << brief(dep->package())
+     << "\n  externGlobals: " << brief(dep->externGlobals())
+     << "\n  linkedGlobals: " << brief(dep->linkedGlobals())
+     << "\n  externFunctions: " << brief(dep->externFunctions())
+     << "\n  linkedfunctions: " << brief(dep->linkedFunctions())
+     << "\n  externClasses: " << brief(dep->externClasses())
+     << "\n  linkedClasses: " << brief(dep->linkedClasses());
   return os;
 }
 
@@ -438,19 +522,13 @@ Local<Package> PackageLoader::load() {
       throw Error("package file is corrupt");
     auto majorVersion = readValue<u16>();
     auto minorVersion = readValue<u16>();
-    if (majorVersion != 0 || minorVersion != 14)
+    if (majorVersion != 0 || minorVersion != 15)
       throw Error("package file has wrong format version");
 
     package_ = handleScope.escape(*Package::create(heap()));
 
     auto flags = readValue<u64>();
     package_->setFlags(flags);
-
-    auto depCount = readLength();
-    auto depSpecArray = BlockArray<PackageDependency>::create(heap(), depCount);
-    package_->setDependencySpecs(*depSpecArray);
-    auto depArray = BlockArray<Package>::create(heap(), depCount);
-    package_->setDependencies(*depArray);
 
     auto stringCount = readLength();
     auto stringArray = BlockArray<String>::create(heap(), stringCount);
@@ -484,6 +562,10 @@ Local<Package> PackageLoader::load() {
     }
     package_->setTypeParameters(*typeParametersArray);
 
+    auto depCount = readLength();
+    auto depArray = BlockArray<PackageDependency>::create(heap(), depCount);
+    package_->setDependencies(*depArray);
+
     auto entryFunctionIndex = readLength();
     package_->setEntryFunctionIndex(entryFunctionIndex);
 
@@ -503,11 +585,8 @@ Local<Package> PackageLoader::load() {
     package_->setVersion(*version);
 
     for (length_t i = 0; i < depCount; i++) {
-      auto depStr = readString();
-      auto dep = PackageDependency::fromString(heap(), depStr);
-      if (!dep)
-        throw Error("invalid package dependency");
-      depSpecArray->set(i, *dep);
+      auto dep = readDependencyHeader();
+      depArray->set(i, *dep);
     }
 
     for (length_t i = 0; i < stringCount; i++) {
@@ -523,12 +602,17 @@ Local<Package> PackageLoader::load() {
       functionArray->set(i, *function);
     }
     for (length_t i = 0; i < classCount; i++) {
-      auto clas = handle(block_cast<Class>(classArray->get(i)));
+      auto clas = handle(classArray->get(i));
       readClass(clas);
     }
     for (length_t i = 0; i < typeParameterCount; i++) {
-      auto param = handle(block_cast<TypeParameter>(typeParametersArray->get(i)));
+      auto param = handle(typeParametersArray->get(i));
       readTypeParameter(param);
+    }
+
+    for (length_t i = 0; i < depCount; i++) {
+      auto dep = handle(depArray->get(i));
+      readDependency(dep);
     }
   } catch (istream::failure exn) {
     throw Error("error reading package");
@@ -658,6 +742,60 @@ void PackageLoader::readTypeParameter(const Local<TypeParameter>& param) {
   param->setFlags(flags);
   param->setUpperBound(*upperBound);
   param->setLowerBound(*lowerBound);
+}
+
+
+Local<PackageDependency> PackageLoader::readDependencyHeader() {
+  auto depStr = readString();
+  Local<PackageName> name;
+  Local<PackageVersion> minVersion, maxVersion;
+  if (!PackageDependency::parseNameAndVersion(heap(), depStr,
+                                              &name, &minVersion, &maxVersion)) {
+    throw Error("invalid dependency string");
+  }
+
+  auto globalCount = readLengthVbn();
+  auto functionCount = readLengthVbn();
+  auto classCount = readLengthVbn();
+
+  auto dep = PackageDependency::create(heap(), name, minVersion, maxVersion,
+                                       globalCount, functionCount, classCount);
+
+  // We need to pre-allocate classes so types can refer to them.
+  auto externClasses = dep->externClasses();
+  for (length_t i = 0; i < classCount; i++) {
+    auto c = Class::create(heap());
+    externClasses->set(i, *c);
+  }
+
+  return dep;
+}
+
+
+void PackageLoader::readDependency(const Local<PackageDependency>& dep) {
+  auto globals = handle(dep->externGlobals());
+  for (length_t i = 0; i < globals->length(); i++) {
+    auto g = readGlobal();
+    if ((g->flags() & EXTERN_FLAG) == 0)
+      throw Error("dependency global is not extern");
+    globals->set(i, *g);
+  }
+
+  auto functions = handle(dep->externFunctions());
+  for (length_t i = 0; i < functions->length(); i++) {
+    auto f = readFunction();
+    if ((f->flags() & EXTERN_FLAG) == 0)
+      throw Error("dependency function is not extern");
+    functions->set(i, *f);
+  }
+
+  auto classes = handle(dep->externClasses());
+  for (length_t i = 0; i < classes->length(); i++) {
+    auto c = handle(classes->get(i));
+    readClass(c);
+    if ((c->flags() & EXTERN_FLAG) == 0)
+      throw Error("dependency class is not extern");
+  }
 }
 
 

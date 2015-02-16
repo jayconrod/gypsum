@@ -38,7 +38,7 @@ class Serializer(object):
     def serialize(self):
         self.writeHeader()
         for d in self.package.dependencies:
-            self.writeString(d)
+            self.writeDependencyHeader(d)
         for s in self.package.strings:
             self.writeString(s)
         for g in self.package.globals:
@@ -49,23 +49,25 @@ class Serializer(object):
             self.writeClass(c)
         for p in self.package.typeParameters:
             self.writeTypeParameter(p)
+        for d in self.package.dependencies:
+            self.writeDependency(dep)
 
     def writeHeader(self):
         self.outFile.write(struct.pack("<Ihhqiiiiiiii",
                                        0x676b7073,   # magic number
                                        0,            # major version
-                                       14,           # minor version
+                                       15,           # minor version
                                        0,            # flags
-                                       len(self.package.dependencies),
                                        len(self.package.strings),
                                        len(self.package.globals),
                                        len(self.package.functions),
                                        len(self.package.classes),
                                        len(self.package.typeParameters),
+                                       len(self.package.dependencies),
                                        self.package.entryFunction,
                                        self.package.initFunction))
-        self.writeString(self.package.name)
-        self.writeString(self.package.version)
+        self.writeString(str(self.package.name))
+        self.writeString(str(self.package.version))
 
     def rewrite(self, format, value, offset, whence=os.SEEK_SET):
         self.outFile.seek(offset, whence)
@@ -141,6 +143,20 @@ class Serializer(object):
         self.writeFlags(typeParameter.flags)
         self.writeType(typeParameter.upperBound)
         self.writeType(typeParameter.lowerBound)
+
+    def writeDependencyHeader(self, dependency):
+        self.writeString(dependency.dependencyString())
+        self.writeVbn(len(dependency.globals))
+        self.writeVbn(len(dependency.functions))
+        self.writeVbn(len(dependency.classes))
+
+    def writeDependnecy(self, dependency):
+        for g in dependency.globals:
+            self.writeGlobal(g)
+        for f in dependency.functions:
+            self.writeFunction(f)
+        for c in dependency.classes:
+            self.writeClass(c)
 
     def writeType(self, type):
         # TODO: serialize this in a way that doesn't couple us so closely to Type::Form

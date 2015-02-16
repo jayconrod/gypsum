@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -68,6 +68,7 @@ class Local: public Handle<T> {
   Local& operator = (const Local<S>& local);
   template <class S>
   Local& operator = (const Handle<S>& handle);
+  void clear();
 
  private:
   Local(T** slot)
@@ -324,6 +325,12 @@ Local<T>& Local<T>::operator = (const Handle<S>& handle) {
       : nullptr;
   CHECK_SUBTYPE_VALUE(T*, *handle);
   return *this;
+}
+
+
+template <class T>
+void Local<T>::clear() {
+  this->slot_ = nullptr;
 }
 
 

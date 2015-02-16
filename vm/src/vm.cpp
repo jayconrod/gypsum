@@ -193,17 +193,17 @@ void VM::loadPackageDependenciesAndInitialize(const Handle<Package>& package) {
       loadingPackages.pop_back();
     } else {
       auto index = last.currentDepIndex++;
-      auto depSpec = handle(last.package->dependencySpecs()->get(index));
+      auto dep = handle(last.package->dependencies()->get(index));
 
       // Check if this package is already loaded.
-      auto dep = findPackage(handle(depSpec->name()));
+      auto depPackage = findPackage(handle(dep->name()));
 
       // If not, check if we have already started loading the package, and its dependencies
       // are satisfied.
-      if (!dep) {
+      if (!depPackage) {
         for (auto& loaded : loadedPackages) {
-          if (depSpec->name()->equals(loaded->name())) {
-            dep = loaded;
+          if (dep->name()->equals(loaded->name())) {
+            depPackage = loaded;
             break;
           }
         }
@@ -211,30 +211,30 @@ void VM::loadPackageDependenciesAndInitialize(const Handle<Package>& package) {
 
       // If we did find a package, make sure it's a suitable version. We don't allow loading
       // multiple versions of the same package.
-      if (dep && !depSpec->isSatisfiedBy(*dep)) {
+      if (depPackage && !dep->isSatisfiedBy(*depPackage)) {
         throw Error("package is already loaded with bad version");
       }
 
       // If not, check if we are still trying to satisfy the dependencies. This indicates a
       // circular dependency, which is not allowed.
-      if (!dep) {
+      if (!depPackage) {
         for (auto& state : loadingPackages) {
-          if (depSpec->isSatisfiedBy(*state.package)) {
+          if (dep->isSatisfiedBy(*state.package)) {
             throw Error("circular package dependency");
           }
         }
 
         // Search the file system for the package and load it.
-        auto depFileName = searchForPackage(depSpec);
+        auto depFileName = searchForPackage(dep);
         if (depFileName.empty()) {
           throw Error("could not find package");
         }
 
-        dep = Package::loadFromFile(this, depFileName);
-        loadingPackages.push_back(LoadState(dep));
+        depPackage = Package::loadFromFile(this, depFileName);
+        loadingPackages.push_back(LoadState(depPackage));
       }
 
-      last.package->dependencies()->set(index, *dep);
+      dep->setPackage(*depPackage);
     }
   }
 

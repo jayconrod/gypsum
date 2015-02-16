@@ -18,10 +18,7 @@ using namespace codeswitch::internal;
 
 
 TEST(BadPackageNames) {
-  VM vm;
-  Heap* heap = vm.heap();
-  AllowAllocationScope allowAllocation(vm.heap(), true);
-  HandleScope handleScope(&vm);
+  TEST_PROLOGUE
 
   ASSERT_FALSE(PackageName::fromString(heap, STR("")));
   ASSERT_FALSE(PackageName::fromString(heap, STR("0")));
@@ -52,10 +49,7 @@ TEST(BadPackageNames) {
 
 
 TEST(GoodPackageNames) {
-  VM vm;
-  Heap* heap = vm.heap();
-  AllowAllocationScope allowAllocation(vm.heap(), true);
-  HandleScope handleScope(&vm);
+  TEST_PROLOGUE
 
   auto name = PackageName::fromString(heap, STR("foo"));
   auto components = BlockArray<String>::create(heap, 1);
@@ -74,10 +68,7 @@ TEST(GoodPackageNames) {
 
 
 TEST(BadPackageVersions) {
-  VM vm;
-  Heap* heap = vm.heap();
-  AllowAllocationScope allowAllocation(vm.heap(), true);
-  HandleScope handleScope(&vm);
+  TEST_PROLOGUE
 
   ASSERT_FALSE(PackageVersion::fromString(heap, STR("")));
   ASSERT_FALSE(PackageVersion::fromString(heap, STR("A")));
@@ -105,10 +96,7 @@ TEST(BadPackageVersions) {
 
 
 TEST(GoodPackageVersions) {
-  VM vm;
-  Heap* heap = vm.heap();
-  AllowAllocationScope allowAllocation(vm.heap(), true);
-  HandleScope handleScope(&vm);
+  TEST_PROLOGUE
 
   auto version = PackageVersion::fromString(heap, STR("1"));
   auto components = I32Array::create(heap, 1);
@@ -126,51 +114,81 @@ TEST(GoodPackageVersions) {
 }
 
 
-TEST(PackageDependencyFromString) {
-  VM vm;
-  Heap* heap = vm.heap();
-  AllowAllocationScope allowAllocation(vm.heap(), true);
-  HandleScope handleScope(&vm);
+TEST(PackageDependencyParseNameAndVersion) {
+  TEST_PROLOGUE
 
-  auto dependency = PackageDependency::fromString(heap, STR("foo.bar"));
-  auto name = PackageName::fromString(heap, STR("foo.bar"));
+  Local<PackageName> name;
   Local<PackageVersion> minVersion, maxVersion;
-  auto expected = PackageDependency::create(heap, name, minVersion, maxVersion);
-  ASSERT_TRUE(expected->equals(*dependency));
+  bool result;
 
-  dependency = PackageDependency::fromString(heap, STR("foo.bar:"));
-  ASSERT_TRUE(expected->equals(*dependency));
+  auto expectedName = PackageName::fromString(heap, STR("foo.bar"));
+  result = PackageDependency::parseNameAndVersion(heap, STR("foo.bar"),
+                                                  &name, &minVersion, &maxVersion);
+  ASSERT_TRUE(result);
+  ASSERT_TRUE(expectedName->equals(*name));
+  ASSERT_FALSE(minVersion);
+  ASSERT_FALSE(maxVersion);
 
-  dependency = PackageDependency::fromString(heap, STR("foo.bar::"));
-  ASSERT_TRUE(expected->equals(*dependency));
+  result = PackageDependency::parseNameAndVersion(heap, STR("foo.bar:"),
+                                                  &name, &minVersion, &maxVersion);
+  ASSERT_FALSE(result);
 
-  dependency = PackageDependency::fromString(heap, STR("foo.bar:1.2"));
-  minVersion = PackageVersion::fromString(heap, STR("1.2"));
-  expected = PackageDependency::create(heap, name, minVersion, maxVersion);
-  ASSERT_TRUE(expected->equals(*dependency));
+  result = PackageDependency::parseNameAndVersion(heap, STR("foo.bar:-"),
+                                                  &name, &minVersion, &maxVersion);
+  ASSERT_FALSE(result);
 
-  dependency = PackageDependency::fromString(heap, STR("foo.bar:1.2:"));
-  ASSERT_TRUE(expected->equals(*dependency));
+  auto expectedMinVersion = PackageVersion::fromString(heap, STR("1.2"));
+  result = PackageDependency::parseNameAndVersion(heap, STR("foo.bar:1.2"),
+                                                  &name, &minVersion, &maxVersion);
+  ASSERT_TRUE(result);
+  ASSERT_TRUE(expectedName->equals(*name));
+  ASSERT_TRUE(expectedMinVersion->equals(*minVersion));
+  ASSERT_TRUE(expectedMinVersion->equals(*maxVersion));
 
-  dependency = PackageDependency::fromString(heap, STR("foo.bar:1.2:3.4"));
-  maxVersion = PackageVersion::fromString(heap, STR("3.4"));
-  expected = PackageDependency::create(heap, name, minVersion, maxVersion);
-  ASSERT_TRUE(expected->equals(*dependency));
+  result = PackageDependency::parseNameAndVersion(heap, STR("foo.bar:1.2-"),
+                                                  &name, &minVersion, &maxVersion);
+  ASSERT_TRUE(result);
+  ASSERT_TRUE(expectedName->equals(*name));
+  ASSERT_TRUE(expectedMinVersion->equals(*minVersion));
+  ASSERT_FALSE(maxVersion);
 
-  dependency = PackageDependency::fromString(heap, STR("foo.bar::3.4"));
-  minVersion = Local<PackageVersion>();
-  expected = PackageDependency::create(heap, name, minVersion, maxVersion);
-  ASSERT_TRUE(expected->equals(*dependency));
+  auto expectedMaxVersion = PackageVersion::fromString(heap, STR("3.4"));
+  result = PackageDependency::parseNameAndVersion(heap, STR("foo.bar:-3.4"),
+                                                  &name, &minVersion, &maxVersion);
+  ASSERT_TRUE(result);
+  ASSERT_TRUE(expectedName->equals(*name));
+  ASSERT_FALSE(minVersion);
+  ASSERT_TRUE(expectedMaxVersion->equals(*expectedMaxVersion));
+
+  result = PackageDependency::parseNameAndVersion(heap, STR("foo.bar:1.2-3.4"),
+                                                  &name, &minVersion, &maxVersion);
+  ASSERT_TRUE(result);
+  ASSERT_TRUE(expectedName->equals(*name));
+  ASSERT_TRUE(expectedMinVersion->equals(*expectedMinVersion));
+  ASSERT_TRUE(expectedMaxVersion->equals(*expectedMaxVersion));
+
+  result = PackageDependency::parseNameAndVersion(heap, STR("foo.bar:3.4-1.2"),
+                                                  &name, &minVersion, &maxVersion);
+  ASSERT_FALSE(result);
+}
+
+
+static Local<PackageDependency> packageDependencyFromString(Heap* heap,
+                                                            const Handle<String>& str) {
+  Local<PackageName> name;
+  Local<PackageVersion> minVersion, maxVersion;
+  bool result = PackageDependency::parseNameAndVersion(heap, str,
+                                                       &name, &minVersion, &maxVersion);
+  ASSERT_TRUE(result);
+
+  return PackageDependency::create(heap, name, minVersion, maxVersion, 0, 0, 0);
 }
 
 
 TEST(PackageDependencySatisfied) {
-  VM vm;
-  Heap* heap = vm.heap();
-  AllowAllocationScope allowAllocation(vm.heap(), true);
-  HandleScope handleScope(&vm);
+  TEST_PROLOGUE
 
-  auto dependency = PackageDependency::fromString(heap, STR("foo:1:3"));
+  auto dependency = packageDependencyFromString(heap, STR("foo:1-3"));
   auto name = PackageName::fromString(heap, STR("bar"));
   auto v1 = PackageVersion::fromString(heap, STR("1"));
   ASSERT_FALSE(dependency->isSatisfiedBy(*name, *v1));
@@ -187,12 +205,12 @@ TEST(PackageDependencySatisfied) {
   auto v4 = PackageVersion::fromString(heap, STR("4"));
   ASSERT_FALSE(dependency->isSatisfiedBy(*name, *v4));
 
-  dependency = PackageDependency::fromString(heap, STR("foo::3"));
+  dependency = packageDependencyFromString(heap, STR("foo:-3"));
   ASSERT_TRUE(dependency->isSatisfiedBy(*name, *v0));
   ASSERT_TRUE(dependency->isSatisfiedBy(*name, *v3));
   ASSERT_FALSE(dependency->isSatisfiedBy(*name, *v4));
 
-  dependency = PackageDependency::fromString(heap, STR("foo:1"));
+  dependency = packageDependencyFromString(heap, STR("foo:1-"));
   ASSERT_FALSE(dependency->isSatisfiedBy(*name, *v0));
   ASSERT_TRUE(dependency->isSatisfiedBy(*name, *v1));
   ASSERT_TRUE(dependency->isSatisfiedBy(*name, *v4));
