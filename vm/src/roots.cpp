@@ -12,6 +12,7 @@
 #include "function.h"
 #include "global.h"
 #include "handle.h"
+#include "hash-table.h"
 #include "package.h"
 #include "stack.h"
 #include "string.h"
@@ -163,6 +164,22 @@ void Roots::initialize(Heap* heap) {
 
   auto falseString = String::rawFromUtf8CString(heap, "false");
   basicRoots_[FALSE_STRING_ROOT_INDEX] = falseString;
+
+  typedef BlockHashMapTable<String, Block> DefaultBlockHashMapTable;
+  auto blockHashMapTableMeta = new(heap, 0, sizeof(DefaultBlockHashMapTable),
+                                   sizeof(DefaultBlockHashMapTable::Element))
+      Meta(DefaultBlockHashMapTable::kBlockType);
+  blockHashMapTableMeta->hasElementPointers_ = true;
+  blockHashMapTableMeta->elementPointerMap().setWord(
+      0, DefaultBlockHashMapTable::kElementPointerMap);
+  basicRoots_[BLOCK_HASH_MAP_TABLE_META_ROOT_INDEX] = blockHashMapTableMeta;
+
+  typedef BlockHashMap<String, Block> DefaultBlockHashMap;
+  auto blockHashMapMeta = new(heap, 0, sizeof(DefaultBlockHashMap), 0)
+      Meta(DefaultBlockHashMapTable::kBlockType);
+  blockHashMapMeta->hasPointers_ = true;
+  blockHashMapMeta->objectPointerMap().setWord(0, DefaultBlockHashMap::kPointerMap);
+  basicRoots_[BLOCK_HASH_MAP_META_ROOT_INDEX] = blockHashMapMeta;
 }
 
 
@@ -182,6 +199,8 @@ Meta* Roots::getMetaForBlockType(int type) {
     case I64_ARRAY_BLOCK_TYPE: return i64ArrayMeta();
     case BLOCK_ARRAY_BLOCK_TYPE: return blockArrayMeta();
     case TAGGED_ARRAY_BLOCK_TYPE: return taggedArrayMeta();
+    case BLOCK_HASH_MAP_TABLE_BLOCK_TYPE: return blockHashMapTableMeta();
+    case BLOCK_HASH_MAP_BLOCK_TYPE: return blockHashMapMeta();
     case TYPE_BLOCK_TYPE: return typeMeta();
     case STRING_BLOCK_TYPE: return stringMeta();
     default:

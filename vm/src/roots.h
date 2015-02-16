@@ -66,6 +66,8 @@ class Roots {
     F(String, emptyString, EMPTY_STRING)                              \
     F(String, trueString, TRUE_STRING)                                \
     F(String, falseString, FALSE_STRING)                              \
+    F(Meta, blockHashMapTableMeta, BLOCK_HASH_MAP_TABLE_META)         \
+    F(Meta, blockHashMapMeta, BLOCK_HASH_MAP_META)                    \
 
   #define DEFINE_BASIC_GETTER(type, name, NAME)                       \
   type* name() const {                                                \

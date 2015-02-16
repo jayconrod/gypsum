@@ -187,6 +187,14 @@ int String::compare(String* other) const {
 }
 
 
+u32 String::hashCode() const {
+  u32 code = 0;
+  for (auto ch : *this)
+    code = 31 * code + ch;
+  return code;
+}
+
+
 String* String::tryConcat(Heap* heap, String* other) {
   if (other->length_ == 0) {
     return this;

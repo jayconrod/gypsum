@@ -50,6 +50,7 @@ class String: public Object {
   bool equals(String* other) const;
   bool equals(const char* other) const;
   int compare(String* other) const;
+  u32 hashCode() const;
 
   String* tryConcat(Heap* heap, String* other);
   static Local<String> concat(Heap* heap,

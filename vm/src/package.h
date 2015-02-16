@@ -32,7 +32,7 @@ class Package: public Block {
  public:
   static const BlockType kBlockType = PACKAGE_BLOCK_TYPE;
 
-  DEFINE_NEW(Package, PACKAGE_BLOCK_TYPE)
+  DEFINE_NEW(Package)
   explicit Package(VM* vm);
   static Local<Package> create(Heap* heap);
 
@@ -98,7 +98,7 @@ class PackageName: public Block {
   static const length_t kMaxComponentLength = 1000;
   static const length_t kMaxComponentCount = 100;
 
-  DEFINE_NEW(PackageName, PACKAGE_NAME_BLOCK_TYPE)
+  DEFINE_NEW(PackageName)
   explicit PackageName(BlockArray<String>* components);
   static Local<PackageName> create(Heap* heap, const Handle<BlockArray<String>>& components);
 
@@ -127,7 +127,7 @@ class PackageVersion: public Block {
   static const length_t kMaxComponent = 999999;
   static const length_t kMaxComponentCount = 100;
 
-  DEFINE_NEW(PackageVersion, PACKAGE_VERSION_BLOCK_TYPE)
+  DEFINE_NEW(PackageVersion)
   explicit PackageVersion(I32Array* components);
   static Local<PackageVersion> create(Heap* heap, const Handle<I32Array>& components);
 
@@ -152,7 +152,7 @@ class PackageDependency: public Block {
  public:
   static const BlockType kBlockType = PACKAGE_DEPENDENCY_BLOCK_TYPE;
 
-  DEFINE_NEW(PackageDependency, PACKAGE_DEPENDENCY_BLOCK_TYPE)
+  DEFINE_NEW(PackageDependency)
   PackageDependency(PackageName* name,
                     PackageVersion* minVersion,
                     PackageVersion* maxVersion,

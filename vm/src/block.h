@@ -36,6 +36,8 @@ V(I32Array, I32_ARRAY)                                                         \
 V(I64Array, I64_ARRAY)                                                         \
 V(BlockArray, BLOCK_ARRAY)                                                     \
 V(TaggedArray, TAGGED_ARRAY)                                                   \
+V(BlockHashMapTable, BLOCK_HASH_MAP_TABLE)                                     \
+V(BlockHashMap, BLOCK_HASH_MAP)                                                \
 V(Object, OBJECT)                                                              \
 V(Type, TYPE)                                                                  \
 V(String, STRING)                                                              \

@@ -21,7 +21,7 @@ class Global: public Block {
  public:
   static const BlockType kBlockType = GLOBAL_BLOCK_TYPE;
 
-  DEFINE_NEW(Global, GLOBAL_BLOCK_TYPE)
+  DEFINE_NEW(Global)
   Global(String* name, u32 flags, Type* type);
   static Local<Global> create(Heap* heap, const Handle<String>& name,
                               u32 flags, const Handle<Type>& type);

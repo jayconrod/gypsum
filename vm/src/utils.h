@@ -131,6 +131,17 @@ inline word_t isPowerOf2(word_t n) {
 }
 
 
+template <class T>
+inline T roundUpToPowerOf2(T n) {
+  if (n == 0)
+    return 0;
+  T p = 1;
+  while (p < n)
+    p <<= 1;
+  return p;
+}
+
+
 constexpr inline word_t align(word_t n, word_t alignment) {
   return (n + alignment - 1UL) & ~(alignment - 1UL);
 }
