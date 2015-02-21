@@ -46,3 +46,30 @@ TEST(HashMapBasics) {
   StringHashMap::remove(heap, map, baz);
   ASSERT_TRUE(map->isEmpty());
 }
+
+
+TEST(HashMapStress) {
+  TEST_PROLOGUE
+
+  length_t repetitions = 2000;
+  auto map = StringHashMap::create(heap);
+  for (auto i = 0; i < 2; i++) {
+    for (length_t j = 0; j < repetitions; j++) {
+      u32 ch = static_cast<u32>(j);
+      auto s = String::create(heap, 1, &ch);
+      StringHashMap::add(heap, map, s, s);
+      ASSERT_EQ(j + 1, map->length());
+    }
+    for (length_t j = 0; j < repetitions; j++) {
+      u32 ch = static_cast<u32>(j);
+      auto s = String::create(heap, 1, &ch);
+      ASSERT_TRUE(map->contains(*s));
+    }
+    for (length_t j = 0; j < repetitions; j++) {
+      u32 ch = static_cast<u32>(j);
+      auto s = String::create(heap, 1, &ch);
+      StringHashMap::remove(heap, map, s);
+      ASSERT_EQ(repetitions - j - 1, map->length());
+    }
+  }
+}

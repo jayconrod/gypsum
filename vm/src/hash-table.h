@@ -22,7 +22,7 @@ class HashTable: public Block {
   void* operator new(size_t, Heap* heap, length_t capacity) {
     ASSERT(isPowerOf2(capacity));
     auto size = sizeForCapacity(capacity);
-    auto table = reinterpret_cast<HashTable<E>*>(heap->allocateUninitialized(size));
+    auto table = reinterpret_cast<HashTable<E>*>(heap->allocate(size));
     table->capacity_ = capacity;
     return table;
   }
@@ -60,7 +60,7 @@ class HashTable: public Block {
     u32 code = elem.hashCode();
     length_t probe = mask() & static_cast<length_t>(code);
     E* elems = elements();
-    while (!elems[probe].isEmpty()) {
+    while (!elems[probe].isEmpty() && !elems[probe].isDead()) {
       ASSERT(!elems[probe].matches(elem));
       probe = (probe + 1) & mask();
     }

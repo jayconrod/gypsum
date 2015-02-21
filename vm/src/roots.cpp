@@ -170,6 +170,7 @@ void Roots::initialize(Heap* heap) {
                                    sizeof(DefaultBlockHashMapTable::Element))
       Meta(DefaultBlockHashMapTable::kBlockType);
   blockHashMapTableMeta->hasElementPointers_ = true;
+  blockHashMapTableMeta->lengthOffset_ = offsetof(DefaultBlockHashMapTable, capacity_);
   blockHashMapTableMeta->elementPointerMap().setWord(
       0, DefaultBlockHashMapTable::kElementPointerMap);
   basicRoots_[BLOCK_HASH_MAP_TABLE_META_ROOT_INDEX] = blockHashMapTableMeta;
