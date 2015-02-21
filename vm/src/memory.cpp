@@ -38,7 +38,7 @@ Address AllocationRange::allocate(size_t size) {
   // We can safely check for overflow because unsigned addition is defined to wrap.
   bool overflow = newBase < base_;
   if (overflow || newBase > limit_)
-    throw AllocationError();
+    return 0;
   auto addr = base_;
   base_ = newBase;
   return addr;
