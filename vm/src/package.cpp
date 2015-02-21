@@ -21,6 +21,7 @@
 #include "function.h"
 #include "global.h"
 #include "handle.h"
+#include "hash-table.h"
 #include "heap.h"
 #include "roots.h"
 #include "string.h"
@@ -41,6 +42,7 @@ namespace internal {
   F(Package, functions_)        \
   F(Package, classes_)          \
   F(Package, typeParameters_)   \
+  F(Package, exports_)          \
 
 DEFINE_POINTER_MAP(Package, PACKAGE_POINTER_LIST)
 
@@ -181,6 +183,56 @@ Function* Package::initFunction() {
 }
 
 
+void Package::ensureExports(Heap* heap, const Handle<Package>& package) {
+  if (package->exports_)
+    return;
+
+  HandleScope handleScope(heap->vm());
+  auto exports = ExportMap::create(heap);
+  auto globals = handle(package->globals());
+  for (length_t i = 0; i < globals->length(); i++) {
+    auto global = handle(globals->get(i));
+    if ((global->flags() & PUBLIC_FLAG) != 0) {
+      auto name = handle(global->name());
+      ASSERT(!exports->contains(*name));
+      ExportMap::add(heap, exports, name, global);
+    }
+  }
+
+  // TODO: support other kinds of definitions.
+
+  package->setExports(*exports);
+}
+
+
+void Package::link(Heap* heap, const Handle<Package>& package) {
+  auto vm = heap->vm();
+  HandleScope handleScope(vm);
+  auto dependencies = handle(package->dependencies());
+  for (length_t i = 0; i < dependencies->length(); i++) {
+    auto dependency = handle(dependencies->get(i));
+    auto depPackage = handle(dependency->package());
+    ensureExports(heap, depPackage);
+    auto depExports = handle(depPackage->exports());
+
+    ASSERT(dependency->linkedGlobals() == nullptr);
+    auto externGlobals = handle(dependency->externGlobals());
+    auto globalCount = externGlobals->length();
+    auto linkedGlobals = BlockArray<Global>::create(heap, globalCount);
+    for (length_t j = 0; j < globalCount; j++) {
+      auto externGlobal = externGlobals->get(i);
+      auto name = externGlobal->name();
+      auto linkedGlobal = depExports->getOrElse(name, nullptr);
+      if (!linkedGlobal || !isa<Global>(linkedGlobal))
+        throw Error("link error");
+      linkedGlobals->set(j, block_cast<Global>(linkedGlobal));
+    }
+
+    // TODO: handle other kinds of definitions
+  }
+}
+
+
 ostream& operator << (ostream& os, const Package* pkg) {
   os << brief(pkg)
      << "\n  name: " << brief(pkg->name())
@@ -192,7 +244,8 @@ ostream& operator << (ostream& os, const Package* pkg) {
      << "\n  classes: " << brief(pkg->classes())
      << "\n  type parameters: " << brief(pkg->typeParameters())
      << "\n  entry function index: " << pkg->entryFunctionIndex()
-     << "\n  init function index: " << pkg->initFunctionIndex();
+     << "\n  init function index: " << pkg->initFunctionIndex()
+     << "\n  exports: " << pkg->exports();
   return os;
 }
 

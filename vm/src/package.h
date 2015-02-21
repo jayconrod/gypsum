@@ -20,6 +20,8 @@ template <class T>
 class BlockArray;
 class Function;
 class Global;
+template <class K, class V>
+class BlockHashMap;
 class Heap;
 class PackageDependency;
 class PackageName;
@@ -27,6 +29,7 @@ class PackageVersion;
 class String;
 class TypeParameter;
 
+typedef BlockHashMap<String, Block> ExportMap;
 
 class Package: public Block {
  public:
@@ -71,6 +74,12 @@ class Package: public Block {
   DEFINE_INL_ACCESSORS2(length_t, initFunctionIndex, setInitFunctionIndex)
   Function* initFunction();
 
+  ExportMap* exports() const { return exports_.get(); }
+  void setExports(ExportMap* exports) { exports_.set(this, exports); }
+  static void ensureExports(Heap* heap, const Handle<Package>& package);
+
+  static void link(Heap* heap, const Handle<Package>& package);
+
  private:
   DECLARE_POINTER_MAP()
 
@@ -85,6 +94,7 @@ class Package: public Block {
   Ptr<BlockArray<TypeParameter>> typeParameters_;
   length_t entryFunctionIndex_;
   length_t initFunctionIndex_;
+  Ptr<ExportMap> exports_;
   // Update PACKAGE_POINTER_LIST if pointers change.
 };
 
