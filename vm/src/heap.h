@@ -27,25 +27,17 @@ class VM;
   }                                                                                   \
 
 
-// TODO: remove when no longer used
-#define ALLOCATE_WITH_GC(name, heap, type, call) do { \
-  type* _value = call;                                \
-  if (_value == nullptr) {                            \
-    (heap)->collectGarbage();                         \
-    _value = call;                                    \
-    if (_value == nullptr) {                          \
-      throw Error("out of memory");                   \
-    }                                                 \
-  }                                                   \
-  name = Local<type>(_value);                         \
-} while (false)                                       \
-
-
-// TODO: remove when no longer used
-#define DEFINE_ALLOCATION(heap, type, call)      \
-  Local<type> _result;                           \
-  ALLOCATE_WITH_GC(_result, heap, type, call);   \
-  return _result;                                \
+#define RETRY_WITH_GC(heap, stmt)                                                     \
+  do {                                                                                \
+    try {                                                                             \
+      stmt;                                                                           \
+      break;                                                                          \
+    } catch (const AllocationError& exn) {                                            \
+      if (!exn.shouldRetryAfterGC())                                                  \
+        throw;                                                                        \
+      (heap)->collectGarbage();                                                       \
+    }                                                                                 \
+  } while (true)                                                                      \
 
 
 /** Thrown when memory can't be allocated from the heap. Contains a flag that indicates whether

@@ -11,7 +11,6 @@
 #include "array.h"
 #include "block.h"
 #include "error.h"
-#include "gc.h"
 #include "handle.h"
 #include "heap.h"
 #include "utils.h"

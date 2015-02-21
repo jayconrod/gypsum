@@ -10,7 +10,6 @@
 #include <iostream>
 #include "block.h"
 #include "handle.h"
-#include "gc.h"
 
 namespace codeswitch {
 namespace internal {

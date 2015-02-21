@@ -7,7 +7,6 @@
 #include "type.h"
 
 #include "block.h"
-#include "gc.h"
 #include "handle.h"
 #include "roots.h"
 #include "type-parameter.h"

@@ -10,7 +10,6 @@
 #include "block.h"
 #include "field.h"
 #include "function.h"
-#include "gc.h"
 #include "handle.h"
 #include "package.h"
 #include "roots.h"

@@ -17,7 +17,6 @@
 #include "bytecode.h"
 #include "flags.h"
 #include "function.h"
-#include "gc.h"
 #include "global.h"
 #include "handle.h"
 #include "object.h"

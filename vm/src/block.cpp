@@ -8,7 +8,6 @@
 
 #include "array.h"
 #include "function.h"
-#include "gc.h"
 #include "handle.h"
 #include "heap.h"
 #include "roots.h"

@@ -10,7 +10,6 @@
 #include <iomanip>
 #include <iostream>
 #include "block.h"
-#include "gc.h"
 #include "heap.h"
 #include "tagged.h"
 #include "utils.h"

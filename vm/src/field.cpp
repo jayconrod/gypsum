@@ -7,7 +7,6 @@
 #include "field.h"
 
 #include "block.h"
-#include "gc.h"
 #include "handle.h"
 #include "heap.h"
 #include "type.h"

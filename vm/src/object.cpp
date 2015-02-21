@@ -8,7 +8,6 @@
 
 #include <cstring>
 #include "block.h"
-#include "gc.h"
 #include "handle.h"
 #include "heap.h"
 

@@ -6,7 +6,6 @@
 
 #include "global.h"
 
-#include "gc.h"
 #include "type.h"
 
 using namespace std;
