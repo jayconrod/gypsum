@@ -89,7 +89,7 @@ class PackageLoader {
 
 
 Package::Package(VM* vm)
-    : Block(PACKAGE_BLOCK_TYPE),
+    : Object(PACKAGE_BLOCK_TYPE),
       flags_(0),
       dependencies_(this, reinterpret_cast<BlockArray<PackageDependency>*>(
           vm->roots()->emptyBlockArray())),

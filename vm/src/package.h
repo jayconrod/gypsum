@@ -11,6 +11,7 @@
 #include <string>
 #include "block.h"
 #include "handle.h"
+#include "object.h"
 #include "utils.h"
 
 namespace codeswitch {
@@ -31,7 +32,7 @@ class TypeParameter;
 
 typedef BlockHashMap<String, Block> ExportMap;
 
-class Package: public Block {
+class Package: public Object {
  public:
   static const BlockType kBlockType = PACKAGE_BLOCK_TYPE;
 

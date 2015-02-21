@@ -106,9 +106,12 @@ def initClass(out, classData):
             out.write("    methods->set(%d, %s);\n" % (i, id))
     out.write("    ::new(clas) Class(name, 0, typeParameters, supertype, fields, " +
               "constructors, methods, nullptr, nullptr, elementType, lengthFieldIndex);\n")
-    out.write("    auto meta = clas->buildInstanceMeta();\n")
-    out.write("    clas->setInstanceMeta(meta);\n")
-    out.write("    builtinMetas_.push_back(meta);\n  }")
+    if classData.get("isOpaque"):
+        out.write("    builtinMetas_.push_back(nullptr);\n  }")
+    else:
+        out.write("    auto meta = clas->buildInstanceMeta();\n")
+        out.write("    clas->setInstanceMeta(meta);\n")
+        out.write("    builtinMetas_.push_back(meta);\n  }")
 
 
 def initFunction(out, functionData):

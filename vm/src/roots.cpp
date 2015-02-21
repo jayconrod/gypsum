@@ -37,11 +37,6 @@ void Roots::initialize(Heap* heap) {
   freeMeta->lengthOffset_ = offsetof(Free, size_);
   basicRoots_[FREE_META_ROOT_INDEX] = freeMeta;
 
-  auto packageMeta = new(heap, 0, sizeof(Package), 0) Meta(PACKAGE_BLOCK_TYPE);
-  packageMeta->hasPointers_ = true;
-  packageMeta->objectPointerMap().setWord(0, Package::kPointerMap);
-  basicRoots_[PACKAGE_META_ROOT_INDEX] = packageMeta;
-
   auto packageNameMeta = new(heap, 0, sizeof(PackageName), 0) Meta(PACKAGE_NAME_BLOCK_TYPE);
   packageNameMeta->hasPointers_ = true;
   packageNameMeta->objectPointerMap().setWord(0, PackageName::kPointerMap);
@@ -147,6 +142,22 @@ void Roots::initialize(Heap* heap) {
 
   auto erasedType = new(heap, 0) Type(Type::ERASED_TYPE, Type::NO_FLAGS);
   basicRoots_[ERASED_TYPE_ROOT_INDEX] = erasedType;
+
+  auto packageClass = getBuiltinClass(BUILTIN_PACKAGE_CLASS_ID);
+  auto packageMethods = packageClass->methods();
+  auto packageMeta = new(heap, packageMethods->length(), sizeof(Package), 0)
+      Meta(PACKAGE_BLOCK_TYPE);
+  packageMeta->hasPointers_ = true;
+  packageMeta->objectPointerMap().setWord(0, Package::kPointerMap);
+  packageMeta->setClass(packageClass);
+  for (length_t i = 0; i < packageMethods->length(); i++) {
+    auto methodId = packageMethods->get(i);
+    auto method = getBuiltinFunction(methodId);
+    packageMeta->setData(i, method);
+  }
+  packageClass->setInstanceMeta(packageMeta);
+  basicRoots_[PACKAGE_META_ROOT_INDEX] = packageMeta;
+  builtinMetas_[builtinIdToIndex(BUILTIN_PACKAGE_CLASS_ID)] = packageMeta;
 
   Meta* typeMeta = getBuiltinClass(BUILTIN_TYPE_CLASS_ID)->instanceMeta();
   typeMeta->blockType_ = TYPE_BLOCK_TYPE;

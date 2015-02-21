@@ -157,6 +157,14 @@
       parameterTypes:
         - String
         - String
+- name: Package
+  id: BUILTIN_PACKAGE_CLASS_ID
+  isPrimitive: false
+  isOpaque: true
+  supertype: Object
+  constructors: []
+  methods: []
+  fields: []
 - name: unit
   id: BUILTIN_UNIT_TYPE_ID
   isPrimitive: true
