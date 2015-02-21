@@ -81,16 +81,18 @@ class HashTable: public Block {
     return findIndex(elem) != kIndexNotSet;
   }
 
-  const E& find(const E& elem) const {
+  const E* find(const E& elem) const {
     auto index = findIndex(elem);
-    ASSERT(index != kIndexNotSet);
-    return elements()[index];
+    return index != kIndexNotSet
+         ? elements() + index
+         : nullptr;
   }
 
-  E& find(const E& elem) {
+  E* find(const E& elem) {
     auto index = findIndex(elem);
-    ASSERT(index != kIndexNotSet);
-    return elements()[index];
+    return index != kIndexNotSet
+         ? elements() + index
+         : nullptr;
   }
 
  protected:
@@ -154,8 +156,18 @@ class HashMap: public Block {
   typename Table::Element::Value get(const typename Table::Element::Key key) const {
     ASSERT(table_);
     typename Table::Element element(key);
-    typename Table::Element& found = table()->find(element);
-    return found.value;
+    const typename Table::Element* found = table()->find(element);
+    ASSERT(found != nullptr);
+    return found->value;
+  }
+
+  typename Table::Element::Value getOrElse(const typename Table::Element::Key key,
+                                           typename Table::Element::Value defaultValue) const {
+    if (!table_)
+      return defaultValue;
+    typename Table::Element element(key);
+    const typename Table::Element* found = table()->find(element);
+    return found != nullptr ? found->value : defaultValue;
   }
 
  private:

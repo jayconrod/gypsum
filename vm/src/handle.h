@@ -73,7 +73,10 @@ class Local: public Handle<T> {
  private:
   Local(T** slot)
       : Handle<T>(slot) { }
+
   friend class HandleScope;
+  template <class S>
+  friend class Local;
 };
 
 
@@ -104,6 +107,9 @@ class Persistent: public Handle<T> {
  private:
   void release();
   size_t index_;
+
+  template <class S>
+  friend class Persistent;
 };
 
 

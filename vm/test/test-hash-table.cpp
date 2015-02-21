@@ -6,6 +6,7 @@
 
 #include "test.h"
 
+#include "array.h"
 #include "hash-table.h"
 #include "string.h"
 
@@ -31,6 +32,8 @@ TEST(HashMapBasics) {
   ASSERT_FALSE(map->isEmpty());
   ASSERT_TRUE(map->contains(*foo));
   ASSERT_EQ(*foo, map->get(*foo));
+  ASSERT_EQ(*foo, map->getOrElse(*foo, nullptr));
+  ASSERT_EQ(nullptr, map->getOrElse(*bar, nullptr));
 
   StringHashMap::add(heap, map, bar, bar);
   StringHashMap::add(heap, map, baz, baz);
@@ -52,24 +55,40 @@ TEST(HashMapStress) {
   TEST_PROLOGUE
 
   length_t repetitions = 2000;
+  auto strings = BlockArray<String>::create(heap, repetitions);
+  {
+    HandleScope handleScope(&vm);
+    for (length_t i = 0; i < repetitions; i++) {
+      u32 ch = static_cast<u32>(i);
+      auto s = String::create(heap, 1, &ch);
+      strings->set(i, *s);
+    }
+  }
+
   auto map = StringHashMap::create(heap);
   for (auto i = 0; i < 2; i++) {
-    for (length_t j = 0; j < repetitions; j++) {
-      u32 ch = static_cast<u32>(j);
-      auto s = String::create(heap, 1, &ch);
-      StringHashMap::add(heap, map, s, s);
-      ASSERT_EQ(j + 1, map->length());
+    {
+      HandleScope handleScope(&vm);
+      for (length_t j = 0; j < repetitions; j++) {
+        auto s = handle(strings->get(j));
+        StringHashMap::add(heap, map, s, s);
+        ASSERT_EQ(j + 1, map->length());
+      }
     }
-    for (length_t j = 0; j < repetitions; j++) {
-      u32 ch = static_cast<u32>(j);
-      auto s = String::create(heap, 1, &ch);
-      ASSERT_TRUE(map->contains(*s));
+    {
+      HandleScope handleScope(&vm);
+      for (length_t j = 0; j < repetitions; j++) {
+        auto s = handle(strings->get(j));
+        ASSERT_TRUE(map->contains(*s));
+      }
     }
-    for (length_t j = 0; j < repetitions; j++) {
-      u32 ch = static_cast<u32>(j);
-      auto s = String::create(heap, 1, &ch);
-      StringHashMap::remove(heap, map, s);
-      ASSERT_EQ(repetitions - j - 1, map->length());
+    {
+      HandleScope handleScope(&vm);
+      for (length_t j = 0; j < repetitions; j++) {
+        auto s = handle(strings->get(j));
+        StringHashMap::remove(heap, map, s);
+        ASSERT_EQ(repetitions - j - 1, map->length());
+      }
     }
   }
 }
