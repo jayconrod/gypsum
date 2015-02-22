@@ -64,8 +64,8 @@ class Serializer(object):
                                        len(self.package.classes),
                                        len(self.package.typeParameters),
                                        len(self.package.dependencies),
-                                       self.package.entryFunction,
-                                       self.package.initFunction))
+                                       self.package.entryFunction.index,
+                                       self.package.initFunction.index))
         self.writeString(str(self.package.name))
         self.writeString(str(self.package.version))
 
@@ -90,7 +90,7 @@ class Serializer(object):
     def writeFunction(self, function):
         self.writeName(function.name)
         self.writeFlags(function.flags)
-        self.writeList(lambda p: self.writeVbn(p.id), function.typeParameters)
+        self.writeList(lambda p: self.writeVbn(p.id.index), function.typeParameters)
         self.writeType(function.returnType)
         self.writeVbn(len(function.parameterTypes))
         for ty in function.parameterTypes:
@@ -190,7 +190,7 @@ class Serializer(object):
         bits = form | flags << 4
         self.writeVbn(bits)
         if id is not None:
-            self.writeVbn(id)
+            self.writeVbn(id.index)
         if isinstance(type, ir_types.ClassType):
             self.writeList(self.writeType, type.typeArguments)
 
@@ -203,7 +203,7 @@ class Serializer(object):
         self.outFile.write(struct.pack("<I", bits))
 
     def writeIdList(self, list):
-        self.writeList(lambda elem: self.writeVbn(elem.id), list)
+        self.writeList(lambda elem: self.writeVbn(elem.id.index), list)
 
     def writeList(self, writer, list):
         self.writeVbn(len(list))

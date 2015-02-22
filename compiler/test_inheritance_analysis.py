@@ -35,31 +35,33 @@ class TestInheritanceAnalysis(unittest.TestCase):
 
     def testClassInfoForBuiltin(self):
         info = self.analyzeFromSource("")
-        rootClassInfo = info.getClassInfo(getRootClass())
+        rootClassInfo = info.getClassInfo(BUILTIN_ROOT_CLASS_ID)
         self.assertIs(getRootClass(), rootClassInfo.irDefn)
         self.assertIs(None, rootClassInfo.superclassInfo)
 
     def testNoBaseClass(self):
         info = self.analyzeFromSource("class Foo")
-        ast = info.ast
-        self.assertEquals(BUILTIN_ROOT_CLASS_ID,
-                          info.getClassInfo(ast.definitions[0]).superclassInfo.irDefn.id)
+        clas = info.package.findClass(name="Foo")
+        classInfo = info.getClassInfo(clas)
+        self.assertEquals(BUILTIN_ROOT_CLASS_ID, classInfo.superclassInfo.irDefn.id)
 
     def testWithBaseClass(self):
         source = "class Foo\n" + \
                  "class Bar <: Foo"
         info = self.analyzeFromSource(source)
         ast = info.ast
-        fooClassInfo = info.getClassInfo(ast.definitions[0])
-        barClassInfo = info.getClassInfo(ast.definitions[1])
+        fooClass = info.package.findClass(name="Foo")
+        barClass = info.package.findClass(name="Bar")
+        fooClassInfo = info.getClassInfo(fooClass)
+        barClassInfo = info.getClassInfo(barClass)
         self.assertIs(fooClassInfo, barClassInfo.superclassInfo)
 
     def testInheritFromException(self):
         info = self.analyzeFromSource("class Foo <: Exception")
         ast = info.ast
-        classInfo = info.getClassInfo(ast.definitions[0])
-        superclassInfo = classInfo.superclassInfo
-        self.assertIs(getExceptionClass(), superclassInfo.irDefn)
+        clas = info.package.findClass(name="Foo")
+        classInfo = info.getClassInfo(clas)
+        self.assertIs(getExceptionClass(), classInfo.superclassInfo.irDefn)
 
     def testInheritFromSelf(self):
         self.assertRaises(ScopeException, self.analyzeFromSource, "class Foo <: Foo")

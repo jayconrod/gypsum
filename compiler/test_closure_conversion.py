@@ -40,19 +40,21 @@ class TestClosureConversion(TestCaseWithDefinitions):
                  "  def g = x\n"
         info = self.analyzeFromSource(source)
         fAst = info.ast.definitions[0]
+        fScopeId = info.getScope(info.getDefnInfo(fAst).irDefn).scopeId
         gAst = fAst.body.statements[1]
+        gScopeId = info.getScope(info.getDefnInfo(gAst).irDefn).scopeId
 
-        fContextInfo = info.getContextInfo(fAst)
+        fContextInfo = info.getContextInfo(fScopeId)
         fContextClass = fContextInfo.irContextClass
         self.assertEquals([self.makeField("x", type=I64Type)], fContextClass.fields)
         xDefnInfo = info.getDefnInfo(fAst.body.statements[0].pattern)
         self.assertEquals(self.makeField("x", type=I64Type), xDefnInfo.irDefn)
         self.assertIs(xDefnInfo, info.getUseInfo(gAst.body).defnInfo)
-        gClosureInfo = info.getClosureInfo(gAst)
+        gClosureInfo = info.getClosureInfo(gScopeId)
         gClosureClass = gClosureInfo.irClosureClass
         self.assertEquals([self.makeField("$context", type=ClassType(fContextClass))],
                           gClosureClass.fields)
-        self.assertEquals({fAst.id: gClosureClass.fields[0]}, gClosureInfo.irClosureContexts)
+
         self.assertEquals(self.makeVariable("g", type=ClassType(gClosureClass)),
                           gClosureInfo.irClosureVar)
 
@@ -63,8 +65,8 @@ class TestClosureConversion(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source)
         cAst = info.ast.definitions[0]
         C = info.package.findClass(name="C")
-
-        cContextInfo = info.getContextInfo(cAst)
+        cScopeId = info.getScope(C).scopeId
+        cContextInfo = info.getContextInfo(cScopeId)
         self.assertIs(C, cContextInfo.irContextClass)
         xDefnInfo = info.getDefnInfo(cAst.members[0].pattern)
         xUseInfo = info.getUseInfo(cAst.members[1].body)
@@ -77,8 +79,8 @@ class TestClosureConversion(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source)
         cAst = info.ast.definitions[0]
         C = info.package.findClass(name="C")
-
-        cContextInfo = info.getContextInfo(cAst)
+        cScopeId = info.getScope(C).scopeId
+        cContextInfo = info.getContextInfo(cScopeId)
         self.assertIs(C, cContextInfo.irContextClass)
         fDefnInfo = info.getDefnInfo(cAst.members[0])
         fUseInfo = info.getUseInfo(cAst.members[1].body)
@@ -92,19 +94,20 @@ class TestClosureConversion(TestCaseWithDefinitions):
         cAst = info.ast.definitions[0]
         C = info.package.findClass(name="C")
         CType = ClassType(C)
-        fContextInfo = info.getContextInfo(cAst.members[0])
-        fContextClass = info.package.findClass(name="$context")
         f = info.package.findFunction(name="f")
+        fScopeId = info.getScope(f).scopeId
+        fContextInfo = info.getContextInfo(fScopeId)
+        fContextClass = info.package.findClass(name="$context")
         self.assertIs(fContextClass, fContextInfo.irContextClass)
         self.assertEquals(1, len(fContextClass.constructors))
         self.assertEquals([self.makeField("$this", type=CType, flags=frozenset([LET]))],
                           fContextClass.fields)
-        gClosureInfo = info.getClosureInfo(cAst.members[0].body.statements[0])
+        g = info.package.findFunction(name="g")
+        gScopeId = info.getScope(g).scopeId
+        gClosureInfo = info.getClosureInfo(gScopeId)
         gClosureClass = info.package.findClass(name="$closure")
         self.assertIs(gClosureClass, gClosureInfo.irClosureClass)
-        self.assertEquals({cAst.members[0].id: gClosureClass.fields[0]},
-                          gClosureInfo.irClosureContexts)
-        g = info.package.findFunction(name="g")
+        self.assertEquals({fScopeId: gClosureClass.fields[0]}, gClosureInfo.irClosureContexts)
         self.assertTrue(gClosureInfo.irClosureVar in f.variables)
         self.assertEquals(1, len(gClosureClass.constructors))
         self.assertEquals([ClassType(gClosureClass), ClassType(fContextClass)],

@@ -12,6 +12,7 @@ from parser import *
 from ast import *
 from scope_analysis import *
 from type_analysis import *
+from ids import *
 from ir import *
 from ir_types import *
 from compile_info import *

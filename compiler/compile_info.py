@@ -7,12 +7,10 @@
 import ast
 import builtins
 import data
+import ids
 import ir
 import ir_types
 
-
-BUILTIN_SCOPE_ID = -1
-GLOBAL_SCOPE_ID = 0
 
 CONTEXT_CONSTRUCTOR_HINT = "context-constructor-hint"
 CLOSURE_CONSTRUCTOR_HINT = "closure-constructor-hint"
@@ -28,57 +26,69 @@ class CompileInfo(object):
             package = ir.Package()
         self.ast = ast
         self.package = package
-        self.scopes = {}
+        self.scopes = {}  # keyed by ScopeId, AstId, and DefnId
         self.globalScope = None
-        self.contextInfo = {}
-        self.closureInfo = {}
-        self.defnInfo = {}
-        self.useInfo = {}
-        self.classInfo = {}
-        self.typeInfo = {}
-        self.callInfo = {}
-
-    def _get(self, key, dictionary):
-        return dictionary[self._key(key)]
-
-    def _set(self, key, value, dictionary):
-        dictionary[self._key(key)] = value
-
-    def _has(self, key, dictionary):
-        return self._key(key) in dictionary
-
-    def _key(self, k):
-        if isinstance(k, int):
-            return k
-        elif isinstance(k, ast.AstNode):
-            return k.id
-        elif hasattr(k, "astDefn") and k.astDefn is not None:
-            return k.astDefn.id
-        elif builtins.isBuiltinId(k.id) and isinstance(k, ir.Function):
-            # TODO: fix this hack. We add an offset to builtin function ids to disambiguate
-            # them from class ids.
-            return k.id - 100
-        else:
-            return k.id
+        self.contextInfo = {}  # keyed by ScopeId
+        self.closureInfo = {}  # keyed by ScopeId
+        self.defnInfo = {}  # keyed by AstId
+        self.useInfo = {}  # keyed by AstId
+        self.classInfo = {}  # keyed by DefnId
+        self.typeInfo = {}  # keyed by AstId
+        self.callInfo = {}  # keyed by AstId
 
 
-_dictNames = [("Scope", "scopes"),
-              ("ContextInfo", "contextInfo"),
-              ("ClosureInfo", "closureInfo"),
-              ("DefnInfo", "defnInfo"),
-              ("UseInfo", "useInfo"),
-              ("ClassInfo", "classInfo"),
-              ("Type", "typeInfo"),
-              ("CallInfo", "callInfo")]
-def _addDictMethods(elemName, dictName):
-    setattr(CompileInfo, "get" + elemName,
-            lambda self, key: self._get(key, getattr(self, dictName)))
-    setattr(CompileInfo, "set" + elemName,
-            lambda self, key, value: self._set(key, value, getattr(self, dictName)))
-    setattr(CompileInfo, "has" + elemName,
-            lambda self, key: self._has(key, getattr(self, dictName)))
-for _elemName, _dictName in _dictNames:
-    _addDictMethods(_elemName, _dictName)
+_dictNames = [("Scope", "scopes", (ids.ScopeId, ids.AstId, ids.DefnId)),
+              ("ContextInfo", "contextInfo", (ids.ScopeId,)),
+              ("ClosureInfo", "closureInfo", (ids.ScopeId,)),
+              ("DefnInfo", "defnInfo", (ids.AstId,)),
+              ("UseInfo", "useInfo", (ids.AstId,)),
+              ("ClassInfo", "classInfo", (ids.DefnId,)),
+              ("Type", "typeInfo", (ids.AstId,)),
+              ("CallInfo", "callInfo", (ids.AstId,))]
+
+def _addDictMethods(elemName, dictName, types):
+    def cleanKey(self, key):
+        if isinstance(key, ast.AstNode):
+            astId = key.id
+            if ids.AstId in types:
+                return astId
+            elif ids.DefnId in types and astId in self.defnInfo:
+                return self.defnInfo[astId].irDefn.id
+            elif ids.ScopeId in types and astId in self.scopes:
+                return self.scopes[astId].scopeId
+            return astId
+        elif isinstance(key, ir.IrDefinition):
+            defnId = key.id
+            if ids.DefnId in types:
+                return defnId
+            elif ids.ScopeId in types:
+                if defnId in self.scopes:
+                    return self.scopes[defnId].scopeId
+                elif key.astDefn is not None and key.astDefn.id in self.scopes:
+                    return self.scopes[key.astDefn.id].scopeId
+            return defnId
+        return key
+
+    def get(self, key):
+        key = cleanKey(self, key)
+        assert any(isinstance(key, type) for type in types)
+        return getattr(self, dictName)[key]
+    setattr(CompileInfo, "get" + elemName, get)
+
+    def set(self, key, value):
+        key = cleanKey(self, key)
+        assert any(isinstance(key, type) for type in types)
+        getattr(self, dictName)[key] = value
+    setattr(CompileInfo, "set" + elemName, set)
+
+    def has(self, key):
+        key = cleanKey(self, key)
+        assert any(isinstance(key, type) for type in types)
+        return key in getattr(self, dictName)
+    setattr(CompileInfo, "has" + elemName, has)
+
+for _elemName, _dictName, _types in _dictNames:
+    _addDictMethods(_elemName, _dictName, _types)
 
 
 class ContextInfo(data.Data):
@@ -89,7 +99,7 @@ class ContextInfo(data.Data):
     definitions in that scope and what context objects are used from parent scopes."""
 
     propertyNames = [
-        # int: the AST id of the node that creates this scope.
+        # ScopeId: the scope this context info is about
         "id",
 
         # Class | None: a class which contains definitions made in this scope which may be used
@@ -104,7 +114,7 @@ class ContextInfo(data.Data):
 
     def __repr__(self):
         irContextClassStr = self.irContextClass.name if self.irContextClass else "None"
-        return "ContextInfo(%d, %s)" % (self.id, irContextClassStr)
+        return "ContextInfo(%s, %s)" % (self.id, irContextClassStr)
 
 
 class ClosureInfo(data.Data):
@@ -118,7 +128,7 @@ class ClosureInfo(data.Data):
         # contexts.
         "irClosureClass",
 
-        # {ast id -> Field | Variable | None}: for each outer scope containing a definition
+        # {ScopeId -> Field | Variable | None}: for each outer scope containing a definition
         # used in this scope, this dictionary maps the outer scope id to a location where its
         # context may be loaded. Parent scopes are loaded out of a Field in irClosureClass.
         # Local function scopes are accessible with a Variable. Local class scopes are not
@@ -137,7 +147,7 @@ class ClosureInfo(data.Data):
 
     def __repr__(self):
         irClosureClassStr = self.irClosureClass.name if self.irClosureClass else "None"
-        irClosureContextsStr = ", ".join("%d: %s" % kv
+        irClosureContextsStr = ", ".join("%s: %s" % kv
                                          for kv in self.irClosureContexts.iteritems())
         return "ClosureInfo(%s, {%s}, %s)" % \
             (irClosureClassStr, irClosureContextsStr, repr(self.irClosureVar))
@@ -162,11 +172,11 @@ class DefnInfo(data.Data):
         # the IR definition created from this node
         "irDefn",
 
-        # int: the id of the scope which contains this definition. If this definition is
+        # ScopeId: the id of the scope which contains this definition. If this definition is
         # inherited, this is the scope id of the inheriting class (the subclass).
         "scopeId",
 
-        # int: the id of the scope which contains this definition in source. If this definition
+        # ScopeId: the id of the scope which contains this definition in source. If this definition
         # is inherited, this will be the id of the superclass containing the original
         # definition. If this definition is not inherited, this will be the same as `scopeId`.
         "inheritedScopeId",
@@ -187,7 +197,7 @@ class DefnInfo(data.Data):
 
     def __repr__(self):
         irDefnStr = repr(self.irDefn)
-        return "DefnInfo(%s, %d, %d, %d)" % \
+        return "DefnInfo(%s, %s, %s, %d)" % \
             (irDefnStr, self.scopeId, self.inheritedScopeId, self.inheritanceDepth)
 
     def isMethod(self):
@@ -208,11 +218,11 @@ class UseInfo(data.Data):
     """Created for every AST node which refers to a definition using a symbol."""
 
     propertyNames = [
-        # Info about the definition being referenced.
+        # DefnInfo: Info about the definition being referenced.
         "defnInfo",
 
-        # The scope id containing the symbol. If the symbol is used in a different scope than
-        # the one it was defined, it may need to be captured.
+        # ScopeId: The scope id containing the symbol. If the symbol is used in a different
+        # scope than the one it was defined, it may need to be captured.
         "useScopeId",
 
         # Describes how the definition is being used. This affects whether the definition is
@@ -224,8 +234,8 @@ class UseInfo(data.Data):
         useScope = info.getScope(self.useScopeId)
         defnScope = info.getScope(self.defnInfo.scopeId)
         return self.kind is USE_AS_VALUE and \
-               defnScope.scopeId != GLOBAL_SCOPE_ID and \
-               defnScope.scopeId != BUILTIN_SCOPE_ID and \
+               defnScope.scopeId is not ids.GLOBAL_SCOPE_ID and \
+               defnScope.scopeId is not ids.BUILTIN_SCOPE_ID and \
                not useScope.isLocalWithin(defnScope)
 
 
@@ -303,37 +313,8 @@ def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes):
         return None
 
 
-class InfoPrinter(ast.AstPrinter):
-    def __init__(self, out, info):
-        super(InfoPrinter, self).__init__(out)
-        self.info = info
-
-    def visitDefault(self, node):
-        super(InfoPrinter, self).visitDefault(node)
-        indent = self.indentStr()
-        infoStrs = []
-        if self.info.hasScope(node):
-            infoStrs.append(str(self.info.getScope(node)))
-        if self.info.hasDefnInfo(node):
-            infoStrs.append(str(self.info.getDefnInfo(node)))
-        if self.info.hasContextInfo(node):
-            infoStrs.append(str(self.info.getContextInfo(node)))
-        if self.info.hasClosureInfo(node):
-            infoStrs.append(str(self.info.getClosureInfo(node)))
-        if self.info.hasUseInfo(node):
-            infoStrs.append(str(self.info.getUseInfo(node)))
-        if self.info.hasClassInfo(node):
-            infoStrs.append(str(self.info.getClassInfo(node)))
-        if self.info.hasType(node):
-            infoStrs.append(str(self.info.getType(node)))
-
-        for s in infoStrs:
-            self.out.write("%s- %s\n" % (indent, s))
-
-
 __all__ = [ "CompileInfo", "ContextInfo", "ClosureInfo", "DefnInfo",
             "ClassInfo", "UseInfo", "getAllArgumentTypes",
-            "GLOBAL_SCOPE_ID", "BUILTIN_SCOPE_ID",
             "USE_AS_VALUE", "USE_AS_TYPE", "USE_AS_PROPERTY", "USE_AS_CONSTRUCTOR",
             "CONTEXT_CONSTRUCTOR_HINT", "CLOSURE_CONSTRUCTOR_HINT",
             "getExplicitTypeParameters", "getImplicitTypeParameters",

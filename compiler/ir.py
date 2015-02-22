@@ -8,6 +8,7 @@ import builtins
 import compile_info
 import data
 import flags
+import ids
 import ir_types
 import bytecode
 
@@ -15,7 +16,8 @@ import re
 import StringIO
 
 class Package(object):
-    def __init__(self, name="default", version=""):
+    def __init__(self, id=ids.TARGET_PACKAGE_ID, name="default", version=""):
+        self.id = id
         self.name = name
         self.version = version
         self.dependencies = []
@@ -42,33 +44,33 @@ class Package(object):
             buf.write("%s\n\n" % c)
         for p in self.typeParameters:
             buf.write("%s\n\n" % p)
-        buf.write("entry function: %d\n" % self.entryFunction)
-        buf.write("init function: %d\n" % self.initFunction)
+        buf.write("entry function: %s\n" % self.entryFunction)
+        buf.write("init function: %s\n" % self.initFunction)
         return buf.getvalue()
 
     def addGlobal(self, name, astDefn, *args):
-        id = len(self.globals)
+        id = ids.DefnId(self.id, ids.DefnId.GLOBAL, len(self.globals))
         self.findOrAddString(name)
         g = Global(name, astDefn, id, *args)
         self.globals.append(g)
         return g
 
     def addFunction(self, name, astDefn, *args):
-        id = len(self.functions)
+        id = ids.DefnId(self.id, ids.DefnId.FUNCTION, len(self.functions))
         self.findOrAddString(name)
         f = Function(name, astDefn, id, *args)
         self.functions.append(f)
         return f
 
     def addClass(self, name, astDefn, *args):
-        id = len(self.classes)
+        id = ids.DefnId(self.id, ids.DefnId.CLASS, len(self.classes))
         self.findOrAddString(name)
         c = Class(name, astDefn, id, *args)
         self.classes.append(c)
         return c
 
     def addTypeParameter(self, name, astDefn, *args):
-        id = len(self.typeParameters)
+        id = ids.DefnId(self.id, ids.DefnId.TYPE_PARAMETER, len(self.typeParameters))
         self.findOrAddString(name)
         p = TypeParameter(name, astDefn, id, *args)
         self.typeParameters.append(p)
@@ -226,7 +228,7 @@ class IrTopDefn(IrDefinition):
     skipCompareNames = IrDefinition.skipCompareNames + ("id",)
 
     def isBuiltin(self):
-        return self.id < 0
+        return self.id.isBuiltin()
 
 
 class Global(IrTopDefn):
@@ -236,7 +238,7 @@ class Global(IrTopDefn):
         buf = StringIO.StringIO()
         if len(self.flags) > 0:
             buf.write(" ".join(self.flags) + " ")
-        buf.write("var %s#%d" % (self.name, self.id))
+        buf.write("var %s%s" % (self.name, self.id))
         return buf.getvalue()
 
 
@@ -307,7 +309,7 @@ class Function(IrTopDefn):
         buf = StringIO.StringIO()
         if len(self.flags) > 0:
             buf.write(" ".join(self.flags) + " ")
-        buf.write("def %s#%d" % (self.name, self.id))
+        buf.write("def %s%s" % (self.name, str(self.id)))
         if self.typeParameters is not None and len(self.typeParameters) > 0:
             buf.write("[%s]" % ", ".join([str(tp) for tp in self.typeParameters]))
         if self.parameterTypes is not None and len(self.parameterTypes) > 0:
@@ -341,7 +343,7 @@ class Class(IrTopDefn):
 
     def superclasses(self):
         """Returns a generator of superclasses in depth-first order, including this class."""
-        assert self.id is not bytecode.BUILTIN_NOTHING_CLASS_ID
+        assert self is not builtins.getNothingClass()
         yield self
         clas = self
         while len(clas.supertypes) > 0:
@@ -389,10 +391,9 @@ class Class(IrTopDefn):
         return len(self.findClassPathToBaseClass(base))
 
     def isSubclassOf(self, other):
-        nothingClassId = -2   # avoid circular import dependency with builtins
-        if self is other or self.id == nothingClassId:
+        if self is other or self is builtins.getNothingClass():
             return True
-        elif other.id == nothingClassId:
+        elif other is builtins.getNothingClass():
             return False
         else:
             return other in self.superclasses()
@@ -483,16 +484,16 @@ class Class(IrTopDefn):
 
     def __str__(self):
         buf = StringIO.StringIO()
-        buf.write("%s class %s#%d" % (" ".join(self.flags), self.name, self.id))
+        buf.write("%s class %s%s" % (" ".join(self.flags), self.name, self.id))
         buf.write("\n")
         for field in self.fields:
             buf.write("  %s\n" % str(field))
         if self.initializer is not None:
             buf.write("  %s\n" % str(self.initializer))
         for ctor in self.constructors:
-            buf.write("  constructor #%d\n" % ctor.id)
+            buf.write("  constructor %s\n" % ctor.id)
         for method in self.methods:
-            buf.write("  method #%d\n" % method.id)
+            buf.write("  method %s\n" % method.id)
         return buf.getvalue()
 
 
@@ -518,7 +519,7 @@ class TypeParameter(IrTopDefn):
             (self.name, self.upperBound, self.lowerBound, self.flags)
 
     def __str__(self):
-        return "%s type %s#%d <: %s >: %s" % \
+        return "%s type %s%s <: %s >: %s" % \
             (" ".join(self.flags), self.name, self.id, self.upperBound, self.lowerBound)
 
     def variance(self):

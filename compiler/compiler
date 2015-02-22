@@ -77,18 +77,16 @@ for sourceFilename in args.sources:
         if args.print_ast:
             printer = AstPrinter(sys.stdout)
             printer.visit(ast)
-        package = Package(args.package_name, args.package_version)
+        package = Package(name=args.package_name, version=args.package_version)
         package.dependencies.extend(args.depends)
         info = CompileInfo(ast, package)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         if args.print_scope:
-            printer = InfoPrinter(sys.stdout, info)
-            printer.visit(ast)
+            sys.stderr.write("--print-scope not supported right now")
         analyzeTypes(info)
         if args.print_types:
-            printer = InfoPrinter(sys.stdout, info)
-            printer.visit(ast)
+            sys.stderr.write("--print-types not supported right now")
         convertClosures(info)
         flattenClasses(info)
         compile(info)

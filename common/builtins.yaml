@@ -40,7 +40,7 @@
 - name: Nothing
   id: BUILTIN_NOTHING_CLASS_ID
   isPrimitive: false
-  supertype: Object
+  supertype: null
   constructors: []
   fields: []
   methods: []

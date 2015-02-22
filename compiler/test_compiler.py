@@ -85,10 +85,12 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret()]]))
 
     def testInitGlobal(self):
-        self.checkFunction("let x = 42",
+        package = self.compileFromSource("let x = 42")
+        x = package.findGlobal(name="x")
+        self.checkFunction(package,
                            self.makeSimpleFunction("$init", UnitType, [[
                                i64(42),
-                               stg(0),
+                               stg(x.id.index),
                                unit(),
                                ret()]]))
 
@@ -154,7 +156,7 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(package,
                            self.makeSimpleFunction("f", getRootClassType(), [[
                                string(fooIndex),
-                               tyc(BUILTIN_ROOT_CLASS_ID),
+                               tyc(BUILTIN_ROOT_CLASS_ID.index),
                                cast(),
                                stlocal(-1),
                                ldlocal(-1),
@@ -170,8 +172,8 @@ class TestCompiler(TestCaseWithDefinitions):
         yType = ClassType(Foo, (getRootClassType(),))
         expected = self.makeSimpleFunction("f", yType, [[
             ldlocal(0),
-            tyc(BUILTIN_ROOT_CLASS_ID),
-            tyc(Foo.id),
+            tyc(BUILTIN_ROOT_CLASS_ID.index),
+            tyc(Foo.id.index),
             cast(),
             stlocal(-1),
             ldlocal(-1),
@@ -184,18 +186,23 @@ class TestCompiler(TestCaseWithDefinitions):
     def testLoadGlobal(self):
         source = "let x = 42\n" + \
                  "def f = x"
-        self.checkFunction(source,
+        package = self.compileFromSource(source)
+        x = package.findGlobal(name="x")
+        self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
-                               ldg(0),
+                               ldg(x.id.index),
                                ret()]]))
 
     def testStoreGlobal(self):
         source = "var x: i64\n" + \
                  "def f = { x = 12; {}; }"
-        self.checkFunction(source,
+        package = self.compileFromSource(source)
+        x = package.findGlobal(name="x")
+        f = package.findFunction(name="f")
+        self.checkFunction(package,
                            self.makeSimpleFunction("f", UnitType, [[
                                i64(12),
-                               stg(0),
+                               stg(x.id.index),
                                unit(),
                                ret()]]))
 
@@ -274,7 +281,7 @@ class TestCompiler(TestCaseWithDefinitions):
         package = self.compileFromSource("def f(s: String, var o: Object) = { o = s; {}; }")
         expected = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
-            tyc(BUILTIN_ROOT_CLASS_ID),
+            tyc(BUILTIN_ROOT_CLASS_ID.index),
             cast(),
             stlocal(1),
             unit(),
@@ -294,8 +301,8 @@ class TestCompiler(TestCaseWithDefinitions):
         yType = ClassType(Foo, (getRootClassType(),))
         expected = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
-            tyc(BUILTIN_ROOT_CLASS_ID),
-            tyc(Foo.id),
+            tyc(BUILTIN_ROOT_CLASS_ID.index),
+            tyc(Foo.id.index),
             cast(),
             stlocal(1),
             unit(),
@@ -339,10 +346,10 @@ class TestCompiler(TestCaseWithDefinitions):
         init = package.findFunction(name="$initializer")
         expected = self.makeSimpleFunction("$constructor", UnitType, [[
                        ldlocal(0),
-                       callg(getRootClass().constructors[0].id),
+                       callg(getRootClass().constructors[0].id.index),
                        drop(),
                        ldlocal(0),
-                       callg(init.id),
+                       callg(init.id.index),
                        drop(),
                        ldlocal(0),
                        ldlocal(0),
@@ -430,29 +437,35 @@ class TestCompiler(TestCaseWithDefinitions):
         self.assertEquals(expected, package.findFunction(name="f"))
 
     def testLoadNonNullableObject(self):
+        source = "class Foo\n" + \
+                 "  def this = { this.x = this; }\n" + \
+                 "  var x: Object\n" + \
+                 "def f = Foo.x"
+        package = self.compileFromSource(source)
+        Foo = package.findClass(name="Foo")
         ty = getRootClassType()
-        self.checkFunction("class Foo\n" + \
-                           "  def this = { this.x = this; }\n" + \
-                           "  var x: Object\n" + \
-                           "def f = Foo.x",
+        self.checkFunction(package,
                            self.makeSimpleFunction("f", ty, [[
-                               allocobj(0),
+                               allocobj(Foo.id.index),
                                dup(),
-                               callg(1),
+                               callg(Foo.constructors[0].id.index),
                                drop(),
                                ldpc(0),
                                ret()]]))
 
     def testLoadNullableObject(self):
+        source = "class Foo\n" + \
+                 "  def this = {}\n" + \
+                 "  var x: Object?\n" + \
+                 " def f = Foo.x"
+        package = self.compileFromSource(source)
+        Foo = package.findClass(name="Foo")
         ty = ClassType(getRootClass(), (), NULLABLE_TYPE_FLAG)
-        self.checkFunction("class Foo\n" + \
-                           "  def this = {}\n" + \
-                           "  var x: Object?\n" + \
-                           " def f = Foo.x",
+        self.checkFunction(package,
                            self.makeSimpleFunction("f", ty, [[
-                               allocobj(0),
+                               allocobj(Foo.id.index),
                                dup(),
-                               callg(1),
+                               callg(Foo.constructors[0].id.index),
                                drop(),
                                ldp(0),
                                ret()]]))
@@ -730,10 +743,10 @@ class TestCompiler(TestCaseWithDefinitions):
                                dup(),
                                callv(1, typeofMethodIndex),
                                dup(),
-                               allocarri(typeClass.id, 1),
+                               allocarri(typeClass.id.index, 1),
                                dup(),
-                               cls(exnClass.id),
-                               callg(BUILTIN_TYPE_CTOR_ID),
+                               cls(exnClass.id.index),
+                               callg(BUILTIN_TYPE_CTOR_ID.index),
                                drop(),
                                callv(2, isSubtypeOfMethodIndex),
                                branchif(3, 5),
@@ -776,10 +789,10 @@ class TestCompiler(TestCaseWithDefinitions):
                                dup(),
                                callv(1, typeofMethodIndex),
                                dup(),
-                               allocarri(BUILTIN_TYPE_CLASS_ID, 1),
+                               allocarri(BUILTIN_TYPE_CLASS_ID.index, 1),
                                dup(),
-                               cls(exnClass.id),
-                               callg(BUILTIN_TYPE_CTOR_ID),
+                               cls(exnClass.id.index),
+                               callg(BUILTIN_TYPE_CTOR_ID.index),
                                drop(),
                                callv(2, isSubtypeOfMethodIndex),
                                branchif(3, 5),
@@ -898,19 +911,19 @@ class TestCompiler(TestCaseWithDefinitions):
                            self.makeSimpleFunction("f", I64Type, [[
                                pushtry(1, 2),
                              ], [
-                               allocobj(BUILTIN_EXCEPTION_CLASS_ID),
+                               allocobj(BUILTIN_EXCEPTION_CLASS_ID.index),
                                dup(),
-                               callg(BUILTIN_EXCEPTION_CTOR_ID),
+                               callg(BUILTIN_EXCEPTION_CTOR_ID.index),
                                drop(),
                                throw(),
                              ], [
                                dup(),
                                callv(1, typeofMethodIndex),
                                dup(),
-                               allocarri(BUILTIN_TYPE_CLASS_ID, 1),
+                               allocarri(BUILTIN_TYPE_CLASS_ID.index, 1),
                                dup(),
-                               cls(BUILTIN_EXCEPTION_CLASS_ID),
-                               callg(BUILTIN_TYPE_CTOR_ID),
+                               cls(BUILTIN_EXCEPTION_CLASS_ID.index),
+                               callg(BUILTIN_TYPE_CTOR_ID.index),
                                drop(),
                                callv(2, subtypeMethodIndex),
                                branchif(3, 5),
@@ -1063,22 +1076,28 @@ class TestCompiler(TestCaseWithDefinitions):
     def testNullaryCall(self):
         source = "def f: i64 = 12\n" + \
                  "def g: i64 = f\n"
-        self.checkFunction(source,
-                           self.makeSimpleFunction("g", I64Type, [[
-                               callg(0),
-                               ret(),
-                             ]]))
+        package = self.compileFromSource(source)
+        f = package.findFunction(name="f")
+        g = package.findFunction(name="g")
+        self.assertEquals(g,
+                          self.makeSimpleFunction("g", I64Type, [[
+                              callg(f.id.index),
+                              ret(),
+                            ]]))
 
     def testFunctionCall(self):
         source = "def f(x: i64, y: i64): i64 = x\n" + \
                  "def g: i64 = f(12, 34)\n"
-        self.checkFunction(source,
-                           self.makeSimpleFunction("g", I64Type, [[
-                               i64(12),
-                               i64(34),
-                               callg(0),
-                               ret(),
-                             ]]))
+        package = self.compileFromSource(source)
+        f = package.findFunction(name="f")
+        g = package.findFunction(name="g")
+        self.assertEquals(g,
+                          self.makeSimpleFunction("g", I64Type, [[
+                              i64(12),
+                              i64(34),
+                              callg(f.id.index),
+                              ret(),
+                            ]]))
 
     def testInitializer(self):
         source = "class Foo\n" + \
@@ -1110,10 +1129,10 @@ class TestCompiler(TestCaseWithDefinitions):
         init = package.findFunction(name="$initializer")
         self.assertEquals(self.makeSimpleFunction("$constructor", UnitType, [[
                               ldlocal(0),
-                              callg(getRootClass().constructors[0].id),
+                              callg(getRootClass().constructors[0].id.index),
                               drop(),
                               ldlocal(0),
-                              callg(init.id),
+                              callg(init.id.index),
                               drop(),
                               unit(),
                               ret()]],
@@ -1132,13 +1151,13 @@ class TestCompiler(TestCaseWithDefinitions):
         init = clas.initializer
         expected = self.makeSimpleFunction("$constructor", UnitType, [[
             ldlocal(0),
-            callg(getRootClass().constructors[0].id),
+            callg(getRootClass().constructors[0].id.index),
             drop(),
             ldlocal(1),
             ldlocal(0),
             st32(0),
             ldlocal(0),
-            callg(init.id),
+            callg(init.id.index),
             drop(),
             unit(),
             ret()]],
@@ -1160,10 +1179,10 @@ class TestCompiler(TestCaseWithDefinitions):
         init = clas.initializer
         expected = self.makeSimpleFunction("$constructor", UnitType, [[
             ldlocal(0),
-            callg(getRootClass().constructors[0].id),
+            callg(getRootClass().constructors[0].id.index),
             drop(),
             ldlocal(0),
-            callg(init.id),
+            callg(init.id.index),
             drop(),
             ldlocal(0),
             ldlocal(1),
@@ -1187,9 +1206,9 @@ class TestCompiler(TestCaseWithDefinitions):
         objType = ClassType(clas, ())
         self.checkFunction(package,
                            self.makeSimpleFunction("f", objType, [[
-                               allocobj(clas.id),
+                               allocobj(clas.id.index),
                                dup(),
-                               callg(clas.constructors[0].id),
+                               callg(clas.constructors[0].id.index),
                                drop(),
                                ret(),
                              ]]))
@@ -1205,8 +1224,8 @@ class TestCompiler(TestCaseWithDefinitions):
         objType = ClassType(clas, ())
         self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
-                               allocobj(clas.id),
-                               callg(clas.constructors[0].id),
+                               allocobj(clas.id.index),
+                               callg(clas.constructors[0].id.index),
                                drop(),
                                i64(12),
                                ret()]]))
@@ -1220,13 +1239,13 @@ class TestCompiler(TestCaseWithDefinitions):
         thisType = ClassType(clas)
         self.assertEquals(self.makeSimpleFunction("$constructor", UnitType, [[
                               ldlocal(0),
-                              callg(getRootClass().constructors[0].id),
+                              callg(getRootClass().constructors[0].id.index),
                               drop(),
                               ldlocal(1),
                               ldlocal(0),
                               st32(0),
                               ldlocal(0),
-                              callg(init.id),
+                              callg(init.id.index),
                               drop(),
                               unit(),
                               ret()]],
@@ -1244,11 +1263,11 @@ class TestCompiler(TestCaseWithDefinitions):
         objType = ClassType(clas, ())
         self.checkFunction(package,
                            self.makeSimpleFunction("f", objType, [[
-                               allocobj(clas.id),
+                               allocobj(clas.id.index),
                                dup(),
                                i64(1),
                                i64(2),
-                               callg(clas.constructors[0].id),
+                               callg(clas.constructors[0].id.index),
                                drop(),
                                ret(),
                              ]]))
@@ -1302,18 +1321,18 @@ class TestCompiler(TestCaseWithDefinitions):
         closureType = ClassType(closureClass)
         self.checkFunction(package,
                            self.makeSimpleFunction("foo", I64Type, [[
-                               allocobj(contextClass.id),
+                               allocobj(contextClass.id.index),
                                dup(),
-                               callg(contextClass.constructors[0].id),
+                               callg(contextClass.constructors[0].id.index),
                                drop(),
                                stlocal(-1),
                                ldlocal(0),
                                ldlocal(-1),
                                st64(0),
-                               allocobj(closureClass.id),
+                               allocobj(closureClass.id.index),
                                dup(),
                                ldlocal(-1),
-                               callg(closureClass.constructors[0].id),
+                               callg(closureClass.constructors[0].id.index),
                                drop(),
                                stlocal(-2),
                                ldlocal(-2),
@@ -1332,7 +1351,7 @@ class TestCompiler(TestCaseWithDefinitions):
         expected = self.makeSimpleFunction("$constructor", UnitType, [[
                                                ldlocal(0),
                                                i64(12),
-                                               callg(clas.constructors[0].id),
+                                               callg(clas.constructors[0].id.index),
                                                drop(),
                                                unit(),
                                                ret()]],
@@ -1360,10 +1379,10 @@ class TestCompiler(TestCaseWithDefinitions):
         expected = self.makeSimpleFunction("$constructor", UnitType, [[
                                                ldlocal(0),
                                                i64(12),
-                                               callg(foo.constructors[0].id),
+                                               callg(foo.constructors[0].id.index),
                                                drop(),
                                                ldlocal(0),
-                                               callg(bar.initializer.id),
+                                               callg(bar.initializer.id.index),
                                                drop(),
                                                unit(),
                                                ret()]],
@@ -1381,10 +1400,10 @@ class TestCompiler(TestCaseWithDefinitions):
         barTy = ClassType(bar)
         expected = self.makeSimpleFunction("$constructor", UnitType, [[
                                                ldlocal(0),
-                                               callg(foo.constructors[0].id),
+                                               callg(foo.constructors[0].id.index),
                                                drop(),
                                                ldlocal(0),
-                                               callg(bar.initializer.id),
+                                               callg(bar.initializer.id.index),
                                                drop(),
                                                unit(),
                                                ret()]],
@@ -1399,7 +1418,7 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(package,
                            self.makeSimpleFunction("f", UnitType, [[
                                string(fooIndex),
-                               callg(BUILTIN_PRINT_FUNCTION_ID),
+                               callg(BUILTIN_PRINT_FUNCTION_ID.index),
                                ret()]]))
 
     def testCallBuiltinPrimitiveMethod(self):
@@ -1407,7 +1426,7 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(source,
                            self.makeSimpleFunction("f", getStringType(), [[
                                unit(),
-                               callg(BUILTIN_UNIT_TO_STRING_ID),
+                               callg(BUILTIN_UNIT_TO_STRING_ID.index),
                                ret()]]))
 
     def testCallWithStaticClassTypeArgument(self):
@@ -1421,8 +1440,8 @@ class TestCompiler(TestCaseWithDefinitions):
         f = package.findFunction(name="f")
         expected = self.makeSimpleFunction("f", Cty, [[
                        ldlocal(0),
-                       tyc(C.id),
-                       callg(id.id),
+                       tyc(C.id.index),
+                       callg(id.id.index),
                        ret()]],
                      variables=[self.makeVariable("o", type=Cty,
                                                   kind=PARAMETER, flags=frozenset([LET]))],
@@ -1439,8 +1458,8 @@ class TestCompiler(TestCaseWithDefinitions):
         outer = package.findFunction(name="id-outer")
         expected = self.makeSimpleFunction("id-outer", Tty, [[
             ldlocal(0),
-            tyv(T.id),
-            callg(inner.id),
+            tyv(T.id.index),
+            callg(inner.id.index),
             ret()]],
           variables=[self.makeVariable("x", type=Tty, kind=PARAMETER, flags=frozenset([LET]))],
           typeParameters=[T],
@@ -1458,8 +1477,8 @@ class TestCompiler(TestCaseWithDefinitions):
         idInner = package.findFunction(name="id-inner")
         expected = self.makeSimpleFunction("id-outer", Tty, [[
             ldlocal(0),
-            tyv(T.id),
-            callg(idInner.id),
+            tyv(T.id.index),
+            callg(idInner.id.index),
             ret()]],
           variables=[self.makeVariable("x", type=Tty, kind=PARAMETER, flags=frozenset([LET]))],
           typeParameters=[T],
@@ -1479,26 +1498,26 @@ class TestCompiler(TestCaseWithDefinitions):
         idInner = package.findFunction(name="id-inner")
         idInnerMethodIndex = closureClass.getMethodIndex(idInner)
         expected = self.makeSimpleFunction("id-outer", Tty, [[
-            tyv(T.id),
-            allocobj(contextClass.id),
+            tyv(T.id.index),
+            allocobj(contextClass.id.index),
             dup(),
-            tyv(T.id),
-            callg(contextClass.constructors[0].id),
+            tyv(T.id.index),
+            callg(contextClass.constructors[0].id.index),
             drop(),
             stlocal(-1),
             ldlocal(0),
             ldlocal(-1),
             stp(0),
-            tyv(T.id),
-            allocobj(closureClass.id),
+            tyv(T.id.index),
+            allocobj(closureClass.id.index),
             dup(),
             ldlocal(-1),
-            tyv(T.id),
-            callg(closureClass.constructors[0].id),
+            tyv(T.id.index),
+            callg(closureClass.constructors[0].id.index),
             drop(),
             stlocal(-2),
             ldlocal(-2),
-            tyv(T.id),
+            tyv(T.id.index),
             callv(1, idInnerMethodIndex),
             ret()]],
           variables=[self.makeVariable("$context", type=ClassType(contextClass)),
@@ -1543,7 +1562,7 @@ class TestCompiler(TestCaseWithDefinitions):
         toStringIndex = Foo.getMethodIndex(toString)
         expected = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
-            tyc(BUILTIN_ROOT_CLASS_ID),
+            tyc(BUILTIN_ROOT_CLASS_ID.index),
             callv(1, toStringIndex),
             drop(),
             unit(),
@@ -1561,11 +1580,11 @@ class TestCompiler(TestCaseWithDefinitions):
         Ctype = ClassType(C, (VariableType(T),))
         expectedCtor = self.makeSimpleFunction("$constructor", UnitType, [[
             ldlocal(0),
-            callg(BUILTIN_ROOT_CLASS_CTOR_ID),
+            callg(BUILTIN_ROOT_CLASS_CTOR_ID.index),
             drop(),
             ldlocal(0),
-            tyv(T.id),
-            callg(C.initializer.id),
+            tyv(T.id.index),
+            callg(C.initializer.id.index),
             drop(),
             unit(),
             ret()]],
@@ -1593,9 +1612,9 @@ class TestCompiler(TestCaseWithDefinitions):
         expectedF = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
             ldlocal(0),
-            tyc(C.id),
+            tyc(C.id.index),
             callv(1, Box.getMethodIndex(get)),
-            tyc(C.id),
+            tyc(C.id.index),
             callv(2, Box.getMethodIndex(set)),
             ret()]],
           variables=[self.makeVariable("box", type=boxType,

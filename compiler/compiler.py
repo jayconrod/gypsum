@@ -105,7 +105,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                                         superclass.name)
             self.loadThis()
             self.buildStaticTypeArguments(supertype.typeArguments)
-            self.callg(defaultSuperCtors[0].id)
+            self.callg(defaultSuperCtors[0].id.index)
             self.drop()
 
         # If this is a primary constructor, unpack the parameters before calling the
@@ -123,12 +123,12 @@ class CompileVisitor(ast.AstNodeVisitor):
             if irInitializer is not None:
                 self.loadThis()
                 self.buildImplicitStaticTypeArguments(self.function.typeParameters)
-                self.callg(irInitializer.id)
+                self.callg(irInitializer.id.index)
                 self.drop()
 
         # Compile those statements.
         mode = COMPILE_FOR_EFFECT if self.function.isConstructor() else COMPILE_FOR_VALUE
-        self.compileStatements(self.astDefn.id, parameters, statements, mode)
+        self.compileStatements(self.getScopeId(), parameters, statements, mode)
 
         # Add a return if there was no explicit return.
         if self.currentBlock is not None:
@@ -275,7 +275,8 @@ class CompileVisitor(ast.AstNodeVisitor):
         raise SemanticException(expr.location, "`super` is only valid as part of a call")
 
     def visitAstBlockExpression(self, expr, mode):
-        self.compileStatements(expr.id, None, expr.statements, mode)
+        scopeId = self.info.getScope(expr).scopeId
+        self.compileStatements(scopeId, None, expr.statements, mode)
 
     def visitAstAssignExpression(self, expr, mode):
         ty = self.info.getType(expr.right)
@@ -602,10 +603,7 @@ class CompileVisitor(ast.AstNodeVisitor):
 
     def compileStatements(self, scopeId, parameters, statements, mode):
         # Create a context if needed.
-        if scopeId is not None and \
-           not (self.astDefn.id == scopeId and
-                isinstance(self.astDefn, ast.AstClassDefinition)) and \
-           self.info.hasContextInfo(scopeId):
+        if self.isContextNeeded(scopeId):
             contextInfo = self.info.getContextInfo(scopeId)
             if contextInfo.irContextClass is not None:
                 self.createContext(contextInfo)
@@ -650,7 +648,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                 self.loadField(defnInfo.irDefn)
             else:
                 assert isinstance(defnInfo.irDefn, Global)
-                self.ldg(defnInfo.irDefn.id)
+                self.ldg(defnInfo.irDefn.id.index)
 
     def storeVariable(self, varOrDefnInfo, valueType=None):
         if isinstance(varOrDefnInfo, Variable):
@@ -668,10 +666,10 @@ class CompileVisitor(ast.AstNodeVisitor):
                 self.storeField(defnInfo.irDefn)
             else:
                 assert isinstance(defnInfo.irDefn, Global)
-                self.stg(defnInfo.irDefn.id)
+                self.stg(defnInfo.irDefn.id.index)
 
     def loadContext(self, scopeId):
-        closureInfo = self.info.getClosureInfo(self.getScopeAstDefn())
+        closureInfo = self.info.getClosureInfo(self.getScopeId())
         loc = closureInfo.irClosureContexts[scopeId]
         if isinstance(loc, Variable):
             self.loadVariable(loc)
@@ -716,6 +714,13 @@ class CompileVisitor(ast.AstNodeVisitor):
         assert self.function.isMethod()
         self.ldlocal(0)
 
+    def isContextNeeded(self, scopeId):
+        return scopeId is not None and \
+               not (self.getScopeId() == scopeId and
+                    (isinstance(self.astDefn, ast.AstClassDefinition) or
+                     isinstance(self.astDefn, ast.AstPrimaryConstructorDefinition))) and \
+               self.info.hasContextInfo(scopeId)
+
     def createContext(self, contextInfo):
         contextClass = contextInfo.irContextClass
         contextId = contextInfo.id
@@ -723,10 +728,10 @@ class CompileVisitor(ast.AstNodeVisitor):
         contextCtor = contextClass.constructors[0]
         assert contextClass.typeParameters == contextCtor.typeParameters
         self.buildImplicitStaticTypeArguments(contextClass.typeParameters)
-        self.allocobj(contextClass.id)
+        self.allocobj(contextClass.id.index)
         self.dup()
         self.buildImplicitStaticTypeArguments(contextCtor.typeParameters)
-        self.callg(contextCtor.id)
+        self.callg(contextCtor.id.index)
         self.drop()
         irContextVar = self.info.getClosureInfo(contextId).irClosureContexts[contextId]
         self.storeVariable(irContextVar)
@@ -746,12 +751,12 @@ class CompileVisitor(ast.AstNodeVisitor):
                 capturedScopeIds = closureInfo.capturedScopeIds()
                 assert len(closureCtor.parameterTypes) == len(capturedScopeIds) + 1
                 self.buildImplicitStaticTypeArguments(closureClass.typeParameters)
-                self.allocobj(closureClass.id)
+                self.allocobj(closureClass.id.index)
                 self.dup()
                 for id in capturedScopeIds:
                     self.loadContext(id)
                 self.buildImplicitStaticTypeArguments(closureCtor.typeParameters)
-                self.callg(closureCtor.id)
+                self.callg(closureCtor.id.index)
                 self.drop()
                 self.storeVariable(closureInfo.irClosureVar)
             elif isinstance(stmt, ast.AstClassDefinition):
@@ -766,10 +771,11 @@ class CompileVisitor(ast.AstNodeVisitor):
         shouldDropForEffect = mode is COMPILE_FOR_EFFECT
         defnInfo = useInfo.defnInfo
         irDefn = defnInfo.irDefn
-        closureInfo = self.info.getClosureInfo(irDefn) \
-                      if self.info.hasClosureInfo(irDefn) \
-                      else None
         assert isinstance(irDefn, Function)
+        if self.info.hasScope(irDefn) and self.info.hasClosureInfo(irDefn):
+            closureInfo = self.info.getClosureInfo(irDefn)
+        else:
+            closureInfo = None
         argCount = len(argExprs)
 
         def compileArgs():
@@ -784,18 +790,18 @@ class CompileVisitor(ast.AstNodeVisitor):
             assert receiver is None
             compileArgs()
             compileTypeArgs()
-            self.callg(irDefn.id)
+            self.callg(irDefn.id.index)
 
         elif receiver is None and irDefn.isConstructor():
             # Constructor
             assert receiver is None
             compileTypeArgs()
-            self.allocobj(irDefn.clas.id)
+            self.allocobj(irDefn.clas.id.index)
             if mode is COMPILE_FOR_VALUE:
                 self.dup()
             compileArgs()
             compileTypeArgs()
-            self.callg(irDefn.id)
+            self.callg(irDefn.id.index)
             self.drop()
             shouldDropForEffect = False
         else:
@@ -841,7 +847,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             elif irDefn.isFinal():
                 # Calls to final methods can be made directly. This includes constructors and
                 # primitive methods which can't be called virtually.
-                self.callg(irDefn.id)
+                self.callg(irDefn.id.index)
             else:
                 index = irDefn.clas.getMethodIndex(irDefn)
                 self.callv(argCount + 1, index)
@@ -867,15 +873,15 @@ class CompileVisitor(ast.AstNodeVisitor):
         assert isinstance(ty, ClassType)
         if any(STATIC in param.flags for param in ty.clas.typeParameters):
             raise SemanticException(location, "cannot match type with static parameters")
-        self.allocarri(BUILTIN_TYPE_CLASS_ID, 1)
+        self.allocarri(BUILTIN_TYPE_CLASS_ID.index, 1)
         self.dup()
-        self.cls(ty.clas.id)
-        self.callg(BUILTIN_TYPE_CTOR_ID)
+        self.cls(ty.clas.id.index)
+        self.callg(BUILTIN_TYPE_CTOR_ID.index)
         self.drop()
 
     def buildImplicitStaticTypeArguments(self, typeParams):
         for param in typeParams:
-            self.tyv(param.id)
+            self.tyv(param.id.index)
 
     def buildStaticTypeArguments(self, types):
         for ty in types:
@@ -885,9 +891,9 @@ class CompileVisitor(ast.AstNodeVisitor):
         if isinstance(ty, ClassType):
             for arg in ty.typeArguments:
                 self.buildStaticTypeArgument(arg)
-            self.tyc(ty.clas.id)
+            self.tyc(ty.clas.id.index)
         elif isinstance(ty, VariableType):
-            self.tyv(ty.typeParameter.id)
+            self.tyv(ty.typeParameter.id.index)
         else:
             raise NotImplementedError
 
@@ -895,11 +901,12 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.buildStaticTypeArgument(ty)
         self.cast()
 
-    def getScopeAstDefn(self):
+    def getScopeId(self):
         if isinstance(self.astDefn, ast.AstPrimaryConstructorDefinition):
-            return self.function.clas.astDefn
+            astDefn = self.function.clas.astDefn
         else:
-            return self.astDefn
+            astDefn = self.astDefn
+        return self.info.getScope(astDefn).scopeId
 
     def orderBlocks(self):
         # Clear the "id" attribute of each block. None will indicate a block has not been

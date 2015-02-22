@@ -15,10 +15,10 @@ import bytecode
 
 def registerBuiltins(bind):
     _initialize()
-    for key, value in _builtinClassNameMap.iteritems():
-        bind(key, value)
-    for key, value in _builtinFunctionNameMap.iteritems():
-        bind(key, value)
+    for clas in _builtinClasses:
+        bind(clas.name, clas)
+    for function in _builtinFunctions:
+        bind(function.name, function)
 
 
 def getRootClass():
@@ -60,9 +60,8 @@ def getBuiltinFunctions():
     return _builtinFunctionNameMap.values()
 
 
-def isBuiltinId(id):
-    return id < 0
-
+_builtinClasses = []
+_builtinFunctions = []
 
 _builtinClassNameMap = {}
 _builtinClassTypeMap = {}
@@ -124,6 +123,7 @@ def _initialize():
     def declareClass(classData):
         clas = ir.Class(classData["name"], None, None, [],
                         None, None, None, None, None, frozenset())
+        _builtinClasses.append(clas)
         _builtinClassNameMap[classData["name"]] = clas
 
     def defineClass(classData):
@@ -162,6 +162,7 @@ def _initialize():
 
     def defineFunction(functionData):
         function = buildFunction(functionData)
+        _builtinFunctions.append(function)
         _builtinFunctionNameMap[function.name] = function
 
     builtinsPath = os.path.join(os.path.dirname(__file__), "..", "common", "builtins.yaml")
@@ -176,5 +177,4 @@ def _initialize():
 
 __all__ = ["registerBuiltins", "getRootClass", "getNothingClass",
            "getExceptionClass", "getTypeClass", "getStringClass",
-           "getBuiltinClasses", "getBuiltinClassFromType",
-           "getBuiltinFunctions", "isBuiltinId"]
+           "getBuiltinClasses", "getBuiltinClassFromType", "getBuiltinFunctions"]
