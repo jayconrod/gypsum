@@ -342,3 +342,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.assertEquals(frozenset([COVARIANT, STATIC]), S.flags)
         self.assertEquals(frozenset([CONTRAVARIANT, STATIC]), T.flags)
         self.assertEquals(frozenset([STATIC]), U.flags)
+
+    def testBuiltinConflict(self):
+        self.analyzeFromSource("let String = 42")
+        # pass if no error

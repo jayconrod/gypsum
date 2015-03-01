@@ -45,23 +45,10 @@ def analyzeDeclarations(info):
       info.{get,set,has}DefnInfo.
     - Create a ClassInfo object for each node which defines a class. These can be accessed later
       using info.{get,set,has}ClassInfo."""
-    info.globalScope = GlobalScope(info.ast, info)
-    info.setScope(GLOBAL_SCOPE_ID, info.globalScope)
-    # TODO: provide a separate implementation for the global builtin scope.
-    info.setScope(BUILTIN_SCOPE_ID, info.globalScope)
-
-    def createBuiltinInfo(name, irDefn):
-        if isinstance(irDefn, ir.Class):
-            # This scope will automatically be added to info.scopes.
-            scope = BuiltinScope(irDefn, info.globalScope)
-            # DefnInfos for the class and its members are created by BuiltinScope.
-            defnInfo = scope.defnInfo
-        else:
-            assert isinstance(irDefn, ir.Function)
-            defnInfo = DefnInfo(irDefn, BUILTIN_SCOPE_ID)
-        info.globalScope.bind(name, defnInfo)
-        info.globalScope.define(name)
-    registerBuiltins(createBuiltinInfo)
+    builtinScope = BuiltinGlobalScope(info)
+    globalScope = GlobalScope(info.ast, builtinScope, info)
+    info.globalScope = globalScope
+    info.setScope(info.ast.id, globalScope)
 
     visitor = DeclarationVisitor(info.globalScope)
     visitor.visitChildren(info.ast)
@@ -533,6 +520,8 @@ class Scope(ast.AstNodeVisitor):
         """Returns a list of type parameters implied by this scope and outer scopes. These
         can be used when declaring or calling functions or classes. Outer-most type parameters
         are listed first."""
+        raise NotImplementedError
+
         if self.parent is None:
             # No type parameters implied by global scope
             return []
@@ -777,8 +766,8 @@ class Scope(ast.AstNodeVisitor):
 
 
 class GlobalScope(Scope):
-    def __init__(self, astModule, info):
-        super(GlobalScope, self).__init__(astModule, GLOBAL_SCOPE_ID, None, info)
+    def __init__(self, astModule, parent, info):
+        super(GlobalScope, self).__init__(astModule, GLOBAL_SCOPE_ID, parent, info)
 
     def createIrDefn(self, astDefn, astVarDefn):
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
@@ -801,6 +790,9 @@ class GlobalScope(Scope):
         else:
             raise NotImplementedError
         return irDefn
+
+    def getImplicitTypeParameters(self):
+        return []
 
     def isDefinedAutomatically(self, astDefn):
         return True
@@ -889,6 +881,9 @@ class FunctionScope(Scope):
         else:
             raise NotImplementedError
         return irDefn
+
+    def getImplicitTypeParameters(self):
+        return list(self.getIrDefn().typeParameters)
 
     def isDefinedAutomatically(self, astDefn):
         return isinstance(astDefn, ast.AstClassDefinition) or \
@@ -1095,6 +1090,9 @@ class ClassScope(Scope):
             irDefn = self.createIrClassDefn(astDefn)
         return irDefn
 
+    def getImplicitTypeParameters(self):
+        return list(self.getIrDefn().typeParameters)
+
     def isDefinedAutomatically(self, astDefn):
         return isinstance(astDefn, ast.AstPrimaryConstructorDefinition) or \
                isinstance(astDefn, ast.AstFunctionDefinition) or \
@@ -1127,13 +1125,29 @@ class ClassScope(Scope):
         return ClassScope(ast, self)
 
 
-class BuiltinScope(Scope):
-    def __init__(self, irClass, parent):
-        super(BuiltinScope, self).__init__(None, ScopeId("builtin-" + irClass.name),
-                                           parent, parent.info)
-        self.irClass = irClass
-        self.info.setScope(self.irClass.id, self)
-        self.defnInfo = DefnInfo(irClass, BUILTIN_SCOPE_ID)
+class BuiltinGlobalScope(Scope):
+    def __init__(self, info):
+        super(BuiltinGlobalScope, self).__init__(None, BUILTIN_SCOPE_ID, None, info)
+        def bind(name, irDefn):
+            defnInfo = DefnInfo(irDefn, self.scopeId)
+            if isinstance(irDefn, ir.Class):
+                # This scope will automatically be registered.
+                BuiltinClassScope(defnInfo, self)
+            self.bind(name, defnInfo)
+            self.define(name)
+        registerBuiltins(bind)
+
+    def getImplicitTypeParameters(self):
+        return []
+
+
+class BuiltinClassScope(Scope):
+    def __init__(self, classDefnInfo, parent):
+        irClass = classDefnInfo.irDefn
+        super(BuiltinClassScope, self).__init__(None, ScopeId("builtin-" + irClass.name),
+                                                parent, parent.info)
+        self.info.setScope(irClass.id, self)
+        self.defnInfo = classDefnInfo
         if not hasattr(irClass, "isPrimitive"):
             parent.info.setClassInfo(irClass, ClassInfo(irClass))
             for ctor in irClass.constructors:
@@ -1153,6 +1167,9 @@ class BuiltinScope(Scope):
 
     def getDefnInfo(self):
         return self.defnInfo
+
+    def getImplicitTypeParameters(self):
+        return []
 
 
 class ScopeVisitor(ast.AstNodeVisitor):
