@@ -26,8 +26,8 @@ class Package(object):
         self.classes = []
         self.typeParameters = []
         self.strings = []
-        self.entryFunction = -1
-        self.initFunction = -1
+        self.entryFunction = None
+        self.initFunction = None
 
     def __str__(self):
         buf = StringIO.StringIO()
@@ -80,6 +80,14 @@ class Package(object):
         self.findOrAddString(name)
         return Field(name, *args)
 
+    def addDependency(self, package):
+        if package.id.index is not None:
+            assert self.dependencies.package is package
+            return
+        dep = PackageDependency.fromPackage(package)
+        package.id.index = len(self.dependencies)
+        self.dependencies.append(dep)
+
     def findString(self, s):
         if type(s) == str:
             s = unicode(s)
@@ -123,6 +131,12 @@ class Package(object):
         return (d for d in defns if matchAll(d))
 
 
+class PackagePrefix(object):
+    def __init__(self, id, name):
+        self.id = id
+        self.name = name
+
+
 class PackageName(object):
     nameComponentSrc = "[A-Za-z][A-Za-z0-9_]*"
     nameSrc = r"%s(?:\.%s)*" % (nameComponentSrc, nameComponentSrc)
@@ -133,7 +147,7 @@ class PackageName(object):
 
     @staticmethod
     def fromString(s):
-        m = nameRex.match(s)
+        m = PackageName.nameRex.match(s)
         if not m or m.end() != len(s):
             raise ValueError("invalid package name: " + s)
         return PackageName(s.split("."))
@@ -141,8 +155,15 @@ class PackageName(object):
     def __cmp__(self, other):
         return cmp(self.components, other.components)
 
+    def __repr__(self):
+        return "PackageName(%s)" % ".".join(self.components)
+
     def __str__(self):
         return ".".join(self.components)
+
+    def hasPrefix(self, components):
+        return len(components) < len(self.components) and \
+               all(a == b for a, b in zip(self.components, components))
 
 
 class PackageVersion(object):
@@ -161,6 +182,9 @@ class PackageVersion(object):
 
     def __cmp__(self, other):
         return cmp(self.components, other.components)
+
+    def __repr__(self):
+        return "PackageVersion(%s)" % ".".join(self.components)
 
     def __str__(self):
         return ".".join(str(c) for c in self.components)
@@ -190,11 +214,17 @@ class PackageDependency(object):
         maxVersion = PackageVersion.fromString(m.group(3)) if m.group(3) else None
         return PackageDependency(name, minVersion, maxVersion)
 
+    @staticmethod
+    def fromPackage(package):
+        dep = PackageDependency(package.name, package.version, None)
+        dep.package = package
+        return dep
+
     def dependencyString(self):
         minStr = str(self.minVersion) if self.minVersion is not None else ""
         maxStr = "-" + str(self.maxVersion) if self.maxVersion is not None else ""
         versionStr = ":" + minStr + maxStr if minStr or maxStr else ""
-        return self.name + versionStr
+        return str(self.name) + versionStr
 
     def __str__(self):
         buf = StringIO.StringIO()
@@ -210,6 +240,7 @@ class PackageDependency(object):
             buf.write("%s\n\n" % f)
         for c in self.classes:
             buf.write("%s\n\n" % c)
+        return buf.getvalue()
 
 
 class IrDefinition(data.Data):

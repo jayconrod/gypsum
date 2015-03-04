@@ -400,6 +400,13 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
+      case PKG: {
+        auto depIndex = readVbn();
+        auto package = function_->package()->dependencies()->get(depIndex)->package();
+        push<Block*>(package);
+        break;
+      }
+
       case CLS: {
         auto classId = readVbn();
         Class* clas = isBuiltinId(classId)

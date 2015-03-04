@@ -433,6 +433,10 @@ def getStringType():
     return ClassType(builtins.getStringClass())
 
 
+def getPackageType():
+    return ClassType(builtins.getPackageClass())
+
+
 # Extra variance symbols
 # Invariant means neither covariant nor contravariant.
 INVARIANT = "invariant"

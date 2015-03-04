@@ -8,7 +8,7 @@ from functools import partial
 
 import ast
 from bytecode import W8, W16, W32, W64, BUILTIN_TYPE_CLASS_ID, BUILTIN_TYPE_CTOR_ID, instInfoByCode
-from ir import Global, Variable, Field, Function, Class, LOCAL
+from ir import Class, Field, Function, Global, LOCAL, Package, Variable
 from ir_types import UnitType, ClassType, VariableType, NULLABLE_TYPE_FLAG, getExceptionClassType
 import ir_instructions
 from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PACKAGE_INITIALIZER_HINT, DefnInfo
@@ -259,10 +259,13 @@ class CompileVisitor(ast.AstNodeVisitor):
             # Parameter, local, or context variable.
             self.loadVariable(useInfo.defnInfo)
             self.dropForEffect(mode)
-        else:
-            assert isinstance(irDefn, Function) or isinstance(irDefn, Class)
+        elif isinstance(irDefn, Function) or isinstance(irDefn, Class):
             callInfo = self.info.getCallInfo(expr)
             self.buildCall(useInfo, callInfo, None, [], [], mode)
+        else:
+            assert isinstance(irDefn, Package)
+            assert irDefn.id.index is not None
+            self.pkg(irDefn.id.index)
 
     def visitAstThisExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)

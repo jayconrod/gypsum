@@ -42,6 +42,7 @@ class ScopeId(Id):
 
 BUILTIN_SCOPE_ID = ScopeId("builtin")
 GLOBAL_SCOPE_ID = ScopeId("global")
+PACKAGE_SCOPE_ID = ScopeId("package-list")
 
 
 class PackageId(Id):

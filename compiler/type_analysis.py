@@ -686,8 +686,9 @@ class TypeVisitor(TypeVisitorCommon):
         elif isinstance(irDefn, ir.Class):
             for ctor in irDefn.constructors:
                 self.ensureParamTypeInfoForDefn(ctor)
-        elif isinstance(irDefn, ir.TypeParameter):
-            pass   # already done in SubtypeVisitor
+        elif isinstance(irDefn, ir.TypeParameter) or \
+             isinstance(irDefn, ir.Package):
+            pass   # already done elsewhere
         else:
             raise NotImplementedError
 
@@ -756,10 +757,12 @@ class TypeVisitor(TypeVisitorCommon):
                 ty = ty.substituteForInheritance(receiverType.clas, fieldClass)
                 ty = ty.substitute(receiverType.clas.typeParameters, receiverType.typeArguments)
             return ty
-        else:
-            assert isinstance(irDefn, ir.Variable) or \
-                   isinstance(irDefn, ir.Global)
+        elif isinstance(irDefn, ir.Variable) or \
+             isinstance(irDefn, ir.Global):
             return irDefn.type
+        else:
+            assert isinstance(irDefn, ir.Package)
+            return ir_t.getPackageType()
 
     def findBaseClassForField(self, receiverClass, field):
         # At this point, classes haven't been flattened yet, so we have to search up the

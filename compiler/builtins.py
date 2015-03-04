@@ -46,6 +46,11 @@ def getStringClass():
     return _builtinClassNameMap["String"]
 
 
+def getPackageClass():
+    _initialize()
+    return _builtinClassNameMap["Package"]
+
+
 def getBuiltinClasses(includePrimitives):
     return [clas for clas in _builtinClassNameMap.itervalues()
             if includePrimitives or not hasattr(clas, "isPrimitive")]

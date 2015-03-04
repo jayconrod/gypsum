@@ -50,9 +50,15 @@ class Serializer(object):
         for p in self.package.typeParameters:
             self.writeTypeParameter(p)
         for d in self.package.dependencies:
-            self.writeDependency(dep)
+            self.writeDependency(d)
 
     def writeHeader(self):
+        entryFunctionIndex = self.package.entryFunction.index \
+                             if self.package.entryFunction is not None \
+                             else -1
+        initFunctionIndex = self.package.initFunction.index \
+                            if self.package.initFunction is not None \
+                            else -1
         self.outFile.write(struct.pack("<Ihhqiiiiiiii",
                                        0x676b7073,   # magic number
                                        0,            # major version
@@ -64,8 +70,8 @@ class Serializer(object):
                                        len(self.package.classes),
                                        len(self.package.typeParameters),
                                        len(self.package.dependencies),
-                                       self.package.entryFunction.index,
-                                       self.package.initFunction.index))
+                                       entryFunctionIndex,
+                                       initFunctionIndex))
         self.writeString(str(self.package.name))
         self.writeString(str(self.package.version))
 
@@ -150,7 +156,7 @@ class Serializer(object):
         self.writeVbn(len(dependency.functions))
         self.writeVbn(len(dependency.classes))
 
-    def writeDependnecy(self, dependency):
+    def writeDependency(self, dependency):
         for g in dependency.globals:
             self.writeGlobal(g)
         for f in dependency.functions:

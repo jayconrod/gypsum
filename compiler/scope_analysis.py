@@ -25,7 +25,7 @@ from data import Data
 from errors import TypeException, ScopeException
 from flags import *
 from graph import Graph
-from ids import DefnId, ScopeId, BUILTIN_SCOPE_ID, GLOBAL_SCOPE_ID
+from ids import DefnId, PackageId, ScopeId, BUILTIN_SCOPE_ID, GLOBAL_SCOPE_ID, PACKAGE_SCOPE_ID
 import ir
 from ir_types import getRootClassType, ClassType, UnitType
 from location import Location, NoLoc
@@ -45,12 +45,12 @@ def analyzeDeclarations(info):
       info.{get,set,has}DefnInfo.
     - Create a ClassInfo object for each node which defines a class. These can be accessed later
       using info.{get,set,has}ClassInfo."""
-    builtinScope = BuiltinGlobalScope(info)
-    globalScope = GlobalScope(info.ast, builtinScope, info)
-    info.globalScope = globalScope
+    packageScope = PackageScope(PACKAGE_SCOPE_ID, None, info, info.packageNames, [])
+    builtinScope = BuiltinGlobalScope(packageScope)
+    globalScope = GlobalScope(info.ast, builtinScope)
     info.setScope(info.ast.id, globalScope)
 
-    visitor = DeclarationVisitor(info.globalScope)
+    visitor = DeclarationVisitor(globalScope)
     visitor.visitChildren(info.ast)
 
 
@@ -89,7 +89,7 @@ def analyzeInheritance(info):
     registerBuiltins(handleBuiltinInheritance)
 
     # Populate the rest of the graph by traversing the AST.
-    visitor = InheritanceVisitor(info.globalScope, inheritanceGraph, subtypeGraph)
+    visitor = InheritanceVisitor(info.getScope(GLOBAL_SCOPE_ID), inheritanceGraph, subtypeGraph)
     visitor.visitChildren(info.ast)
 
     # Check for cycles.
@@ -520,10 +520,7 @@ class Scope(ast.AstNodeVisitor):
         """Returns a list of type parameters implied by this scope and outer scopes. These
         can be used when declaring or calling functions or classes. Outer-most type parameters
         are listed first."""
-        raise NotImplementedError
-
-        if self.parent is None:
-            # No type parameters implied by global scope
+        if self.scopeId in [BUILTIN_SCOPE_ID, GLOBAL_SCOPE_ID, PACKAGE_SCOPE_ID]:
             return []
         else:
             return list(self.getIrDefn().typeParameters)
@@ -608,16 +605,22 @@ class Scope(ast.AstNodeVisitor):
 
         Also checks whether the definition is allowed to be used in this scope and raises an
         Exception if not."""
-        if (PRIVATE in defnInfo.irDefn.flags and \
-            not self.isWithin(defnInfo.inheritedScopeId)) or \
-           (PROTECTED in defnInfo.irDefn.flags and \
-            not self.isWithin(defnInfo.scopeId)):
+        if hasattr(defnInfo.irDefn, "flags") and \
+           ((PRIVATE in defnInfo.irDefn.flags and \
+             not self.isWithin(defnInfo.inheritedScopeId)) or \
+            (PROTECTED in defnInfo.irDefn.flags and \
+             not self.isWithin(defnInfo.scopeId))):
             raise ScopeException(loc, "%s: not allowed to be used in this scope" %
                                  defnInfo.irDefn.name)
+
         if useKind is USE_AS_CONSTRUCTOR and \
            ABSTRACT in defnInfo.irDefn.clas.flags:
             raise ScopeException(loc, "%s: cannot instantiate abstract class" %
                                  defnInfo.irDefn.clas.name)
+
+        if isinstance(defnInfo.irDefn, ir.Package):
+            assert useKind in [USE_AS_VALUE, USE_AS_PROPERTY]
+            self.info.package.addDependency(defnInfo.irDefn)
 
         useInfo = UseInfo(defnInfo, self.scopeId, useKind)
         self.info.setUseInfo(useAstId, useInfo)
@@ -684,6 +687,12 @@ class Scope(ast.AstNodeVisitor):
             useScope.parent.capture(useInfo)
             useScope.makeClosure()
             useScope.closureCaptureContext(defnScope.scopeId)
+
+    def requiresCapture(self):
+        """Returns True if definitions in this scope must be captured to be available in other
+        scopes, for example for function and class scopes. Returns False if those definitions
+        are available in all scopes, for example for global, builtin, and package scopes."""
+        raise NotImplementedError
 
     def captureScopeContext(self):
         """Makes this scope available for capturing.
@@ -766,8 +775,8 @@ class Scope(ast.AstNodeVisitor):
 
 
 class GlobalScope(Scope):
-    def __init__(self, astModule, parent, info):
-        super(GlobalScope, self).__init__(astModule, GLOBAL_SCOPE_ID, parent, info)
+    def __init__(self, astModule, parent):
+        super(GlobalScope, self).__init__(astModule, GLOBAL_SCOPE_ID, parent, parent.info)
 
     def createIrDefn(self, astDefn, astVarDefn):
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
@@ -783,7 +792,7 @@ class GlobalScope(Scope):
                                                    None, self.getImplicitTypeParameters(),
                                                    None, [], None, flags)
             if astDefn.name == "main":
-                assert self.info.package.entryFunction == -1
+                assert self.info.package.entryFunction is None
                 self.info.package.entryFunction = irDefn.id
         elif isinstance(astDefn, ast.AstClassDefinition):
             irDefn = self.createIrClassDefn(astDefn)
@@ -791,14 +800,14 @@ class GlobalScope(Scope):
             raise NotImplementedError
         return irDefn
 
-    def getImplicitTypeParameters(self):
-        return []
-
     def isDefinedAutomatically(self, astDefn):
         return True
 
     def findEnclosingClass(self):
         return None
+
+    def requiresCapture(self):
+        return False
 
     def captureScopeContext(self):
         raise NotImplementedError("global scope does not need a context")
@@ -882,15 +891,15 @@ class FunctionScope(Scope):
             raise NotImplementedError
         return irDefn
 
-    def getImplicitTypeParameters(self):
-        return list(self.getIrDefn().typeParameters)
-
     def isDefinedAutomatically(self, astDefn):
         return isinstance(astDefn, ast.AstClassDefinition) or \
                isinstance(astDefn, ast.AstFunctionDefinition)
 
     def findEnclosingClass(self):
         return self.parent.findEnclosingClass()
+
+    def requiresCapture(self):
+        return True
 
     def captureScopeContext(self):
         contextInfo = self.info.getContextInfo(self.scopeId)
@@ -1090,9 +1099,6 @@ class ClassScope(Scope):
             irDefn = self.createIrClassDefn(astDefn)
         return irDefn
 
-    def getImplicitTypeParameters(self):
-        return list(self.getIrDefn().typeParameters)
-
     def isDefinedAutomatically(self, astDefn):
         return isinstance(astDefn, ast.AstPrimaryConstructorDefinition) or \
                isinstance(astDefn, ast.AstFunctionDefinition) or \
@@ -1102,6 +1108,9 @@ class ClassScope(Scope):
 
     def findEnclosingClass(self):
         return self.getIrDefn()
+
+    def requiresCapture(self):
+        return True
 
     def captureScopeContext(self):
         pass
@@ -1126,8 +1135,8 @@ class ClassScope(Scope):
 
 
 class BuiltinGlobalScope(Scope):
-    def __init__(self, info):
-        super(BuiltinGlobalScope, self).__init__(None, BUILTIN_SCOPE_ID, None, info)
+    def __init__(self, parent):
+        super(BuiltinGlobalScope, self).__init__(None, BUILTIN_SCOPE_ID, parent, parent.info)
         def bind(name, irDefn):
             defnInfo = DefnInfo(irDefn, self.scopeId)
             if isinstance(irDefn, ir.Class):
@@ -1137,8 +1146,8 @@ class BuiltinGlobalScope(Scope):
             self.define(name)
         registerBuiltins(bind)
 
-    def getImplicitTypeParameters(self):
-        return []
+    def requiresCapture(self):
+        return False
 
 
 class BuiltinClassScope(Scope):
@@ -1168,8 +1177,47 @@ class BuiltinClassScope(Scope):
     def getDefnInfo(self):
         return self.defnInfo
 
-    def getImplicitTypeParameters(self):
-        return []
+    def requiresCapture(self):
+        return False
+
+
+class PackageScope(Scope):
+    def __init__(self, scopeId, parent, info, packageNames, prefix):
+        super(PackageScope, self).__init__(None, scopeId, parent, info)
+        self.packageNames = []
+        self.prefix = prefix
+        self.prefixScopes = {}
+
+        bindings = {}
+        for name in packageNames:
+            if name.hasPrefix(prefix):
+                nextComponent = name.components[len(prefix)]
+                nextPrefix = list(prefix) + [nextComponent]
+                if len(name.components) == len(prefix) + 1:
+                    package = ir.Package(id=PackageId(), name=name)
+                else:
+                    package = ir.PackagePrefix(id=PackageId(), name=nextPrefix)
+                if nextComponent not in bindings or \
+                   (isinstance(bindings[nextComponent], PackagePrefix) and \
+                    isinstance(package, Package)):
+                    bindings[nextComponent] = package
+        for component, package in bindings.iteritems():
+            defnInfo = DefnInfo(package, self.scopeId)
+            self.bind(component, defnInfo)
+            self.define(component)
+
+    def scopeForPrefix(self, component):
+        if component in self.prefixScopes:
+            return self.prefixScopes
+
+        prefix = self.prefix + [component]
+        scope = PackageScope(ScopeId(".".join(prefix)), self, self.info,
+                             self.packageNames, prefix)
+        self.prefixScopes[component] = scope
+        return scope
+
+    def requiresCapture(self):
+        return False
 
 
 class ScopeVisitor(ast.AstNodeVisitor):

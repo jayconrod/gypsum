@@ -561,6 +561,14 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
+        case PKG: {
+          readVbn(bytecode, &pcOffset);
+          auto packageClass = handle(roots->getBuiltinClass(BUILTIN_PACKAGE_CLASS_ID));
+          auto type = Type::create(heap, packageClass);
+          currentMap.push(type);
+          break;
+        }
+
         case CLS: {
           readVbn(bytecode, &pcOffset);
           currentMap.push(handle(Type::rootClassType(roots)));

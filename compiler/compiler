@@ -7,10 +7,11 @@
 # the GPL license that can be found in the LICENSE.txt file.
 
 
+import argparse
+import os
+import os.path
 import re
 import sys
-import os.path
-import argparse
 
 from ir import Package, PackageName, PackageVersion, PackageDependency
 from lexer import *
@@ -37,6 +38,8 @@ cmdline.add_argument("-v", "--package-version", action="store", type=PackageVers
 cmdline.add_argument("-d", "--depends", action="append", type=PackageDependency.fromString,
                      default=[],
                      help="Additional package dependencies")
+cmdline.add_argument("-P", "--package-path", action="append", type=str, default=[],
+                     help="Directories containing packages that could be imported")
 cmdline.add_argument("-o", "--output", action="store",
                      default="out.csp",
                      help="Name of the output file")
@@ -57,6 +60,20 @@ cmdline.add_argument("--print-ir", action="store_true",
 cmdline.add_argument("--print-stack", action="store_true",
                      help="Print compiler stack on error")
 args = cmdline.parse_args()
+
+packageFileNameRex = re.compile(r"^(%s)-%s.csp$" % \
+                                (PackageName.nameSrc, PackageVersion.versionSrc))
+packageNames = []
+
+for dirName in args.package_path:
+    try:
+        for fileName in os.listdir(dirName):
+            m = packageFileNameRex.match(fileName)
+            if m:
+                packageName = PackageName.fromString(m.group(1))
+                packageNames.append(packageName)
+    except OSError:
+        continue
 
 for sourceFilename in args.sources:
     try:
@@ -79,7 +96,7 @@ for sourceFilename in args.sources:
             printer.visit(ast)
         package = Package(name=args.package_name, version=args.package_version)
         package.dependencies.extend(args.depends)
-        info = CompileInfo(ast, package)
+        info = CompileInfo(ast, package, packageNames)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         if args.print_scope:

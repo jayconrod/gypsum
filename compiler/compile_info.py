@@ -21,13 +21,15 @@ PACKAGE_INITIALIZER_HINT = "package-initializer-hint"
 class CompileInfo(object):
     """Contains state created and used by most compiler phases"""
 
-    def __init__(self, ast, package=None):
+    def __init__(self, ast, package=None, packageNames=None):
         if package is None:
             package = ir.Package()
+        if packageNames is None:
+            packageNames = []
+        self.packageNames = packageNames
         self.ast = ast
         self.package = package
         self.scopes = {}  # keyed by ScopeId, AstId, and DefnId
-        self.globalScope = None
         self.contextInfo = {}  # keyed by ScopeId
         self.closureInfo = {}  # keyed by ScopeId
         self.defnInfo = {}  # keyed by AstId
@@ -234,8 +236,7 @@ class UseInfo(data.Data):
         useScope = info.getScope(self.useScopeId)
         defnScope = info.getScope(self.defnInfo.scopeId)
         return self.kind is USE_AS_VALUE and \
-               defnScope.scopeId is not ids.GLOBAL_SCOPE_ID and \
-               defnScope.scopeId is not ids.BUILTIN_SCOPE_ID and \
+               defnScope.requiresCapture() and \
                not useScope.isLocalWithin(defnScope)
 
 
