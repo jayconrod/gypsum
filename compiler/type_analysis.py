@@ -441,7 +441,8 @@ class TypeVisitor(TypeVisitorCommon):
             if packageNameLength > 0:
                 defnInfo = nameInfo.getDefnInfo()
                 if isinstance(defnInfo.irDefn, ir.PackagePrefix):
-                    raise TypeException("%s is not the full name of a package" % \
+                    raise TypeException(node.location,
+                                        "%s is not the full name of a package" % \
                                         str(defnInfo.irDefn.name))
                 assert isinstance(defnInfo.irDefn, ir.Package)
                 packageNode, _ = nodeNames[packageNameLength - 1]

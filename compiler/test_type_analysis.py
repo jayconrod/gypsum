@@ -21,12 +21,15 @@ from builtins import getRootClass, getStringClass, getNothingClass, getException
 from utils_test import TestCaseWithDefinitions
 
 class TestTypeAnalysis(TestCaseWithDefinitions):
-    def analyzeFromSource(self, source):
+    def analyzeFromSource(self, source, packageNames=None):
         filename = "(test)"
         rawTokens = lex(filename, source)
         layoutTokens = layout(rawTokens)
         ast = parse(filename, layoutTokens)
-        info = CompileInfo(ast)
+        if packageNames is None:
+            packageNames = []
+        packageNames = map(PackageName.fromString, packageNames)
+        info = CompileInfo(ast, Package(), packageNames)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         analyzeTypes(info)
@@ -203,6 +206,26 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(I32Type, info.package.findFunction(name="g").returnType)
         self.assertEquals(I32Type, info.getType(info.ast.definitions[1].body))
 
+    def testPackageVariable(self):
+        source = "var x = foo"
+        info = self.analyzeFromSource(source, packageNames=["foo"])
+        packageType = getPackageType()
+        self.assertEquals(packageType, info.package.findGlobal(name="x").type)
+        self.assertEquals(packageType, info.getType(info.ast.definitions[0].expression))
+        self.assertEquals(info.packageNames[0], info.package.dependencies[0].name)
+        self.assertEquals(0, info.package.dependencies[0].package.id.index)
+
+    def testPackageVariablePrefix(self):
+        source = "var x = foo"
+        self.assertRaises(TypeException,
+                          lambda: self.analyzeFromSource(source, packageNames=["foo.bar"]))
+
+    def testPackageVariableWithPrefix(self):
+        source = "var x = foo"
+        info = self.analyzeFromSource(source, packageNames=["foo", "foo.bar"])
+        packageType = getPackageType()
+        self.assertEquals(packageType, info.package.findGlobal(name="x").type)
+
     def testThisExpr(self):
         source = "class Foo\n" + \
                  "  var x = this"
@@ -272,6 +295,24 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(BooleanType, info.package.findFunction(name="f").returnType)
         self.assertEquals(BooleanType, info.package.findFunction(name="m").returnType)
         self.assertEquals(BooleanType, info.getType(info.ast.definitions[1].body))
+
+    def testPropertyPackage(self):
+        source = "var x = foo.bar"
+        info = self.analyzeFromSource(source, packageNames=["foo.bar"])
+        packageType = getPackageType()
+        self.assertEquals(packageType, info.getType(info.ast.definitions[0].expression))
+        self.assertFalse(info.hasType(info.ast.definitions[0].expression.receiver))
+
+    def testPropertyPackagePrefix(self):
+        source = "var x = foo.bar"
+        self.assertRaises(TypeException,
+                          lambda: self.analyzeFromSource(source, packageNames=["foo.bar.baz"]))
+
+    def testPropertyPackageWithPrefix(self):
+        source = "var x = foo.bar"
+        info = self.analyzeFromSource(source, packageNames=["foo.bar", "foo.bar.baz"])
+        packageType = getPackageType()
+        self.assertEquals(packageType, info.getType(info.ast.definitions[0].expression))
 
     def testCallMethodWithNullableReceiver(self):
         source = "class Foo\n" + \

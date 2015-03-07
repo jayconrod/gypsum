@@ -465,6 +465,6 @@ def changeVariance(old, new):
 __all__ = ["BIVARIANT","INVARIANT", "UnitType", "BooleanType", "I8Type",
            "I16Type", "I32Type", "I64Type", "F32Type", "F64Type",
            "VariableType", "ClassType",  "NoType",
-           "getRootClassType", "getStringType", "getNullType",
+           "getRootClassType", "getStringType", "getPackageType", "getNullType",
            "getClassFromType", "NULLABLE_TYPE_FLAG", "changeVariance",
            "getNothingClassType"]

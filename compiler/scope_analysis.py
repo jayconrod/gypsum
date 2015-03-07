@@ -1207,8 +1207,8 @@ class PackageScope(Scope):
                 else:
                     package = ir.PackagePrefix(id=PackageId(), name=nextPrefix)
                 if nextComponent not in bindings or \
-                   (isinstance(bindings[nextComponent], PackagePrefix) and \
-                    isinstance(package, Package)):
+                   (isinstance(bindings[nextComponent], ir.PackagePrefix) and \
+                    isinstance(package, ir.Package)):
                     bindings[nextComponent] = package
         for component, package in bindings.iteritems():
             defnInfo = DefnInfo(package, self.scopeId)
@@ -1419,6 +1419,3 @@ def checkFlags(flags, mask, loc):
 
 def isInternalName(name):
     return name.startswith("$")
-
-__all__ = ["analyzeDeclarations","analyzeInheritance", "convertClosures",
-           "flattenClasses"]

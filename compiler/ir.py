@@ -114,6 +114,9 @@ class Package(object):
     def findTypeParameter(self, **kwargs):
         return next(self.find(self.typeParameters, kwargs))
 
+    def findDependency(self, **kwargs):
+        return next(self.find(self.dependencies, kwargs))
+
     def find(self, defns, kwargs):
         def matchItem(defn, key, value):
             if key == "clas":
@@ -607,5 +610,5 @@ class Variable(IrDefinition):
 class Field(IrDefinition):
     propertyNames = IrDefinition.propertyNames + ("type", "flags")
 
-__all__ = ["Package", "Global", "Function", "Class", "TypeParameter",
-           "Variable", "Field", "LOCAL", "PARAMETER"]
+__all__ = ["Package", "PackageName", "PackagePrefix", "Global", "Function", "Class",
+           "TypeParameter", "Variable", "Field", "LOCAL", "PARAMETER"]

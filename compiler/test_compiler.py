@@ -27,12 +27,15 @@ from errors import *
 from utils_test import TestCaseWithDefinitions
 
 class TestCompiler(TestCaseWithDefinitions):
-    def compileFromSource(self, source):
+    def compileFromSource(self, source, packageNames=None):
         filename = "(test)"
         rawTokens = lex(filename, source)
         layoutTokens = layout(rawTokens)
         ast = parse(filename, layoutTokens)
-        info = CompileInfo(ast)
+        if packageNames is None:
+            packageNames = []
+        packageNames = map(PackageName.fromString, packageNames)
+        info = CompileInfo(ast, Package(), packageNames)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         analyzeTypes(info)
@@ -182,6 +185,26 @@ class TestCompiler(TestCaseWithDefinitions):
           variables=[self.makeVariable("x", type=xType, kind=PARAMETER, flags=frozenset([LET])),
                      self.makeVariable("y", type=yType)])
         self.assertEquals(expected, package.findFunction(name="f"))
+
+    def testLoadVariablePackage(self):
+        source = "def f = foo"
+        package = self.compileFromSource(source, packageNames=["foo"])
+        fooId = package.findDependency(pred=lambda dep: str(dep.name) == "foo").package.id
+        packageType = getPackageType()
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", packageType, [[
+                               pkg(fooId.index),
+                               ret()]]))
+
+    def testLoadPropertyPackage(self):
+        source = "def f = foo.bar"
+        package = self.compileFromSource(source, packageNames=["foo.bar"])
+        barId = package.findDependency(pred=lambda dep: str(dep.name) == "foo.bar").package.id
+        packageType = getPackageType()
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", packageType, [[
+                               pkg(barId.index),
+                               ret()]]))
 
     def testLoadGlobal(self):
         source = "let x = 42\n" + \

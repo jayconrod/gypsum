@@ -17,6 +17,7 @@ from ids import *
 from errors import *
 from flags import *
 from utils_test import TestCaseWithDefinitions
+from location import NoLoc
 
 
 class TestDeclarationAnalysis(TestCaseWithDefinitions):
@@ -346,3 +347,58 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
     def testBuiltinConflict(self):
         self.analyzeFromSource("let String = 42")
         # pass if no error
+
+
+class TestPackageScope(unittest.TestCase):
+    def setUp(self):
+        self.info = CompileInfo(None)
+
+    def infoAndScopeWithPackageNames(self, args):
+        names = map(PackageName.fromString, args)
+        info = CompileInfo(None, Package(), names)
+        scope = PackageScope(PACKAGE_SCOPE_ID, None, info, names, [])
+        return info, scope
+
+    def testNotFoundWhenEmpty(self):
+        info, scope = self.infoAndScopeWithPackageNames([])
+        self.assertRaises(ScopeException, scope.lookup, "foo", NoLoc)
+
+    def testFoundSimple(self):
+        info, scope = self.infoAndScopeWithPackageNames(["foo", "bar"])
+        nameInfo = scope.lookup("foo", NoLoc)
+        self.assertTrue(nameInfo.isPackage())
+
+    def testFoundSimplePrefix(self):
+        info, scope = self.infoAndScopeWithPackageNames(["foo.bar"])
+        nameInfo = scope.lookup("foo", NoLoc)
+        self.assertFalse(nameInfo.isPackage())
+        self.assertTrue(nameInfo.isPackagePrefix())
+
+    def testFoundSimpleWithPrefix(self):
+        info, scope = self.infoAndScopeWithPackageNames(["foo", "foo.bar"])
+        nameInfo = scope.lookup("foo", NoLoc)
+        self.assertTrue(nameInfo.isPackage())
+
+    def testNotFoundCompound(self):
+        info, scope = self.infoAndScopeWithPackageNames(["foo.bar"])
+        scope = scope.scopeForPrefix("foo")
+        self.assertRaises(ScopeException, scope.lookup, "baz", NoLoc)
+
+    def testFoundCompound(self):
+        info, scope = self.infoAndScopeWithPackageNames(["foo.bar"])
+        scope = scope.scopeForPrefix("foo")
+        nameInfo = scope.lookup("bar", NoLoc)
+        self.assertTrue(nameInfo.isPackage())
+
+    def testFoundCompoundPrefix(self):
+        info, scope = self.infoAndScopeWithPackageNames(["foo.bar.baz"])
+        scope = scope.scopeForPrefix("foo")
+        nameInfo = scope.lookup("bar", NoLoc)
+        self.assertFalse(nameInfo.isPackage())
+        self.assertTrue(nameInfo.isPackagePrefix())
+
+    def testFoundCompoundWithPrefix(self):
+        info, scope = self.infoAndScopeWithPackageNames(["foo.bar", "foo.bar.baz"])
+        scope = scope.scopeForPrefix("foo")
+        nameInfo = scope.lookup("bar", NoLoc)
+        self.assertTrue(nameInfo.isPackage())
