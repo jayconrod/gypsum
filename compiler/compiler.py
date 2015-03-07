@@ -294,10 +294,12 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.visit(expr.receiver, COMPILE_FOR_VALUE)
             self.loadField(irDefn)
             self.dropForEffect(mode)
-        else:
-            assert isinstance(irDefn, Function)
+        elif isinstance(irDefn, Function):
             callInfo = self.info.getCallInfo(expr)
             self.buildCall(useInfo, callInfo, expr.receiver, [], [], mode)
+        else:
+            assert isinstance(irDefn, Package)
+            self.pkg(irDefn.id.index)
 
     def visitAstCallExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)

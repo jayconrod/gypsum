@@ -411,10 +411,62 @@ class TypeVisitor(TypeVisitorCommon):
         return leftTy
 
     def visitAstPropertyExpression(self, node):
-        receiverTy = self.visit(node.receiver)
-        ty = self.handleMethodCall(node.propertyName, node.id,
-                                   receiverTy, [], [], False, node.location)
-        return ty
+        # We handle sequences of property expressions all at once without recursing. This is
+        # because some part of the sequence may be a package name. Prefixes of package names
+        # are invalid expressions and cannot be typed. We also don't want to add dependencies
+        # on packages whose names are prefixes of other package names.
+        nodeNames = [(node, node.propertyName)]
+        n = node.receiver
+        while isinstance(n, ast.AstPropertyExpression):
+            nodeNames.append((n, node.propertyName))
+            n = n.receiver
+        nodeNames.append((n, n.name if isinstance(n, ast.AstVariableExpression) else None))
+        nodeNames.reverse()
+
+        packageNameLength = 0
+        package = None
+        scope = self.scope()
+        if nodeNames[0][1] is not None:
+            # The expression starts with a variable expression, which could be the start
+            # of a package name.
+            while packageNameLength < len(nodeNames):
+                node, name = nodeNames[packageNameLength]
+                nameInfo = scope.lookup(name, node.location)
+                if not (nameInfo.isPackage() or nameInfo.isPackagePrefix()):
+                    break
+                packageNameLength += 1
+                prefixScopeId = nameInfo.getDefnInfo().scopeId
+                scope = self.info.getScope(prefixScopeId).scopeForPrefix(name)
+
+            if packageNameLength > 0:
+                defnInfo = nameInfo.getDefnInfo()
+                if isinstance(defnInfo.irDefn, ir.PackagePrefix):
+                    raise TypeException("%s is not the full name of a package" % \
+                                        str(defnInfo.irDefn.name))
+                assert isinstance(defnInfo.irDefn, ir.Package)
+                packageNode, _ = nodeNames[packageNameLength - 1]
+                scope.use(defnInfo, packageNode.id, USE_AS_VALUE, packageNode.location)
+                receiverType = ir_t.getPackageType()
+                self.info.setType(packageNode, receiverType)
+
+        # Now we know the package prefix (if there was one), we can deal with the rest of
+        # the expression.
+        if packageNameLength == 0:
+            receiverType = self.visit(nodeNames[0][0])
+            start = 1
+        else:
+            # TODO: handle lookup of package definition after deserializer works.
+            # receiverType set above
+            start = packageNameLength
+
+        for i in xrange(start, len(nodeNames)):
+            n, name = nodeNames[i]
+            assert isinstance(n, ast.AstPropertyExpression)
+            receiverType = self.handleMethodCall(name, n.id, receiverType,
+                                                 [], [], False, n.location)
+            self.info.setType(n, receiverType)
+
+        return receiverType
 
     def visitAstCallExpression(self, node):
         typeArgs = map(self.visit, node.typeArguments)
@@ -715,6 +767,11 @@ class TypeVisitor(TypeVisitorCommon):
 
         nameInfo = scope.lookup(name, loc,
                                 localOnly=receiverIsExplicit, mayBeAssignment=mayAssign)
+        if nameInfo.isPackagePrefix():
+            raise TypeException(loc,
+                                "%s is part of a package name prefix and is not valid here" %
+                                name)
+
         if nameInfo.isClass():
             irClass = nameInfo.getDefnInfo().irDefn
             self.ensureParamTypeInfoForDefn(irClass)

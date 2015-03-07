@@ -302,6 +302,14 @@ class NameInfo(object):
     def isClass(self):
         return not self.isOverloaded() and isinstance(self.getDefnInfo().irDefn, ir.Class)
 
+    def isPackage(self):
+        return not self.isOverloaded() and \
+               isinstance(self.getDefnInfo().irDefn, ir.Package)
+
+    def isPackagePrefix(self):
+        return not self.isOverloaded() and \
+               isinstance(self.getDefnInfo().irDefn, ir.PackagePrefix)
+
     def getInfoForConstructors(self, info):
         assert self.isClass()
         irClass = self.getDefnInfo().irDefn
@@ -1191,6 +1199,7 @@ class PackageScope(Scope):
         bindings = {}
         for name in packageNames:
             if name.hasPrefix(prefix):
+                self.packageNames.append(name)
                 nextComponent = name.components[len(prefix)]
                 nextPrefix = list(prefix) + [nextComponent]
                 if len(name.components) == len(prefix) + 1:
