@@ -16,7 +16,7 @@ from ir import *
 from ids import *
 from errors import *
 from flags import *
-from utils_test import TestCaseWithDefinitions
+from utils_test import MockPackageLoader, TestCaseWithDefinitions
 from location import NoLoc
 
 
@@ -355,8 +355,9 @@ class TestPackageScope(unittest.TestCase):
 
     def infoAndScopeWithPackageNames(self, args):
         names = map(PackageName.fromString, args)
-        info = CompileInfo(None, Package(), names)
-        scope = PackageScope(PACKAGE_SCOPE_ID, None, info, names, [])
+        loader = MockPackageLoader(names)
+        info = CompileInfo(None, Package(), loader)
+        scope = PackageScope(PACKAGE_SCOPE_ID, None, info, names, [], None)
         return info, scope
 
     def testNotFoundWhenEmpty(self):

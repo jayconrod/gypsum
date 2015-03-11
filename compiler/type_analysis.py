@@ -8,7 +8,7 @@ import ast
 from errors import TypeException
 import ir
 import ir_types as ir_t
-from builtins import getExceptionClass, getNothingClass
+from builtins import getExceptionClass, getPackageClass, getNothingClass
 from utils import COMPILE_FOR_VALUE, COMPILE_FOR_MATCH
 from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, CallInfo, getExplicitTypeParameters, getImplicitTypeParameters
 from flags import COVARIANT, CONTRAVARIANT
@@ -418,7 +418,7 @@ class TypeVisitor(TypeVisitorCommon):
         nodeNames = [(node, node.propertyName)]
         n = node.receiver
         while isinstance(n, ast.AstPropertyExpression):
-            nodeNames.append((n, node.propertyName))
+            nodeNames.append((n, n.propertyName))
             n = n.receiver
         nodeNames.append((n, n.name if isinstance(n, ast.AstVariableExpression) else None))
         nodeNames.reverse()
@@ -429,17 +429,19 @@ class TypeVisitor(TypeVisitorCommon):
         if nodeNames[0][1] is not None:
             # The expression starts with a variable expression, which could be the start
             # of a package name.
+            packageNameInfo = None
             while packageNameLength < len(nodeNames):
                 node, name = nodeNames[packageNameLength]
-                nameInfo = scope.lookup(name, node.location)
-                if not (nameInfo.isPackage() or nameInfo.isPackagePrefix()):
+                nextNameInfo = scope.lookup(name, node.location)
+                if not (nextNameInfo.isPackage() or nextNameInfo.isPackagePrefix()):
                     break
+                packageNameInfo = nextNameInfo
                 packageNameLength += 1
-                prefixScopeId = nameInfo.getDefnInfo().scopeId
+                prefixScopeId = packageNameInfo.getDefnInfo().scopeId
                 scope = self.info.getScope(prefixScopeId).scopeForPrefix(name)
 
             if packageNameLength > 0:
-                defnInfo = nameInfo.getDefnInfo()
+                defnInfo = packageNameInfo.getDefnInfo()
                 if isinstance(defnInfo.irDefn, ir.PackagePrefix):
                     raise TypeException(node.location,
                                         "%s is not the full name of a package" % \
@@ -447,18 +449,23 @@ class TypeVisitor(TypeVisitorCommon):
                 assert isinstance(defnInfo.irDefn, ir.Package)
                 packageNode, _ = nodeNames[packageNameLength - 1]
                 scope.use(defnInfo, packageNode.id, USE_AS_VALUE, packageNode.location)
-                receiverType = ir_t.getPackageType()
-                self.info.setType(packageNode, receiverType)
+                packageType = ir_t.getPackageType()
+                self.info.setType(packageNode, packageType)
 
         # Now we know the package prefix (if there was one), we can deal with the rest of
         # the expression.
         if packageNameLength == 0:
             receiverType = self.visit(nodeNames[0][0])
             start = 1
+        elif packageNameLength == len(nodeNames):
+            receiverType = packageType
+            start = len(nodeNames)
         else:
-            # TODO: handle lookup of package definition after deserializer works.
-            # receiverType set above
-            start = packageNameLength
+            package = defnInfo.irDefn
+            n, name = nodeNames[packageNameLength]
+            receiverType = self.handlePossibleCall(scope, name, node.id, None,
+                                                   [], [], False, node.location)
+            start = packageNameLength + 1
 
         for i in xrange(start, len(nodeNames)):
             n, name = nodeNames[i]

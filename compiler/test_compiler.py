@@ -24,7 +24,8 @@ from flags import LET
 from compile_info import CompileInfo
 from builtins import *
 from errors import *
-from utils_test import TestCaseWithDefinitions
+from utils_test import MockPackageLoader, TestCaseWithDefinitions
+
 
 class TestCompiler(TestCaseWithDefinitions):
     def compileFromSource(self, source, packageNames=None):
@@ -35,7 +36,8 @@ class TestCompiler(TestCaseWithDefinitions):
         if packageNames is None:
             packageNames = []
         packageNames = map(PackageName.fromString, packageNames)
-        info = CompileInfo(ast, Package(), packageNames)
+        loader = MockPackageLoader(packageNames)
+        info = CompileInfo(ast, Package(), loader)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         analyzeTypes(info)

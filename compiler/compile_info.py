@@ -21,12 +21,11 @@ PACKAGE_INITIALIZER_HINT = "package-initializer-hint"
 class CompileInfo(object):
     """Contains state created and used by most compiler phases"""
 
-    def __init__(self, ast, package=None, packageNames=None):
+    def __init__(self, ast, package=None, packageLoader=None):
         if package is None:
             package = ir.Package()
-        if packageNames is None:
-            packageNames = []
-        self.packageNames = packageNames
+        self.loader = packageLoader
+        self.packageNames = self.loader.getPackageNames() if self.loader is not None else []
         self.ast = ast
         self.package = package
         self.scopes = {}  # keyed by ScopeId, AstId, and DefnId

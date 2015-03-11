@@ -11,6 +11,7 @@ import flags
 import ids
 import ir_types
 import bytecode
+import utils
 
 import re
 import StringIO
@@ -158,6 +159,9 @@ class PackageName(object):
     def __cmp__(self, other):
         return cmp(self.components, other.components)
 
+    def __hash__(self):
+        return utils.hashList(self.components)
+
     def __repr__(self):
         return "PackageName(%s)" % ".".join(self.components)
 
@@ -170,7 +174,7 @@ class PackageName(object):
 
 
 class PackageVersion(object):
-    versionComponentSrc = "[1-9][0-9]*"
+    versionComponentSrc = "[0-9]+"
     versionSrc = r"%s(?:\.%s)*" % (versionComponentSrc, versionComponentSrc)
     versionRex = re.compile(r"\A%s\Z" % versionSrc)
 
@@ -179,7 +183,7 @@ class PackageVersion(object):
 
     @staticmethod
     def fromString(s):
-        if not versionRex.match(s):
+        if not PackageVersion.versionRex.match(s):
             raise ValueError("invalid package version: " + s)
         return PackageVersion([int(c) for c in s.split(".")])
 

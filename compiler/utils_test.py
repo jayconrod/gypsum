@@ -6,7 +6,7 @@
 
 import unittest
 
-from ir import Global, Function, Class, TypeParameter, Variable, Field, LOCAL
+from ir import Global, Function, Class, Package, TypeParameter, Variable, Field, LOCAL
 from ir_types import getNothingClassType, getRootClassType
 from utils import Counter
 
@@ -88,4 +88,12 @@ class TestCaseWithDefinitions(unittest.TestCase):
                 args[k] = v
 
 
-__all__ = ["TestCaseWithDefinitions"]
+class MockPackageLoader(object):
+    def __init__(self, packageNames):
+        self.packageNames = packageNames
+
+    def getPackageNames(self):
+        return self.packageNames
+
+    def loadPackage(self, name):
+        return Package()

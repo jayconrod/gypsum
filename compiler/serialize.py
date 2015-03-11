@@ -10,6 +10,7 @@ import os
 
 import builtins
 import flags
+import ids
 import ir
 import ir_instructions
 import ir_types
@@ -30,10 +31,22 @@ def serialize(package, fileName):
             outFile.close()
 
 
+def deserialize(fileName):
+    try:
+        with open(fileName, "rb") as inFile:
+            deserializer = Deserializer(inFile)
+            deserializer.deserialize()
+            return deserializer.package
+    except ValueError as exn:
+        raise IOError(exn)
+
+
 HEADER_FORMAT = "<Ihhqiiiiiiii"
 MAGIC = 0x676b7073
 MAJOR_VERSION = 0
-MINOR_VERSION = 15
+MINOR_VERSION = 16
+
+FLAG_FORMAT = "<i"
 
 
 class Serializer(object):
@@ -212,7 +225,7 @@ class Serializer(object):
 
     def writeFlags(self, flags_var):
         bits = flags.flagSetToFlagBits(flags_var)
-        self.outFile.write(struct.pack("<I", bits))
+        self.outFile.write(struct.pack(FLAG_FORMAT, bits))
 
     def writeIdList(self, list):
         self.writeList(lambda elem: self.writeVbn(elem.id.index), list)
@@ -283,61 +296,71 @@ class Deserializer(object):
         if magic != MAGIC or major != MAJOR_VERSION or minor != MINOR_VERSION:
             raise IOError("package headers don't look valid")
 
-        stringCount = headers[3]
+        flags = headers[3]
+
+        stringCount = headers[4]
         self.package.strings = [None] * stringCount
 
         # We pre-allocate top-level definitions so they can point to each other if we read
         # them out of order. This is particularly important for type definitions.
-        globalCount = headers[4]
+        globalCount = headers[5]
         self.package.globals = self.createEmptyGlobalList(globalCount, self.package.id)
 
-        functionCount = headers[5]
+        functionCount = headers[6]
         self.package.functions = self.createEmptyFunctionList(functionCount, self.package.id)
 
-        classCount = headers[6]
+        classCount = headers[7]
         self.package.classes = self.createEmptyClassList(classCount, self.package.id)
 
-        typeParamCount = headers[7]
+        typeParamCount = headers[8]
         self.package.typeParameters = self.createEmptyTypeParameterList(typeParamCount,
                                                                         self.package.id)
 
-        depCount = headers[8]
+        depCount = headers[9]
         self.package.dependencies = [None] * depCount
 
-        entryFunctionIndex = headers[9]
-        initFunctionIndex = headers[10]
+        entryFunctionIndex = headers[10]
+        if entryFunctionIndex != -1:
+            if entryFunctionIndex < 0 or entryFunctionIndex >= len(self.package.functions):
+                raise IOError("invalid entry function index")
+            self.package.entryFunction = self.package.functions[entryFunctionIndex]
+        initFunctionIndex = headers[11]
+        if initFunctionIndex != -1:
+            if initFunctionIndex < 0 or initFunctionIndex >= len(self.package.functions):
+                raise IOError("invalid init function index")
+            self.package.initFunction = self.package.functions[initFunctionIndex]
 
         nameStr = self.readString()
-        self.package.name = PackageName.fromString(nameStr)
+        self.package.name = ir.PackageName.fromString(nameStr)
         versionStr = self.readString()
-        self.package.version = PackageVersion.fromString(versionStr)
+        self.package.version = ir.PackageVersion.fromString(versionStr)
 
     def createEmptyGlobalList(self, count, packageId):
-        ids = (ids.DefnId(packageId, ids.DefnId.GLOBAL, i) for i in xrange(count))
-        globals = list(ir.Global(None, None, id, None, None) for id in ids)
+        gids = (ids.DefnId(packageId, ids.DefnId.GLOBAL, i) for i in xrange(count))
+        globals = list(ir.Global(None, None, id, None, None) for id in gids)
         return globals
 
     def createEmptyFunctionList(self, count, packageId):
-        ids = (ids.DefnId(packageId, ids.DefnId.FUNCTION, i) for i in xrange(count))
+        fids = (ids.DefnId(packageId, ids.DefnId.FUNCTION, i) for i in xrange(count))
         functions = list(ir.Function(None, None, id, None, None, None, None, None, None)
-                         for id in ids)
+                         for id in fids)
         return functions
 
     def createEmptyClassList(self, count, packageId):
-        ids = (ids.DefnId(self.package.id, ids.DefnId.CLASS, i) for i in xrange(count))
+        cids = (ids.DefnId(self.package.id, ids.DefnId.CLASS, i) for i in xrange(count))
         classes = list(ir.Class(None, None, id, None, None, None, None, None, None, None)
-                       for id in ids)
+                       for id in cids)
         return classes
 
     def createEmptyTypeParameterList(self, count, packageId):
-        ids = (ids.DefnId(packageId, ids.DefnId.TYPE_PARAMETER, i) for i in xrange(count))
-        params = list(ir.TypeParameter(None, None, id, None, None, None) for id in ids)
+        tids = (ids.DefnId(packageId, ids.DefnId.TYPE_PARAMETER, i) for i in xrange(count))
+        params = list(ir.TypeParameter(None, None, id, None, None, None) for id in tids)
         return params
 
     def readString(self):
         length = self.readVbn()
         size = self.readVbn()
-        encoded = self.read(size)
+        encoded = self.inFile.read(size)
         return encoded.decode("utf-8")
 
     def readGlobal(self, globl):
@@ -434,7 +457,7 @@ class Deserializer(object):
             ty = ir_types.F64Type
         elif form == 8:
             clas = self.readId(self.package.classes)
-            typeArgs = self.readList(self.readType)
+            typeArgs = tuple(self.readList(self.readType))
             ty = ir_types.ClassType(clas, typeArgs, flags)
         elif form == 9:
             param = self.readId(self.package.typeParameters)
@@ -451,9 +474,10 @@ class Deserializer(object):
         return self.readId(self.package.strings)
 
     def readFlags(self):
-        bits = self.readVbn()
-        flags = flags.flagBitsToFlagSet(bits)
-        return flags
+        size = struct.calcsize(FLAG_FORMAT)
+        bits = struct.unpack(FLAG_FORMAT, self.inFile.read(size))[0]
+        flagSet = flags.flagBitsToFlagSet(bits)
+        return flagSet
 
     def readList(self, reader, *args):
         n = self.readVbn()

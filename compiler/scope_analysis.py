@@ -45,7 +45,7 @@ def analyzeDeclarations(info):
       info.{get,set,has}DefnInfo.
     - Create a ClassInfo object for each node which defines a class. These can be accessed later
       using info.{get,set,has}ClassInfo."""
-    packageScope = PackageScope(PACKAGE_SCOPE_ID, None, info, info.packageNames, [])
+    packageScope = PackageScope(PACKAGE_SCOPE_ID, None, info, info.packageNames, [], None)
     builtinScope = BuiltinGlobalScope(packageScope)
     globalScope = GlobalScope(info.ast, builtinScope)
     info.setScope(info.ast.id, globalScope)
@@ -789,7 +789,7 @@ class GlobalScope(Scope):
     def createIrDefn(self, astDefn, astVarDefn):
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         if isinstance(astDefn, ast.AstVariablePattern):
-            checkFlags(flags, frozenset([LET]), astDefn.location)
+            checkFlags(flags, frozenset([LET, PUBLIC, PROTECTED]), astDefn.location)
             irDefn = self.info.package.addGlobal(astDefn.name, astDefn, None, flags)
         elif isinstance(astDefn, ast.AstFunctionDefinition):
             checkFlags(flags, frozenset(), astDefn.location)
@@ -1190,27 +1190,39 @@ class BuiltinClassScope(Scope):
 
 
 class PackageScope(Scope):
-    def __init__(self, scopeId, parent, info, packageNames, prefix):
+    def __init__(self, scopeId, parent, info, packageNames, prefix, package):
         super(PackageScope, self).__init__(None, scopeId, parent, info)
         self.packageNames = []
         self.prefix = prefix
+        self.package = package
         self.prefixScopes = {}
 
-        bindings = {}
+        if package is not None:
+            for i, g in enumerate(package.globals):
+                if PUBLIC in g.flags:
+                    defnInfo = DefnInfo(g, scopeId)
+                    self.bind(g.name, defnInfo)
+                    self.define(g.name)
+
+        packageBindings = {}
         for name in packageNames:
             if name.hasPrefix(prefix):
-                self.packageNames.append(name)
                 nextComponent = name.components[len(prefix)]
+                if self.isBound(nextComponent):
+                    continue
+
+                self.packageNames.append(name)
                 nextPrefix = list(prefix) + [nextComponent]
                 if len(name.components) == len(prefix) + 1:
                     package = ir.Package(id=PackageId(), name=name)
                 else:
                     package = ir.PackagePrefix(id=PackageId(), name=nextPrefix)
-                if nextComponent not in bindings or \
-                   (isinstance(bindings[nextComponent], ir.PackagePrefix) and \
+                if nextComponent not in packageBindings or \
+                   (isinstance(packageBindings[nextComponent], ir.PackagePrefix) and \
                     isinstance(package, ir.Package)):
-                    bindings[nextComponent] = package
-        for component, package in bindings.iteritems():
+                    packageBindings[nextComponent] = package
+
+        for component, package in packageBindings.iteritems():
             defnInfo = DefnInfo(package, self.scopeId)
             self.bind(component, defnInfo)
             self.define(component)
@@ -1220,8 +1232,14 @@ class PackageScope(Scope):
             return self.prefixScopes
 
         prefix = self.prefix + [component]
+        name = ir.PackageName(prefix)
+        if name in self.packageNames:
+            package = self.info.loader.loadPackage(name)
+        else:
+            package = None
+
         scope = PackageScope(ScopeId(".".join(prefix)), self, self.info,
-                             self.packageNames, prefix)
+                             self.packageNames, prefix, package)
         self.prefixScopes[component] = scope
         return scope
 

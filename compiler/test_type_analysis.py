@@ -18,7 +18,8 @@ from scope_analysis import *
 from type_analysis import *
 from flags import *
 from builtins import getRootClass, getStringClass, getNothingClass, getExceptionClass
-from utils_test import TestCaseWithDefinitions
+from utils_test import MockPackageLoader, TestCaseWithDefinitions
+
 
 class TestTypeAnalysis(TestCaseWithDefinitions):
     def analyzeFromSource(self, source, packageNames=None):
@@ -29,7 +30,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         if packageNames is None:
             packageNames = []
         packageNames = map(PackageName.fromString, packageNames)
-        info = CompileInfo(ast, Package(), packageNames)
+        loader = MockPackageLoader(packageNames)
+        info = CompileInfo(ast, Package(), loader)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         analyzeTypes(info)

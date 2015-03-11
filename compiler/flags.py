@@ -21,10 +21,22 @@ def checkFlagConflicts(flags):
 
 
 def flagSetToFlagBits(flagSet):
-    return reduce(lambda bits, flag: bits | _flagCodes[flag], flagSet, 0)
+    return reduce(lambda bits, flag: bits | _flagsToCodes[flag], flagSet, 0)
 
 
-_flagCodes = {}
+def flagBitsToFlagSet(flagBits):
+    code = 1
+    flags = []
+    while flagBits != 0:
+        if (flagBits & code) != 0:
+            flags.append(_codesToFlags[code])
+            flagBits ^= code
+        code <<= 1
+    return frozenset(flags)
+
+
+_flagsToCodes = {}
+_codesToFlags = {}
 _flagNames = {}
 _flagGroups = []
 
@@ -41,7 +53,9 @@ def _initialize():
     code = 1
     for flagName in flagList:
         globals()[flagName] = flagName
-        _flagCodes[flagName] = code
+
+        _flagsToCodes[flagName] = code
+        _codesToFlags[code] = flagName
         _flagNames[flagName.lower()] = flagName
         code <<= 1
     _flagGroups.append(frozenset([PUBLIC, PROTECTED, PRIVATE]))
