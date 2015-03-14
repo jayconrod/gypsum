@@ -113,6 +113,7 @@ class Package(object):
             return externDefns[id.externIndex]
 
         id.externIndex = len(externDefns)
+        self.findOrAddString(irDefn.name)
         externFlags = irDefn.flags | frozenset([flags.EXTERN])
         if isinstance(irDefn, Global):
             externIrDefn = Global(irDefn.name, irDefn.astDefn, id,
@@ -251,6 +252,10 @@ class PackageDependency(object):
         self.package = None
         self.externGlobals = []
         self.linkedGlobals = []
+        self.externFunctions = []
+        self.linkedFunctions = []
+        self.externClasses = []
+        self.linkedClasses = []
 
     @staticmethod
     def fromString(s):

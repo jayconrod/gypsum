@@ -105,10 +105,13 @@ class HashTable: public Block {
       return start;
 
     length_t probe = (start + 1) & mask();
-    while (probe != start && !elems[probe].matches(elem)) {
+    bool match = false;
+    while (probe != start &&
+           !elems[probe].isEmpty() &&
+           !(match = elems[probe].matches(elem))) {
       probe = (probe + 1) & mask();
     }
-    return elems[probe].isDead() ? kIndexNotSet : probe;
+    return match ? probe : kIndexNotSet;
   }
 
   length_t capacity_;

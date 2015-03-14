@@ -187,6 +187,7 @@ void Package::ensureExports(Heap* heap, const Handle<Package>& package) {
   if (package->exports_)
     return;
 
+  AllowAllocationScope allowAllocation(heap, true);
   HandleScope handleScope(heap->vm());
   auto exports = ExportMap::create(heap);
   auto globals = handle(package->globals());
@@ -207,6 +208,7 @@ void Package::ensureExports(Heap* heap, const Handle<Package>& package) {
 
 void Package::link(Heap* heap, const Handle<Package>& package) {
   auto vm = heap->vm();
+  AllowAllocationScope allowAllocation(heap, true);
   HandleScope handleScope(vm);
   auto dependencies = handle(package->dependencies());
   for (length_t i = 0; i < dependencies->length(); i++) {
@@ -223,11 +225,13 @@ void Package::link(Heap* heap, const Handle<Package>& package) {
       auto externGlobal = externGlobals->get(i);
       auto name = externGlobal->name();
       auto linkedGlobal = depExports->getOrElse(name, nullptr);
-      if (!linkedGlobal || !isa<Global>(linkedGlobal))
+      if (!linkedGlobal || !isa<Global>(linkedGlobal) ||
+          !externGlobal->isCompatibleWith(block_cast<Global>(linkedGlobal))) {
         throw Error("link error");
+      }
       linkedGlobals->set(j, block_cast<Global>(linkedGlobal));
     }
-
+    dependency->setLinkedGlobals(*linkedGlobals);
     // TODO: handle other kinds of definitions
   }
 }
@@ -441,9 +445,9 @@ PackageDependency::PackageDependency(PackageName* name,
       linkedClasses_(this, linkedClasses) {
   ASSERT(minVersion == nullptr || maxVersion == nullptr ||
          minVersion->compare(maxVersion) <= 0);
-  ASSERT(externGlobals->length() == linkedGlobals->length());
-  ASSERT(externFunctions->length() == linkedFunctions->length());
-  ASSERT(externClasses->length() == linkedClasses->length());
+  ASSERT(linkedGlobals == nullptr || externGlobals->length() == linkedGlobals->length());
+  ASSERT(linkedFunctions == nullptr || externFunctions->length() == linkedFunctions->length());
+  ASSERT(linkedClasses == nullptr || externClasses->length() == linkedClasses->length());
 }
 
 
@@ -460,9 +464,9 @@ Local<PackageDependency> PackageDependency::create(
     const Handle<BlockArray<Class>>& linkedClasses) {
   RETRY_WITH_GC(heap, return Local<PackageDependency>(new(heap) PackageDependency(
       *name, minVersion.getOrNull(), maxVersion.getOrNull(),
-      *externGlobals, *linkedGlobals,
-      *externFunctions, *linkedFunctions,
-      *externClasses, *linkedClasses)));
+      *externGlobals, linkedGlobals.getOrNull(),
+      *externFunctions, linkedFunctions.getOrNull(),
+      *externClasses, linkedClasses.getOrNull())));
 }
 
 
@@ -474,15 +478,13 @@ Local<PackageDependency> PackageDependency::create(Heap* heap,
                                                    length_t functionCount,
                                                    length_t classCount) {
   auto externGlobals = BlockArray<Global>::create(heap, globalCount);
-  auto linkedGlobals = BlockArray<Global>::create(heap, globalCount);
   auto externFunctions = BlockArray<Function>::create(heap, functionCount);
-  auto linkedFunctions = BlockArray<Function>::create(heap, functionCount);
   auto externClasses = BlockArray<Class>::create(heap, classCount);
-  auto linkedClasses = BlockArray<Class>::create(heap, classCount);
-  return create(heap, name, minVersion, maxVersion,
-                externGlobals, linkedGlobals,
-                externFunctions, linkedFunctions,
-                externClasses, linkedClasses);
+  RETRY_WITH_GC(heap, return Local<PackageDependency>(new(heap) PackageDependency(
+      *name, minVersion.getOrNull(), maxVersion.getOrNull(),
+      *externGlobals, nullptr,
+      *externFunctions, nullptr,
+      *externClasses, nullptr)));
 }
 
 
@@ -543,6 +545,24 @@ bool PackageDependency::parseNameAndVersion(Heap* heap,
 }
 
 
+void PackageDependency::setLinkedGlobals(BlockArray<Global>* linkedGlobals) {
+  ASSERT(externGlobals_.get()->length() == linkedGlobals->length());
+  linkedGlobals_.set(this, linkedGlobals);
+}
+
+
+void PackageDependency::setLinkedFunctions(BlockArray<Function>* linkedFunctions) {
+  ASSERT(externFunctions_.get()->length() == linkedFunctions->length());
+  linkedFunctions_.set(this, linkedFunctions);
+}
+
+
+void PackageDependency::setLinkedClasses(BlockArray<Class>* linkedClasses) {
+  ASSERT(externClasses_.get()->length() == linkedClasses->length());
+  linkedClasses_.set(this, linkedClasses);
+}
+
+
 bool PackageDependency::isSatisfiedBy(const PackageName* name,
                                       const PackageVersion* version) const {
   return this->name()->equals(name) &&
@@ -568,6 +588,7 @@ ostream& operator << (ostream& os, const PackageDependency* dep) {
 
 
 Local<Package> PackageLoader::load() {
+  AllowAllocationScope allowAllocation(heap(), true);
   HandleScope handleScope(vm_);
   try {
     auto magic = readValue<u32>();
@@ -575,7 +596,7 @@ Local<Package> PackageLoader::load() {
       throw Error("package file is corrupt");
     auto majorVersion = readValue<u16>();
     auto minorVersion = readValue<u16>();
-    if (majorVersion != 0 || minorVersion != 15)
+    if (majorVersion != 0 || minorVersion != 16)
       throw Error("package file has wrong format version");
 
     package_ = handleScope.escape(*Package::create(heap()));

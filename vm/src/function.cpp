@@ -437,10 +437,25 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
+        case LDGF: {
+          auto depIndex = readVbn(bytecode, &pcOffset);
+          auto externIndex = readVbn(bytecode, &pcOffset);
+          auto type = handle(package->dependencies()->get(depIndex)
+              ->linkedGlobals()->get(externIndex)->type());
+          currentMap.push(type);
+          break;
+        }
+
         case STG: {
           readVbn(bytecode, &pcOffset);
           currentMap.pop();
           break;
+        }
+
+        case STGF: {
+          readVbn(bytecode, &pcOffset);
+          readVbn(bytecode, &pcOffset);
+          currentMap.pop();
         }
 
         case LD8:

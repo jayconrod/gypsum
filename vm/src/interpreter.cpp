@@ -331,10 +331,29 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
+      case LDGF: {
+        auto depIndex = toLength(readVbn());
+        auto externIndex = toLength(readVbn());
+        auto value = function_->package()->dependencies()->get(depIndex)
+            ->linkedGlobals()->get(externIndex)->getRaw();
+        push(value);
+        break;
+      }
+
       case STG: {
         auto index = toLength(readVbn());
         auto value = pop<i64>();
         auto global = function_->package()->getGlobal(index);
+        global->setRaw(value);
+        break;
+      }
+
+      case STGF: {
+        auto depIndex = toLength(readVbn());
+        auto externIndex = toLength(readVbn());
+        auto value = pop<i64>();
+        auto global = function_->package()->dependencies()->get(depIndex)
+            ->linkedGlobals()->get(externIndex);
         global->setRaw(value);
         break;
       }

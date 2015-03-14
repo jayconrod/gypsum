@@ -146,7 +146,7 @@ string VM::searchForPackage(const Handle<PackageDependency>& dependency) {
       if (dashPos != packageName.size())
         continue;
       auto dotPos = file.size() - 4;
-      auto versionStlStr = file.substr(dashPos + 1, dotPos - dashPos);
+      auto versionStlStr = file.substr(dashPos + 1, dotPos - dashPos - 1);
       auto versionStr = String::fromUtf8String(heap(), versionStlStr);
       auto version = PackageVersion::fromString(heap(), versionStr);
       if (version &&

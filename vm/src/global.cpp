@@ -6,6 +6,7 @@
 
 #include "global.h"
 
+#include "flags.h"
 #include "type.h"
 
 using namespace std;
@@ -34,6 +35,12 @@ Global::Global(String* name, u32 flags, Type* type)
 Local<Global> Global::create(Heap* heap, const Handle<String>& name,
                              u32 flags, const Handle<Type>& type) {
   RETRY_WITH_GC(heap, return Local<Global>(new(heap) Global(*name, flags, *type)));
+}
+
+
+bool Global::isCompatibleWith(const Global* other) const {
+  return (flags() | EXTERN_FLAG) == (other->flags() | EXTERN_FLAG) &&
+         type()->equals(other->type());
 }
 
 

@@ -204,10 +204,13 @@ class PackageDependency: public Block {
   void setPackage(Package* package) { package_.set(this, package); }
   BlockArray<Global>* externGlobals() const { return externGlobals_.get(); }
   BlockArray<Global>* linkedGlobals() const { return linkedGlobals_.get(); }
+  void setLinkedGlobals(BlockArray<Global>* linkedGlobals);
   BlockArray<Function>* externFunctions() const { return externFunctions_.get(); }
   BlockArray<Function>* linkedFunctions() const { return linkedFunctions_.get(); }
+  void setLinkedFunctions(BlockArray<Function>* linkedFunctions);
   BlockArray<Class>* externClasses() const { return externClasses_.get(); }
   BlockArray<Class>* linkedClasses() const { return linkedClasses_.get(); }
+  void setLinkedClasses(BlockArray<Class>* linkedClasses);
 
   bool isSatisfiedBy(const Package* package) const {
     return isSatisfiedBy(package->name(), package->version());

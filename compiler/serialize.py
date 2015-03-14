@@ -44,7 +44,7 @@ def deserialize(fileName):
 HEADER_FORMAT = "<Ihhqiiiiiiii"
 MAGIC = 0x676b7073
 MAJOR_VERSION = 0
-MINOR_VERSION = 17
+MINOR_VERSION = 16
 
 FLAG_FORMAT = "<i"
 
@@ -171,16 +171,16 @@ class Serializer(object):
 
     def writeDependencyHeader(self, dependency):
         self.writeString(dependency.dependencyString())
-        self.writeVbn(len(dependency.globals))
-        self.writeVbn(len(dependency.functions))
-        self.writeVbn(len(dependency.classes))
+        self.writeVbn(len(dependency.externGlobals))
+        self.writeVbn(len(dependency.externFunctions))
+        self.writeVbn(len(dependency.externClasses))
 
     def writeDependency(self, dependency):
-        for g in dependency.globals:
+        for g in dependency.externGlobals:
             self.writeGlobal(g)
-        for f in dependency.functions:
+        for f in dependency.externFunctions:
             self.writeFunction(f)
-        for c in dependency.classes:
+        for c in dependency.externClasses:
             self.writeClass(c)
 
     def writeType(self, type):
@@ -412,18 +412,18 @@ class Deserializer(object):
         dep = ir.PackageDependency.fromString(depStr)
         packageId = ids.PackageId(index)
         globalCount = self.readVbn()
-        dep.globals = self.createEmptyGlobalList(globalCount, packageId)
+        dep.externGlobals = self.createEmptyGlobalList(globalCount, packageId)
         functionCount = self.readVbn()
-        dep.functions = self.createEmptyFunctionList(functionCount, packageId)
+        dep.externFunctions = self.createEmptyFunctionList(functionCount, packageId)
         classCount = self.readVbn()
-        dep.classes = self.createEmptyClassList(classCount, packageId)
+        dep.externClasses = self.createEmptyClassList(classCount, packageId)
 
     def readDependency(self, dep):
-        for g in dep.globals:
+        for g in dep.externGlobals:
             self.readGlobal(g)
-        for f in dep.functions:
+        for f in dep.externFunctions:
             self.readFunction(f)
-        for c in dep.classes:
+        for c in dep.externClasses:
             self.readClass(c)
 
     def readType(self):
