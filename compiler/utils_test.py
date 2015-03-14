@@ -6,7 +6,7 @@
 
 import unittest
 
-from ir import Global, Function, Class, Package, TypeParameter, Variable, Field, LOCAL
+from ir import Global, Function, Class, Package, PackageName, PackagePrefix, TypeParameter, Variable, Field, LOCAL
 from ir_types import getNothingClassType, getRootClassType
 from utils import Counter
 
@@ -89,11 +89,25 @@ class TestCaseWithDefinitions(unittest.TestCase):
 
 
 class MockPackageLoader(object):
-    def __init__(self, packageNames):
-        self.packageNames = packageNames
+    def __init__(self, packagesOrPackageNames):
+        if len(packagesOrPackageNames) == 0:
+            self.packageNames = []
+            self.packages = {}
+        elif isinstance(packagesOrPackageNames[0], Package):
+            self.packageNames = [p.name for p in packagesOrPackageNames]
+            self.packages = {p.name: p for p in packagesOrPackageNames}
+        else:
+            assert isinstance(packagesOrPackageNames[0], PackageName)
+            self.packageNames = packagesOrPackageNames
+            self.packages = {name: Package(name=name) for name in packagesOrPackageNames}
 
     def getPackageNames(self):
         return self.packageNames
 
+    def isPackage(self, name):
+        return name in self.packageNames
+
     def loadPackage(self, name):
-        return Package()
+        if name not in self.packages:
+            self.packages[name] = Package(name=name)
+        return self.packages[name]

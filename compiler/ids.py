@@ -52,16 +52,16 @@ class PackageId(Id):
         self.index = index
 
     def __repr__(self):
-        if self.index is not None:
-            return "PackageId(%d)" % self.index
-        else:
+        if self is TARGET_PACKAGE_ID:
             return "PackageId(TARGET)"
+        else:
+            return "PackageId(%s)" % str(self.index)
 
     def __str__(self):
-        if self.index is not None:
-            return "#%d" % self.index
-        else:
+        if self is TARGET_PACKAGE_ID:
             return "#TARGET"
+        else:
+            return "#%s" % str(self.index)
 
 TARGET_PACKAGE_ID = PackageId()
 
@@ -74,7 +74,7 @@ class DefnId(Id):
     CLASS = "class"
     TYPE_PARAMETER = "type-parameter"
 
-    def __init__(self, packageId, kind, index):
+    def __init__(self, packageId, kind, index, externIndex=None):
         if packageId is None:
             assert index < 0
         else:
@@ -82,16 +82,19 @@ class DefnId(Id):
         self.packageId = packageId
         self.kind = kind
         self.index = index
+        self.externIndex = externIndex
 
     def __repr__(self):
         packageStr = str(self.packageId) if self.packageId else "BUILTIN"
-        return "DefnId(%s, %s, %d)" % (packageStr, self.kind, self.index)
+        return "DefnId(%s, %s, %s, %s)" % (packageStr, self.kind, self.index, self.externIndex)
 
     def __str__(self):
-        if self.packageId is TARGET_PACKAGE_ID or self.packageId is None:
-            return "#%d" % self.index
-        else:
-            return "#%d.%d" % (self.packageId.index, self.index)
+        packageStr = "" \
+                     if self.packageId is TARGET_PACKAGE_ID or self.packageId is None \
+                     else "%d." % self.packageId.index
+        indexStr = "%d" % self.index
+        externIndexStr = ":%d" % self.externIndex if self.externIndex is not None else ""
+        return "#%s%s%s" % (packageStr, indexStr, externIndexStr)
 
     def isBuiltin(self):
         return self.packageId is None

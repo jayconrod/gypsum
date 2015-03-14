@@ -17,7 +17,16 @@ import re
 import StringIO
 
 class Package(object):
-    def __init__(self, id=ids.TARGET_PACKAGE_ID, name="default", version=""):
+    def __init__(self, id=None, name=None, version=None):
+        if id is None:
+            id = ids.PackageId()
+        if name is None:
+            name = PackageName(["default"])
+        if version is None:
+            version = PackageVersion([0])
+        assert isinstance(id, ids.PackageId) and \
+               isinstance(name, PackageName) and \
+               isinstance(version, PackageVersion)
         self.id = id
         self.name = name
         self.version = version
@@ -83,11 +92,41 @@ class Package(object):
 
     def addDependency(self, package):
         if package.id.index is not None:
-            assert self.dependencies.package is package
+            assert self.dependencies[package.id.index].package is package
             return
         dep = PackageDependency.fromPackage(package)
         package.id.index = len(self.dependencies)
         self.dependencies.append(dep)
+
+    def externalize(self, irDefn):
+        id = irDefn.id
+        assert irDefn.isForeign() and id.packageId.index is not None
+        dep = self.dependencies[id.packageId.index]
+        if isinstance(irDefn, Global):
+            externDefns = dep.externGlobals
+            linkedDefns = dep.linkedGlobals
+        else:
+            raise NotImplementedError
+        assert len(externDefns) == len(linkedDefns)
+
+        if id.externIndex is not None:
+            return externDefns[id.externIndex]
+
+        id.externIndex = len(externDefns)
+        externFlags = irDefn.flags | frozenset([flags.EXTERN])
+        if isinstance(irDefn, Global):
+            externIrDefn = Global(irDefn.name, irDefn.astDefn, id,
+                                  self.externalizeType(irDefn.type),
+                                  externFlags)
+        else:
+            raise NotImplementedError
+
+        externDefns.append(externIrDefn)
+        linkedDefns.append(irDefn)
+        return externIrDefn
+
+    def externalizeType(self, ty):
+        return ty
 
     def findString(self, s):
         if type(s) == str:
@@ -136,8 +175,8 @@ class Package(object):
 
 
 class PackagePrefix(object):
-    def __init__(self, id, name):
-        self.id = id
+    def __init__(self, name):
+        assert isinstance(name, PackageName)
         self.name = name
 
 
@@ -147,7 +186,7 @@ class PackageName(object):
     nameRex = re.compile(r"\A%s\Z" % nameSrc)
 
     def __init__(self, components):
-        self.components = components
+        self.components = list(components)
 
     @staticmethod
     def fromString(s):
@@ -203,13 +242,15 @@ class PackageDependency(object):
     dependencyRex = re.compile(r"\A%s\Z" % dependencySrc)
 
     def __init__(self, name, minVersion, maxVersion):
+        assert isinstance(name, PackageName) and \
+               (minVersion is None or isinstance(minVersion, PackageVersion)) and \
+               (maxVersion is None or isinstance(maxVersion, PackageVersion))
         self.name = name
         self.minVersion = minVersion
         self.maxVersion = maxVersion
         self.package = None
-        self.globals = []
-        self.functions = []
-        self.classes = []
+        self.externGlobals = []
+        self.linkedGlobals = []
 
     @staticmethod
     def fromString(s):
@@ -241,12 +282,8 @@ class PackageDependency(object):
         if self.maxVersion:
             buf.write("-" + str(self.maxVersion))
         buf.write("\n\n")
-        for g in self.globals:
+        for g in self.externGlobals:
             buf.write("%s\n\n" % g)
-        for f in self.functions:
-            buf.write("%s\n\n" % f)
-        for c in self.classes:
-            buf.write("%s\n\n" % c)
         return buf.getvalue()
 
 
@@ -267,6 +304,9 @@ class IrTopDefn(IrDefinition):
 
     def isBuiltin(self):
         return self.id.isBuiltin()
+
+    def isForeign(self):
+        return not self.isBuiltin() and self.id.packageId is not ids.TARGET_PACKAGE_ID
 
 
 class Global(IrTopDefn):

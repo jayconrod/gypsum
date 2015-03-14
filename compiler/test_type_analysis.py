@@ -31,7 +31,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
             packageNames = []
         packageNames = map(PackageName.fromString, packageNames)
         loader = MockPackageLoader(packageNames)
-        info = CompileInfo(ast, Package(), loader)
+        info = CompileInfo(ast, packageLoader=loader)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         analyzeTypes(info)

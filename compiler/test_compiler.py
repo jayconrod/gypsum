@@ -15,12 +15,13 @@ from compile_info import *
 from scope_analysis import *
 from type_analysis import *
 from compiler import *
+from ids import *
 from ir import *
 from ir_types import *
 import ir_instructions
 from ir_instructions import *
 from bytecode import *
-from flags import LET
+from flags import LET, PUBLIC
 from compile_info import CompileInfo
 from builtins import *
 from errors import *
@@ -28,16 +29,17 @@ from utils_test import MockPackageLoader, TestCaseWithDefinitions
 
 
 class TestCompiler(TestCaseWithDefinitions):
-    def compileFromSource(self, source, packageNames=None):
+    def compileFromSource(self, source, packageNames=None, packageLoader=None):
+        assert packageNames is None or packageLoader is None
         filename = "(test)"
         rawTokens = lex(filename, source)
         layoutTokens = layout(rawTokens)
         ast = parse(filename, layoutTokens)
         if packageNames is None:
             packageNames = []
-        packageNames = map(PackageName.fromString, packageNames)
-        loader = MockPackageLoader(packageNames)
-        info = CompileInfo(ast, Package(), loader)
+        if packageLoader is None:
+            packageLoader = MockPackageLoader(map(PackageName.fromString, packageNames))
+        info = CompileInfo(ast, Package(id=TARGET_PACKAGE_ID), packageLoader)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         analyzeTypes(info)
@@ -228,6 +230,45 @@ class TestCompiler(TestCaseWithDefinitions):
                            self.makeSimpleFunction("f", UnitType, [[
                                i64(12),
                                stg(x.id.index),
+                               unit(),
+                               ret()]]))
+
+    def testLoadForeignGlobal(self):
+        foo = Package(name=PackageName(["foo"]))
+        self.assertIsNot(foo.id, TARGET_PACKAGE_ID)
+        self.assertIsNone(foo.id.index)
+        x = foo.addGlobal("x", None, I64Type, frozenset([PUBLIC]))
+        y = foo.addGlobal("y", None, I64Type, frozenset([PUBLIC]))
+        source = "def f = foo.y"
+        package = self.compileFromSource(source, packageLoader=MockPackageLoader([foo]))
+        depIndex = foo.id.index
+        self.assertIsNotNone(depIndex)
+        dep = package.dependencies[depIndex]
+        self.assertIs(foo, dep.package)
+        self.assertIs(y.id.packageId, foo.id)
+        self.assertIs(dep.linkedGlobals[y.id.externIndex], y)
+        self.assertNotIn(EXTERN, y.flags)
+        self.assertIsNot(dep.externGlobals[y.id.externIndex], y)
+        externY = dep.externGlobals[y.id.externIndex]
+        self.assertIs(externY.id, y.id)
+        self.assertIn(EXTERN, externY.flags)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               ldgf(depIndex, y.id.externIndex),
+                               ret()]]))
+
+    def testStoreForeignGlobal(self):
+        foo = Package(name=PackageName(["foo"]))
+        x = foo.addGlobal("x", None, I64Type, frozenset([PUBLIC]))
+        loader = MockPackageLoader([foo])
+        source = "def f =\n" + \
+                 "  foo.x = 12\n" + \
+                 "  {}"
+        package = self.compileFromSource(source, packageLoader=loader)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", UnitType, [[
+                               i64(12),
+                               stgf(foo.id.index, x.id.index),
                                unit(),
                                ret()]]))
 

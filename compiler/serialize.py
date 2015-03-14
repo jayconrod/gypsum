@@ -44,7 +44,7 @@ def deserialize(fileName):
 HEADER_FORMAT = "<Ihhqiiiiiiii"
 MAGIC = 0x676b7073
 MAJOR_VERSION = 0
-MINOR_VERSION = 16
+MINOR_VERSION = 17
 
 FLAG_FORMAT = "<i"
 

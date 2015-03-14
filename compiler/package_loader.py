@@ -28,12 +28,12 @@ class PackageLoader(object):
         else:
             self.paths = []
 
-        self.packageFileNames = None
+        self.packageInfo = None
 
-    def ensurePackageFileNames(self):
-        if self.packageFileNames is not None:
+    def ensurePackageInfo(self):
+        if self.packageInfo is not None:
             return
-        self.packageFileNames = {}
+        self.packageInfo = {}
         packageFileNameRex = re.compile(r"\A(%s)-(%s).csp\Z" %
                                         (ir.PackageName.nameSrc, ir.PackageVersion.versionSrc))
         for dirName in self.paths:
@@ -45,17 +45,25 @@ class PackageLoader(object):
                     name = ir.PackageName.fromString(m.group(1))
                     version = ir.PackageVersion.fromString(m.group(2))
                     fileName = os.path.join(dirName, baseName)
-                    if name not in self.packageFileNames or \
-                       version > self.packageFileNames[name].version:
-                        self.packageFileNames[name] = PackageLoader.Info(name, version, fileName)
+                    if name not in self.packageInfo or \
+                       version > self.packageInfo[name].version:
+                        self.packageInfo[name] = PackageLoader.Info(name, version, fileName)
             except OSError:
                 continue
 
     def getPackageNames(self):
-        self.ensurePackageFileNames()
-        return self.packageFileNames.keys()
+        self.ensurePackageInfo()
+        return self.packageInfo.keys()
+
+    def isPackage(self, name):
+        self.ensurePackageInfo()
+        return name in self.packageInfo
 
     def loadPackage(self, name):
-        fileName = self.packageFileNames[name].fileName
+        info = self.packageInfo[name]
+        if info.package is not None:
+            return info.package
+        fileName = self.packageInfo[name].fileName
         package = serialize.deserialize(fileName)
+        info.package = package
         return package

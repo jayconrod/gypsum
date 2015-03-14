@@ -297,6 +297,8 @@ class CompileVisitor(ast.AstNodeVisitor):
         elif isinstance(irDefn, Function):
             callInfo = self.info.getCallInfo(expr)
             self.buildCall(useInfo, callInfo, expr.receiver, [], [], mode)
+        elif isinstance(irDefn, Global):
+            self.loadVariable(useInfo.defnInfo)
         else:
             assert isinstance(irDefn, Package)
             self.pkg(irDefn.id.index)
@@ -556,10 +558,12 @@ class CompileVisitor(ast.AstNodeVisitor):
         irDefn = useInfo.defnInfo.irDefn
         if LET in irDefn.flags:
             raise SemanticException(expr.location, "left side of assignment is constant")
-        if isinstance(expr, ast.AstVariableExpression) and \
-           (isinstance(irDefn, Variable) or \
-            isinstance(irDefn, Field) or \
-            isinstance(irDefn, Global)):
+        if (isinstance(expr, ast.AstVariableExpression) and \
+            (isinstance(irDefn, Variable) or \
+             isinstance(irDefn, Field) or \
+             isinstance(irDefn, Global))) or \
+           (isinstance(expr, ast.AstPropertyExpression) and \
+            isinstance(irDefn, Global) and irDefn.isForeign()):
             return VarLValue(expr, self, ty, useInfo)
         elif isinstance(expr, ast.AstPropertyExpression) and isinstance(irDefn, Field):
             self.visit(expr.receiver, COMPILE_FOR_VALUE)
@@ -646,14 +650,18 @@ class CompileVisitor(ast.AstNodeVisitor):
         else:
             assert isinstance(varOrDefnInfo, DefnInfo)
             defnInfo = varOrDefnInfo
-            if isinstance(defnInfo.irDefn, Variable):
-                self.loadVariable(defnInfo.irDefn)
-            elif isinstance(defnInfo.irDefn, Field):
+            irDefn = defnInfo.irDefn
+            if isinstance(irDefn, Variable):
+                self.loadVariable(irDefn)
+            elif isinstance(irDefn, Field):
                 self.loadContext(defnInfo.scopeId)
-                self.loadField(defnInfo.irDefn)
+                self.loadField(irDefn)
             else:
-                assert isinstance(defnInfo.irDefn, Global)
-                self.ldg(defnInfo.irDefn.id.index)
+                assert isinstance(irDefn, Global)
+                if irDefn.isForeign():
+                    self.ldgf(irDefn.id.packageId.index, irDefn.id.externIndex)
+                else:
+                    self.ldg(irDefn.id.index)
 
     def storeVariable(self, varOrDefnInfo, valueType=None):
         if isinstance(varOrDefnInfo, Variable):
@@ -664,14 +672,18 @@ class CompileVisitor(ast.AstNodeVisitor):
         else:
             assert isinstance(varOrDefnInfo, DefnInfo)
             defnInfo = varOrDefnInfo
-            if isinstance(defnInfo.irDefn, Variable):
-                self.storeVariable(defnInfo.irDefn, valueType)
-            elif isinstance(defnInfo.irDefn, Field):
+            irDefn = defnInfo.irDefn
+            if isinstance(irDefn, Variable):
+                self.storeVariable(irDefn, valueType)
+            elif isinstance(irDefn, Field):
                 self.loadContext(defnInfo.scopeId)
-                self.storeField(defnInfo.irDefn)
+                self.storeField(irDefn)
             else:
-                assert isinstance(defnInfo.irDefn, Global)
-                self.stg(defnInfo.irDefn.id.index)
+                assert isinstance(irDefn, Global)
+                if irDefn.isForeign():
+                    self.stgf(irDefn.id.packageId.index, irDefn.id.externIndex)
+                else:
+                    self.stg(irDefn.id.index)
 
     def loadContext(self, scopeId):
         closureInfo = self.info.getClosureInfo(self.getScopeId())

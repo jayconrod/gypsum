@@ -23,7 +23,7 @@ class CompileInfo(object):
 
     def __init__(self, ast, package=None, packageLoader=None):
         if package is None:
-            package = ir.Package()
+            package = ir.Package(ids.TARGET_PACKAGE_ID)
         self.loader = packageLoader
         self.packageNames = self.loader.getPackageNames() if self.loader is not None else []
         self.ast = ast

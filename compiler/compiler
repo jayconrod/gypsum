@@ -13,6 +13,7 @@ import os.path
 import re
 import sys
 
+from ids import TARGET_PACKAGE_ID
 from ir import Package, PackageName, PackageVersion, PackageDependency
 from lexer import *
 from layout import layout
@@ -83,7 +84,7 @@ for sourceFilename in args.sources:
         if args.print_ast:
             printer = AstPrinter(sys.stdout)
             printer.visit(ast)
-        package = Package(name=args.package_name, version=args.package_version)
+        package = Package(TARGET_PACKAGE_ID, args.package_name, args.package_version)
         package.dependencies.extend(args.depends)
         info = CompileInfo(ast, package, loader)
         analyzeDeclarations(info)

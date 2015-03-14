@@ -25,7 +25,9 @@
 - {name: "ldlocal", iops: 1, term: false}
 - {name: "stlocal", iops: 1, term: false}
 - {name: "ldg", iops: 1, term: false}
+- {name: "ldgf", iops: 2, term: false}
 - {name: "stg", iops: 1, term: false}
+- {name: "stgf", iops: 2, term: false}
 - {name: "ld8", iops: 1, term: false}
 - {name: "ld16", iops: 1, term: false}
 - {name: "ld32", iops: 1, term: false}

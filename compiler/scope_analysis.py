@@ -302,13 +302,13 @@ class NameInfo(object):
     def isClass(self):
         return not self.isOverloaded() and isinstance(self.getDefnInfo().irDefn, ir.Class)
 
-    def isPackage(self):
-        return not self.isOverloaded() and \
-               isinstance(self.getDefnInfo().irDefn, ir.Package)
-
     def isPackagePrefix(self):
         return not self.isOverloaded() and \
                isinstance(self.getDefnInfo().irDefn, ir.PackagePrefix)
+
+    def isPackage(self):
+        return not self.isOverloaded() and \
+               isinstance(self.getDefnInfo().irDefn, ir.Package)
 
     def getInfoForConstructors(self, info):
         assert self.isClass()
@@ -591,7 +591,7 @@ class Scope(ast.AstNodeVisitor):
            not defnScope.isDefined(name) and \
            self.isLocalWithin(defnScope):
             raise ScopeException(loc, "%s: used before being defined" % name)
-        return defnScope.bindings[name]
+        return defnScope.getDefinition(name)
 
     def isBound(self, name):
         """Returns true if a symbol is defined in this scope."""
@@ -613,22 +613,28 @@ class Scope(ast.AstNodeVisitor):
 
         Also checks whether the definition is allowed to be used in this scope and raises an
         Exception if not."""
-        if hasattr(defnInfo.irDefn, "flags") and \
-           ((PRIVATE in defnInfo.irDefn.flags and \
+        irDefn = defnInfo.irDefn
+        if isinstance(irDefn, ir.Package):
+            assert useKind in [USE_AS_VALUE, USE_AS_PROPERTY]
+            self.info.package.addDependency(irDefn)
+
+        if isinstance(irDefn, ir.IrTopDefn) and \
+           irDefn.isForeign() and \
+           not EXTERN in irDefn.flags:
+            irDefn = defnInfo.irDefn = self.info.package.externalize(irDefn)
+
+        if hasattr(irDefn, "flags") and \
+           ((PRIVATE in irDefn.flags and \
              not self.isWithin(defnInfo.inheritedScopeId)) or \
-            (PROTECTED in defnInfo.irDefn.flags and \
+            (PROTECTED in irDefn.flags and \
              not self.isWithin(defnInfo.scopeId))):
             raise ScopeException(loc, "%s: not allowed to be used in this scope" %
-                                 defnInfo.irDefn.name)
+                                 irDefn.name)
 
         if useKind is USE_AS_CONSTRUCTOR and \
-           ABSTRACT in defnInfo.irDefn.clas.flags:
+           ABSTRACT in irDefn.clas.flags:
             raise ScopeException(loc, "%s: cannot instantiate abstract class" %
-                                 defnInfo.irDefn.clas.name)
-
-        if isinstance(defnInfo.irDefn, ir.Package):
-            assert useKind in [USE_AS_VALUE, USE_AS_PROPERTY]
-            self.info.package.addDependency(defnInfo.irDefn)
+                                 irDefn.clas.name)
 
         useInfo = UseInfo(defnInfo, self.scopeId, useKind)
         self.info.setUseInfo(useAstId, useInfo)
@@ -1213,17 +1219,14 @@ class PackageScope(Scope):
 
                 self.packageNames.append(name)
                 nextPrefix = list(prefix) + [nextComponent]
-                if len(name.components) == len(prefix) + 1:
-                    package = ir.Package(id=PackageId(), name=name)
-                else:
-                    package = ir.PackagePrefix(id=PackageId(), name=nextPrefix)
+                package = ir.PackagePrefix(ir.PackageName(nextPrefix))
                 if nextComponent not in packageBindings or \
                    (isinstance(packageBindings[nextComponent], ir.PackagePrefix) and \
                     isinstance(package, ir.Package)):
                     packageBindings[nextComponent] = package
 
-        for component, package in packageBindings.iteritems():
-            defnInfo = DefnInfo(package, self.scopeId)
+        for component, prefix in packageBindings.iteritems():
+            defnInfo = DefnInfo(prefix, self.scopeId)
             self.bind(component, defnInfo)
             self.define(component)
 
@@ -1242,6 +1245,22 @@ class PackageScope(Scope):
                              self.packageNames, prefix, package)
         self.prefixScopes[component] = scope
         return scope
+
+    def getDefinition(self, name):
+        nameInfo = super(PackageScope, self).getDefinition(name)
+        if nameInfo is None:
+            return None
+        defnInfo = nameInfo.getDefnInfo()
+        irDefn = defnInfo.irDefn
+        if isinstance(irDefn, ir.PackagePrefix):
+            packageName = ir.PackageName(self.prefix + [name])
+            if packageName in self.packageNames:
+                defnInfo.irDefn = self.info.loader.loadPackage(packageName)
+        return nameInfo
+
+    def use(self, defnInfo, useAstId, useKind, loc):
+        irDefn = defnInfo
+        return super(PackageScope, self).use(defnInfo, useAstId, useKind, loc)
 
     def requiresCapture(self):
         return False

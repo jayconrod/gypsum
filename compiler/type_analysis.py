@@ -433,7 +433,7 @@ class TypeVisitor(TypeVisitorCommon):
             while packageNameLength < len(nodeNames):
                 node, name = nodeNames[packageNameLength]
                 nextNameInfo = scope.lookup(name, node.location)
-                if not (nextNameInfo.isPackage() or nextNameInfo.isPackagePrefix()):
+                if not (nextNameInfo.isPackagePrefix() or nextNameInfo.isPackage()):
                     break
                 packageNameInfo = nextNameInfo
                 packageNameLength += 1
@@ -442,11 +442,12 @@ class TypeVisitor(TypeVisitorCommon):
 
             if packageNameLength > 0:
                 defnInfo = packageNameInfo.getDefnInfo()
-                if isinstance(defnInfo.irDefn, ir.PackagePrefix):
+                package = defnInfo.irDefn
+                if not isinstance(package, ir.Package):
+                    assert isinstance(package, ir.PackagePrefix)
                     raise TypeException(node.location,
-                                        "%s is not the full name of a package" % \
-                                        str(defnInfo.irDefn.name))
-                assert isinstance(defnInfo.irDefn, ir.Package)
+                                        "%s is not the full name of a package" %
+                                        str(package.name))
                 packageNode, _ = nodeNames[packageNameLength - 1]
                 scope.use(defnInfo, packageNode.id, USE_AS_VALUE, packageNode.location)
                 packageType = ir_t.getPackageType()
@@ -461,7 +462,7 @@ class TypeVisitor(TypeVisitorCommon):
             receiverType = packageType
             start = len(nodeNames)
         else:
-            package = defnInfo.irDefn
+            self.info.package.addDependency(package)
             n, name = nodeNames[packageNameLength]
             receiverType = self.handlePossibleCall(scope, name, node.id, None,
                                                    [], [], False, node.location)
