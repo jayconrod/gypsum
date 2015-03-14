@@ -96,6 +96,8 @@ void Test ## name ::test()
   Heap* heap = vm.heap(); \
   HandleScope handleScope(&vm); \
   AllowAllocationScope allowAllocation(heap, true); \
+  Roots* roots = vm.roots(); \
+  USE(roots);
 
 #define STR(s) String::fromUtf8CString(heap, s)
 

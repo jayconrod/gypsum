@@ -8,8 +8,12 @@
 
 #include <string>
 #include "array.h"
+#include "flags.h"
+#include "global.h"
+#include "hash-table.h"
 #include "package.h"
 #include "string.h"
+#include "type.h"
 
 #define STR(s) String::fromUtf8CString(heap, s)
 
@@ -214,4 +218,108 @@ TEST(PackageDependencySatisfied) {
   ASSERT_FALSE(dependency->isSatisfiedBy(*name, *v0));
   ASSERT_TRUE(dependency->isSatisfiedBy(*name, *v1));
   ASSERT_TRUE(dependency->isSatisfiedBy(*name, *v4));
+}
+
+
+TEST(PackageExports) {
+  TEST_PROLOGUE
+
+  auto package = Package::create(heap);
+  auto globals = BlockArray<Global>::create(heap, 2);
+  auto fooName = STR("foo");
+  auto foo = Global::create(heap, fooName, NO_FLAGS, handle(Type::unitType(roots)));
+  globals->set(0, *foo);
+  auto barName = STR("bar");
+  auto bar = Global::create(heap, barName, PUBLIC_FLAG, handle(Type::unitType(roots)));
+  globals->set(1, *bar);
+  package->setGlobals(*globals);
+
+  Package::ensureExports(heap, package);
+  auto exports = handle(package->exports());
+  ASSERT_FALSE(exports->contains(*fooName));
+  ASSERT_EQ(*bar, exports->get(*barName));
+}
+
+
+TEST(PackageLink) {
+  TEST_PROLOGUE
+
+  auto package = Package::create(heap);
+
+  auto fooName = PackageName::fromString(heap, STR("foo"));
+  Local<PackageVersion> nullVersion;
+  auto fooDep = PackageDependency::create(heap, fooName, nullVersion, nullVersion, 1, 0, 0);
+  ASSERT_EQ(nullptr, fooDep->linkedGlobals());
+  auto externBar = Global::create(heap, STR("bar"),
+                                  EXTERN_FLAG | PUBLIC_FLAG,
+                                  handle(Type::unitType(roots)));
+  fooDep->externGlobals()->set(0, *externBar);
+  auto deps = BlockArray<PackageDependency>::create(heap, 1);
+  deps->set(0, *fooDep);
+  package->setDependencies(*deps);
+
+  auto fooPackage = Package::create(heap);
+  auto fooGlobals = BlockArray<Global>::create(heap, 1);
+  auto bar = Global::create(heap, STR("bar"), PUBLIC_FLAG, handle(Type::unitType(roots)));
+  fooGlobals->set(0, *bar);
+  fooPackage->setGlobals(*fooGlobals);
+  fooDep->setPackage(*fooPackage);
+
+  Package::link(heap, package);
+
+  ASSERT_EQ(*bar, fooDep->linkedGlobals()->get(0));
+}
+
+
+TEST(PackageLinkMissingGlobal) {
+  TEST_PROLOGUE
+
+  auto package = Package::create(heap);
+
+  auto fooName = PackageName::fromString(heap, STR("foo"));
+  Local<PackageVersion> nullVersion;
+  auto fooDep = PackageDependency::create(heap, fooName, nullVersion, nullVersion, 1, 0, 0);
+  ASSERT_EQ(nullptr, fooDep->linkedGlobals());
+  auto externBar = Global::create(heap, STR("bar"),
+                                  EXTERN_FLAG | PUBLIC_FLAG,
+                                  handle(Type::unitType(roots)));
+  fooDep->externGlobals()->set(0, *externBar);
+  auto deps = BlockArray<PackageDependency>::create(heap, 1);
+  deps->set(0, *fooDep);
+  package->setDependencies(*deps);
+
+  auto fooPackage = Package::create(heap);
+  fooDep->setPackage(*fooPackage);
+
+  ASSERT_THROWS(Error, Package::link(heap, package));
+}
+
+
+TEST(PackageLinkIncompatibleGlobal) {
+  TEST_PROLOGUE
+
+  auto package = Package::create(heap);
+
+  auto fooName = PackageName::fromString(heap, STR("foo"));
+  Local<PackageVersion> nullVersion;
+  auto fooDep = PackageDependency::create(heap, fooName, nullVersion, nullVersion, 1, 0, 0);
+  ASSERT_EQ(nullptr, fooDep->linkedGlobals());
+  auto externBar = Global::create(heap, STR("bar"),
+                                  EXTERN_FLAG | PUBLIC_FLAG,
+                                  handle(Type::unitType(roots)));
+  fooDep->externGlobals()->set(0, *externBar);
+  auto deps = BlockArray<PackageDependency>::create(heap, 1);
+  deps->set(0, *fooDep);
+  package->setDependencies(*deps);
+
+  auto fooPackage = Package::create(heap);
+  auto fooGlobals = BlockArray<Global>::create(heap, 1);
+  auto bar = Global::create(heap, STR("bar"),
+                            LET_FLAG | PUBLIC_FLAG,
+                            handle(Type::unitType(roots)));
+  fooGlobals->set(0, *bar);
+  fooPackage->setGlobals(*fooGlobals);
+  fooDep->setPackage(*fooPackage);
+
+  ASSERT_THROWS(Error, Package::link(heap, package));
 }
