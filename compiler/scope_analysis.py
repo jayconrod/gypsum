@@ -802,7 +802,7 @@ class GlobalScope(Scope):
             checkFlags(flags, frozenset([LET, PUBLIC, PROTECTED]), astDefn.location)
             irDefn = self.info.package.addGlobal(astDefn.name, astDefn, None, flags)
         elif isinstance(astDefn, ast.AstFunctionDefinition):
-            checkFlags(flags, frozenset(), astDefn.location)
+            checkFlags(flags, frozenset([PUBLIC]), astDefn.location)
             if astDefn.body is None:
                 raise ScopeException(astDefn.location,
                                      "%s: global function must have body" % astDefn.name)
@@ -1210,11 +1210,14 @@ class PackageScope(Scope):
         self.prefixScopes = {}
 
         if package is not None:
-            for i, g in enumerate(package.globals):
-                if PUBLIC in g.flags:
-                    defnInfo = DefnInfo(g, scopeId)
-                    self.bind(g.name, defnInfo)
-                    self.define(g.name)
+            exportedDefns = []
+            exportedDefns.extend(g for g in package.globals if PUBLIC in g.flags)
+            exportedDefns.extend(f for f in package.functions
+                                 if PUBLIC in f.flags and METHOD not in f.flags)
+            for defn in exportedDefns:
+                defnInfo = DefnInfo(defn, scopeId)
+                self.bind(defn.name, defnInfo)
+                self.define(defn.name)
 
         packageBindings = {}
         for name in packageNames:

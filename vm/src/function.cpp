@@ -15,6 +15,7 @@
 #include "global.h"
 #include "package.h"
 #include "roots.h"
+#include "string.h"
 #include "type.h"
 #include "type-parameter.h"
 #include "utils.h"
@@ -132,6 +133,31 @@ bool Function::hasPointerMapAtPcOffset(length_t pcOffset) const {
   if (map == nullptr)
     return false;
   return map->hasLocalsRegion(pcOffset);
+}
+
+
+bool Function::isCompatibleWith(const Handle<Function>& a, const Handle<Function>& b) {
+  HandleScope handleScope(a->getVM());
+  if (!a->name()->equals(b->name()) ||
+      (a->flags() | EXTERN_FLAG) != (b->flags() | EXTERN_FLAG) ||
+      a->typeParameterCount() != b->typeParameterCount() ||
+      !Type::isSubtypeOf(handle(a->returnType()), handle(b->returnType())) ||
+      a->parameterCount() != b->parameterCount()) {
+    return false;
+  }
+
+  for (length_t i = 0, n = a->typeParameterCount(); i < n; i++) {
+    auto ap = handle(a->typeParameter(i)), bp = handle(b->typeParameter(i));
+    if (!TypeParameter::isCompatibleWith(ap, bp))
+      return false;
+  }
+  for (length_t i = 0, n = a->parameterCount(); i < n; i++) {
+    auto at = handle(a->parameterType(i)), bt = handle(b->parameterType(i));
+    if (!Type::isSubtypeOf(bt, at))
+      return false;
+  }
+
+  return true;
 }
 
 
@@ -568,7 +594,22 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           } else {
             callee = handle(package->getFunction(functionId));
           }
-          for (word_t i = 0; i < callee->parameterCount(); i++)
+          for (length_t i = 0; i < callee->parameterCount(); i++)
+            currentMap.pop();
+          auto returnType = currentMap.substituteReturnType(callee);
+          currentMap.popTypeArgs();
+          currentMap.push(returnType);
+          break;
+        }
+
+        case CALLGF: {
+          auto depIndex = readVbn(bytecode, &pcOffset);
+          auto externIndex = readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          auto callee = handle(package->dependencies()->get(depIndex)
+              ->linkedFunctions()->get(externIndex));
+          for (length_t i = 0; i < callee->parameterCount(); i++)
             currentMap.pop();
           auto returnType = currentMap.substituteReturnType(callee);
           currentMap.popTypeArgs();

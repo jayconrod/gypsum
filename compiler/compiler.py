@@ -296,7 +296,8 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.dropForEffect(mode)
         elif isinstance(irDefn, Function):
             callInfo = self.info.getCallInfo(expr)
-            self.buildCall(useInfo, callInfo, expr.receiver, [], [], mode)
+            receiver = expr.receiver if callInfo.receiverExprNeeded else None
+            self.buildCall(useInfo, callInfo, receiver, [], [], mode)
         elif isinstance(irDefn, Global):
             self.loadVariable(useInfo.defnInfo)
         else:
@@ -807,7 +808,10 @@ class CompileVisitor(ast.AstNodeVisitor):
             assert receiver is None
             compileArgs()
             compileTypeArgs()
-            self.callg(irDefn.id.index)
+            if irDefn.isForeign():
+                self.callgf(irDefn.id.packageId.index, irDefn.id.index)
+            else:
+                self.callg(irDefn.id.index)
 
         elif receiver is None and irDefn.isConstructor():
             # Constructor
@@ -864,7 +868,10 @@ class CompileVisitor(ast.AstNodeVisitor):
             elif irDefn.isFinal():
                 # Calls to final methods can be made directly. This includes constructors and
                 # primitive methods which can't be called virtually.
-                self.callg(irDefn.id.index)
+                if irDefn.isForeign():
+                    self.callgf(irDefn.id.packageId.index, irDefn.id.index)
+                else:
+                    self.callg(irDefn.id.index)
             else:
                 index = irDefn.clas.getMethodIndex(irDefn)
                 self.callv(argCount + 1, index)

@@ -190,6 +190,7 @@ void Package::ensureExports(Heap* heap, const Handle<Package>& package) {
   AllowAllocationScope allowAllocation(heap, true);
   HandleScope handleScope(heap->vm());
   auto exports = ExportMap::create(heap);
+
   auto globals = handle(package->globals());
   for (length_t i = 0; i < globals->length(); i++) {
     auto global = handle(globals->get(i));
@@ -197,6 +198,16 @@ void Package::ensureExports(Heap* heap, const Handle<Package>& package) {
       auto name = handle(global->name());
       ASSERT(!exports->contains(*name));
       ExportMap::add(heap, exports, name, global);
+    }
+  }
+
+  auto functions = handle(package->functions());
+  for (length_t i = 0; i < functions->length(); i++) {
+    auto function = handle(functions->get(i));
+    if ((function->flags() & (PUBLIC_FLAG | METHOD_FLAG)) == PUBLIC_FLAG) {
+      auto name = handle(function->name());
+      ASSERT(!exports->contains(*name));
+      ExportMap::add(heap, exports, name, function);
     }
   }
 
@@ -222,17 +233,38 @@ void Package::link(Heap* heap, const Handle<Package>& package) {
     auto globalCount = externGlobals->length();
     auto linkedGlobals = BlockArray<Global>::create(heap, globalCount);
     for (length_t j = 0; j < globalCount; j++) {
-      auto externGlobal = externGlobals->get(i);
-      auto name = externGlobal->name();
-      auto linkedGlobal = depExports->getOrElse(name, nullptr);
-      if (!linkedGlobal || !isa<Global>(linkedGlobal) ||
-          !externGlobal->isCompatibleWith(block_cast<Global>(linkedGlobal))) {
+      auto externGlobal = handle(externGlobals->get(i));
+      auto name = handle(externGlobal->name());
+      auto rawLinkedGlobal = depExports->getOrElse(*name, nullptr);
+      if (!rawLinkedGlobal || !isa<Global>(rawLinkedGlobal)) {
         throw Error("link error");
       }
-      linkedGlobals->set(j, block_cast<Global>(linkedGlobal));
+      auto linkedGlobal = handle(block_cast<Global>(rawLinkedGlobal));
+      if (!Global::isCompatibleWith(linkedGlobal, externGlobal)) {
+        throw Error("link error");
+      }
+      linkedGlobals->set(j, *linkedGlobal);
     }
     dependency->setLinkedGlobals(*linkedGlobals);
-    // TODO: handle other kinds of definitions
+
+    ASSERT(dependency->linkedFunctions() == nullptr);
+    auto externFunctions = handle(dependency->externFunctions());
+    auto functionCount = externFunctions->length();
+    auto linkedFunctions = BlockArray<Function>::create(heap, functionCount);
+    for (length_t j = 0; j < functionCount; j++) {
+      auto externFunction = handle(externFunctions->get(i));
+      auto name = handle(externFunction->name());
+      auto rawLinkedFunction = depExports->getOrElse(*name, nullptr);
+      if (!rawLinkedFunction || !isa<Function>(rawLinkedFunction)) {
+        throw Error("link error");
+      }
+      auto linkedFunction = handle(block_cast<Function>(rawLinkedFunction));
+      if (!Function::isCompatibleWith(linkedFunction, externFunction)) {
+        throw Error("link error");
+      }
+      linkedFunctions->set(j, *linkedFunction);
+    }
+    dependency->setLinkedFunctions(*linkedFunctions);
   }
 }
 
@@ -407,17 +439,18 @@ ostream& operator << (ostream& os, const PackageVersion* version) {
 }
 
 
-#define PACKAGE_DEPENDENCY_POINTER_LIST(F) \
-  F(PackageDependency, name_)              \
-  F(PackageDependency, minVersion_)        \
-  F(PackageDependency, maxVersion_)        \
-  F(PackageDependency, package_)           \
-  F(PackageDependency, externGlobals_)     \
-  F(PackageDependency, linkedGlobals_)     \
-  F(PackageDependency, externFunctions_)   \
-  F(PackageDependency, linkedFunctions_)   \
-  F(PackageDependency, externClasses_)     \
-  F(PackageDependency, linkedClasses_)     \
+#define PACKAGE_DEPENDENCY_POINTER_LIST(F)    \
+  F(PackageDependency, name_)                 \
+  F(PackageDependency, minVersion_)           \
+  F(PackageDependency, maxVersion_)           \
+  F(PackageDependency, package_)              \
+  F(PackageDependency, externGlobals_)        \
+  F(PackageDependency, linkedGlobals_)        \
+  F(PackageDependency, externFunctions_)      \
+  F(PackageDependency, linkedFunctions_)      \
+  F(PackageDependency, externClasses_)        \
+  F(PackageDependency, linkedClasses_)        \
+  F(PackageDependency, externTypeParameters_) \
 
 DEFINE_POINTER_MAP(PackageDependency, PACKAGE_DEPENDENCY_POINTER_LIST)
 
@@ -432,7 +465,8 @@ PackageDependency::PackageDependency(PackageName* name,
                                      BlockArray<Function>* externFunctions,
                                      BlockArray<Function>* linkedFunctions,
                                      BlockArray<Class>* externClasses,
-                                     BlockArray<Class>* linkedClasses)
+                                     BlockArray<Class>* linkedClasses,
+                                     BlockArray<TypeParameter>* externTypeParameters)
     : Block(PACKAGE_DEPENDENCY_BLOCK_TYPE),
       name_(this, name),
       minVersion_(this, minVersion),
@@ -442,7 +476,8 @@ PackageDependency::PackageDependency(PackageName* name,
       externFunctions_(this, externFunctions),
       linkedFunctions_(this, linkedFunctions),
       externClasses_(this, externClasses),
-      linkedClasses_(this, linkedClasses) {
+      linkedClasses_(this, linkedClasses),
+      externTypeParameters_(this, externTypeParameters) {
   ASSERT(minVersion == nullptr || maxVersion == nullptr ||
          minVersion->compare(maxVersion) <= 0);
   ASSERT(linkedGlobals == nullptr || externGlobals->length() == linkedGlobals->length());
@@ -461,12 +496,14 @@ Local<PackageDependency> PackageDependency::create(
     const Handle<BlockArray<Function>>& externFunctions,
     const Handle<BlockArray<Function>>& linkedFunctions,
     const Handle<BlockArray<Class>>& externClasses,
-    const Handle<BlockArray<Class>>& linkedClasses) {
+    const Handle<BlockArray<Class>>& linkedClasses,
+    const Handle<BlockArray<TypeParameter>>& externTypeParameters) {
   RETRY_WITH_GC(heap, return Local<PackageDependency>(new(heap) PackageDependency(
       *name, minVersion.getOrNull(), maxVersion.getOrNull(),
       *externGlobals, linkedGlobals.getOrNull(),
       *externFunctions, linkedFunctions.getOrNull(),
-      *externClasses, linkedClasses.getOrNull())));
+      *externClasses, linkedClasses.getOrNull(),
+      *externTypeParameters)));
 }
 
 
@@ -476,15 +513,18 @@ Local<PackageDependency> PackageDependency::create(Heap* heap,
                                                    const Handle<PackageVersion>& maxVersion,
                                                    length_t globalCount,
                                                    length_t functionCount,
-                                                   length_t classCount) {
+                                                   length_t classCount,
+                                                   length_t typeParameterCount) {
   auto externGlobals = BlockArray<Global>::create(heap, globalCount);
   auto externFunctions = BlockArray<Function>::create(heap, functionCount);
   auto externClasses = BlockArray<Class>::create(heap, classCount);
+  auto externTypeParameters = BlockArray<TypeParameter>::create(heap, typeParameterCount);
   RETRY_WITH_GC(heap, return Local<PackageDependency>(new(heap) PackageDependency(
       *name, minVersion.getOrNull(), maxVersion.getOrNull(),
       *externGlobals, nullptr,
       *externFunctions, nullptr,
-      *externClasses, nullptr)));
+      *externClasses, nullptr,
+      *externTypeParameters)));
 }
 
 
@@ -582,7 +622,8 @@ ostream& operator << (ostream& os, const PackageDependency* dep) {
      << "\n  externFunctions: " << brief(dep->externFunctions())
      << "\n  linkedfunctions: " << brief(dep->linkedFunctions())
      << "\n  externClasses: " << brief(dep->externClasses())
-     << "\n  linkedClasses: " << brief(dep->linkedClasses());
+     << "\n  linkedClasses: " << brief(dep->linkedClasses())
+     << "\n  externTypeParameters: " << brief(dep->externTypeParameters());
   return os;
 }
 
@@ -734,7 +775,7 @@ Local<Function> PackageLoader::readFunction() {
   word_t localsSize = kNotSet;
   Local<LengthArray> blockOffsets;
   vector<u8> instructions;
-  if ((flags & ABSTRACT_FLAG) == 0) {
+  if ((flags & (ABSTRACT_FLAG | EXTERN_FLAG)) == 0) {
     localsSize = readWordVbn();
     auto instructionsSize = readLengthVbn();
     instructions = readData(instructionsSize);
@@ -831,15 +872,23 @@ Local<PackageDependency> PackageLoader::readDependencyHeader() {
   auto globalCount = readLengthVbn();
   auto functionCount = readLengthVbn();
   auto classCount = readLengthVbn();
+  auto typeParameterCount = readLengthVbn();
 
   auto dep = PackageDependency::create(heap(), name, minVersion, maxVersion,
-                                       globalCount, functionCount, classCount);
+                                       globalCount, functionCount,
+                                       classCount, typeParameterCount);
 
-  // We need to pre-allocate classes so types can refer to them.
-  auto externClasses = dep->externClasses();
+  // We need to pre-allocate classes and type parameters so types can refer to them.
+  auto externClasses = handle(dep->externClasses());
   for (length_t i = 0; i < classCount; i++) {
     auto c = Class::create(heap());
     externClasses->set(i, *c);
+  }
+
+  auto externTypeParameters = handle(dep->externTypeParameters());
+  for (length_t i = 0; i < typeParameterCount; i++) {
+    auto p = TypeParameter::create(heap());
+    externTypeParameters->set(i, *p);
   }
 
   return dep;
@@ -869,6 +918,14 @@ void PackageLoader::readDependency(const Local<PackageDependency>& dep) {
     readClass(c);
     if ((c->flags() & EXTERN_FLAG) == 0)
       throw Error("dependency class is not extern");
+  }
+
+  auto typeParameters = handle(dep->externTypeParameters());
+  for (length_t i = 0; i < typeParameters->length(); i++) {
+    auto p = handle(typeParameters->get(i));
+    readTypeParameter(p);
+    if ((p->flags() & EXTERN_FLAG) == 0)
+      throw Error("dependency type parameter is not extern");
   }
 }
 

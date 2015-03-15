@@ -804,10 +804,13 @@ class TypeVisitor(TypeVisitorCommon):
         (defnInfo, allTypeArgs, allArgTypes) = \
             nameInfo.findDefnInfoWithArgTypes(receiverType, receiverIsExplicit,
                                               typeArgs, argTypes, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
+        irDefn = defnInfo.irDefn
+        receiverExprNeeded = receiverIsExplicit and \
+                             (not isinstance(irDefn, ir.Function) or defnInfo.irDefn.isMethod())
+        callInfo = CallInfo(allTypeArgs, receiverExprNeeded)
+        self.info.setCallInfo(useAstId, callInfo)
 
         self.scope().use(defnInfo, useAstId, useKind, loc)
-        irDefn = defnInfo.irDefn
         self.ensureTypeInfoForDefn(irDefn)
         if isinstance(irDefn, ir.Function):
             if irDefn.isConstructor():

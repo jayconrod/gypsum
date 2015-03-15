@@ -120,7 +120,9 @@ class Serializer(object):
         self.writeVbn(len(function.parameterTypes))
         for ty in function.parameterTypes:
             self.writeType(ty)
-        assert function.blocks is not None or flags.ABSTRACT in function.flags
+        assert function.blocks is not None or \
+               flags.ABSTRACT in function.flags or \
+               flags.EXTERN in function.flags
         if function.blocks is not None:
             localsSize = 8 * len(filter(lambda v: v.kind is ir.LOCAL, function.variables))
             self.writeVbn(localsSize)
@@ -174,6 +176,7 @@ class Serializer(object):
         self.writeVbn(len(dependency.externGlobals))
         self.writeVbn(len(dependency.externFunctions))
         self.writeVbn(len(dependency.externClasses))
+        self.writeVbn(len(dependency.externTypeParameters))
 
     def writeDependency(self, dependency):
         for g in dependency.externGlobals:
@@ -182,6 +185,8 @@ class Serializer(object):
             self.writeFunction(f)
         for c in dependency.externClasses:
             self.writeClass(c)
+        for p in dependency.externTypeParameters:
+            self.writeTypeParameter(p)
 
     def writeType(self, type):
         # TODO: serialize this in a way that doesn't couple us so closely to Type::Form
@@ -417,6 +422,9 @@ class Deserializer(object):
         dep.externFunctions = self.createEmptyFunctionList(functionCount, packageId)
         classCount = self.readVbn()
         dep.externClasses = self.createEmptyClassList(classCount, packageId)
+        typeParameterCount = self.readVbn()
+        dep.externTypeParameters = \
+            self.createEmptyTypeParameterList(typeParameterCount, packageId)
 
     def readDependency(self, dep):
         for g in dep.externGlobals:
@@ -425,6 +433,8 @@ class Deserializer(object):
             self.readFunction(f)
         for c in dep.externClasses:
             self.readClass(c)
+        for p in dep.externTypeParameters:
+            self.readTypeParameter(p)
 
     def readType(self):
         bits = self.readVbn()

@@ -456,6 +456,15 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
+      case CALLGF: {
+        auto packageIndex = toLength(readVbn());
+        auto externIndex = toLength(readVbn());
+        Persistent<Function> callee(function_->package()->dependencies()->get(packageIndex)
+            ->linkedFunctions()->get(externIndex));
+        enter(callee);
+        break;
+      }
+
       case CALLV: {
         auto argCount = readVbn();
         auto methodIndex = toLength(readVbn());
@@ -775,7 +784,7 @@ void Interpreter::enter(const Handle<Function>& callee) {
   // Make sure we have pointer maps for the callee before we build a stack frame for it.
   // This may trigger garbage collection (since pointer maps are allocated like everything
   // else), but that's fine since we're at a safepoint, and we haven't built the frame yet.
-  ASSERT((callee->flags() & ABSTRACT_FLAG) == 0);
+  ASSERT((callee->flags() & (ABSTRACT_FLAG | EXTERN_FLAG)) == 0);
   ensurePointerMap(callee);
 
   stack_->align(kWordSize);

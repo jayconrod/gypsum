@@ -8,8 +8,10 @@
 
 #include <unordered_set>
 #include "block.h"
+#include "flags.h"
 #include "handle.h"
 #include "heap.h"
+#include "string.h"
 #include "type.h"
 
 using namespace std;
@@ -53,6 +55,15 @@ Local<TypeParameter> TypeParameter::create(Heap* heap,
                                            const Handle<Type>& lowerBound) {
   RETRY_WITH_GC(heap, return Local<TypeParameter>(
       new(heap) TypeParameter(*name, flags, upperBound.getOrNull(), lowerBound.getOrNull())));
+}
+
+
+bool TypeParameter::isCompatibleWith(const Handle<TypeParameter>& a,
+                                     const Handle<TypeParameter>& b) {
+  return a->name()->equals(b->name()) &&
+         (a->flags() | EXTERN_FLAG) == (b->flags() | EXTERN_FLAG) &&
+         a->upperBound()->equals(b->upperBound()) &&
+         a->lowerBound()->equals(b->lowerBound());
 }
 
 

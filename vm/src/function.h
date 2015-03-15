@@ -87,6 +87,8 @@ class Function: public Block {
   }
   bool hasPointerMapAtPcOffset(length_t pcOffset) const;
 
+  static bool isCompatibleWith(const Handle<Function>& a, const Handle<Function>& b);
+
  private:
   DECLARE_POINTER_MAP()
   Ptr<String> name_;

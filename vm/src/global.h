@@ -30,7 +30,7 @@ class Global: public Block {
   u32 flags() const { return flags_; }
   Type* type() const { return type_.get(); }
 
-  bool isCompatibleWith(const Global* other) const;
+  static bool isCompatibleWith(const Handle<Global>& a, const Handle<Global>& b);
 
   bool isObject() const;
   Object* getObject() const;

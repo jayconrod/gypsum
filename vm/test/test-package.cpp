@@ -185,7 +185,7 @@ static Local<PackageDependency> packageDependencyFromString(Heap* heap,
                                                        &name, &minVersion, &maxVersion);
   ASSERT_TRUE(result);
 
-  return PackageDependency::create(heap, name, minVersion, maxVersion, 0, 0, 0);
+  return PackageDependency::create(heap, name, minVersion, maxVersion, 0, 0, 0, 0);
 }
 
 
@@ -248,7 +248,7 @@ TEST(PackageLink) {
 
   auto fooName = PackageName::fromString(heap, STR("foo"));
   Local<PackageVersion> nullVersion;
-  auto fooDep = PackageDependency::create(heap, fooName, nullVersion, nullVersion, 1, 0, 0);
+  auto fooDep = PackageDependency::create(heap, fooName, nullVersion, nullVersion, 1, 0, 0, 0);
   ASSERT_EQ(nullptr, fooDep->linkedGlobals());
   auto externBar = Global::create(heap, STR("bar"),
                                   EXTERN_FLAG | PUBLIC_FLAG,
@@ -278,7 +278,7 @@ TEST(PackageLinkMissingGlobal) {
 
   auto fooName = PackageName::fromString(heap, STR("foo"));
   Local<PackageVersion> nullVersion;
-  auto fooDep = PackageDependency::create(heap, fooName, nullVersion, nullVersion, 1, 0, 0);
+  auto fooDep = PackageDependency::create(heap, fooName, nullVersion, nullVersion, 1, 0, 0, 0);
   ASSERT_EQ(nullptr, fooDep->linkedGlobals());
   auto externBar = Global::create(heap, STR("bar"),
                                   EXTERN_FLAG | PUBLIC_FLAG,
@@ -302,7 +302,7 @@ TEST(PackageLinkIncompatibleGlobal) {
 
   auto fooName = PackageName::fromString(heap, STR("foo"));
   Local<PackageVersion> nullVersion;
-  auto fooDep = PackageDependency::create(heap, fooName, nullVersion, nullVersion, 1, 0, 0);
+  auto fooDep = PackageDependency::create(heap, fooName, nullVersion, nullVersion, 1, 0, 0, 0);
   ASSERT_EQ(nullptr, fooDep->linkedGlobals());
   auto externBar = Global::create(heap, STR("bar"),
                                   EXTERN_FLAG | PUBLIC_FLAG,

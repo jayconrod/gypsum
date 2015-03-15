@@ -172,24 +172,28 @@ class PackageDependency: public Block {
                     BlockArray<Function>* externFunctions,
                     BlockArray<Function>* linkedFunctions,
                     BlockArray<Class>* externClasses,
-                    BlockArray<Class>* linkedClasses);
-  static Local<PackageDependency> create(Heap* heap,
-                                         const Handle<PackageName>& name,
-                                         const Handle<PackageVersion>& minVersion,
-                                         const Handle<PackageVersion>& maxVersion,
-                                         const Handle<BlockArray<Global>>& externGlobals,
-                                         const Handle<BlockArray<Global>>& linkedGlobals,
-                                         const Handle<BlockArray<Function>>& externFunctions,
-                                         const Handle<BlockArray<Function>>& linkedFunctions,
-                                         const Handle<BlockArray<Class>>& externClasses,
-                                         const Handle<BlockArray<Class>>& linkedClasses);
+                    BlockArray<Class>* linkedClasses,
+                    BlockArray<TypeParameter>* externTypeParameters);
+  static Local<PackageDependency> create(
+      Heap* heap,
+      const Handle<PackageName>& name,
+      const Handle<PackageVersion>& minVersion,
+      const Handle<PackageVersion>& maxVersion,
+      const Handle<BlockArray<Global>>& externGlobals,
+      const Handle<BlockArray<Global>>& linkedGlobals,
+      const Handle<BlockArray<Function>>& externFunctions,
+      const Handle<BlockArray<Function>>& linkedFunctions,
+      const Handle<BlockArray<Class>>& externClasses,
+      const Handle<BlockArray<Class>>& linkedClasses,
+      const Handle<BlockArray<TypeParameter>>& externTypeParameters);
   static Local<PackageDependency> create(Heap* heap,
                                          const Handle<PackageName>& name,
                                          const Handle<PackageVersion>& minVersion,
                                          const Handle<PackageVersion>& maxVersion,
                                          length_t globalCount,
                                          length_t functionCount,
-                                         length_t classCount);
+                                         length_t classCount,
+                                         length_t typeParameterCount);
 
   static bool parseNameAndVersion(Heap* heap,
                                   const Handle<String>& depString,
@@ -211,6 +215,12 @@ class PackageDependency: public Block {
   BlockArray<Class>* externClasses() const { return externClasses_.get(); }
   BlockArray<Class>* linkedClasses() const { return linkedClasses_.get(); }
   void setLinkedClasses(BlockArray<Class>* linkedClasses);
+  BlockArray<TypeParameter>* externTypeParameters() const {
+    return externTypeParameters_.get();
+  }
+  void setExternTypeParameters(BlockArray<TypeParameter>* externTypeParameters) {
+    externTypeParameters_.set(this, externTypeParameters);
+  }
 
   bool isSatisfiedBy(const Package* package) const {
     return isSatisfiedBy(package->name(), package->version());
@@ -230,6 +240,7 @@ class PackageDependency: public Block {
   Ptr<BlockArray<Function>> linkedFunctions_;
   Ptr<BlockArray<Class>> externClasses_;
   Ptr<BlockArray<Class>> linkedClasses_;
+  Ptr<BlockArray<TypeParameter>> externTypeParameters_;
   // Update PACKAGE_DEPENDENCY_POINTER_LIST if pointers change.
 };
 

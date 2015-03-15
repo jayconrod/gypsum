@@ -38,9 +38,9 @@ Local<Global> Global::create(Heap* heap, const Handle<String>& name,
 }
 
 
-bool Global::isCompatibleWith(const Global* other) const {
-  return (flags() | EXTERN_FLAG) == (other->flags() | EXTERN_FLAG) &&
-         type()->equals(other->type());
+bool Global::isCompatibleWith(const Handle<Global>& a, const Handle<Global>& b) {
+  return (a->flags() | EXTERN_FLAG) == (b->flags() | EXTERN_FLAG) &&
+         a->type()->equals(b->type());
 }
 
 

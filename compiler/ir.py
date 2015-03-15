@@ -105,9 +105,15 @@ class Package(object):
         if isinstance(irDefn, Global):
             externDefns = dep.externGlobals
             linkedDefns = dep.linkedGlobals
+        elif isinstance(irDefn, Function):
+            externDefns = dep.externFunctions
+            linkedDefns = dep.linkedFunctions
+        elif isinstance(irDefn, TypeParameter):
+            externDefns = dep.externTypeParameters
+            linkedDefns = None
         else:
             raise NotImplementedError
-        assert len(externDefns) == len(linkedDefns)
+        assert linkedDefns is None or len(externDefns) == len(linkedDefns)
 
         if id.externIndex is not None:
             return externDefns[id.externIndex]
@@ -119,11 +125,23 @@ class Package(object):
             externIrDefn = Global(irDefn.name, irDefn.astDefn, id,
                                   self.externalizeType(irDefn.type),
                                   externFlags)
+        elif isinstance(irDefn, Function):
+            externIrDefn = Function(irDefn.name, irDefn.astDefn, id,
+                                    self.externalizeType(irDefn.returnType),
+                                    map(self.externalize, irDefn.typeParameters),
+                                    map(self.externalizeType, irDefn.parameterTypes),
+                                    None, None, externFlags)
+        elif isinstance(irDefn, TypeParameter):
+            externIrDefn = TypeParameter(irDefn.name, irDefn.astDefn, id,
+                                         self.externalizeType(irDefn.upperBound),
+                                         self.externalizeType(irDefn.lowerBound),
+                                         externFlags)
         else:
             raise NotImplementedError
 
         externDefns.append(externIrDefn)
-        linkedDefns.append(irDefn)
+        if linkedDefns is not None:
+            linkedDefns.append(irDefn)
         return externIrDefn
 
     def externalizeType(self, ty):
@@ -256,6 +274,7 @@ class PackageDependency(object):
         self.linkedFunctions = []
         self.externClasses = []
         self.linkedClasses = []
+        self.externTypeParameters = []
 
     @staticmethod
     def fromString(s):
