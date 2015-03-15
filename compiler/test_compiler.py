@@ -21,7 +21,7 @@ from ir_types import *
 import ir_instructions
 from ir_instructions import *
 from bytecode import *
-from flags import LET, PUBLIC
+from flags import LET, PUBLIC, METHOD
 from compile_info import CompileInfo
 from builtins import *
 from errors import *
@@ -59,7 +59,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def makeSimpleFunction(self, name, retTy, blocks,
                            typeParameters=None, parameterTypes=None,
-                           variables=None, attribs=frozenset()):
+                           variables=None, flags=frozenset()):
         dummyPackage = Package()
         if variables is None:
             variables = []
@@ -69,7 +69,7 @@ class TestCompiler(TestCaseWithDefinitions):
             parameterTypes = [v.type for v in variables if v.kind is PARAMETER]
         blockList = [BasicBlock(i, insts) for i, insts in enumerate(blocks)]
         function = dummyPackage.addFunction(name, None, retTy, typeParameters, parameterTypes,
-                                            variables, blockList, attribs)
+                                            variables, blockList, flags)
         return function
 
     def checkFunction(self, input, expected):
@@ -425,7 +425,8 @@ class TestCompiler(TestCaseWithDefinitions):
                        ret()]],
                      parameterTypes=[clasTy],
                      variables=[self.makeVariable("$this", type=clasTy,
-                                                  kind=PARAMETER, flags=frozenset([LET]))])
+                                                  kind=PARAMETER, flags=frozenset([LET]))],
+                     flags=frozenset([METHOD]))
         self.assertEquals(expected, clas.constructors[0])
 
     def testAssignConstField(self):
@@ -1184,7 +1185,8 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret()]],
                              parameterTypes=[thisType],
                              variables=[self.makeVariable("$this", type=thisType,
-                                                          kind=PARAMETER, flags=frozenset([LET]))]))
+                                                          kind=PARAMETER, flags=frozenset([LET]))],
+                             flags=frozenset([METHOD])))
 
     def testDefaultCtorCallsInitializer(self):
         source = "class Foo"
@@ -1204,7 +1206,8 @@ class TestCompiler(TestCaseWithDefinitions):
                               ret()]],
                             parameterTypes=[thisType],
                             variables=[self.makeVariable("$this", type=thisType,
-                                                         kind=PARAMETER, flags=frozenset([LET]))]),
+                                                         kind=PARAMETER, flags=frozenset([LET]))],
+                            flags=frozenset([METHOD])),
                           ctor)
 
     def testPrimaryCtorCallsInitializer(self):
@@ -1229,7 +1232,8 @@ class TestCompiler(TestCaseWithDefinitions):
             ret()]],
           parameterTypes=[thisType, I32Type],
           variables=[self.makeVariable("$this", type=thisType,
-                                       kind=PARAMETER, flags=frozenset([LET]))])
+                                       kind=PARAMETER, flags=frozenset([LET]))],
+          flags=frozenset([METHOD]))
         self.assertEquals(expected, ctor)
 
     def testSecondaryCtorCallsInitializer(self):
@@ -1260,7 +1264,8 @@ class TestCompiler(TestCaseWithDefinitions):
           variables=[self.makeVariable("$this", type=thisType,
                                        kind=PARAMETER, flags=frozenset([LET])),
                      self.makeVariable("x", type=I32Type,
-                                       kind=PARAMETER, flags=frozenset([LET]))])
+                                       kind=PARAMETER, flags=frozenset([LET]))],
+          flags=frozenset([METHOD]))
         self.assertEquals(expected, ctor)
 
     def testNullaryCtor(self):
@@ -1317,7 +1322,8 @@ class TestCompiler(TestCaseWithDefinitions):
                               ret()]],
                             parameterTypes=[thisType, I32Type],
                             variables=[self.makeVariable("$this", type=thisType,
-                                                         kind=PARAMETER, flags=frozenset([LET]))]),
+                                                         kind=PARAMETER, flags=frozenset([LET]))],
+                            flags=frozenset([METHOD])),
                           ctor)
 
     def testCtorWithArgs(self):
@@ -1424,7 +1430,8 @@ class TestCompiler(TestCaseWithDefinitions):
                                              variables=[self.makeVariable("$this", type=ty,
                                                                           kind=PARAMETER,
                                                                           flags=frozenset([LET]))],
-                                             parameterTypes=[ty])
+                                             parameterTypes=[ty],
+                                             flags=frozenset([METHOD]))
         self.assertEquals(expected, clas.constructors[1])
 
     def testCallAlternateCtorLater(self):
@@ -1454,7 +1461,8 @@ class TestCompiler(TestCaseWithDefinitions):
                                                ret()]],
                                              variables=[self.makeVariable("$this", type=barTy,
                                                                           kind=PARAMETER, flags=frozenset([LET]))],
-                                             parameterTypes=[barTy])
+                                             parameterTypes=[barTy],
+                                             flags=frozenset([METHOD]))
         self.assertEquals(expected, bar.constructors[0])
 
     def testCallDefaultSuperCtor(self):
@@ -1657,7 +1665,8 @@ class TestCompiler(TestCaseWithDefinitions):
           variables=[self.makeVariable("$this", type=Ctype,
                                        kind=PARAMETER, flags=frozenset([LET]))],
           typeParameters=[T],
-          parameterTypes=[Ctype])
+          parameterTypes=[Ctype],
+          flags=frozenset([METHOD]))
         self.assertEquals(expectedCtor, C.constructors[0])
 
     def testCallClassMethodsWithStaticTypeArgs(self):

@@ -543,14 +543,15 @@ class Scope(ast.AstNodeVisitor):
 
         irInitializer = self.info.package.addFunction("$initializer", astDefn,
                                                       None, list(implicitTypeParams),
-                                                      None, [], None, frozenset())
+                                                      None, [], None, frozenset([METHOD]))
         self.makeMethod(irInitializer, irDefn)
         irDefn.initializer = irInitializer
 
         if not astDefn.hasConstructors():
             irDefaultCtor = self.info.package.addFunction("$constructor", astDefn,
                                                           None, list(implicitTypeParams),
-                                                          None, [], None, frozenset())
+                                                          None, [], None,
+                                                          frozenset([METHOD]))
             self.makeMethod(irDefaultCtor, irDefn)
             irDefn.constructors.append(irDefaultCtor)
         classInfo = ClassInfo(irDefn)
@@ -558,11 +559,14 @@ class Scope(ast.AstNodeVisitor):
         return irDefn
 
     def makeMethod(self, function, clas):
-        """Convenience method which adds a "this" parameter and sets the "clas" attrib.
+        """Convenience method which turns a function into a method.
 
-        Note that this does not add the function to the class's methods or constructors lists.
+        Adds a "this" parameter, sets the "clas" attrib, and adds the METHOD flag. Note that
+        this does not add the function to the class's methods or constructors lists. It just
+        modifies the function itself.
         """
         function.clas = clas
+        function.flags |= frozenset([METHOD])
         this = ir.Variable("$this", function.astDefn, None, ir.PARAMETER, frozenset([LET]))
         function.variables.insert(0, this)
 
@@ -931,7 +935,7 @@ class FunctionScope(Scope):
                                              [irContextType],
                                              [ir.Variable("$this", None, irContextType,
                                                           ir.PARAMETER, frozenset([LET]))],
-                                             [], frozenset())
+                                             [], frozenset([METHOD]))
         ctor.compileHint = CONTEXT_CONSTRUCTOR_HINT
         irContextClass.constructors.append(ctor)
         contextInfo.irContextClass = irContextClass
@@ -988,7 +992,7 @@ class FunctionScope(Scope):
                                                                    irClosureType,
                                                                    ir.PARAMETER,
                                                                    frozenset([LET]))],
-                                                      None, frozenset())
+                                                      None, frozenset([METHOD]))
         irClosureCtor.clas = irClosureClass
         irClosureCtor.compileHint = CLOSURE_CONSTRUCTOR_HINT
         irClosureClass.constructors.append(irClosureCtor)
@@ -1076,13 +1080,15 @@ class ClassScope(Scope):
                 checkFlags(flags, frozenset([PROTECTED, PRIVATE]), astDefn.location)
                 irDefn = self.info.package.addFunction("$constructor", astDefn,
                                                        None, implicitTypeParams,
-                                                       None, [], None, flags)
+                                                       None, [], None,
+                                                       flags | frozenset([METHOD]))
                 irScopeDefn.constructors.append(irDefn)
             else:
                 checkFlags(flags, frozenset([ABSTRACT, PROTECTED, PRIVATE]), astDefn.location)
                 irDefn = self.info.package.addFunction(astDefn.name, astDefn,
                                                        None, implicitTypeParams,
-                                                       None, [], None, flags)
+                                                       None, [], None,
+                                                       flags | frozenset([METHOD]))
                 irScopeDefn.methods.append(irDefn)
             # We don't need to call makeMethod here because the inner FunctionScope will do it.
         elif isinstance(astDefn, ast.AstPrimaryConstructorDefinition):
@@ -1090,7 +1096,7 @@ class ClassScope(Scope):
             implicitTypeParams = self.getImplicitTypeParameters()
             irDefn = self.info.package.addFunction("$constructor", astDefn,
                                                    None, implicitTypeParams,
-                                                   None, [], None, flags)
+                                                   None, [], None, flags | frozenset([METHOD]))
             irScopeDefn.constructors.append(irDefn)
             self.makeMethod(irDefn, irScopeDefn)
         elif isinstance(astDefn, ast.AstTypeParameter):

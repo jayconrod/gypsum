@@ -196,7 +196,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         astDefn = ast.definitions[0].members[0]
         scopeId = info.getScope(ast.definitions[0]).scopeId
         this = self.makeVariable("$this", kind=PARAMETER, flags=frozenset([LET]))
-        expectedFunction = self.makeFunction("f", variables=[this])
+        expectedFunction = self.makeFunction("f", variables=[this], flags=frozenset([METHOD]))
         expectedDefnInfo = DefnInfo(expectedFunction, scopeId)
         self.assertEquals(expectedDefnInfo, info.getDefnInfo(astDefn))
         expectedClosureInfo = ClosureInfo(info.package.findClass(name="C"),
@@ -260,7 +260,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource("class C\n" +
                                       "  private def f = {}")
         f = info.package.findFunction(name="f")
-        self.assertEquals(frozenset([PRIVATE]), f.flags)
+        self.assertEquals(frozenset([METHOD, PRIVATE]), f.flags)
 
     def testFunctionMustHaveBody(self):
         self.assertRaises(ScopeException, self.analyzeFromSource, "def f: i64")
@@ -278,7 +278,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         C = info.package.findClass(name="C")
         self.assertEquals(frozenset([ABSTRACT]), C.flags)
         f = info.package.findFunction(name="f")
-        self.assertEquals(frozenset([ABSTRACT]), f.flags)
+        self.assertEquals(frozenset([ABSTRACT, METHOD]), f.flags)
 
     def testAbstractMethodMustNotHaveBody(self):
         self.assertRaises(ScopeException, self.analyzeFromSource,
