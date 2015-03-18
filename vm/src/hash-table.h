@@ -189,7 +189,7 @@ class HashMap: public Block {
   static void ensureCapacity(Heap* heap, const Handle<HashMap<Table>>& map, length_t count) {
     auto newLength = map->length() + count;
     if (newLength >= map->softCapacity()) {
-      auto newCapacity = max(roundUpToPowerOf2(newLength),
+      auto newCapacity = max(roundUpToPowerOf2(newLength) * 2,
                              kDefaultInitialCapacity);
       resize(heap, map, newCapacity);
     }
