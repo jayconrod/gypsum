@@ -22,16 +22,17 @@ from utils_test import MockPackageLoader, TestCaseWithDefinitions
 
 
 class TestTypeAnalysis(TestCaseWithDefinitions):
-    def analyzeFromSource(self, source, packageNames=None):
+    def analyzeFromSource(self, source, packageNames=None, packageLoader=None):
+        assert packageNames is None or packageLoader is None
         filename = "(test)"
         rawTokens = lex(filename, source)
         layoutTokens = layout(rawTokens)
         ast = parse(filename, layoutTokens)
         if packageNames is None:
             packageNames = []
-        packageNames = map(PackageName.fromString, packageNames)
-        loader = MockPackageLoader(packageNames)
-        info = CompileInfo(ast, packageLoader=loader)
+        if packageLoader is None:
+            packageLoader = MockPackageLoader(map(PackageName.fromString, packageNames))
+        info = CompileInfo(ast, packageLoader=packageLoader)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         analyzeTypes(info)
@@ -315,6 +316,44 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source, packageNames=["foo.bar", "foo.bar.baz"])
         packageType = getPackageType()
         self.assertEquals(packageType, info.getType(info.ast.definitions[0].expression))
+
+    def testPropertyForeignGlobal(self):
+        source = "var x = foo.bar"
+        foo = Package(name=PackageName(["foo"]))
+        bar = foo.addGlobal("bar", None, UnitType, frozenset([PUBLIC, LET]))
+        info = self.analyzeFromSource(source, packageLoader=MockPackageLoader([foo]))
+        x = info.package.findGlobal(name="x")
+        self.assertEquals(UnitType, x.type)
+        self.assertEquals(UnitType, info.getType(info.ast.definitions[0].expression))
+
+    def testPropertyForeignFunction(self):
+        source = "var x = foo.bar"
+        foo = Package(name=PackageName(["foo"]))
+        bar = foo.addFunction("bar", None, UnitType, [], [], None, None, frozenset([PUBLIC]))
+        info = self.analyzeFromSource(source, packageLoader=MockPackageLoader([foo]))
+        x = info.package.findGlobal(name="x")
+        self.assertEquals(UnitType, x.type)
+        self.assertEquals(UnitType, info.getType(info.ast.definitions[0].expression))
+
+    def testCallForeignFunctionWithArg(self):
+        source = "var x = foo.bar(12)"
+        foo = Package(name=PackageName(["foo"]))
+        bar = foo.addFunction("bar", None, I64Type, [], [I64Type],
+                              None, None, frozenset([PUBLIC]))
+        info = self.analyzeFromSource(source, packageLoader=MockPackageLoader([foo]))
+        x = info.package.findGlobal(name="x")
+        self.assertEquals(I64Type, x.type)
+
+    def testCallForeignFunctionWithTypeArg(self):
+        source = "var x = foo.bar[String](\"baz\")"
+        foo = Package(name=PackageName(["foo"]))
+        T = foo.addTypeParameter("T", None, getRootClassType(), getNothingClassType(),
+                                 frozenset([STATIC]))
+        Tty = VariableType(T)
+        bar = foo.addFunction("bar", None, Tty, [T], [Tty], None, None, frozenset([PUBLIC]))
+        info = self.analyzeFromSource(source, packageLoader=MockPackageLoader([foo]))
+        x = info.package.findGlobal(name="x")
+        self.assertEquals(getStringType(), x.type)
 
     def testCallMethodWithNullableReceiver(self):
         source = "class Foo\n" + \

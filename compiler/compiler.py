@@ -305,15 +305,18 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.pkg(irDefn.id.index)
 
     def visitAstCallExpression(self, expr, mode):
+        if not isinstance(expr.callee, ast.AstVariableExpression) and \
+           not isinstance(expr.callee, ast.AstPropertyExpression):
+            raise SemanticException(expr.location, "uncallable expression")
+
         useInfo = self.info.getUseInfo(expr)
         callInfo = self.info.getCallInfo(expr) if self.info.hasCallInfo(expr) else None
-        if isinstance(expr.callee, ast.AstVariableExpression):
-            self.buildCall(useInfo, callInfo, None, expr.typeArguments, expr.arguments, mode)
-        elif isinstance(expr.callee, ast.AstPropertyExpression):
-            self.buildCall(useInfo, callInfo, expr.callee.receiver,
-                           expr.typeArguments, expr.arguments, mode)
+        if isinstance(expr.callee, ast.AstPropertyExpression) and \
+           not self.info.hasPackageInfo(expr.callee.receiver):
+            receiver = expr.callee.receiver
         else:
-            raise SemanticException(expr.location, "uncallable expression")
+            receiver = None
+        self.buildCall(useInfo, callInfo, receiver, expr.typeArguments, expr.arguments, mode)
 
     def visitCallThisExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)

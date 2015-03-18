@@ -1166,6 +1166,44 @@ class TestCompiler(TestCaseWithDefinitions):
                               ret(),
                             ]]))
 
+    def testForeignFunctionCall(self):
+        foo = Package(name=PackageName(["foo"]))
+        bar = foo.addFunction("bar", None, I64Type, [], [I64Type],
+                              None, None, frozenset([PUBLIC]))
+        loader = MockPackageLoader([foo])
+        source = "def f = foo.bar(12)"
+        package = self.compileFromSource(source, packageLoader=loader)
+        self.assertIs(foo.id, bar.id.packageId)
+        dep = package.dependencies[foo.id.index]
+        self.assertIs(bar, dep.linkedFunctions[bar.id.externIndex])
+        externBar = dep.externFunctions[bar.id.externIndex]
+        self.assertIn(EXTERN, externBar.flags)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               i64(12),
+                               callgf(foo.id.index, bar.id.externIndex),
+                               ret()]]))
+
+    def testForeignFunctionCallWithTypeArg(self):
+        foo = Package(name=PackageName(["foo"]))
+        T = foo.addTypeParameter("T", None, getRootClassType(), getNothingClassType(),
+                                 frozenset([STATIC]))
+        Tty = VariableType(T)
+        bar = foo.addFunction("bar", None, Tty, [T], [Tty], None, None, frozenset([PUBLIC]))
+        loader = MockPackageLoader([foo])
+        source = "def f(s: String) = foo.bar[String](s)"
+        package = self.compileFromSource(source, packageLoader=loader)
+        stringTy = getStringType()
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", stringTy, [[
+                               ldlocal(0),
+                               tyc(BUILTIN_STRING_CLASS_ID.index),
+                               callgf(foo.id.index, bar.id.externIndex),
+                               ret()]],
+                             parameterTypes=[stringTy],
+                             variables=[self.makeVariable("s", type=stringTy,
+                                                          kind=PARAMETER, flags=frozenset([LET]))]))
+
     def testInitializer(self):
         source = "class Foo\n" + \
                  "  var x: Foo = this\n" + \

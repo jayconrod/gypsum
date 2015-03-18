@@ -36,6 +36,7 @@ class CompileInfo(object):
         self.classInfo = {}  # keyed by DefnId
         self.typeInfo = {}  # keyed by AstId
         self.callInfo = {}  # keyed by AstId
+        self.packageInfo = {}  # keyed by AstId
 
 
 _dictNames = [("Scope", "scopes", (ids.ScopeId, ids.AstId, ids.DefnId)),
@@ -45,7 +46,8 @@ _dictNames = [("Scope", "scopes", (ids.ScopeId, ids.AstId, ids.DefnId)),
               ("UseInfo", "useInfo", (ids.AstId,)),
               ("ClassInfo", "classInfo", (ids.DefnId,)),
               ("Type", "typeInfo", (ids.AstId,)),
-              ("CallInfo", "callInfo", (ids.AstId,))]
+              ("CallInfo", "callInfo", (ids.AstId,)),
+              ("PackageInfo", "packageInfo", (ids.AstId,))]
 
 def _addDictMethods(elemName, dictName, types):
     def cleanKey(self, key):
@@ -270,6 +272,19 @@ class CallInfo(data.Data):
         # false when the receiver expression is a package or namespace or when there is no
         # explicit receiver expression.
         "receiverExprNeeded",
+    ]
+
+
+class PackageInfo(data.Data):
+    """Defined for variable and property expressions which are actually just package names.
+    This helps us access definitions inside packages later."""
+
+    propertyNames = [
+        # The package being referenced.
+        "package",
+
+        # The PackageScope for the package being referenced.
+        "scopeId",
     ]
 
 

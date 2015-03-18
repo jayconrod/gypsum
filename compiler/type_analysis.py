@@ -10,7 +10,7 @@ import ir
 import ir_types as ir_t
 from builtins import getExceptionClass, getPackageClass, getNothingClass
 from utils import COMPILE_FOR_VALUE, COMPILE_FOR_MATCH
-from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, CallInfo, getExplicitTypeParameters, getImplicitTypeParameters
+from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, CallInfo, PackageInfo, getExplicitTypeParameters, getImplicitTypeParameters
 from flags import COVARIANT, CONTRAVARIANT
 
 
@@ -449,7 +449,9 @@ class TypeVisitor(TypeVisitorCommon):
                                         "%s is not the full name of a package" %
                                         str(package.name))
                 packageNode, _ = nodeNames[packageNameLength - 1]
-                scope.use(defnInfo, packageNode.id, USE_AS_VALUE, packageNode.location)
+                self.scope().use(defnInfo, packageNode.id, USE_AS_VALUE, packageNode.location)
+                packageInfo = PackageInfo(package, scope.scopeId)
+                self.info.setPackageInfo(packageNode, packageInfo)
                 packageType = ir_t.getPackageType()
                 self.info.setType(packageNode, packageType)
 
@@ -485,8 +487,16 @@ class TypeVisitor(TypeVisitorCommon):
                                          None, typeArgs, argTypes, False, node.location)
         elif isinstance(node.callee, ast.AstPropertyExpression):
             receiverType = self.visit(node.callee.receiver)
-            ty = self.handleMethodCall(node.callee.propertyName, node.id,
-                                       receiverType, typeArgs, argTypes, False, node.location)
+            receiverUseInfo = self.info.getUseInfo(node.callee.receiver)
+            if isinstance(receiverUseInfo.defnInfo.irDefn, ir.Package):
+                packageInfo = self.info.getPackageInfo(node.callee.receiver)
+                packageScope = self.info.getScope(packageInfo.scopeId)
+                ty = self.handlePossibleCall(packageScope, node.callee.propertyName, node.id,
+                                             None, typeArgs, argTypes, False, node.location)
+            else:
+                ty = self.handleMethodCall(node.callee.propertyName, node.id,
+                                           receiverType, typeArgs, argTypes,
+                                           False, node.location)
         elif isinstance(node.callee, ast.AstThisExpression) or \
              isinstance(node.callee, ast.AstSuperExpression):
             receiverType = self.visit(node.callee)
@@ -809,6 +819,10 @@ class TypeVisitor(TypeVisitorCommon):
                              (not isinstance(irDefn, ir.Function) or defnInfo.irDefn.isMethod())
         callInfo = CallInfo(allTypeArgs, receiverExprNeeded)
         self.info.setCallInfo(useAstId, callInfo)
+        if isinstance(irDefn, ir.Package):
+            defnScope = self.info.getScope(defnInfo.scopeId)
+            packageInfo = PackageInfo(irDefn, defnScope.scopeForPrefix(name).scopeId)
+            self.info.setPackageInfo(useAstId, packageInfo)
 
         self.scope().use(defnInfo, useAstId, useKind, loc)
         self.ensureTypeInfoForDefn(irDefn)
