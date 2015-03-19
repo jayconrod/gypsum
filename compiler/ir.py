@@ -90,7 +90,7 @@ class Package(object):
         self.findOrAddString(name)
         return Field(name, *args)
 
-    def addDependency(self, package):
+    def ensureDependency(self, package):
         if package.id.index is not None:
             assert self.dependencies[package.id.index].package is package
             return

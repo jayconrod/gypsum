@@ -620,7 +620,7 @@ class Scope(ast.AstNodeVisitor):
         irDefn = defnInfo.irDefn
         if isinstance(irDefn, ir.Package):
             assert useKind in [USE_AS_VALUE, USE_AS_PROPERTY]
-            self.info.package.addDependency(irDefn)
+            self.info.package.ensureDependency(irDefn)
 
         if isinstance(irDefn, ir.IrTopDefn) and \
            irDefn.isForeign() and \

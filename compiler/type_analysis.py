@@ -464,7 +464,7 @@ class TypeVisitor(TypeVisitorCommon):
             receiverType = packageType
             start = len(nodeNames)
         else:
-            self.info.package.addDependency(package)
+            self.info.package.ensureDependency(package)
             n, name = nodeNames[packageNameLength]
             receiverType = self.handlePossibleCall(scope, name, node.id, None,
                                                    [], [], False, node.location)
