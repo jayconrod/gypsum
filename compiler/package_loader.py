@@ -66,4 +66,8 @@ class PackageLoader(object):
         fileName = self.packageInfo[name].fileName
         package = serialize.deserialize(fileName)
         info.package = package
+
+        for dep in package.dependencies:
+            dep.package = self.loadPackage(dep.name)
+
         return package
