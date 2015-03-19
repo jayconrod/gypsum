@@ -136,31 +136,6 @@ bool Function::hasPointerMapAtPcOffset(length_t pcOffset) const {
 }
 
 
-bool Function::isCompatibleWith(const Handle<Function>& a, const Handle<Function>& b) {
-  HandleScope handleScope(a->getVM());
-  if (!a->name()->equals(b->name()) ||
-      (a->flags() | EXTERN_FLAG) != (b->flags() | EXTERN_FLAG) ||
-      a->typeParameterCount() != b->typeParameterCount() ||
-      !Type::isSubtypeOf(handle(a->returnType()), handle(b->returnType())) ||
-      a->parameterCount() != b->parameterCount()) {
-    return false;
-  }
-
-  for (length_t i = 0, n = a->typeParameterCount(); i < n; i++) {
-    auto ap = handle(a->typeParameter(i)), bp = handle(b->typeParameter(i));
-    if (!TypeParameter::isCompatibleWith(ap, bp))
-      return false;
-  }
-  for (length_t i = 0, n = a->parameterCount(); i < n; i++) {
-    auto at = handle(a->parameterType(i)), bt = handle(b->parameterType(i));
-    if (!Type::isSubtypeOf(bt, at))
-      return false;
-  }
-
-  return true;
-}
-
-
 ostream& operator << (ostream& os, const Function* fn) {
   os << brief(fn);
   if (fn->hasBuiltinId())

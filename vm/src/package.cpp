@@ -232,18 +232,17 @@ void Package::link(Heap* heap, const Handle<Package>& package) {
     auto externGlobals = handle(dependency->externGlobals());
     auto globalCount = externGlobals->length();
     auto linkedGlobals = BlockArray<Global>::create(heap, globalCount);
-    for (length_t j = 0; j < globalCount; j++) {
-      auto externGlobal = handle(externGlobals->get(i));
-      auto name = handle(externGlobal->name());
-      auto rawLinkedGlobal = depExports->getOrElse(*name, nullptr);
-      if (!rawLinkedGlobal || !isa<Global>(rawLinkedGlobal)) {
-        throw Error("link error");
+    {
+      AllowAllocationScope noAllocation(heap, false);
+      for (length_t j = 0; j < globalCount; j++) {
+        auto externGlobal = externGlobals->get(i);
+        auto name = externGlobal->name();
+        auto linkedGlobal = depExports->getOrElse(name, nullptr);
+        if (!linkedGlobal || !isa<Global>(linkedGlobal)) {
+          throw Error("link error");
+        }
+        linkedGlobals->set(j, block_cast<Global>(linkedGlobal));
       }
-      auto linkedGlobal = handle(block_cast<Global>(rawLinkedGlobal));
-      if (!Global::isCompatibleWith(linkedGlobal, externGlobal)) {
-        throw Error("link error");
-      }
-      linkedGlobals->set(j, *linkedGlobal);
     }
     dependency->setLinkedGlobals(*linkedGlobals);
 
@@ -251,18 +250,17 @@ void Package::link(Heap* heap, const Handle<Package>& package) {
     auto externFunctions = handle(dependency->externFunctions());
     auto functionCount = externFunctions->length();
     auto linkedFunctions = BlockArray<Function>::create(heap, functionCount);
-    for (length_t j = 0; j < functionCount; j++) {
-      auto externFunction = handle(externFunctions->get(i));
-      auto name = handle(externFunction->name());
-      auto rawLinkedFunction = depExports->getOrElse(*name, nullptr);
-      if (!rawLinkedFunction || !isa<Function>(rawLinkedFunction)) {
-        throw Error("link error");
+    {
+      AllowAllocationScope noAllocation(heap, false);
+      for (length_t j = 0; j < functionCount; j++) {
+        auto externFunction = externFunctions->get(i);
+        auto name = externFunction->name();
+        auto linkedFunction = depExports->getOrElse(name, nullptr);
+        if (!linkedFunction || !isa<Function>(linkedFunction)) {
+          throw Error("link error");
+        }
+        linkedFunctions->set(j, block_cast<Function>(linkedFunction));
       }
-      auto linkedFunction = handle(block_cast<Function>(rawLinkedFunction));
-      if (!Function::isCompatibleWith(linkedFunction, externFunction)) {
-        throw Error("link error");
-      }
-      linkedFunctions->set(j, *linkedFunction);
     }
     dependency->setLinkedFunctions(*linkedFunctions);
   }
