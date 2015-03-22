@@ -265,6 +265,9 @@ TEST(PackageLink) {
   fooPackage->setGlobals(*fooGlobals);
   fooDep->setPackage(*fooPackage);
 
+  auto emptyExternTypes = BlockArray<ExternTypeInfo>::create(heap, 0);
+  package->setExternTypes(*emptyExternTypes);
+
   Package::link(heap, package);
 
   ASSERT_EQ(*bar, fooDep->linkedGlobals()->get(0));

@@ -40,10 +40,14 @@
 - {name: "st64", iops: 1, term: false}
 - {name: "stp", iops: 1, term: false}
 - {name: "allocobj", iops: 1, term: false}
+- {name: "allocobjf", iops: 2, term: false}
 - {name: "allocarri", iops: 2, term: false}
+- {name: "allocarrif", iops: 3, term: false}
 - {name: "pkg", iops: 1, term: false}
 - {name: "cls", iops: 1, term: false}
+- {name: "clsf", iops: 2, term: false}
 - {name: "tyc", iops: 1, term: false}
+- {name: "tycf", iops: 2, term: false}
 - {name: "tyv", iops: 1, term: false}
 - {name: "cast", iops: 0, term: false}
 - {name: "callg", iops: 1, term: false}

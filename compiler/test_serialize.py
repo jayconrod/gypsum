@@ -105,7 +105,7 @@ class TestSerialization(unittest.TestCase):
             tyOut = self.des.readType()
             self.assertEquals(ty, tyOut)
 
-        package = ir.Package()
+        package = ir.Package(id=ids.TARGET_PACKAGE_ID)
         package.classes = self.des.createEmptyClassList(4, package.id)
         package.typeParameters = self.des.createEmptyTypeParameterList(2, package.id)
         self.ser.package = package

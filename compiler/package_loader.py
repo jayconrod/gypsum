@@ -28,12 +28,14 @@ class PackageLoader(object):
         else:
             self.paths = []
 
-        self.packageInfo = None
+        self.packageInfoByName = None
+        self.packageInfoById = None
 
     def ensurePackageInfo(self):
-        if self.packageInfo is not None:
+        if self.packageInfoByName is not None:
             return
-        self.packageInfo = {}
+        self.packageInfoByName = {}
+        self.packageInfoById = {}
         packageFileNameRex = re.compile(r"\A(%s)-(%s).csp\Z" %
                                         (ir.PackageName.nameSrc, ir.PackageVersion.versionSrc))
         for dirName in self.paths:
@@ -45,29 +47,34 @@ class PackageLoader(object):
                     name = ir.PackageName.fromString(m.group(1))
                     version = ir.PackageVersion.fromString(m.group(2))
                     fileName = os.path.join(dirName, baseName)
-                    if name not in self.packageInfo or \
-                       version > self.packageInfo[name].version:
-                        self.packageInfo[name] = PackageLoader.Info(name, version, fileName)
+                    if name not in self.packageInfoByName or \
+                       version > self.packageInfoByName[name].version:
+                        self.packageInfoByName[name] = \
+                          PackageLoader.Info(name, version, fileName)
             except OSError:
                 continue
 
     def getPackageNames(self):
         self.ensurePackageInfo()
-        return self.packageInfo.keys()
+        return self.packageInfoByName.keys()
 
     def isPackage(self, name):
         self.ensurePackageInfo()
-        return name in self.packageInfo
+        return name in self.packageInfoByName
 
     def loadPackage(self, name):
-        info = self.packageInfo[name]
+        info = self.packageInfoByName[name]
         if info.package is not None:
             return info.package
-        fileName = self.packageInfo[name].fileName
+        fileName = self.packageInfoByName[name].fileName
         package = serialize.deserialize(fileName)
         info.package = package
+        self.packageInfoById[package.id] = info
 
         for dep in package.dependencies:
             dep.package = self.loadPackage(dep.name)
 
         return package
+
+    def getPackageById(self, id):
+        return self.packageInfoById[id]

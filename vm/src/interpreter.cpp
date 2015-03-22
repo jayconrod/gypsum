@@ -405,6 +405,22 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
+      case ALLOCOBJF: {
+        auto depIndex = toLength(readVbn());
+        auto externIndex = toLength(readVbn());
+        Object* obj = nullptr;
+        {
+          GCSafeScope gcSafe(this);
+          HandleScope handleScope(vm_);
+          auto clas = handle(function_->package()->dependencies()->get(depIndex)
+              ->linkedClasses()->get(externIndex));
+          auto meta = Class::ensureAndGetInstanceMeta(clas);
+          obj = *Object::create(vm_->heap(), meta);
+        }
+        push<Block*>(obj);
+        break;
+      }
+
       case ALLOCARRI: {
         auto classId = readVbn();
         auto length = readVbn();
@@ -413,6 +429,23 @@ i64 Interpreter::call(const Handle<Function>& callee) {
           GCSafeScope gcSafe(this);
           HandleScope handleScope(vm_);
           auto meta = getMetaForClassId(classId);
+          obj = *Object::create(vm_->heap(), meta, length);
+        }
+        push<Block*>(obj);
+        break;
+      }
+
+      case ALLOCARRIF: {
+        auto depIndex = toLength(readVbn());
+        auto externIndex = toLength(readVbn());
+        auto length = toLength(readVbn());
+        Object* obj = nullptr;
+        {
+          GCSafeScope gcSafe(this);
+          HandleScope handleScope(vm_);
+          auto clas = handle(function_->package()->dependencies()->get(depIndex)
+              ->linkedClasses()->get(externIndex));
+          auto meta = Class::ensureAndGetInstanceMeta(clas);
           obj = *Object::create(vm_->heap(), meta, length);
         }
         push<Block*>(obj);
@@ -435,8 +468,22 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
+      case CLSF: {
+        auto depIndex = toLength(readVbn());
+        auto externIndex = toLength(readVbn());
+        auto clas = function_->package()->dependencies()->get(depIndex)
+            ->linkedClasses()->get(externIndex);
+        push<Block*>(clas);
+        break;
+      }
+
       case TYC:
       case TYV:
+        readVbn();
+        break;
+
+      case TYCF:
+        readVbn();
         readVbn();
         break;
 

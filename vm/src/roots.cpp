@@ -163,6 +163,12 @@ void Roots::initialize(Heap* heap) {
   typeMeta->blockType_ = TYPE_BLOCK_TYPE;
   basicRoots_[TYPE_META_ROOT_INDEX] = typeMeta;
 
+  auto externTypeInfoMeta =
+      new(heap, 0, sizeof(ExternTypeInfo), 0) Meta(EXTERN_TYPE_INFO_BLOCK_TYPE);
+  externTypeInfoMeta->hasPointers_ = true;
+  externTypeInfoMeta->objectPointerMap().setWord(0, ExternTypeInfo::kPointerMap);
+  basicRoots_[EXTERN_TYPE_INFO_META_ROOT_INDEX] = externTypeInfoMeta;
+
   Meta* stringMeta = getBuiltinClass(BUILTIN_STRING_CLASS_ID)->instanceMeta();
   stringMeta->blockType_ = STRING_BLOCK_TYPE;
   basicRoots_[STRING_META_ROOT_INDEX] = stringMeta;
@@ -214,6 +220,7 @@ Meta* Roots::getMetaForBlockType(int type) {
     case BLOCK_HASH_MAP_TABLE_BLOCK_TYPE: return blockHashMapTableMeta();
     case BLOCK_HASH_MAP_BLOCK_TYPE: return blockHashMapMeta();
     case TYPE_BLOCK_TYPE: return typeMeta();
+    case EXTERN_TYPE_INFO_BLOCK_TYPE: return externTypeInfoMeta();
     case STRING_BLOCK_TYPE: return stringMeta();
     default:
       UNREACHABLE();

@@ -19,6 +19,7 @@ namespace internal {
 
 template <class T>
 class BlockArray;
+class ExternTypeInfo;
 class Function;
 class Global;
 template <class K, class V>
@@ -79,6 +80,11 @@ class Package: public Object {
   void setExports(ExportMap* exports) { exports_.set(this, exports); }
   static void ensureExports(Heap* heap, const Handle<Package>& package);
 
+  BlockArray<ExternTypeInfo>* externTypes() const { return externTypes_.get(); }
+  void setExternTypes(BlockArray<ExternTypeInfo>* externTypes) {
+    externTypes_.set(this, externTypes);
+  }
+
   static void link(Heap* heap, const Handle<Package>& package);
 
  private:
@@ -96,6 +102,7 @@ class Package: public Object {
   length_t entryFunctionIndex_;
   length_t initFunctionIndex_;
   Ptr<ExportMap> exports_;
+  Ptr<BlockArray<ExternTypeInfo>> externTypes_;
   // Update PACKAGE_POINTER_LIST if pointers change.
 };
 

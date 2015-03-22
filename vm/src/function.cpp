@@ -510,6 +510,20 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
+        case ALLOCOBJF: {
+          auto depIndex = readVbn(bytecode, &pcOffset);
+          auto externIndex = readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          auto clas = handle(package->dependencies()->get(depIndex)
+              ->linkedClasses()->get(externIndex));
+          vector<Local<Type>> typeArgs;
+          currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
+          auto type = Type::create(heap, clas, typeArgs);
+          currentMap.push(type);
+          break;
+        }
+
         case ALLOCARRI: {
           i64 classId = readVbn(bytecode, &pcOffset);
           readVbn(bytecode, &pcOffset);  // length is unused
@@ -528,6 +542,21 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
+        case ALLOCARRIF: {
+          auto depIndex = readVbn(bytecode, &pcOffset);
+          auto externIndex = readVbn(bytecode, &pcOffset);
+          readVbn(bytecode, &pcOffset);  // length is unused
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          auto clas = handle(package->dependencies()->get(depIndex)
+              ->linkedClasses()->get(externIndex));
+          vector<Local<Type>> typeArgs;
+          currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
+          auto type = Type::create(heap, clas, typeArgs);
+          currentMap.push(type);
+          break;
+        }
+
         case TYC: {
           i64 classId = readVbn(bytecode, &pcOffset);
           Local<Class> clas;
@@ -536,6 +565,18 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           } else {
             clas = handle(package->getClass(classId));
           }
+          vector<Local<Type>> typeArgs;
+          currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
+          auto type = Type::create(heap, clas, typeArgs);
+          currentMap.pushTypeArg(type);
+          break;
+        }
+
+        case TYCF: {
+          auto depIndex = readVbn(bytecode, &pcOffset);
+          auto externIndex = readVbn(bytecode, &pcOffset);
+          auto clas = handle(package->dependencies()->get(depIndex)
+              ->linkedClasses()->get(externIndex));
           vector<Local<Type>> typeArgs;
           currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
           auto type = Type::create(heap, clas, typeArgs);
@@ -601,6 +642,13 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         }
 
         case CLS: {
+          readVbn(bytecode, &pcOffset);
+          currentMap.push(handle(Type::rootClassType(roots)));
+          break;
+        }
+
+        case CLSF: {
+          readVbn(bytecode, &pcOffset);
           readVbn(bytecode, &pcOffset);
           currentMap.push(handle(Type::rootClassType(roots)));
           break;

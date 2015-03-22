@@ -662,10 +662,13 @@ class CompileVisitor(ast.AstNodeVisitor):
                 self.loadField(irDefn)
             else:
                 assert isinstance(irDefn, Global)
-                if irDefn.isForeign():
-                    self.ldgf(irDefn.id.packageId.index, irDefn.id.externIndex)
-                else:
-                    self.ldg(irDefn.id.index)
+                self.loadGlobal(irDefn)
+
+    def loadGlobal(self, globl):
+        if globl.isForeign():
+            self.ldgf(globl.id.packageId.index, globl.id.externIndex)
+        else:
+            self.ldg(globl.id.index)
 
     def storeVariable(self, varOrDefnInfo, valueType=None):
         if isinstance(varOrDefnInfo, Variable):
@@ -684,10 +687,13 @@ class CompileVisitor(ast.AstNodeVisitor):
                 self.storeField(irDefn)
             else:
                 assert isinstance(irDefn, Global)
-                if irDefn.isForeign():
-                    self.stgf(irDefn.id.packageId.index, irDefn.id.externIndex)
-                else:
-                    self.stg(irDefn.id.index)
+                self.storeGlobal(irDefn)
+
+    def storeGlobal(self, globl):
+        if globl.isForeign():
+            self.stgf(globl.id.packageId.index, globl.id.externIndex)
+        else:
+            self.stg(globl.id.index)
 
     def loadContext(self, scopeId):
         closureInfo = self.info.getClosureInfo(self.getScopeId())
@@ -744,6 +750,7 @@ class CompileVisitor(ast.AstNodeVisitor):
 
     def createContext(self, contextInfo):
         contextClass = contextInfo.irContextClass
+        assert not contextClass.isForeign()
         contextId = contextInfo.id
         assert len(contextClass.constructors) == 1
         contextCtor = contextClass.constructors[0]
@@ -766,7 +773,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                 if closureClass is None or \
                    closureClass is self.info.getDefnInfo(self.astDefn).irDefn:
                     continue
-                assert len(closureClass.constructors) == 1
+                assert not closureClass.isForeign() and len(closureClass.constructors) == 1
                 closureCtor = closureClass.constructors[0]
                 assert closureClass.typeParameters == closureCtor.typeParameters
                 capturedScopeIds = closureInfo.capturedScopeIds()
@@ -811,21 +818,21 @@ class CompileVisitor(ast.AstNodeVisitor):
             assert receiver is None
             compileArgs()
             compileTypeArgs()
-            if irDefn.isForeign():
-                self.callgf(irDefn.id.packageId.index, irDefn.id.index)
-            else:
-                self.callg(irDefn.id.index)
+            self.callFunction(irDefn)
 
         elif receiver is None and irDefn.isConstructor():
             # Constructor
             assert receiver is None
             compileTypeArgs()
-            self.allocobj(irDefn.clas.id.index)
+            if irDefn.clas.isForeign():
+                self.allocobjf(irDefn.clas.id.packageId.index, irDefn.clas.id.externIndex)
+            else:
+                self.allocobj(irDefn.clas.id.index)
             if mode is COMPILE_FOR_VALUE:
                 self.dup()
             compileArgs()
             compileTypeArgs()
-            self.callg(irDefn.id.index)
+            self.callFunction(irDefn)
             self.drop()
             shouldDropForEffect = False
         else:
@@ -871,10 +878,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             elif irDefn.isFinal():
                 # Calls to final methods can be made directly. This includes constructors and
                 # primitive methods which can't be called virtually.
-                if irDefn.isForeign():
-                    self.callgf(irDefn.id.packageId.index, irDefn.id.index)
-                else:
-                    self.callg(irDefn.id.index)
+                self.callFunction(irDefn)
             else:
                 index = irDefn.clas.getMethodIndex(irDefn)
                 self.callv(argCount + 1, index)
@@ -885,6 +889,12 @@ class CompileVisitor(ast.AstNodeVisitor):
 
         if shouldDropForEffect:
             self.drop()
+
+    def callFunction(self, function):
+        if function.isForeign():
+            self.callgf(function.id.packageId.index, function.id.externIndex)
+        else:
+            self.callg(function.id.index)
 
     def buildAssignment(self, lvalue, mode):
         if mode is COMPILE_FOR_VALUE:
@@ -902,12 +912,16 @@ class CompileVisitor(ast.AstNodeVisitor):
             raise SemanticException(location, "cannot match type with static parameters")
         self.allocarri(BUILTIN_TYPE_CLASS_ID.index, 1)
         self.dup()
-        self.cls(ty.clas.id.index)
+        if ty.clas.isForeign():
+            self.clsf(ty.clas.id.packageId.index, ty.clas.id.externIndex)
+        else:
+            self.cls(ty.clas.id.index)
         self.callg(BUILTIN_TYPE_CTOR_ID.index)
         self.drop()
 
     def buildImplicitStaticTypeArguments(self, typeParams):
         for param in typeParams:
+            assert not param.isForeign()
             self.tyv(param.id.index)
 
     def buildStaticTypeArguments(self, types):
@@ -918,8 +932,12 @@ class CompileVisitor(ast.AstNodeVisitor):
         if isinstance(ty, ClassType):
             for arg in ty.typeArguments:
                 self.buildStaticTypeArgument(arg)
-            self.tyc(ty.clas.id.index)
+            if ty.clas.isForeign():
+                self.tycf(ty.clas.packageId.index, ty.clas.id.externIndex)
+            else:
+                self.tyc(ty.clas.id.index)
         elif isinstance(ty, VariableType):
+            assert not ty.typeParameter.isForeign()
             self.tyv(ty.typeParameter.id.index)
         else:
             raise NotImplementedError

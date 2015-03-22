@@ -44,7 +44,7 @@ def deserialize(fileName):
 HEADER_FORMAT = "<Ihhqiiiiiiii"
 MAGIC = 0x676b7073
 MAJOR_VERSION = 0
-MINOR_VERSION = 16
+MINOR_VERSION = 17
 
 FLAG_FORMAT = "<i"
 
@@ -176,6 +176,7 @@ class Serializer(object):
         self.writeVbn(len(dependency.externGlobals))
         self.writeVbn(len(dependency.externFunctions))
         self.writeVbn(len(dependency.externClasses))
+        self.writeVbn(len(dependency.externMethods))
         self.writeVbn(len(dependency.externTypeParameters))
 
     def writeDependency(self, dependency):
@@ -185,6 +186,8 @@ class Serializer(object):
             self.writeFunction(f)
         for c in dependency.externClasses:
             self.writeClass(c)
+        for m in dependency.externMethods:
+            self.writeFunction(m)
         for p in dependency.externTypeParameters:
             self.writeTypeParameter(p)
 
@@ -208,18 +211,24 @@ class Serializer(object):
         elif type is ir_types.F64Type:
             form = 7
         elif isinstance(type, ir_types.ClassType):
-            form = 8
             id = type.clas.id
+            if type.clas.isForeign():
+                form = 10
+            else:
+                form = 8
         else:
             assert isinstance(type, ir_types.VariableType)
-            form = 9
             id = type.typeParameter.id
+            assert not type.typeParameter.isForeign()
+            form = 9
         flags = 0
         if ir_types.NULLABLE_TYPE_FLAG in type.flags:
             flags = flags | 1
         bits = form | flags << 4
         self.writeVbn(bits)
         if id is not None:
+            if id.externIndex is not None:
+                self.writeVbn(id.externIndex)
             self.writeVbn(id.index)
         if isinstance(type, ir_types.ClassType):
             self.writeList(self.writeType, type.typeArguments)
@@ -273,6 +282,7 @@ class Deserializer(object):
     def __init__(self, inFile):
         self.inFile = inFile
         self.package = ir.Package()
+        self.package.externTypes = []
         self.entryFunctionIndex = None
         self.initFunctionIndex = None
 
@@ -352,7 +362,7 @@ class Deserializer(object):
         return functions
 
     def createEmptyClassList(self, count, packageId):
-        cids = (ids.DefnId(self.package.id, ids.DefnId.CLASS, i) for i in xrange(count))
+        cids = (ids.DefnId(packageId, ids.DefnId.CLASS, i) for i in xrange(count))
         classes = list(ir.Class(None, None, id, None, None, None, None, None, None, None)
                        for id in cids)
         return classes
@@ -472,6 +482,12 @@ class Deserializer(object):
         elif form == 9:
             param = self.readId(self.package.typeParameters)
             ty = ir_types.VariableType(param, flags)
+        elif form == 10:
+            dep = self.readId(self.package.dependencies)
+            clas = self.readId(dep.externClasses)
+            typeArgs = tuple(self.readList(self.readType))
+            ty = ir_types.ClassType(clas, typeArgs, flags)
+            self.package.externTypes.append(ty)
         else:
             raise IOError("invalid type flags")
 

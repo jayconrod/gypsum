@@ -625,7 +625,7 @@ class Scope(ast.AstNodeVisitor):
         if isinstance(irDefn, ir.IrTopDefn) and \
            irDefn.isForeign() and \
            not EXTERN in irDefn.flags:
-            irDefn = defnInfo.irDefn = self.info.package.externalize(irDefn)
+            irDefn = defnInfo.irDefn = self.info.package.externalize(irDefn, self.info.loader)
 
         if hasattr(irDefn, "flags") and \
            ((PRIVATE in irDefn.flags and \
@@ -1214,10 +1214,13 @@ class PackageScope(Scope):
             exportedDefns.extend(g for g in package.globals if PUBLIC in g.flags)
             exportedDefns.extend(f for f in package.functions
                                  if PUBLIC in f.flags and METHOD not in f.flags)
+            exportedDefns.extend(c for c in package.classes if PUBLIC in c.flags)
             for defn in exportedDefns:
                 defnInfo = DefnInfo(defn, scopeId)
                 self.bind(defn.name, defnInfo)
                 self.define(defn.name)
+            for clas in package.classes:
+                ExternClassScope(ScopeId(clas.name), self, info, clas)
 
         packageBindings = {}
         for name in packageNames:
@@ -1273,6 +1276,24 @@ class PackageScope(Scope):
 
     def requiresCapture(self):
         return False
+
+
+class ExternClassScope(Scope):
+    def __init__(self, scopeId, parent, info, clas):
+        super(ExternClassScope, self).__init__(None, scopeId, parent, info)
+        for ctor in clas.constructors:
+            if PUBLIC in ctor.flags:
+                defnInfo = DefnInfo(ctor, self.scopeId)
+                self.bind("$constructor", defnInfo)
+                self.define("$constructor")
+        for member in clas.methods + clas.fields:
+            if PUBLIC in ctor.flags:
+                defnInfo = DefnInfo(member, self.scopeId)
+                self.bind(member.name, defnInfo)
+                self.define(member.name)
+
+    def requiresCapture(self):
+        return True
 
 
 class ScopeVisitor(ast.AstNodeVisitor):

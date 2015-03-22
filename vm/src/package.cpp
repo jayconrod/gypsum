@@ -43,6 +43,7 @@ namespace internal {
   F(Package, classes_)          \
   F(Package, typeParameters_)   \
   F(Package, exports_)          \
+  F(Package, externTypes_)      \
 
 DEFINE_POINTER_MAP(Package, PACKAGE_POINTER_LIST)
 
@@ -85,6 +86,7 @@ class PackageLoader {
   VM* vm_;
   istream& stream_;
   Local<Package> package_;
+  vector<Local<ExternTypeInfo>> externTypes_;
 };
 
 
@@ -235,7 +237,7 @@ void Package::link(Heap* heap, const Handle<Package>& package) {
     {
       AllowAllocationScope noAllocation(heap, false);
       for (length_t j = 0; j < globalCount; j++) {
-        auto externGlobal = externGlobals->get(i);
+        auto externGlobal = externGlobals->get(j);
         auto name = externGlobal->name();
         auto linkedGlobal = depExports->getOrElse(name, nullptr);
         if (!linkedGlobal || !isa<Global>(linkedGlobal)) {
@@ -253,7 +255,7 @@ void Package::link(Heap* heap, const Handle<Package>& package) {
     {
       AllowAllocationScope noAllocation(heap, false);
       for (length_t j = 0; j < functionCount; j++) {
-        auto externFunction = externFunctions->get(i);
+        auto externFunction = externFunctions->get(j);
         auto name = externFunction->name();
         auto linkedFunction = depExports->getOrElse(name, nullptr);
         if (!linkedFunction || !isa<Function>(linkedFunction)) {
@@ -263,7 +265,30 @@ void Package::link(Heap* heap, const Handle<Package>& package) {
       }
     }
     dependency->setLinkedFunctions(*linkedFunctions);
+
+    ASSERT(dependency->linkedClasses() == nullptr);
+    auto externClasses = handle(dependency->externClasses());
+    auto classCount = externClasses->length();
+    auto linkedClasses = BlockArray<Class>::create(heap, classCount);
+    {
+      AllowAllocationScope noAllocation(heap, false);
+      for (length_t j = 0; j < classCount; j++) {
+        auto externClass = externClasses->get(j);
+        auto name = externClass->name();
+        auto linkedClass = depExports->getOrElse(name, nullptr);
+        if (!linkedClass || !isa<Class>(linkedClass)) {
+          throw Error("link error");
+        }
+        linkedClasses->set(j, block_cast<Class>(linkedClass));
+      }
+    }
   }
+
+  auto externTypes = handle(package->externTypes());
+  for (length_t i = 0; i < externTypes->length(); i++) {
+    externTypes->get(i)->linkType();
+  }
+  package->setExternTypes(nullptr);
 }
 
 
@@ -279,7 +304,8 @@ ostream& operator << (ostream& os, const Package* pkg) {
      << "\n  type parameters: " << brief(pkg->typeParameters())
      << "\n  entry function index: " << pkg->entryFunctionIndex()
      << "\n  init function index: " << pkg->initFunctionIndex()
-     << "\n  exports: " << pkg->exports();
+     << "\n  exports: " << brief(pkg->exports())
+     << "\n  externTypes: " << brief(pkg->externTypes());
   return os;
 }
 
@@ -635,7 +661,7 @@ Local<Package> PackageLoader::load() {
       throw Error("package file is corrupt");
     auto majorVersion = readValue<u16>();
     auto minorVersion = readValue<u16>();
-    if (majorVersion != 0 || minorVersion != 16)
+    if (majorVersion != 0 || minorVersion != 17)
       throw Error("package file has wrong format version");
 
     package_ = handleScope.escape(*Package::create(heap()));
@@ -727,6 +753,12 @@ Local<Package> PackageLoader::load() {
       auto dep = handle(depArray->get(i));
       readDependency(dep);
     }
+
+    auto externTypesArray = BlockArray<ExternTypeInfo>::create(heap(), externTypes_.size());
+    for (length_t i = 0; i < externTypes_.size(); i++) {
+      externTypesArray->set(i, *externTypes_[i]);
+    }
+    package_->setExternTypes(*externTypesArray);
   } catch (istream::failure exn) {
     throw Error("error reading package");
   }
@@ -943,7 +975,7 @@ Local<Type> PackageLoader::readType() {
     return handle(Type::primitiveTypeFromForm(roots(), form));
   } else {
     auto code = readVbn();
-    if (form == Type::CLASS_TYPE) {
+    if (form == Type::CLASS_TYPE || form == Type::EXTERN_CLASS_TYPE) {
       auto typeArgCount = readLengthVbn();
       if (flags == Type::NULLABLE_FLAG &&
           code == BUILTIN_NOTHING_CLASS_ID) {
@@ -951,10 +983,12 @@ Local<Type> PackageLoader::readType() {
         return handle(roots()->nullType());
       }
       Local<Class> clas;
-      if (isBuiltinId(code)) {
-        clas = handle(roots()->getBuiltinClass(static_cast<BuiltinId>(code)));
-      } else {
-        clas = handle(package_->getClass(code));
+      if (form == Type::CLASS_TYPE) {
+        if (isBuiltinId(code)) {
+          clas = handle(roots()->getBuiltinClass(static_cast<BuiltinId>(code)));
+        } else {
+          clas = handle(package_->getClass(code));
+        }
       }
       vector<Local<Type>> typeArgs;
       typeArgs.reserve(typeArgCount);
@@ -963,6 +997,12 @@ Local<Type> PackageLoader::readType() {
         typeArgs.push_back(typeArg);
       }
       auto ty = Type::create(heap(), clas, typeArgs, flags);
+      if (form == Type::EXTERN_CLASS_TYPE) {
+        auto depIndex = toLength(code);
+        auto externIndex = toLength(readVbn());
+        auto info = ExternTypeInfo::create(heap(), ty, package_, depIndex, externIndex);
+        externTypes_.push_back(info);
+      }
       return ty;
     } else {
       ASSERT(form == Type::VARIABLE_TYPE);

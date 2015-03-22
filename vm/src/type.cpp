@@ -6,8 +6,10 @@
 
 #include "type.h"
 
+#include "array.h"
 #include "block.h"
 #include "handle.h"
+#include "package.h"
 #include "roots.h"
 #include "type-parameter.h"
 
@@ -535,6 +537,57 @@ ostream& operator << (ostream& os, const Type* type) {
   } else if (type->isVariable()) {
     os << "\n  variable: " << brief(type->asVariable());
   }
+  return os;
+}
+
+
+#define EXTERN_TYPE_INFO_POINTERS_LIST(F) \
+  F(ExternTypeInfo, type_)                \
+  F(ExternTypeInfo, package_)             \
+
+DEFINE_POINTER_MAP(ExternTypeInfo, EXTERN_TYPE_INFO_POINTERS_LIST)
+
+#undef EXTERN_TYPE_INFO_POINTERS_LIST
+
+
+ExternTypeInfo::ExternTypeInfo(Type* type,
+                               Package* package,
+                               length_t dependencyIndex,
+                               length_t externIndex)
+    : Block(kBlockType),
+      type_(this, type),
+      package_(this, package),
+      dependencyIndex_(dependencyIndex),
+      externIndex_(externIndex) { }
+
+
+Local<ExternTypeInfo> ExternTypeInfo::create(Heap* heap,
+                                             const Handle<Type>& type,
+                                             const Handle<Package>& package,
+                                             length_t dependencyIndex,
+                                             length_t externIndex) {
+  RETRY_WITH_GC(heap, return Local<ExternTypeInfo>(
+      new(heap) ExternTypeInfo(*type, *package, dependencyIndex, externIndex)));
+}
+
+
+void ExternTypeInfo::linkType() {
+  auto type = type_.get();
+  ASSERT(type->form() == Type::EXTERN_CLASS_TYPE &&
+         type->length() >= 1 && type->elements_[0].get() == this);
+  auto linkedClass = package_.get()->dependencies()->get(dependencyIndex_)
+      ->linkedClasses()->get(externIndex_);
+  type->elements_[0].set(type, linkedClass);
+  type->form_ = Type::CLASS_TYPE;
+}
+
+
+ostream& operator << (ostream& os, const ExternTypeInfo* info) {
+  os << brief(info)
+     << "\n  type: " << brief(info->type())
+     << "\n  package: " << brief(info->package())
+     << "\n  dependencyIndex: " << info->dependencyIndex()
+     << "\n  externIndex: " << info->externIndex();
   return os;
 }
 

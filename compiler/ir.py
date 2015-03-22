@@ -38,6 +38,8 @@ class Package(object):
         self.strings = []
         self.entryFunction = None
         self.initFunction = None
+        self.exports = None
+        self.externTypes = None
 
     def __str__(self):
         buf = StringIO.StringIO()
@@ -98,54 +100,120 @@ class Package(object):
         package.id.index = len(self.dependencies)
         self.dependencies.append(dep)
 
-    def externalize(self, irDefn):
+    def externalize(self, irDefn, loader):
         id = irDefn.id
+        assert irDefn.isForeign()
+        self.ensureDependency(loader.getPackageById(id.packageId))
+
         assert irDefn.isForeign() and id.packageId.index is not None
         dep = self.dependencies[id.packageId.index]
         if isinstance(irDefn, Global):
             externDefns = dep.externGlobals
-            linkedDefns = dep.linkedGlobals
         elif isinstance(irDefn, Function):
-            externDefns = dep.externFunctions
-            linkedDefns = dep.linkedFunctions
+            if flags.METHOD in irDefn.flags:
+                externDefns = dep.externMethods
+            else:
+                externDefns = dep.externFunctions
         elif isinstance(irDefn, TypeParameter):
             externDefns = dep.externTypeParameters
-            linkedDefns = None
         else:
             raise NotImplementedError
-        assert linkedDefns is None or len(externDefns) == len(linkedDefns)
 
         if id.externIndex is not None:
             return externDefns[id.externIndex]
 
         id.externIndex = len(externDefns)
+        externDefns.append(None)  # placeholder, needed for recursion
+
         self.findOrAddString(irDefn.name)
         externFlags = irDefn.flags | frozenset([flags.EXTERN])
+        externalize = lambda defn: self.externalize(defn, loader)
+        externalizeType = lambda ty: self.externalizeType(ty, loader)
         if isinstance(irDefn, Global):
             externIrDefn = Global(irDefn.name, irDefn.astDefn, id,
-                                  self.externalizeType(irDefn.type),
-                                  externFlags)
+                                  externalizeType(irDefn.type), externFlags)
         elif isinstance(irDefn, Function):
             externIrDefn = Function(irDefn.name, irDefn.astDefn, id,
-                                    self.externalizeType(irDefn.returnType),
-                                    map(self.externalize, irDefn.typeParameters),
-                                    map(self.externalizeType, irDefn.parameterTypes),
+                                    externalizeType(irDefn.returnType),
+                                    map(externalize, irDefn.typeParameters),
+                                    map(externalizeType, irDefn.parameterTypes),
                                     None, None, externFlags)
+        elif isinstance(irDefn, Class):
+            externIrDefn = Class(irDefn.name, irDefn.astDefn, id,
+                                 map(externalize, irDefn.typeParameters),
+                                 map(externalizeType, irDefn.supertypes),
+                                 None,  # initializer
+                                 map(externalize, irDefn.constructors),
+                                 [Field(f.name, f.astDefn, externalizeType(f.type), f.flags)
+                                  for f in irDefn.fields],
+                                 map(externalize, irDefn.methods),
+                                 externFlags)
         elif isinstance(irDefn, TypeParameter):
             externIrDefn = TypeParameter(irDefn.name, irDefn.astDefn, id,
-                                         self.externalizeType(irDefn.upperBound),
-                                         self.externalizeType(irDefn.lowerBound),
+                                         externalizeType(irDefn.upperBound),
+                                         externalizeType(irDefn.lowerBound),
                                          externFlags)
         else:
             raise NotImplementedError
 
-        externDefns.append(externIrDefn)
-        if linkedDefns is not None:
-            linkedDefns.append(irDefn)
+        externDefns[id.externIndex] = externIrDefn
         return externIrDefn
 
-    def externalizeType(self, ty):
-        return ty
+    def externalizeType(self, ty, loader):
+        externalize = lambda defn: self.externalize(defn, loader)
+        externalizeType = lambda ty: self.externalizeType(ty, loader)
+        if isinstance(ty, ir_types.ClassType) and ty.clas.isForeign():
+            externTy = ir_types.ClassType(externalize(ty.clas),
+                                          tuple(map(externalizeType, ty.typeArgs)),
+                                          ty.flags)
+        elif isinstance(ty, ir_types.VariableType) and ty.typeParameter.isForeign():
+            externTy = ir_types.VariableType(externalize(ty.typeParameter), ty.flags)
+        else:
+            externTy = ty
+        return externTy
+
+    def ensureExports(self):
+        if self.exports is not None:
+            return self.exports
+
+        self.exports = {}
+
+        def addExport(defn):
+            assert defn.name not in self.exports
+            self.exports[defn.name] = defn
+
+        for g in self.globals:
+            if flags.PUBLIC in g.flags:
+                addExport(g)
+        for f in self.functions:
+            if flags.PUBLIC in f.flags and flags.METHOD not in f.flags:
+                addExport(f)
+        for c in self.classes:
+            if flags.PUBLIC in c.flags:
+                addExport(c)
+
+        return self.exports
+
+    def link(self):
+        # We assume package validation is done elsewhere (either when the linked packages were
+        # installed or after linking), so we don't do it here.
+        # TODO: once validation is implemented, re-check this method and make sure we aren't
+        # making any bad assumptions here.
+        for dep in self.dependencies:
+            depExports = dep.package.ensureExports()
+            dep.linkedGlobals = [depExports[g.name] for g in dep.externGlobals]
+            assert all(isinstance(g, Global) for g in dep.linkedGlobals)
+            dep.linkedFunctions = [depExports[f.name] for f in dep.externFunctions]
+            assert all(isinstance(f, Function) for f in dep.linkedFunctions)
+            dep.linkedClasses = [depExports[c.name] for c in dep.externClasses]
+            assert all(isinstance(c, Class) for c in dep.linkedClasses)
+
+        for ty in self.externTypes:
+            assert flags.EXTERN in ty.clas.flags
+            depIndex = ty.clas.id.packageId.index
+            externIndex = ty.clas.id.externIndex
+            ty.clas = self.dependencies[depIndex].linkedClasses[externIndex]
+        self.externTypes = None
 
     def findString(self, s):
         if type(s) == str:
@@ -269,11 +337,12 @@ class PackageDependency(object):
         self.maxVersion = maxVersion
         self.package = None
         self.externGlobals = []
-        self.linkedGlobals = []
+        self.linkedGlobals = None
         self.externFunctions = []
-        self.linkedFunctions = []
+        self.linkedFunctions = None
         self.externClasses = []
-        self.linkedClasses = []
+        self.linkedClasses = None
+        self.externMethods = []
         self.externTypeParameters = []
 
     @staticmethod

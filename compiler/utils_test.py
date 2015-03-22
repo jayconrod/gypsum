@@ -111,3 +111,6 @@ class MockPackageLoader(object):
         if name not in self.packages:
             self.packages[name] = Package(name=name)
         return self.packages[name]
+
+    def getPackageById(self, id):
+        return next(package for package in self.packages.itervalues() if package.id is id)

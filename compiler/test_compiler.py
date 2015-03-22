@@ -246,7 +246,6 @@ class TestCompiler(TestCaseWithDefinitions):
         dep = package.dependencies[depIndex]
         self.assertIs(foo, dep.package)
         self.assertIs(y.id.packageId, foo.id)
-        self.assertIs(dep.linkedGlobals[y.id.externIndex], y)
         self.assertNotIn(EXTERN, y.flags)
         self.assertIsNot(dep.externGlobals[y.id.externIndex], y)
         externY = dep.externGlobals[y.id.externIndex]
@@ -1175,7 +1174,6 @@ class TestCompiler(TestCaseWithDefinitions):
         package = self.compileFromSource(source, packageLoader=loader)
         self.assertIs(foo.id, bar.id.packageId)
         dep = package.dependencies[foo.id.index]
-        self.assertIs(bar, dep.linkedFunctions[bar.id.externIndex])
         externBar = dep.externFunctions[bar.id.externIndex]
         self.assertIn(EXTERN, externBar.flags)
         self.checkFunction(package,
