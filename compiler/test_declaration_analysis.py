@@ -262,6 +262,34 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         f = info.package.findFunction(name="f")
         self.assertEquals(frozenset([METHOD, PRIVATE]), f.flags)
 
+    def testPublicClassDefaultConstructor(self):
+        info = self.analyzeFromSource("public class C")
+        C = info.package.findClass(name="C")
+        self.assertIn(PUBLIC, C.flags)
+        self.assertEquals(1, len(C.constructors))
+        self.assertIn(PUBLIC, C.constructors[0].flags)
+
+    def testPublicClassPrimaryConstructor(self):
+        info = self.analyzeFromSource("public class C(x: i64)")
+        C = info.package.findClass(name="C")
+        self.assertIn(PUBLIC, C.flags)
+        self.assertEquals(1, len(C.constructors))
+        self.assertIn(PUBLIC, C.constructors[0].flags)
+
+    def testPublicClassPrivatePrimaryConstructor(self):
+        info = self.analyzeFromSource("public class C private (x: i64)")
+        C = info.package.findClass(name="C")
+        self.assertIn(PRIVATE, C.constructors[0].flags & frozenset([PUBLIC, PROTECTED, PRIVATE]))
+
+    @unittest.skip("private classes not supported yet")
+    def testPrivateClassPrimaryConstructor(self):
+        info = self.analyzeFromSource("private class C(x: i64)")
+        C = info.package.findClass(name="C")
+        self.assertIn(PRIVATE, C.flags)
+        self.assertEquals(1, len(C.constructors))
+        self.assertEquals(frozenset([]),
+                          C.constructors[0].flags & frozenset([PUBLIC, PROTECTED, PRIVATE]))
+
     def testFunctionMustHaveBody(self):
         self.assertRaises(ScopeException, self.analyzeFromSource, "def f: i64")
 
@@ -403,3 +431,45 @@ class TestPackageScope(unittest.TestCase):
         scope = scope.scopeForPrefix("foo")
         nameInfo = scope.lookup("bar", NoLoc)
         self.assertTrue(nameInfo.isPackage())
+
+    def testPackageClassHasScope(self):
+        package = Package(name=PackageName(["foo"]))
+        clas = package.addClass("C", None, [], [getRootClassType()],
+                                None, None, None, None, frozenset([PUBLIC]))
+        classType = ClassType(clas)
+        publicCtor = package.addFunction("$constructor", None, UnitType, [],
+                                         [classType], None, None,
+                                         frozenset([PUBLIC, METHOD, EXTERN]))
+        privateCtor = package.addFunction("$constructor", None, UnitType, [],
+                                          [classType], None, None,
+                                          frozenset([PRIVATE, METHOD, EXTERN]))
+        clas.constructors = [publicCtor, privateCtor]
+        publicMethod = package.addFunction("m1", None, UnitType, [],
+                                           [classType], None, None,
+                                           frozenset([PUBLIC, METHOD, EXTERN]))
+        privateMethod = package.addFunction("m2", None, UnitType, [],
+                                            [classType], None, None,
+                                            frozenset([PRIVATE, METHOD, EXTERN]))
+        clas.methods = [publicMethod, privateMethod]
+        publicField = package.newField("x", None, UnitType, frozenset([PUBLIC, EXTERN]))
+        privateField = package.newField("y", None, UnitType, frozenset([PRIVATE, EXTERN]))
+        clas.fields = [publicField, privateField]
+
+        self.info.loader = MockPackageLoader([package])
+        topPackageScope = PackageScope(PACKAGE_SCOPE_ID, None, self.info,
+                                       self.info.loader.getPackageNames(), [], None)
+        fooPackageScope = topPackageScope.scopeForPrefix("foo")
+
+        defnInfo = fooPackageScope.lookup("C", NoLoc).getDefnInfo()
+        self.assertIs(clas, defnInfo.irDefn)
+        self.assertIs(fooPackageScope.scopeId, defnInfo.scopeId)
+        classScope = self.info.getScope(clas.id)
+        defnInfo = classScope.lookup("$constructor", NoLoc).getDefnInfo()
+        self.assertIs(publicCtor, defnInfo.irDefn)
+        self.assertIs(classScope.scopeId, defnInfo.scopeId)
+        defnInfo = classScope.lookup("m1", NoLoc).getDefnInfo()
+        self.assertIs(publicMethod, defnInfo.irDefn)
+        self.assertRaises(ScopeException, classScope.lookup, "m2", NoLoc)
+        defnInfo = classScope.lookup("x", NoLoc).getDefnInfo()
+        self.assertIs(publicField, defnInfo.irDefn)
+        self.assertRaises(ScopeException, classScope.lookup, "y", NoLoc)

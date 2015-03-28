@@ -6,11 +6,14 @@
 
 import unittest
 
+import builtins
+import bytecode
 import flags
 import ids
 import ir
 import ir_types
 import serialize
+import utils_test
 
 class MockFile(object):
     def __init__(self, bytes=None):
@@ -75,11 +78,34 @@ class TestSerialization(unittest.TestCase):
         lst = self.des.readList(read)
         self.assertEquals(expected, lst)
 
-    def testRewriteIdList(self):
-        globals = self.des.createEmptyGlobalList(3, ids.TARGET_PACKAGE_ID)
-        self.ser.writeIdList(globals)
-        globalsOut = self.des.readList(self.des.readId, globals)
-        self.assertEquals(globals, globalsOut)
+    def testRewriteBuiltinFunctionId(self):
+        function = builtins.getBuiltinFunctionById(bytecode.BUILTIN_ROOT_CLASS_TO_STRING_ID)
+        self.ser.writeMethodId(function)
+        outFunction = self.des.readMethodId()
+        self.assertIs(function, outFunction)
+
+    def testRewriteLocalMethodId(self):
+        package = ir.Package(ids.TARGET_PACKAGE_ID)
+        method = package.addFunction("foo", None, ir_types.UnitType, [], [],
+                                      None, None, frozenset([flags.METHOD]))
+        self.ser.package = package
+        self.ser.writeMethodId(method)
+        self.des.package = package
+        outMethod = self.des.readMethodId()
+        self.assertIs(method, outMethod)
+
+    def testRewriteForeignMethodId(self):
+        package = ir.Package(ids.TARGET_PACKAGE_ID)
+        otherPackage = ir.Package()
+        method = otherPackage.addFunction("foo", None, ir_types.UnitType, [], [],
+                                           None, None, frozenset([flags.METHOD]))
+        loader = utils_test.MockPackageLoader([otherPackage])
+        externMethod = package.externalize(method, loader)
+        self.ser.package = package
+        self.ser.writeMethodId(externMethod)
+        self.des.package = package
+        outMethod = self.des.readMethodId()
+        self.assertIs(externMethod, outMethod)
 
     def testRewriteFlags(self):
         flagSet = frozenset([flags.ABSTRACT, flags.PUBLIC, flags.STATIC])
@@ -128,3 +154,99 @@ class TestSerialization(unittest.TestCase):
                                      (ir_types.ClassType(package.classes[3]),
                                       ir_types.VariableType(package.typeParameters[1]))))
         checkType(ir_types.VariableType(package.typeParameters[1], nullFlags))
+
+    def testRewriteExternClassType(self):
+        package = ir.Package(id=ids.TARGET_PACKAGE_ID)
+        depPackage = ir.Package()
+        loader = utils_test.MockPackageLoader([depPackage])
+        depClass = depPackage.addClass("C", None, [], [ir_types.getRootClassType()], None,
+                                       [], [], [], frozenset([flags.PUBLIC]))
+        externClass = package.externalize(depClass, loader)
+        self.assertIn(flags.EXTERN, externClass.flags)
+        self.assertIs(depPackage, package.dependencies[0].package)
+        self.assertIs(externClass, package.dependencies[0].externClasses[0])
+
+        nullFlags = frozenset([ir_types.NULLABLE_TYPE_FLAG])
+        externClassType = ir_types.ClassType(externClass, (), nullFlags)
+        self.ser.writeType(externClassType)
+
+        self.des.package = package
+        package.externTypes = []
+        outType = self.des.readType()
+        self.assertEquals(externClassType, outType)
+        self.assertEquals([externClassType], package.externTypes)
+
+    def testRewriteName(self):
+        package = ir.Package()
+        package.findOrAddString("foo")
+        package.findOrAddString("bar")
+
+        self.ser.package = package
+        self.ser.writeName(u"foo")
+        self.ser.writeName(u"bar")
+
+        self.des.package =  package
+        self.assertEquals(u"foo", self.des.readName())
+        self.assertEquals(u"bar", self.des.readName())
+
+    def testRewriteField(self):
+        package = ir.Package()
+        field = package.newField("foo", None, ir_types.I64Type,
+                                 frozenset([flags.PUBLIC, flags.LET]))
+        self.ser.package = package
+        self.ser.writeField(field)
+
+        self.des.package = package
+        outField = self.des.readField()
+
+    def testRewriteTypeParameter(self):
+        package = ir.Package(ids.TARGET_PACKAGE_ID)
+        typeParam = package.addTypeParameter("T", None,
+                                             ir_types.getRootClassType(),
+                                             ir_types.getNothingClassType(),
+                                             frozenset([flags.STATIC]))
+        self.ser.package = package
+        self.ser.writeTypeParameter(typeParam)
+        outTypeParam = ir.TypeParameter(None, None, typeParam.id, None, None, None)
+        self.des.package = package
+        self.des.readTypeParameter(outTypeParam)
+        self.assertEquals(typeParam, outTypeParam)
+
+    def testRewriteClass(self):
+        package = ir.Package(ids.TARGET_PACKAGE_ID)
+        typeParam = package.addTypeParameter("T", None,
+                                             ir_types.getRootClassType(),
+                                             ir_types.getNothingClassType(),
+                                             frozenset([flags.STATIC]))
+        supertype = ir_types.getRootClassType()
+        field = package.newField("x", None, ir_types.I64Type, frozenset([flags.PRIVATE]))
+        clas = package.addClass("Foo", None, [typeParam], [supertype], None, None,
+                                [field], None, frozenset([flags.PUBLIC]))
+        ty = ir_types.ClassType(clas)
+        constructor = package.addFunction("$constructor", None, ir_types.UnitType, [],
+                                          [ty], None, None,
+                                          frozenset([flags.PUBLIC, flags.METHOD]))
+        constructor.clas = clas
+        clas.constructors = [constructor]
+        localMethod = package.addFunction("m", None, ir_types.I64Type, [],
+                                          [ty], None, None,
+                                          frozenset([flags.PUBLIC, flags.METHOD]))
+        localMethod.clas = clas
+        otherPackage = ir.Package()
+        loader = utils_test.MockPackageLoader([otherPackage])
+        otherMethod = otherPackage.addFunction("o", None, ir_types.I64Type, [],
+                                               [ir_types.getRootClassType()], None, None,
+                                               frozenset([flags.PUBLIC, flags.METHOD]))
+        otherMethod.clas = builtins.getRootClass()
+        externMethod = package.externalize(otherMethod, loader)
+        builtinMethod = builtins.getBuiltinFunctionById(bytecode.BUILTIN_ROOT_CLASS_TO_STRING_ID)
+        clas.methods = [localMethod, externMethod, builtinMethod]
+
+        self.ser.package = package
+        self.ser.writeClass(clas)
+        self.des.package = package
+        outClass = ir.Class(None, None, clas.id, None, None, None, None, None, None, None)
+        self.des.readClass(outClass)
+        self.assertEquals(clas, outClass)
+        for method in outClass.constructors + outClass.methods:
+            self.assertIs(outClas, method.clas)

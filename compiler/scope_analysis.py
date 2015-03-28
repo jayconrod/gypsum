@@ -537,7 +537,7 @@ class Scope(ast.AstNodeVisitor):
         """Convenience method for creating a class definition."""
         implicitTypeParams = self.getImplicitTypeParameters()
         flags = getFlagsFromAstDefn(astDefn, None)
-        checkFlags(flags, frozenset([ABSTRACT]), astDefn.location)
+        checkFlags(flags, frozenset([ABSTRACT, PUBLIC, PROTECTED]), astDefn.location)
         irDefn = self.info.package.addClass(astDefn.name, astDefn, implicitTypeParams,
                                             None, None, [], [], [], flags)
 
@@ -548,10 +548,10 @@ class Scope(ast.AstNodeVisitor):
         irDefn.initializer = irInitializer
 
         if not astDefn.hasConstructors():
+            ctorFlags = (flags & frozenset([PUBLIC, PROTECTED])) | frozenset([METHOD])
             irDefaultCtor = self.info.package.addFunction("$constructor", astDefn,
                                                           None, list(implicitTypeParams),
-                                                          None, [], None,
-                                                          frozenset([METHOD]))
+                                                          None, [], None, ctorFlags)
             self.makeMethod(irDefaultCtor, irDefn)
             irDefn.constructors.append(irDefaultCtor)
         classInfo = ClassInfo(irDefn)
@@ -1061,7 +1061,7 @@ class ClassScope(Scope):
         irScopeDefn = self.getIrDefn()
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         if isinstance(astDefn, ast.AstVariablePattern):
-            checkFlags(flags, frozenset([LET, PROTECTED, PRIVATE]), astDefn.location)
+            checkFlags(flags, frozenset([LET, PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
             irDefn = self.info.package.newField(astDefn.name, astDefn, None, flags)
             irScopeDefn.fields.append(irDefn)
         elif isinstance(astDefn, ast.AstFunctionDefinition):
@@ -1077,14 +1077,15 @@ class ClassScope(Scope):
                                      "%s: abstract function not allowed in non-abstract class" %
                                      astDefn.name)
             if astDefn.name == "this":
-                checkFlags(flags, frozenset([PROTECTED, PRIVATE]), astDefn.location)
+                checkFlags(flags, frozenset([PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
                 irDefn = self.info.package.addFunction("$constructor", astDefn,
                                                        None, implicitTypeParams,
                                                        None, [], None,
                                                        flags | frozenset([METHOD]))
                 irScopeDefn.constructors.append(irDefn)
             else:
-                checkFlags(flags, frozenset([ABSTRACT, PROTECTED, PRIVATE]), astDefn.location)
+                checkFlags(flags, frozenset([ABSTRACT, PUBLIC, PROTECTED, PRIVATE]),
+                           astDefn.location)
                 irDefn = self.info.package.addFunction(astDefn.name, astDefn,
                                                        None, implicitTypeParams,
                                                        None, [], None,
@@ -1092,7 +1093,9 @@ class ClassScope(Scope):
                 irScopeDefn.methods.append(irDefn)
             # We don't need to call makeMethod here because the inner FunctionScope will do it.
         elif isinstance(astDefn, ast.AstPrimaryConstructorDefinition):
-            checkFlags(flags, frozenset([PROTECTED, PRIVATE]), astDefn.location)
+            checkFlags(flags, frozenset([PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
+            if len(flags & frozenset([PUBLIC, PROTECTED, PRIVATE])) == 0:
+                flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
             implicitTypeParams = self.getImplicitTypeParameters()
             irDefn = self.info.package.addFunction("$constructor", astDefn,
                                                    None, implicitTypeParams,
@@ -1220,7 +1223,9 @@ class PackageScope(Scope):
                 self.bind(defn.name, defnInfo)
                 self.define(defn.name)
             for clas in package.classes:
-                ExternClassScope(ScopeId(clas.name), self, info, clas)
+                if PUBLIC in clas.flags:
+                    scope = ExternClassScope(ScopeId(clas.name), self, info, clas)
+                    self.info.setScope(clas.id, scope)
 
         packageBindings = {}
         for name in packageNames:
@@ -1287,7 +1292,7 @@ class ExternClassScope(Scope):
                 self.bind("$constructor", defnInfo)
                 self.define("$constructor")
         for member in clas.methods + clas.fields:
-            if PUBLIC in ctor.flags:
+            if PUBLIC in member.flags:
                 defnInfo = DefnInfo(member, self.scopeId)
                 self.bind(member.name, defnInfo)
                 self.define(member.name)

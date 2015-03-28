@@ -37,7 +37,7 @@ def deserialize(fileName):
             deserializer = Deserializer(inFile)
             deserializer.deserialize()
             return deserializer.package
-    except ValueError as exn:
+    except (ValueError, IndexError) as exn:
         raise IOError(exn)
 
 
@@ -47,6 +47,9 @@ MAJOR_VERSION = 0
 MINOR_VERSION = 17
 
 FLAG_FORMAT = "<i"
+
+BUILTIN_INDEX = -2
+LOCAL_INDEX = -1
 
 
 class Serializer(object):
@@ -115,7 +118,7 @@ class Serializer(object):
     def writeFunction(self, function):
         self.writeName(function.name)
         self.writeFlags(function.flags)
-        self.writeList(lambda p: self.writeVbn(p.id.index), function.typeParameters)
+        self.writeTypeParameterList(function.typeParameters)
         self.writeType(function.returnType)
         self.writeVbn(len(function.parameterTypes))
         for ty in function.parameterTypes:
@@ -154,11 +157,11 @@ class Serializer(object):
     def writeClass(self, clas):
         self.writeName(clas.name)
         self.writeFlags(clas.flags)
-        self.writeIdList(clas.typeParameters)
+        self.writeTypeParameterList(clas.typeParameters)
         self.writeType(clas.supertypes[0])
         self.writeList(self.writeField, clas.fields)
-        self.writeIdList(clas.constructors)
-        self.writeIdList(clas.methods)
+        self.writeMethodList(clas.constructors)
+        self.writeMethodList(clas.methods)
 
     def writeField(self, field):
         self.writeName(field.name)
@@ -241,8 +244,25 @@ class Serializer(object):
         bits = flags.flagSetToFlagBits(flags_var)
         self.outFile.write(struct.pack(FLAG_FORMAT, bits))
 
-    def writeIdList(self, list):
-        self.writeList(lambda elem: self.writeVbn(elem.id.index), list)
+    def writeTypeParameterList(self, list):
+        assert all(not p.isForeign() and not p.isBuiltin() for p in list)
+        self.writeList(lambda p: self.writeVbn(p.id.index), list)
+
+    def writeMethodList(self, list):
+        self.writeList(self.writeMethodId, list)
+
+    def writeMethodId(self, method):
+        if method.isBuiltin():
+            collectionIndex = BUILTIN_INDEX
+            methodIndex = method.id.index
+        elif not method.isForeign():
+            collectionIndex = LOCAL_INDEX
+            methodIndex = method.id.index
+        else:
+            collectionIndex = method.id.packageId.index
+            methodIndex = method.id.externIndex
+        self.writeVbn(collectionIndex)
+        self.writeVbn(methodIndex)
 
     def writeList(self, writer, list):
         self.writeVbn(len(list))
@@ -395,6 +415,11 @@ class Deserializer(object):
             instructionsBuffer = self.inFile.read(instructionsSize)
             blockOffsets = self.readList(self.readVbn)
             function.blocks = self.decodeInstructions(instructionsBuffer, blockOffsets)
+        if flags.METHOD in function.flags:
+            if len(function.parameterTypes) == 0 or \
+               not isinstance(function.parameterTypes[0], ir_types.ClassType):
+                raise IOError("method without receiver class type")
+            function.clas = function.parameterTypes[0].clas
 
     def decodeInstructions(self, instructionsBuffer, blockOffsets):
         # TODO: implement if we ever actually need this.
@@ -404,15 +429,15 @@ class Deserializer(object):
         clas.name = self.readName()
         clas.flags = self.readFlags()
         clas.typeParameters = self.readList(self.readId, self.package.typeParameters)
-        clas.supertype = self.readType()
+        clas.supertypes = [self.readType()]
         clas.fields = self.readList(self.readField)
-        clas.constructors = self.readList(self.readId, self.package.functions)
-        clas.methods = self.readList(self.readId, self.package.methods)
+        clas.constructors = self.readList(self.readMethodId)
+        clas.methods = self.readList(self.readMethodId)
 
     def readField(self):
         name = self.readName()
-        ty = self.readType()
         flags = self.readFlags()
+        ty = self.readType()
         field = ir.Field(name, None, ty, flags)
         return field
 
@@ -476,7 +501,7 @@ class Deserializer(object):
         elif form == 7:
             ty = ir_types.F64Type
         elif form == 8:
-            clas = self.readId(self.package.classes)
+            clas = self.readClassId()
             typeArgs = tuple(self.readList(self.readType))
             ty = ir_types.ClassType(clas, typeArgs, flags)
         elif form == 9:
@@ -512,6 +537,27 @@ class Deserializer(object):
             elem = reader(*args)
             elems.append(elem)
         return elems
+
+    def readClassId(self):
+        index = self.readVbn()
+        try:
+            if index < 0:
+                return builtins.getBuiltinClassById(index)
+            else:
+                return self.package.classes[index]
+        except IndexError:
+            raise IOError("invalid index")
+
+    def readMethodId(self):
+        collectionIndex = self.readVbn()
+        methodIndex = self.readVbn()
+        if collectionIndex == BUILTIN_INDEX:
+            method = builtins.getBuiltinFunctionById(methodIndex)
+        elif collectionIndex == LOCAL_INDEX:
+            method = self.package.functions[methodIndex]
+        else:
+            method = self.package.dependencies[collectionIndex].externMethods[methodIndex]
+        return method
 
     def readId(self, collection):
         index = self.readVbn()

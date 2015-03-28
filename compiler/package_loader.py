@@ -77,4 +77,6 @@ class PackageLoader(object):
         return package
 
     def getPackageById(self, id):
-        return self.packageInfoById[id]
+        package = self.packageInfoById[id].package
+        assert package is not None
+        return package

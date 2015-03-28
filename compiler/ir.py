@@ -101,11 +101,17 @@ class Package(object):
         self.dependencies.append(dep)
 
     def externalize(self, irDefn, loader):
+        if not irDefn.isForeign():
+            return irDefn
+
+        # Make sure we have a dependency on the package that contains this definition.
         id = irDefn.id
-        assert irDefn.isForeign()
         self.ensureDependency(loader.getPackageById(id.packageId))
 
+        # Find the list we're going to put our external description in.
         assert irDefn.isForeign() and id.packageId.index is not None
+        self.findOrAddString(irDefn.name)
+        externFlags = irDefn.flags | frozenset([flags.EXTERN])
         dep = self.dependencies[id.packageId.index]
         if isinstance(irDefn, Global):
             externDefns = dep.externGlobals
@@ -114,45 +120,53 @@ class Package(object):
                 externDefns = dep.externMethods
             else:
                 externDefns = dep.externFunctions
+        elif isinstance(irDefn, Class):
+            externDefns = dep.externClasses
         elif isinstance(irDefn, TypeParameter):
             externDefns = dep.externTypeParameters
         else:
             raise NotImplementedError
 
+        # Base case: we already externalized this definition, so re-use that.
         if id.externIndex is not None:
             return externDefns[id.externIndex]
 
+        # Recursive case: add a placeholder definition so recursive calls can find it.
+        # Externalize anything else the definition depends on.
         id.externIndex = len(externDefns)
-        externDefns.append(None)  # placeholder, needed for recursion
 
-        self.findOrAddString(irDefn.name)
-        externFlags = irDefn.flags | frozenset([flags.EXTERN])
-        externalize = lambda defn: self.externalize(defn, loader)
-        externalizeType = lambda ty: self.externalizeType(ty, loader)
+        def externalize(defn):
+            return self.externalize(defn, loader)
+        def externalizeType(ty):
+            return self.externalizeType(ty, loader)
         if isinstance(irDefn, Global):
-            externIrDefn = Global(irDefn.name, irDefn.astDefn, id,
-                                  externalizeType(irDefn.type), externFlags)
+            externIrDefn = Global(irDefn.name, irDefn.astDefn, id, None, externFlags)
+            externDefns.append(externIrDefn)
+            externIrDefn.type = externalizeType(irDefn.type)
         elif isinstance(irDefn, Function):
             externIrDefn = Function(irDefn.name, irDefn.astDefn, id,
-                                    externalizeType(irDefn.returnType),
-                                    map(externalize, irDefn.typeParameters),
-                                    map(externalizeType, irDefn.parameterTypes),
-                                    None, None, externFlags)
+                                    None, None, None, None, None, externFlags)
+            externDefns.append(externIrDefn)
+            externIrDefn.returnType = externalizeType(irDefn.returnType)
+            externIrDefn.typeParameters = map(externalize, irDefn.typeParameters)
+            externIrDefn.parameterTypes = map(externalizeType, irDefn.parameterTypes)
         elif isinstance(irDefn, Class):
             externIrDefn = Class(irDefn.name, irDefn.astDefn, id,
-                                 map(externalize, irDefn.typeParameters),
-                                 map(externalizeType, irDefn.supertypes),
-                                 None,  # initializer
-                                 map(externalize, irDefn.constructors),
-                                 [Field(f.name, f.astDefn, externalizeType(f.type), f.flags)
-                                  for f in irDefn.fields],
-                                 map(externalize, irDefn.methods),
-                                 externFlags)
+                                 None, None, None, None, None, None, externFlags)
+            externDefns.append(externIrDefn)
+            externIrDefn.typeParameters = map(externalize, irDefn.typeParameters)
+            externIrDefn.supertypes = map(externalizeType, irDefn.supertypes)
+            externIrDefn.constructors = map(externalize, irDefn.constructors)
+            externIrDefn.fields = [Field(f.name, f.astDefn,
+                                        externalizeType(f.type), f.flags)
+                                  for f in irDefn.fields]
+            externIrDefn.methods = map(externalize, irDefn.methods)
         elif isinstance(irDefn, TypeParameter):
             externIrDefn = TypeParameter(irDefn.name, irDefn.astDefn, id,
-                                         externalizeType(irDefn.upperBound),
-                                         externalizeType(irDefn.lowerBound),
-                                         externFlags)
+                                         None, None, externFlags)
+            externDefns.append(externIrDefn)
+            externIrDefn.upperBound = externalizeType(irDefn.upperBound)
+            externIrDefn.lowerBound = externalizeType(irDefn.lowerBound)
         else:
             raise NotImplementedError
 
@@ -164,7 +178,7 @@ class Package(object):
         externalizeType = lambda ty: self.externalizeType(ty, loader)
         if isinstance(ty, ir_types.ClassType) and ty.clas.isForeign():
             externTy = ir_types.ClassType(externalize(ty.clas),
-                                          tuple(map(externalizeType, ty.typeArgs)),
+                                          tuple(map(externalizeType, ty.typeArguments)),
                                           ty.flags)
         elif isinstance(ty, ir_types.VariableType) and ty.typeParameter.isForeign():
             externTy = ir_types.VariableType(externalize(ty.typeParameter), ty.flags)

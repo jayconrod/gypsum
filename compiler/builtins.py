@@ -3,11 +3,11 @@
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
 
-
 import os.path
 import re
 import yaml
 
+import ids
 import ir
 import ir_types
 
@@ -52,8 +52,29 @@ def getPackageClass():
 
 
 def getBuiltinClasses(includePrimitives):
+    _initialize()
     return [clas for clas in _builtinClassNameMap.itervalues()
             if includePrimitives or not hasattr(clas, "isPrimitive")]
+
+
+def getBuiltinClassById(idOrIndex):
+    _initialize()
+    if isinstance(idOrIndex, int):
+        id = bytecode.getBuiltinClassId(idOrIndex)
+    else:
+        assert isinstance(idOrIndex, ids.DefnId)
+        id = idOrIndex
+    return _builtinClassIdMap[id]
+
+
+def getBuiltinFunctionById(idOrIndex):
+    _initialize()
+    if isinstance(idOrIndex, int):
+        id = bytecode.getBuiltinFunctionId(idOrIndex)
+    else:
+        assert isinstance(idOrIndex, ids.DefnId)
+        id = idOrIndex
+    return _builtinFunctionIdMap[id]
 
 
 def getBuiltinClassFromType(ty):
@@ -62,6 +83,7 @@ def getBuiltinClassFromType(ty):
 
 
 def getBuiltinFunctions():
+    _initialize()
     return _builtinFunctionNameMap.values()
 
 
@@ -70,7 +92,9 @@ _builtinFunctions = []
 
 _builtinClassNameMap = {}
 _builtinClassTypeMap = {}
+_builtinClassIdMap = {}
 _builtinFunctionNameMap = {}
+_builtinFunctionIdMap = {}
 
 _initialized = False
 
@@ -105,7 +129,7 @@ def _initialize():
 
     def buildFunction(functionData):
         name = functionData.get("name", "$constructor")
-        id = getattr(bytecode,functionData["id"])
+        id = getattr(bytecode, functionData["id"])
         function = ir.Function(name, None, id,
                                buildType(functionData["returnType"]),
                                [],
@@ -113,6 +137,7 @@ def _initialize():
                                [], [], frozenset())
         if "insts" in functionData:
             function.insts = functionData["insts"]
+        _builtinFunctionIdMap[id] = function
         return function
 
     def buildMethod(functionData, clas):
@@ -156,6 +181,7 @@ def _initialize():
             addMethod(clas.methods, inheritedMethodCount, buildMethod(m, clas))
 
         _builtinClassTypeMap[buildType(clas.name)] = clas
+        _builtinClassIdMap[clas.id] = clas
 
     def addMethod(methods, inheritedCount, method):
         for i, m in enumerate(methods[:inheritedCount]):

@@ -355,6 +355,22 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         x = info.package.findGlobal(name="x")
         self.assertEquals(getStringType(), x.type)
 
+    def testCallFunctionWithForeignTypeArg(self):
+        otherPackage = Package(name=PackageName(["foo"]))
+        clas = otherPackage.addClass("Bar", None, [], [getRootClassType()], None,
+                                     [], [], [], frozenset([PUBLIC]))
+        loader = MockPackageLoader([otherPackage])
+        source = "def id[static T](x: T) = x\n" + \
+                 "def f(x: String) = id[String](x)"
+        info = self.analyzeFromSource(source, packageLoader=loader)
+        externClass = info.package.externalize(clas, loader)
+        expectedType = ClassType(externClass)
+        fAst = info.ast.definitions[1]
+        self.assertEquals(expectedType, info.getType(fAst.parameters[0]))
+        self.assertEquals(expectedType, info.getType(fAst.body.typeArguments[0]))
+        self.assertEquals(expectedType, info.getType(fAst.body.arguments[0]))
+        self.assertEquals(expectedType, info.getType(fAst.body))
+
     def testCallMethodWithNullableReceiver(self):
         source = "class Foo\n" + \
                  "  def m = {}\n" + \
