@@ -331,6 +331,22 @@ class AstClassType(AstType):
         return self.typeArguments
 
 
+class AstProjectedType(AstType):
+    def __init__(self, left, right, location):
+        super(AstProjectedType, self).__init__(location)
+        self.left = left
+        self.right = right
+
+    def __repr__(self):
+        return "AstProjectedType(%s, %s)" % (repr(self.left), repr(self.right))
+
+    def tag(self):
+        return "ProjectedType"
+
+    def children(self):
+        return [self.left, self.right]
+
+
 class AstExpression(AstNode):
     pass
 

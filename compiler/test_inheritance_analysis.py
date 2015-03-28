@@ -11,12 +11,14 @@ from compile_info import *
 from ir import *
 from ir_types import *
 from errors import *
+from flags import *
 from layout import layout
 from lexer import *
 from parser import *
 from scope_analysis import *
 from builtins import getRootClass, getExceptionClass
 from bytecode import BUILTIN_ROOT_CLASS_ID
+from utils_test import MockPackageLoader
 
 class TestInheritanceAnalysis(unittest.TestCase):
     def parseFromSource(self, source):
@@ -26,9 +28,9 @@ class TestInheritanceAnalysis(unittest.TestCase):
         ast = parse(filename, layoutTokens)
         return ast
 
-    def analyzeFromSource(self, source):
+    def analyzeFromSource(self, source, packageLoader=None):
         ast = self.parseFromSource(source)
-        info = CompileInfo(ast)
+        info = CompileInfo(ast, packageLoader=packageLoader)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         return info
@@ -56,6 +58,50 @@ class TestInheritanceAnalysis(unittest.TestCase):
         barClassInfo = info.getClassInfo(barClass)
         self.assertIs(fooClassInfo, barClassInfo.superclassInfo)
 
+    def testInheritFromForeignType(self):
+        package = Package(name=PackageName(["foo"]))
+        foreignClass = package.addClass("Bar", None, [], [getRootClassType()],
+                                        None, [], [], [], frozenset([PUBLIC]))
+        loader = MockPackageLoader([package])
+        source = "class Baz <: foo.Bar"
+        info = self.analyzeFromSource(source, packageLoader=loader)
+        bazClass = info.package.findClass(name="Baz")
+        bazClassInfo = info.getClassInfo(bazClass)
+        foreignClassInfo = info.getClassInfo(foreignClass)
+        self.assertIs(foreignClassInfo, bazClassInfo.superclassInfo)
+
+    @unittest.skip("not implemented")
+    def testInheritFromLocalTypeInForeignClass(self):
+        # TODO: test foreign type inheriting from local class
+        # when we support other packages depending on package being compiled
+        self.fail()
+
+    def testInheritForeignTypeInForeignTypeInSamePackage(self):
+        package = Package(name=PackageName(["foo"]))
+        barClass = package.addClass("Bar", None, [], [getRootClassType()],
+                                    None, [], [], [], frozenset([PUBLIC]))
+        bazClass = package.addClass("Baz", None, [], [ClassType(barClass)],
+                                    None, [], [], [], frozenset())
+        loader = MockPackageLoader([package])
+        info = self.analyzeFromSource("class Quux <: foo.Bar", packageLoader=loader)
+        barClassInfo = info.getClassInfo(barClass)
+        bazClassInfo = info.getClassInfo(bazClass)
+        self.assertIs(barClassInfo, bazClassInfo.superclassInfo)
+
+    def testInheritForeignTypeInForeignTypeInDifferentPackage(self):
+        fooPackage = Package(name=PackageName(["foo"]))
+        barClass = fooPackage.addClass("Bar", None, [], [getRootClassType()],
+                                       None, [], [], [], frozenset([PUBLIC]))
+        bazPackage = Package(name=PackageName(["baz"]))
+        loader = MockPackageLoader([fooPackage, bazPackage])
+        bazPackage.dependencies.append(PackageDependency.fromPackage(fooPackage))
+        quuxClass = bazPackage.addClass("Quux", None, [], [ClassType(barClass)],
+                                        None, [], [], [], frozenset([PUBLIC]))
+        info = self.analyzeFromSource("class Zzyzx <: baz.Quux", packageLoader=loader)
+        barClassInfo = info.getClassInfo(barClass)
+        quuxClassInfo = info.getClassInfo(quuxClass)
+        self.assertIs(barClassInfo, quuxClassInfo.superclassInfo)
+
     def testInheritFromException(self):
         info = self.analyzeFromSource("class Foo <: Exception")
         ast = info.ast
@@ -71,11 +117,26 @@ class TestInheritanceAnalysis(unittest.TestCase):
                  "class Bar <: Foo"
         self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
+    @unittest.skip("not implemented")
+    def testInheritCycleForeign(self):
+        # TODO: test an inheritance cycle with a foreign class and a local class.
+        # when we support other packages depeneding on the one being compiled.
+        self.fail()
+
     def testTypeParameterCycle(self):
         source = "class Foo\n" + \
                  "class Bar <: Foo\n" + \
                  "def f[static T <: Bar >: Foo] = 12"
         self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
+    def testTypeParameterCycleForeign(self):
+        package = Package(name=PackageName(["foo"]))
+        barClass = package.addClass("Bar", None, [], [getRootClassType()],
+                                    None, [], [], [], frozenset([PUBLIC]))
+        loader = MockPackageLoader([package])
+        source = "class Baz <: foo.Bar\n" + \
+                 "def f[static T <: Baz >: foo.Bar]"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source, packageLoader=loader)
 
     def testInheritedDefinitionsAreBound(self):
         source = "class Foo\n" + \

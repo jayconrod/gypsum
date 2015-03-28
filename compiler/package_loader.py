@@ -12,7 +12,22 @@ import ir
 import serialize
 
 
-class PackageLoader(object):
+class BasePackageLoader(object):
+    def __init__(self):
+        self.loadHooks = []
+
+    def addLoadHook(self, hook):
+        self.loadHooks.append(hook)
+
+    def removeLoadHook(self, hook):
+        self.loadHooks.remove(hook)
+
+    def runLoadHooks(self, package):
+        for hook in self.loadHooks:
+            hook(package)
+
+
+class PackageLoader(BasePackageLoader):
     class Info(object):
         def __init__(self, name, version, fileName):
             self.name = name
@@ -21,6 +36,7 @@ class PackageLoader(object):
             self.package = None
 
     def __init__(self, paths=None):
+        super(PackageLoader, self).__init__()
         if paths is not None:
             self.paths = paths
         elif os.environ.get("CS_PACKAGE_PATH") is not None:
@@ -30,6 +46,7 @@ class PackageLoader(object):
 
         self.packageInfoByName = None
         self.packageInfoById = None
+        self.loadHooks = []
 
     def ensurePackageInfo(self):
         if self.packageInfoByName is not None:
@@ -74,7 +91,11 @@ class PackageLoader(object):
         for dep in package.dependencies:
             dep.package = self.loadPackage(dep.name)
 
+        self.runLoadHooks(package)
         return package
+
+    def getLoadedPackages(self):
+        return [packageInfo.package for packageInfo in self.packageInfoById.itervalues()]
 
     def getPackageById(self, id):
         package = self.packageInfoById[id].package

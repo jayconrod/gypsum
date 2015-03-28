@@ -92,7 +92,7 @@ def superclass():
         else:
             [_, supertype, args] = ct.untangle(parsed)
             return supertype, args
-    return ct.Opt(keyword("<:") + classType() + args) ^ process
+    return ct.Opt(keyword("<:") + ty() + args) ^ process
 
 
 def supertypes():
@@ -145,7 +145,7 @@ def varPattern():
 
 # Types
 def ty():
-    return simpleType() | classType()
+    return simpleType() | projectedType()
 
 
 def tyOpt():
@@ -170,6 +170,23 @@ def classType():
         flags = set([nullFlag]) if nullFlag else set()
         return ast.AstClassType(name, typeArgs, flags, loc)
     return symbol + typeArguments() + ct.Opt(ct.Reserved(OPERATOR, "?")) ^ process
+
+
+def projectableType():
+    return classType()
+
+
+def projectedType():
+    def process(parsed, loc):
+        if len(parsed) == 1:
+            return parsed[0]
+        else:
+            n = len(parsed)
+            projected = parsed[n - 1]
+            for i in xrange(n - 2, -1, -1):
+                projected = ast.AstProjectedType(parsed[i], projected, loc)
+            return projected
+    return ct.Rep1Sep(projectableType(), keyword(".")) ^ process
 
 
 def typeArguments():

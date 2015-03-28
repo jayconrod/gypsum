@@ -63,34 +63,55 @@ def analyzeInheritance(info):
     bindings from each class to its derived classes. At this point, overrides are treated as
     overloads, since we cannot distinguish between them until after type analysis."""
 
-    # The inheritance graph is for classes only. The nodes are ScopeIds. If A is a subclass of
-    # B, then A -> B will be an edge in the graph.
-    inheritanceGraph = Graph()
-
-    # The subtype graph is for all type definitions (classes and type parameters). The nodes
-    # are DefnIds. The inheritance graph is a subgraph. Additional edges correspond to type
-    # parameter bounds. Type arguments are ignored here.
+    # The subtype graph is for all type definitions (classes and type parameters) in packages
+    # loaded so far. The purpose of the subtype graph is to detect cycles, which are
+    # errors. Type.isSubtypeOf isn't safe until we know the subtype graph is acyclic.
+    # The vertices of the subtype graph are DefnIds. The edges correspond to superclasses
+    # and type parameter bounds. Type arguments are ignored here.
     subtypeGraph = Graph()
 
-    # Add edges for builtin classes. Still need to track these, even though they aren't in AST.
+    # The inheritance graph is for local classes only. It's purpose is to decide which order to
+    # copy bindings from base classes to subclasses. The nodes are ScopeIds. The edges are
+    # subclass relationships. Note that this is a subgraph of the subtype graph. Builtin and
+    # foreign classes are not included in this graph because they don't need any bindings
+    # copied to them.
+    inheritanceGraph = Graph()
+
+    # Make sure we have class info for classes in all loaded packages.
+    def ensureClassInfo(package):
+        for clas in package.classes:
+            assert not info.hasClassInfo(clas)
+            info.setClassInfo(clas, ClassInfo(clas))
+    for package in info.loader.getLoadedPackages():
+        ensureClassInfo(package)
+    info.loader.addLoadHook(ensureClassInfo)
+
+    # Populate both graphs with local definitions from the AST. Also, make sure we have
+    # class info for any packages that get loaded.
+    visitor = InheritanceVisitor(info.getScope(GLOBAL_SCOPE_ID), inheritanceGraph, subtypeGraph)
+    visitor.visitChildren(info.ast)
+
+    info.loader.removeLoadHook(ensureClassInfo)
+
+    # Populate the subtype graph using builtin classes.
+    def addNonLocalClass(irClass):
+        assert len(irClass.supertypes) <= 1
+        if len(irClass.supertypes) == 1:
+            classInfo = info.getClassInfo(irClass)
+            irSuperclass = irClass.supertypes[0].clas
+            classInfo.superclassInfo = info.getClassInfo(irSuperclass)
+            subtypeGraph.addEdge(irClass.id, irSuperclass.id)
     def handleBuiltinInheritance(name, irDefn):
         if isinstance(irDefn, ir.Class):
-            assert len(irDefn.supertypes) <= 1
-            if len(irDefn.supertypes) == 1:
-                classInfo = info.getClassInfo(irDefn)
-                irSuperclass = irDefn.supertypes[0].clas
-                classInfo.superclassInfo = info.getClassInfo(irSuperclass)
-                classScopeId = info.getScope(irDefn.id).scopeId
-                superclassScopeId = info.getScope(irSuperclass.id).scopeId
-                inheritanceGraph.addEdge(classScopeId, superclassScopeId)
-                subtypeGraph.addEdge(irDefn.id, irSuperclass.id)
+            addNonLocalClass(irDefn)
         elif isinstance(irDefn, ir.TypeParameter):
             raise NotImplementedError
     registerBuiltins(handleBuiltinInheritance)
 
-    # Populate the rest of the graph by traversing the AST.
-    visitor = InheritanceVisitor(info.getScope(GLOBAL_SCOPE_ID), inheritanceGraph, subtypeGraph)
-    visitor.visitChildren(info.ast)
+    # Populate the subtype graph using foreign classes.
+    for package in info.loader.getLoadedPackages():
+        for irClass in package.classes:
+            addNonLocalClass(irClass)
 
     # Check for cycles.
     if subtypeGraph.isCyclic():
@@ -101,13 +122,11 @@ def analyzeInheritance(info):
     # to ensure we don't miss anything, i.e., if S <: T, we must ensure all bindings have been
     # copied to T before copying from T to S. Builtin classes are already flattened, so this
     # is not necessary for them.
-    topologicalClassIds = inheritanceGraph.reverseEdges().topologicalSort()
-    for scopeId in topologicalClassIds:
+    topologicalClassScopeIds = inheritanceGraph.reverseEdges().topologicalSort()
+    for scopeId in topologicalClassScopeIds:
         scope = info.getScope(scopeId)
         clas = scope.getIrDefn()
         classInfo = info.getClassInfo(clas)
-        if clas.isBuiltin() or classInfo.superclassInfo is None:
-            continue
 
         superclassScope = info.getScope(classInfo.superclassInfo.irDefn.id)
         for name, defnInfo in superclassScope.getBindings():
@@ -619,7 +638,7 @@ class Scope(ast.AstNodeVisitor):
         Exception if not."""
         irDefn = defnInfo.irDefn
         if isinstance(irDefn, ir.Package):
-            assert useKind in [USE_AS_VALUE, USE_AS_PROPERTY]
+            assert useKind in [USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY]
             self.info.package.ensureDependency(irDefn)
 
         if isinstance(irDefn, ir.IrTopDefn) and \
@@ -1213,6 +1232,7 @@ class PackageScope(Scope):
         self.prefixScopes = {}
 
         if package is not None:
+            info.setScope(package.id, self)
             exportedDefns = []
             exportedDefns.extend(g for g in package.globals if PUBLIC in g.flags)
             exportedDefns.extend(f for f in package.functions
@@ -1222,10 +1242,11 @@ class PackageScope(Scope):
                 defnInfo = DefnInfo(defn, scopeId)
                 self.bind(defn.name, defnInfo)
                 self.define(defn.name)
-            for clas in package.classes:
-                if PUBLIC in clas.flags:
-                    scope = ExternClassScope(ScopeId(clas.name), self, info, clas)
-                    self.info.setScope(clas.id, scope)
+            for dep in package.dependencies:
+                for clas in dep.externClasses:
+                    if PUBLIC in clas.flags:
+                        scope = ExternClassScope(ScopeId(clas.name), self, info, clas)
+                        self.info.setScope(clas.id, scope)
 
         packageBindings = {}
         for name in packageNames:
@@ -1273,6 +1294,7 @@ class PackageScope(Scope):
             packageName = ir.PackageName(self.prefix + [name])
             if packageName in self.packageNames:
                 defnInfo.irDefn = self.info.loader.loadPackage(packageName)
+                self.scopeForPrefix(name)  # force scope to be created
         return nameInfo
 
     def use(self, defnInfo, useAstId, useKind, loc):
@@ -1404,27 +1426,24 @@ class InheritanceVisitor(ScopeVisitor):
 
     def visitAstClassDefinition(self, node):
         scope = self.scope.scopeForClass(node)
-        scopeId = scope.scopeId
         irClass = scope.getIrDefn()
         classInfo = self.info.getClassInfo(irClass)
         if node.supertype is None:
-            rootClassScopeId = self.info.getScope(BUILTIN_ROOT_CLASS_ID).scopeId
             classInfo.superclassInfo = self.info.getClassInfo(BUILTIN_ROOT_CLASS_ID)
-            self.inheritanceGraph.addEdge(scopeId, rootClassScopeId)
             self.subtypeGraph.addEdge(irClass.id, BUILTIN_ROOT_CLASS_ID)
         else:
-            supertype = node.supertype
-            supertypeIrDefn = self.addTypeToSubtypeGraph(irClass.id, scope, supertype)
+            supertypeIrDefn = self.addTypeToSubtypeGraph(irClass.id, scope, node.supertype)
             if not isinstance(supertypeIrDefn, ir.Class):
                 raise ScopeException(node.location, "inheritance from non-class type")
-
-            superclassId = supertypeIrDefn.id
-            superclassScopeId = self.info.getScope(superclassId).scopeId
-            superclassInfo = self.info.getClassInfo(superclassId)
-            if classInfo is superclassInfo:
-                raise ScopeException(node.location, "class cannot inherit from itself")
+            superclassInfo = self.info.getClassInfo(supertypeIrDefn)
             classInfo.superclassInfo = superclassInfo
-            self.inheritanceGraph.addEdge(scopeId, superclassScopeId)
+
+            if supertypeIrDefn.isLocal():
+                if classInfo is superclassInfo:
+                    raise ScopeException(node.location, "class cannot inherit from itself")
+
+                superclassScopeId = self.info.getScope(supertypeIrDefn).scopeId
+                self.inheritanceGraph.addEdge(scope.scopeId, superclassScopeId)
 
         super(InheritanceVisitor, self).visitAstClassDefinition(node)
 
@@ -1437,18 +1456,31 @@ class InheritanceVisitor(ScopeVisitor):
 
     def addTypeToSubtypeGraph(self, id, scope, astType, reverse=False):
         assert isinstance(id, DefnId)
-        if not isinstance(astType, ast.AstClassType):
-            raise ScopeException(astType.location, "inheritance from non-class type")
-        nameInfo = scope.lookup(astType.name, astType.location, ignoreDefnOrder=True)
-        if nameInfo.isOverloaded():
-            raise ScopeException(astType.location, "inheritance from overloaded symbol")
-        defnInfo = nameInfo.getDefnInfo()
-        irDefn = defnInfo.irDefn
-        assert irDefn.isTypeDefn()
+        irDefn = self.lookupTypeDefn(scope, astType)
+        if not irDefn.isTypeDefn():
+            raise ScopeException(astType.location, "inheritance from non-class definition")
         if not reverse:
             self.subtypeGraph.addEdge(id, irDefn.id)
         else:
             self.subtypeGraph.addEdge(irDefn.id, id)
+        return irDefn
+
+    def lookupTypeDefn(self, scope, astType):
+        if isinstance(astType, ast.AstClassType):
+            nameInfo = scope.lookup(astType.name, astType.location, ignoreDefnOrder=True)
+            if nameInfo.isOverloaded():
+                raise ScopeException(astType.location, "inheritance from overloaded symbol")
+            defnInfo = nameInfo.getDefnInfo()
+            scope.use(defnInfo, astType.id, USE_AS_TYPE, astType.location)
+            irDefn = defnInfo.irDefn
+        elif isinstance(astType, ast.AstProjectedType):
+            outerDefn = self.lookupTypeDefn(scope, astType.left)
+            if not self.info.hasScope(outerDefn):
+                raise ScopeException(astType.left.location,
+                                     "projection from definition which does not have a scope")
+            irDefn = self.lookupTypeDefn(self.info.getScope(outerDefn), astType.right)
+        else:
+            raise ScopeException(astType.location, "inheritance from non-class type")
         return irDefn
 
 

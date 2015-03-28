@@ -8,6 +8,7 @@ import unittest
 
 from ir import Global, Function, Class, Package, PackageName, PackagePrefix, TypeParameter, Variable, Field, LOCAL
 from ir_types import getNothingClassType, getRootClassType
+from package_loader import BasePackageLoader
 from utils import Counter
 
 
@@ -88,8 +89,9 @@ class TestCaseWithDefinitions(unittest.TestCase):
                 args[k] = v
 
 
-class MockPackageLoader(object):
+class MockPackageLoader(BasePackageLoader):
     def __init__(self, packagesOrPackageNames):
+        super(MockPackageLoader, self).__init__()
         if len(packagesOrPackageNames) == 0:
             self.packageNames = []
             self.packages = {}
@@ -100,6 +102,7 @@ class MockPackageLoader(object):
             assert isinstance(packagesOrPackageNames[0], PackageName)
             self.packageNames = packagesOrPackageNames
             self.packages = {name: Package(name=name) for name in packagesOrPackageNames}
+        self.loadedIds = set()
 
     def getPackageNames(self):
         return self.packageNames
@@ -108,9 +111,20 @@ class MockPackageLoader(object):
         return name in self.packageNames
 
     def loadPackage(self, name):
+        assert name in self.packageNames
         if name not in self.packages:
             self.packages[name] = Package(name=name)
-        return self.packages[name]
+        package = self.packages[name]
+
+        if package.id not in self.loadedIds:
+            self.loadedIds.add(package.id)
+            for dep in package.dependencies:
+                dep.package = self.loadPackage(dep.name)
+            self.runLoadHooks(package)
+        return package
+
+    def getLoadedPackages(self):
+        return map(self.getPackageById, self.loadedIds)
 
     def getPackageById(self, id):
         return next(package for package in self.packages.itervalues() if package.id is id)

@@ -39,7 +39,7 @@ class CompileInfo(object):
         self.packageInfo = {}  # keyed by AstId
 
 
-_dictNames = [("Scope", "scopes", (ids.ScopeId, ids.AstId, ids.DefnId)),
+_dictNames = [("Scope", "scopes", (ids.ScopeId, ids.AstId, ids.DefnId, ids.PackageId)),
               ("ContextInfo", "contextInfo", (ids.ScopeId,)),
               ("ClosureInfo", "closureInfo", (ids.ScopeId,)),
               ("DefnInfo", "defnInfo", (ids.AstId,)),
@@ -70,6 +70,12 @@ def _addDictMethods(elemName, dictName, types):
                 elif key.astDefn is not None and key.astDefn.id in self.scopes:
                     return self.scopes[key.astDefn.id].scopeId
             return defnId
+        elif isinstance(key, ir.Package):
+            packageId = key.id
+            if ids.PackageId in types:
+                return packageId
+            elif ids.ScopeId in types:
+                return self.scopes[packageId].scopeId
         return key
 
     def get(self, key):

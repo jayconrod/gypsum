@@ -415,6 +415,9 @@ class IrTopDefn(IrDefinition):
     def isForeign(self):
         return not self.isBuiltin() and self.id.packageId is not ids.TARGET_PACKAGE_ID
 
+    def isLocal(self):
+        return not self.isBuiltin() and not self.isForeign()
+
 
 class Global(IrTopDefn):
     propertyNames = IrTopDefn.propertyNames + ("type", "flags")
@@ -761,5 +764,6 @@ class Variable(IrDefinition):
 class Field(IrDefinition):
     propertyNames = IrDefinition.propertyNames + ("type", "flags")
 
-__all__ = ["Package", "PackageName", "PackagePrefix", "Global", "Function", "Class",
-           "TypeParameter", "Variable", "Field", "LOCAL", "PARAMETER"]
+__all__ = ["Package", "PackageName", "PackagePrefix", "PackageDependency",
+           "Global", "Function", "Class", "TypeParameter", "Variable", "Field",
+           "LOCAL", "PARAMETER"]
