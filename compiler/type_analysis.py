@@ -120,6 +120,62 @@ class TypeVisitorCommon(ast.AstNodeVisitor):
                                     irDefn.name)
             return ir_t.VariableType(irDefn)
 
+    def visitAstProjectedType(self, node):
+        components = []
+        def flatten(node):
+            if isinstance(node, ast.AstClassType):
+                components.append(node)
+            elif isinstance(node, ast.AstProjectedType):
+                flatten(node.left)
+                flatten(node.right)
+            else:
+                raise TypeException(node.location, "cannot project from a non-class type")
+        flatten(node)
+
+        scope = self.scope()
+        defnInfo = None  # don't cache irDefn, since Scope.use may externalize it.
+        isProjected = False
+        typeArgs = []
+        for component in components:
+            nameInfo = scope.lookup(component.name, component.location, localOnly=isProjected)
+            if nameInfo.isOverloaded():
+                raise TypeException(component.location,
+                                    "%s: cannot project from overloaded symbol" %
+                                    component.name)
+            defnInfo = nameInfo.getDefnInfo()
+            if not isinstance(defnInfo.irDefn, ir.Package) and \
+               not isinstance(defnInfo.irDefn, ir.PackagePrefix) and \
+               not defnInfo.irDefn.isTypeDefn():
+                raise TypeException(component.location,
+                                    "%s: cannot project from non-type" %
+                                    component.name)
+
+            if len(component.typeArguments) > 0:
+                if not isinstance(defnInfo.irDefn, ir.IrDefinition):
+                    raise TypeException(component.location,
+                                        "%s: non-type definition does not accept type arguments" %
+                                        component.name)
+                typeArgs.extend(self.handleAstClassTypeArgs(defnInfo.irDefn,
+                                                            component.typeArguments))
+
+            if isinstance(defnInfo.irDefn, ir.Package) or \
+               isinstance(defnInfo.irDefn, ir.IrDefinition):
+                self.scope().use(defnInfo, component.id, USE_AS_TYPE, component.location)
+                scope = self.info.getScope(defnInfo.irDefn)
+            else:
+                assert isinstance(defnInfo.irDefn, ir.PackagePrefix)
+                scope = self.info.getScope(defnInfo.scopeId).scopeForPrefix(component.name)
+            isProjected = True
+
+        irDefn = defnInfo.irDefn
+        if isinstance(irDefn, ir.Package) or not irDefn.isTypeDefn():
+            raise TypeException(node.location, "cannot project a non-type definition")
+        if isinstance(irDefn, ir.Class):
+            assert len(typeArgs) == len(irDefn.typeParameters)
+            return ir_t.ClassType(irDefn, tuple(typeArgs))
+        else:
+            raise NotImplementedError
+
     def handleAstClassTypeArgs(self, irClass, nodes):
         raise NotImplementedError
 

@@ -593,6 +593,55 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource("def f = print(\"foo\")")
         self.assertEquals(UnitType, info.getType(info.ast.definitions[0].body))
 
+    def testForeignProjectedClassType(self):
+        package = Package(name=PackageName(["foo"]))
+        clas = package.addClass("Bar", None, [], [getRootClassType()],
+                                None, [], [], [], frozenset([PUBLIC]))
+        loader = MockPackageLoader([package])
+        source = "var g: foo.Bar"
+        info = self.analyzeFromSource(source, packageLoader=loader)
+        externClass = info.package.externalize(clas, loader)
+        expectedType = ClassType(externClass)
+        g = info.package.findGlobal(name="g")
+        self.assertEquals(expectedType, g.type)
+
+    def testForeignProjectedPackageType(self):
+        loader = MockPackageLoader([PackageName(["foo", "bar"])])
+        source = "var g: foo.bar"
+        self.assertRaises(TypeException, self.analyzeFromSource, source, packageLoader=loader)
+
+    def testForeignProjectedClassTypeWithPackageTypeArgs(self):
+        package = Package(name=PackageName(["foo"]))
+        clas = package.addClass("Bar", None, [], [getRootClassType()],
+                                None, [], [], [], frozenset([PUBLIC]))
+        loader = MockPackageLoader([package])
+        source = "var g: foo[String].Bar"
+        self.assertRaises(TypeException, self.analyzeFromSource, source, packageLoader=loader)
+
+    def testForeignProjectedClassTypeWithTypeArgs(self):
+        package = Package(name=PackageName(["foo"]))
+        param = package.addTypeParameter("T", None, getRootClassType(),
+                                         getNothingClassType(), frozenset([STATIC]))
+        clas = package.addClass("Bar", None, [param], [getRootClassType()],
+                                None, [], [], [], frozenset([PUBLIC]))
+        loader = MockPackageLoader([package])
+        source = "var g: foo.Bar[String]"
+        info = self.analyzeFromSource(source, packageLoader=loader)
+        externClass = info.package.externalize(clas, loader)
+        expectedType = ClassType(externClass, (getStringType(),))
+        g = info.package.findGlobal(name="g")
+        self.assertEquals(expectedType, g.type)
+
+    def testForeignProjectedClassTypeWithTypeArgsOutOfBounds(self):
+        package = Package(name=PackageName(["foo"]))
+        param = package.addTypeParameter("T", None, getStringType(),
+                                         getNothingClassType(), frozenset([STATIC]))
+        clas = package.addClass("Bar", None, [param], [getRootClassType()],
+                                None, [], [], [], frozenset([PUBLIC]))
+        loader = MockPackageLoader([package])
+        source = "var g: foo.Bar[Object]"
+        self.assertRaises(TypeException, self.analyzeFromSource, source, packageLoader=loader)
+
     # Closures
     def testFunctionContextFields(self):
         source = "def f(x: i32) =\n" + \

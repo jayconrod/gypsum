@@ -933,7 +933,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             for arg in ty.typeArguments:
                 self.buildStaticTypeArgument(arg)
             if ty.clas.isForeign():
-                self.tycf(ty.clas.packageId.index, ty.clas.id.externIndex)
+                self.tycf(ty.clas.id.packageId.index, ty.clas.id.externIndex)
             else:
                 self.tyc(ty.clas.id.index)
         elif isinstance(ty, VariableType):

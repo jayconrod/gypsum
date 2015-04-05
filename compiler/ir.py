@@ -280,7 +280,6 @@ class PackagePrefix(object):
         assert isinstance(name, PackageName)
         self.name = name
 
-
 class PackageName(object):
     nameComponentSrc = "[A-Za-z][A-Za-z0-9_]*"
     nameSrc = r"%s(?:\.%s)*" % (nameComponentSrc, nameComponentSrc)

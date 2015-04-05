@@ -1202,6 +1202,60 @@ class TestCompiler(TestCaseWithDefinitions):
                              variables=[self.makeVariable("s", type=stringTy,
                                                           kind=PARAMETER, flags=frozenset([LET]))]))
 
+    def testMatchForeignType(self):
+        # try-catch is used for now, since full pattern matching hasn't been implemented yet.
+        fooPackage = Package(name=PackageName(["foo"]))
+        exceptionClass = getExceptionClass()
+        clas = fooPackage.addClass("Bar", None, [], [ClassType(exceptionClass)],
+                                None, [], [], [], frozenset([PUBLIC]))
+        loader = MockPackageLoader([fooPackage])
+
+        source = "def f =\n" + \
+                 "  try {} catch\n" + \
+                 "    case x: foo.Bar => {}"
+        package = self.compileFromSource(source, packageLoader=loader)
+
+        externClass = package.externalize(clas, loader)
+        externType = ClassType(externClass)
+        typeofMethod = exceptionClass.getMember("typeof")
+        typeofMethodIndex = exceptionClass.getMethodIndex(typeofMethod)
+        typeClass = getTypeClass()
+        isSubtypeOfMethod = typeClass.getMember("is-subtype-of")
+        isSubtypeOfMethodIndex = typeClass.getMethodIndex(isSubtypeOfMethod)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", UnitType, [[
+                               pushtry(1, 2),
+                             ], [
+                               unit(),
+                               poptry(4),
+                             ], [
+                               dup(),
+                               callv(1, typeofMethodIndex),
+                               dup(),
+                               allocarri(BUILTIN_TYPE_CLASS_ID.index, 1),
+                               dup(),
+                               clsf(clas.id.packageId.index, clas.id.externIndex),
+                               callg(BUILTIN_TYPE_CTOR_ID.index),
+                               drop(),
+                               callv(2, isSubtypeOfMethodIndex),
+                               branchif(3, 5),
+                             ], [
+                               tycf(clas.id.packageId.index, clas.id.externIndex),
+                               cast(),
+                               stlocal(-1),
+                               drop(),
+                               drop(),
+                               unit(),
+                               branch(4),
+                             ], [
+                               ret(),
+                             ], [
+                               drop(),
+                               throw(),
+                             ]],
+                             variables=[self.makeVariable("x", type=externType,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
     def testInitializer(self):
         source = "class Foo\n" + \
                  "  var x: Foo = this\n" + \

@@ -636,6 +636,7 @@ class Scope(ast.AstNodeVisitor):
 
         Also checks whether the definition is allowed to be used in this scope and raises an
         Exception if not."""
+        assert not self.isForeign()
         irDefn = defnInfo.irDefn
         if isinstance(irDefn, ir.Package):
             assert useKind in [USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY]
@@ -685,6 +686,10 @@ class Scope(ast.AstNodeVisitor):
             if not current.isLocal():
                 return False
             current = current.parent
+
+    def isForeign(self):
+        """Returns true if this scope is in a package other than the one being compiled."""
+        return False
 
     def isWithin(self, scopeOrId):
         id = scopeOrId.scopeId if isinstance(scopeOrId, Scope) else scopeOrId
@@ -1225,28 +1230,30 @@ class BuiltinClassScope(Scope):
 
 class PackageScope(Scope):
     def __init__(self, scopeId, parent, info, packageNames, prefix, package):
+        assert package is None or \
+               isinstance(package, ir.Package) or \
+               isinstance(package, ir.PackagePrefix)
         super(PackageScope, self).__init__(None, scopeId, parent, info)
         self.packageNames = []
         self.prefix = prefix
         self.package = package
         self.prefixScopes = {}
 
-        if package is not None:
+        if isinstance(package, ir.Package):
             info.setScope(package.id, self)
             exportedDefns = []
             exportedDefns.extend(g for g in package.globals if PUBLIC in g.flags)
             exportedDefns.extend(f for f in package.functions
                                  if PUBLIC in f.flags and METHOD not in f.flags)
-            exportedDefns.extend(c for c in package.classes if PUBLIC in c.flags)
+            exportedClasses = [c for c in package.classes if PUBLIC in c.flags]
+            exportedDefns.extend(exportedClasses)
             for defn in exportedDefns:
                 defnInfo = DefnInfo(defn, scopeId)
                 self.bind(defn.name, defnInfo)
                 self.define(defn.name)
-            for dep in package.dependencies:
-                for clas in dep.externClasses:
-                    if PUBLIC in clas.flags:
-                        scope = ExternClassScope(ScopeId(clas.name), self, info, clas)
-                        self.info.setScope(clas.id, scope)
+            for clas in exportedClasses:
+                scope = ExternClassScope(ScopeId(clas.name), self, info, clas)
+                self.info.setScope(clas.id, scope)
 
         packageBindings = {}
         for name in packageNames:
@@ -1268,19 +1275,20 @@ class PackageScope(Scope):
             self.bind(component, defnInfo)
             self.define(component)
 
+    def isForeign(self):
+        return self.package is not None
+
     def scopeForPrefix(self, component):
         if component in self.prefixScopes:
             return self.prefixScopes
 
-        prefix = self.prefix + [component]
-        name = ir.PackageName(prefix)
-        if name in self.packageNames:
-            package = self.info.loader.loadPackage(name)
-        else:
-            package = None
+        defnInfo = self.bindings[component].getDefnInfo()
+        name = defnInfo.irDefn.name
+        if name in self.packageNames and isinstance(defnInfo.irDefn, ir.PackagePrefix):
+            defnInfo.irDefn = self.info.loader.loadPackage(name)
 
-        scope = PackageScope(ScopeId(".".join(prefix)), self, self.info,
-                             self.packageNames, prefix, package)
+        scope = PackageScope(ScopeId(str(name)), self, self.info,
+                             self.packageNames, name.components, defnInfo.irDefn)
         self.prefixScopes[component] = scope
         return scope
 
@@ -1318,6 +1326,9 @@ class ExternClassScope(Scope):
                 defnInfo = DefnInfo(member, self.scopeId)
                 self.bind(member.name, defnInfo)
                 self.define(member.name)
+
+    def isForeign(self):
+        return True
 
     def requiresCapture(self):
         return True
