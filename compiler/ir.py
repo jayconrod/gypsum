@@ -150,6 +150,13 @@ class Package(object):
             externIrDefn.returnType = externalizeType(irDefn.returnType)
             externIrDefn.typeParameters = map(externalize, irDefn.typeParameters)
             externIrDefn.parameterTypes = map(externalizeType, irDefn.parameterTypes)
+            if flags.METHOD in irDefn.flags:
+                clas = irDefn.clas
+                if clas.id.isBuiltin():
+                    externIrDefn.clas = clas
+                else:
+                    externIrDefn.clas = self.dependencies[clas.id.packageId.index] \
+                                            .externClasses[clas.id.externIndex]
         elif isinstance(irDefn, Class):
             externIrDefn = Class(irDefn.name, irDefn.astDefn, id,
                                  None, None, None, None, None, None, externFlags)

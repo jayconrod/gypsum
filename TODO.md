@@ -49,6 +49,7 @@
   - ir classes
 - no optional parameters: prevent objects from being extended
 - use separate Id classes instead of integers
+- Replace Function.clas with .getReceiverClass()
 
 ## VM
 - use variadic arguments for API call

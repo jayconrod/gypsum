@@ -19,7 +19,7 @@ from compile_info import *
 from location import NoLoc
 from flags import LET
 from errors import *
-from utils_test import TestCaseWithDefinitions
+from utils_test import MockPackageLoader, TestCaseWithDefinitions
 
 
 class TestUseAnalysis(TestCaseWithDefinitions):
@@ -32,7 +32,9 @@ class TestUseAnalysis(TestCaseWithDefinitions):
 
     def analyzeFromSource(self, source):
         ast = self.parseFromSource(source)
-        info = CompileInfo(ast)
+        package = Package(id=TARGET_PACKAGE_ID)
+        packageLoader = MockPackageLoader([])
+        info = CompileInfo(ast, package, packageLoader)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         return info

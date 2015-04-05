@@ -82,16 +82,16 @@ def analyzeInheritance(info):
         for clas in package.classes:
             assert not info.hasClassInfo(clas)
             info.setClassInfo(clas, ClassInfo(clas))
-    for package in info.loader.getLoadedPackages():
+    for package in info.packageLoader.getLoadedPackages():
         ensureClassInfo(package)
-    info.loader.addLoadHook(ensureClassInfo)
+    info.packageLoader.addLoadHook(ensureClassInfo)
 
     # Populate both graphs with local definitions from the AST. Also, make sure we have
     # class info for any packages that get loaded.
     visitor = InheritanceVisitor(info.getScope(GLOBAL_SCOPE_ID), inheritanceGraph, subtypeGraph)
     visitor.visitChildren(info.ast)
 
-    info.loader.removeLoadHook(ensureClassInfo)
+    info.packageLoader.removeLoadHook(ensureClassInfo)
 
     # Populate the subtype graph using builtin classes.
     def addNonLocalClass(irClass):
@@ -109,7 +109,7 @@ def analyzeInheritance(info):
     registerBuiltins(handleBuiltinInheritance)
 
     # Populate the subtype graph using foreign classes.
-    for package in info.loader.getLoadedPackages():
+    for package in info.packageLoader.getLoadedPackages():
         for irClass in package.classes:
             addNonLocalClass(irClass)
 
@@ -634,8 +634,13 @@ class Scope(ast.AstNodeVisitor):
     def use(self, defnInfo, useAstId, useKind, loc):
         """Creates, registers, and returns UseInfo for a given definition.
 
-        Also checks whether the definition is allowed to be used in this scope and raises an
-        Exception if not."""
+        This method should be called in the scope where a definition is used, not where
+        the definition comes from or is looked up from. Consequently, this should never be
+        called on a foreign or builtin scope. This method also checks whether the definition
+        is allowed to be used in this scope and raises a ScopeException if not. It may
+        modify or replace `defnInfo.irDefn`, so don't cache a reference to that across a
+        call to this method. For example, it will externalize and replace foreign
+        definitions."""
         assert not self.isForeign()
         irDefn = defnInfo.irDefn
         if isinstance(irDefn, ir.Package):
@@ -645,7 +650,7 @@ class Scope(ast.AstNodeVisitor):
         if isinstance(irDefn, ir.IrTopDefn) and \
            irDefn.isForeign() and \
            not EXTERN in irDefn.flags:
-            irDefn = defnInfo.irDefn = self.info.package.externalize(irDefn, self.info.loader)
+            irDefn = defnInfo.irDefn = self.info.package.externalize(irDefn, self.info.packageLoader)
 
         if hasattr(irDefn, "flags") and \
            ((PRIVATE in irDefn.flags and \
@@ -1280,12 +1285,12 @@ class PackageScope(Scope):
 
     def scopeForPrefix(self, component):
         if component in self.prefixScopes:
-            return self.prefixScopes
+            return self.prefixScopes[component]
 
         defnInfo = self.bindings[component].getDefnInfo()
         name = defnInfo.irDefn.name
         if name in self.packageNames and isinstance(defnInfo.irDefn, ir.PackagePrefix):
-            defnInfo.irDefn = self.info.loader.loadPackage(name)
+            defnInfo.irDefn = self.info.packageLoader.loadPackage(name)
 
         scope = PackageScope(ScopeId(str(name)), self, self.info,
                              self.packageNames, name.components, defnInfo.irDefn)
@@ -1301,7 +1306,7 @@ class PackageScope(Scope):
         if isinstance(irDefn, ir.PackagePrefix):
             packageName = ir.PackageName(self.prefix + [name])
             if packageName in self.packageNames:
-                defnInfo.irDefn = self.info.loader.loadPackage(packageName)
+                defnInfo.irDefn = self.info.packageLoader.loadPackage(packageName)
                 self.scopeForPrefix(name)  # force scope to be created
         return nameInfo
 
@@ -1442,6 +1447,7 @@ class InheritanceVisitor(ScopeVisitor):
         if node.supertype is None:
             classInfo.superclassInfo = self.info.getClassInfo(BUILTIN_ROOT_CLASS_ID)
             self.subtypeGraph.addEdge(irClass.id, BUILTIN_ROOT_CLASS_ID)
+            self.inheritanceGraph.addVertex(scope.scopeId)
         else:
             supertypeIrDefn = self.addTypeToSubtypeGraph(irClass.id, scope, node.supertype)
             if not isinstance(supertypeIrDefn, ir.Class):
@@ -1482,7 +1488,7 @@ class InheritanceVisitor(ScopeVisitor):
             if nameInfo.isOverloaded():
                 raise ScopeException(astType.location, "inheritance from overloaded symbol")
             defnInfo = nameInfo.getDefnInfo()
-            scope.use(defnInfo, astType.id, USE_AS_TYPE, astType.location)
+            self.scope.use(defnInfo, astType.id, USE_AS_TYPE, astType.location)
             irDefn = defnInfo.irDefn
         elif isinstance(astType, ast.AstProjectedType):
             outerDefn = self.lookupTypeDefn(scope, astType.left)

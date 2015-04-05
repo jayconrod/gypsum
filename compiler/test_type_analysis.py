@@ -9,6 +9,7 @@ import unittest
 from ast import *
 from compile_info import *
 from errors import *
+from ids import *
 from ir import *
 from ir_types import *
 from layout import layout
@@ -32,7 +33,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
             packageNames = []
         if packageLoader is None:
             packageLoader = MockPackageLoader(map(PackageName.fromString, packageNames))
-        info = CompileInfo(ast, packageLoader=packageLoader)
+        package = Package(TARGET_PACKAGE_ID)
+        info = CompileInfo(ast, package=package, packageLoader=packageLoader)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         analyzeTypes(info)
@@ -361,7 +363,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                      [], [], [], frozenset([PUBLIC]))
         loader = MockPackageLoader([otherPackage])
         source = "def id[static T](x: T) = x\n" + \
-                 "def f(x: String) = id[String](x)"
+                 "def f(x: foo.Bar) = id[foo.Bar](x)"
         info = self.analyzeFromSource(source, packageLoader=loader)
         externClass = info.package.externalize(clas, loader)
         expectedType = ClassType(externClass)

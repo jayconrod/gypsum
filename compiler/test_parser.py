@@ -280,6 +280,14 @@ class TestParser(unittest.TestCase):
                         ty(),
                         "A[B].C[D]")
 
+    def testProjectFromPrimitive(self):
+        self.assertRaises(ParseException, self.parseFromSource, ty(),
+                          "i64.A")
+
+    def testProjectPrimitive(self):
+        self.assertRaises(ParseException, self.parseFromSource, ty(),
+                          "A.i64")
+
     # Expressions
     def testIntExpr(self):
         values = [("-42", -42, 64),

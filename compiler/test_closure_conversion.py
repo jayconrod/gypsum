@@ -12,13 +12,14 @@ from parser import *
 from ast import *
 from scope_analysis import *
 from type_analysis import *
+from ids import *
 from ir import *
 from compile_info import CompileInfo
 from ir_types import *
 from errors import *
 from builtins import *
 from flags import LET
-from utils_test import TestCaseWithDefinitions
+from utils_test import MockPackageLoader, TestCaseWithDefinitions
 
 
 class TestClosureConversion(TestCaseWithDefinitions):
@@ -27,7 +28,9 @@ class TestClosureConversion(TestCaseWithDefinitions):
         rawTokens = lex(filename, source)
         layoutTokens = layout(rawTokens)
         ast = parse(filename, layoutTokens)
-        info = CompileInfo(ast)
+        package = Package(TARGET_PACKAGE_ID)
+        packageLoader = MockPackageLoader([])
+        info = CompileInfo(ast, package, packageLoader)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         analyzeTypes(info)

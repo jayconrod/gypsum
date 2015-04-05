@@ -99,6 +99,7 @@ class TestSerialization(unittest.TestCase):
         otherPackage = ir.Package()
         method = otherPackage.addFunction("foo", None, ir_types.UnitType, [], [],
                                            None, None, frozenset([flags.METHOD]))
+        method.clas = builtins.getRootClass()
         loader = utils_test.MockPackageLoader([otherPackage])
         externMethod = package.externalize(method, loader)
         self.ser.package = package
@@ -249,4 +250,4 @@ class TestSerialization(unittest.TestCase):
         self.des.readClass(outClass)
         self.assertEquals(clas, outClass)
         for method in outClass.constructors + outClass.methods:
-            self.assertIs(outClas, method.clas)
+            self.assertIs(method.parameterTypes[0].clas, method.clas)

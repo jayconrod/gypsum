@@ -8,6 +8,7 @@ import unittest
 
 from ast import *
 from compile_info import *
+import ids
 from ir import *
 from ir_types import *
 from errors import *
@@ -29,8 +30,11 @@ class TestInheritanceAnalysis(unittest.TestCase):
         return ast
 
     def analyzeFromSource(self, source, packageLoader=None):
+        if packageLoader is None:
+            packageLoader = MockPackageLoader([])
         ast = self.parseFromSource(source)
-        info = CompileInfo(ast, packageLoader=packageLoader)
+        info = CompileInfo(ast, package=Package(ids.TARGET_PACKAGE_ID),
+                           packageLoader=packageLoader)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         return info

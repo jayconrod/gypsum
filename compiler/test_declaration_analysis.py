@@ -30,7 +30,9 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
 
     def analyzeFromSource(self, source):
         ast = self.parseFromSource(source)
-        info = CompileInfo(ast)
+        package = Package(id=TARGET_PACKAGE_ID)
+        packageLoader = MockPackageLoader([])
+        info = CompileInfo(ast, package, packageLoader)
         analyzeDeclarations(info)
         return info
 
@@ -378,13 +380,11 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
 
 
 class TestPackageScope(unittest.TestCase):
-    def setUp(self):
-        self.info = CompileInfo(None)
-
     def infoAndScopeWithPackageNames(self, args):
         names = map(PackageName.fromString, args)
-        loader = MockPackageLoader(names)
-        info = CompileInfo(None, Package(), loader)
+        package = Package(id=TARGET_PACKAGE_ID)
+        packageLoader = MockPackageLoader(names)
+        info = CompileInfo(None, package, packageLoader)
         scope = PackageScope(PACKAGE_SCOPE_ID, None, info, names, [], None)
         return info, scope
 
@@ -455,15 +455,16 @@ class TestPackageScope(unittest.TestCase):
         privateField = package.newField("y", None, UnitType, frozenset([PRIVATE, EXTERN]))
         clas.fields = [publicField, privateField]
 
-        self.info.loader = MockPackageLoader([package])
-        topPackageScope = PackageScope(PACKAGE_SCOPE_ID, None, self.info,
-                                       self.info.loader.getPackageNames(), [], None)
+        packageLoader = MockPackageLoader([package])
+        info = CompileInfo(None, Package(id=TARGET_PACKAGE_ID), packageLoader)
+        topPackageScope = PackageScope(PACKAGE_SCOPE_ID, None, info,
+                                       packageLoader.getPackageNames(), [], None)
         fooPackageScope = topPackageScope.scopeForPrefix("foo")
 
         defnInfo = fooPackageScope.lookup("C", NoLoc).getDefnInfo()
         self.assertIs(clas, defnInfo.irDefn)
         self.assertIs(fooPackageScope.scopeId, defnInfo.scopeId)
-        classScope = self.info.getScope(clas.id)
+        classScope = info.getScope(clas.id)
         defnInfo = classScope.lookup("$constructor", NoLoc).getDefnInfo()
         self.assertIs(publicCtor, defnInfo.irDefn)
         self.assertIs(classScope.scopeId, defnInfo.scopeId)

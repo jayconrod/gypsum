@@ -125,11 +125,10 @@ class TypeVisitorCommon(ast.AstNodeVisitor):
         def flatten(node):
             if isinstance(node, ast.AstClassType):
                 components.append(node)
-            elif isinstance(node, ast.AstProjectedType):
+            else:
+                assert isinstance(node, ast.AstProjectedType)
                 flatten(node.left)
                 flatten(node.right)
-            else:
-                raise TypeException(node.location, "cannot project from a non-class type")
         flatten(node)
 
         scope = self.scope()

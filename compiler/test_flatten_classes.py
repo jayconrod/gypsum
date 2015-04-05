@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014-2015, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -12,10 +12,12 @@ from parser import *
 from ast import *
 from scope_analysis import *
 from type_analysis import *
+from ids import *
 from ir import *
 from builtins import *
 from compile_info import CompileInfo
 from errors import *
+from utils_test import MockPackageLoader
 
 class TestFlattenClasses(unittest.TestCase):
     def setUp(self):
@@ -26,7 +28,9 @@ class TestFlattenClasses(unittest.TestCase):
         rawTokens = lex(filename, source)
         layoutTokens = layout(rawTokens)
         ast = parse(filename, layoutTokens)
-        info = CompileInfo(ast)
+        package = Package(TARGET_PACKAGE_ID)
+        packageLoader = MockPackageLoader([])
+        info = CompileInfo(ast, package, packageLoader)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         analyzeTypes(info)

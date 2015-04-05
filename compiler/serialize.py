@@ -457,6 +457,8 @@ class Deserializer(object):
         dep.externFunctions = self.createEmptyFunctionList(functionCount, packageId)
         classCount = self.readVbn()
         dep.externClasses = self.createEmptyClassList(classCount, packageId)
+        methodCount = self.readVbn()
+        dep.externMethods = self.createEmptyFunctionList(methodCount, packageId)
         typeParameterCount = self.readVbn()
         dep.externTypeParameters = \
             self.createEmptyTypeParameterList(typeParameterCount, packageId)
@@ -468,6 +470,8 @@ class Deserializer(object):
             self.readFunction(f)
         for c in dep.externClasses:
             self.readClass(c)
+        for m in dep.externMethods:
+            self.readFunction(m)
         for p in dep.externTypeParameters:
             self.readTypeParameter(p)
 
