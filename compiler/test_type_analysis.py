@@ -373,6 +373,30 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(expectedType, info.getType(fAst.body.arguments[0]))
         self.assertEquals(expectedType, info.getType(fAst.body))
 
+    def testLoadFromInheritedForeignClass(self):
+        fooPackage = Package(name=PackageName(["foo"]))
+        clas = fooPackage.addClass("Bar", None, [], [getRootClassType()], None,
+                                   [], [], [], frozenset([PUBLIC]))
+        ty = ClassType(clas)
+        ctor = fooPackage.addFunction("$constructor", None, UnitType, [], [ty], None, None,
+                                      frozenset([PUBLIC, METHOD]))
+        ctor.clas = clas
+        clas.constructors = [ctor]
+        field = fooPackage.newField("x", None, I64Type, frozenset([PUBLIC]))
+        packageLoader = MockPackageLoader([fooPackage])
+
+        source = "class Baz <: foo.Bar\n" + \
+                 "def f(o: Baz) = o.x"
+        info = self.analyzeFromSource(source, packageLoader=packageLoader)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(I64Type, f.returnType)
+
+    def testProjectTypeParameter(self):
+        source = "class Foo\n" + \
+                 "  class Bar\n" + \
+                 "def f[static T <: Foo](x: T.Bar) = {}"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     def testCallMethodWithNullableReceiver(self):
         source = "class Foo\n" + \
                  "  def m = {}\n" + \

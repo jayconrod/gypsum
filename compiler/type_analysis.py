@@ -144,9 +144,9 @@ class TypeVisitorCommon(ast.AstNodeVisitor):
             defnInfo = nameInfo.getDefnInfo()
             if not isinstance(defnInfo.irDefn, ir.Package) and \
                not isinstance(defnInfo.irDefn, ir.PackagePrefix) and \
-               not defnInfo.irDefn.isTypeDefn():
+               not isinstance(defnInfo.irDefn, ir.Class):
                 raise TypeException(component.location,
-                                    "%s: cannot project from non-type" %
+                                    "%s: cannot project from non-class type" %
                                     component.name)
 
             if len(component.typeArguments) > 0:

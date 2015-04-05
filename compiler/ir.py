@@ -548,8 +548,8 @@ class Class(IrTopDefn):
         """Returns a list of supertypes (ClassTypes), which represent a path through the class
         DAG from this class to the given base class. The path does not include a type for this
         class, but it does include the supertype for the base. If the given class is not a
-        base, returns None. This class must not but Nothing, since there is no well-defined
-        class in that case."""
+        base, returns None. This class must not be Nothing, since there is no well-defined
+        path in that case."""
         assert self is not builtins.getNothingClass()
         path = []
         indexStack = [0]
