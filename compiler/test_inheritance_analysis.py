@@ -66,6 +66,8 @@ class TestInheritanceAnalysis(unittest.TestCase):
         package = Package(name=PackageName(["foo"]))
         foreignClass = package.addClass("Bar", None, [], [getRootClassType()],
                                         None, [], [], [], frozenset([PUBLIC]))
+        field = package.newField("x", None, None, frozenset([PUBLIC]))
+        foreignClass.fields = [field]
         loader = MockPackageLoader([package])
         source = "class Baz <: foo.Bar"
         info = self.analyzeFromSource(source, packageLoader=loader)
@@ -73,6 +75,8 @@ class TestInheritanceAnalysis(unittest.TestCase):
         bazClassInfo = info.getClassInfo(bazClass)
         foreignClassInfo = info.getClassInfo(foreignClass)
         self.assertIs(foreignClassInfo, bazClassInfo.superclassInfo)
+        bazScope = info.getScope(bazClass)
+        self.assertTrue(bazScope.isBound("x"))
 
     @unittest.skip("not implemented")
     def testInheritFromLocalTypeInForeignClass(self):

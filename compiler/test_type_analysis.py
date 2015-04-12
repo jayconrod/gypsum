@@ -365,8 +365,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "def id[static T](x: T) = x\n" + \
                  "def f(x: foo.Bar) = id[foo.Bar](x)"
         info = self.analyzeFromSource(source, packageLoader=loader)
-        externClass = info.package.externalize(clas, loader)
-        expectedType = ClassType(externClass)
+        expectedType = ClassType(clas)
         fAst = info.ast.definitions[1]
         self.assertEquals(expectedType, info.getType(fAst.parameters[0]))
         self.assertEquals(expectedType, info.getType(fAst.body.typeArguments[0]))
@@ -382,6 +381,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                       frozenset([PUBLIC, METHOD]))
         clas.constructors = [ctor]
         field = fooPackage.newField("x", None, I64Type, frozenset([PUBLIC]))
+        clas.fields = [field]
         packageLoader = MockPackageLoader([fooPackage])
 
         source = "class Baz <: foo.Bar\n" + \
@@ -625,8 +625,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         loader = MockPackageLoader([package])
         source = "var g: foo.Bar"
         info = self.analyzeFromSource(source, packageLoader=loader)
-        externClass = info.package.externalize(clas, loader)
-        expectedType = ClassType(externClass)
+        expectedType = ClassType(clas)
         g = info.package.findGlobal(name="g")
         self.assertEquals(expectedType, g.type)
 
@@ -652,8 +651,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         loader = MockPackageLoader([package])
         source = "var g: foo.Bar[String]"
         info = self.analyzeFromSource(source, packageLoader=loader)
-        externClass = info.package.externalize(clas, loader)
-        expectedType = ClassType(externClass, (getStringType(),))
+        expectedType = ClassType(clas, (getStringType(),))
         g = info.package.findGlobal(name="g")
         self.assertEquals(expectedType, g.type)
 
@@ -758,7 +756,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "def f = \"foo\".to-string"
         info = self.analyzeFromSource(source)
         useInfo = info.getUseInfo(info.ast.definitions[0].body)
-        receiverClass = useInfo.defnInfo.irDefn.getReceiverClass
+        receiverClass = useInfo.defnInfo.irDefn.getReceiverClass()
         self.assertIs(getStringClass(), receiverClass)
 
     def testRecursiveOverrideBuiltinWithoutReturnType(self):

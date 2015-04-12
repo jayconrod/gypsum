@@ -264,6 +264,12 @@ class Package(object):
                 return value in defn.flags
             elif key == "pred":
                 return value(defn)
+            elif key == "clas":
+                 if isinstance(defn, Function):
+                     return defn.getReceiverClass() is value
+                 else:
+                     assert isinstance(defn, TypeParameter)
+                     return defn.clas is value
             else:
                 return getattr(defn, key) == value
         def matchAll(defn):
@@ -467,7 +473,7 @@ class Function(IrTopDefn):
         if not self.isMethod() or self.isConstructor():
             return True
         receiverClass = self.getReceiverClass()
-        return hasattr(receiverClass, "isPrimitive") and self.receiverClass.isPrimitive
+        return hasattr(receiverClass, "isPrimitive") and receiverClass.isPrimitive
 
     def mayOverride(self, other):
         assert self.isMethod() and other.isMethod()

@@ -21,7 +21,7 @@ def analyzeTypes(info):
     # function calls in expressions.
     declarationVisitor = DeclarationTypeVisitor(info)
     declarationVisitor.visit(info.ast)
-    declarationVisitor.checkTypeArgs()
+    declarationVisitor.checkTypes()
 
     # Add type annotations for AST nodes which need them, and add type information to
     # the package.
@@ -216,14 +216,27 @@ class DeclarationTypeVisitor(TypeVisitorBase):
     def __init__(self, info):
         super(DeclarationTypeVisitor, self).__init__(info)
 
+        # List of type parameters to check after the AST traversal. We want to ensure that
+        # lower bounds are subtypes of upper bounds. This is not needed to ensure termination,
+        # since we checked the subtype graph for cycles during inheritance analysis. We are
+        # mainly concerned with bounds that are unrelated, e.g., sibling classes or variable
+        # types that may overlap.
+        self.typeParamsToCheck = []
+
         # List of type arguments to bounds-check after the AST traversal. We have to defer
         # checking these because `Type.isSubtypeOf` won't work until the traversal is complete.
         self.typeArgsToCheck = []
 
-    def checkTypeArgs(self):
+    def checkTypes(self):
         """Called after analyzing all declrations in the AST to verify that type arguments are
-        in bounds. While traversing the AST, we make a list of type arguments to check, and
-        we check everything in that list here."""
+        in bounds and all type parameters have correct bounds. While traversing the AST, we
+        make a list of type arguments and parameters to check, and we check everything in that
+        list here."""
+        for tp, loc in self.typeParamsToCheck:
+            if not tp.lowerBound.isSubtypeOf(tp.upperBound):
+                raise TypeException(loc,
+                                    "%s: lower bound is not subtype of upper bound" % tp.name)
+
         for ta, tp, loc in self.typeArgsToCheck:
             if not ta.isSubtypeOf(tp.upperBound) or \
                not tp.lowerBound.isSubtypeOf(ta):
@@ -293,6 +306,7 @@ class DeclarationTypeVisitor(TypeVisitorBase):
 
         irParam.upperBound = visitBound(node.upperBound, ir_t.getRootClassType())
         irParam.lowerBound = visitBound(node.lowerBound, ir_t.getNothingClassType())
+        self.typeParamsToCheck.append((irParam, node.location))
 
     def visitAstParameter(self, node):
         return self.visit(node.pattern, True)

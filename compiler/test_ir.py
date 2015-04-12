@@ -72,20 +72,24 @@ class TestIr(utils_test.TestCaseWithDefinitions):
 
     def testMayOverrideParamSub(self):
         rt = ClassType(self.base)
-        f1 = self.makeFunction("f", returnType=UnitType, parameterTypes=[rt, ClassType(self.A)])
+        f1 = self.makeFunction("f", returnType=UnitType, parameterTypes=[rt, ClassType(self.A)],
+                               flags=frozenset([flags.METHOD]))
         f2 = self.makeFunction("f", returnType=UnitType,
-                               parameterTypes=[rt, ClassType(self.base)])
+                               parameterTypes=[rt, ClassType(self.base)],
+                               flags=frozenset([flags.METHOD]))
         self.assertTrue(f2.mayOverride(f1))
         self.assertFalse(f1.mayOverride(f2))
 
     def testMayOverrideTypeParamsDiff(self):
         rt = ClassType(self.base)
         f1 = self.makeFunction("f", returnType=UnitType,
-                               typeParameters=[self.T], parameterTypes=[rt])
+                               typeParameters=[self.T], parameterTypes=[rt],
+                               flags=frozenset([flags.METHOD]))
         S = self.makeTypeParameter("S", upperBound=ClassType(self.base),
                                    lowerBound=ClassType(self.A))
         f2 = self.makeFunction("f", returnType=UnitType,
-                               typeParameters=[S], parameterTypes=[rt])
+                               typeParameters=[S], parameterTypes=[rt],
+                               flags=frozenset([flags.METHOD]))
         self.assertFalse(f2.mayOverride(f1))
         self.assertFalse(f1.mayOverride(f2))
 

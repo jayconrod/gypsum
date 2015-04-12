@@ -636,20 +636,12 @@ class Scope(ast.AstNodeVisitor):
         This method should be called in the scope where a definition is used, not where
         the definition comes from or is looked up from. Consequently, this should never be
         called on a foreign or builtin scope. This method also checks whether the definition
-        is allowed to be used in this scope and raises a ScopeException if not. It may
-        modify or replace `defnInfo.irDefn`, so don't cache a reference to that across a
-        call to this method. For example, it will externalize and replace foreign
-        definitions."""
+        is allowed to be used in this scope and raises a ScopeException if not."""
         assert not self.isForeign()
         irDefn = defnInfo.irDefn
         if isinstance(irDefn, ir.Package):
             assert useKind in [USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY]
             self.info.package.ensureDependency(irDefn)
-
-        if isinstance(irDefn, ir.IrTopDefn) and \
-           irDefn.isForeign() and \
-           not EXTERN in irDefn.flags:
-            irDefn = defnInfo.irDefn = self.info.package.externalize(irDefn, self.info.packageLoader)
 
         if hasattr(irDefn, "flags") and \
            ((PRIVATE in irDefn.flags and \
@@ -1025,11 +1017,15 @@ class FunctionScope(Scope):
         irClosureClass.constructors.append(irClosureCtor)
 
         # Convert the function into a method of the closure class.
+        # We don't use `makeMethod`, since it's intended to be used before type analysis, but
+        # we do most of the same things.
         irDefn = self.getIrDefn()
         assert not irDefn.isMethod()
-        irDefn.variables.insert(0, ir.Variable("$this", None, irClosureType,
-                                               ir.PARAMETER, frozenset([LET])))
-        irDefn.parameterTypes.insert(0, irClosureType)
+        irDefn.flags |= frozenset([METHOD])
+        thisType = ClassType.forReceiver(irClosureClass)
+        this = ir.Variable("$this", irDefn.astDefn, thisType, ir.PARAMETER, frozenset([LET]))
+        irDefn.variables.insert(0, this)
+        irDefn.parameterTypes.insert(0, thisType)
         irClosureClass.methods.append(irDefn)
 
         # If the parent is a function scope, define a local variable to hold the closure.
@@ -1134,6 +1130,7 @@ class ClassScope(Scope):
                 raise NotImplementedError
             irDefn = self.info.package.addTypeParameter(astDefn.name, astDefn,
                                                         None, None, flags)
+            irDefn.clas = irScopeDefn
             irScopeDefn.typeParameters.append(irDefn)
             irScopeDefn.initializer.typeParameters.append(irDefn)
             for ctor in irScopeDefn.constructors:
@@ -1307,10 +1304,6 @@ class PackageScope(Scope):
                 self.scopeForPrefix(name)  # force scope to be created
         return nameInfo
 
-    def use(self, defnInfo, useAstId, useKind, loc):
-        irDefn = defnInfo
-        return super(PackageScope, self).use(defnInfo, useAstId, useKind, loc)
-
     def requiresCapture(self):
         return False
 
@@ -1441,10 +1434,11 @@ class InheritanceVisitor(ScopeVisitor):
         scope = self.scope.scopeForClass(node)
         irClass = scope.getIrDefn()
         classInfo = self.info.getClassInfo(irClass)
+        superclassScopeId = None
+
         if node.supertype is None:
             classInfo.superclassInfo = self.info.getClassInfo(BUILTIN_ROOT_CLASS_ID)
             self.subtypeGraph.addEdge(irClass.id, BUILTIN_ROOT_CLASS_ID)
-            self.inheritanceGraph.addVertex(scope.scopeId)
         else:
             supertypeIrDefn = self.addTypeToSubtypeGraph(irClass.id, scope, node.supertype)
             if not isinstance(supertypeIrDefn, ir.Class):
@@ -1455,9 +1449,12 @@ class InheritanceVisitor(ScopeVisitor):
             if supertypeIrDefn.isLocal():
                 if classInfo is superclassInfo:
                     raise ScopeException(node.location, "class cannot inherit from itself")
-
                 superclassScopeId = self.info.getScope(supertypeIrDefn).scopeId
-                self.inheritanceGraph.addEdge(scope.scopeId, superclassScopeId)
+
+        if superclassScopeId is None:
+            self.inheritanceGraph.addVertex(scope.scopeId)
+        else:
+            self.inheritanceGraph.addEdge(scope.scopeId, superclassScopeId)
 
         super(InheritanceVisitor, self).visitAstClassDefinition(node)
 

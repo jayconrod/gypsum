@@ -45,6 +45,7 @@ class TestCompiler(TestCaseWithDefinitions):
         analyzeTypes(info)
         convertClosures(info)
         flattenClasses(info)
+        externalize(info)
         compile(info)
         return info.package
 
@@ -1215,8 +1216,7 @@ class TestCompiler(TestCaseWithDefinitions):
                  "    case x: foo.Bar => {}"
         package = self.compileFromSource(source, packageLoader=loader)
 
-        externClass = package.externalize(clas, loader)
-        externType = ClassType(externClass)
+        barType = ClassType(clas)
         typeofMethod = exceptionClass.getMember("typeof")
         typeofMethodIndex = exceptionClass.getMethodIndex(typeofMethod)
         typeClass = getTypeClass()
@@ -1253,7 +1253,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                drop(),
                                throw(),
                              ]],
-                             variables=[self.makeVariable("x", type=externType,
+                             variables=[self.makeVariable("x", type=barType,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testInitializer(self):
@@ -1470,7 +1470,8 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]],
                              variables=[self.makeVariable("$this", type=closureType,
                                                           kind=PARAMETER, flags=frozenset([LET]))],
-                             parameterTypes=[closureType]))
+                             parameterTypes=[closureType],
+                             flags=frozenset([METHOD])))
 
     def testCallClosure(self):
         source = "def foo(x: i64) =\n" + \

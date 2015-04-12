@@ -20,7 +20,7 @@ from layout import layout
 from parser import *
 from scope_analysis import *
 from type_analysis import *
-from compiler import compile
+from compiler import compile, externalize
 from serialize import serialize
 from package_loader import PackageLoader
 from compile_info import CompileInfo
@@ -96,6 +96,7 @@ for sourceFilename in args.sources:
             sys.stderr.write("--print-types not supported right now")
         convertClosures(info)
         flattenClasses(info)
+        externalize(info)
         compile(info)
         package = info.package
         if args.print_ir:
