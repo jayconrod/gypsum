@@ -150,13 +150,6 @@ class Package(object):
             externIrDefn.returnType = externalizeType(irDefn.returnType)
             externIrDefn.typeParameters = map(externalize, irDefn.typeParameters)
             externIrDefn.parameterTypes = map(externalizeType, irDefn.parameterTypes)
-            if flags.METHOD in irDefn.flags:
-                clas = irDefn.clas
-                if clas.id.isBuiltin():
-                    externIrDefn.clas = clas
-                else:
-                    externIrDefn.clas = self.dependencies[clas.id.packageId.index] \
-                                            .externClasses[clas.id.externIndex]
         elif isinstance(irDefn, Class):
             externIrDefn = Class(irDefn.name, irDefn.astDefn, id,
                                  None, None, None, None, None, None, externFlags)
@@ -267,11 +260,7 @@ class Package(object):
 
     def find(self, defns, kwargs):
         def matchItem(defn, key, value):
-            if key == "clas":
-                return isinstance(defn, Function) and \
-                       hasattr(defn, "clas") and \
-                       defn.clas is value
-            elif key == "flag":
+            if key == "flag":
                 return value in defn.flags
             elif key == "pred":
                 return value(defn)
@@ -441,6 +430,11 @@ class Function(IrTopDefn):
                     ("returnType", "typeParameters", "parameterTypes",
                      "variables", "blocks", "flags")
 
+    def getReceiverClass(self):
+        assert self.isMethod()
+        ty = self.parameterTypes[0]
+        return builtins.getBuiltinClassFromType(ty) if ty.isPrimitive() else ty.clas
+
     def canCallWith(self, typeArgs, argTypes):
         if len(self.typeParameters) != len(typeArgs):
             return False
@@ -464,17 +458,16 @@ class Function(IrTopDefn):
         return all(at.isSubtypeOf(pt) for at, pt in zip(argTypes, paramTypes))
 
     def isMethod(self):
-        return hasattr(self, "clas")
+        return flags.METHOD in self.flags
 
     def isConstructor(self):
-        return hasattr(self, "clas") and \
-               isinstance(self.clas.constructors, list) and \
-               any(ctor is self for ctor in self.clas.constructors)
+        return self.name == "$constructor"
 
     def isFinal(self):
-        return not self.isMethod() or \
-               self.isConstructor() or \
-               hasattr(self.clas, "isPrimitive") and self.clas.isPrimitive
+        if not self.isMethod() or self.isConstructor():
+            return True
+        receiverClass = self.getReceiverClass()
+        return hasattr(receiverClass, "isPrimitive") and self.receiverClass.isPrimitive
 
     def mayOverride(self, other):
         assert self.isMethod() and other.isMethod()
@@ -485,7 +478,9 @@ class Function(IrTopDefn):
             all(atp.isEquivalent(btp) for atp, btp in
                 zip(selfExplicitTypeParameters, otherExplicitTypeParameters))
         selfParameterTypes = self.parameterTypes[1:]
-        otherParameterTypes = [pty.substituteForInheritance(self.clas, other.clas) \
+        selfClass = self.getReceiverClass()
+        otherClass = other.getReceiverClass()
+        otherParameterTypes = [pty.substituteForInheritance(selfClass, otherClass) \
                                for pty in other.parameterTypes[1:]]
         parameterTypesAreCompatible = \
             len(selfParameterTypes) == len(otherParameterTypes) and \

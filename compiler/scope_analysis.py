@@ -584,7 +584,6 @@ class Scope(ast.AstNodeVisitor):
         this does not add the function to the class's methods or constructors lists. It just
         modifies the function itself.
         """
-        function.clas = clas
         function.flags |= frozenset([METHOD])
         this = ir.Variable("$this", function.astDefn, None, ir.PARAMETER, frozenset([LET]))
         function.variables.insert(0, this)
@@ -661,9 +660,9 @@ class Scope(ast.AstNodeVisitor):
                                  irDefn.name)
 
         if useKind is USE_AS_CONSTRUCTOR and \
-           ABSTRACT in irDefn.clas.flags:
+           ABSTRACT in irDefn.getReceiverClass().flags:
             raise ScopeException(loc, "%s: cannot instantiate abstract class" %
-                                 irDefn.clas.name)
+                                 irDefn.getReceiverClass().name)
 
         useInfo = UseInfo(defnInfo, self.scopeId, useKind)
         self.info.setUseInfo(useAstId, useInfo)
@@ -1022,14 +1021,12 @@ class FunctionScope(Scope):
                                                                    ir.PARAMETER,
                                                                    frozenset([LET]))],
                                                       None, frozenset([METHOD]))
-        irClosureCtor.clas = irClosureClass
         irClosureCtor.compileHint = CLOSURE_CONSTRUCTOR_HINT
         irClosureClass.constructors.append(irClosureCtor)
 
         # Convert the function into a method of the closure class.
         irDefn = self.getIrDefn()
         assert not irDefn.isMethod()
-        irDefn.clas = irClosureClass
         irDefn.variables.insert(0, ir.Variable("$this", None, irClosureType,
                                                ir.PARAMETER, frozenset([LET])))
         irDefn.parameterTypes.insert(0, irClosureType)
@@ -1137,7 +1134,6 @@ class ClassScope(Scope):
                 raise NotImplementedError
             irDefn = self.info.package.addTypeParameter(astDefn.name, astDefn,
                                                         None, None, flags)
-            irDefn.clas = irScopeDefn
             irScopeDefn.typeParameters.append(irDefn)
             irScopeDefn.initializer.typeParameters.append(irDefn)
             for ctor in irScopeDefn.constructors:
@@ -1216,8 +1212,9 @@ class BuiltinClassScope(Scope):
                 self.bind("$constructor", defnInfo)
                 self.define("$constructor")
         for method in irClass.methods:
-            inheritedScopeId = self.info.getScope(method.clas.id).scopeId
-            inheritanceDepth = irClass.findDistanceToBaseClass(method.clas)
+            methodClass = method.getReceiverClass()
+            inheritedScopeId = self.info.getScope(methodClass.id).scopeId
+            inheritanceDepth = irClass.findDistanceToBaseClass(methodClass)
             defnInfo = DefnInfo(method, self.scopeId, inheritedScopeId, inheritanceDepth)
             self.bind(method.name, defnInfo)
             self.define(method.name)

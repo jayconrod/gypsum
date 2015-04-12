@@ -380,7 +380,6 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         ty = ClassType(clas)
         ctor = fooPackage.addFunction("$constructor", None, UnitType, [], [ty], None, None,
                                       frozenset([PUBLIC, METHOD]))
-        ctor.clas = clas
         clas.constructors = [ctor]
         field = fooPackage.newField("x", None, I64Type, frozenset([PUBLIC]))
         packageLoader = MockPackageLoader([fooPackage])
@@ -753,13 +752,13 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         fooClass = info.package.findClass(name="Foo")
         barClass = info.package.findClass(name="Bar")
         self.assertEquals(len(fooClass.methods), len(barClass.methods))
-        self.assertIs(barClass, barClass.methods[-1].clas)
+        self.assertIs(barClass, barClass.methods[-1].getReceiverClass())
 
     def testBuiltinOverride(self):
         source = "def f = \"foo\".to-string"
         info = self.analyzeFromSource(source)
         useInfo = info.getUseInfo(info.ast.definitions[0].body)
-        receiverClass = useInfo.defnInfo.irDefn.clas
+        receiverClass = useInfo.defnInfo.irDefn.getReceiverClass
         self.assertIs(getStringClass(), receiverClass)
 
     def testRecursiveOverrideBuiltinWithoutReturnType(self):
@@ -773,7 +772,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source)
         List = info.package.findClass(name="List")
         useInfo = info.getUseInfo(info.ast.definitions[0].members[0].body.right.trueExpr)
-        receiverClass = useInfo.defnInfo.irDefn.clas
+        receiverClass = useInfo.defnInfo.irDefn.getReceiverClass()
         self.assertIs(List, receiverClass)
 
     def testOverrideWithImplicitTypeParameters(self):
@@ -782,7 +781,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source)
         A = info.package.findClass(name="A")
         toString = A.getMethod("to-string")
-        self.assertIs(A, toString.clas)
+        self.assertIs(A, toString.getReceiverClass())
         self.assertIs(toString.override, getRootClass().getMethod("to-string"))
 
     def testOverrideCovariantParameters(self):

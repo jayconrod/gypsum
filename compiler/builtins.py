@@ -7,6 +7,7 @@ import os.path
 import re
 import yaml
 
+import flags
 import ids
 import ir
 import ir_types
@@ -140,9 +141,9 @@ def _initialize():
         _builtinFunctionIdMap[id] = function
         return function
 
-    def buildMethod(functionData, clas):
+    def buildMethod(functionData):
         function = buildFunction(functionData)
-        function.clas = clas
+        function.flags |= frozenset([flags.METHOD])
         return function
 
     def buildField(fieldData):
@@ -169,7 +170,7 @@ def _initialize():
                 clas.supertypes = []
                 clas.fields = []
                 clas.methods = []
-            clas.constructors = [buildMethod(c, clas) for c in classData["constructors"]]
+            clas.constructors = map(buildMethod, classData["constructors"])
             clas.fields += map(buildField, classData["fields"])
         else:
             clas.supertypes = []
@@ -178,7 +179,7 @@ def _initialize():
             clas.isPrimitive = True
         inheritedMethodCount = len(clas.methods)
         for m in classData["methods"]:
-            addMethod(clas.methods, inheritedMethodCount, buildMethod(m, clas))
+            addMethod(clas.methods, inheritedMethodCount, buildMethod(m))
 
         _builtinClassTypeMap[buildType(clas.name)] = clas
         _builtinClassIdMap[clas.id] = clas

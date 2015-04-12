@@ -16,15 +16,16 @@ from flags import COVARIANT, CONTRAVARIANT
 
 def analyzeTypes(info):
     """Analyzes a syntax, determines a type for each node, and reports any inconsistencies."""
-    # Establish type information for class supertypes and type parameter upper/lower bounds.
-    # This is needed for Type.isSubtypeOf to work, which is needed to type expressions.
-    subtypeVisitor = SubtypeVisitor(info)
-    subtypeVisitor.visit(info.ast)
-    subtypeVisitor.checkTypeArgs()
+    # Establish type information for class supertypes, type parameter upper/lower bounds,
+    # and function parameter types. This is needed for `Type.isSubtypeOf` and for typing
+    # function calls in expressions.
+    declarationVisitor = DeclarationTypeVisitor(info)
+    declarationVisitor.visit(info.ast)
+    declarationVisitor.checkTypeArgs()
 
     # Add type annotations for AST nodes which need them, and add type information to
     # the package.
-    analysis = TypeVisitor(info)
+    analysis = DefinitionTypeVisitor(info)
     analysis.visit(info.ast)
 
     # Overloads and overrides are resolved lazily when something calls them. If nothing calls
@@ -38,33 +39,53 @@ def analyzeTypes(info):
     for func in info.package.functions:
         if hasattr(func, "override"):
             overridenReturnType = func.override.returnType.substituteForInheritance(
-                func.clas, func.override.clas)
+                func.getReceiverClass(), func.override.getReceiverClass())
             if not func.returnType.isSubtypeOf(overridenReturnType):
                 raise TypeException(func.getLocation(),
                                     "%s: return type is not subtype of overriden function" %
                                     func.name)
 
 
-class TypeVisitorCommon(ast.AstNodeVisitor):
-    """Provides common functionality for SubtypeVisitor and TypeVisitor, namely the visitor
-    functions for the various AstType subclasses. Also tracks the current scope. Both visitors
-    may jump around the AST randomly, and this is needed to keep track of which scope we were
-    in when we return from one of these jumps."""
+class TypeVisitorBase(ast.AstNodeVisitor):
+    """Provides common functionality for type visitors, namely the visitor functions for the
+    various AstType subclasses."""
     def __init__(self, info):
         self.info = info
+
+        # Stack containing the current scope. Used for lookups.
         self.scopeStack = []
+
+        # Stack containing the current implicit receiver type. Used for building method
+        # parameter types and for lookups. Entries may be `None` for scopes that don't have
+        # an implicit receiver type.
+        self.receiverTypeStack = []
 
     def scope(self):
         return self.scopeStack[-1]
 
+    def hasReceiverType(self):
+        return len(self.receiverTypeStack) > 0 and self.receiverTypeStack[-1] is not None
+
+    def getReceiverType(self):
+        assert self.hasReceiverType()
+        return self.receiverTypeStack[-1]
+
     def preVisit(self, node, *unused):
         if self.info.hasScope(node.id):
-            self.scopeStack.append(self.info.getScope(node.id))
+            scope = self.info.getScope(node.id)
+            self.scopeStack.append(scope)
+            enclosingClass = scope.findEnclosingClass()
+            if enclosingClass is not None:
+                receiverType = ir_t.ClassType.forReceiver(enclosingClass)
+                self.receiverTypeStack.append(receiverType)
+            else:
+                self.receiverTypeStack.append(None)
 
     def postVisit(self, node, *unused):
         if self.info.hasScope(node.id):
             assert self.scopeStack[-1] is self.info.getScope(node.id)
             self.scopeStack.pop()
+            self.receiverTypeStack.pop()
 
     def visitAstUnitType(self, node):
         return ir_t.UnitType
@@ -184,38 +205,57 @@ class TypeVisitorCommon(ast.AstNodeVisitor):
         return result
 
 
-class SubtypeVisitor(TypeVisitorCommon):
-    """Analyzes classes and type parameters and saves supertypes, upper bounds, and
-    lower bounds. This must be done before we can start typing expressions, because we need
-    a fully functional Type.isSubtypeOf method, which relies on this information. We use
-    isSubtypeOf here, too, but only on definitions we've already processed. This is guaranteed
-    to terminate, since we checked the subtype graph for cycles in an earlier phase."""
+class DeclarationTypeVisitor(TypeVisitorBase):
+    """Analyzes functions, classes, and type parameters and saves supertypes, upper bounds,
+    lower bounds, and parameter types. The analysis proceeds in lexical order over the ASt.
+    This must be done before we can start typing expressions, because we need a fully
+    functional Type.isSubtypeOf method, which relies on this information. We use isSubtypeOf
+    here, too, but only on definitions we've already processed. This is guaranteed to
+    terminate, since we checked the subtype graph for cycles in an earlier phase."""
 
     def __init__(self, info):
-        super(SubtypeVisitor, self).__init__(info)
+        super(DeclarationTypeVisitor, self).__init__(info)
+
+        # List of type arguments to bounds-check after the AST traversal. We have to defer
+        # checking these because `Type.isSubtypeOf` won't work until the traversal is complete.
         self.typeArgsToCheck = []
 
     def checkTypeArgs(self):
-        for a, b, name, loc in self.typeArgsToCheck:
-            if not a.isSubtypeOf(b):
-                raise TypeException(loc, "%s: type argument is not in bounds" % name)
+        """Called after analyzing all declrations in the AST to verify that type arguments are
+        in bounds. While traversing the AST, we make a list of type arguments to check, and
+        we check everything in that list here."""
+        for ta, tp, loc in self.typeArgsToCheck:
+            if not ta.isSubtypeOf(tp.upperBound) or \
+               not tp.lowerBound.isSubtypeOf(ta):
+                raise TypeException(loc, "%s: type argument is not in bounds" % tp.name)
 
     def visitAstModule(self, node):
         self.visitChildren(node)
 
     def visitAstFunctionDefinition(self, node):
+        irFunction = self.info.getDefnInfo(node).irDefn
+        if irFunction.isMethod():
+            self.setMethodReceiverType(irFunction)
         for param in node.typeParameters:
             self.visit(param)
-        if isinstance(node.body, ast.AstBlockExpression):
+        irFunction.parameterTypes = []
+        if irFunction.isMethod():
+            irFunction.parameterTypes.append(self.getReceiverType())
+        irFunction.parameterTypes.extend(map(self.visit, node.parameters))
+        if node.body is not None:
             self.visit(node.body)
+
+    def visitAstPrimaryConstructorDefinition(self, node):
+        irFunction = self.info.getDefnInfo(node).irDefn
+        irFunction.parameterTypes = [self.getReceiverType()] + map(self.visit, node.parameters)
+        self.setMethodReceiverType(irFunction)
 
     def visitAstClassDefinition(self, node):
         irClass = self.info.getDefnInfo(node).irDefn
-        if irClass.supertypes is not None:
-            return
-
         for param in node.typeParameters:
             self.visit(param)
+        if node.constructor is not None:
+            self.visit(node.constructor)
         if node.supertype is None:
             irClass.supertypes = [ir_t.getRootClassType()]
         else:
@@ -224,13 +264,20 @@ class SubtypeVisitor(TypeVisitorCommon):
                 raise TypeException(node.location,
                                     "%s: supertype may not be nullable" % node.name)
             irClass.supertypes = [supertype]
+        if node.superArgs is not None:
+            for arg in node.superArgs:
+                self.visit(arg)
         for member in node.members:
             self.visit(member)
+        if not node.hasConstructors():
+            defaultCtor = irClass.constructors[0]
+            self.setMethodReceiverType(defaultCtor)
+            defaultCtor.parameterTypes = [self.getReceiverType()]
+        self.setMethodReceiverType(irClass.initializer)
+        irClass.initializer.parameterTypes = [self.getReceiverType()]
 
     def visitAstTypeParameter(self, node):
         irParam = self.info.getDefnInfo(node).irDefn
-        if irParam.upperBound is not None:
-            return
 
         def visitBound(bound, default):
             if bound is None:
@@ -246,44 +293,48 @@ class SubtypeVisitor(TypeVisitorCommon):
 
         irParam.upperBound = visitBound(node.upperBound, ir_t.getRootClassType())
         irParam.lowerBound = visitBound(node.lowerBound, ir_t.getNothingClassType())
-        if not irParam.lowerBound.isSubtypeOf(irParam.upperBound):
-            raise TypeException(node.location,
-                                "%s: lower bound is not subtype of upper bound" % node.name)
 
-    def visitAstBlockExpression(self, node):
-        self.visitChildren(node)
+    def visitAstParameter(self, node):
+        return self.visit(node.pattern, True)
+
+    def visitAstVariablePattern(self, node, isParam=False):
+        if not isParam:
+            return None
+        if node.ty is None:
+            raise TypeException(node.location, "%s: type not specified" % node.name)
+        return self.visit(node.ty)
 
     def visitDefault(self, node):
-        pass
+        self.visitChildren(node)
 
     def handleAstClassTypeArgs(self, irClass, nodes):
         typeArgs = tuple(map(self.visit, nodes))
         typeParams = getExplicitTypeParameters(irClass)
         assert len(typeParams) == len(typeArgs)
         for tp, ta, node in zip(typeParams, typeArgs, nodes):
-            self.typeArgsToCheck += [(tp.lowerBound, ta, tp.name, node.location),
-                                     (ta, tp.upperBound, tp.name, node.location)]
+            self.typeArgsToCheck.append((ta, tp, node.location))
         return typeArgs
 
-    def ensureTypeInfoForDefn(self, irDefn):
-        if irDefn.astDefn is not None:
-            self.visit(irDefn.astDefn)
+    def setMethodReceiverType(self, irFunction):
+        assert irFunction.variables[0].name == "$this"
+        irFunction.variables[0].type = self.getReceiverType()
 
 
-class TypeVisitor(TypeVisitorCommon):
-    """Traverses the AST and records type information for every node that requires it,
-    specifically every expression, pattern, and type node. This also adds type information to
-    IR definitions, including functions (parameter and return types), fields, variables, etc."""
+class DefinitionTypeVisitor(TypeVisitorBase):
+    """Records type information for every node that requires it, including expression nodes,
+    pattern nodes, and type nodes. Type information is saved in `CompileInfo.typeInfo` (keyed
+    by `AstId`). It is also added to the relevant places in the IR, including function
+    return types, fields, variables, etc. Note that unlike `DeclarationTypeVisitor`, this
+    analysis does not traverse the AST in order. When a function with no explicit return type
+    is called in an expression, this visitor jumps to the function definition to determine the
+    return type so the call expression can be typed."""
     def __init__(self, info):
-        super(TypeVisitor, self).__init__(info)
+        super(DefinitionTypeVisitor, self).__init__(info)
 
         # functionStack keeps track of the function we're currently analyzing. It contains
         # FunctionState for functions or None if we're analyzing something that is not a
         # function (like a class). This is used to resolve return types and to detect recursion.
         self.functionStack = []
-
-        # receiverTypeStack keeps track of the receiver type for the current class.
-        self.receiverTypeStack = []
 
         # varianceClass indicates what class is being visited, for the purpose of restricting
         # variance for type parameters. May be `None` when variance doesn't matter.
@@ -299,32 +350,22 @@ class TypeVisitor(TypeVisitorCommon):
         self.variance = ir_t.BIVARIANT
 
     def preVisit(self, node, *unused):
-        super(TypeVisitor, self).preVisit(node, *unused)
+        super(DefinitionTypeVisitor, self).preVisit(node, *unused)
         if not self.info.hasDefnInfo(node):
             return
         irDefn = self.info.getDefnInfo(node).irDefn
-        if isinstance(irDefn, ir.Class) or isinstance(irDefn, ir.Function):
-            if isinstance(irDefn, ir.Function):
-                functionState = FunctionState(irDefn)
-                enclosingClass = self.scope().findEnclosingClass()
-                receiverType = ir_t.ClassType.forReceiver(enclosingClass) \
-                               if enclosingClass is not None \
-                               else None
-            else:
-                assert isinstance(irDefn, ir.Class)
-                functionState = None
-                receiverType = ir_t.ClassType.forReceiver(irDefn)
-            self.functionStack.append(functionState)
-            self.receiverTypeStack.append(receiverType)
+        if isinstance(irDefn, ir.Class):
+            self.functionStack.append(None)
+        elif isinstance(irDefn, ir.Function):
+            self.functionStack.append(FunctionState(irDefn))
 
     def postVisit(self, node, *unused):
-        super(TypeVisitor, self).postVisit(node, *unused)
+        super(DefinitionTypeVisitor, self).postVisit(node, *unused)
         if not self.info.hasDefnInfo(node):
             return
         irDefn = self.info.getDefnInfo(node).irDefn
         if isinstance(irDefn, ir.Class) or isinstance(irDefn, ir.Function):
             self.functionStack.pop()
-            self.receiverTypeStack.pop()
 
     def visitAstModule(self, node):
         self.visitChildren(node)
@@ -676,7 +717,7 @@ class TypeVisitor(TypeVisitorCommon):
         return ir_t.getNullType()
 
     def visitAstClassType(self, node):
-        ty = super(TypeVisitor, self).visitAstClassType(node)
+        ty = super(DefinitionTypeVisitor, self).visitAstClassType(node)
         if isinstance(ty, ir_t.VariableType):
             param = ty.typeParameter
             if self.variance is not None and param.clas is self.varianceClass:
@@ -717,15 +758,18 @@ class TypeVisitor(TypeVisitorCommon):
             # Found function with unknown type, process it. We can't patiently wait until we
             # get to its AST node, since we need to know its return type.
 
-            # Process parameter types first, including "this".
+            # Process parameter types first. We already know the types, but we need to ensure
+            # that variant type parameters are being used correctly.
+            # TODO: should variance checks in general be done in DeclarationTypeVisitor?
             if isinstance(node, ast.AstPrimaryConstructorDefinition):
-                vscope = VarianceScope(self, COVARIANT, irFunction.clas)
+                vscope = VarianceScope(self, COVARIANT, irFunction.getReceiverClass())
             elif irFunction.isMethod() and not irFunction.isConstructor():
-                vscope = VarianceScope(self, CONTRAVARIANT, irFunction.clas)
+                vscope = VarianceScope(self, CONTRAVARIANT, irFunction.getReceiverClass())
             else:
                 vscope = VarianceScope.clear(self)
             with vscope:
-                self.ensureParamTypeInfoForDefn(irFunction)
+                for param in node.parameters:
+                    self.visit(param)
 
             # Process return type, if specified.
             if astReturnType is not None:
@@ -733,7 +777,7 @@ class TypeVisitor(TypeVisitorCommon):
                     raise TypeException(node.location,
                                         "constructors must not declare return type")
                 if irFunction.isMethod():
-                    vscope = VarianceScope(self, COVARIANT, irFunction.clas)
+                    vscope = VarianceScope(self, COVARIANT, irFunction.getReceiverClass())
                 else:
                     vscope = VarianceScope.clear(self)
                 with vscope:
@@ -753,7 +797,7 @@ class TypeVisitor(TypeVisitorCommon):
                 bodyType = self.visit(astBody)
                 if bodyType is not ir_t.NoType:
                     if irFunction.isMethod() and not irFunction.isConstructor():
-                        vscope = VarianceScope(self, COVARIANT, irFunction.clas)
+                        vscope = VarianceScope(self, COVARIANT, irFunction.getReceiverClass())
                     else:
                         vscope = VarianceScope.clear(self)
                     with vscope:
@@ -773,33 +817,6 @@ class TypeVisitor(TypeVisitorCommon):
     def isConditionType(self, ty):
         return ty == ir_t.BooleanType or ty == ir_t.NoType
 
-    def ensureParamTypeInfoForDefn(self, irDefn):
-        if isinstance(irDefn, ir.Class):
-            for ctor in irDefn.constructors:
-                self.ensureParamTypeInfoForDefn(ctor)
-        elif isinstance(irDefn, ir.Function):
-            if irDefn.parameterTypes is not None:
-                return
-            astDefn = irDefn.astDefn
-            self.preVisit(astDefn)
-
-            if isinstance(astDefn, ast.AstFunctionDefinition) or \
-               isinstance(astDefn, ast.AstClassDefinition):
-                for typeParam in astDefn.typeParameters:
-                    self.visit(typeParam)
-
-            irDefn.parameterTypes = []
-            if irDefn.isMethod():
-                receiverType = self.receiverTypeStack[-1]
-                irDefn.parameterTypes.append(receiverType)
-                assert irDefn.variables[0].name == "$this"
-                irDefn.variables[0].type = receiverType
-            if isinstance(astDefn, ast.AstFunctionDefinition) or \
-               isinstance(astDefn, ast.AstPrimaryConstructorDefinition):
-                irDefn.parameterTypes.extend(map(self.visit, irDefn.astDefn.parameters))
-
-            self.postVisit(astDefn)
-
     def ensureTypeInfoForDefn(self, irDefn):
         if isinstance(irDefn, ir.Function):
             if irDefn.returnType is None:
@@ -809,12 +826,10 @@ class TypeVisitor(TypeVisitorCommon):
              isinstance(irDefn, ir.Global):
             if irDefn.type is None:
                 self.visit(irDefn.astVarDefn)
-        elif isinstance(irDefn, ir.Class):
-            for ctor in irDefn.constructors:
-                self.ensureParamTypeInfoForDefn(ctor)
-        elif isinstance(irDefn, ir.TypeParameter) or \
+        elif isinstance(irDefn, ir.Class) or \
+             isinstance(irDefn, ir.TypeParameter) or \
              isinstance(irDefn, ir.Package):
-            pass   # already done elsewhere
+            pass   # already done in previous pass.
         else:
             raise NotImplementedError
 
@@ -830,8 +845,8 @@ class TypeVisitor(TypeVisitorCommon):
                            receiverType, typeArgs, argTypes,
                            mayAssign, loc):
         receiverIsExplicit = receiverType is not None
-        if not receiverIsExplicit and len(self.receiverTypeStack) > 0:
-            receiverType = self.receiverTypeStack[-1]   # may still be None
+        if not receiverIsExplicit and self.hasReceiverType():
+            receiverType = self.getReceiverType()
 
         assert name != "$constructor" or receiverIsExplicit
         if name == "$constructor" or receiverIsExplicit:
@@ -848,7 +863,6 @@ class TypeVisitor(TypeVisitorCommon):
 
         if nameInfo.isClass():
             irClass = nameInfo.getDefnInfo().irDefn
-            self.ensureParamTypeInfoForDefn(irClass)
             explicitTypeParams = getExplicitTypeParameters(irClass)
             if len(typeArgs) != len(explicitTypeParams):
                 raise TypeException(loc,
@@ -864,8 +878,6 @@ class TypeVisitor(TypeVisitorCommon):
             receiverIsExplicit = True
             useKind = USE_AS_CONSTRUCTOR
 
-        for overload in nameInfo.iterOverloads():
-            self.ensureParamTypeInfoForDefn(overload.irDefn)
         (defnInfo, allTypeArgs, allArgTypes) = \
             nameInfo.findDefnInfoWithArgTypes(receiverType, receiverIsExplicit,
                                               typeArgs, argTypes, loc)

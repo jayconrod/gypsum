@@ -99,7 +99,6 @@ class TestSerialization(unittest.TestCase):
         otherPackage = ir.Package()
         method = otherPackage.addFunction("foo", None, ir_types.UnitType, [], [],
                                            None, None, frozenset([flags.METHOD]))
-        method.clas = builtins.getRootClass()
         loader = utils_test.MockPackageLoader([otherPackage])
         externMethod = package.externalize(method, loader)
         self.ser.package = package
@@ -227,18 +226,15 @@ class TestSerialization(unittest.TestCase):
         constructor = package.addFunction("$constructor", None, ir_types.UnitType, [],
                                           [ty], None, None,
                                           frozenset([flags.PUBLIC, flags.METHOD]))
-        constructor.clas = clas
         clas.constructors = [constructor]
         localMethod = package.addFunction("m", None, ir_types.I64Type, [],
                                           [ty], None, None,
                                           frozenset([flags.PUBLIC, flags.METHOD]))
-        localMethod.clas = clas
         otherPackage = ir.Package()
         loader = utils_test.MockPackageLoader([otherPackage])
         otherMethod = otherPackage.addFunction("o", None, ir_types.I64Type, [],
                                                [ir_types.getRootClassType()], None, None,
                                                frozenset([flags.PUBLIC, flags.METHOD]))
-        otherMethod.clas = builtins.getRootClass()
         externMethod = package.externalize(otherMethod, loader)
         builtinMethod = builtins.getBuiltinFunctionById(bytecode.BUILTIN_ROOT_CLASS_TO_STRING_ID)
         clas.methods = [localMethod, externMethod, builtinMethod]
@@ -249,5 +245,3 @@ class TestSerialization(unittest.TestCase):
         outClass = ir.Class(None, None, clas.id, None, None, None, None, None, None, None)
         self.des.readClass(outClass)
         self.assertEquals(clas, outClass)
-        for method in outClass.constructors + outClass.methods:
-            self.assertIs(method.parameterTypes[0].clas, method.clas)

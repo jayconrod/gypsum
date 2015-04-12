@@ -73,10 +73,8 @@ class TestIr(utils_test.TestCaseWithDefinitions):
     def testMayOverrideParamSub(self):
         rt = ClassType(self.base)
         f1 = self.makeFunction("f", returnType=UnitType, parameterTypes=[rt, ClassType(self.A)])
-        f1.clas = self.base
         f2 = self.makeFunction("f", returnType=UnitType,
                                parameterTypes=[rt, ClassType(self.base)])
-        f2.clas = self.base
         self.assertTrue(f2.mayOverride(f1))
         self.assertFalse(f1.mayOverride(f2))
 
@@ -84,12 +82,10 @@ class TestIr(utils_test.TestCaseWithDefinitions):
         rt = ClassType(self.base)
         f1 = self.makeFunction("f", returnType=UnitType,
                                typeParameters=[self.T], parameterTypes=[rt])
-        f1.clas = self.base
         S = self.makeTypeParameter("S", upperBound=ClassType(self.base),
                                    lowerBound=ClassType(self.A))
         f2 = self.makeFunction("f", returnType=UnitType,
                                typeParameters=[S], parameterTypes=[rt])
-        f2.clas = self.base
         self.assertFalse(f2.mayOverride(f1))
         self.assertFalse(f1.mayOverride(f2))
 
@@ -127,13 +123,10 @@ class TestExternalize(unittest.TestCase):
                                              [], [], None, None,
                                              frozenset([flags.PUBLIC,
                                                         flags.METHOD]))
-        ctor.clas = self.clas
         self.clas.constructors = [ctor]
-        method =self.otherPackage.addFunction("m", None, UnitType,
-                                                           [], [], None, None,
-                                                           frozenset([flags.PUBLIC,
-                                                                      flags.METHOD]))
-        method.clas = self.clas
+        method = self.otherPackage.addFunction("m", None, UnitType,
+                                               [], [], None, None,
+                                               frozenset([flags.PUBLIC, flags.METHOD]))
         self.clas.methods = [method]
         self.externClassTy = self.externalizeType(self.classTy)
         self.param = self.otherPackage.addTypeParameter("T", None, getRootClassType(),
@@ -197,14 +190,12 @@ class TestExternalize(unittest.TestCase):
         ctor = self.otherPackage.addFunction("$constructor", None, UnitType, [self.param],
                                              [clasTy], None, None,
                                              frozenset([flags.PUBLIC, flags.METHOD]))
-        ctor.clas = clas
         clas.constructors = [ctor]
         field = self.otherPackage.newField("x", None, clasTy, frozenset([flags.PUBLIC]))
         clas.fields = [field]
         method = self.otherPackage.addFunction("f", None, UnitType, [self.param], [clasTy],
                                                None, None,
                                                frozenset([flags.PUBLIC, flags.METHOD]))
-        method.clas = clas
         builtinMethod = \
             builtins.getBuiltinFunctionById(bytecode.BUILTIN_ROOT_CLASS_TO_STRING_ID)
         clas.methods = [method, builtinMethod]

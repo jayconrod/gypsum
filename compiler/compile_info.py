@@ -324,7 +324,7 @@ def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes):
     If the function is not compatible, returns None."""
     if receiverType is not None:
         if isinstance(receiverType, ir_types.ObjectType):
-            receiverType = receiverType.substituteForBaseClass(irFunction.clas)
+            receiverType = receiverType.substituteForBaseClass(irFunction.getReceiverClass())
         implicitTypeArgs = list(receiverType.getTypeArguments())
         allArgTypes = [receiverType] + argTypes
     else:

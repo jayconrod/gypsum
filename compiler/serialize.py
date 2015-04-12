@@ -415,11 +415,6 @@ class Deserializer(object):
             instructionsBuffer = self.inFile.read(instructionsSize)
             blockOffsets = self.readList(self.readVbn)
             function.blocks = self.decodeInstructions(instructionsBuffer, blockOffsets)
-        if flags.METHOD in function.flags:
-            if len(function.parameterTypes) == 0 or \
-               not isinstance(function.parameterTypes[0], ir_types.ClassType):
-                raise IOError("method without receiver class type")
-            function.clas = function.parameterTypes[0].clas
 
     def decodeInstructions(self, instructionsBuffer, blockOffsets):
         # TODO: implement if we ever actually need this.
