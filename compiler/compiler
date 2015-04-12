@@ -20,7 +20,8 @@ from layout import layout
 from parser import *
 from scope_analysis import *
 from type_analysis import *
-from compiler import compile, externalize
+from externalization import externalize
+from compiler import compile
 from serialize import serialize
 from package_loader import PackageLoader
 from compile_info import CompileInfo

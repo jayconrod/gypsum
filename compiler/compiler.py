@@ -17,19 +17,6 @@ from errors import SemanticException
 from builtins import getTypeClass, getExceptionClass, getRootClass
 from utils import Counter, COMPILE_FOR_EFFECT, COMPILE_FOR_VALUE, COMPILE_FOR_UNINITIALIZED, COMPILE_FOR_MATCH
 
-# TODO: move externalization into new module
-def externalize(info):
-    for useInfo in info.useInfo.itervalues():
-        irDefn = useInfo.defnInfo.irDefn
-        if isinstance(irDefn, Package):
-            info.package.ensureDependency(irDefn)
-        elif isinstance(irDefn, IrTopDefn):
-            info.package.externalize(irDefn, info.packageLoader)
-
-    for ty in info.typeInfo.itervalues():
-        info.package.externalizeType(ty, info.packageLoader)
-
-
 def compile(info):
     for clas in info.package.classes:
         assignFieldIndices(clas, info)
@@ -1074,4 +1061,4 @@ class PropertyLValue(LValue):
     def evaluate(self):
         self.compiler.loadField(self.field)
 
-__all__ = ["compile", "externalize"]
+__all__ = ["compile"]

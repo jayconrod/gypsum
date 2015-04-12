@@ -14,6 +14,7 @@ from ast import *
 from compile_info import *
 from scope_analysis import *
 from type_analysis import *
+from externalization import externalize
 from compiler import *
 from ids import *
 from ir import *

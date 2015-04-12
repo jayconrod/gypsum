@@ -8,6 +8,7 @@ import unittest
 
 import builtins
 import bytecode
+import externalization
 import flags
 import ids
 import ir
@@ -100,7 +101,8 @@ class TestSerialization(unittest.TestCase):
         method = otherPackage.addFunction("foo", None, ir_types.UnitType, [], [],
                                            None, None, frozenset([flags.METHOD]))
         loader = utils_test.MockPackageLoader([otherPackage])
-        externMethod = package.externalize(method, loader)
+        externalizer = externalization.Externalizer(package, loader)
+        externMethod = externalizer.externalizeDefn(method)
         self.ser.package = package
         self.ser.writeMethodId(externMethod)
         self.des.package = package
@@ -161,7 +163,8 @@ class TestSerialization(unittest.TestCase):
         loader = utils_test.MockPackageLoader([depPackage])
         depClass = depPackage.addClass("C", None, [], [ir_types.getRootClassType()], None,
                                        [], [], [], frozenset([flags.PUBLIC]))
-        externClass = package.externalize(depClass, loader)
+        externalizer = externalization.Externalizer(package, loader)
+        externClass = externalizer.externalizeDefn(depClass)
         self.assertIn(flags.EXTERN, externClass.flags)
         self.assertIs(depPackage, package.dependencies[0].package)
         self.assertIs(externClass, package.dependencies[0].externClasses[0])
@@ -237,7 +240,8 @@ class TestSerialization(unittest.TestCase):
         otherMethod = otherPackage.addFunction("o", None, ir_types.I64Type, [],
                                                [ir_types.getRootClassType()], None, None,
                                                frozenset([flags.PUBLIC, flags.METHOD]))
-        externMethod = package.externalize(otherMethod, loader)
+        externalizer = externalization.Externalizer(package, loader)
+        externMethod = externalizer.externalizeDefn(otherMethod)
         builtinMethod = builtins.getBuiltinFunctionById(bytecode.BUILTIN_ROOT_CLASS_TO_STRING_ID)
         clas.methods = [localMethod, externMethod, builtinMethod]
 

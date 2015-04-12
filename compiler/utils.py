@@ -8,6 +8,10 @@ import string
 from StringIO import StringIO
 
 
+def each(f, iterable):
+    for elem in iterable:
+        f(elem)
+
 def align(n, alignment):
     return (n + alignment - 1) & ~(alignment - 1)
 
@@ -152,6 +156,6 @@ COMPILE_FOR_MATCH = "compile-for-match"
 COMPILE_FOR_UNINITIALIZED = "compile-for-uninitialized"
 
 
-__all__ = ["encodeString", "tryDecodeString", "Counter", "hashList",
+__all__ = ["each", "encodeString", "tryDecodeString", "Counter", "hashList",
            "COMPILE_FOR_VALUE", "COMPILE_FOR_EFFECT", "COMPILE_FOR_MATCH",
            "COMPILE_FOR_UNINITIALIZED"]
