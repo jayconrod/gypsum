@@ -337,6 +337,23 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(UnitType, x.type)
         self.assertEquals(UnitType, info.getType(info.ast.definitions[0].expression))
 
+    def testPropertyForeignCtor(self):
+        foo = Package(name=PackageName(["foo"]))
+        bar = foo.addClass("Bar", None, [], [getRootClassType()],
+                           None, [], [], [], frozenset([PUBLIC]))
+        barType = ClassType(bar)
+        ctor = foo.addFunction("$constructor", None, UnitType, [], [barType], None, None,
+                               frozenset([PUBLIC, METHOD]))
+        bar.constructors.append(ctor)
+        packageLoader = MockPackageLoader([foo])
+
+        source = "var x = foo.Bar"
+        info = self.analyzeFromSource(source, packageLoader=packageLoader)
+        x = info.package.findGlobal(name="x")
+        self.assertEquals(barType, x.type)
+        callInfo = info.getCallInfo(info.ast.definitions[0].expression)
+        self.assertFalse(callInfo.receiverExprNeeded)
+
     def testCallForeignFunctionWithArg(self):
         source = "var x = foo.bar(12)"
         foo = Package(name=PackageName(["foo"]))
@@ -372,6 +389,44 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(expectedType, info.getType(fAst.body.arguments[0]))
         self.assertEquals(expectedType, info.getType(fAst.body))
 
+    def testLoadFromForeignClass(self):
+        fooPackage = Package(name=PackageName(["foo"]))
+        clas = fooPackage.addClass("Bar", None, [], [getRootClassType()], None,
+                                   [], [], [], frozenset([PUBLIC]))
+        clas.fields.append(fooPackage.newField("x", None, I64Type, frozenset([PUBLIC])))
+        loader = MockPackageLoader([fooPackage])
+
+        source = "def f(o: foo.Bar) = o.x"
+        info = self.analyzeFromSource(source, packageLoader=loader)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(I64Type, f.returnType)
+
+    def testStoreToForeignClass(self):
+        fooPackage = Package(name=PackageName(["foo"]))
+        clas = fooPackage.addClass("Bar", None, [], [getRootClassType()], None,
+                                   [], [], [], frozenset([PUBLIC]))
+        clas.fields.append(fooPackage.newField("x", None, I64Type, frozenset([PUBLIC])))
+        loader = MockPackageLoader([fooPackage])
+
+        source = "def f(o: foo.Bar) = o.x = 12"
+        info = self.analyzeFromSource(source, packageLoader=loader)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(I64Type, f.returnType)
+
+    def testCallForeignMethod(self):
+        fooPackage = Package(name=PackageName(["foo"]))
+        clas = fooPackage.addClass("Bar", None, [], [getRootClassType()], None,
+                                   [], [], [], frozenset([PUBLIC]))
+        m = fooPackage.addFunction("m", None, I64Type, [], [ClassType(clas)],
+                                   None, None, frozenset([PUBLIC, METHOD]))
+        clas.methods.append(m)
+        loader = MockPackageLoader([fooPackage])
+
+        source = "def f(o: foo.Bar) = o.m"
+        info = self.analyzeFromSource(source, packageLoader=loader)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(I64Type, f.returnType)
+
     def testLoadFromInheritedForeignClass(self):
         fooPackage = Package(name=PackageName(["foo"]))
         clas = fooPackage.addClass("Bar", None, [], [getRootClassType()], None,
@@ -389,6 +444,25 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source, packageLoader=packageLoader)
         f = info.package.findFunction(name="f")
         self.assertEquals(I64Type, f.returnType)
+
+    def testCallInInheritedForeignClass(self):
+        fooPackage = Package(name=PackageName(["foo"]))
+        clas = fooPackage.addClass("Bar", None, [], [getRootClassType()], None,
+                                   [], [], [], frozenset([PUBLIC]))
+        ty = ClassType(clas)
+        ctor = fooPackage.addFunction("$constructor", None, UnitType, [], [ty], None, None,
+                                      frozenset([PUBLIC, METHOD]))
+        clas.constructors.append(ctor)
+        m = fooPackage.addFunction("m", None, ty, [], [ty], None, None,
+                                   frozenset([PUBLIC, METHOD]))
+        clas.methods.append(m)
+        packageLoader = MockPackageLoader([fooPackage])
+
+        source = "class Baz <: foo.Bar\n" + \
+                 "def f(o: Baz) = o.m"
+        info = self.analyzeFromSource(source, packageLoader=packageLoader)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(ty, f.returnType)
 
     def testProjectTypeParameter(self):
         source = "class Foo\n" + \

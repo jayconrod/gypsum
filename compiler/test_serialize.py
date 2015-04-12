@@ -197,7 +197,9 @@ class TestSerialization(unittest.TestCase):
         self.ser.writeField(field)
 
         self.des.package = package
-        outField = self.des.readField()
+        outField = self.des.readField(2)
+        self.assertEquals(field, outField)
+        self.assertEquals(2, outField.index)
 
     def testRewriteTypeParameter(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)

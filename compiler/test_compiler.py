@@ -454,11 +454,33 @@ class TestCompiler(TestCaseWithDefinitions):
         clasTy = ClassType(package.classes[0], ())
         expected = self.makeSimpleFunction("f", clasTy, [[
                        ldlocal(0),
-                       ldp(0),
+                       ldpc(0),
                        ret()]],
                      parameterTypes=[clasTy],
                      variables=[self.makeVariable("foo", type=clasTy,
                                                   kind=PARAMETER, flags=frozenset([LET]))])
+        self.assertEquals(expected, package.findFunction(name="f"))
+
+    def testLoadForeignPtrField(self):
+        fooPackage = Package(name=PackageName(["foo"]))
+        clas = fooPackage.addClass("Bar", None, [], [getRootClassType()], None,
+                                   [], [], [], frozenset([PUBLIC]))
+        field = fooPackage.newField("x", None, getRootClassType(), frozenset([LET, PUBLIC]))
+        field.index = 0
+        clas.fields.append(field)
+        ty = ClassType(clas)
+        loader = MockPackageLoader([fooPackage])
+
+        source = "def f(o: foo.Bar) = o.x"
+        package = self.compileFromSource(source, packageLoader=loader)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", getRootClassType(), [[
+                               ldlocal(0),
+                               ldpc(0),
+                               ret()]],
+                             parameterTypes=[ty],
+                             variables=[self.makeVariable("o", type=ty,
+                                        kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testAccumShortPropForEffect(self):
         package = self.compileFromSource("class Foo\n" +
@@ -1203,6 +1225,28 @@ class TestCompiler(TestCaseWithDefinitions):
                              variables=[self.makeVariable("s", type=stringTy,
                                                           kind=PARAMETER, flags=frozenset([LET]))]))
 
+    def testFunctionCallWithForeignTypeArg(self):
+        fooPackage = Package(name=PackageName(["foo"]))
+        barClass = fooPackage.addClass("Bar", None, [], [getRootClassType()],
+                                       None, [], [], [], frozenset([PUBLIC]))
+        barType = ClassType(barClass)
+        loader = MockPackageLoader([fooPackage])
+
+        source = "def id[static T](o: T) = o\n" + \
+                 "def f(o: foo.Bar) = id[foo.Bar](o)"
+        package = self.compileFromSource(source, packageLoader=loader)
+        idFunction = package.findFunction(name="id")
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", barType, [[
+                               ldlocal(0),
+                               tycf(barClass.id.packageId.index, barClass.id.externIndex),
+                               callg(idFunction.id.index),
+                               ret(),
+                             ]],
+                             parameterTypes=[barType],
+                             variables=[self.makeVariable("o", type=barType,
+                                                          kind=PARAMETER, flags=frozenset([LET]))]))
+
     def testMatchForeignType(self):
         # try-catch is used for now, since full pattern matching hasn't been implemented yet.
         fooPackage = Package(name=PackageName(["foo"]))
@@ -1433,6 +1477,26 @@ class TestCompiler(TestCaseWithDefinitions):
                                drop(),
                                ret(),
                              ]]))
+
+    def testForeignCtor(self):
+        fooPackage = Package(name=PackageName(["foo"]))
+        barClass = fooPackage.addClass("Bar", None, [], [getRootClassType()],
+                                       None, [], [], [], frozenset([PUBLIC]))
+        barTy = ClassType(barClass)
+        ctor = fooPackage.addFunction("$constructor", None, UnitType, [], [barTy], None, None,
+                                      frozenset([PUBLIC, METHOD]))
+        barClass.constructors.append(ctor)
+        loader = MockPackageLoader([fooPackage])
+
+        source = "def f = foo.Bar"
+        package = self.compileFromSource(source, packageLoader=loader)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", barTy, [[
+                               allocobjf(barClass.id.packageId.index, barClass.id.externIndex),
+                               dup(),
+                               callgf(ctor.id.packageId.index, ctor.id.externIndex),
+                               drop(),
+                               ret()]]))
 
     def testNullaryMethod(self):
         source = "class Foo\n" + \

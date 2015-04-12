@@ -897,7 +897,10 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                               typeArgs, argTypes, loc)
         irDefn = defnInfo.irDefn
         receiverExprNeeded = receiverIsExplicit and \
-                             (not isinstance(irDefn, ir.Function) or defnInfo.irDefn.isMethod())
+                             (isinstance(irDefn, ir.Field) or \
+                              (isinstance(irDefn, ir.Function) and \
+                               irDefn.isMethod() and \
+                               not irDefn.isConstructor()))
         callInfo = CallInfo(allTypeArgs, receiverExprNeeded)
         self.info.setCallInfo(useAstId, callInfo)
         if isinstance(irDefn, ir.Package):

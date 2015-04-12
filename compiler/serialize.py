@@ -425,15 +425,24 @@ class Deserializer(object):
         clas.flags = self.readFlags()
         clas.typeParameters = self.readList(self.readId, self.package.typeParameters)
         clas.supertypes = [self.readType()]
-        clas.fields = self.readList(self.readField)
+        clas.fields = self.readFields()
         clas.constructors = self.readList(self.readMethodId)
         clas.methods = self.readList(self.readMethodId)
 
-    def readField(self):
+    def readFields(self):
+        n = self.readVbn()
+        fields = []
+        for i in xrange(n):
+            field = self.readField(i)
+            fields.append(field)
+        return fields
+
+    def readField(self, index):
         name = self.readName()
         flags = self.readFlags()
         ty = self.readType()
         field = ir.Field(name, None, ty, flags)
+        field.index = index
         return field
 
     def readTypeParameter(self, param):
