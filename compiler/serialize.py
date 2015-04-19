@@ -230,9 +230,11 @@ class Serializer(object):
         bits = form | flags << 4
         self.writeVbn(bits)
         if id is not None:
-            if id.externIndex is not None:
+            if id.externIndex is None:
+                self.writeVbn(id.index)
+            else:
+                self.writeVbn(id.packageId.index)
                 self.writeVbn(id.externIndex)
-            self.writeVbn(id.index)
         if isinstance(type, ir_types.ClassType):
             self.writeList(self.writeType, type.typeArguments)
 
@@ -246,7 +248,11 @@ class Serializer(object):
 
     def writeTypeParameterList(self, list):
         assert all(not p.isForeign() and not p.isBuiltin() for p in list)
-        self.writeList(lambda p: self.writeVbn(p.id.index), list)
+        def writeId(typeParam):
+            self.writeVbn(typeParam.id.externIndex
+                          if flags.EXTERN in typeParam.flags \
+                          else typeParam.id.index)
+        self.writeList(writeId, list)
 
     def writeMethodList(self, list):
         self.writeList(self.writeMethodId, list)
@@ -254,7 +260,7 @@ class Serializer(object):
     def writeMethodId(self, method):
         if method.isBuiltin():
             collectionIndex = BUILTIN_INDEX
-            methodIndex = method.id.index
+            methodIndex = ~method.id.index
         elif not method.isForeign():
             collectionIndex = LOCAL_INDEX
             methodIndex = method.id.index

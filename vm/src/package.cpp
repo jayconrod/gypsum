@@ -64,8 +64,17 @@ class PackageLoader {
 
   Local<String> readString();
   Local<Global> readGlobal();
-  Local<Function> readFunction();
-  void readClass(const Local<Class>& clas);
+  Local<Function> readFunction(const Handle<BlockArray<TypeParameter>>& pkgTypeParams);
+  void readExternFunction(const Handle<Function>& func,
+                          const Handle<BlockArray<TypeParameter>>& pkgTypeParams);
+  void readFunctionHeader(const Handle<BlockArray<TypeParameter>>& pkgTypeParams,
+                          Local<String>* name,
+                          u32* flags,
+                          Local<BlockArray<TypeParameter>>* typeParameters,
+                          Local<Type>* returnType,
+                          Local<BlockArray<Type>>* parameterTypes);
+  void readClass(const Local<Class>& clas,
+                 const Handle<BlockArray<TypeParameter>>& pkgTypeParams);
   Local<Field> readField();
   void readTypeParameter(const Local<TypeParameter>& typeParam);
   Local<PackageDependency> readDependencyHeader();
@@ -76,6 +85,7 @@ class PackageLoader {
   Local<String> readName();
   length_t readLength();
   vector<u8> readData(word_t size);
+  DefnId readDefnIdVbns();
   i64 readVbn();
   word_t readWordVbn();
   length_t readLengthVbn();
@@ -144,32 +154,45 @@ Local<Package> Package::loadFromStream(VM* vm, istream& stream) {
 }
 
 
-String* Package::getString(length_t index) {
+String* Package::getString(length_t index) const {
   return block_cast<String>(strings()->get(index));
 }
 
 
-Global* Package::getGlobal(length_t index) {
+Global* Package::getGlobal(length_t index) const {
   return block_cast<Global>(globals()->get(index));
 }
 
 
-Function* Package::getFunction(length_t index) {
+Function* Package::getFunction(length_t index) const {
   return block_cast<Function>(functions()->get(index));
 }
 
 
-Class* Package::getClass(length_t index) {
+Function* Package::getFunction(DefnId id) const {
+  if (id.packageId == kBuiltinPackageId) {
+    auto builtinId = indexToBuiltinId(id.defnIndex);
+    return getVM()->roots()->getBuiltinFunction(builtinId);
+  } else if (id.packageId == kLocalPackageId) {
+    return getFunction(static_cast<length_t>(id.defnIndex));
+  } else {
+    return dependencies()->get(static_cast<length_t>(id.packageId))
+        ->linkedFunctions()->get(static_cast<length_t>(id.defnIndex));
+  }
+}
+
+
+Class* Package::getClass(length_t index) const {
   return block_cast<Class>(classes()->get(index));
 }
 
 
-TypeParameter* Package::getTypeParameter(length_t index) {
+TypeParameter* Package::getTypeParameter(length_t index) const {
   return block_cast<TypeParameter>(typeParameters()->get(index));
 }
 
 
-Function* Package::entryFunction() {
+Function* Package::entryFunction() const {
   auto index = entryFunctionIndex();
   if (index == kLengthNotSet)
     return nullptr;
@@ -177,7 +200,7 @@ Function* Package::entryFunction() {
 }
 
 
-Function* Package::initFunction() {
+Function* Package::initFunction() const {
   auto index = initFunctionIndex();
   if (index == kLengthNotSet)
     return nullptr;
@@ -474,6 +497,7 @@ ostream& operator << (ostream& os, const PackageVersion* version) {
   F(PackageDependency, linkedFunctions_)      \
   F(PackageDependency, externClasses_)        \
   F(PackageDependency, linkedClasses_)        \
+  F(PackageDependency, externMethods_)        \
   F(PackageDependency, externTypeParameters_) \
 
 DEFINE_POINTER_MAP(PackageDependency, PACKAGE_DEPENDENCY_POINTER_LIST)
@@ -490,6 +514,7 @@ PackageDependency::PackageDependency(PackageName* name,
                                      BlockArray<Function>* linkedFunctions,
                                      BlockArray<Class>* externClasses,
                                      BlockArray<Class>* linkedClasses,
+                                     BlockArray<Function>* externMethods,
                                      BlockArray<TypeParameter>* externTypeParameters)
     : Block(PACKAGE_DEPENDENCY_BLOCK_TYPE),
       name_(this, name),
@@ -501,6 +526,7 @@ PackageDependency::PackageDependency(PackageName* name,
       linkedFunctions_(this, linkedFunctions),
       externClasses_(this, externClasses),
       linkedClasses_(this, linkedClasses),
+      externMethods_(this, externMethods),
       externTypeParameters_(this, externTypeParameters) {
   ASSERT(minVersion == nullptr || maxVersion == nullptr ||
          minVersion->compare(maxVersion) <= 0);
@@ -521,12 +547,13 @@ Local<PackageDependency> PackageDependency::create(
     const Handle<BlockArray<Function>>& linkedFunctions,
     const Handle<BlockArray<Class>>& externClasses,
     const Handle<BlockArray<Class>>& linkedClasses,
+    const Handle<BlockArray<Function>>& externMethods,
     const Handle<BlockArray<TypeParameter>>& externTypeParameters) {
   RETRY_WITH_GC(heap, return Local<PackageDependency>(new(heap) PackageDependency(
       *name, minVersion.getOrNull(), maxVersion.getOrNull(),
       *externGlobals, linkedGlobals.getOrNull(),
       *externFunctions, linkedFunctions.getOrNull(),
-      *externClasses, linkedClasses.getOrNull(),
+      *externClasses, linkedClasses.getOrNull(), *externMethods,
       *externTypeParameters)));
 }
 
@@ -538,16 +565,18 @@ Local<PackageDependency> PackageDependency::create(Heap* heap,
                                                    length_t globalCount,
                                                    length_t functionCount,
                                                    length_t classCount,
+                                                   length_t methodCount,
                                                    length_t typeParameterCount) {
   auto externGlobals = BlockArray<Global>::create(heap, globalCount);
   auto externFunctions = BlockArray<Function>::create(heap, functionCount);
   auto externClasses = BlockArray<Class>::create(heap, classCount);
+  auto externMethods = BlockArray<Function>::create(heap, methodCount);
   auto externTypeParameters = BlockArray<TypeParameter>::create(heap, typeParameterCount);
   RETRY_WITH_GC(heap, return Local<PackageDependency>(new(heap) PackageDependency(
       *name, minVersion.getOrNull(), maxVersion.getOrNull(),
       *externGlobals, nullptr,
       *externFunctions, nullptr,
-      *externClasses, nullptr,
+      *externClasses, nullptr, *externMethods,
       *externTypeParameters)));
 }
 
@@ -647,6 +676,7 @@ ostream& operator << (ostream& os, const PackageDependency* dep) {
      << "\n  linkedfunctions: " << brief(dep->linkedFunctions())
      << "\n  externClasses: " << brief(dep->externClasses())
      << "\n  linkedClasses: " << brief(dep->linkedClasses())
+     << "\n  externMethods: " << brief(dep->externMethods())
      << "\n  externTypeParameters: " << brief(dep->externTypeParameters());
   return os;
 }
@@ -737,12 +767,12 @@ Local<Package> PackageLoader::load() {
       globalArray->set(i, *global);
     }
     for (length_t i = 0; i < functionCount; i++) {
-      auto function = readFunction();
+      auto function = readFunction(typeParametersArray);
       functionArray->set(i, *function);
     }
     for (length_t i = 0; i < classCount; i++) {
       auto clas = handle(classArray->get(i));
-      readClass(clas);
+      readClass(clas, typeParametersArray);
     }
     for (length_t i = 0; i < typeParameterCount; i++) {
       auto param = handle(typeParametersArray->get(i));
@@ -783,24 +813,15 @@ Local<Global> PackageLoader::readGlobal() {
 }
 
 
-Local<Function> PackageLoader::readFunction() {
-  auto name = readName();
-  auto flags = readValue<u32>();
-
-  auto typeParameterCount = readLengthVbn();
-  auto typeParameters = TaggedArray<TypeParameter>::create(heap(), typeParameterCount);
-  for (length_t i = 0; i < typeParameterCount; i++) {
-    auto id = readIdVbn();
-    typeParameters->set(i, Tagged<TypeParameter>(id));
-  }
-
-  auto returnType = readType();
-  auto parameterCount = readLengthVbn();
-  auto types = BlockArray<Type>::create(heap(), parameterCount + 1);
-  types->set(0, *returnType);
-  for (length_t i = 0; i < parameterCount; i++) {
-    types->set(i + 1, *readType());
-  }
+Local<Function>
+PackageLoader::readFunction(const Handle<BlockArray<TypeParameter>>& pkgTypeParams) {
+  Local<String> name;
+  u32 flags;
+  Local<BlockArray<TypeParameter>> typeParameters;
+  Local<Type> returnType;
+  Local<BlockArray<Type>> parameterTypes;
+  readFunctionHeader(pkgTypeParams, &name, &flags,
+                     &typeParameters, &returnType, &parameterTypes);
 
   word_t localsSize = kNotSet;
   Local<LengthArray> blockOffsets;
@@ -818,21 +839,74 @@ Local<Function> PackageLoader::readFunction() {
     }
   }
 
-  auto function = Function::create(heap(), name, flags, typeParameters, types,
-                                   localsSize, instructions, blockOffsets, package_);
-  return function;
+  auto func = Function::create(heap(), name, flags, typeParameters,
+                               returnType, parameterTypes,
+                               localsSize, instructions, blockOffsets,
+                               package_);
+  return func;
 }
 
 
-void PackageLoader::readClass(const Local<Class>& clas) {
+void PackageLoader::readExternFunction(const Handle<Function>& func,
+                                       const Handle<BlockArray<TypeParameter>>& pkgTypeParams) {
+  Local<String> name;
+  u32 flags;
+  Local<BlockArray<TypeParameter>> typeParameters;
+  Local<Type> returnType;
+  Local<BlockArray<Type>> parameterTypes;
+  readFunctionHeader(pkgTypeParams, &name, &flags,
+                     &typeParameters, &returnType, &parameterTypes);
+  func->setName(*name);
+  func->setFlags(flags);
+  func->setTypeParameters(*typeParameters);
+  func->setReturnType(*returnType);
+  func->setParameterTypes(*parameterTypes);
+
+  if ((flags & EXTERN_FLAG) == 0) {
+    throw Error("invalid function");
+  }
+}
+
+
+void PackageLoader::readFunctionHeader(const Handle<BlockArray<TypeParameter>>& pkgTypeParams,
+                                       Local<String>* name,
+                                       u32* flags,
+                                       Local<BlockArray<TypeParameter>>* typeParameters,
+                                       Local<Type>* returnType,
+                                       Local<BlockArray<Type>>* parameterTypes) {
+  *name = readName();
+  *flags = readValue<u32>();
+
+  auto typeParameterCount = readLengthVbn();
+  *typeParameters = BlockArray<TypeParameter>::create(heap(), typeParameterCount);
+  for (length_t i = 0; i < typeParameterCount; i++) {
+    auto index = readLengthVbn();
+    if (index >= pkgTypeParams->length())
+      throw Error("invalid type parameter index");
+    (*typeParameters)->set(i, pkgTypeParams->get(index));
+  }
+
+  *returnType = readType();
+  auto parameterCount = readLengthVbn();
+  *parameterTypes = BlockArray<Type>::create(heap(), parameterCount);
+  for (length_t i = 0; i < parameterCount; i++) {
+    (*parameterTypes)->set(i, *readType());
+  }
+}
+
+
+void PackageLoader::readClass(const Local<Class>& clas,
+                              const Handle<BlockArray<TypeParameter>>& pkgTypeParams) {
   auto name = readName();
   auto flags = readValue<u32>();
 
   auto typeParamCount = readLengthVbn();
-  auto typeParameters = TaggedArray<TypeParameter>::create(heap(), typeParamCount);
+  auto typeParameters = BlockArray<TypeParameter>::create(heap(), typeParamCount);
   for (length_t i = 0; i < typeParamCount; i++) {
-    auto id = readIdVbn();
-    typeParameters->set(i, Tagged<TypeParameter>(id));
+    auto index = readLengthVbn();
+    if (index >= pkgTypeParams->length())
+      throw Error("invalid type parameter index");
+    typeParameters->set(i, pkgTypeParams->get(index));
   }
 
   auto supertype = readType();
@@ -845,17 +919,17 @@ void PackageLoader::readClass(const Local<Class>& clas) {
   }
 
   auto constructorCount = readLengthVbn();
-  auto constructors = IdArray::create(heap(), constructorCount);
+  auto constructors = BlockArray<Function>::create(heap(), constructorCount);
   for (length_t i = 0; i < constructorCount; i++) {
-    auto id = readIdVbn();
-    constructors->set(i, id);
+    auto id = readDefnIdVbns();
+    constructors->set(i, package_->getFunction(id));
   }
 
   auto methodCount = readLengthVbn();
-  auto methods = IdArray::create(heap(), methodCount);
+  auto methods = BlockArray<Function>::create(heap(), methodCount);
   for (length_t i = 0; i < methodCount; i++) {
-    auto id = readIdVbn();
-    methods->set(i, id);
+    auto id = readDefnIdVbns();
+    methods->set(i, package_->getFunction(id));
   }
 
   clas->setName(*name);
@@ -902,17 +976,26 @@ Local<PackageDependency> PackageLoader::readDependencyHeader() {
   auto globalCount = readLengthVbn();
   auto functionCount = readLengthVbn();
   auto classCount = readLengthVbn();
+  auto methodCount = readLengthVbn();
   auto typeParameterCount = readLengthVbn();
 
   auto dep = PackageDependency::create(heap(), name, minVersion, maxVersion,
                                        globalCount, functionCount,
-                                       classCount, typeParameterCount);
+                                       classCount, methodCount, typeParameterCount);
 
-  // We need to pre-allocate classes and type parameters so types can refer to them.
+  // We need to pre-allocate methods, classes, type parameters so that other definitions
+  // and types can refer to them. Normally, functions can't be preallocated since they have
+  // variable size, but these are extern and don't have code.
   auto externClasses = handle(dep->externClasses());
   for (length_t i = 0; i < classCount; i++) {
     auto c = Class::create(heap());
     externClasses->set(i, *c);
+  }
+
+  auto externMethods = handle(dep->externMethods());
+  for (length_t i = 0; i < methodCount; i++) {
+    auto f = Function::create(heap());
+    externMethods->set(i, *f);
   }
 
   auto externTypeParameters = handle(dep->externTypeParameters());
@@ -926,6 +1009,8 @@ Local<PackageDependency> PackageLoader::readDependencyHeader() {
 
 
 void PackageLoader::readDependency(const Local<PackageDependency>& dep) {
+  auto typeParameters = handle(dep->externTypeParameters());
+
   auto globals = handle(dep->externGlobals());
   for (length_t i = 0; i < globals->length(); i++) {
     auto g = readGlobal();
@@ -936,7 +1021,7 @@ void PackageLoader::readDependency(const Local<PackageDependency>& dep) {
 
   auto functions = handle(dep->externFunctions());
   for (length_t i = 0; i < functions->length(); i++) {
-    auto f = readFunction();
+    auto f = readFunction(typeParameters);
     if ((f->flags() & EXTERN_FLAG) == 0)
       throw Error("dependency function is not extern");
     functions->set(i, *f);
@@ -945,12 +1030,20 @@ void PackageLoader::readDependency(const Local<PackageDependency>& dep) {
   auto classes = handle(dep->externClasses());
   for (length_t i = 0; i < classes->length(); i++) {
     auto c = handle(classes->get(i));
-    readClass(c);
+    readClass(c, typeParameters);
     if ((c->flags() & EXTERN_FLAG) == 0)
       throw Error("dependency class is not extern");
   }
 
-  auto typeParameters = handle(dep->externTypeParameters());
+  auto methods = handle(dep->externMethods());
+  for (length_t i = 0; i < methods->length(); i++) {
+    auto m = handle(methods->get(i));
+    readExternFunction(m, typeParameters);
+    u32 mask = EXTERN_FLAG | METHOD_FLAG;
+    if ((m->flags() & mask) != mask)
+      throw Error("dependency method is not extern");
+  }
+
   for (length_t i = 0; i < typeParameters->length(); i++) {
     auto p = handle(typeParameters->get(i));
     readTypeParameter(p);
@@ -1048,6 +1141,14 @@ vector<u8> PackageLoader::readData(word_t size) {
   vector<u8> buffer(size);
   stream_.read(reinterpret_cast<char*>(buffer.data()), size);
   return buffer;
+}
+
+
+DefnId PackageLoader::readDefnIdVbns() {
+  auto packageId = readIdVbn();
+  auto index = readLengthVbn();
+  DefnId id = { packageId, index };
+  return id;
 }
 
 

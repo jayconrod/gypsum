@@ -20,8 +20,8 @@ class Field;
 class Function;
 class I32Array;
 typedef I32Array LengthArray;
-typedef I32Array IdArray;
 class Package;
+class PackageIdArray;
 class String;
 template <class T>
 class TaggedArray;
@@ -35,11 +35,11 @@ class Class: public Block {
   void* operator new(size_t, Heap* heap);
   Class(String* name,
         u32 flags,
-        TaggedArray<TypeParameter>* typeParameters,
+        BlockArray<TypeParameter>* typeParameters,
         Type* supertype,
         BlockArray<Field>* fields,
-        IdArray* constructors,
-        IdArray* methods,
+        BlockArray<Function>* constructors,
+        BlockArray<Function>* methods,
         Package* package,
         Meta* instanceMeta = nullptr,
         Type* elementType = nullptr,
@@ -48,11 +48,11 @@ class Class: public Block {
   static Local<Class> create(Heap* heap,
                              const Handle<String>& name,
                              u32 flags,
-                             const Handle<TaggedArray<TypeParameter>>& typeParameters,
+                             const Handle<BlockArray<TypeParameter>>& typeParameters,
                              const Handle<Type>& supertype,
                              const Handle<BlockArray<Field>>& fields,
-                             const Handle<IdArray>& constructors,
-                             const Handle<IdArray>& methods,
+                             const Handle<BlockArray<Function>>& constructors,
+                             const Handle<BlockArray<Function>>& methods,
                              const Handle<Package>& package,
                              const Handle<Meta>& instanceMeta = Local<Meta>(),
                              const Handle<Type>& elementType = Local<Type>(),
@@ -69,8 +69,8 @@ class Class: public Block {
   u32 flags() const { return flags_; }
   void setFlags(u32 flags) { flags_ = flags; }
 
-  TaggedArray<TypeParameter>* typeParameters() const { return typeParameters_.get(); }
-  void setTypeParameters(TaggedArray<TypeParameter>* newTypeParameters) {
+  BlockArray<TypeParameter>* typeParameters() const { return typeParameters_.get(); }
+  void setTypeParameters(BlockArray<TypeParameter>* newTypeParameters) {
     typeParameters_.set(this, newTypeParameters);
   }
   TypeParameter* typeParameter(length_t index) const;
@@ -85,13 +85,13 @@ class Class: public Block {
   word_t findFieldOffset(length_t index) const;
   Class* findFieldClass(length_t index);
 
-  IdArray* constructors() const { return constructors_.get(); }
-  void setConstructors(IdArray* newConstructors) { constructors_.set(this, newConstructors); }
-  Function* getConstructor(length_t index) const;
+  BlockArray<Function>* constructors() const { return constructors_.get(); }
+  void setConstructors(BlockArray<Function>* newConstructors) {
+    constructors_.set(this, newConstructors);
+  }
 
-  IdArray* methods() const { return methods_.get(); }
-  void setMethods(IdArray* newMethods) { methods_.set(this, newMethods); }
-  Function* getMethod(length_t index) const;
+  BlockArray<Function>* methods() const { return methods_.get(); }
+  void setMethods(BlockArray<Function>* newMethods) { methods_.set(this, newMethods); }
 
   Package* package() const { return package_.get(); }
   void setPackage(Package* newPackage) { package_.set(this, newPackage); }
@@ -121,11 +121,11 @@ class Class: public Block {
   DECLARE_POINTER_MAP()
   Ptr<String> name_;
   u32 flags_;
-  Ptr<TaggedArray<TypeParameter>> typeParameters_;
+  Ptr<BlockArray<TypeParameter>> typeParameters_;
   Ptr<Type> supertype_;
   Ptr<BlockArray<Field>> fields_;
-  Ptr<IdArray> constructors_;
-  Ptr<IdArray> methods_;
+  Ptr<BlockArray<Function>> constructors_;
+  Ptr<BlockArray<Function>> methods_;
   Ptr<Package> package_;
   Ptr<Meta> instanceMeta_;
   Ptr<Type> elementType_;

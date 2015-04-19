@@ -201,7 +201,6 @@ class I32Array: public DataArray<i32, I32_ARRAY_BLOCK_TYPE> {
 
 
 typedef I32Array LengthArray;
-typedef I32Array IdArray;
 
 
 class I64Array: public DataArray<i64, I64_ARRAY_BLOCK_TYPE> {

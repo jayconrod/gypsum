@@ -126,7 +126,7 @@ class Arguments::Impl: public RefCounted {
   Impl(i::VM* vm, i::Persistent<i::Function> function)
       : function_(move(function)),
         paramIndex_(0),
-        data_(function_->parameterCount()) { }
+        data_(function_->parameterTypes()->length()) { }
 
   i::i64* data() { return data_.data(); }
 
@@ -134,12 +134,12 @@ class Arguments::Impl: public RefCounted {
   void push(T arg);
 
   i::Type* nextType() {
-    API_CHECK(paramIndex_ < function_->parameterCount(), "too many arguments");
-    return function_->parameterType(paramIndex_);
+    API_CHECK(paramIndex_ < function_->parameterTypes()->length(), "too many arguments");
+    return function_->parameterTypes()->get(paramIndex_);
   }
 
   bool isComplete() {
-    return paramIndex_ == function_->parameterCount();
+    return paramIndex_ == function_->parameterTypes()->length();
   }
 
  private:
@@ -151,20 +151,20 @@ class Arguments::Impl: public RefCounted {
 
 template <class T>
 void Arguments::Impl::push(T arg) {
-  API_CHECK(paramIndex_ < function_->parameterCount(), "too many arguments");
+  API_CHECK(paramIndex_ < function_->parameterTypes()->length(), "too many arguments");
   data_[paramIndex_++] = static_cast<i::i64>(arg);
 }
 
 template <>
 void Arguments::Impl::push<i::f32>(i::f32 arg) {
-  API_CHECK(paramIndex_ < function_->parameterCount(), "too many arguments");
+  API_CHECK(paramIndex_ < function_->parameterTypes()->length(), "too many arguments");
   auto bits = static_cast<i::u64>(i::f32ToBits(arg));
   data_[paramIndex_++] = bits;
 }
 
 template <>
 void Arguments::Impl::push<i::f64>(i::f64 arg) {
-  API_CHECK(paramIndex_ < function_->parameterCount(), "too many arguments");
+  API_CHECK(paramIndex_ < function_->parameterTypes()->length(), "too many arguments");
   auto bits = i::f64ToBits(arg);
   data_[paramIndex_++] = bits;
 }
@@ -264,7 +264,7 @@ void Function::call(const Arguments& args) {
   i::VM::Scope vmScope(impl_->vm());
   API_CHECK(args.isComplete(), "not enough arguments");
   try {
-    impl_->call(args.impl_->data(), impl_->function()->parameterCount());
+    impl_->call(args.impl_->data(), impl_->function()->parameterTypes()->length());
   } catch (i::Error& exn) {
     throw Error(exn.message());
   }
@@ -278,7 +278,7 @@ ctype Function::callFor##typename(const Arguments& args) {                      
   API_CHECK(args.isComplete(), "not enough arguments");                                        \
   i::i64 result = i::kNotSet;                                                                  \
   try {                                                                                        \
-    result = impl_->call(args.impl_->data(), impl_->function()->parameterCount());             \
+    result = impl_->call(args.impl_->data(), impl_->function()->parameterTypes()->length());   \
   } catch (i::Error& exn) {                                                                    \
     throw Error(exn.message());                                                                \
   }                                                                                            \

@@ -151,8 +151,7 @@ void Roots::initialize(Heap* heap) {
   packageMeta->objectPointerMap().setWord(0, Package::kPointerMap);
   packageMeta->setClass(packageClass);
   for (length_t i = 0; i < packageMethods->length(); i++) {
-    auto methodId = packageMethods->get(i);
-    auto method = getBuiltinFunction(methodId);
+    auto method = packageMethods->get(i);
     packageMeta->setData(i, method);
   }
   packageClass->setInstanceMeta(packageMeta);

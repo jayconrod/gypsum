@@ -31,18 +31,21 @@ class Function: public Block {
   void* operator new(size_t, Heap* heap, length_t instructionsSize);
   Function(String* name,
            u32 flags,
-           TaggedArray<TypeParameter>* typeParameters,
-           BlockArray<Type>* types,
+           BlockArray<TypeParameter>* typeParameters,
+           Type* returnType,
+           BlockArray<Type>* parameterTypes,
            word_t localsSize,
            const std::vector<u8>& instructions,
            LengthArray* blockOffsets,
            Package* package,
            StackPointerMap* stackPointerMap);
+  static Local<Function> create(Heap* heap);
   static Local<Function> create(Heap* heap,
                                 const Handle<String>& name,
                                 u32 flags,
-                                const Handle<TaggedArray<TypeParameter>>& typeParameters,
-                                const Handle<BlockArray<Type>>& types,
+                                const Handle<BlockArray<TypeParameter>>& typeParameters,
+                                const Handle<Type>& returnType,
+                                const Handle<BlockArray<Type>>& parameterTypes,
                                 word_t localsSize,
                                 const std::vector<u8>& instructions,
                                 const Handle<LengthArray>& blockOffsets,
@@ -51,7 +54,9 @@ class Function: public Block {
   static word_t sizeForFunction(length_t instructionsSize);
 
   String* name() const { return name_.get(); }
+  void setName(String* newName) { name_.set(this, newName); }
   u32 flags() const { return flags_; }
+  void setFlags(u32 newFlags) { flags_ = newFlags; }
 
   BuiltinId builtinId() const {
     ASSERT(hasBuiltinId());
@@ -60,18 +65,24 @@ class Function: public Block {
   void setBuiltinId(BuiltinId id) { builtinId_ = id; }
   bool hasBuiltinId() const { return builtinId_ != 0; }
 
-  TaggedArray<TypeParameter>* typeParameters() const { return typeParameters_.get(); }
-  TypeParameter* typeParameter(length_t index) const;
-  length_t typeParameterCount() const { return typeParameters()->length(); }
+  BlockArray<TypeParameter>* typeParameters() const { return typeParameters_.get(); }
+  void setTypeParameters(BlockArray<TypeParameter>* newTypeParameters) {
+    typeParameters_.set(this, newTypeParameters);
+  }
+  TypeParameter* typeParameter(length_t index) const { return typeParameters()->get(index); }
 
-  BlockArray<Type>* types() const { return types_.get(); }
-  Type* returnType() const { return types()->get(0); }
-  length_t parameterCount() const { return types()->length() - 1; }
+  Type* returnType() const { return returnType_.get(); }
+  void setReturnType(Type* newReturnType) { returnType_.set(this, newReturnType); }
+
+  BlockArray<Type>* parameterTypes() const { return parameterTypes_.get(); }
+  void setParameterTypes(BlockArray<Type>* newParameterTypes) {
+    parameterTypes_.set(this, newParameterTypes);
+  }
   word_t parametersSize() const;
   ptrdiff_t parameterOffset(length_t index) const;
-  Type* parameterType(length_t index) const { return types()->get(index + 1); }
 
   word_t localsSize() const { return localsSize_; }
+  void setLocalsSize(word_t newLocalsSize) { localsSize_ = newLocalsSize; }
 
   length_t instructionsSize() const { return instructionsSize_; }
   u8* instructionsStart() const;
@@ -80,6 +91,7 @@ class Function: public Block {
   length_t blockOffset(length_t index) const { return blockOffsets()->get(index); }
 
   Package* package() const { return package_.get(); }
+  void setPackage(Package* newPackage) { package_.set(this, newPackage); }
 
   StackPointerMap* stackPointerMap() const { return stackPointerMap_.get(); }
   void setStackPointerMap(StackPointerMap* newStackPointerMap) {
@@ -92,8 +104,9 @@ class Function: public Block {
   Ptr<String> name_;
   u32 flags_;
   BuiltinId builtinId_;
-  Ptr<TaggedArray<TypeParameter>> typeParameters_;
-  Ptr<BlockArray<Type>> types_;
+  Ptr<BlockArray<TypeParameter>> typeParameters_;
+  Ptr<Type> returnType_;
+  Ptr<BlockArray<Type>> parameterTypes_;
   word_t localsSize_;
   length_t instructionsSize_;
   Ptr<LengthArray> blockOffsets_;

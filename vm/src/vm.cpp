@@ -246,7 +246,7 @@ void VM::loadPackageDependenciesAndInitialize(const Handle<Package>& package) {
     Package::link(heap(), package);
     if (package->initFunctionIndex() != kIndexNotSet) {
       Persistent<Function> init(package->initFunction());
-      if (init->parameterCount() > 0) {
+      if (init->parameterTypes()->length() > 0) {
         throw Error("init function has arguments");
       }
       interpreter.call(init);

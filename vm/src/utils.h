@@ -50,6 +50,13 @@ const length_t kPcNotSet = ~0u;
 typedef i32 id_t;
 const id_t kIdNotSet = -1;
 
+const id_t kLocalPackageId = -1;
+const id_t kBuiltinPackageId = -2;
+struct DefnId {
+  id_t packageId;
+  length_t defnIndex;
+};
+
 const int KB = 1024;
 const int MB = 1024 * KB;
 const int GB = 1024 * MB;

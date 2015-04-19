@@ -62,8 +62,8 @@ def initClass(out, classData):
     out.write("\n  { // %s\n" % classData["id"])
     out.write("    auto clas = getBuiltinClass(%s);\n" % classData["id"])
     out.write("    auto name = getBuiltinName(%s);\n" % classData["id"])
-    out.write("    auto typeParameters = reinterpret_cast<TaggedArray<TypeParameter>*>(" +
-              "emptyTaggedArray());\n")
+    out.write("    auto typeParameters = reinterpret_cast<BlockArray<TypeParameter>*>(" +
+              "emptyBlockArray());\n")
     if classData["supertype"] is None:
         out.write("    Type* supertype = nullptr;\n")
     else:
@@ -90,20 +90,23 @@ def initClass(out, classData):
                                 if field["name"] == "length")
         out.write("    auto lengthFieldIndex = %d;\n" % lengthFieldIndex)
     if len(classData["constructors"]) == 0:
-        out.write("    auto constructors = emptyi32Array();\n")
+        out.write("    auto constructors = reinterpret_cast<BlockArray<Function>*>(" +
+                  "emptyBlockArray());\n")
     else:
-        out.write("    auto constructors = new(heap, %d) IdArray;\n" %
+        out.write("    auto constructors = new(heap, %d) BlockArray<Function>;\n" %
                   len(classData["constructors"]))
         for i, ctorData in enumerate(classData["constructors"]):
-            out.write("    constructors->set(%d, %s);\n" %
+            out.write("    constructors->set(%d, getBuiltinFunction(%s));\n" %
                       (i, ctorData["id"]))
     allMethodIds = [method["id"] for method in findInheritedMethods(classData)]
     if len(allMethodIds) == 0:
-        out.write("    auto methods = emptyi32Array();\n")
+        out.write("    auto methods = reinterpret_cast<BlockArray<Function>*>(" +
+                  "emptyBlockArray());\n")
     else:
-        out.write("    auto methods = new(heap, %d) IdArray;\n" % len(allMethodIds))
+        out.write("    auto methods = new(heap, %d) BlockArray<Function>;\n" %
+                  len(allMethodIds))
         for i, id in enumerate(allMethodIds):
-            out.write("    methods->set(%d, %s);\n" % (i, id))
+            out.write("    methods->set(%d, getBuiltinFunction(%s));\n" % (i, id))
     out.write("    ::new(clas) Class(name, 0, typeParameters, supertype, fields, " +
               "constructors, methods, nullptr, nullptr, elementType, lengthFieldIndex);\n")
     if classData.get("isOpaque"):
@@ -122,12 +125,13 @@ def initFunction(out, functionData):
     else:
         out.write("    auto name = String::rawFromUtf8CString(heap, \"%s\");\n" %
                   functionData["name"])
-    typeNames = [functionData["returnType"]] + functionData["parameterTypes"]
-    out.write("    auto types = new(heap, %d) BlockArray<Type>;\n" % len(typeNames))
-    for i, name in enumerate(typeNames):
-        out.write("    types->set(%d, %s);\n" % (i, getTypeFromName(name)))
-    out.write("    ::new(function) Function(name, 0, emptyTypeParameters, types, 0, " +
-              "emptyInstructions, nullptr, nullptr, nullptr);\n")
+    out.write("    auto returnType = %s;\n" % getTypeFromName(functionData["returnType"]))
+    out.write("    auto parameterTypes = new(heap, %d) BlockArray<Type>;\n" %
+              len(functionData["parameterTypes"]))
+    for i, name in enumerate(functionData["parameterTypes"]):
+        out.write("    parameterTypes->set(%d, %s);\n" % (i, getTypeFromName(name)))
+    out.write("    ::new(function) Function(name, 0, emptyTypeParameters, " +
+              "returnType, parameterTypes, 0, emptyInstructions, nullptr, nullptr, nullptr);\n")
     out.write("    function->setBuiltinId(%s);\n" % functionData["id"])
     out.write("  }")
 
@@ -237,7 +241,7 @@ void Roots::initializeBuiltins(Heap* heap) {
   // Initialize functions
   //
   vector<u8> emptyInstructions;
-  auto emptyTypeParameters = reinterpret_cast<TaggedArray<TypeParameter>*>(emptyTaggedArray());
+  auto emptyTypeParameters = reinterpret_cast<BlockArray<TypeParameter>*>(emptyBlockArray());
 """)
     for classData in classesData:
         if not classData["isPrimitive"]:

@@ -9,6 +9,7 @@
 #include "array.h"
 #include "block.h"
 #include "field.h"
+#include "flags.h"
 #include "function.h"
 #include "handle.h"
 #include "package.h"
@@ -43,11 +44,11 @@ void* Class::operator new (size_t, Heap* heap) {
 
 Class::Class(String* name,
              u32 flags,
-             TaggedArray<TypeParameter>* typeParameters,
+             BlockArray<TypeParameter>* typeParameters,
              Type* supertype,
              BlockArray<Field>* fields,
-             IdArray* constructors,
-             IdArray* methods,
+             BlockArray<Function>* constructors,
+             BlockArray<Function>* methods,
              Package* package,
              Meta* instanceMeta,
              Type* elementType,
@@ -71,11 +72,11 @@ Class::Class(String* name,
 Local<Class> Class::create(Heap* heap,
                            const Handle<String>& name,
                            u32 flags,
-                           const Handle<TaggedArray<TypeParameter>>& typeParameters,
+                           const Handle<BlockArray<TypeParameter>>& typeParameters,
                            const Handle<Type>& supertype,
                            const Handle<BlockArray<Field>>& fields,
-                           const Handle<IdArray>& constructors,
-                           const Handle<IdArray>& methods,
+                           const Handle<BlockArray<Function>>& constructors,
+                           const Handle<BlockArray<Function>>& methods,
                            const Handle<Package>& package,
                            const Handle<Meta>& instanceMeta,
                            const Handle<Type>& elementType,
@@ -95,12 +96,7 @@ Local<Class> Class::create(Heap* heap) {
 
 
 TypeParameter* Class::typeParameter(length_t index) const {
-  auto paramTag = typeParameters()->get(index);
-  if (paramTag.isNumber()) {
-    return package()->getTypeParameter(paramTag.getNumber());
-  } else {
-    return paramTag.getPointer();
-  }
+  return typeParameters()->get(index);
 }
 
 
@@ -151,23 +147,6 @@ Class* Class::findFieldClass(length_t index) {
 }
 
 
-Function* Class::getConstructor(length_t index) const {
-  auto id = constructors()->get(index);
-  auto ctor = package()->getFunction(id);
-  return ctor;
-}
-
-
-Function* Class::getMethod(length_t index) const {
-  intptr_t id = methods()->get(index);
-  if (isBuiltinId(id)) {
-    return getVM()->roots()->getBuiltinFunction(static_cast<BuiltinId>(id));
-  } else {
-    return package()->getFunction(id);
-  }
-}
-
-
 Meta* Class::buildInstanceMeta() {
   u32 objectSize = kWordSize, elementSize = 0;
   u8 lengthOffset = 0;
@@ -187,7 +166,7 @@ Meta* Class::buildInstanceMeta() {
   meta->hasElementPointers_ = hasElementPointers;
   meta->lengthOffset_ = lengthOffset;
   for (length_t i = 0; i < methodCount; i++) {
-    auto method = getMethod(i);
+    auto method = methods()->get(i);
     meta->setData(i, method);
   }
   meta->objectPointerMap().copyFrom(objectPointerMap.bitmap());

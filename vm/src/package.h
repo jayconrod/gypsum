@@ -56,25 +56,26 @@ class Package: public Object {
   }
   BlockArray<String>* strings() const { return strings_.get(); }
   void setStrings(BlockArray<String>* newStrings) { strings_.set(this, newStrings); }
-  String* getString(length_t index);
+  String* getString(length_t index) const;
   BlockArray<Global>* globals() const { return globals_.get(); }
   void setGlobals(BlockArray<Global>* newGlobals) { globals_.set(this, newGlobals); }
-  Global* getGlobal(length_t index);
+  Global* getGlobal(length_t index) const;
   BlockArray<Function>* functions() const { return functions_.get(); }
   void setFunctions(BlockArray<Function>* newFunctions) { functions_.set(this, newFunctions); }
-  Function* getFunction(length_t index);
+  Function* getFunction(length_t index) const;
+  Function* getFunction(DefnId id) const;
   BlockArray<Class>* classes() const { return classes_.get(); }
   void setClasses(BlockArray<Class>* newClasses) { classes_.set(this, newClasses); }
-  Class* getClass(length_t index);
+  Class* getClass(length_t index) const;
   BlockArray<TypeParameter>* typeParameters() const { return typeParameters_.get(); }
   void setTypeParameters(BlockArray<TypeParameter>* newTypeParameters) {
     typeParameters_.set(this, newTypeParameters);
   }
-  TypeParameter* getTypeParameter(length_t index);
+  TypeParameter* getTypeParameter(length_t index) const;
   DEFINE_INL_ACCESSORS2(length_t, entryFunctionIndex, setEntryFunctionIndex)
-  Function* entryFunction();
+  Function* entryFunction() const;
   DEFINE_INL_ACCESSORS2(length_t, initFunctionIndex, setInitFunctionIndex)
-  Function* initFunction();
+  Function* initFunction() const;
 
   ExportMap* exports() const { return exports_.get(); }
   void setExports(ExportMap* exports) { exports_.set(this, exports); }
@@ -180,6 +181,7 @@ class PackageDependency: public Block {
                     BlockArray<Function>* linkedFunctions,
                     BlockArray<Class>* externClasses,
                     BlockArray<Class>* linkedClasses,
+                    BlockArray<Function>* externMethods,
                     BlockArray<TypeParameter>* externTypeParameters);
   static Local<PackageDependency> create(
       Heap* heap,
@@ -192,6 +194,7 @@ class PackageDependency: public Block {
       const Handle<BlockArray<Function>>& linkedFunctions,
       const Handle<BlockArray<Class>>& externClasses,
       const Handle<BlockArray<Class>>& linkedClasses,
+      const Handle<BlockArray<Function>>& externMethods,
       const Handle<BlockArray<TypeParameter>>& externTypeParameters);
   static Local<PackageDependency> create(Heap* heap,
                                          const Handle<PackageName>& name,
@@ -200,6 +203,7 @@ class PackageDependency: public Block {
                                          length_t globalCount,
                                          length_t functionCount,
                                          length_t classCount,
+                                         length_t methodCount,
                                          length_t typeParameterCount);
 
   static bool parseNameAndVersion(Heap* heap,
@@ -222,6 +226,7 @@ class PackageDependency: public Block {
   BlockArray<Class>* externClasses() const { return externClasses_.get(); }
   BlockArray<Class>* linkedClasses() const { return linkedClasses_.get(); }
   void setLinkedClasses(BlockArray<Class>* linkedClasses);
+  BlockArray<Function>* externMethods() const { return externMethods_.get(); }
   BlockArray<TypeParameter>* externTypeParameters() const {
     return externTypeParameters_.get();
   }
@@ -247,6 +252,7 @@ class PackageDependency: public Block {
   Ptr<BlockArray<Function>> linkedFunctions_;
   Ptr<BlockArray<Class>> externClasses_;
   Ptr<BlockArray<Class>> linkedClasses_;
+  Ptr<BlockArray<Function>> externMethods_;
   Ptr<BlockArray<TypeParameter>> externTypeParameters_;
   // Update PACKAGE_DEPENDENCY_POINTER_LIST if pointers change.
 };
