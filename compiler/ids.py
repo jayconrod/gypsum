@@ -64,6 +64,8 @@ class PackageId(Id):
             return "#%s" % str(self.index)
 
 TARGET_PACKAGE_ID = PackageId()
+BUILTIN_PACKAGE_INDEX = -2
+LOCAL_PACKAGE_INDEX = -1
 
 
 class DefnId(Id):
@@ -98,3 +100,21 @@ class DefnId(Id):
 
     def isBuiltin(self):
         return self.packageId is None
+
+    def isLocal(self):
+        return self.packageId is TARGET_PACKAGE_ID
+
+    def isForeign(self):
+        return not self.isBuiltin() and not self.isLocal()
+
+    def getPackageIndex(self):
+        if self.packageId is None:
+            return BUILTIN_PACKAGE_INDEX
+        elif self.packageId is TARGET_PACKAGE_ID:
+            return LOCAL_PACKAGE_INDEX
+        else:
+            assert self.packageId.index is not None
+            return self.packageId.index
+
+    def getDefnIndex(self):
+        return self.externIndex if self.isForeign() else self.index

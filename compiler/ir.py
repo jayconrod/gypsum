@@ -95,10 +95,11 @@ class Package(object):
     def ensureDependency(self, package):
         if package.id.index is not None:
             assert self.dependencies[package.id.index].package is package
-            return
+            return self.dependencies[package.id.index]
         dep = PackageDependency.fromPackage(package)
         package.id.index = len(self.dependencies)
         self.dependencies.append(dep)
+        return self.dependencies[-1]
 
     def ensureExports(self):
         if self.exports is not None:

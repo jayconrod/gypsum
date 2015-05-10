@@ -42,6 +42,7 @@ class TestExternalization(unittest.TestCase):
         self.param = self.otherPackage.addTypeParameter("T", None, self.rootClassType,
                                                         self.nothingClassType,
                                                         frozenset([flags.STATIC]))
+        self.dep = self.package.ensureDependency(self.otherPackage)
         self.externParam = self.externalizer.externalizeDefn(self.param)
         self.varTy = ir_types.VariableType(self.param)
 
@@ -114,7 +115,11 @@ class TestExternalization(unittest.TestCase):
         expectedMethod = ir.Function("f", None, method.id, ir_types.UnitType, [self.externParam],
                                      [clasTy], None, None,
                                      frozenset([flags.PUBLIC, flags.METHOD, flags.EXTERN]))
-        expected.methods = [expectedMethod, builtinMethod]
+        externBuiltinMethod = ir.Function("to-string", None, builtinMethod.id,
+                                          ir_types.getStringType(), [],
+                                          [ir_types.getRootClassType()],
+                                          None, None, frozenset([flags.EXTERN, flags.METHOD]))
+        expected.methods = [expectedMethod, externBuiltinMethod]
         self.assertEquals(expected, externClass)
 
     def testExternalizeTypeParameter(self):
