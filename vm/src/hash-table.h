@@ -120,6 +120,22 @@ class HashTable: public Block {
 };
 
 
+template <class E>
+std::ostream& operator << (std::ostream& os, const HashTable<E>* table) {
+  os << brief(table)
+     << "\n  capacity: " << table->capacity()
+     << "\n  liveCount: " << table->liveCount()
+     << "\n  deadCount: " << table->deadCount();
+  auto elements = table->elements();
+  for (length_t i = 0; i < table->capacity(); i++) {
+    if (elements[i].isLive()) {
+      os << "\n  element #" << i << ":" << elements[i];
+    }
+  }
+  return os;
+}
+
+
 template <class Table>
 class HashMap: public Block {
  public:
@@ -132,6 +148,9 @@ class HashMap: public Block {
 
   length_t length() const { return table() ? table()->liveCount() : 0; }
   bool isEmpty() const { return length() == 0; }
+
+  Table* table() { return table_.get(); }
+  const Table* table() const { return table_.get(); }
 
   static void add(Heap* heap, Local<HashMap<Table>> map,
                   const typename Table::Element::SafeKey& key,
@@ -176,8 +195,6 @@ class HashMap: public Block {
  private:
   friend class Roots;
 
-  Table* table() const { return table_.get(); }
-
   length_t capacity() const {
     return table() ? table()->capacity() : 0;
   }
@@ -209,6 +226,14 @@ class HashMap: public Block {
   Ptr<Table> table_;
   // Update kPointerMap if any pointers change.
 };
+
+
+template <class Table>
+std::ostream& operator << (std::ostream& os, const HashMap<Table>* map) {
+  os << brief(map)
+     << "\n  table: " << brief(map->table());
+  return os;
+}
 
 
 template <class K, class V>
@@ -268,6 +293,14 @@ struct BlockHashMapElement {
 
   BlockHashMapElement& operator = (const BlockHashMapElement& other) = delete;
 };
+
+
+template <class K, class V>
+std::ostream& operator << (std::ostream& os, const BlockHashMapElement<K, V>& elem) {
+  os << "\n    key: " << elem.key
+     << "\n    value: " << elem.value;
+  return os;
+}
 
 
 template <class K, class V>

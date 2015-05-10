@@ -205,6 +205,9 @@ Meta* Roots::getMetaForBlockType(int type) {
     case META_BLOCK_TYPE: return metaMeta();
     case FREE_BLOCK_TYPE: return freeMeta();
     case PACKAGE_BLOCK_TYPE: return packageMeta();
+    case PACKAGE_NAME_BLOCK_TYPE: return packageNameMeta();
+    case PACKAGE_VERSION_BLOCK_TYPE: return packageVersionMeta();
+    case PACKAGE_DEPENDENCY_BLOCK_TYPE: return packageDependencyMeta();
     case STACK_BLOCK_TYPE: return stackMeta();
     case GLOBAL_BLOCK_TYPE: return globalMeta();
     case FUNCTION_BLOCK_TYPE: return functionMeta();

@@ -13,6 +13,10 @@
 #include "roots.h"
 #include "stack.h"
 
+#ifdef DEBUG
+#include "hash-table.h"  // needed for dump
+#endif
+
 using namespace std;
 
 namespace codeswitch {
@@ -109,6 +113,8 @@ void dump(const Block* block) {
     case I64_ARRAY_BLOCK_TYPE: cerr << reinterpret_cast<const I64Array*>(block); break;
     case BLOCK_ARRAY_BLOCK_TYPE: cerr << reinterpret_cast<const BlockArray<Block>*>(block); break;
     case TAGGED_ARRAY_BLOCK_TYPE: cerr << reinterpret_cast<const TaggedArray<Block>*>(block); break;
+    case BLOCK_HASH_MAP_TABLE_BLOCK_TYPE: cerr << reinterpret_cast<const BlockHashMapTable<Block*, Block*>*>(block); break;
+    case BLOCK_HASH_MAP_BLOCK_TYPE: cerr << reinterpret_cast<const BlockHashMap<Block*, Block*>*>(block); break;
     case OBJECT_BLOCK_TYPE: cerr << reinterpret_cast<const Object*>(block); break;
     case TYPE_BLOCK_TYPE: cerr << reinterpret_cast<const Type*>(block); break;
     case STRING_BLOCK_TYPE: cerr << reinterpret_cast<const String*>(block); break;
@@ -204,13 +210,6 @@ VM* Block::getVM() const {
 Heap* Block::getHeap() const {
   return getVM()->heap();
 }
-
-
-#ifdef DEBUG
-void Block::dump() const {
-  cerr << brief(this) << endl;
-}
-#endif
 
 
 #define META_POINTER_LIST(F) \

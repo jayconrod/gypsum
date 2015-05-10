@@ -275,14 +275,22 @@ void Package::ensureExports(Heap* heap, const Handle<Package>& package) {
   auto functions = handle(package->functions());
   for (length_t i = 0; i < functions->length(); i++) {
     auto function = handle(functions->get(i));
-    if ((function->flags() & (PUBLIC_FLAG | METHOD_FLAG)) == PUBLIC_FLAG) {
+    if ((function->flags() & PUBLIC_FLAG) != 0) {
       auto name = handle(function->name());
       ASSERT(!exports->contains(*name));
       ExportMap::add(heap, exports, name, function);
     }
   }
 
-  // TODO: support other kinds of definitions.
+  auto classes = handle(package->classes());
+  for (length_t i = 0; i < classes->length(); i++) {
+    auto clas = handle(classes->get(i));
+    if ((clas->flags() & PUBLIC_FLAG) != 0) {
+      auto name = handle(clas->name());
+      ASSERT(!exports->contains(*name));
+      ExportMap::add(heap, exports, name, clas);
+    }
+  }
 
   package->setExports(*exports);
 }
@@ -351,6 +359,7 @@ void Package::link(Heap* heap, const Handle<Package>& package) {
         linkedClasses->set(j, block_cast<Class>(linkedClass));
       }
     }
+    dependency->setLinkedClasses(*linkedClasses);
   }
 
   auto externTypes = handle(package->externTypes());

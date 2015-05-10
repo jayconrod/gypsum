@@ -150,10 +150,6 @@ BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
     metaWord_ = MetaWord(static_cast<BlockType>(mw >> MetaWord::kGcBitCount));
   }
 
-  #ifdef DEBUG
-  void dump() const;
-  #endif
-
  protected:
   void setElementsLength(word_t length);
 
