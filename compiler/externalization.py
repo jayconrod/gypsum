@@ -110,6 +110,7 @@ class Externalizer(object):
             self.externalizeDefn(ty.typeParameter)
 
     def externalizeMethod(self, method, dep):
+        self.package.findOrAddString(method.name)
         id = ids.DefnId(ids.TARGET_PACKAGE_ID, ids.DefnId.FUNCTION, len(dep.externMethods))
         externFlags = method.flags | frozenset([flags.EXTERN])
         externMethod = ir.Function(method.name, method.astDefn, id,

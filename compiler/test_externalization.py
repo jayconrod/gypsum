@@ -122,6 +122,11 @@ class TestExternalization(unittest.TestCase):
         expected.methods = [expectedMethod, externBuiltinMethod]
         self.assertEquals(expected, externClass)
 
+    def testExternalizeBuiltinMethodName(self):
+        method = builtins.getBuiltinFunctionById(bytecode.BUILTIN_ROOT_CLASS_EQ_OP_ID)
+        externMethod = self.externalizer.externalizeMethod(method, self.dep)
+        self.assertIn(method.name, self.package.strings)
+
     def testExternalizeTypeParameter(self):
         param = self.otherPackage.addTypeParameter("S", None, self.classTy, self.classTy,
                                                    frozenset([flags.STATIC]))
