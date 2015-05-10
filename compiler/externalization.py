@@ -46,10 +46,7 @@ class Externalizer(object):
         if isinstance(defn, ir.Global):
             externDefns = dep.externGlobals
         elif isinstance(defn, ir.Function):
-            if flags.METHOD in defn.flags:
-                externDefns = dep.externMethods
-            else:
-                externDefns = dep.externFunctions
+            externDefns = dep.externFunctions
         elif isinstance(defn, ir.Class):
             externDefns = dep.externClasses
         elif isinstance(defn, ir.TypeParameter):

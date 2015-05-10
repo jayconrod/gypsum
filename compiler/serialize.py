@@ -571,7 +571,7 @@ class Deserializer(object):
         elif packageIndex == ids.LOCAL_PACKAGE_INDEX:
             method = self.package.functions[methodIndex]
         else:
-            method = self.package.dependencies[packageIndex].externMethods[methodIndex]
+            method = self.package.dependencies[packageIndex].externFunctions[methodIndex]
         return method
 
     def readId(self, collection):

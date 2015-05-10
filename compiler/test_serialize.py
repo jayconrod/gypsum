@@ -32,7 +32,7 @@ class MockFile(object):
         self.bytes.extend(s)
 
 
-class TestSerialization(unittest.TestCase):
+class TestSerialize(unittest.TestCase):
     def setUp(self):
         self.file = MockFile()
         self.ser = serialize.Serializer(None, self.file)
