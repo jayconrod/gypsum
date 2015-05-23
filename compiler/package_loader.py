@@ -54,14 +54,14 @@ class PackageLoader(BasePackageLoader):
         self.packageInfoByName = {}
         self.packageInfoById = {}
         packageFileNameRex = re.compile(r"\A(%s)-(%s).csp\Z" %
-                                        (ir.PackageName.nameSrc, ir.PackageVersion.versionSrc))
+                                        (ir.Name.packageSrc, ir.PackageVersion.versionSrc))
         for dirName in self.paths:
             try:
                 for baseName in os.listdir(dirName):
                     m = packageFileNameRex.match(baseName)
                     if m is None:
                         continue
-                    name = ir.PackageName.fromString(m.group(1))
+                    name = ir.Name.fromString(m.group(1), isPackageName=True)
                     version = ir.PackageVersion.fromString(m.group(2))
                     fileName = os.path.join(dirName, baseName)
                     if name not in self.packageInfoByName or \

@@ -278,7 +278,7 @@ def flattenClasses(info):
 def isHeritable(irDefn):
     """Returns true if the given irDefn can be inherited from a base class by a
     deriving class."""
-    if isinstance(irDefn, ir.Function) and irDefn.name == "$constructor":
+    if isinstance(irDefn, ir.Function) and irDefn.isConstructor():
         # Constructors are not heritable. At this time when this function is called, the
         # function may not have been made into a method yet, so Function.isConstructor would
         # return false. So we check the name instead, which is a hack.
@@ -333,7 +333,7 @@ class NameInfo(object):
         assert self.isClass()
         irClass = self.getDefnInfo().irDefn
         classScope = info.getScope(irClass)
-        ctorNameInfo = classScope.getDefinition("$constructor")
+        ctorNameInfo = classScope.getDefinition(ir.CONSTRUCTOR_SUFFIX)
         assert ctorNameInfo is not None
         return ctorNameInfo
 
@@ -454,7 +454,8 @@ class NameInfo(object):
 
 
 class Scope(ast.AstNodeVisitor):
-    def __init__(self, ast, scopeId, parent, info):
+    def __init__(self, prefix, ast, scopeId, parent, info):
+        self.prefix = prefix
         self.scopeId = scopeId
         self.ast = ast
         self.parent = parent
@@ -487,6 +488,9 @@ class Scope(ast.AstNodeVisitor):
     def getIrDefn(self):
         return self.getDefnInfo().irDefn
 
+    def makeName(self, short):
+        return ir.Name(self.prefix + [short])
+
     def declare(self, astDefn, astVarDefn=None):
         """Creates an IR definition to the package, adds it to the package, and
         adds DefinitionInfo."""
@@ -503,7 +507,7 @@ class Scope(ast.AstNodeVisitor):
         self.info.setDefnInfo(astDefn, defnInfo)
 
         # If the definition has a user-specified name, bind it in this scope.
-        name = irDefn.name
+        name = irDefn.name.short()
         if self.isBound(name) and not self.bindings[name].isOverloadable(defnInfo):
             raise ScopeException(astDefn.location, "%s: already declared" % name)
         self.bind(name, defnInfo)
@@ -525,6 +529,8 @@ class Scope(ast.AstNodeVisitor):
         For non-function defintions, this requires the name is not already bound. For function
         definitions, multiple functions may share the same name. They are added to
         OverloadInfo."""
+        assert isinstance(name, str)
+        assert isinstance(defnInfo, DefnInfo)
         if name not in self.bindings:
             self.bindings[name] = NameInfo(name)
         self.bindings[name].addOverload(defnInfo)
@@ -557,10 +563,12 @@ class Scope(ast.AstNodeVisitor):
         implicitTypeParams = self.getImplicitTypeParameters()
         flags = getFlagsFromAstDefn(astDefn, None)
         checkFlags(flags, frozenset([ABSTRACT, PUBLIC, PROTECTED]), astDefn.location)
-        irDefn = self.info.package.addClass(astDefn.name, astDefn, implicitTypeParams,
+        name = self.makeName(astDefn.name)
+        irDefn = self.info.package.addClass(name, astDefn, implicitTypeParams,
                                             None, None, [], [], [], flags)
 
-        irInitializer = self.info.package.addFunction("$initializer", astDefn,
+        irInitializerName = name.withSuffix(ir.CLASS_INIT_SUFFIX)
+        irInitializer = self.info.package.addFunction(irInitializerName, astDefn,
                                                       None, list(implicitTypeParams),
                                                       None, [], None, frozenset([METHOD]))
         self.makeMethod(irInitializer, irDefn)
@@ -568,7 +576,8 @@ class Scope(ast.AstNodeVisitor):
 
         if not astDefn.hasConstructors():
             ctorFlags = (flags & frozenset([PUBLIC, PROTECTED])) | frozenset([METHOD])
-            irDefaultCtor = self.info.package.addFunction("$constructor", astDefn,
+            irDefaultCtorName = name.withSuffix(ir.CONSTRUCTOR_SUFFIX)
+            irDefaultCtor = self.info.package.addFunction(irDefaultCtorName, astDefn,
                                                           None, list(implicitTypeParams),
                                                           None, [], None, ctorFlags)
             self.makeMethod(irDefaultCtor, irDefn)
@@ -585,7 +594,8 @@ class Scope(ast.AstNodeVisitor):
         modifies the function itself.
         """
         function.flags |= frozenset([METHOD])
-        this = ir.Variable("$this", function.astDefn, None, ir.PARAMETER, frozenset([LET]))
+        thisName = function.name.withSuffix(ir.RECEIVER_SUFFIX)
+        this = ir.Variable(thisName, function.astDefn, None, ir.PARAMETER, frozenset([LET]))
         function.variables.insert(0, this)
 
     def isDefinedAutomatically(self, astDefn):
@@ -628,6 +638,7 @@ class Scope(ast.AstNodeVisitor):
         return name in self.defined
 
     def define(self, name):
+        assert isinstance(name, str)
         self.defined.add(name)
 
     def use(self, defnInfo, useAstId, useKind, loc):
@@ -760,47 +771,51 @@ class Scope(ast.AstNodeVisitor):
             irClosureClass = closureInfo.irClosureClass
             irContextClass = self.info.getContextInfo(scopeId).irContextClass
             irContextType = ClassType(irContextClass)
-            irContextField = self.info.package.newField("$context", None,
+            contextFieldName = irClosureClass.name.withSuffix(ir.CONTEXT_SUFFIX)
+            irContextField = self.info.package.newField(contextFieldName, None,
                                                         irContextType, frozenset())
             irClosureClass.fields.append(irContextField)
             irClosureClass.constructors[0].parameterTypes.append(irContextType)
             closureInfo.irClosureContexts[scopeId] = irContextField
 
     def localScope(self, ast):
-        return self.getOrCreateScope(ast, self.newLocalScope)
+        return self.getOrCreateScope(None, ast, self.newLocalScope)
 
-    def newLocalScope(self, ast):
+    def newLocalScope(self, prefix, ast):
         """Creates a new scope for block expressions which may introduce definitions
 
         Must be implemented by subclasses.
         """
         raise NotImplementedError
 
-    def scopeForFunction(self, ast):
-        return self.getOrCreateScope(ast, self.newScopeForFunction)
+    def scopeForFunction(self, shortName, ast):
+        return self.getOrCreateScope(shortName, ast, self.newScopeForFunction)
 
-    def newScopeForFunction(self, ast):
+    def newScopeForFunction(self, prefix, ast):
         """Creates a new scope for function definitions.
 
         Must be implemented by subclasses.
         """
         raise NotImplementedError
 
-    def scopeForClass(self, ast):
-        return self.getOrCreateScope(ast, self.newScopeForClass)
+    def scopeForClass(self, shortName, ast):
+        return self.getOrCreateScope(shortName, ast, self.newScopeForClass)
 
-    def newScopeForClass(self, ast):
+    def newScopeForClass(self, prefix, ast):
         """Creates a new scope for class definition.
 
         Must be implemented by subclasses.
         """
         raise NotImplementedError
 
-    def getOrCreateScope(self, ast, create):
+    def getOrCreateScope(self, shortName, ast, create):
         if ast.id in self.childScopes:
             return self.childScopes[ast.id]
         else:
-            scope = create(ast)
+            prefix = list(self.prefix)
+            if shortName is not None:
+                prefix.append(shortName)
+            scope = create(prefix, ast)
             self.childScopes[ast.id] = scope
             return scope
 
@@ -814,19 +829,20 @@ class Scope(ast.AstNodeVisitor):
 
 class GlobalScope(Scope):
     def __init__(self, astModule, parent):
-        super(GlobalScope, self).__init__(astModule, GLOBAL_SCOPE_ID, parent, parent.info)
+        super(GlobalScope, self).__init__([], astModule, GLOBAL_SCOPE_ID, parent, parent.info)
 
     def createIrDefn(self, astDefn, astVarDefn):
+        name = self.makeName(astDefn.name)
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         if isinstance(astDefn, ast.AstVariablePattern):
             checkFlags(flags, frozenset([LET, PUBLIC, PROTECTED]), astDefn.location)
-            irDefn = self.info.package.addGlobal(astDefn.name, astDefn, None, flags)
+            irDefn = self.info.package.addGlobal(name, astDefn, None, flags)
         elif isinstance(astDefn, ast.AstFunctionDefinition):
             checkFlags(flags, frozenset([PUBLIC]), astDefn.location)
             if astDefn.body is None:
                 raise ScopeException(astDefn.location,
                                      "%s: global function must have body" % astDefn.name)
-            irDefn = self.info.package.addFunction(astDefn.name, astDefn,
+            irDefn = self.info.package.addFunction(name, astDefn,
                                                    None, self.getImplicitTypeParameters(),
                                                    None, [], None, flags)
             if astDefn.name == "main":
@@ -856,19 +872,19 @@ class GlobalScope(Scope):
     def makeClosure(self):
         raise NotImplementedError("global scopes can't capture anything")
 
-    def newLocalScope(self, ast):
+    def newLocalScope(self, prefix, ast):
         raise NotImplementedError("global scopes can't have local contexts")
 
-    def newScopeForFunction(self, ast):
-        return FunctionScope(ast, self)
+    def newScopeForFunction(self, prefix, ast):
+        return FunctionScope(prefix, ast, self)
 
-    def newScopeForClass(self, ast):
-        return ClassScope(ast, self)
+    def newScopeForClass(self, prefix, ast):
+        return ClassScope(prefix, ast, self)
 
 
 class FunctionScope(Scope):
-    def __init__(self, ast, parent):
-        super(FunctionScope, self).__init__(ast, ScopeId(ast.id), parent, parent.info)
+    def __init__(self, prefix, ast, parent):
+        super(FunctionScope, self).__init__(prefix, ast, ScopeId(ast.id), parent, parent.info)
         self.info.setScope(self.getIrDefn().id, self)
 
     def configureAsMethod(self, astClassScopeId, irClassDefn):
@@ -894,10 +910,11 @@ class FunctionScope(Scope):
 
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         if isinstance(astDefn, ast.AstTypeParameter):
+            name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([STATIC]), astDefn.location)
             if STATIC not in flags:
                 raise NotImplementedError
-            irDefn = self.info.package.addTypeParameter(astDefn.name, astDefn,
+            irDefn = self.info.package.addTypeParameter(name, astDefn,
                                                         None, None, flags)
             irScopeDefn.typeParameters.append(irDefn)
         elif isinstance(astDefn, ast.AstParameter):
@@ -907,20 +924,23 @@ class FunctionScope(Scope):
                 # need to create a separate definition here.
                 irDefn = None
             else:
-                irDefn = ir.Variable("$parameter", None, ir.PARAMETER, flags)
+                name = self.makeName(ir.ANON_PARAMETER_SUFFIX)
+                irDefn = ir.Variable(name, None, ir.PARAMETER, flags)
                 irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, ast.AstVariablePattern):
+            name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([LET]), astDefn.location)
             kind = ir.PARAMETER if isinstance(astVarDefn, ast.AstParameter) else ir.LOCAL
-            irDefn = ir.Variable(astDefn.name, astDefn, None, kind, flags)
+            irDefn = ir.Variable(name, astDefn, None, kind, flags)
             irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, ast.AstFunctionDefinition):
+            name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset(), astDefn.location)
             if astDefn.body is None:
                 raise ScopeException(astDefn.location,
                                      "%s: function must have body" % astDefn.name)
             implicitTypeParams = self.getImplicitTypeParameters()
-            irDefn = self.info.package.addFunction(astDefn.name, astDefn,
+            irDefn = self.info.package.addFunction(name, astDefn,
                                                    None, implicitTypeParams,
                                                    None, [], None, flags)
         elif isinstance(astDefn, ast.AstClassDefinition):
@@ -943,17 +963,22 @@ class FunctionScope(Scope):
         contextInfo = self.info.getContextInfo(self.scopeId)
         if contextInfo.irContextClass is not None:
             return
+        irDefn = self.getIrDefn()
 
         # Create the context class.
         implicitTypeParams = self.getImplicitTypeParameters()
-        irContextClass = self.info.package.addClass("$context", None, list(implicitTypeParams),
+        contextClassName = irDefn.name.withSuffix(ir.CONTEXT_SUFFIX)
+        irContextClass = self.info.package.addClass(contextClassName,
+                                                    None, list(implicitTypeParams),
                                                     [getRootClassType()], None,
                                                     [], [], [], frozenset())
         irContextType = ClassType(irContextClass, ())
-        ctor = self.info.package.addFunction("$contextCtor", None,
+        ctorName = contextClassName.withSuffix(ir.CONSTRUCTOR_SUFFIX)
+        receiverName = ctorName.withSuffix(ir.RECEIVER_SUFFIX)
+        ctor = self.info.package.addFunction(ctorName, None,
                                              UnitType, list(implicitTypeParams),
                                              [irContextType],
-                                             [ir.Variable("$this", None, irContextType,
+                                             [ir.Variable(receiverName, None, irContextType,
                                                           ir.PARAMETER, frozenset([LET]))],
                                              [], frozenset([METHOD]))
         ctor.compileHint = CONTEXT_CONSTRUCTOR_HINT
@@ -961,8 +986,8 @@ class FunctionScope(Scope):
         contextInfo.irContextClass = irContextClass
 
         # Create a variable to hold an instance of it.
-        irContextVar = ir.Variable("$context", None, irContextType, ir.LOCAL, frozenset())
-        self.getIrDefn().variables.append(irContextVar)
+        irContextVar = ir.Variable(contextClassName, None, irContextType, ir.LOCAL, frozenset())
+        irDefn.variables.append(irContextVar)
         closureInfo = self.info.getClosureInfo(self.scopeId)
         closureInfo.irClosureContexts[self.scopeId] = irContextVar
 
@@ -997,18 +1022,23 @@ class FunctionScope(Scope):
         closureInfo = self.info.closureInfo[self.scopeId]
         if closureInfo.irClosureClass:
             return
+        irDefn = self.getIrDefn()
 
         # Create a closure class to hold this method and its contexts.
         implicitTypeParams = self.getImplicitTypeParameters()
-        irClosureClass = self.info.package.addClass("$closure", None, list(implicitTypeParams),
+        closureName = irDefn.name.withSuffix(ir.CLOSURE_SUFFIX)
+        irClosureClass = self.info.package.addClass(closureName, None,
+                                                    list(implicitTypeParams),
                                                     [getRootClassType()], None,
                                                     [], [], [], frozenset())
         closureInfo.irClosureClass = irClosureClass
         irClosureType = ClassType(irClosureClass)
-        irClosureCtor = self.info.package.addFunction("$closureCtor", None,
+        ctorName = closureName.withSuffix(ir.CONSTRUCTOR_SUFFIX)
+        ctorReceiverName = ctorName.withSuffix(ir.RECEIVER_SUFFIX)
+        irClosureCtor = self.info.package.addFunction(ctorName, None,
                                                       UnitType, list(implicitTypeParams),
                                                       [irClosureType],
-                                                      [ir.Variable("$this", None,
+                                                      [ir.Variable(ctorReceiverName, None,
                                                                    irClosureType,
                                                                    ir.PARAMETER,
                                                                    frozenset([LET]))],
@@ -1019,11 +1049,11 @@ class FunctionScope(Scope):
         # Convert the function into a method of the closure class.
         # We don't use `makeMethod`, since it's intended to be used before type analysis, but
         # we do most of the same things.
-        irDefn = self.getIrDefn()
         assert not irDefn.isMethod()
         irDefn.flags |= frozenset([METHOD])
         thisType = ClassType.forReceiver(irClosureClass)
-        this = ir.Variable("$this", irDefn.astDefn, thisType, ir.PARAMETER, frozenset([LET]))
+        thisName = irDefn.name.withSuffix(ir.RECEIVER_SUFFIX)
+        this = ir.Variable(thisName, irDefn.astDefn, thisType, ir.PARAMETER, frozenset([LET]))
         irDefn.variables.insert(0, this)
         irDefn.parameterTypes.insert(0, thisType)
         irClosureClass.methods.append(irDefn)
@@ -1035,14 +1065,14 @@ class FunctionScope(Scope):
             self.parent.getIrDefn().variables.append(irClosureVar)
             closureInfo.irClosureVar = irClosureVar
 
-    def newLocalScope(self, ast):
-        return FunctionScope(ast, self)
+    def newLocalScope(self, prefix, ast):
+        return FunctionScope(prefix, ast, self)
 
-    def newScopeForFunction(self, ast):
-        return FunctionScope(ast, self)
+    def newScopeForFunction(self, prefix, ast):
+        return FunctionScope(prefix, ast, self)
 
-    def newScopeForClass(self, ast):
-        return ClassScope(ast, self)
+    def newScopeForClass(self, prefix, ast):
+        return ClassScope(prefix, ast, self)
 
     def finish(self):
         if not self.isLocal():
@@ -1059,14 +1089,14 @@ class FunctionScope(Scope):
 
 
 class ClassScope(Scope):
-    def __init__(self, ast, parent):
-        super(ClassScope, self).__init__(ast, ScopeId(ast.id), parent, parent.info)
+    def __init__(self, prefix, ast, parent):
+        super(ClassScope, self).__init__(prefix, ast, ScopeId(ast.id), parent, parent.info)
         irDefn = self.getIrDefn()
         self.info.setScope(irDefn.id, self)
         contextInfo = self.info.getContextInfo(self.scopeId)
         contextInfo.irContextClass = irDefn
         this = irDefn.initializer.variables[0]
-        assert this.name == "$this"
+        assert this.name.short() == ir.RECEIVER_SUFFIX
         self.bind("this", DefnInfo(this, self.scopeId, self.scopeId, NOT_HERITABLE))
         self.define("this")
         closureInfo = self.info.getClosureInfo(self.scopeId)
@@ -1076,15 +1106,16 @@ class ClassScope(Scope):
         # Bind default constructors.
         for ctor in irDefn.constructors:
             defnInfo = DefnInfo(ctor, self.scopeId, self.scopeId, NOT_HERITABLE)
-            self.bind(ctor.name, defnInfo)
-            self.define(ctor.name)
+            self.bind(ctor.name.short(), defnInfo)
+            self.define(ctor.name.short())
 
     def createIrDefn(self, astDefn, astVarDefn):
         irScopeDefn = self.getIrDefn()
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         if isinstance(astDefn, ast.AstVariablePattern):
+            name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([LET, PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
-            irDefn = self.info.package.newField(astDefn.name, astDefn, None, flags)
+            irDefn = self.info.package.newField(name, astDefn, None, flags)
             irScopeDefn.fields.append(irDefn)
         elif isinstance(astDefn, ast.AstFunctionDefinition):
             implicitTypeParams = self.getImplicitTypeParameters()
@@ -1099,36 +1130,40 @@ class ClassScope(Scope):
                                      "%s: abstract function not allowed in non-abstract class" %
                                      astDefn.name)
             if astDefn.name == "this":
+                name = self.makeName(ir.CONSTRUCTOR_SUFFIX)
                 checkFlags(flags, frozenset([PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
-                irDefn = self.info.package.addFunction("$constructor", astDefn,
+                irDefn = self.info.package.addFunction(name, astDefn,
                                                        None, implicitTypeParams,
                                                        None, [], None,
                                                        flags | frozenset([METHOD]))
                 irScopeDefn.constructors.append(irDefn)
             else:
+                name = self.makeName(astDefn.name)
                 checkFlags(flags, frozenset([ABSTRACT, PUBLIC, PROTECTED, PRIVATE]),
                            astDefn.location)
-                irDefn = self.info.package.addFunction(astDefn.name, astDefn,
+                irDefn = self.info.package.addFunction(name, astDefn,
                                                        None, implicitTypeParams,
                                                        None, [], None,
                                                        flags | frozenset([METHOD]))
                 irScopeDefn.methods.append(irDefn)
             # We don't need to call makeMethod here because the inner FunctionScope will do it.
         elif isinstance(astDefn, ast.AstPrimaryConstructorDefinition):
+            name = self.makeName(ir.CONSTRUCTOR_SUFFIX)
             checkFlags(flags, frozenset([PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
             if len(flags & frozenset([PUBLIC, PROTECTED, PRIVATE])) == 0:
                 flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
             implicitTypeParams = self.getImplicitTypeParameters()
-            irDefn = self.info.package.addFunction("$constructor", astDefn,
+            irDefn = self.info.package.addFunction(name, astDefn,
                                                    None, implicitTypeParams,
                                                    None, [], None, flags | frozenset([METHOD]))
             irScopeDefn.constructors.append(irDefn)
             self.makeMethod(irDefn, irScopeDefn)
         elif isinstance(astDefn, ast.AstTypeParameter):
+            name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([STATIC, COVARIANT, CONTRAVARIANT]), astDefn.location)
             if STATIC not in flags:
                 raise NotImplementedError
-            irDefn = self.info.package.addTypeParameter(astDefn.name, astDefn,
+            irDefn = self.info.package.addTypeParameter(name, astDefn,
                                                         None, None, flags)
             irDefn.clas = irScopeDefn
             irScopeDefn.typeParameters.append(irDefn)
@@ -1166,29 +1201,30 @@ class ClassScope(Scope):
     def makeClosure(self):
         pass
 
-    def newLocalScope(self, ast):
-        scope = FunctionScope(ast, self)
+    def newLocalScope(self, prefix, ast):
+        scope = FunctionScope(prefix, ast, self)
         return scope
 
-    def newScopeForFunction(self, ast):
-        scope = FunctionScope(ast, self)
+    def newScopeForFunction(self, prefix, ast):
+        scope = FunctionScope(prefix, ast, self)
         scope.configureAsMethod(self.scopeId, self.getIrDefn())
         return scope
 
-    def newScopeForClass(self, ast):
-        return ClassScope(ast, self)
+    def newScopeForClass(self, prefix, ast):
+        return ClassScope(prefix, ast, self)
 
 
 class BuiltinGlobalScope(Scope):
     def __init__(self, parent):
-        super(BuiltinGlobalScope, self).__init__(None, BUILTIN_SCOPE_ID, parent, parent.info)
+        super(BuiltinGlobalScope, self).__init__([], None, BUILTIN_SCOPE_ID,
+                                                 parent, parent.info)
         def bind(name, irDefn):
             defnInfo = DefnInfo(irDefn, self.scopeId)
             if isinstance(irDefn, ir.Class):
                 # This scope will automatically be registered.
                 BuiltinClassScope(defnInfo, self)
-            self.bind(name, defnInfo)
-            self.define(name)
+            self.bind(name.short(), defnInfo)
+            self.define(name.short())
         registerBuiltins(bind)
 
     def requiresCapture(self):
@@ -1198,27 +1234,27 @@ class BuiltinGlobalScope(Scope):
 class BuiltinClassScope(Scope):
     def __init__(self, classDefnInfo, parent):
         irClass = classDefnInfo.irDefn
-        super(BuiltinClassScope, self).__init__(None, ScopeId("builtin-" + irClass.name),
-                                                parent, parent.info)
+        super(BuiltinClassScope, self).__init__(
+            [], None, ScopeId("builtin-" + irClass.name.short()), parent, parent.info)
         self.info.setScope(irClass.id, self)
         self.defnInfo = classDefnInfo
         if not hasattr(irClass, "isPrimitive"):
             parent.info.setClassInfo(irClass, ClassInfo(irClass))
             for ctor in irClass.constructors:
                 defnInfo = DefnInfo(ctor, self.scopeId, self.scopeId, NOT_HERITABLE)
-                self.bind("$constructor", defnInfo)
-                self.define("$constructor")
+                self.bind(ir.CONSTRUCTOR_SUFFIX, defnInfo)
+                self.define(ir.CONSTRUCTOR_SUFFIX)
         for method in irClass.methods:
             methodClass = method.getReceiverClass()
             inheritedScopeId = self.info.getScope(methodClass.id).scopeId
             inheritanceDepth = irClass.findDistanceToBaseClass(methodClass)
             defnInfo = DefnInfo(method, self.scopeId, inheritedScopeId, inheritanceDepth)
-            self.bind(method.name, defnInfo)
-            self.define(method.name)
+            self.bind(method.name.short(), defnInfo)
+            self.define(method.name.short())
         for field in irClass.fields:
             defnInfo = DefnInfo(field, self.scopeId)
-            self.bind(field.name, defnInfo)
-            self.define(field.name)
+            self.bind(field.name.short(), defnInfo)
+            self.define(field.name.short())
 
     def getDefnInfo(self):
         return self.defnInfo
@@ -1232,7 +1268,7 @@ class PackageScope(Scope):
         assert package is None or \
                isinstance(package, ir.Package) or \
                isinstance(package, ir.PackagePrefix)
-        super(PackageScope, self).__init__(None, scopeId, parent, info)
+        super(PackageScope, self).__init__([], None, scopeId, parent, info)
         self.packageNames = []
         self.prefix = prefix
         self.package = package
@@ -1248,8 +1284,8 @@ class PackageScope(Scope):
             exportedDefns.extend(exportedClasses)
             for defn in exportedDefns:
                 defnInfo = DefnInfo(defn, scopeId)
-                self.bind(defn.name, defnInfo)
-                self.define(defn.name)
+                self.bind(defn.name.short(), defnInfo)
+                self.define(defn.name.short())
             for clas in exportedClasses:
                 scope = ExternClassScope(ScopeId(clas.name), self, info, clas)
                 self.info.setScope(clas.id, scope)
@@ -1263,7 +1299,7 @@ class PackageScope(Scope):
 
                 self.packageNames.append(name)
                 nextPrefix = list(prefix) + [nextComponent]
-                package = ir.PackagePrefix(ir.PackageName(nextPrefix))
+                package = ir.PackagePrefix(ir.Name(nextPrefix))
                 if nextComponent not in packageBindings or \
                    (isinstance(packageBindings[nextComponent], ir.PackagePrefix) and \
                     isinstance(package, ir.Package)):
@@ -1298,7 +1334,7 @@ class PackageScope(Scope):
         defnInfo = nameInfo.getDefnInfo()
         irDefn = defnInfo.irDefn
         if isinstance(irDefn, ir.PackagePrefix):
-            packageName = ir.PackageName(self.prefix + [name])
+            packageName = ir.Name(self.prefix + [name])
             if packageName in self.packageNames:
                 defnInfo.irDefn = self.info.packageLoader.loadPackage(packageName)
                 self.scopeForPrefix(name)  # force scope to be created
@@ -1310,17 +1346,18 @@ class PackageScope(Scope):
 
 class ExternClassScope(Scope):
     def __init__(self, scopeId, parent, info, clas):
-        super(ExternClassScope, self).__init__(None, scopeId, parent, info)
+        super(ExternClassScope, self).__init__(clas.name.components, None,
+                                               scopeId, parent, info)
         for ctor in clas.constructors:
             if PUBLIC in ctor.flags:
                 defnInfo = DefnInfo(ctor, self.scopeId)
-                self.bind("$constructor", defnInfo)
-                self.define("$constructor")
+                self.bind(ir.CONSTRUCTOR_SUFFIX, defnInfo)
+                self.define(ir.CONSTRUCTOR_SUFFIX)
         for member in clas.methods + clas.fields:
             if PUBLIC in member.flags:
                 defnInfo = DefnInfo(member, self.scopeId)
-                self.bind(member.name, defnInfo)
-                self.define(member.name)
+                self.bind(member.name.short(), defnInfo)
+                self.define(member.name.short())
 
     def isForeign(self):
         return True
@@ -1349,12 +1386,13 @@ class ScopeVisitor(ast.AstNodeVisitor):
         self.visit(node.pattern, node)
 
     def visitAstFunctionDefinition(self, node):
-        scope = self.scope.scopeForFunction(node)
+        scopeName = ir.CONSTRUCTOR_SUFFIX if node.name == "this" else node.name
+        scope = self.scope.scopeForFunction(scopeName, node)
         visitor = self.createChildVisitor(scope)
         visitor.visitChildren(node)
 
     def visitAstClassDefinition(self, node):
-        scope = self.scope.scopeForClass(node)
+        scope = self.scope.scopeForClass(node.name, node)
         visitor = self.createChildVisitor(scope)
         visitor.visitChildren(node)
 
@@ -1431,7 +1469,7 @@ class InheritanceVisitor(ScopeVisitor):
         return InheritanceVisitor(scope, self.inheritanceGraph, self.subtypeGraph)
 
     def visitAstClassDefinition(self, node):
-        scope = self.scope.scopeForClass(node)
+        scope = self.scope.scopeForClass(node.name, node)
         irClass = scope.getIrDefn()
         classInfo = self.info.getClassInfo(irClass)
         superclassScopeId = None

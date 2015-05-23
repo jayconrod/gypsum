@@ -80,7 +80,7 @@ def getBuiltinFunctionById(idOrIndex):
 
 def getBuiltinClassFromType(ty):
     _initialize()
-    return _builtinClassTypeMap.get(ty)
+    return _builtinClassTypeMap.get(str(ty))
 
 
 def getBuiltinFunctions():
@@ -128,8 +128,12 @@ def _initialize():
             flags = frozenset([ir_types.NULLABLE_TYPE_FLAG] if m.group(2) == "?" else [])
             return ir_types.ClassType(clas, (), flags)
 
-    def buildFunction(functionData):
-        name = functionData.get("name", "$constructor")
+    def buildFunction(functionData, namePrefix=None):
+        nameComponents = []
+        if namePrefix is not None:
+            nameComponents.append(namePrefix)
+        nameComponents.append(functionData.get("name", ir.CONSTRUCTOR_SUFFIX))
+        name = ir.Name(nameComponents)
         id = getattr(bytecode, functionData["id"])
         function = ir.Function(name, None, id,
                                buildType(functionData["returnType"]),
@@ -141,18 +145,19 @@ def _initialize():
         _builtinFunctionIdMap[id] = function
         return function
 
-    def buildMethod(functionData):
-        function = buildFunction(functionData)
+    def buildMethod(functionData, classShortName):
+        function = buildFunction(functionData, classShortName)
         function.flags |= frozenset([flags.METHOD])
         return function
 
-    def buildField(fieldData):
-        name = fieldData["name"]
+    def buildField(fieldData, classShortName):
+        name = ir.Name([classShortName, fieldData["name"]])
         ty = buildType(fieldData["type"])
         return ir.Field(name, None, ty, frozenset())
 
     def declareClass(classData):
-        clas = ir.Class(classData["name"], None, None, [],
+        name = ir.Name([classData["name"]])
+        clas = ir.Class(name, None, None, [],
                         None, None, None, None, None, frozenset())
         _builtinClasses.append(clas)
         _builtinClassNameMap[classData["name"]] = clas
@@ -170,8 +175,10 @@ def _initialize():
                 clas.supertypes = []
                 clas.fields = []
                 clas.methods = []
-            clas.constructors = map(buildMethod, classData["constructors"])
-            clas.fields += map(buildField, classData["fields"])
+            clas.constructors = [buildMethod(ctorData, classData["name"])
+                                 for ctorData in classData["constructors"]]
+            clas.fields += [buildField(fieldData, classData["name"])
+                            for fieldData in classData["fields"]]
         else:
             clas.supertypes = []
             clas.fields = []
@@ -179,14 +186,14 @@ def _initialize():
             clas.isPrimitive = True
         inheritedMethodCount = len(clas.methods)
         for m in classData["methods"]:
-            addMethod(clas.methods, inheritedMethodCount, buildMethod(m))
+            addMethod(clas.methods, inheritedMethodCount, buildMethod(m, classData["name"]))
 
-        _builtinClassTypeMap[buildType(clas.name)] = clas
+        _builtinClassTypeMap[classData["name"]] = clas
         _builtinClassIdMap[clas.id] = clas
 
     def addMethod(methods, inheritedCount, method):
         for i, m in enumerate(methods[:inheritedCount]):
-            if method.name == m.name and method.mayOverride(m):
+            if method.name.short() == m.name.short() and method.mayOverride(m):
                 method.override = m
                 methods[i] = method
                 return

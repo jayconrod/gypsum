@@ -89,8 +89,8 @@ class TestUseAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource("class Foo { var x = this; };")
         classScope = info.getScope(info.ast.definitions[0])
         thisNameInfo = classScope.lookup("this", NoLoc)
-        self.assertEquals(DefnInfo(self.makeVariable("$this", kind=PARAMETER,
-                                                     flags=frozenset([LET])),
+        self.assertEquals(DefnInfo(self.makeVariable(Name(["Foo", CLASS_INIT_SUFFIX, RECEIVER_SUFFIX]),
+                                                     kind=PARAMETER, flags=frozenset([LET])),
                                    classScope.scopeId, classScope.scopeId, NOT_HERITABLE),
                           thisNameInfo.getDefnInfo())
 
@@ -176,7 +176,7 @@ class TestUseAnalysis(TestCaseWithDefinitions):
                  "  def make-bar = Bar[Foo](this)\n" + \
                  "class Bar[static +T](value: T)"
         info = self.analyzeFromSourceWithTypes(source)
-        T = info.package.findTypeParameter(name="T")
+        T = info.package.findTypeParameter(name="Bar.T")
         use = info.getUseInfo(info.ast.definitions[1].constructor.parameters[0].pattern.ty)
         self.assertIs(T, use.defnInfo.irDefn)
 
@@ -201,6 +201,6 @@ class TestUseAnalysis(TestCaseWithDefinitions):
         source = "class A[static T]\n" + \
                  "def f[static S <: A[S]] = {}"
         info = self.analyzeFromSourceWithTypes(source)
-        S = info.package.findTypeParameter(name="S")
+        S = info.package.findTypeParameter(name="f.S")
         use = info.getUseInfo(info.ast.definitions[1].typeParameters[0].upperBound.typeArguments[0])
         self.assertIs(S, use.defnInfo.irDefn)

@@ -25,21 +25,24 @@ class TestExternalization(unittest.TestCase):
         self.packageLoader = utils_test.MockPackageLoader([self.otherPackage])
         self.externalizer = externalization.Externalizer(self.package, self.packageLoader)
 
-        field = self.otherPackage.newField("x", None, ir_types.I64Type,
+        field = self.otherPackage.newField(ir.Name(["x"]), None, ir_types.I64Type,
                                            frozenset([flags.PUBLIC]))
-        self.clas = self.otherPackage.addClass("Foo", None, [], [self.rootClassType], None,
-                                               None, [field], None, frozenset([flags.PUBLIC]))
+        self.clas = self.otherPackage.addClass(ir.Name(["Foo"]), None, [], [self.rootClassType],
+                                               None, None, [field], None,
+                                               frozenset([flags.PUBLIC]))
         self.classTy = ir_types.ClassType(self.clas)
-        ctor = self.otherPackage.addFunction("$constructor", None, ir_types.UnitType,
+        ctor = self.otherPackage.addFunction(ir.Name([ir.CONSTRUCTOR_SUFFIX]),
+                                             None, ir_types.UnitType,
                                              [], [], None, None,
                                              frozenset([flags.PUBLIC,
                                                         flags.METHOD]))
         self.clas.constructors = [ctor]
-        method = self.otherPackage.addFunction("m", None, ir_types.UnitType,
+        method = self.otherPackage.addFunction(ir.Name(["m"]), None, ir_types.UnitType,
                                                [], [], None, None,
                                                frozenset([flags.PUBLIC, flags.METHOD]))
         self.clas.methods = [method]
-        self.param = self.otherPackage.addTypeParameter("T", None, self.rootClassType,
+        self.param = self.otherPackage.addTypeParameter(ir.Name(["T"]), None,
+                                                        self.rootClassType,
                                                         self.nothingClassType,
                                                         frozenset([flags.STATIC]))
         self.dep = self.package.ensureDependency(self.otherPackage)
@@ -69,54 +72,61 @@ class TestExternalization(unittest.TestCase):
         self.assertIs(expected, defn)
 
     def testExternalizeGlobal(self):
-        globl = self.otherPackage.addGlobal("g", None, self.classTy,
+        globl = self.otherPackage.addGlobal(ir.Name(["g"]), None, self.classTy,
                                             frozenset([flags.PUBLIC]))
         externGlobal = self.externalizer.externalizeDefn(globl)
-        expected = ir.Global("g", None, globl.id, self.classTy,
+        expected = ir.Global(ir.Name(["g"]), None, globl.id, self.classTy,
                              frozenset([flags.PUBLIC, flags.EXTERN]))
         self.assertEquals(expected, externGlobal)
         self.checkExternPosition(externGlobal)
 
     def testExternalizeFunction(self):
-        function = self.otherPackage.addFunction("f", None, self.classTy, [self.param],
-                                                 [self.varTy], None, None,
+        function = self.otherPackage.addFunction(ir.Name(["f"]), None, self.classTy,
+                                                 [self.param], [self.varTy], None, None,
                                                  frozenset([flags.PUBLIC]))
         externFunction = self.externalizer.externalizeDefn(function)
-        expected = ir.Function("f", None, function.id, self.classTy, [self.externParam],
-                               [self.varTy], None, None,
+        expected = ir.Function(ir.Name(["f"]), None, function.id, self.classTy,
+                               [self.externParam], [self.varTy], None, None,
                                frozenset([flags.PUBLIC, flags.EXTERN]))
         self.assertEquals(expected, externFunction)
 
     def testExternalizeClass(self):
-        clas = self.otherPackage.addClass("C", None, [self.param], [self.rootClassType],
+        clas = self.otherPackage.addClass(ir.Name(["C"]), None,
+                                          [self.param], [self.rootClassType],
                                           None, None, None, None, frozenset([flags.PUBLIC]))
         clasTy = ir_types.ClassType(clas, (self.varTy,))
-        ctor = self.otherPackage.addFunction("$constructor", None, ir_types.UnitType, [self.param],
+        ctor = self.otherPackage.addFunction(ir.Name(["C", ir.CONSTRUCTOR_SUFFIX]),
+                                             None, ir_types.UnitType, [self.param],
                                              [clasTy], None, None,
                                              frozenset([flags.PUBLIC, flags.METHOD]))
         clas.constructors = [ctor]
-        field = self.otherPackage.newField("x", None, clasTy, frozenset([flags.PUBLIC]))
+        field = self.otherPackage.newField(ir.Name(["C", "x"]), None,
+                                           clasTy, frozenset([flags.PUBLIC]))
         clas.fields = [field]
-        method = self.otherPackage.addFunction("f", None, ir_types.UnitType, [self.param], [clasTy],
+        method = self.otherPackage.addFunction(ir.Name(["C", "f"]), None,
+                                               ir_types.UnitType, [self.param], [clasTy],
                                                None, None,
                                                frozenset([flags.PUBLIC, flags.METHOD]))
         builtinMethod = \
             builtins.getBuiltinFunctionById(bytecode.BUILTIN_ROOT_CLASS_TO_STRING_ID)
         clas.methods = [method, builtinMethod]
         externClass = self.externalizer.externalizeDefn(clas)
-        expected = ir.Class("C", None, clas.id, [self.externParam], [self.rootClassType],
-                            None, None, None, None, frozenset([flags.PUBLIC, flags.EXTERN]))
-        expectedCtor = ir.Function("$constructor", None, ctor.id, ir_types.UnitType, [self.externParam],
+        expected = ir.Class(ir.Name(["C"]), None, clas.id, [self.externParam],
+                            [self.rootClassType], None, None, None, None,
+                            frozenset([flags.PUBLIC, flags.EXTERN]))
+        expectedCtor = ir.Function(ir.Name(["C", ir.CONSTRUCTOR_SUFFIX]),
+                                   None, ctor.id, ir_types.UnitType, [self.externParam],
                                    [clasTy], None, None,
                                    frozenset([flags.PUBLIC, flags.METHOD, flags.EXTERN]))
         expected.constructors = [expectedCtor]
-        expectedField = ir.Field("x", None, clasTy, frozenset([flags.PUBLIC]))
+        expectedField = ir.Field(ir.Name(["C", "x"]), None, clasTy, frozenset([flags.PUBLIC]))
         expected.fields = [expectedField]
-        expectedMethod = ir.Function("f", None, method.id, ir_types.UnitType, [self.externParam],
+        expectedMethod = ir.Function(ir.Name(["C", "f"]),
+                                     None, method.id, ir_types.UnitType, [self.externParam],
                                      [clasTy], None, None,
                                      frozenset([flags.PUBLIC, flags.METHOD, flags.EXTERN]))
-        externBuiltinMethod = ir.Function("to-string", None, builtinMethod.id,
-                                          ir_types.getStringType(), [],
+        externBuiltinMethod = ir.Function(ir.Name(["Object", "to-string"]), None,
+                                          builtinMethod.id, ir_types.getStringType(), [],
                                           [ir_types.getRootClassType()],
                                           None, None, frozenset([flags.EXTERN, flags.METHOD]))
         expected.methods = [expectedMethod, externBuiltinMethod]
@@ -125,13 +135,14 @@ class TestExternalization(unittest.TestCase):
     def testExternalizeBuiltinMethodName(self):
         method = builtins.getBuiltinFunctionById(bytecode.BUILTIN_ROOT_CLASS_EQ_OP_ID)
         externMethod = self.externalizer.externalizeMethod(method, self.dep)
-        self.assertIn(method.name, self.package.strings)
+        self.assertIn(method.name.short(), self.package.strings)
 
     def testExternalizeTypeParameter(self):
-        param = self.otherPackage.addTypeParameter("S", None, self.classTy, self.classTy,
+        param = self.otherPackage.addTypeParameter(ir.Name(["S"]), None,
+                                                   self.classTy, self.classTy,
                                                    frozenset([flags.STATIC]))
         externParam = self.externalizer.externalizeDefn(param)
-        expected = ir.TypeParameter("S", None, param.id, self.classTy, self.classTy,
+        expected = ir.TypeParameter(ir.Name(["S"]), None, param.id, self.classTy, self.classTy,
                                     frozenset([flags.STATIC, flags.EXTERN]))
         self.assertEquals(expected, externParam)
 
@@ -141,6 +152,7 @@ class TestExternalization(unittest.TestCase):
         self.assertIs(rootClass, externClass)
 
     def testExternalizeLocalDefn(self):
-        localGlobal = self.package.addGlobal("g", None, ir_types.UnitType, frozenset())
+        localGlobal = self.package.addGlobal(ir.Name(["g"]), None,
+                                             ir_types.UnitType, frozenset())
         externGlobal = self.externalizer.externalizeDefn(localGlobal)
         self.assertIs(localGlobal, externGlobal)

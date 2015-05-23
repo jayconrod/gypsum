@@ -67,7 +67,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         astDefn = ast.definitions[0]
         defnInfo = info.getDefnInfo(astDefn)
         irClass = defnInfo.irDefn
-        self.assertEquals("C", irClass.name)
+        self.assertEquals(Name(["C"]), irClass.name)
         self.assertEquals(GLOBAL_SCOPE_ID, defnInfo.scopeId)
         self.assertTrue(info.getScope(GLOBAL_SCOPE_ID).isDefined("C"))
         self.assertTrue(irClass.initializer is not None)
@@ -101,26 +101,27 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         clas = info.package.findClass(name="C")
         self.assertEquals(1, len(clas.constructors))
         self.assertIs(ctor, clas.constructors[0])
-        self.assertEquals([self.makeVariable("$this", kind=PARAMETER, flags=frozenset([LET]))],
+        self.assertEquals([self.makeVariable(Name(["C", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
+                                             kind=PARAMETER, flags=frozenset([LET]))],
                           ctor.variables)
-        self.assertEquals([self.makeField("x", flags=frozenset([LET])),
-                           self.makeField("y", flags=frozenset([LET]))],
+        self.assertEquals([self.makeField("C.x", flags=frozenset([LET])),
+                           self.makeField("C.y", flags=frozenset([LET]))],
                           clas.fields)
         xDefnInfo = info.getDefnInfo(ast.constructor.parameters[0].pattern)
-        self.assertEquals(self.makeField("x", flags=frozenset([LET])), xDefnInfo.irDefn)
+        self.assertEquals(self.makeField("C.x", flags=frozenset([LET])), xDefnInfo.irDefn)
 
     def testDefineClassWithPrimaryCtorWithVarParam(self):
         source = "class C(var x: i32)"
         info = self.analyzeFromSource(source)
         C = info.package.findClass(name="C")
-        self.assertEquals([self.makeField("x")], C.fields)
+        self.assertEquals([self.makeField("C.x")], C.fields)
 
     def testDefineFunctionParameter(self):
         info = self.analyzeFromSource("def f(x: i32) = x")
         ast = info.ast
         astDefn = ast.definitions[0].parameters[0].pattern
         scopeId = info.getScope(ast.definitions[0]).scopeId
-        self.assertEquals(DefnInfo(self.makeVariable("x", kind=PARAMETER,
+        self.assertEquals(DefnInfo(self.makeVariable("f.x", kind=PARAMETER,
                                                      flags=frozenset([LET])),
                                    scopeId),
                           info.getDefnInfo(astDefn))
@@ -130,7 +131,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         ast = info.ast
         astDefn = ast.definitions[0].parameters[0].pattern
         scopeId = info.getScope(ast.definitions[0]).scopeId
-        self.assertEquals(DefnInfo(self.makeVariable("x", kind=PARAMETER), scopeId),
+        self.assertEquals(DefnInfo(self.makeVariable("f.x", kind=PARAMETER), scopeId),
                           info.getDefnInfo(astDefn))
 
     def testDefineFunctionVar(self):
@@ -138,7 +139,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         ast = info.ast
         astDefn = ast.definitions[0].body.statements[0].pattern
         scopeId = info.getScope(ast.definitions[0]).scopeId
-        self.assertEquals(DefnInfo(self.makeVariable("x", kind=LOCAL), scopeId),
+        self.assertEquals(DefnInfo(self.makeVariable("f.x", kind=LOCAL), scopeId),
                           info.getDefnInfo(astDefn))
 
     def testDefineFunctionConst(self):
@@ -146,7 +147,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         ast = info.ast
         astDefn = ast.definitions[0].body.statements[0].pattern
         scopeId = info.getScope(ast.definitions[0]).scopeId
-        self.assertEquals(DefnInfo(self.makeVariable("x", kind=LOCAL, flags=frozenset([LET])),
+        self.assertEquals(DefnInfo(self.makeVariable("f.x", kind=LOCAL, flags=frozenset([LET])),
                                    scopeId),
                           info.getDefnInfo(astDefn))
 
@@ -155,7 +156,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         ast = info.ast
         astDefn = ast.definitions[0].body.statements[0]
         scopeId = info.getScope(ast.definitions[0]).scopeId
-        expected = self.makeFunction("g")
+        expected = self.makeFunction("f.g")
         self.assertEquals(DefnInfo(expected, scopeId), info.getDefnInfo(astDefn))
 
     def testDefineFunctionClass(self):
@@ -164,7 +165,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         astDefn = ast.definitions[0].body.statements[0]
         scopeId = info.getScope(ast.definitions[0]).scopeId
         defnInfo = info.getDefnInfo(astDefn)
-        self.assertEquals("C", defnInfo.irDefn.name)
+        self.assertEquals(Name(["f", "C"]), defnInfo.irDefn.name)
         self.assertEquals(scopeId, defnInfo.scopeId)
 
     def testDefineClassVar(self):
@@ -172,7 +173,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         ast = info.ast
         astDefn = ast.definitions[0].members[0].pattern
         scopeId = info.getScope(ast.definitions[0]).scopeId
-        self.assertEquals(DefnInfo(self.makeField("x"), scopeId),
+        self.assertEquals(DefnInfo(self.makeField("C.x"), scopeId),
                           info.getDefnInfo(astDefn))
 
     def testDefineClassConst(self):
@@ -180,7 +181,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         ast = info.ast
         astDefn = ast.definitions[0].members[0].pattern
         scopeId = info.getScope(ast.definitions[0]).scopeId
-        self.assertEquals(DefnInfo(self.makeField("x", flags=frozenset([LET])), scopeId),
+        self.assertEquals(DefnInfo(self.makeField("C.x", flags=frozenset([LET])), scopeId),
                           info.getDefnInfo(astDefn))
 
 
@@ -188,8 +189,9 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         source = "class C() { var x = { var y = 12; y; }; };"
         info = self.analyzeFromSource(source)
         irInitializer = info.package.findClass(name="C").initializer
-        self.assertEquals([self.makeVariable("$this", kind=PARAMETER, flags=frozenset([LET])),
-                           self.makeVariable("y", kind=LOCAL)],
+        self.assertEquals([self.makeVariable(Name(["C", CLASS_INIT_SUFFIX, RECEIVER_SUFFIX]),
+                                             kind=PARAMETER, flags=frozenset([LET])),
+                           self.makeVariable("C.y", kind=LOCAL)],
                           irInitializer.variables)
 
     def testDefineClassFunction(self):
@@ -197,14 +199,15 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         ast = info.ast
         astDefn = ast.definitions[0].members[0]
         scopeId = info.getScope(ast.definitions[0]).scopeId
-        this = self.makeVariable("$this", kind=PARAMETER, flags=frozenset([LET]))
-        expectedFunction = self.makeFunction("f", variables=[this], flags=frozenset([METHOD]))
+        this = self.makeVariable(Name(["C", "f", RECEIVER_SUFFIX]),
+                                 kind=PARAMETER, flags=frozenset([LET]))
+        expectedFunction = self.makeFunction("C.f", variables=[this], flags=frozenset([METHOD]))
         expectedDefnInfo = DefnInfo(expectedFunction, scopeId)
         self.assertEquals(expectedDefnInfo, info.getDefnInfo(astDefn))
         expectedClosureInfo = ClosureInfo(info.package.findClass(name="C"),
-                                          {scopeId:
-                                             self.makeVariable("$this", kind=PARAMETER,
-                                                               flags=frozenset([LET]))})
+                                          {scopeId: self.makeVariable(Name(["C", CLASS_INIT_SUFFIX, RECEIVER_SUFFIX]),
+                                                                      kind=PARAMETER,
+                                                                      flags=frozenset([LET]))})
         self.assertEquals(expectedClosureInfo, info.getClosureInfo(scopeId))
 
     @unittest.skip("inner classes not supported yet")
@@ -222,7 +225,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                                       "};")
         ast = info.ast
         defnInfo = info.getDefnInfo(ast.definitions[0].body.statements[0].statements[0].pattern)
-        self.assertEquals(self.makeVariable("x", kind=LOCAL), defnInfo.irDefn)
+        self.assertEquals(self.makeVariable("f.x", kind=LOCAL), defnInfo.irDefn)
         self.assertIs(info.getScope(ast.definitions[0].body.statements[0].id),
                       info.getScope(defnInfo.scopeId))
 
@@ -231,7 +234,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                                       "  case x => x\n")
         ast = info.ast
         defnInfo = info.getDefnInfo(ast.definitions[0].body.catchHandler.cases[0].pattern)
-        self.assertEquals(self.makeVariable("x", kind=LOCAL, flags=frozenset([LET])),
+        self.assertEquals(self.makeVariable("f.x", kind=LOCAL, flags=frozenset([LET])),
                           defnInfo.irDefn)
         self.assertIs(info.getScope(ast.definitions[0].body.catchHandler.cases[0].id),
                       info.getScope(defnInfo.scopeId))
@@ -261,7 +264,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
     def testPrivateClassFunction(self):
         info = self.analyzeFromSource("class C\n" +
                                       "  private def f = {}")
-        f = info.package.findFunction(name="f")
+        f = info.package.findFunction(name="C.f")
         self.assertEquals(frozenset([METHOD, PRIVATE]), f.flags)
 
     def testPublicClassDefaultConstructor(self):
@@ -307,7 +310,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                                       "  abstract def f: i64")
         C = info.package.findClass(name="C")
         self.assertEquals(frozenset([ABSTRACT]), C.flags)
-        f = info.package.findFunction(name="f")
+        f = info.package.findFunction(name="C.f")
         self.assertEquals(frozenset([ABSTRACT, METHOD]), f.flags)
 
     def testAbstractMethodMustNotHaveBody(self):
@@ -329,8 +332,8 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
 
     def testFunctionTypeParameterStatic(self):
         info = self.analyzeFromSource("def f[static T] = {}")
-        T = info.package.findTypeParameter(name="T")
-        self.assertEquals("T", T.name)
+        T = info.package.findTypeParameter(name="f.T")
+        self.assertEquals(Name.fromString("f.T"), T.name)
         self.assertEquals(frozenset([STATIC]), T.flags)
         f = info.package.findFunction(name="f")
         self.assertEquals(1, len(f.typeParameters))
@@ -339,9 +342,9 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
     def testFunctionOuterTypeParameter(self):
         info = self.analyzeFromSource("def f[static T](t: T) =\n" +
                                       "  def g = t")
-        g = info.package.findFunction(name="g")
+        g = info.package.findFunction(name="f.g")
         self.assertEquals(1, len(g.typeParameters))
-        T = info.package.findTypeParameter(name="T")
+        T = info.package.findTypeParameter(name="f.T")
         self.assertIs(T, g.typeParameters[0])
 
     def testFunctionVariantTypeParameter(self):
@@ -356,9 +359,9 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                  "    {}"
         info = self.analyzeFromSource(source)
         Box = info.package.findClass(name="Box")
-        T = info.package.findTypeParameter(name="T")
-        get = info.package.findFunction(name="get")
-        set = info.package.findFunction(name="set")
+        T = info.package.findTypeParameter(name="Box.T")
+        get = info.package.findFunction(name="Box.get")
+        set = info.package.findFunction(name="Box.set")
         self.assertEquals([T], Box.typeParameters)
         self.assertEquals([T], Box.initializer.typeParameters)
         self.assertEquals([T], Box.constructors[0].typeParameters)
@@ -381,7 +384,8 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
 
 class TestPackageScope(unittest.TestCase):
     def infoAndScopeWithPackageNames(self, args):
-        names = map(PackageName.fromString, args)
+        packageNameFromString = lambda s: Name.fromString(s, isPackageName=True)
+        names = map(packageNameFromString, args)
         package = Package(id=TARGET_PACKAGE_ID)
         packageLoader = MockPackageLoader(names)
         info = CompileInfo(None, package, packageLoader)
@@ -433,26 +437,28 @@ class TestPackageScope(unittest.TestCase):
         self.assertTrue(nameInfo.isPackage())
 
     def testPackageClassHasScope(self):
-        package = Package(name=PackageName(["foo"]))
-        clas = package.addClass("C", None, [], [getRootClassType()],
+        package = Package(name=Name(["foo"]))
+        clas = package.addClass(Name(["C"]), None, [], [getRootClassType()],
                                 None, None, None, None, frozenset([PUBLIC]))
         classType = ClassType(clas)
-        publicCtor = package.addFunction("$constructor", None, UnitType, [],
+        publicCtor = package.addFunction(Name(["C", CONSTRUCTOR_SUFFIX]), None, UnitType, [],
                                          [classType], None, None,
                                          frozenset([PUBLIC, METHOD, EXTERN]))
-        privateCtor = package.addFunction("$constructor", None, UnitType, [],
+        privateCtor = package.addFunction(Name(["C", CONSTRUCTOR_SUFFIX]), None, UnitType, [],
                                           [classType], None, None,
                                           frozenset([PRIVATE, METHOD, EXTERN]))
         clas.constructors = [publicCtor, privateCtor]
-        publicMethod = package.addFunction("m1", None, UnitType, [],
+        publicMethod = package.addFunction(Name(["C", "m1"]), None, UnitType, [],
                                            [classType], None, None,
                                            frozenset([PUBLIC, METHOD, EXTERN]))
-        privateMethod = package.addFunction("m2", None, UnitType, [],
+        privateMethod = package.addFunction(Name(["C", "m2"]), None, UnitType, [],
                                             [classType], None, None,
                                             frozenset([PRIVATE, METHOD, EXTERN]))
         clas.methods = [publicMethod, privateMethod]
-        publicField = package.newField("x", None, UnitType, frozenset([PUBLIC, EXTERN]))
-        privateField = package.newField("y", None, UnitType, frozenset([PRIVATE, EXTERN]))
+        publicField = package.newField(Name(["C", "x"]), None, UnitType,
+                                       frozenset([PUBLIC, EXTERN]))
+        privateField = package.newField(Name(["C", "y"]), None, UnitType,
+                                        frozenset([PRIVATE, EXTERN]))
         clas.fields = [publicField, privateField]
 
         packageLoader = MockPackageLoader([package])
@@ -465,7 +471,7 @@ class TestPackageScope(unittest.TestCase):
         self.assertIs(clas, defnInfo.irDefn)
         self.assertIs(fooPackageScope.scopeId, defnInfo.scopeId)
         classScope = info.getScope(clas.id)
-        defnInfo = classScope.lookup("$constructor", NoLoc).getDefnInfo()
+        defnInfo = classScope.lookup(CONSTRUCTOR_SUFFIX, NoLoc).getDefnInfo()
         self.assertIs(publicCtor, defnInfo.irDefn)
         self.assertIs(classScope.scopeId, defnInfo.scopeId)
         defnInfo = classScope.lookup("m1", NoLoc).getDefnInfo()

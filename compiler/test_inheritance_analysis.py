@@ -63,10 +63,10 @@ class TestInheritanceAnalysis(unittest.TestCase):
         self.assertIs(fooClassInfo, barClassInfo.superclassInfo)
 
     def testInheritFromForeignType(self):
-        package = Package(name=PackageName(["foo"]))
-        foreignClass = package.addClass("Bar", None, [], [getRootClassType()],
+        package = Package(name=Name(["foo"]))
+        foreignClass = package.addClass(Name(["Bar"]), None, [], [getRootClassType()],
                                         None, [], [], [], frozenset([PUBLIC]))
-        field = package.newField("x", None, None, frozenset([PUBLIC]))
+        field = package.newField(Name(["x"]), None, None, frozenset([PUBLIC]))
         foreignClass.fields = [field]
         loader = MockPackageLoader([package])
         source = "class Baz <: foo.Bar"
@@ -85,10 +85,10 @@ class TestInheritanceAnalysis(unittest.TestCase):
         self.fail()
 
     def testInheritForeignTypeInForeignTypeInSamePackage(self):
-        package = Package(name=PackageName(["foo"]))
-        barClass = package.addClass("Bar", None, [], [getRootClassType()],
+        package = Package(name=Name(["foo"]))
+        barClass = package.addClass(Name(["Bar"]), None, [], [getRootClassType()],
                                     None, [], [], [], frozenset([PUBLIC]))
-        bazClass = package.addClass("Baz", None, [], [ClassType(barClass)],
+        bazClass = package.addClass(Name(["Baz"]), None, [], [ClassType(barClass)],
                                     None, [], [], [], frozenset())
         loader = MockPackageLoader([package])
         info = self.analyzeFromSource("class Quux <: foo.Bar", packageLoader=loader)
@@ -97,13 +97,13 @@ class TestInheritanceAnalysis(unittest.TestCase):
         self.assertIs(barClassInfo, bazClassInfo.superclassInfo)
 
     def testInheritForeignTypeInForeignTypeInDifferentPackage(self):
-        fooPackage = Package(name=PackageName(["foo"]))
-        barClass = fooPackage.addClass("Bar", None, [], [getRootClassType()],
+        fooPackage = Package(name=Name(["foo"]))
+        barClass = fooPackage.addClass(Name(["Bar"]), None, [], [getRootClassType()],
                                        None, [], [], [], frozenset([PUBLIC]))
-        bazPackage = Package(name=PackageName(["baz"]))
+        bazPackage = Package(name=Name(["baz"]))
         loader = MockPackageLoader([fooPackage, bazPackage])
         bazPackage.dependencies.append(PackageDependency.fromPackage(fooPackage))
-        quuxClass = bazPackage.addClass("Quux", None, [], [ClassType(barClass)],
+        quuxClass = bazPackage.addClass(Name(["Quux"]), None, [], [ClassType(barClass)],
                                         None, [], [], [], frozenset([PUBLIC]))
         info = self.analyzeFromSource("class Zzyzx <: baz.Quux", packageLoader=loader)
         barClassInfo = info.getClassInfo(barClass)
@@ -138,8 +138,8 @@ class TestInheritanceAnalysis(unittest.TestCase):
         self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
     def testTypeParameterCycleForeign(self):
-        package = Package(name=PackageName(["foo"]))
-        barClass = package.addClass("Bar", None, [], [getRootClassType()],
+        package = Package(name=Name(["foo"]))
+        barClass = package.addClass(Name(["Bar"]), None, [], [getRootClassType()],
                                     None, [], [], [], frozenset([PUBLIC]))
         loader = MockPackageLoader([package])
         source = "class Baz <: foo.Bar\n" + \
@@ -198,7 +198,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
                  "  def this(value: U) = super(value)\n"
         info = self.analyzeFromSource(source)
         scope = info.getScope(info.ast.definitions[0])
-        self.assertEquals(1, len(scope.getDefinition("$constructor").overloads))
+        self.assertEquals(1, len(scope.getDefinition(CONSTRUCTOR_SUFFIX).overloads))
 
     def testTypeParametersNotHeritable(self):
         source = "class A[static T]\n" + \

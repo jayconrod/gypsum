@@ -237,8 +237,10 @@ class Serializer(object):
             self.writeList(self.writeType, type.typeArguments)
 
     def writeName(self, name):
-        index = self.package.findString(name)
-        self.writeVbn(index)
+        def writeComponent(comp):
+            index = self.package.findString(comp)
+            self.writeVbn(index)
+        self.writeList(writeComponent, name.components)
 
     def writeFlags(self, flags_var):
         bits = flags.flagSetToFlagBits(flags_var)
@@ -367,7 +369,7 @@ class Deserializer(object):
             self.package.initFunction = self.package.functions[initFunctionIndex]
 
         nameStr = self.readString()
-        self.package.name = ir.PackageName.fromString(nameStr)
+        self.package.name = ir.PackageName.fromString(nameStr, isPackageName=True)
         versionStr = self.readString()
         self.package.version = ir.PackageVersion.fromString(versionStr)
 
@@ -547,7 +549,9 @@ class Deserializer(object):
         return ty
 
     def readName(self):
-        return self.readId(self.package.strings)
+        readComponent = lambda: self.readId(self.package.strings)
+        components = self.readList(readComponent)
+        return ir.Name(components)
 
     def readFlags(self):
         size = struct.calcsize(FLAG_FORMAT)

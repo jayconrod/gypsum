@@ -322,7 +322,7 @@ class ClassType(ObjectType):
 
     def __str__(self):
         if len(self.typeArguments) == 0:
-            return self.clas.name
+            return str(self.clas.name)
         else:
             return "%s[%s]%s" % \
                    (self.clas.name,
@@ -374,7 +374,7 @@ class VariableType(ObjectType):
         self.typeParameter = typeParameter
 
     def __str__(self):
-        return self.typeParameter.name
+        return str(self.typeParameter.name)
 
     def __repr__(self):
         return "VariableType(%s)" % self.typeParameter.name

@@ -8,7 +8,7 @@ from functools import partial
 
 import ast
 from bytecode import W8, W16, W32, W64, BUILTIN_TYPE_CLASS_ID, BUILTIN_TYPE_CTOR_ID, instInfoByCode
-from ir import IrTopDefn, Class, Field, Function, Global, LOCAL, Package, Variable
+from ir import IrTopDefn, Class, Field, Function, Global, LOCAL, Package, PACKAGE_INIT_NAME, RECEIVER_SUFFIX, Variable
 from ir_types import UnitType, ClassType, VariableType, NULLABLE_TYPE_FLAG, getExceptionClassType
 import ir_instructions
 from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PACKAGE_INITIALIZER_HINT, DefnInfo
@@ -20,7 +20,7 @@ from utils import Counter, COMPILE_FOR_EFFECT, COMPILE_FOR_VALUE, COMPILE_FOR_UN
 def compile(info):
     for clas in info.package.classes:
         assignFieldIndices(clas, info)
-    init = info.package.addFunction("$init", None, UnitType, [], [], [], None, frozenset())
+    init = info.package.addFunction(PACKAGE_INIT_NAME, None, UnitType, [], [], [], None, frozenset())
     init.compileHint = PACKAGE_INITIALIZER_HINT
     info.package.initFunction = init.id
     for function in info.package.functions:
@@ -204,7 +204,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             typeClass = getTypeClass()
             self.dup()
             self.buildType(patTy, pat.location)
-            isSubtypeOfMethod = typeClass.getMethod("is-subtype-of")
+            isSubtypeOfMethod = typeClass.findMethodByShortName("is-subtype-of")
             index = typeClass.getMethodIndex(isSubtypeOfMethod)
             self.callv(2, index)
             self.branchif(successBlock.id, failBlock.id)
@@ -355,7 +355,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             # regular operators (handled like methods)
             useInfo = self.info.getUseInfo(expr)
             callInfo = self.info.getCallInfo(expr)
-            isCompoundAssignment = opName == useInfo.defnInfo.irDefn.name + "="
+            isCompoundAssignment = opName == useInfo.defnInfo.irDefn.name.short() + "="
             if isCompoundAssignment:
                 ty = self.info.getType(expr.right)
                 receiver = self.compileLValue(expr.left, ty)
@@ -502,7 +502,7 @@ class CompileVisitor(ast.AstNodeVisitor):
 
     def visitAstPartialFunctionExpression(self, expr, mode, ty, doneBlock, failBlock):
         self.dup()
-        typeofMethod = getRootClass().getMethod("typeof")
+        typeofMethod = getRootClass().findMethodByShortName("typeof")
         self.buildCallSimpleMethod(typeofMethod, COMPILE_FOR_VALUE)
         for case in expr.cases[:-1]:
             nextBlock = self.newBlock()
@@ -583,7 +583,7 @@ class CompileVisitor(ast.AstNodeVisitor):
 
     def enumerateParameters(self, parameters):
         if self.function.isMethod():
-            if self.function.variables[0].name == "$this":
+            if self.function.variables[0].name.short() == RECEIVER_SUFFIX:
                 # Receiver may be captured, so don't assume it's a regular variable.
                 self.function.variables[0].index = 0
             implicitParamCount = 1

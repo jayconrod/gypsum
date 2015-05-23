@@ -49,16 +49,17 @@ class TestClosureConversion(TestCaseWithDefinitions):
 
         fContextInfo = info.getContextInfo(fScopeId)
         fContextClass = fContextInfo.irContextClass
-        self.assertEquals([self.makeField("x", type=I64Type)], fContextClass.fields)
+        self.assertEquals([self.makeField("f.x", type=I64Type)], fContextClass.fields)
         xDefnInfo = info.getDefnInfo(fAst.body.statements[0].pattern)
-        self.assertEquals(self.makeField("x", type=I64Type), xDefnInfo.irDefn)
+        self.assertEquals(self.makeField("f.x", type=I64Type), xDefnInfo.irDefn)
         self.assertIs(xDefnInfo, info.getUseInfo(gAst.body).defnInfo)
         gClosureInfo = info.getClosureInfo(gScopeId)
         gClosureClass = gClosureInfo.irClosureClass
-        self.assertEquals([self.makeField("$context", type=ClassType(fContextClass))],
+        self.assertEquals([self.makeField(Name(["f", "g", CLOSURE_SUFFIX, CONTEXT_SUFFIX]),
+                                          type=ClassType(fContextClass))],
                           gClosureClass.fields)
 
-        self.assertEquals(self.makeVariable("g", type=ClassType(gClosureClass)),
+        self.assertEquals(self.makeVariable(Name(["f", "g"]), type=ClassType(gClosureClass)),
                           gClosureInfo.irClosureVar)
 
     def testUseFieldInMethod(self):
@@ -97,23 +98,25 @@ class TestClosureConversion(TestCaseWithDefinitions):
         cAst = info.ast.definitions[0]
         C = info.package.findClass(name="C")
         CType = ClassType(C)
-        f = info.package.findFunction(name="f")
+        f = info.package.findFunction(name="C.f")
         fScopeId = info.getScope(f).scopeId
         fContextInfo = info.getContextInfo(fScopeId)
-        fContextClass = info.package.findClass(name="$context")
+        fContextClass = info.package.findClass(name=Name(["C", "f", CONTEXT_SUFFIX]))
         self.assertIs(fContextClass, fContextInfo.irContextClass)
         self.assertEquals(1, len(fContextClass.constructors))
-        self.assertEquals([self.makeField("$this", type=CType, flags=frozenset([LET]))],
+        self.assertEquals([self.makeField(Name(["C", "f", RECEIVER_SUFFIX]),
+                                          type=CType, flags=frozenset([LET]))],
                           fContextClass.fields)
-        g = info.package.findFunction(name="g")
+        g = info.package.findFunction(name="C.f.g")
         gScopeId = info.getScope(g).scopeId
         gClosureInfo = info.getClosureInfo(gScopeId)
-        gClosureClass = info.package.findClass(name="$closure")
+        gClosureClass = info.package.findClass(name=Name(["C", "f", "g", CLOSURE_SUFFIX]))
         self.assertIs(gClosureClass, gClosureInfo.irClosureClass)
         self.assertEquals({fScopeId: gClosureClass.fields[0]}, gClosureInfo.irClosureContexts)
         self.assertTrue(gClosureInfo.irClosureVar in f.variables)
         self.assertEquals(1, len(gClosureClass.constructors))
         self.assertEquals([ClassType(gClosureClass), ClassType(fContextClass)],
                           gClosureClass.constructors[0].parameterTypes)
-        self.assertEquals([self.makeField("$context", type=ClassType(fContextClass))],
+        self.assertEquals([self.makeField(Name(["C", "f", "g", CLOSURE_SUFFIX, CONTEXT_SUFFIX]),
+                                          type=ClassType(fContextClass))],
                           gClosureClass.fields)

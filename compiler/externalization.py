@@ -40,7 +40,7 @@ class Externalizer(object):
         self.package.ensureDependency(self.packageLoader.getPackageById(id.packageId))
 
         # Find the list we're going to put our external description in.
-        self.package.findOrAddString(defn.name)
+        self.package.addName(defn.name)
         externFlags = defn.flags | frozenset([flags.EXTERN])
         dep = self.package.dependencies[id.packageId.index]
         if isinstance(defn, ir.Global):
@@ -85,7 +85,7 @@ class Externalizer(object):
             each(self.externalizeType, defn.supertypes)
             externDefn.constructors = [self.externalizeMethod(ctor, dep)
                                        for ctor in defn.constructors]
-            each(self.package.findOrAddString, (f.name for f in defn.fields))
+            each(self.package.addName, (f.name for f in defn.fields))
             each(self.externalizeType, (f.type for f in defn.fields))
             externDefn.methods = [self.externalizeMethod(m, dep) for m in defn.methods]
         elif isinstance(defn, ir.TypeParameter):
@@ -107,7 +107,7 @@ class Externalizer(object):
             self.externalizeDefn(ty.typeParameter)
 
     def externalizeMethod(self, method, dep):
-        self.package.findOrAddString(method.name)
+        self.package.addName(method.name)
         id = ids.DefnId(ids.TARGET_PACKAGE_ID, ids.DefnId.FUNCTION, len(dep.externMethods))
         externFlags = method.flags | frozenset([flags.EXTERN])
         externMethod = ir.Function(method.name, method.astDefn, id,

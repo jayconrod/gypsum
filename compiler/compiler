@@ -14,7 +14,7 @@ import re
 import sys
 
 from ids import TARGET_PACKAGE_ID
-from ir import Package, PackageName, PackageVersion, PackageDependency
+from ir import Package, PackageVersion, PackageDependency, Name
 from lexer import *
 from layout import layout
 from parser import *
@@ -29,11 +29,12 @@ from errors import CompileException
 
 sys.setrecursionlimit(10000)
 
+PackageName = lambda s: Name.fromString(s, isPackageName=True)
 cmdline = argparse.ArgumentParser(description="Compile source files into CodeSwitch packages")
 cmdline.add_argument("sources", metavar="source", type=str, nargs="+",
                      help="Source file names")
-cmdline.add_argument("-p", "--package-name", action="store", type=PackageName.fromString,
-                     default=PackageName(["default"]),
+cmdline.add_argument("-p", "--package-name", action="store", type=PackageName,
+                     default=PackageName("default"),
                      help="Name of the package being compiled")
 cmdline.add_argument("-v", "--package-version", action="store", type=PackageVersion.fromString,
                      default=PackageVersion([0]),

@@ -4,6 +4,7 @@
 # the GPL license that can be found in the LICENSE.txt file.
 
 
+import ast
 import builtins
 import compile_info
 import data
@@ -11,7 +12,7 @@ import flags
 import ids
 import ir_types
 import bytecode
-import utils
+from utils import each, hashList
 
 import re
 import StringIO
@@ -21,11 +22,11 @@ class Package(object):
         if id is None:
             id = ids.PackageId()
         if name is None:
-            name = PackageName(["default"])
+            name = Name(["default"])
         if version is None:
             version = PackageVersion([0])
         assert isinstance(id, ids.PackageId) and \
-               isinstance(name, PackageName) and \
+               isinstance(name, Name) and \
                isinstance(version, PackageVersion)
         self.id = id
         self.name = name
@@ -62,34 +63,34 @@ class Package(object):
 
     def addGlobal(self, name, astDefn, *args):
         id = ids.DefnId(self.id, ids.DefnId.GLOBAL, len(self.globals))
-        self.findOrAddString(name)
+        self.addName(name)
         g = Global(name, astDefn, id, *args)
         self.globals.append(g)
         return g
 
     def addFunction(self, name, astDefn, *args):
         id = ids.DefnId(self.id, ids.DefnId.FUNCTION, len(self.functions))
-        self.findOrAddString(name)
+        self.addName(name)
         f = Function(name, astDefn, id, *args)
         self.functions.append(f)
         return f
 
     def addClass(self, name, astDefn, *args):
         id = ids.DefnId(self.id, ids.DefnId.CLASS, len(self.classes))
-        self.findOrAddString(name)
+        self.addName(name)
         c = Class(name, astDefn, id, *args)
         self.classes.append(c)
         return c
 
     def addTypeParameter(self, name, astDefn, *args):
         id = ids.DefnId(self.id, ids.DefnId.TYPE_PARAMETER, len(self.typeParameters))
-        self.findOrAddString(name)
+        self.addName(name)
         p = TypeParameter(name, astDefn, id, *args)
         self.typeParameters.append(p)
         return p
 
     def newField(self, name, *args):
-        self.findOrAddString(name)
+        self.addName(name)
         return Field(name, *args)
 
     def ensureDependency(self, package):
@@ -144,14 +145,20 @@ class Package(object):
             ty.clas = self.dependencies[depIndex].linkedClasses[externIndex]
         self.externTypes = None
 
+    def addName(self, name):
+        assert isinstance(name, Name)
+        each(self.findOrAddString, name.components)
+
     def findString(self, s):
-        if type(s) == str:
+        if isinstance(s, str):
             s = unicode(s)
+        assert isinstance(s, unicode)
         return self.strings.index(s)
 
     def findOrAddString(self, s):
-        if type(s) == str:
+        if isinstance(s, str):
             s = unicode(s)
+        assert isinstance(s, unicode)
         for i in xrange(0, len(self.strings)):
             if self.strings[i] == s:
                 return i
@@ -175,7 +182,9 @@ class Package(object):
 
     def find(self, defns, kwargs):
         def matchItem(defn, key, value):
-            if key == "flag":
+            if key == "name" and isinstance(value, str):
+                return Name.fromString(value) == defn.name
+            elif key == "flag":
                 return value in defn.flags
             elif key == "pred":
                 return value(defn)
@@ -192,41 +201,76 @@ class Package(object):
         return (d for d in defns if matchAll(d))
 
 
-class PackagePrefix(object):
-    def __init__(self, name):
-        assert isinstance(name, PackageName)
-        self.name = name
+class Name(object):
+    """The name of a package or a definition within a package.
 
-class PackageName(object):
-    nameComponentSrc = "[A-Za-z][A-Za-z0-9_]*"
+    Names consist of a list between 1 and 100 (inclusive) components. Each component is a
+    string of between 1 and 1000 unicode characters. The only invalid character is '.'; this
+    acts as a separator when names are printed.
+
+    Package name components are restricted to upper and lower case Roman letters, numbers,
+    and '_' (although '_' cannot be the first character).
+
+    Names are not guaranteed to be unique among all definitions in the same package. They
+    should be unique among public and protected definitions though."""
+
+    nameComponentSrc = "[^.]+"
     nameSrc = r"%s(?:\.%s)*" % (nameComponentSrc, nameComponentSrc)
     nameRex = re.compile(r"\A%s\Z" % nameSrc)
+
+    packageComponentSrc = "[A-Za-z][A-Za-z0-9_]*"
+    packageSrc = r"%s(?:\.%s)*" % (packageComponentSrc, packageComponentSrc)
+    packageRex = re.compile(r"\A%s\Z" % packageSrc)
 
     def __init__(self, components):
         self.components = list(components)
 
     @staticmethod
-    def fromString(s):
-        m = PackageName.nameRex.match(s)
+    def fromString(s, isPackageName=False):
+        m = Name.packageRex.match(s) if isPackageName else Name.nameRex.match(s)
         if not m or m.end() != len(s):
             raise ValueError("invalid package name: " + s)
-        return PackageName(s.split("."))
+        return Name(s.split("."))
 
     def __cmp__(self, other):
         return cmp(self.components, other.components)
 
     def __hash__(self):
-        return utils.hashList(self.components)
+        return hashList(self.components)
 
     def __repr__(self):
-        return "PackageName(%s)" % ".".join(self.components)
+        return "Name(%s)" % ".".join(self.components)
 
     def __str__(self):
         return ".".join(self.components)
 
+    def __add__(self, other):
+        return Name(self.components + other.components)
+
+    def withSuffix(self, suffix):
+        return Name(self.components + [suffix])
+
     def hasPrefix(self, components):
         return len(components) < len(self.components) and \
                all(a == b for a, b in zip(self.components, components))
+
+    def short(self):
+        return self.components[-1]
+
+
+CLOSURE_SUFFIX = "$closure"
+CONSTRUCTOR_SUFFIX = "$constructor"
+CONTEXT_SUFFIX = "$context"
+PACKAGE_INIT_NAME = Name(["$pkginit"])
+CLASS_INIT_SUFFIX = "$init"
+ANON_PARAMETER_SUFFIX = "$parameter"
+RECEIVER_SUFFIX = "$this"
+
+
+class PackagePrefix(object):
+    def __init__(self, name):
+        assert isinstance(name, Name)
+        self.name = name
 
 
 class PackageVersion(object):
@@ -255,11 +299,11 @@ class PackageVersion(object):
 
 class PackageDependency(object):
     dependencySrc = "%s(?::(%s)?(?:-(%s))?)?" % \
-                    (PackageName.nameSrc, PackageVersion.versionSrc, PackageVersion.versionSrc)
+                    (Name.nameSrc, PackageVersion.versionSrc, PackageVersion.versionSrc)
     dependencyRex = re.compile(r"\A%s\Z" % dependencySrc)
 
     def __init__(self, name, minVersion, maxVersion):
-        assert isinstance(name, PackageName) and \
+        assert isinstance(name, Name) and \
                (minVersion is None or isinstance(minVersion, PackageVersion)) and \
                (maxVersion is None or isinstance(maxVersion, PackageVersion))
         self.name = name
@@ -280,7 +324,7 @@ class PackageDependency(object):
         m = re.match(s)
         if not m:
             raise ValueError("invalid package dependency: " + s)
-        name = PackageName.fromString(m.group(1))
+        name = Name.fromString(m.group(1))
         minVersion = PackageVersion.fromString(m.group(2)) if m.group(2) else None
         maxVersion = PackageVersion.fromString(m.group(3)) if m.group(3) else None
         return PackageDependency(name, minVersion, maxVersion)
@@ -313,6 +357,13 @@ class PackageDependency(object):
 class IrDefinition(data.Data):
     propertyNames = ("name", "astDefn")
     skipCompareNames = ("astDefn",)
+
+    def __init__(self, *args, **extra):
+        name = args[0] if len(args) > 0 else extra["name"]
+        assert name is None or isinstance(name, Name)
+        astDefn = args[1] if len(args) > 1 else extra["astDefn"]
+        assert astDefn is None or isinstance(astDefn, ast.AstNode)
+        super(IrDefinition, self).__init__(*args, **extra)
 
     def isTypeDefn(self):
         return False
@@ -382,7 +433,8 @@ class Function(IrTopDefn):
         return flags.METHOD in self.flags
 
     def isConstructor(self):
-        return self.name == "$constructor"
+        # TODO: come up with a better way to indicate this, maybe a flag.
+        return self.name.short() == CONSTRUCTOR_SUFFIX
 
     def isFinal(self):
         if not self.isMethod() or self.isConstructor():
@@ -538,15 +590,12 @@ class Class(IrTopDefn):
         else:
             return None
 
-    def getMethod(self, name, typeArgs=None, argTypes=None):
-        assert (typeArgs is None) == (argTypes is None)
-        candidate = None
+    def findMethodByShortName(self, name):
+        assert isinstance(name, str)
         for m in self.methods:
-            if m.name == name and \
-               (argTypes is None or m.canCallWith(type[ClassType(self)] + argTypes)):
-                assert candidate is None
-                candidate = m
-        return candidate
+            if m.name.short() == name:
+                return m
+        return None
 
     def getMethodDict(self):
         methodDict = {}
@@ -588,7 +637,7 @@ class Class(IrTopDefn):
 
     def __repr__(self):
         return "Class(%s, %s, %s, %s, %s, %s, %s, %s)" % \
-            (self.name, repr(self.typeParameters), repr(self.supertypes),
+            (repr(self.name), repr(self.typeParameters), repr(self.supertypes),
              repr(self.initializer), repr(self.constructors),
              repr(self.fields), repr(self.methods), repr(self.flags))
 
@@ -686,6 +735,24 @@ class Variable(IrDefinition):
 class Field(IrDefinition):
     propertyNames = IrDefinition.propertyNames + ("type", "flags")
 
-__all__ = ["Package", "PackageName", "PackagePrefix", "PackageDependency",
-           "Global", "Function", "Class", "TypeParameter", "Variable", "Field",
-           "LOCAL", "PARAMETER"]
+__all__ = [
+    "Package",
+    "Name",
+    "CLOSURE_SUFFIX",
+    "CONSTRUCTOR_SUFFIX",
+    "CONTEXT_SUFFIX",
+    "PACKAGE_INIT_NAME",
+    "CLASS_INIT_SUFFIX",
+    "ANON_PARAMETER_SUFFIX",
+    "RECEIVER_SUFFIX",
+    "PackagePrefix",
+    "PackageDependency",
+    "Global",
+    "Function",
+    "Class",
+    "TypeParameter",
+    "Variable",
+    "Field",
+    "LOCAL",
+    "PARAMETER",
+]

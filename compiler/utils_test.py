@@ -6,7 +6,7 @@
 
 import unittest
 
-from ir import Global, Function, Class, Package, PackageName, PackagePrefix, TypeParameter, Variable, Field, LOCAL
+from ir import Global, Function, Class, Package, Name, PackagePrefix, TypeParameter, Variable, Field, LOCAL
 from ir_types import getNothingClassType, getRootClassType
 from package_loader import BasePackageLoader
 from utils import Counter
@@ -26,6 +26,7 @@ class TestCaseWithDefinitions(unittest.TestCase):
         self.typeParameterCounter = None
 
     def makeGlobal(self, name, **args):
+        name = self.makeName(name)
         defaultValues = {"astDefn": None,
                          "type": None,
                          "flags": frozenset()}
@@ -34,6 +35,7 @@ class TestCaseWithDefinitions(unittest.TestCase):
         return Global(name, **args)
 
     def makeFunction(self, name, **args):
+        name = self.makeName(name)
         defaultValues = {"astDefn": None,
                          "returnType": None,
                          "typeParameters": [],
@@ -46,6 +48,7 @@ class TestCaseWithDefinitions(unittest.TestCase):
         return Function(name, **args)
 
     def makeClass(self, name, **args):
+        name = self.makeName(name)
         defaultValues = {"astDefn": None,
                          "typeParameters": [],
                          "supertypes": None,
@@ -59,7 +62,7 @@ class TestCaseWithDefinitions(unittest.TestCase):
         return Class(name, **args)
 
     def makeTypeParameter(self, name, **args):
-        import builtins
+        name = self.makeName(name)
         defaultValues = {"astDefn": None,
                          "upperBound": getRootClassType(),
                          "lowerBound": getNothingClassType(),
@@ -69,6 +72,7 @@ class TestCaseWithDefinitions(unittest.TestCase):
         return TypeParameter(name, **args)
 
     def makeVariable(self, name, **args):
+        name = self.makeName(name)
         defaultValues = {"astDefn": None,
                          "type": None,
                          "kind": LOCAL,
@@ -77,6 +81,7 @@ class TestCaseWithDefinitions(unittest.TestCase):
         return Variable(name, **args)
 
     def makeField(self, name, **args):
+        name = self.makeName(name)
         defaultValues = {"astDefn": None,
                          "type": None,
                          "flags": frozenset()}
@@ -87,6 +92,12 @@ class TestCaseWithDefinitions(unittest.TestCase):
         for k, v in values.iteritems():
             if k not in args:
                 args[k] = v
+
+    def makeName(self, name):
+        if isinstance(name, str):
+            name = Name.fromString(name)
+        assert isinstance(name, Name)
+        return name
 
 
 class MockPackageLoader(BasePackageLoader):
@@ -99,7 +110,7 @@ class MockPackageLoader(BasePackageLoader):
             self.packageNames = [p.name for p in packagesOrPackageNames]
             self.packages = {p.name: p for p in packagesOrPackageNames}
         else:
-            assert isinstance(packagesOrPackageNames[0], PackageName)
+            assert isinstance(packagesOrPackageNames[0], Name)
             self.packageNames = packagesOrPackageNames
             self.packages = {name: Package(name=name) for name in packagesOrPackageNames}
         self.loadedIds = set()

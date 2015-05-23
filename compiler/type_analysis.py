@@ -330,7 +330,7 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         return typeArgs
 
     def setMethodReceiverType(self, irFunction):
-        assert irFunction.variables[0].name == "$this"
+        assert irFunction.variables[0].name.short() == ir.RECEIVER_SUFFIX
         irFunction.variables[0].type = self.getReceiverType()
 
 
@@ -417,7 +417,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
            (len(node.superArgs) > 0 or hasPrimaryOrDefaultCtor):
             supertype = irClass.supertypes[0]
             superArgTypes = map(self.visit, node.superArgs)
-            self.handleMethodCall("$constructor", node.id, supertype,
+            self.handleMethodCall(ir.CONSTRUCTOR_SUFFIX, node.id, supertype,
                                   [], superArgTypes, False, node.location)
 
         irInitializer = irClass.initializer
@@ -610,7 +610,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         elif isinstance(node.callee, ast.AstThisExpression) or \
              isinstance(node.callee, ast.AstSuperExpression):
             receiverType = self.visit(node.callee)
-            self.handleMethodCall("$constructor", node.id,
+            self.handleMethodCall(ir.CONSTRUCTOR_SUFFIX, node.id,
                                   receiverType, typeArgs, argTypes, False, node.location)
             ty = ir_t.UnitType
         else:
@@ -862,8 +862,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         if not receiverIsExplicit and self.hasReceiverType():
             receiverType = self.getReceiverType()
 
-        assert name != "$constructor" or receiverIsExplicit
-        if name == "$constructor" or receiverIsExplicit:
+        assert name != ir.CONSTRUCTOR_SUFFIX or receiverIsExplicit
+        if name == ir.CONSTRUCTOR_SUFFIX or receiverIsExplicit:
             useKind = USE_AS_PROPERTY
         else:
             useKind = USE_AS_VALUE
