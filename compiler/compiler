@@ -13,7 +13,9 @@ import os.path
 import re
 import sys
 
-from ids import TARGET_PACKAGE_ID
+from ast import AstPackage
+from location import NoLoc
+from ids import AstId, TARGET_PACKAGE_ID
 from ir import Package, PackageVersion, PackageDependency, Name
 from lexer import *
 from layout import layout
@@ -67,11 +69,12 @@ args = cmdline.parse_args()
 
 loader = PackageLoader(args.package_path if len(args.package_path) > 0 else None)
 
-for sourceFilename in args.sources:
-    try:
-        with open(sourceFilename) as in_file:
-            source = in_file.read()
-        rawTokens = lex(sourceFilename, source)
+try:
+    astModules = []
+    for sourceFileName in args.sources:
+        with open(sourceFileName) as inFile:
+            source = inFile.read()
+        rawTokens = lex(sourceFileName, source)
         if args.print_tokens:
             for tok in rawTokens:
                 sys.stdout.write(str(tok) + "\n")
@@ -82,33 +85,40 @@ for sourceFilename in args.sources:
         if args.print_layout:
             for tok in layoutTokens:
                 sys.stdout.write(str(tok) + "\n")
-        ast = parse(sourceFilename, layoutTokens)
+        ast = parse(sourceFileName, layoutTokens)
         if args.print_ast:
             printer = AstPrinter(sys.stdout)
             printer.visit(ast)
-        package = Package(TARGET_PACKAGE_ID, args.package_name, args.package_version)
-        package.dependencies.extend(args.depends)
-        info = CompileInfo(ast, package, loader)
-        analyzeDeclarations(info)
-        analyzeInheritance(info)
-        if args.print_scope:
-            sys.stderr.write("--print-scope not supported right now")
-        analyzeTypes(info)
-        if args.print_types:
-            sys.stderr.write("--print-types not supported right now")
-        convertClosures(info)
-        flattenClasses(info)
-        externalize(info)
-        compile(info)
-        package = info.package
-        if args.print_ir:
-            sys.stdout.write("%s\n" % str(package))
-        serialize(package, args.output)
-    except (CompileException, IOError) as err:
-        if args.print_stack:
-            raise
-        if isinstance(err, CompileException):
-            sys.stderr.write("%s\n" % str(err))
-        else:
-            sys.stderr.write("%s: error: %s\n" % (sourceFilename, str(err)))
-        sys.exit(1)
+        astModules.append(ast)
+    astPackage = AstPackage(astModules, NoLoc)
+    astPackage.id = AstId(-1)
+
+    package = Package(TARGET_PACKAGE_ID, args.package_name, args.package_version)
+    package.dependencies.extend(args.depends)
+    info = CompileInfo(astPackage, package, loader)
+
+    analyzeDeclarations(info)
+    analyzeInheritance(info)
+    if args.print_scope:
+        sys.stderr.write("--print-scope not supported right now")
+    analyzeTypes(info)
+    if args.print_types:
+        sys.stderr.write("--print-types not supported right now")
+    convertClosures(info)
+    flattenClasses(info)
+    externalize(info)
+    compile(info)
+
+    package = info.package
+    if args.print_ir:
+        sys.stdout.write("%s\n" % str(package))
+    serialize(package, args.output)
+
+except (CompileException, IOError) as err:
+    if args.print_stack:
+        raise
+    if isinstance(err, CompileException):
+        sys.stderr.write("%s\n" % str(err))
+    else:
+        sys.stderr.write("%s: error: %s\n" % (sourceFileName, str(err)))
+    sys.exit(1)

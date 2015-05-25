@@ -152,12 +152,12 @@ class TestInheritanceAnalysis(unittest.TestCase):
                  "class Bar <: Foo"
         info = self.analyzeFromSource(source)
         ast = info.ast
-        barScope = info.getScope(ast.definitions[1])
+        barScope = info.getScope(ast.modules[0].definitions[1])
         self.assertTrue(barScope.isBound("x"))
 
     def testInheritedBuiltinDefinitionsAreBound(self):
         info = self.analyzeFromSource("class Foo")
-        scope = info.getScope(info.ast.definitions[0])
+        scope = info.getScope(info.ast.modules[0].definitions[0])
         self.assertTrue(scope.isBound("typeof"))
 
     def testFieldNamesConflict(self):
@@ -180,14 +180,14 @@ class TestInheritanceAnalysis(unittest.TestCase):
                  "class Bar <: Foo\n" + \
                  "  def f = 34"
         info = self.analyzeFromSource(source)
-        scope = info.getScope(info.ast.definitions[1])
+        scope = info.getScope(info.ast.modules[0].definitions[1])
         self.assertEquals(2, len(scope.getDefinition("f").overloads))
 
     def testOverrideBuiltin(self):
         source = "class Foo\n" + \
                  "  def typeof = 12"
         info = self.analyzeFromSource(source)
-        scope = info.getScope(info.ast.definitions[0])
+        scope = info.getScope(info.ast.modules[0].definitions[0])
         self.assertEquals(2, len(scope.getDefinition("typeof").overloads))
 
     def testConstructorsNotHeritable(self):
@@ -197,12 +197,12 @@ class TestInheritanceAnalysis(unittest.TestCase):
                  "class C[static U] <: B[U]\n" + \
                  "  def this(value: U) = super(value)\n"
         info = self.analyzeFromSource(source)
-        scope = info.getScope(info.ast.definitions[0])
+        scope = info.getScope(info.ast.modules[0].definitions[0])
         self.assertEquals(1, len(scope.getDefinition(CONSTRUCTOR_SUFFIX).overloads))
 
     def testTypeParametersNotHeritable(self):
         source = "class A[static T]\n" + \
                  "class B <: A[String]"
         info = self.analyzeFromSource(source)
-        scope = info.getScope(info.ast.definitions[1])
+        scope = info.getScope(info.ast.modules[0].definitions[1])
         self.assertIs(None, scope.getDefinition("T"))

@@ -10,6 +10,7 @@ import data
 import ids
 import ir
 import ir_types
+import location
 
 
 CONTEXT_CONSTRUCTOR_HINT = "context-constructor-hint"
@@ -21,12 +22,15 @@ PACKAGE_INITIALIZER_HINT = "package-initializer-hint"
 class CompileInfo(object):
     """Contains state created and used by most compiler phases"""
 
-    def __init__(self, ast, package, packageLoader):
+    def __init__(self, ast_, package, packageLoader):
+        if isinstance(ast_, ast.AstModule):
+            ast_ = ast.AstPackage([ast_], location.NoLoc)
+            ast_.id = ids.AstId(-1)
         assert package.id is ids.TARGET_PACKAGE_ID
         assert packageLoader is not None
         self.packageLoader = packageLoader
         self.packageNames = self.packageLoader.getPackageNames()
-        self.ast = ast
+        self.ast = ast_
         self.package = package
         self.scopes = {}  # keyed by ScopeId, AstId, and DefnId
         self.contextInfo = {}  # keyed by ScopeId

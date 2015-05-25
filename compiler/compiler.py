@@ -159,9 +159,10 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.ret()
         elif self.compileHint is PACKAGE_INITIALIZER_HINT:
             # This function initializes all the global variables.
-            for defn in self.info.ast.definitions:
-                if isinstance(defn, ast.AstVariableDefinition):
-                    self.visit(defn, COMPILE_FOR_EFFECT)
+            for module in self.info.ast.modules:
+                for defn in module.definitions:
+                    if isinstance(defn, ast.AstVariableDefinition):
+                        self.visit(defn, COMPILE_FOR_EFFECT)
             self.unit()
             self.ret()
 

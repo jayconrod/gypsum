@@ -242,6 +242,9 @@ class DeclarationTypeVisitor(TypeVisitorBase):
                not tp.lowerBound.isSubtypeOf(ta):
                 raise TypeException(loc, "%s: type argument is not in bounds" % tp.name)
 
+    def visitAstPackage(self, node):
+        self.visitChildren(node)
+
     def visitAstModule(self, node):
         self.visitChildren(node)
 
@@ -380,6 +383,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         irDefn = self.info.getDefnInfo(node).irDefn
         if isinstance(irDefn, ir.Class) or isinstance(irDefn, ir.Function):
             self.functionStack.pop()
+
+    def visitAstPackage(self, node):
+        self.visitChildren(node)
 
     def visitAstModule(self, node):
         self.visitChildren(node)

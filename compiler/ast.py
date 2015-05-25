@@ -36,6 +36,21 @@ class AstNode(object):
         return []
 
 
+class AstPackage(AstNode):
+    def __init__(self, modules, location):
+        super(AstPackage, self).__init__(location)
+        self.modules = modules
+
+    def __repr__(self):
+        return "AstPackage(%s)" % repr(self.modules)
+
+    def tag(self):
+        return "AstPackage"
+
+    def children(self):
+        return self.modules
+
+
 class AstModule(AstNode):
     def __init__(self, definitions, location):
         super(AstModule, self).__init__(location)

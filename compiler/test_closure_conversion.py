@@ -42,7 +42,7 @@ class TestClosureConversion(TestCaseWithDefinitions):
                  "  var x = 12\n" + \
                  "  def g = x\n"
         info = self.analyzeFromSource(source)
-        fAst = info.ast.definitions[0]
+        fAst = info.ast.modules[0].definitions[0]
         fScopeId = info.getScope(info.getDefnInfo(fAst).irDefn).scopeId
         gAst = fAst.body.statements[1]
         gScopeId = info.getScope(info.getDefnInfo(gAst).irDefn).scopeId
@@ -67,7 +67,7 @@ class TestClosureConversion(TestCaseWithDefinitions):
                  "  var x = 12\n" + \
                  "  def f = x"
         info = self.analyzeFromSource(source)
-        cAst = info.ast.definitions[0]
+        cAst = info.ast.modules[0].definitions[0]
         C = info.package.findClass(name="C")
         cScopeId = info.getScope(C).scopeId
         cContextInfo = info.getContextInfo(cScopeId)
@@ -81,7 +81,7 @@ class TestClosureConversion(TestCaseWithDefinitions):
                  "  def f = 12\n" + \
                  "  def g = f\n"
         info = self.analyzeFromSource(source)
-        cAst = info.ast.definitions[0]
+        cAst = info.ast.modules[0].definitions[0]
         C = info.package.findClass(name="C")
         cScopeId = info.getScope(C).scopeId
         cContextInfo = info.getContextInfo(cScopeId)
@@ -95,7 +95,7 @@ class TestClosureConversion(TestCaseWithDefinitions):
                  "  def f =\n" + \
                  "    def g = this"
         info = self.analyzeFromSource(source)
-        cAst = info.ast.definitions[0]
+        cAst = info.ast.modules[0].definitions[0]
         C = info.package.findClass(name="C")
         CType = ClassType(C)
         f = info.package.findFunction(name="C.f")

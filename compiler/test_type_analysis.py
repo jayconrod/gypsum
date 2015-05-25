@@ -142,7 +142,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "    this.x = x\n" + \
                  "  var x: i32\n"
         info = self.analyzeFromSource(source)
-        body = info.ast.definitions[0].members[0].body
+        body = info.ast.modules[0].definitions[0].members[0].body
         self.assertEquals(I32Type, info.getType(body.statements[0].left))
 
     def testUnusedDefaultConstructor(self):
@@ -158,7 +158,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  def g = i = 1\n" + \
                  "  var i = 0"
         info = self.analyzeFromSource(source)
-        statements = info.ast.definitions[0].body.statements
+        statements = info.ast.modules[0].definitions[0].body.statements
         self.assertEquals(I64Type, info.getType(statements[0].body.left))
         self.assertEquals(I64Type, info.getType(statements[1].pattern))
 
@@ -205,21 +205,21 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "def f(x: i32) = x"
         info = self.analyzeFromSource(source)
         self.assertEquals(I32Type, info.package.findFunction(name="f").variables[0].type)
-        self.assertEquals(I32Type, info.getType(info.ast.definitions[0].body))
+        self.assertEquals(I32Type, info.getType(info.ast.modules[0].definitions[0].body))
 
     def testFunctionVariable(self):
         source = "def f: i32 = 12i32\n" + \
                  "def g = f\n"
         info = self.analyzeFromSource(source)
         self.assertEquals(I32Type, info.package.findFunction(name="g").returnType)
-        self.assertEquals(I32Type, info.getType(info.ast.definitions[1].body))
+        self.assertEquals(I32Type, info.getType(info.ast.modules[0].definitions[1].body))
 
     def testPackageVariable(self):
         source = "var x = foo"
         info = self.analyzeFromSource(source, packageNames=["foo"])
         packageType = getPackageType()
         self.assertEquals(packageType, info.package.findGlobal(name="x").type)
-        self.assertEquals(packageType, info.getType(info.ast.definitions[0].expression))
+        self.assertEquals(packageType, info.getType(info.ast.modules[0].definitions[0].expression))
         self.assertEquals(info.packageNames[0], info.package.dependencies[0].name)
         self.assertEquals(0, info.package.dependencies[0].package.id.index)
 
@@ -240,7 +240,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source)
         clas = info.package.findClass(name="Foo")
         self.assertEquals(ClassType(clas),
-                          info.getType(info.ast.definitions[0].members[0].expression))
+                          info.getType(info.ast.modules[0].definitions[0].members[0].expression))
 
     def testSuperExpr(self):
         source = "class Foo\n" + \
@@ -248,20 +248,20 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  def this = super()"
         info = self.analyzeFromSource(source)
         foo = info.package.findClass(name="Foo")
-        expr = info.ast.definitions[1].members[0].body.callee
+        expr = info.ast.modules[0].definitions[1].members[0].body.callee
         self.assertEquals(ClassType(foo), info.getType(expr))
 
     def testBlockEmpty(self):
         source = "def f = {}"
         info = self.analyzeFromSource(source)
         self.assertEquals(UnitType, info.package.findFunction(name="f").returnType)
-        self.assertEquals(UnitType, info.getType(info.ast.definitions[0].body))
+        self.assertEquals(UnitType, info.getType(info.ast.modules[0].definitions[0].body))
 
     def testBlockSingleExpr(self):
         source = "def f = { 12; };"
         info = self.analyzeFromSource(source)
         self.assertEquals(I64Type, info.package.findFunction(name="f").returnType)
-        self.assertEquals(I64Type, info.getType(info.ast.definitions[0].body))
+        self.assertEquals(I64Type, info.getType(info.ast.modules[0].definitions[0].body))
 
     def testBlockEndsWithDefn(self):
         source = "def f =\n" + \
@@ -269,14 +269,14 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  var x = 34\n"
         info = self.analyzeFromSource(source)
         self.assertEquals(UnitType, info.package.findFunction(name="f").returnType)
-        self.assertEquals(UnitType, info.getType(info.ast.definitions[0].body))
-        self.assertFalse(info.hasType(info.ast.definitions[0].body.statements[1]))
+        self.assertEquals(UnitType, info.getType(info.ast.modules[0].definitions[0].body))
+        self.assertFalse(info.hasType(info.ast.modules[0].definitions[0].body.statements[1]))
 
     def testAssign(self):
         source = "def f(x: i64) = x = 12\n"
         info = self.analyzeFromSource(source)
         self.assertEquals(I64Type, info.package.findFunction(name="f").returnType)
-        self.assertEquals(I64Type, info.getType(info.ast.definitions[0].body))
+        self.assertEquals(I64Type, info.getType(info.ast.modules[0].definitions[0].body))
 
     def testAssignWrongType(self):
         source = "def f(x: i32) = x = true\n"
@@ -293,7 +293,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "def f(o: Foo) = o.x"
         info = self.analyzeFromSource(source)
         self.assertEquals(BooleanType, info.package.findFunction(name="f").returnType)
-        self.assertEquals(BooleanType, info.getType(info.ast.definitions[1].body))
+        self.assertEquals(BooleanType, info.getType(info.ast.modules[0].definitions[1].body))
 
     def testPropertyNullaryMethod(self):
         source = "class Foo\n" + \
@@ -302,14 +302,14 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source)
         self.assertEquals(BooleanType, info.package.findFunction(name="f").returnType)
         self.assertEquals(BooleanType, info.package.findFunction(name="Foo.m").returnType)
-        self.assertEquals(BooleanType, info.getType(info.ast.definitions[1].body))
+        self.assertEquals(BooleanType, info.getType(info.ast.modules[0].definitions[1].body))
 
     def testPropertyPackage(self):
         source = "var x = foo.bar"
         info = self.analyzeFromSource(source, packageNames=["foo.bar"])
         packageType = getPackageType()
-        self.assertEquals(packageType, info.getType(info.ast.definitions[0].expression))
-        self.assertFalse(info.hasType(info.ast.definitions[0].expression.receiver))
+        self.assertEquals(packageType, info.getType(info.ast.modules[0].definitions[0].expression))
+        self.assertFalse(info.hasType(info.ast.modules[0].definitions[0].expression.receiver))
 
     def testPropertyPackagePrefix(self):
         source = "var x = foo.bar"
@@ -320,7 +320,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "var x = foo.bar"
         info = self.analyzeFromSource(source, packageNames=["foo.bar", "foo.bar.baz"])
         packageType = getPackageType()
-        self.assertEquals(packageType, info.getType(info.ast.definitions[0].expression))
+        self.assertEquals(packageType, info.getType(info.ast.modules[0].definitions[0].expression))
 
     def testPropertyForeignGlobal(self):
         source = "var x = foo.bar"
@@ -329,7 +329,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source, packageLoader=MockPackageLoader([foo]))
         x = info.package.findGlobal(name="x")
         self.assertEquals(UnitType, x.type)
-        self.assertEquals(UnitType, info.getType(info.ast.definitions[0].expression))
+        self.assertEquals(UnitType, info.getType(info.ast.modules[0].definitions[0].expression))
 
     def testPropertyForeignFunction(self):
         source = "var x = foo.bar"
@@ -339,7 +339,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source, packageLoader=MockPackageLoader([foo]))
         x = info.package.findGlobal(name="x")
         self.assertEquals(UnitType, x.type)
-        self.assertEquals(UnitType, info.getType(info.ast.definitions[0].expression))
+        self.assertEquals(UnitType, info.getType(info.ast.modules[0].definitions[0].expression))
 
     def testPropertyForeignCtor(self):
         foo = Package(name=Name(["foo"]))
@@ -356,7 +356,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source, packageLoader=packageLoader)
         x = info.package.findGlobal(name="x")
         self.assertEquals(barType, x.type)
-        callInfo = info.getCallInfo(info.ast.definitions[0].expression)
+        callInfo = info.getCallInfo(info.ast.modules[0].definitions[0].expression)
         self.assertFalse(callInfo.receiverExprNeeded)
 
     def testCallForeignFunctionWithArg(self):
@@ -389,7 +389,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "def f(x: foo.Bar) = id[foo.Bar](x)"
         info = self.analyzeFromSource(source, packageLoader=loader)
         expectedType = ClassType(clas)
-        fAst = info.ast.definitions[1]
+        fAst = info.ast.modules[0].definitions[1]
         self.assertEquals(expectedType, info.getType(fAst.parameters[0]))
         self.assertEquals(expectedType, info.getType(fAst.body.typeArguments[0]))
         self.assertEquals(expectedType, info.getType(fAst.body.arguments[0]))
@@ -497,7 +497,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "def g = f(1, true)"
         info = self.analyzeFromSource(source)
         self.assertEquals(I64Type, info.package.findFunction(name="g").returnType)
-        self.assertEquals(I64Type, info.getType(info.ast.definitions[1].body))
+        self.assertEquals(I64Type, info.getType(info.ast.modules[0].definitions[1].body))
 
     def testCallWrongNumberOfArgs(self):
         source = "def f(x: i32, y: boolean) = x\n" + \
@@ -528,7 +528,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         clas = info.package.findClass(name="Foo")
         function = info.package.findFunction(name="f")
         self.assertEquals(ClassType(clas, ()), function.returnType)
-        self.assertEquals(ClassType(clas, ()), info.getType(info.ast.definitions[1].body))
+        self.assertEquals(ClassType(clas, ()), info.getType(info.ast.modules[0].definitions[1].body))
 
     def testCallCtorWithArgs(self):
         info = self.analyzeFromSource("class Foo\n" +
@@ -537,39 +537,39 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         clas = info.package.findClass(name="Foo")
         function = info.package.findFunction(name="f")
         self.assertEquals(ClassType(clas, ()), function.returnType)
-        self.assertEquals(ClassType(clas, ()), info.getType(info.ast.definitions[1].body))
+        self.assertEquals(ClassType(clas, ()), info.getType(info.ast.modules[0].definitions[1].body))
 
     def testNegExpr(self):
         info = self.analyzeFromSource("def f = -12")
         self.assertEquals(I64Type, info.package.findFunction(name="f").returnType)
-        self.assertEquals(I64Type, info.getType(info.ast.definitions[0].body))
+        self.assertEquals(I64Type, info.getType(info.ast.modules[0].definitions[0].body))
 
     def testAddExpr(self):
         info = self.analyzeFromSource("def f = 12 + 34")
-        self.assertEquals(I64Type, info.getType(info.ast.definitions[0].body))
+        self.assertEquals(I64Type, info.getType(info.ast.modules[0].definitions[0].body))
 
     def testStringConcatExpr(self):
         info = self.analyzeFromSource("def f = \"foo\" + \"bar\"")
-        self.assertEquals(getStringType(), info.getType(info.ast.definitions[0].body))
+        self.assertEquals(getStringType(), info.getType(info.ast.modules[0].definitions[0].body))
 
     def testBinopAssignExpr(self):
         info = self.analyzeFromSource("def f =\n" +
                                       "  var x = 12\n" +
                                       "  x += 34\n")
         self.assertEquals(I64Type, info.package.findFunction(name="f").returnType)
-        self.assertEquals(I64Type, info.getType(info.ast.definitions[0].body.statements[1]))
+        self.assertEquals(I64Type, info.getType(info.ast.modules[0].definitions[0].body.statements[1]))
 
     def testAndExpr(self):
         info = self.analyzeFromSource("def f = true && false")
-        self.assertEquals(BooleanType, info.getType(info.ast.definitions[0].body))
+        self.assertEquals(BooleanType, info.getType(info.ast.modules[0].definitions[0].body))
 
     def testOrExpr(self):
         info = self.analyzeFromSource("def f = true || false")
-        self.assertEquals(BooleanType, info.getType(info.ast.definitions[0].body))
+        self.assertEquals(BooleanType, info.getType(info.ast.modules[0].definitions[0].body))
 
     def testIfExpr(self):
         info = self.analyzeFromSource("def f = if (true) 12 else 34")
-        self.assertEquals(I64Type, info.getType(info.ast.definitions[0].body))
+        self.assertEquals(I64Type, info.getType(info.ast.modules[0].definitions[0].body))
 
     def testIfExprNonBooleanCondition(self):
         source = "def f = if (-1) 12 else 34"
@@ -581,33 +581,33 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testIfExprReturn(self):
         info = self.analyzeFromSource("def f = if (true) return 34 else 12")
-        self.assertEquals(I64Type, info.getType(info.ast.definitions[0].body))
+        self.assertEquals(I64Type, info.getType(info.ast.modules[0].definitions[0].body))
 
     def testIfExprWithoutElse(self):
         info = self.analyzeFromSource("def f = if (true) 12")
-        self.assertEquals(UnitType, info.getType(info.ast.definitions[0].body))
+        self.assertEquals(UnitType, info.getType(info.ast.modules[0].definitions[0].body))
 
     def testWhileExpr(self):
         info = self.analyzeFromSource("def f = while (true) 12")
-        self.assertEquals(UnitType, info.getType(info.ast.definitions[0].body))
+        self.assertEquals(UnitType, info.getType(info.ast.modules[0].definitions[0].body))
 
     def testThrowExpr(self):
         info = self.analyzeFromSource("def f(exn: Exception) = throw exn")
         self.assertEquals(ClassType(getNothingClass()),
                           info.package.findFunction(name="f").returnType)
-        self.assertEquals(NoType, info.getType(info.ast.definitions[0].body))
+        self.assertEquals(NoType, info.getType(info.ast.modules[0].definitions[0].body))
 
     def testThrowNonException(self):
         self.assertRaises(TypeException, self.analyzeFromSource, "def f = throw 12")
 
     def testThrowInIfCondition(self):
         info = self.analyzeFromSource("def f(exn: Exception) = if (throw exn) 12")
-        self.assertEquals(NoType, info.getType(info.ast.definitions[0].body.condition))
+        self.assertEquals(NoType, info.getType(info.ast.modules[0].definitions[0].body.condition))
 
     def testThrowInWhileCondition(self):
         source = "def f(exn: Exception) = while (throw exn) {}"
         info = self.analyzeFromSource(source)
-        self.assertEquals(NoType, info.getType(info.ast.definitions[0].body.condition))
+        self.assertEquals(NoType, info.getType(info.ast.modules[0].definitions[0].body.condition))
 
     def testTryExpr(self):
         info = self.analyzeFromSource("class Base\n" +
@@ -619,7 +619,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                       "    case exn => B\n" +
                                       "  finally 12")
         baseTy = ClassType(info.package.findClass(name="Base"), ())
-        astBody = info.ast.definitions[3].body
+        astBody = info.ast.modules[0].definitions[3].body
         self.assertEquals(baseTy, info.getType(astBody))
         self.assertEquals(ClassType(getExceptionClass()),
                           info.getType(astBody.catchHandler.cases[0].pattern))
@@ -640,7 +640,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "def f = try 12 catch { case exn: Foo => 34; }"
         info = self.analyzeFromSource(source)
         exnClass = info.package.findClass(name="Foo")
-        exnTy = info.getType(info.ast.definitions[1].body.catchHandler.cases[0].pattern)
+        exnTy = info.getType(info.ast.modules[0].definitions[1].body.catchHandler.cases[0].pattern)
         self.assertIs(exnClass, exnTy.clas)
         self.assertIs(exnClass, info.package.findFunction(name="f").variables[0].type.clas)
 
@@ -649,7 +649,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testReturnExpression(self):
         info = self.analyzeFromSource("def f = return 12")
-        self.assertEquals(NoType, info.getType(info.ast.definitions[0].body))
+        self.assertEquals(NoType, info.getType(info.ast.modules[0].definitions[0].body))
         self.assertEquals(I64Type, info.package.findFunction(name="f").returnType)
 
     def testReturnExpressionInGlobal(self):
@@ -663,13 +663,13 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testReturnEmpty(self):
         info = self.analyzeFromSource("def f = return")
-        self.assertEquals(NoType, info.getType(info.ast.definitions[0].body))
+        self.assertEquals(NoType, info.getType(info.ast.modules[0].definitions[0].body))
         self.assertEquals(UnitType, info.package.findFunction(name="f").returnType)
 
     def testConstructRootClass(self):
         info = self.analyzeFromSource("def f = Object")
         rootClass = getRootClass()
-        self.assertEquals(ClassType(rootClass, ()), info.getType(info.ast.definitions[0].body))
+        self.assertEquals(ClassType(rootClass, ()), info.getType(info.ast.modules[0].definitions[0].body))
 
     # Types
     def testUnitType(self):
@@ -700,7 +700,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testCallBuiltin(self):
         info = self.analyzeFromSource("def f = print(\"foo\")")
-        self.assertEquals(UnitType, info.getType(info.ast.definitions[0].body))
+        self.assertEquals(UnitType, info.getType(info.ast.modules[0].definitions[0].body))
 
     def testForeignProjectedClassType(self):
         package = Package(name=Name(["foo"]))
@@ -756,8 +756,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  g"
         info = self.analyzeFromSource(source)
         self.assertEquals(I32Type,
-                          info.getType(info.ast.definitions[0].body.statements[0].body))
-        self.assertEquals(I32Type, info.getType(info.ast.definitions[0].body.statements[1]))
+                          info.getType(info.ast.modules[0].definitions[0].body.statements[0].body))
+        self.assertEquals(I32Type, info.getType(info.ast.modules[0].definitions[0].body.statements[1]))
         self.assertEquals(I32Type, info.package.findFunction(name="f").returnType)
         self.assertEquals(I32Type, info.package.findFunction(name="f.g").returnType)
 
@@ -790,7 +790,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source)
         fooClass = info.package.findClass(name="Foo")
         barClass = info.package.findClass(name="Bar")
-        astCall = info.ast.definitions[3].body.statements[0].expression
+        astCall = info.ast.modules[0].definitions[3].body.statements[0].expression
         self.assertEquals(ClassType(barClass, ()), info.getType(astCall.arguments[0]))
         self.assertEquals(ClassType(fooClass, ()), info.getType(astCall))
 
@@ -803,7 +803,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         fooClass = info.package.findClass(name="Foo")
         barClass = info.package.findClass(name="Bar")
         self.assertEquals(ClassType(fooClass, ()), f.returnType)
-        self.assertEquals(ClassType(barClass, ()), info.getType(info.ast.definitions[2].body))
+        self.assertEquals(ClassType(barClass, ()), info.getType(info.ast.modules[0].definitions[2].body))
 
     def testFunctionReturnStatementWithSubtype(self):
         source = "class Foo\n" + \
@@ -839,7 +839,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testBuiltinOverride(self):
         source = "def f = \"foo\".to-string"
         info = self.analyzeFromSource(source)
-        useInfo = info.getUseInfo(info.ast.definitions[0].body)
+        useInfo = info.getUseInfo(info.ast.modules[0].definitions[0].body)
         receiverClass = useInfo.defnInfo.irDefn.getReceiverClass()
         self.assertIs(getStringClass(), receiverClass)
 
@@ -853,7 +853,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  def to-string: String = value + if (next !== null) next.to-string else \"\""
         info = self.analyzeFromSource(source)
         List = info.package.findClass(name="List")
-        useInfo = info.getUseInfo(info.ast.definitions[0].members[0].body.right.trueExpr)
+        useInfo = info.getUseInfo(info.ast.modules[0].definitions[0].members[0].body.right.trueExpr)
         receiverClass = useInfo.defnInfo.irDefn.getReceiverClass()
         self.assertIs(List, receiverClass)
 
@@ -966,7 +966,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  f(1i32)\n" + \
                  "  f(1f32)\n"
         info = self.analyzeFromSource(source)
-        statements = info.ast.definitions[2].body.statements
+        statements = info.ast.modules[0].definitions[2].body.statements
         self.assertEquals(I32Type, info.getType(statements[0]))
         self.assertEquals(F32Type, info.getType(statements[1]))
 
@@ -975,7 +975,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "def f = {}\n" + \
                  "def g = f[Object]"
         info = self.analyzeFromSource(source)
-        use = info.getUseInfo(info.ast.definitions[2].body)
+        use = info.getUseInfo(info.ast.modules[0].definitions[2].body)
         f = info.package.findFunction(name="f", pred=lambda fn: len(fn.typeParameters) == 1)
         self.assertIs(use.defnInfo.irDefn, f)
 
@@ -985,7 +985,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "def f[static T <: A] = {}\n" + \
                  "def g = f[Object]"
         info = self.analyzeFromSource(source)
-        use = info.getUseInfo(info.ast.definitions[3].body)
+        use = info.getUseInfo(info.ast.modules[0].definitions[3].body)
         A = info.package.findClass(name="A")
         pred = lambda fn: len(fn.typeParameters) == 1 and \
                           fn.typeParameters[0].upperBound.clas is getRootClass()
@@ -1023,7 +1023,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "def id-outer[static T] =\n" + \
                  "  def id-inner(x: T) = x"
         info = self.analyzeFromSource(source)
-        paramType = info.getType(info.ast.definitions[0].body.statements[0].parameters[0])
+        paramType = info.getType(info.ast.modules[0].definitions[0].body.statements[0].parameters[0])
         T = info.package.findTypeParameter(name="id-outer.T")
         self.assertEquals(VariableType(T), paramType)
         retTy = info.package.findFunction(name="id-outer.id-inner").returnType
@@ -1033,7 +1033,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "def id-outer[static T](x: T) =\n" + \
                  "  def id-inner = x"
         info = self.analyzeFromSource(source)
-        xType = info.getType(info.ast.definitions[0].body.statements[0].body)
+        xType = info.getType(info.ast.modules[0].definitions[0].body.statements[0].body)
         T = info.package.findTypeParameter(name="id-outer.T")
         self.assertEquals(VariableType(T), xType)
 
@@ -1042,7 +1042,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  def id-inner = x\n" + \
                  "  id-inner"
         info = self.analyzeFromSource(source)
-        callType = info.getType(info.ast.definitions[0].body.statements[1])
+        callType = info.getType(info.ast.modules[0].definitions[0].body.statements[1])
         T = info.package.findTypeParameter(name="id-outer.T")
         self.assertEquals(VariableType(T), callType)
 
@@ -1077,13 +1077,13 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         f = info.package.findFunction(name="f")
         ty = ClassType(Box, (ClassType(C),))
         self.assertEquals(ty, f.returnType)
-        self.assertEquals(ty, info.getType(info.ast.definitions[2].body))
+        self.assertEquals(ty, info.getType(info.ast.modules[0].definitions[2].body))
 
     def testLoadFieldWithTypeParameter(self):
         source = "class Box[static T](value: T)\n" + \
                  "def f(box: Box[String]) = box.value"
         info = self.analyzeFromSource(source)
-        self.assertEquals(getStringType(), info.getType(info.ast.definitions[1].body))
+        self.assertEquals(getStringType(), info.getType(info.ast.modules[0].definitions[1].body))
 
     def testLoadInheritedFieldWithTypeParameter(self):
         source = "class Box[static T](value: T)\n" + \
@@ -1091,7 +1091,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  def this(s: String) = super(s)\n" + \
                  "def f(box: SubBox) = box.value"
         info = self.analyzeFromSource(source)
-        self.assertEquals(getStringType(), info.getType(info.ast.definitions[2].body))
+        self.assertEquals(getStringType(), info.getType(info.ast.modules[0].definitions[2].body))
 
     def testStoreSubtypeToTypeParameterField(self):
         source = "class A\n" + \
@@ -1100,7 +1100,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "def f(box: Box[A], b: B) = box.value = b"
         info = self.analyzeFromSource(source)
         A = info.package.findClass(name="A")
-        self.assertEquals(ClassType(A), info.getType(info.ast.definitions[3].body))
+        self.assertEquals(ClassType(A), info.getType(info.ast.modules[0].definitions[3].body))
 
     def testCallInheritedMethodWithTypeParameter(self):
         source = "class A[static T](val: T)\n" + \
@@ -1113,7 +1113,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         f = info.package.findFunction(name="f")
         ty = getRootClassType()
         self.assertEquals(ty, f.returnType)
-        self.assertEquals([ty], info.getCallInfo(info.ast.definitions[2].body).typeArguments)
+        self.assertEquals([ty], info.getCallInfo(info.ast.modules[0].definitions[2].body).typeArguments)
 
     def testOverrideInheritedMethodWithTypeParameter(self):
         source = "abstract class Function[static P, static R]\n" + \
@@ -1256,7 +1256,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source)
         Foo = info.package.findClass(name="Foo")
         superctor = Foo.constructors[1]
-        self.assertIs(superctor, info.getUseInfo(info.ast.definitions[1]).defnInfo.irDefn)
+        self.assertIs(superctor, info.getUseInfo(info.ast.modules[0].definitions[1]).defnInfo.irDefn)
 
     def testOverloadedPrimarySuperCtor(self):
         source = "class Foo\n" + \
@@ -1266,7 +1266,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source)
         Foo = info.package.findClass(name="Foo")
         superctor = Foo.constructors[1]
-        self.assertIs(superctor, info.getUseInfo(info.ast.definitions[1]).defnInfo.irDefn)
+        self.assertIs(superctor, info.getUseInfo(info.ast.modules[0].definitions[1]).defnInfo.irDefn)
 
     def testOverloadedAlternateCtor(self):
         source = "class Foo\n" + \
@@ -1275,7 +1275,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  def this(x: boolean) = {}\n"
         info = self.analyzeFromSource(source)
         Foo = info.package.findClass(name="Foo")
-        call = info.ast.definitions[0].members[0].body
+        call = info.ast.modules[0].definitions[0].members[0].body
         calleeCtor = Foo.constructors[2]
         self.assertIs(calleeCtor, info.getUseInfo(call).defnInfo.irDefn)
 
@@ -1294,57 +1294,57 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  def this = {}"
         info = self.analyzeFromSource(source)
         ty = ClassType(info.package.findClass(name="C"))
-        self.assertEquals(ty, info.getType(info.ast.definitions[0].body))
+        self.assertEquals(ty, info.getType(info.ast.modules[0].definitions[0].body))
 
     def testRedefinedSymbol(self):
         self.assertRaises(ScopeException, self.analyzeFromSource, "var x = 12; var x = 34;")
 
     def testUseGlobalVarInGlobal(self):
         info = self.analyzeFromSource("var x = 12; var y = x;")
-        self.assertIs(info.getDefnInfo(info.ast.definitions[0].pattern),
-                      info.getUseInfo(info.ast.definitions[1].expression).defnInfo)
+        self.assertIs(info.getDefnInfo(info.ast.modules[0].definitions[0].pattern),
+                      info.getUseInfo(info.ast.modules[0].definitions[1].expression).defnInfo)
 
     def testUseGlobalVarInFunction(self):
         info = self.analyzeFromSource("var x = 12; def f = x;")
-        self.assertIs(info.getDefnInfo(info.ast.definitions[0].pattern),
-                      info.getUseInfo(info.ast.definitions[1].body).defnInfo)
+        self.assertIs(info.getDefnInfo(info.ast.modules[0].definitions[0].pattern),
+                      info.getUseInfo(info.ast.modules[0].definitions[1].body).defnInfo)
 
     def testUseGlobalVarInClass(self):
         info = self.analyzeFromSource("var x = 12; class C { var y = x; };")
         ast = info.ast
-        self.assertIs(info.getDefnInfo(ast.definitions[0].pattern),
-                      info.getUseInfo(ast.definitions[1].members[0].expression).defnInfo)
+        self.assertIs(info.getDefnInfo(ast.modules[0].definitions[0].pattern),
+                      info.getUseInfo(ast.modules[0].definitions[1].members[0].expression).defnInfo)
 
     def testUseGlobalFunctionInGlobal(self):
         info = self.analyzeFromSource("def f = 12; var x = f;")
-        self.assertIs(info.getDefnInfo(info.ast.definitions[0]),
-                      info.getUseInfo(info.ast.definitions[1].expression).defnInfo)
+        self.assertIs(info.getDefnInfo(info.ast.modules[0].definitions[0]),
+                      info.getUseInfo(info.ast.modules[0].definitions[1].expression).defnInfo)
 
     def testUseGlobalFunctionInFunction(self):
         info = self.analyzeFromSource("def f = 12; def g = f;")
-        self.assertIs(info.getDefnInfo(info.ast.definitions[0]),
-                      info.getUseInfo(info.ast.definitions[1].body).defnInfo)
+        self.assertIs(info.getDefnInfo(info.ast.modules[0].definitions[0]),
+                      info.getUseInfo(info.ast.modules[0].definitions[1].body).defnInfo)
 
     def testUseGlobalFunctionInClass(self):
         info = self.analyzeFromSource("def f = 12; class C { var x = f; }")
-        self.assertIs(info.getDefnInfo(info.ast.definitions[0]),
-                      info.getUseInfo(info.ast.definitions[1].members[0].expression).defnInfo)
+        self.assertIs(info.getDefnInfo(info.ast.modules[0].definitions[0]),
+                      info.getUseInfo(info.ast.modules[0].definitions[1].members[0].expression).defnInfo)
 
     def testUseGlobalClassInGlobal(self):
         source = "class C\n" + \
                  "  def this = {}\n" + \
                  "var x = C\n"
         info = self.analyzeFromSource(source)
-        self.assertIs(info.getDefnInfo(info.ast.definitions[0].members[0]),
-                      info.getUseInfo(info.ast.definitions[1].expression).defnInfo)
+        self.assertIs(info.getDefnInfo(info.ast.modules[0].definitions[0].members[0]),
+                      info.getUseInfo(info.ast.modules[0].definitions[1].expression).defnInfo)
 
     def testUseGlobalClassInFunction(self):
         source = "class C\n" + \
                  "  def this = {}\n" + \
                  "def f = C"
         info = self.analyzeFromSource(source)
-        self.assertIs(info.getDefnInfo(info.ast.definitions[0].members[0]),
-                      info.getUseInfo(info.ast.definitions[1].body).defnInfo)
+        self.assertIs(info.getDefnInfo(info.ast.modules[0].definitions[0].members[0]),
+                      info.getUseInfo(info.ast.modules[0].definitions[1].body).defnInfo)
 
     def testUseGlobalClassInClass(self):
         source = "class C\n" + \
@@ -1352,8 +1352,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "class D\n" + \
                  "  var x = C\n"
         info = self.analyzeFromSource(source)
-        self.assertIs(info.getDefnInfo(info.ast.definitions[0].members[0]),
-                      info.getUseInfo(info.ast.definitions[1].members[0].expression).defnInfo)
+        self.assertIs(info.getDefnInfo(info.ast.modules[0].definitions[0].members[0]),
+                      info.getUseInfo(info.ast.modules[0].definitions[1].members[0].expression).defnInfo)
 
     # Regression tests
     def testPrimaryCtorHasCorrectScope(self):
@@ -1361,8 +1361,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  def make-bar = Bar(1)\n" + \
                  "class Bar(x: i64)"
         info = self.analyzeFromSource(source)
-        barCtor = info.getDefnInfo(info.ast.definitions[1].constructor).irDefn
-        usedCtor = info.getUseInfo(info.ast.definitions[0].members[0].body).defnInfo.irDefn
+        barCtor = info.getDefnInfo(info.ast.modules[0].definitions[1].constructor).irDefn
+        usedCtor = info.getUseInfo(info.ast.modules[0].definitions[0].members[0].body).defnInfo.irDefn
         self.assertIs(barCtor, usedCtor)
 
     def testSubstituteBoundsWhenCalling(self):
