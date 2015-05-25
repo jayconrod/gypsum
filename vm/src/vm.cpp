@@ -14,6 +14,7 @@
 #include "heap.h"
 #include "interpreter.h"
 #include "memory.h"
+#include "name.h"
 #include "package.h"
 #include "platform.h"
 #include "roots.h"
@@ -64,7 +65,7 @@ VM* VM::fromAddress(void* address) {
 }
 
 
-Persistent<Package> VM::findPackage(const Handle<PackageName>& name) {
+Persistent<Package> VM::findPackage(const Handle<Name>& name) {
   for (auto& package : packages_) {
     if (name->equals(package->name()))
       return package;
@@ -122,7 +123,7 @@ void VM::addPackageSearchPaths(const string& paths) {
 
 string VM::searchForPackage(const Handle<PackageDependency>& dependency) {
   AllowAllocationScope allowAllocation(heap(), true);
-  auto packageName = PackageName::toString(heap(), handle(dependency->name()))
+  auto packageName = Name::toString(heap(), handle(dependency->name()))
       ->toUtf8StlString();
   size_t minNameLength = packageName.size() + 6;
   for (auto path : packageSearchPaths_) {

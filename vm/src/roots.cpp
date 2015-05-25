@@ -13,6 +13,7 @@
 #include "global.h"
 #include "handle.h"
 #include "hash-table.h"
+#include "name.h"
 #include "package.h"
 #include "stack.h"
 #include "string.h"
@@ -37,11 +38,6 @@ void Roots::initialize(Heap* heap) {
   freeMeta->lengthOffset_ = offsetof(Free, size_);
   basicRoots_[FREE_META_ROOT_INDEX] = freeMeta;
 
-  auto packageNameMeta = new(heap, 0, sizeof(PackageName), 0) Meta(PACKAGE_NAME_BLOCK_TYPE);
-  packageNameMeta->hasPointers_ = true;
-  packageNameMeta->objectPointerMap().setWord(0, PackageName::kPointerMap);
-  basicRoots_[PACKAGE_NAME_META_ROOT_INDEX] = packageNameMeta;
-
   auto packageVersionMeta = new(heap, 0, sizeof(PackageVersion), 0)
       Meta(PACKAGE_VERSION_BLOCK_TYPE);
   packageVersionMeta->hasPointers_ = true;
@@ -61,6 +57,11 @@ void Roots::initialize(Heap* heap) {
   stackMeta->hasWordSizeLength_ = true;
   stackMeta->lengthOffset_ = offsetof(Stack, stackSize_);
   basicRoots_[STACK_META_ROOT_INDEX] = stackMeta;
+
+  auto nameMeta = new(heap, 0, sizeof(Name), 0) Meta(NAME_BLOCK_TYPE);
+  nameMeta->hasPointers_ = true;
+  nameMeta->objectPointerMap().setWord(0, Name::kPointerMap);
+  basicRoots_[NAME_META_ROOT_INDEX] = nameMeta;
 
   auto globalMeta = new(heap, 0, sizeof(Global), 0) Meta(GLOBAL_BLOCK_TYPE);
   globalMeta->hasPointers_ = true;
@@ -205,7 +206,7 @@ Meta* Roots::getMetaForBlockType(int type) {
     case META_BLOCK_TYPE: return metaMeta();
     case FREE_BLOCK_TYPE: return freeMeta();
     case PACKAGE_BLOCK_TYPE: return packageMeta();
-    case PACKAGE_NAME_BLOCK_TYPE: return packageNameMeta();
+    case NAME_BLOCK_TYPE: return nameMeta();
     case PACKAGE_VERSION_BLOCK_TYPE: return packageVersionMeta();
     case PACKAGE_DEPENDENCY_BLOCK_TYPE: return packageDependencyMeta();
     case STACK_BLOCK_TYPE: return stackMeta();
@@ -252,7 +253,7 @@ Type* Roots::getBuiltinType(BuiltinId id) const {
 }
 
 
-String* Roots::getBuiltinName(BuiltinId id) const {
+Name* Roots::getBuiltinName(BuiltinId id) const {
   auto index = builtinIdToIndex(id);
   ASSERT(index < builtinNames_.size());
   return builtinNames_[index];

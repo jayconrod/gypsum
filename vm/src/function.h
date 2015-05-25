@@ -19,9 +19,9 @@ namespace codeswitch {
 namespace internal {
 
 class Bitmap;
+class Name;
 class Package;
 class StackPointerMap;
-class String;
 class TypeParameter;
 
 class Function: public Block {
@@ -29,7 +29,7 @@ class Function: public Block {
   static const BlockType kBlockType = FUNCTION_BLOCK_TYPE;
 
   void* operator new(size_t, Heap* heap, length_t instructionsSize);
-  Function(String* name,
+  Function(Name* name,
            u32 flags,
            BlockArray<TypeParameter>* typeParameters,
            Type* returnType,
@@ -41,7 +41,7 @@ class Function: public Block {
            StackPointerMap* stackPointerMap);
   static Local<Function> create(Heap* heap);
   static Local<Function> create(Heap* heap,
-                                const Handle<String>& name,
+                                const Handle<Name>& name,
                                 u32 flags,
                                 const Handle<BlockArray<TypeParameter>>& typeParameters,
                                 const Handle<Type>& returnType,
@@ -53,8 +53,8 @@ class Function: public Block {
 
   static word_t sizeForFunction(length_t instructionsSize);
 
-  String* name() const { return name_.get(); }
-  void setName(String* newName) { name_.set(this, newName); }
+  Name* name() const { return name_.get(); }
+  void setName(Name* newName) { name_.set(this, newName); }
   u32 flags() const { return flags_; }
   void setFlags(u32 newFlags) { flags_ = newFlags; }
 
@@ -101,7 +101,7 @@ class Function: public Block {
 
  private:
   DECLARE_POINTER_MAP()
-  Ptr<String> name_;
+  Ptr<Name> name_;
   u32 flags_;
   BuiltinId builtinId_;
   Ptr<BlockArray<TypeParameter>> typeParameters_;

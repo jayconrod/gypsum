@@ -25,13 +25,13 @@ class Global;
 template <class K, class V>
 class BlockHashMap;
 class Heap;
+class Name;
 class PackageDependency;
-class PackageName;
 class PackageVersion;
 class String;
 class TypeParameter;
 
-typedef BlockHashMap<String, Block> ExportMap;
+typedef BlockHashMap<Name, Block> ExportMap;
 
 class Package: public Object {
  public:
@@ -46,8 +46,8 @@ class Package: public Object {
   static Local<Package> loadFromStream(VM* vm, std::istream& stream);
 
   DEFINE_INL_ACCESSORS2(u64, flags, setFlags)
-  PackageName* name() const { return name_.get(); }
-  void setName(PackageName* newName) { name_.set(this, newName); }
+  Name* name() const { return name_.get(); }
+  void setName(Name* newName) { name_.set(this, newName); }
   PackageVersion* version() const { return version_.get(); }
   void setVersion(PackageVersion* newVersion) { version_.set(this, newVersion); }
   BlockArray<PackageDependency>* dependencies() const { return dependencies_.get(); }
@@ -92,7 +92,7 @@ class Package: public Object {
   DECLARE_POINTER_MAP()
 
   u64 flags_;
-  Ptr<PackageName> name_;
+  Ptr<Name> name_;
   Ptr<PackageVersion> version_;
   Ptr<BlockArray<PackageDependency>> dependencies_;
   Ptr<BlockArray<String>> strings_;
@@ -108,35 +108,6 @@ class Package: public Object {
 };
 
 std::ostream& operator << (std::ostream& os, const Package* pkg);
-
-
-class PackageName: public Block {
- public:
-  static const BlockType kBlockType = PACKAGE_NAME_BLOCK_TYPE;
-
-  static const length_t kMaxComponentLength = 1000;
-  static const length_t kMaxComponentCount = 100;
-
-  DEFINE_NEW(PackageName)
-  explicit PackageName(BlockArray<String>* components);
-  static Local<PackageName> create(Heap* heap, const Handle<BlockArray<String>>& components);
-
-  static Local<PackageName> fromString(Heap* heap, const Handle<String>& nameString);
-  static Local<String> toString(Heap* heap, const Handle<PackageName>& name);
-
-  BlockArray<String>* components() const { return components_.get(); }
-
-  int compare(const PackageName* other) const;
-  bool equals(const PackageName* other) const { return compare(other) == 0; }
-
- private:
-  DECLARE_POINTER_MAP()
-
-  Ptr<BlockArray<String>> components_;
-  // Update PACKAGE_NAME_POINTER_LIST if pointers change.
-};
-
-std::ostream& operator << (std::ostream& os, const PackageName* packageName);
 
 
 class PackageVersion: public Block {
@@ -172,7 +143,7 @@ class PackageDependency: public Block {
   static const BlockType kBlockType = PACKAGE_DEPENDENCY_BLOCK_TYPE;
 
   DEFINE_NEW(PackageDependency)
-  PackageDependency(PackageName* name,
+  PackageDependency(Name* name,
                     PackageVersion* minVersion,
                     PackageVersion* maxVersion,
                     BlockArray<Global>* externGlobals,
@@ -185,7 +156,7 @@ class PackageDependency: public Block {
                     BlockArray<TypeParameter>* externTypeParameters);
   static Local<PackageDependency> create(
       Heap* heap,
-      const Handle<PackageName>& name,
+      const Handle<Name>& name,
       const Handle<PackageVersion>& minVersion,
       const Handle<PackageVersion>& maxVersion,
       const Handle<BlockArray<Global>>& externGlobals,
@@ -197,7 +168,7 @@ class PackageDependency: public Block {
       const Handle<BlockArray<Function>>& externMethods,
       const Handle<BlockArray<TypeParameter>>& externTypeParameters);
   static Local<PackageDependency> create(Heap* heap,
-                                         const Handle<PackageName>& name,
+                                         const Handle<Name>& name,
                                          const Handle<PackageVersion>& minVersion,
                                          const Handle<PackageVersion>& maxVersion,
                                          length_t globalCount,
@@ -208,11 +179,11 @@ class PackageDependency: public Block {
 
   static bool parseNameAndVersion(Heap* heap,
                                   const Handle<String>& depString,
-                                  Local<PackageName>* outName,
+                                  Local<Name>* outName,
                                   Local<PackageVersion>* outMinVersion,
                                   Local<PackageVersion>* outMaxVersion);
 
-  PackageName* name() const { return name_.get(); }
+  Name* name() const { return name_.get(); }
   PackageVersion* minVersion() const { return minVersion_.get(); }
   PackageVersion* maxVersion() const { return maxVersion_.get(); }
   Package* package() const { return package_.get(); }
@@ -237,12 +208,12 @@ class PackageDependency: public Block {
   bool isSatisfiedBy(const Package* package) const {
     return isSatisfiedBy(package->name(), package->version());
   }
-  bool isSatisfiedBy(const PackageName* name, const PackageVersion* version) const;
+  bool isSatisfiedBy(const Name* name, const PackageVersion* version) const;
 
  private:
   DECLARE_POINTER_MAP()
 
-  Ptr<PackageName> name_;
+  Ptr<Name> name_;
   Ptr<PackageVersion> minVersion_;
   Ptr<PackageVersion> maxVersion_;
   Ptr<Package> package_;

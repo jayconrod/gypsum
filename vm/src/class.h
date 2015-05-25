@@ -22,7 +22,7 @@ class I32Array;
 typedef I32Array LengthArray;
 class Package;
 class PackageIdArray;
-class String;
+class Name;
 template <class T>
 class TaggedArray;
 class Type;
@@ -33,7 +33,7 @@ class Class: public Block {
   static const BlockType kBlockType = CLASS_BLOCK_TYPE;
 
   void* operator new(size_t, Heap* heap);
-  Class(String* name,
+  Class(Name* name,
         u32 flags,
         BlockArray<TypeParameter>* typeParameters,
         Type* supertype,
@@ -46,7 +46,7 @@ class Class: public Block {
         length_t lengthFieldIndex = kIndexNotSet);
   static Local<Class> create(Heap* heap);
   static Local<Class> create(Heap* heap,
-                             const Handle<String>& name,
+                             const Handle<Name>& name,
                              u32 flags,
                              const Handle<BlockArray<TypeParameter>>& typeParameters,
                              const Handle<Type>& supertype,
@@ -63,8 +63,8 @@ class Class: public Block {
   // need to allocate empty Class objects early, then fill them after other objects which
   // refer to them have been allocated.
 
-  String* name() const { return name_.get(); }
-  void setName(String* name) { name_.set(this, name); }
+  Name* name() const { return name_.get(); }
+  void setName(Name* name) { name_.set(this, name); }
 
   u32 flags() const { return flags_; }
   void setFlags(u32 flags) { flags_ = flags; }
@@ -119,7 +119,7 @@ class Class: public Block {
                                        bool* hasPointers, BitSet* pointerMap) const;
 
   DECLARE_POINTER_MAP()
-  Ptr<String> name_;
+  Ptr<Name> name_;
   u32 flags_;
   Ptr<BlockArray<TypeParameter>> typeParameters_;
   Ptr<Type> supertype_;

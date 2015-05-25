@@ -49,7 +49,7 @@ void* Function::operator new(size_t, Heap* heap, length_t instructionsSize) {
 }
 
 
-Function::Function(String* name,
+Function::Function(Name* name,
                    u32 flags,
                    BlockArray<TypeParameter>* typeParameters,
                    Type* returnType,
@@ -83,7 +83,7 @@ Local<Function> Function::create(Heap* heap) {
 
 
 Local<Function> Function::create(Heap* heap,
-                                 const Handle<String>& name,
+                                 const Handle<Name>& name,
                                  u32 flags,
                                  const Handle<BlockArray<TypeParameter>>& typeParameters,
                                  const Handle<Type>& returnType,

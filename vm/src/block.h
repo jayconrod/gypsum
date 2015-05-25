@@ -22,10 +22,10 @@ namespace internal {
 V(Meta, META)                                                                  \
 V(Free, FREE)                                                                  \
 V(Package, PACKAGE)                                                            \
-V(PackageName, PACKAGE_NAME)                                                   \
 V(PackageVersion, PACKAGE_VERSION)                                             \
 V(PackageDependency, PACKAGE_DEPENDENCY)                                       \
 V(Stack, STACK)                                                                \
+V(Name, NAME)                                                                  \
 V(Global, GLOBAL)                                                              \
 V(Function, FUNCTION)                                                          \
 V(Class, CLASS)                                                                \

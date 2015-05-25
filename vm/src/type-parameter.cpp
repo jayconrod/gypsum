@@ -11,6 +11,7 @@
 #include "flags.h"
 #include "handle.h"
 #include "heap.h"
+#include "name.h"
 #include "string.h"
 #include "type.h"
 
@@ -34,7 +35,7 @@ void* TypeParameter::operator new (size_t, Heap* heap) {
 }
 
 
-TypeParameter::TypeParameter(String* name, u32 flags, Type* upperBound, Type* lowerBound)
+TypeParameter::TypeParameter(Name* name, u32 flags, Type* upperBound, Type* lowerBound)
     : Block(TYPE_PARAMETER_BLOCK_TYPE),
       name_(this, name),
       flags_(flags),
@@ -49,7 +50,7 @@ Local<TypeParameter> TypeParameter::create(Heap* heap) {
 
 
 Local<TypeParameter> TypeParameter::create(Heap* heap,
-                                           const Handle<String>& name,
+                                           const Handle<Name>& name,
                                            u32 flags,
                                            const Handle<Type>& upperBound,
                                            const Handle<Type>& lowerBound) {

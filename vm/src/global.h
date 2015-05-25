@@ -13,8 +13,8 @@
 namespace codeswitch {
 namespace internal {
 
+class Name;
 class Object;
-class String;
 class Type;
 
 class Global: public Block {
@@ -22,11 +22,11 @@ class Global: public Block {
   static const BlockType kBlockType = GLOBAL_BLOCK_TYPE;
 
   DEFINE_NEW(Global)
-  Global(String* name, u32 flags, Type* type);
-  static Local<Global> create(Heap* heap, const Handle<String>& name,
+  Global(Name* name, u32 flags, Type* type);
+  static Local<Global> create(Heap* heap, const Handle<Name>& name,
                               u32 flags, const Handle<Type>& type);
 
-  String* name() const { return name_.get(); }
+  Name* name() const { return name_.get(); }
   u32 flags() const { return flags_; }
   Type* type() const { return type_.get(); }
 
@@ -45,7 +45,7 @@ class Global: public Block {
  private:
   DECLARE_POINTER_MAP()
 
-  Ptr<String> name_;
+  Ptr<Name> name_;
   u32 flags_;
   Ptr<Type> type_;
   union {

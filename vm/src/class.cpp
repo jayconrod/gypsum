@@ -42,7 +42,7 @@ void* Class::operator new (size_t, Heap* heap) {
 }
 
 
-Class::Class(String* name,
+Class::Class(Name* name,
              u32 flags,
              BlockArray<TypeParameter>* typeParameters,
              Type* supertype,
@@ -70,7 +70,7 @@ Class::Class(String* name,
 
 
 Local<Class> Class::create(Heap* heap,
-                           const Handle<String>& name,
+                           const Handle<Name>& name,
                            u32 flags,
                            const Handle<BlockArray<TypeParameter>>& typeParameters,
                            const Handle<Type>& supertype,

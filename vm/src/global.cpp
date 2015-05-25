@@ -23,7 +23,7 @@ DEFINE_POINTER_MAP(Global, GLOBAL_POINTERS_LIST)
 #undef GLOBAL_POINTERS_LIST
 
 
-Global::Global(String* name, u32 flags, Type* type)
+Global::Global(Name* name, u32 flags, Type* type)
     : Block(GLOBAL_BLOCK_TYPE),
       name_(this, name),
       flags_(flags),
@@ -32,7 +32,7 @@ Global::Global(String* name, u32 flags, Type* type)
 }
 
 
-Local<Global> Global::create(Heap* heap, const Handle<String>& name,
+Local<Global> Global::create(Heap* heap, const Handle<Name>& name,
                              u32 flags, const Handle<Type>& type) {
   RETRY_WITH_GC(heap, return Local<Global>(new(heap) Global(*name, flags, *type)));
 }

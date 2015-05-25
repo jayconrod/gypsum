@@ -14,7 +14,7 @@
 namespace codeswitch {
 namespace internal {
 
-class String;
+class Name;
 class Type;
 
 class Field: public Block {
@@ -22,18 +22,18 @@ class Field: public Block {
   static const BlockType kBlockType = FIELD_BLOCK_TYPE;
 
   void* operator new (size_t, Heap* heap);
-  Field(String* name, u32 flags, Type* type);
-  static Local<Field> create(Heap* heap, const Handle<String>& name,
+  Field(Name* name, u32 flags, Type* type);
+  static Local<Field> create(Heap* heap, const Handle<Name>& name,
                              u32 flags, const Handle<Type>& type);
 
-  String* name() const { return name_.get(); }
+  Name* name() const { return name_.get(); }
   u32 flags() const { return flags_; }
   Type* type() const { return type_.get(); }
 
  private:
   DECLARE_POINTER_MAP()
 
-  Ptr<String> name_;
+  Ptr<Name> name_;
   u32 flags_;
   Ptr<Type> type_;
   // Update FIELD_POINTER_LIST if pointer members change.

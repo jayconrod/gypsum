@@ -100,6 +100,7 @@ void Test ## name ::test()
   USE(roots);
 
 #define STR(s) String::fromUtf8CString(heap, s)
+#define NAME(s) Name::fromString(heap, STR(s), Name::DEFN_NAME)
 
 
 // Ugly hack: bypass member protection for classes included after this. The "correct" way would

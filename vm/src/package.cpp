@@ -24,6 +24,7 @@
 #include "handle.h"
 #include "hash-table.h"
 #include "heap.h"
+#include "name.h"
 #include "roots.h"
 #include "string.h"
 #include "type.h"
@@ -68,7 +69,7 @@ class Loader {
   Local<String> readString();
   Local<Global> readGlobal();
   Local<Function> readFunction();
-  void readFunctionHeader(Local<String>* name,
+  void readFunctionHeader(Local<Name>* name,
                           u32* flags,
                           Local<BlockArray<TypeParameter>>* typeParameters,
                           Local<Type>* returnType,
@@ -80,7 +81,7 @@ class Loader {
 
   template <typename T>
   T readValue();
-  Local<String> readName();
+  Local<Name> readName();
   length_t readLength();
   vector<u8> readData(word_t size);
   DefnId readDefnIdVbns();
@@ -388,89 +389,6 @@ ostream& operator << (ostream& os, const Package* pkg) {
 }
 
 
-#define PACKAGE_NAME_POINTER_LIST(F) \
-  F(PackageName, components_)        \
-
-DEFINE_POINTER_MAP(PackageName, PACKAGE_NAME_POINTER_LIST)
-
-#undef PACKAGE_NAME_POINTER_LIST
-
-
-PackageName::PackageName(BlockArray<String>* components)
-    : Block(PACKAGE_NAME_BLOCK_TYPE),
-      components_(this, components) {
-  ASSERT(components->length() <= kMaxComponentCount);
-  #ifdef DEBUG
-  for (auto component : *components) {
-    ASSERT(component->length() <= kMaxComponentLength);
-  }
-  #endif
-}
-
-
-Local<PackageName> PackageName::create(Heap* heap,
-                                       const Handle<BlockArray<String>>& components) {
-  RETRY_WITH_GC(heap, return Local<PackageName>(new(heap) PackageName(*components)));
-}
-
-
-Local<PackageName> PackageName::fromString(Heap* heap, const Handle<String>& nameString) {
-  auto components = String::split(heap, nameString, '.');
-  if (components->length() == 0 || components->length() > kMaxComponentCount)
-    return Local<PackageName>();
-
-  for (auto component : **components) {
-    if (component->length() == 0 || component->length() > kMaxComponentLength)
-      return Local<PackageName>();
-    auto first = component->get(0);
-    if (!inRange<u32>(first, 'A', 'Z') && !inRange<u32>(first, 'a', 'z'))
-      return Local<PackageName>();
-    for (auto it = component->begin() + 1; it != component->end(); ++it) {
-      auto ch = *it;
-      if (!inRange<u32>(ch, 'A', 'Z') &&
-          !inRange<u32>(ch, 'a', 'z') &&
-          !inRange<u32>(ch, '0', '9') &&
-          ch != '_') {
-        return Local<PackageName>();
-      }
-    }
-  }
-
-  return create(heap, components);
-}
-
-
-Local<String> PackageName::toString(Heap* heap, const Handle<PackageName>& name) {
-  auto sep = String::fromUtf8CString(heap, ".");
-  auto nameStr = String::join(heap, handle(name->components()), sep);
-  return nameStr;
-}
-
-
-int PackageName::compare(const PackageName* other) const {
-  auto len = min(components()->length(), other->components()->length());
-  for (length_t i = 0; i < len; i++) {
-    int cmp = components()->get(i)->compare(other->components()->get(i));
-    if (cmp != 0)
-      return cmp;
-  }
-  return static_cast<int>(components()->length()) -
-         static_cast<int>(other->components()->length());
-}
-
-
-ostream& operator << (ostream& os, const PackageName* packageName) {
-  os << brief(packageName) << "\n  ";
-  auto components = packageName->components();
-  auto length = components->length();
-  for (length_t i = 0; i < length - 1; i++) {
-    os << components->get(i) << '.';
-  }
-  os << components->get(length - 1);
-  return os;
-}
-
-
 #define PACKAGE_VERSION_POINTER_LIST(F) \
   F(PackageVersion, components_)        \
 
@@ -560,7 +478,7 @@ DEFINE_POINTER_MAP(PackageDependency, PACKAGE_DEPENDENCY_POINTER_LIST)
 #undef PACKAGE_DEPENDENCY_POINTER_LIST
 
 
-PackageDependency::PackageDependency(PackageName* name,
+PackageDependency::PackageDependency(Name* name,
                                      PackageVersion* minVersion,
                                      PackageVersion* maxVersion,
                                      BlockArray<Global>* externGlobals,
@@ -593,7 +511,7 @@ PackageDependency::PackageDependency(PackageName* name,
 
 Local<PackageDependency> PackageDependency::create(
     Heap* heap,
-    const Handle<PackageName>& name,
+    const Handle<Name>& name,
     const Handle<PackageVersion>& minVersion,
     const Handle<PackageVersion>& maxVersion,
     const Handle<BlockArray<Global>>& externGlobals,
@@ -614,7 +532,7 @@ Local<PackageDependency> PackageDependency::create(
 
 
 Local<PackageDependency> PackageDependency::create(Heap* heap,
-                                                   const Handle<PackageName>& name,
+                                                   const Handle<Name>& name,
                                                    const Handle<PackageVersion>& minVersion,
                                                    const Handle<PackageVersion>& maxVersion,
                                                    length_t globalCount,
@@ -638,13 +556,13 @@ Local<PackageDependency> PackageDependency::create(Heap* heap,
 
 bool PackageDependency::parseNameAndVersion(Heap* heap,
                                             const Handle<String>& depString,
-                                            Local<PackageName>* outName,
+                                            Local<Name>* outName,
                                             Local<PackageVersion>* outMinVersion,
                                             Local<PackageVersion>* outMaxVersion) {
   auto colonPos = depString->find(':');
 
   if (colonPos == kIndexNotSet) {
-    auto name = PackageName::fromString(heap, depString);
+    auto name = Name::fromString(heap, depString, Name::PACKAGE_NAME);
     if (!name)
       return false;
     *outName = name;
@@ -657,7 +575,7 @@ bool PackageDependency::parseNameAndVersion(Heap* heap,
     return false;
 
   auto nameStr = String::substring(heap, depString, 0, colonPos);
-  auto name = PackageName::fromString(heap, nameStr);
+  auto name = Name::fromString(heap, nameStr, Name::PACKAGE_NAME);
   if (!name)
     return false;
 
@@ -711,7 +629,7 @@ void PackageDependency::setLinkedClasses(BlockArray<Class>* linkedClasses) {
 }
 
 
-bool PackageDependency::isSatisfiedBy(const PackageName* name,
+bool PackageDependency::isSatisfiedBy(const Name* name,
                                       const PackageVersion* version) const {
   return this->name()->equals(name) &&
          (minVersion() == nullptr || minVersion()->compare(version) <= 0) &&
@@ -754,7 +672,7 @@ Local<Global> Loader::readGlobal() {
 
 
 Local<Function> Loader::readFunction() {
-  Local<String> name;
+  Local<Name> name;
   u32 flags;
   Local<BlockArray<TypeParameter>> typeParameters;
   Local<Type> returnType;
@@ -785,7 +703,7 @@ Local<Function> Loader::readFunction() {
 }
 
 
-void Loader::readFunctionHeader(Local<String>* name,
+void Loader::readFunctionHeader(Local<Name>* name,
                                 u32* flags,
                                 Local<BlockArray<TypeParameter>>* typeParameters,
                                 Local<Type>* returnType,
@@ -957,15 +875,17 @@ T Loader::readValue() {
 }
 
 
-Local<String> Loader::readName() {
-  auto index = readLengthVbn();
-  if (index == kIndexNotSet) {
-    return handle(roots()->emptyString());
-  } else if (index >= package_->strings()->length()) {
-    throw Error("name index out of bounds");
-  } else {
-    return handle(package_->strings()->get(index));
+Local<Name> Loader::readName() {
+  auto length = readLengthVbn();
+  auto components = BlockArray<String>::create(heap(), length);
+  for (length_t i = 0; i < length; i++) {
+    auto index = readLengthVbn();
+    if (index >= package_->strings()->length()) {
+      throw Error("name index out of bounds");
+    }
+    components->set(i, package_->strings()->get(index));
   }
+  return Name::create(heap(), components);
 }
 
 
@@ -1107,7 +1027,7 @@ Local<Package> PackageLoader::load() {
     package_->setInitFunctionIndex(initFunctionIndex);
 
     auto nameStr = readString();
-    auto name = PackageName::fromString(heap(), nameStr);
+    auto name = Name::fromString(heap(), nameStr, Name::PACKAGE_NAME);
     if (!name)
       throw Error("invalid package name");
     package_->setName(*name);
@@ -1195,7 +1115,7 @@ Local<Function> PackageLoader::readIdAndGetMethod() {
 
 Local<PackageDependency> PackageLoader::readDependencyHeader() {
   auto depStr = readString();
-  Local<PackageName> name;
+  Local<Name> name;
   Local<PackageVersion> minVersion, maxVersion;
   if (!PackageDependency::parseNameAndVersion(heap(), depStr,
                                               &name, &minVersion, &maxVersion)) {
@@ -1238,7 +1158,7 @@ Local<PackageDependency> PackageLoader::readDependencyHeader() {
 
 
 void DependencyLoader::readExternFunction(const Handle<Function>& func) {
-  Local<String> name;
+  Local<Name> name;
   u32 flags;
   Local<BlockArray<TypeParameter>> typeParameters;
   Local<Type> returnType;

@@ -11,64 +11,13 @@
 #include "flags.h"
 #include "global.h"
 #include "hash-table.h"
+#include "name.h"
 #include "package.h"
 #include "string.h"
 #include "type.h"
 
-#define STR(s) String::fromUtf8CString(heap, s)
-
 using namespace std;
 using namespace codeswitch::internal;
-
-
-TEST(BadPackageNames) {
-  TEST_PROLOGUE
-
-  ASSERT_FALSE(PackageName::fromString(heap, STR("")));
-  ASSERT_FALSE(PackageName::fromString(heap, STR("0")));
-  ASSERT_FALSE(PackageName::fromString(heap, STR("_")));
-  ASSERT_FALSE(PackageName::fromString(heap, STR("-")));
-  ASSERT_FALSE(PackageName::fromString(heap, STR("A-")));
-
-  ASSERT_FALSE(PackageName::fromString(heap, STR(".")));
-  ASSERT_FALSE(PackageName::fromString(heap, STR("a.")));
-  ASSERT_FALSE(PackageName::fromString(heap, STR(".b")));
-
-  auto longLength = PackageName::kMaxComponentLength + 1;
-  vector<u8> longNameChars(longLength, 'a');
-  auto longNameStr = String::fromUtf8String(heap, longNameChars.data(), longLength);
-  ASSERT_FALSE(PackageName::fromString(heap, longNameStr));
-
-  auto longCount = PackageName::kMaxComponentCount + 1;
-  vector<u8> longCountChars(longCount * 2 - 1);
-  for (size_t i = 0; i + 1 < longCountChars.size(); i += 2) {
-    longCountChars[i] = 'a';
-    longCountChars[i + 1] = '.';
-  }
-  longCountChars.back() = 'a';
-  auto longCountStr =
-      String::fromUtf8String(heap, longCountChars.data(), longCountChars.size());
-  ASSERT_FALSE(PackageName::fromString(heap, longCountStr));
-}
-
-
-TEST(GoodPackageNames) {
-  TEST_PROLOGUE
-
-  auto name = PackageName::fromString(heap, STR("foo"));
-  auto components = BlockArray<String>::create(heap, 1);
-  components->set(0, *STR("foo"));
-  auto expected = PackageName::create(heap, components);
-  ASSERT_TRUE(expected->equals(*name));
-
-  name = PackageName::fromString(heap, STR("f_oo1.bar34.baz"));
-  components = BlockArray<String>::create(heap, 3);
-  components->set(0, *STR("f_oo1"));
-  components->set(1, *STR("bar34"));
-  components->set(2, *STR("baz"));
-  expected = PackageName::create(heap, components);
-  ASSERT_TRUE(expected->equals(*name));
-}
 
 
 TEST(BadPackageVersions) {
@@ -121,11 +70,11 @@ TEST(GoodPackageVersions) {
 TEST(PackageDependencyParseNameAndVersion) {
   TEST_PROLOGUE
 
-  Local<PackageName> name;
+  Local<Name> name;
   Local<PackageVersion> minVersion, maxVersion;
   bool result;
 
-  auto expectedName = PackageName::fromString(heap, STR("foo.bar"));
+  auto expectedName = Name::fromString(heap, STR("foo.bar"), Name::PACKAGE_NAME);
   result = PackageDependency::parseNameAndVersion(heap, STR("foo.bar"),
                                                   &name, &minVersion, &maxVersion);
   ASSERT_TRUE(result);
@@ -179,7 +128,7 @@ TEST(PackageDependencyParseNameAndVersion) {
 
 static Local<PackageDependency> packageDependencyFromString(Heap* heap,
                                                             const Handle<String>& str) {
-  Local<PackageName> name;
+  Local<Name> name;
   Local<PackageVersion> minVersion, maxVersion;
   bool result = PackageDependency::parseNameAndVersion(heap, str,
                                                        &name, &minVersion, &maxVersion);
@@ -193,11 +142,11 @@ TEST(PackageDependencySatisfied) {
   TEST_PROLOGUE
 
   auto dependency = packageDependencyFromString(heap, STR("foo:1-3"));
-  auto name = PackageName::fromString(heap, STR("bar"));
+  auto name = Name::fromString(heap, STR("bar"), Name::PACKAGE_NAME);
   auto v1 = PackageVersion::fromString(heap, STR("1"));
   ASSERT_FALSE(dependency->isSatisfiedBy(*name, *v1));
 
-  name = PackageName::fromString(heap, STR("foo"));
+  name = Name::fromString(heap, STR("foo"), Name::PACKAGE_NAME);
   ASSERT_TRUE(dependency->isSatisfiedBy(*name, *v1));
 
   auto v0 = PackageVersion::fromString(heap, STR("0"));
@@ -226,10 +175,10 @@ TEST(PackageExports) {
 
   auto package = Package::create(heap);
   auto globals = BlockArray<Global>::create(heap, 2);
-  auto fooName = STR("foo");
+  auto fooName = NAME("foo");
   auto foo = Global::create(heap, fooName, NO_FLAGS, handle(Type::unitType(roots)));
   globals->set(0, *foo);
-  auto barName = STR("bar");
+  auto barName = NAME("bar");
   auto bar = Global::create(heap, barName, PUBLIC_FLAG, handle(Type::unitType(roots)));
   globals->set(1, *bar);
   package->setGlobals(*globals);
@@ -246,12 +195,12 @@ TEST(PackageLink) {
 
   auto package = Package::create(heap);
 
-  auto fooName = PackageName::fromString(heap, STR("foo"));
+  auto fooName = Name::fromString(heap, STR("foo"), Name::PACKAGE_NAME);
   Local<PackageVersion> nullVersion;
   auto fooDep = PackageDependency::create(heap, fooName, nullVersion, nullVersion,
                                           1, 0, 0, 0, 0);
   ASSERT_EQ(nullptr, fooDep->linkedGlobals());
-  auto externBar = Global::create(heap, STR("bar"),
+  auto externBar = Global::create(heap, NAME("bar"),
                                   EXTERN_FLAG | PUBLIC_FLAG,
                                   handle(Type::unitType(roots)));
   fooDep->externGlobals()->set(0, *externBar);
@@ -261,7 +210,7 @@ TEST(PackageLink) {
 
   auto fooPackage = Package::create(heap);
   auto fooGlobals = BlockArray<Global>::create(heap, 1);
-  auto bar = Global::create(heap, STR("bar"), PUBLIC_FLAG, handle(Type::unitType(roots)));
+  auto bar = Global::create(heap, NAME("bar"), PUBLIC_FLAG, handle(Type::unitType(roots)));
   fooGlobals->set(0, *bar);
   fooPackage->setGlobals(*fooGlobals);
   fooDep->setPackage(*fooPackage);
@@ -280,12 +229,12 @@ TEST(PackageLinkMissingGlobal) {
 
   auto package = Package::create(heap);
 
-  auto fooName = PackageName::fromString(heap, STR("foo"));
+  auto fooName = Name::fromString(heap, STR("foo"), Name::PACKAGE_NAME);
   Local<PackageVersion> nullVersion;
   auto fooDep = PackageDependency::create(heap, fooName, nullVersion, nullVersion,
                                           1, 0, 0, 0, 0);
   ASSERT_EQ(nullptr, fooDep->linkedGlobals());
-  auto externBar = Global::create(heap, STR("bar"),
+  auto externBar = Global::create(heap, NAME("bar"),
                                   EXTERN_FLAG | PUBLIC_FLAG,
                                   handle(Type::unitType(roots)));
   fooDep->externGlobals()->set(0, *externBar);

@@ -12,6 +12,7 @@
 #include "block-visitor.h"
 #include "bytecode.h"
 #include "function.h"
+#include "name.h"
 #include "package.h"
 #include "string.h"
 #include "roots.h"
@@ -146,7 +147,7 @@ static Local<Package> createTestPackage(Heap* heap) {
   auto functions = BlockArray<Function>::create(heap, 1);
   Local<BlockArray<TypeParameter>> emptyTypeParameters(
       reinterpret_cast<BlockArray<TypeParameter>*>(roots->emptyBlockArray()));
-  auto function = Function::create(heap, handle(roots->emptyString()),
+  auto function = Function::create(heap, NAME("foo"),
                                    0, emptyTypeParameters, returnType, parameterTypes,
                                    2 * kWordSize, instList, blockOffsetList, package);
   functions->set(0, *function);

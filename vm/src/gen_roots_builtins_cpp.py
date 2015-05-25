@@ -53,7 +53,7 @@ def initType(out, classData):
 
 def initName(out, classData):
     out.write("\n  { // %s\n" % classData["id"])
-    out.write("    auto name = String::rawFromUtf8CString(heap, \"%s\");\n" % classData["name"])
+    out.write("    auto name = nameFromUtf8CString(heap, \"%s\");\n" % classData["name"])
     out.write("    builtinNames_.push_back(name);\n  }")
 
 
@@ -74,7 +74,7 @@ def initClass(out, classData):
         out.write("    auto fields = new(heap, %d) BlockArray<Field>;\n" %
                   len(classData["fields"]))
         for i, fieldData in enumerate(classData["fields"]):
-            out.write("    auto field%dName = String::rawFromUtf8CString(heap, \"%s\");\n" %
+            out.write("    auto field%dName = nameFromUtf8CString(heap, \"%s\");\n" %
                       (i, fieldData["name"]))
             typeName = fieldData["type"]
             out.write("    auto field%d = new(heap) Field(field%dName, 0, %s);\n" %
@@ -121,9 +121,9 @@ def initFunction(out, functionData):
     out.write("\n  { // %s\n" % functionData["id"])
     out.write("    auto function = getBuiltinFunction(%s);\n" % functionData["id"])
     if "name" not in functionData:
-        out.write("    auto name = emptyString();\n")
+        out.write("    auto name = nameFromUtf8CString(heap, \"$constructor\");\n")
     else:
-        out.write("    auto name = String::rawFromUtf8CString(heap, \"%s\");\n" %
+        out.write("    auto name = nameFromUtf8CString(heap, \"%s\");\n" %
                   functionData["name"])
     out.write("    auto returnType = %s;\n" % getTypeFromName(functionData["returnType"]))
     out.write("    auto parameterTypes = new(heap, %d) BlockArray<Type>;\n" %
@@ -182,6 +182,7 @@ with open(rootsBuiltinsName, "w") as rootsBuiltinsFile:
 #include "class.h"
 #include "field.h"
 #include "function.h"
+#include "name.h"
 #include "string.h"
 #include "type.h"
 
@@ -189,6 +190,15 @@ using namespace std;
 
 namespace codeswitch {
 namespace internal {
+
+static Name* nameFromUtf8CString(Heap* heap, const char* cstr) {
+  auto vmstr = String::rawFromUtf8CString(heap, cstr);
+  auto components = new(heap, 1) BlockArray<String>;
+  components->set(0, vmstr);
+  auto name = new(heap) Name(components);
+  return name;
+}
+
 
 void Roots::initializeBuiltins(Heap* heap) {
   //
@@ -221,7 +231,7 @@ void Roots::initializeBuiltins(Heap* heap) {
     rootsBuiltinsFile.write("""
 
   //
-  // Initialize names
+  // Allocate and initialize names
   //""")
     for classData in classesData:
         initName(rootsBuiltinsFile, classData)

@@ -19,10 +19,10 @@ namespace internal {
 
 class Block;
 class Heap;
+class Name;
 class Stack;
 class Package;
 class PackageDependency;
-class PackageName;
 
 class VM {
  public:
@@ -61,7 +61,7 @@ class VM {
   HandleStorage& handleStorage() { return *handleStorage_; }
   const Persistent<Stack>& stack() { return stack_; }
 
-  Persistent<Package> findPackage(const Handle<PackageName>& name);
+  Persistent<Package> findPackage(const Handle<Name>& name);
   Persistent<Package> loadPackage(const Handle<PackageDependency>& dependency);
   Persistent<Package> loadPackage(const std::string& fileName);
   void addPackage(const Handle<Package>& package);

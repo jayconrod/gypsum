@@ -14,7 +14,7 @@
 namespace codeswitch {
 namespace internal {
 
-class String;
+class Name;
 class Type;
 
 class TypeParameter: public Block {
@@ -22,10 +22,10 @@ class TypeParameter: public Block {
   static const BlockType kBlockType = TYPE_PARAMETER_BLOCK_TYPE;
 
   void* operator new (size_t, Heap* heap);
-  TypeParameter(String* name, u32 flags, Type* upperBound, Type* lowerBound);
+  TypeParameter(Name* name, u32 flags, Type* upperBound, Type* lowerBound);
   static Local<TypeParameter> create(Heap* heap);
   static Local<TypeParameter> create(Heap* heap,
-                                     const Handle<String>& name,
+                                     const Handle<Name>& name,
                                      u32 flags,
                                      const Handle<Type>& upperBound,
                                      const Handle<Type>& lowerBound);
@@ -35,8 +35,8 @@ class TypeParameter: public Block {
   // relationship. We may need to allocate TypeParameter objects early, then fill them after
   // other objects which refer to them have been allocated.
 
-  String* name() const { return name_.get(); }
-  void setName(String* name) { name_.set(this, name); }
+  Name* name() const { return name_.get(); }
+  void setName(Name* name) { name_.set(this, name); }
   u32 flags() const { return flags_; }
   void setFlags(u32 newFlags) { flags_ = newFlags; }
   Type* upperBound() const { return upperBound_.get(); }
@@ -52,7 +52,7 @@ class TypeParameter: public Block {
  private:
   DECLARE_POINTER_MAP()
 
-  Ptr<String> name_;
+  Ptr<Name> name_;
   u32 flags_;
   Ptr<Type> upperBound_;
   Ptr<Type> lowerBound_;

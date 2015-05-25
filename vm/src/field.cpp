@@ -30,14 +30,14 @@ void* Field::operator new (size_t, Heap* heap) {
 }
 
 
-Field::Field(String* name, u32 flags, Type* type)
+Field::Field(Name* name, u32 flags, Type* type)
     : Block(FIELD_BLOCK_TYPE),
       name_(this, name),
       flags_(flags),
       type_(this, type) { }
 
 
-Local<Field> Field::create(Heap* heap, const Handle<String>& name,
+Local<Field> Field::create(Heap* heap, const Handle<Name>& name,
                            u32 flags, const Handle<Type>& type) {
   RETRY_WITH_GC(heap, return Local<Field>(new(heap) Field(*name, flags, *type)));
 }

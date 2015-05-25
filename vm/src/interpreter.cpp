@@ -19,6 +19,7 @@
 #include "function.h"
 #include "global.h"
 #include "handle.h"
+#include "name.h"
 #include "object.h"
 #include "package.h"
 #include "roots.h"
@@ -749,7 +750,7 @@ void Interpreter::handleBuiltin(BuiltinId id) {
 
     case BUILTIN_UNIT_TO_STRING_ID: {
       pop<Block*>();  // receiver
-      push<Block*>(vm_->roots()->getBuiltinName(BUILTIN_UNIT_TYPE_ID));
+      push<Block*>(vm_->roots()->getBuiltinName(BUILTIN_UNIT_TYPE_ID)->components()->get(0));
       break;
     }
 

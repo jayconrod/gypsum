@@ -23,6 +23,7 @@ class I8Array;
 class I32Array;
 class I64Array;
 class Meta;
+class Name;
 class String;
 template <class T>
 class TaggedArray;
@@ -40,10 +41,10 @@ class Roots {
     F(Meta, metaMeta, META_META)                                      \
     F(Meta, freeMeta, FREE_META)                                      \
     F(Meta, packageMeta, PACKAGE_META)                                \
-    F(Meta, packageNameMeta, PACKAGE_NAME_META)                       \
     F(Meta, packageVersionMeta, PACKAGE_VERSION_META)                 \
     F(Meta, packageDependencyMeta, PACKAGE_DEPENDENCY_META)           \
     F(Meta, stackMeta, STACK_META)                                    \
+    F(Meta, nameMeta, NAME_META)                                      \
     F(Meta, globalMeta, GLOBAL_META)                                  \
     F(Meta, functionMeta, FUNCTION_META)                              \
     F(Meta, classMeta, CLASS_META)                                    \
@@ -82,7 +83,7 @@ class Roots {
   Class* getBuiltinClass(BuiltinId id) const;
   Meta* getBuiltinMeta(BuiltinId id) const;
   Type* getBuiltinType(BuiltinId id) const;
-  String* getBuiltinName(BuiltinId id) const;
+  Name* getBuiltinName(BuiltinId id) const;
   Function* getBuiltinFunction(BuiltinId id) const;
 
   template <class Callback>
@@ -104,7 +105,7 @@ class Roots {
   std::vector<Class*> builtinClasses_;
   std::vector<Meta*> builtinMetas_;
   std::vector<Type*> builtinTypes_;
-  std::vector<String*> builtinNames_;
+  std::vector<Name*> builtinNames_;
   std::vector<Function*> builtinFunctions_;
 
   #undef BASIC_META_LIST

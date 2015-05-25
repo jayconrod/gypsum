@@ -68,14 +68,14 @@ ostream& operator << (std::ostream& os, brief b) {
 // Unfortunately, we can't use macros to declare these because some of them are templated.
 class Package;
 ostream& operator << (ostream&, const Package*);
-class PackageName;
-ostream& operator << (ostream&, const PackageName*);
 class PackageVersion;
 ostream& operator << (ostream&, const PackageVersion*);
 class PackageDependency;
 ostream& operator << (ostream&, const PackageDependency*);
 class Stack;
 ostream& operator << (ostream&, const Stack*);
+class Name;
+ostream& operator << (ostream&, const Name*);
 class Global;
 ostream& operator << (ostream&, const Global*);
 class Function;
@@ -99,10 +99,10 @@ void dump(const Block* block) {
     case META_BLOCK_TYPE: cerr << reinterpret_cast<const Meta*>(block); break;
     case FREE_BLOCK_TYPE: cerr << reinterpret_cast<const Free*>(block); break;
     case PACKAGE_BLOCK_TYPE: cerr << reinterpret_cast<const Package*>(block); break;
-    case PACKAGE_NAME_BLOCK_TYPE: cerr << reinterpret_cast<const PackageName*>(block); break;
     case PACKAGE_VERSION_BLOCK_TYPE: cerr << reinterpret_cast<const PackageVersion*>(block); break;
     case PACKAGE_DEPENDENCY_BLOCK_TYPE: cerr << reinterpret_cast<const PackageDependency*>(block); break;
     case STACK_BLOCK_TYPE: cerr << reinterpret_cast<const Stack*>(block); break;
+    case NAME_BLOCK_TYPE: cerr << reinterpret_cast<const Name*>(block); break;
     case GLOBAL_BLOCK_TYPE: cerr << reinterpret_cast<const Global*>(block); break;
     case FUNCTION_BLOCK_TYPE: cerr << reinterpret_cast<const Function*>(block); break;
     case CLASS_BLOCK_TYPE: cerr << reinterpret_cast<const Class*>(block); break;
