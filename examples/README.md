@@ -1,7 +1,7 @@
 # Gypsum examples
 
-This directory contains some examples written in Gypsum. Here's a
-suggested order to look at them:
+This directory contains some examples written in Gypsum. A few simple
+examples to start with are:
 
 * hello.gy - introductory "hello world" program. Shows basic input, output,
   output, functions, and variables.
@@ -11,21 +11,15 @@ suggested order to look at them:
 * list.gy - creates a linked list and sums the integers in it. Shows
   how classes and objects are used.
 
-Before you can run any examples, you need to compile the VM driver.
+To build all the examples (in the top-level Gypsum directory):
 
 ```
-cd ../vm
-make -j8
+make build-examples -j8
 ```
 
-You can compile an example like this:
+To run an individual example with the CodeSwitch VM:
 
 ```
-../compiler/compiler hello.gy -o hello.csp
-```
-
-And then run it like this:
-
-```
-../vm/out/driver hello.csp
+make build-vm -j8
+out/debug/driver out/debug/examples/hello.csp
 ```

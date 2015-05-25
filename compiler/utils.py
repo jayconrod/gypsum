@@ -4,7 +4,9 @@
 # the GPL license that can be found in the LICENSE.txt file.
 
 
+import os.path
 import string
+import sys
 from StringIO import StringIO
 
 
@@ -136,6 +138,17 @@ def encodeString(inStr):
     return outBuf.getvalue()
 
 
+def openCommonFile(name):
+    """The compiler may be packaged using pyinstaller. We need to be able to open resource files
+    both in that configuration and in the test configuration (regular Python files). pyinstaller
+    unpacks scripts and resources to a temp folder whose name is in sys._MEIPASS2."""
+    if hasattr(sys, "_MEIPASS"):
+        common = sys._MEIPASS
+    else:
+        common = os.path.join(os.path.dirname(__file__), "..", "common")
+    return open(os.path.join(common, name))
+
+
 class Counter(object):
     def __init__(self, start=0, inc=1):
         self.n = start
@@ -156,6 +169,6 @@ COMPILE_FOR_MATCH = "compile-for-match"
 COMPILE_FOR_UNINITIALIZED = "compile-for-uninitialized"
 
 
-__all__ = ["each", "encodeString", "tryDecodeString", "Counter", "hashList",
+__all__ = ["each", "encodeString", "tryDecodeString", "openCommonFile", "Counter", "hashList",
            "COMPILE_FOR_VALUE", "COMPILE_FOR_EFFECT", "COMPILE_FOR_MATCH",
            "COMPILE_FOR_UNINITIALIZED"]

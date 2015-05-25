@@ -1,70 +1,15 @@
-# Configurations
-mode ?= debug
-use_pch ?= yes
-UNAME_S := $(shell uname -s)
-ifeq ($(UNAME_S),Darwin)
-  OS := osx
-  POSIX := yes
-  use_pch := no
-else
-ifeq ($(UNAME_S),Linux)
-  OS := linux
-  POSIX := yes
-else
-  $(warning Unknown OS: $(UNAME_S))
-  OS := linux
-  POSIX := yes
-endif
-endif
-
-
 # Places
-HERE := $(realpath $(dir $(lastword $(MAKEFILE_LIST))))
-LIB_SRC_DIR := $(HERE)/src
-TEST_SRC_DIR := $(HERE)/test
-INCLUDE_DIR := $(HERE)/include
-PROGRAM_SRC_DIR := $(HERE)/programs
-COMMON_DIR := $(HERE)/../common
-COMPILER_DIR := $(HERE)/../compiler
-OUT_BASE_DIR := $(HERE)/out
-OUT_DIR := $(OUT_BASE_DIR)/$(mode)
-GEN_DIR := $(OUT_DIR)/gen
+LIB_SRC_DIR := $(VM_DIR)/src
+TEST_SRC_DIR := $(VM_DIR)/test
+INCLUDE_DIR := $(VM_DIR)/include
+PROGRAM_SRC_DIR := $(VM_DIR)/programs
 
-
-# Tools and commands
-CXX ?= g++
-CXX_COMPILE := $(CXX) -c -std=c++11
-CXX_DEPENDS := $(CXX) -std=c++11 -MM
-CXX_LINK_EXEC := $(CXX)
-AR ?= ar
-CXX_LINK_STATIC := $(AR) rcs
-RM ?= rm
-REMOVE := $(RM) -r
-PYTHON ?= python
-GY_COMPILER ?= $(COMPILER_DIR)/compiler
+# Additional tools and commands
 MKTEST := $(TEST_SRC_DIR)/mktest.py
 
-
-# Flags
-CXXFLAGS := -Werror -Wall -Wno-invalid-offsetof
-LDFLAGS :=
-DEFINES := -DWORDSIZE=64 -DPAGESIZE=4096
-ifeq ($(mode),debug)
-  CXXFLAGS += -O0 -g3
-  DEFINES += -DDEBUG
-endif
-ifeq ($(mode),release)
-  CXXFLAGS += -O3 -flto
-  LDFLAGS += -O3 -flto
-endif
-ifeq ($(OS),linux)
-  DEFINES += -DCS_PLATFORM_LINUX
-endif
-ifeq ($(OS),osx)
-  DEFINES += -DCS_PLATFORM_OSX
-endif
-
-INCLUDES := -I$(INCLUDE_DIR) $(addprefix -iquote,$(LIB_SRC_DIR) $(TEST_SRC_DIR) $(GEN_DIR))
+# Additional flags
+DEFINES += -DWORDSIZE=64 -DPAGESIZE=4096
+INCLUDES += -I$(INCLUDE_DIR) $(addprefix -iquote,$(LIB_SRC_DIR) $(TEST_SRC_DIR) $(GEN_DIR))
 
 # Sources and intermediates
 csp_packages = $(addprefix $(GEN_DIR)/,$(addsuffix .csp,$(notdir $(basename $1))))
@@ -114,14 +59,15 @@ OBJECTS := $(LIB_OBJECTS) $(TEST_OBJECTS) $(PROGRAM_OBJECTS)
 GEN := $(LIB_GEN)
 
 # Rules
-.PHONY: all clean test
+.PHONY: build-vm check-vm
 
-all: $(PROGRAMS) test
+all: build-vm
 
-clean:
-	$(REMOVE) $(OUT_BASE_DIR)
+build-vm: $(PROGRAMS)
 
-test: $(TEST)
+check: check-vm
+
+check-vm: $(TEST)
 	@$(TEST)
 
 $(PROGRAMS) $(TEST):
@@ -185,7 +131,7 @@ $(foreach src,$(TEST_GY_SOURCES),\
   $(eval $(call csp_packages,$(src)): $(src) $(wildcard $(COMPILER_DIR)/*.py) $(GY_COMPILER)))
 
 $(foreach pkg,$(TEST_CSP_PACKAGES),\
-  $(eval $(call csp_tests,$(pkg)): $(pkg) $(MKTEST)))
+  $(eval $(call csp_tests,$(pkg)): $(pkg) $(MKTEST) $(GY_COMPILER)))
 
 $(foreach dep,$(DEPS),\
   $(eval -include $(dep)))

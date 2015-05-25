@@ -4,7 +4,7 @@
 # the GPL license that can be found in the LICENSE.txt file.
 
 
-import os.path
+import utils
 import yaml
 
 
@@ -47,8 +47,7 @@ def _initialize():
     if _initialized:
         return
     _initialized = True
-    flagsPath = os.path.join(os.path.dirname(__file__), "..", "common", "flags.yaml")
-    with open(flagsPath) as flagsFile:
+    with utils.openCommonFile("flags.yaml") as flagsFile:
         flagList = yaml.load(flagsFile.read())
     code = 1
     for flagName in flagList:

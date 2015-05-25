@@ -33,14 +33,14 @@ complete, the compiler will be rewritten in Gypsum.
 To run the compiler:
 
 ```
-cd compiler
-./compiler program.gy -o program.csp
+make build-compiler
+out/debug/compiler file1.gy file2.gy... -o program.csp
 ```
 
 To test the compiler:
 
 ```
-python -m unittest discover
+make check-compiler -j8
 ```
 
 ## Virtual machine
@@ -53,14 +53,13 @@ and interpret bytecode (with a simple switch loop).
 To build and test the VM:
 
 ```
-cd vm
-make -j8
+make build-vm -j8
 ```
 
 To run a package:
 
 ```
-out/driver program.csp
+out/debug/driver program.csp
 ```
 
 ## Other goodies
@@ -80,10 +79,11 @@ To install, use `M-x package-install-file`, then add this to your `.emacs`:
   needed for CodeSwitch.
 * PyYAML is needed to parse some data files needed for the Gypsum
   compiler and for CodeSwitch.
+* pyinstaller is needed to package the compiler into a single executable.
 * G++ 4.8 or any other C++ compiler which supports C++11 is needed to
   build CodeSwitch. Other binutils are assumed as well.
 * GNU Make 3.81 is needed to build CodeSwitch.
 
-Gypsum and CodeSwitch were developed and tested on Ubuntu 13.10. They
-will hopefully work on other platforms with minimal modification, but
-nothing else is supported right now.
+Gypsum and CodeSwitch were developed and tested on Ubuntu 14.04 and
+MacOS X 10.10. They will may work on other platforms with some
+modification, but nothing else is supported right now.

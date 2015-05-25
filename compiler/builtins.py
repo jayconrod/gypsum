@@ -3,7 +3,6 @@
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
 
-import os.path
 import re
 import yaml
 
@@ -11,6 +10,7 @@ import flags
 import ids
 import ir
 import ir_types
+import utils
 
 import bytecode
 
@@ -204,8 +204,7 @@ def _initialize():
         _builtinFunctions.append(function)
         _builtinFunctionNameMap[function.name] = function
 
-    builtinsPath = os.path.join(os.path.dirname(__file__), "..", "common", "builtins.yaml")
-    with open(builtinsPath) as builtinsFile:
+    with utils.openCommonFile("builtins.yaml") as builtinsFile:
         classes, functions = yaml.load_all(builtinsFile.read())
     for ty in classes:
         declareClass(ty)

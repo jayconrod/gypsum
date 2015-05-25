@@ -5,7 +5,6 @@
 
 
 from collections import namedtuple
-import os.path
 import yaml
 
 import ids
@@ -17,8 +16,7 @@ _c = utils.Counter()
 instInfoByName = {}
 instInfoByCode = []
 
-_opcodesPath = os.path.join(os.path.dirname(__file__), "..", "common", "opcodes.yaml")
-with open(_opcodesPath) as _opcodesFile:
+with utils.openCommonFile("opcodes.yaml") as _opcodesFile:
     for _opc in yaml.load(_opcodesFile.read()):
         _info = InstInfo(_opc["name"], _c(), _opc["iops"], _opc["term"])
         instInfoByName[_opc["name"]] = _info
@@ -65,8 +63,7 @@ def getBuiltinClassId(index):
     return _classIds[index]
 
 
-_builtinsPath = os.path.join(os.path.dirname(__file__), "..", "common", "builtins.yaml")
-with open(_builtinsPath) as _builtinsFile:
+with utils.openCommonFile("builtins.yaml") as _builtinsFile:
     _classes, _functions = yaml.load_all(_builtinsFile.read())
     for _ty in _classes:
         _assignClassId(_ty["id"])
