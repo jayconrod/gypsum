@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -9,8 +9,8 @@
 #include "array.h"
 #include "block.h"
 #include "field.h"
+#include "flags.h"
 #include "function.h"
-#include "gc.h"
 #include "handle.h"
 #include "package.h"
 #include "roots.h"
@@ -22,6 +22,7 @@ namespace codeswitch {
 namespace internal {
 
 #define CLASS_POINTER_LIST(F) \
+  F(Class, name_)             \
   F(Class, typeParameters_)   \
   F(Class, supertype_)        \
   F(Class, fields_)           \
@@ -41,17 +42,19 @@ void* Class::operator new (size_t, Heap* heap) {
 }
 
 
-Class::Class(u32 flags,
-             TaggedArray<TypeParameter>* typeParameters,
+Class::Class(Name* name,
+             u32 flags,
+             BlockArray<TypeParameter>* typeParameters,
              Type* supertype,
              BlockArray<Field>* fields,
-             IdArray* constructors,
-             IdArray* methods,
+             BlockArray<Function>* constructors,
+             BlockArray<Function>* methods,
              Package* package,
              Meta* instanceMeta,
              Type* elementType,
              length_t lengthFieldIndex)
     : Block(CLASS_BLOCK_TYPE),
+      name_(this, name),
       flags_(flags),
       typeParameters_(this, typeParameters),
       supertype_(this, supertype),
@@ -67,18 +70,19 @@ Class::Class(u32 flags,
 
 
 Local<Class> Class::create(Heap* heap,
+                           const Handle<Name>& name,
                            u32 flags,
-                           const Handle<TaggedArray<TypeParameter>>& typeParameters,
+                           const Handle<BlockArray<TypeParameter>>& typeParameters,
                            const Handle<Type>& supertype,
                            const Handle<BlockArray<Field>>& fields,
-                           const Handle<IdArray>& constructors,
-                           const Handle<IdArray>& methods,
+                           const Handle<BlockArray<Function>>& constructors,
+                           const Handle<BlockArray<Function>>& methods,
                            const Handle<Package>& package,
                            const Handle<Meta>& instanceMeta,
                            const Handle<Type>& elementType,
                            length_t lengthFieldIndex) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
-      flags, *typeParameters, *supertype, *fields, *constructors, *methods,
+      *name, flags, *typeParameters, *supertype, *fields, *constructors, *methods,
       package.getOrNull(), instanceMeta.getOrNull(),
       elementType.getOrNull(), lengthFieldIndex)));
 }
@@ -86,18 +90,13 @@ Local<Class> Class::create(Heap* heap,
 
 Local<Class> Class::create(Heap* heap) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
-      0, nullptr, nullptr, nullptr, nullptr, nullptr,
+      nullptr, 0, nullptr, nullptr, nullptr, nullptr, nullptr,
       nullptr, nullptr, nullptr, kIndexNotSet)));
 }
 
 
 TypeParameter* Class::typeParameter(length_t index) const {
-  auto paramTag = typeParameters()->get(index);
-  if (paramTag.isNumber()) {
-    return package()->getTypeParameter(paramTag.getNumber());
-  } else {
-    return paramTag.getPointer();
-  }
+  return typeParameters()->get(index);
 }
 
 
@@ -148,23 +147,6 @@ Class* Class::findFieldClass(length_t index) {
 }
 
 
-Function* Class::getConstructor(length_t index) const {
-  auto id = constructors()->get(index);
-  auto ctor = package()->getFunction(id);
-  return ctor;
-}
-
-
-Function* Class::getMethod(length_t index) const {
-  intptr_t id = methods()->get(index);
-  if (isBuiltinId(id)) {
-    return getVM()->roots()->getBuiltinFunction(static_cast<BuiltinId>(id));
-  } else {
-    return package()->getFunction(id);
-  }
-}
-
-
 Meta* Class::buildInstanceMeta() {
   u32 objectSize = kWordSize, elementSize = 0;
   u8 lengthOffset = 0;
@@ -184,7 +166,7 @@ Meta* Class::buildInstanceMeta() {
   meta->hasElementPointers_ = hasElementPointers;
   meta->lengthOffset_ = lengthOffset;
   for (length_t i = 0; i < methodCount; i++) {
-    auto method = getMethod(i);
+    auto method = methods()->get(i);
     meta->setData(i, method);
   }
   meta->objectPointerMap().copyFrom(objectPointerMap.bitmap());
@@ -238,6 +220,7 @@ void Class::computeSizeAndPointerMapForType(Type* type, u32* size,
 
 ostream& operator << (ostream& os, const Class* clas) {
   os << brief(clas)
+     << "\n  name: " << brief(clas->name())
      << "\n  supertype: " << brief(clas->supertype())
      << "\n  fields: " << brief(clas->fields())
      << "\n  constructors: " << brief(clas->constructors())

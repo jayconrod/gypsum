@@ -213,6 +213,7 @@ bool Heap::shouldExpand() const {
 
 
 void Heap::expand() {
+  // TODO: this will break when we remove chunks from the list.
   auto id = static_cast<u32>(chunks_.size());
   // TODO: handle chunk allocation failure.
   unique_ptr<Chunk> chunk(new(Chunk::kDefaultSize, NOT_EXECUTABLE) Chunk(vm(), id));

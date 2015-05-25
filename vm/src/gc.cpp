@@ -57,8 +57,11 @@ void GC::collectGarbage() {
   heap_->verify();
   #endif
 
-  for (auto chunk : *heap_)
+  for (auto chunk : *heap_) {
     sweepChunk(chunk);
+    chunk->getBitmap().clear();
+    chunk->setIsMarked(false);
+  }
 
   #ifdef DEBUG
   heap_->verify();

@@ -15,6 +15,7 @@
 #include "global.h"
 #include "package.h"
 #include "roots.h"
+#include "string.h"
 #include "type.h"
 #include "type-parameter.h"
 #include "utils.h"
@@ -25,8 +26,10 @@ namespace codeswitch {
 namespace internal {
 
 #define FUNCTION_POINTER_LIST(F) \
+  F(Function, name_)             \
   F(Function, typeParameters_)   \
-  F(Function, types_)            \
+  F(Function, returnType_)       \
+  F(Function, parameterTypes_)   \
   F(Function, blockOffsets_)     \
   F(Function, package_)          \
   F(Function, stackPointerMap_)  \
@@ -46,19 +49,23 @@ void* Function::operator new(size_t, Heap* heap, length_t instructionsSize) {
 }
 
 
-Function::Function(u32 flags,
-                   TaggedArray<TypeParameter>* typeParameters,
-                   BlockArray<Type>* types,
+Function::Function(Name* name,
+                   u32 flags,
+                   BlockArray<TypeParameter>* typeParameters,
+                   Type* returnType,
+                   BlockArray<Type>* parameterTypes,
                    word_t localsSize,
                    const vector<u8>& instructions,
                    LengthArray* blockOffsets,
                    Package* package,
                    StackPointerMap* stackPointerMap)
     : Block(FUNCTION_BLOCK_TYPE),
+      name_(this, name),
       flags_(flags),
       builtinId_(0),
       typeParameters_(this, typeParameters),
-      types_(this, types),
+      returnType_(this, returnType),
+      parameterTypes_(this, parameterTypes),
       localsSize_(localsSize),
       instructionsSize_(instructions.size()),
       blockOffsets_(this, blockOffsets),
@@ -69,16 +76,24 @@ Function::Function(u32 flags,
 }
 
 
+Local<Function> Function::create(Heap* heap) {
+  RETRY_WITH_GC(heap, return Local<Function>(new(heap, 0) Function(
+      nullptr, 0, nullptr, nullptr, nullptr, 0, vector<u8>{}, nullptr, nullptr, nullptr)));
+}
+
+
 Local<Function> Function::create(Heap* heap,
+                                 const Handle<Name>& name,
                                  u32 flags,
-                                 const Handle<TaggedArray<TypeParameter>>& typeParameters,
-                                 const Handle<BlockArray<Type>>& types,
+                                 const Handle<BlockArray<TypeParameter>>& typeParameters,
+                                 const Handle<Type>& returnType,
+                                 const Handle<BlockArray<Type>>& parameterTypes,
                                  word_t localsSize,
                                  const vector<u8>& instructions,
                                  const Handle<LengthArray>& blockOffsets,
                                  const Handle<Package>& package) {
   RETRY_WITH_GC(heap, return Local<Function>(new(heap, instructions.size()) Function(
-      flags, *typeParameters, *types, localsSize, instructions,
+      *name, flags, *typeParameters, *returnType, *parameterTypes, localsSize, instructions,
       blockOffsets.getOrNull(), package.getOrNull(), nullptr)));
 }
 
@@ -89,20 +104,10 @@ word_t Function::sizeForFunction(length_t instructionsSize) {
 }
 
 
-TypeParameter* Function::typeParameter(length_t index) const {
-  auto paramTag = typeParameters()->get(index);
-  if (paramTag.isNumber()) {
-    return package()->getTypeParameter(paramTag.getNumber());
-  } else {
-    return paramTag.getPointer();
-  }
-}
-
-
 word_t Function::parametersSize() const {
   word_t size = 0;
-  for (length_t i = 0, n = parameterCount(); i < n; i++) {
-    size += align(parameterType(i)->typeSize(), kWordSize);
+  for (length_t i = 0, n = parameterTypes()->length(); i < n; i++) {
+    size += align(parameterTypes()->get(i)->typeSize(), kWordSize);
   }
   return size;
 }
@@ -110,8 +115,10 @@ word_t Function::parametersSize() const {
 
 ptrdiff_t Function::parameterOffset(length_t index) const {
   ptrdiff_t offset = 0;
-  for (length_t i = parameterCount() - 1; i > index; i--) {
-    offset += align(parameterType(i)->typeSize(), kWordSize);
+  // Use i32 instead of length_t to avoid underflow.
+  for (auto i = static_cast<i32>(parameterTypes()->length()) - 1;
+       i > static_cast<i32>(index); i--) {
+    offset += align(parameterTypes()->get(i)->typeSize(), kWordSize);
   }
   return offset;
 }
@@ -135,8 +142,10 @@ ostream& operator << (ostream& os, const Function* fn) {
   os << brief(fn);
   if (fn->hasBuiltinId())
     os << "\n  builtin id: " << fn->builtinId();
-  os << "\n  type parameters: " << brief(fn->typeParameters())
-     << "\n  types: " << brief(fn->types())
+  os << "\n  name: " << brief(fn->name())
+     << "\n  type parameters: " << brief(fn->typeParameters())
+     << "\n  returnType: " << brief(fn->returnType())
+     << "\n  parameterTypes: " << brief(fn->parameterTypes())
      << "\n  locals size: " << fn->localsSize()
      << "\n  instructions size: " << fn->instructionsSize()
      << "\n  block offsets: " << brief(fn->blockOffsets())
@@ -201,7 +210,7 @@ struct FrameState {
   }
 
   Local<Type> substituteReturnType(const Local<Function>& callee) {
-    ASSERT(typeArgs.size() == callee->typeParameterCount());
+    ASSERT(typeArgs.size() == callee->typeParameters()->length());
     vector<pair<Local<TypeParameter>, Local<Type>>> typeBindings;
     typeBindings.reserve(typeArgs.size());
     for (word_t i = 0; i < typeArgs.size(); i++) {
@@ -235,8 +244,8 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
 
   // Constrct a pointer map for the parameters.
   vector<Local<Type>> parametersMap;
-  for (length_t i = 0, n = function->parameterCount(); i < n; i++) {
-    parametersMap.push_back(handle(function->parameterType(i)));
+  for (length_t i = 0, n = function->parameterTypes()->length(); i < n; i++) {
+    parametersMap.push_back(handle(function->parameterTypes()->get(i)));
   }
 
   // Construct a pointer map for each point in the function where the garbage collector may be
@@ -432,10 +441,25 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
+        case LDGF: {
+          auto depIndex = readVbn(bytecode, &pcOffset);
+          auto externIndex = readVbn(bytecode, &pcOffset);
+          auto type = handle(package->dependencies()->get(depIndex)
+              ->linkedGlobals()->get(externIndex)->type());
+          currentMap.push(type);
+          break;
+        }
+
         case STG: {
           readVbn(bytecode, &pcOffset);
           currentMap.pop();
           break;
+        }
+
+        case STGF: {
+          readVbn(bytecode, &pcOffset);
+          readVbn(bytecode, &pcOffset);
+          currentMap.pop();
         }
 
         case LD8:
@@ -489,6 +513,20 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
+        case ALLOCOBJF: {
+          auto depIndex = readVbn(bytecode, &pcOffset);
+          auto externIndex = readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          auto clas = handle(package->dependencies()->get(depIndex)
+              ->linkedClasses()->get(externIndex));
+          vector<Local<Type>> typeArgs;
+          currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
+          auto type = Type::create(heap, clas, typeArgs);
+          currentMap.push(type);
+          break;
+        }
+
         case ALLOCARRI: {
           i64 classId = readVbn(bytecode, &pcOffset);
           readVbn(bytecode, &pcOffset);  // length is unused
@@ -507,6 +545,21 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
+        case ALLOCARRIF: {
+          auto depIndex = readVbn(bytecode, &pcOffset);
+          auto externIndex = readVbn(bytecode, &pcOffset);
+          readVbn(bytecode, &pcOffset);  // length is unused
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          auto clas = handle(package->dependencies()->get(depIndex)
+              ->linkedClasses()->get(externIndex));
+          vector<Local<Type>> typeArgs;
+          currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
+          auto type = Type::create(heap, clas, typeArgs);
+          currentMap.push(type);
+          break;
+        }
+
         case TYC: {
           i64 classId = readVbn(bytecode, &pcOffset);
           Local<Class> clas;
@@ -515,6 +568,18 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           } else {
             clas = handle(package->getClass(classId));
           }
+          vector<Local<Type>> typeArgs;
+          currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
+          auto type = Type::create(heap, clas, typeArgs);
+          currentMap.pushTypeArg(type);
+          break;
+        }
+
+        case TYCF: {
+          auto depIndex = readVbn(bytecode, &pcOffset);
+          auto externIndex = readVbn(bytecode, &pcOffset);
+          auto clas = handle(package->dependencies()->get(depIndex)
+              ->linkedClasses()->get(externIndex));
           vector<Local<Type>> typeArgs;
           currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
           auto type = Type::create(heap, clas, typeArgs);
@@ -548,7 +613,7 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           } else {
             callee = handle(package->getFunction(functionId));
           }
-          for (word_t i = 0; i < callee->parameterCount(); i++)
+          for (length_t i = 0; i < callee->parameterTypes()->length(); i++)
             currentMap.pop();
           auto returnType = currentMap.substituteReturnType(callee);
           currentMap.popTypeArgs();
@@ -556,7 +621,37 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
+        case CALLGF: {
+          auto depIndex = readVbn(bytecode, &pcOffset);
+          auto externIndex = readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          auto callee = handle(package->dependencies()->get(depIndex)
+              ->linkedFunctions()->get(externIndex));
+          for (length_t i = 0; i < callee->parameterTypes()->length(); i++)
+            currentMap.pop();
+          auto returnType = currentMap.substituteReturnType(callee);
+          currentMap.popTypeArgs();
+          currentMap.push(returnType);
+          break;
+        }
+
+        case PKG: {
+          readVbn(bytecode, &pcOffset);
+          auto packageClass = handle(roots->getBuiltinClass(BUILTIN_PACKAGE_CLASS_ID));
+          auto type = Type::create(heap, packageClass);
+          currentMap.push(type);
+          break;
+        }
+
         case CLS: {
+          readVbn(bytecode, &pcOffset);
+          currentMap.push(handle(Type::rootClassType(roots)));
+          break;
+        }
+
+        case CLSF: {
+          readVbn(bytecode, &pcOffset);
           readVbn(bytecode, &pcOffset);
           currentMap.push(handle(Type::rootClassType(roots)));
           break;
@@ -569,9 +664,9 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           maps.push_back(currentMap);
           word_t slot = currentMap.size() - argCount;
           Local<Class> clas(currentMap.typeMap[slot]->effectiveClass());
-          Local<Function> callee(clas->getMethod(methodIndex));
+          Local<Function> callee(clas->methods()->get(methodIndex));
 
-          for (word_t i = 0, n = callee->parameterCount(); i < n; i++)
+          for (word_t i = 0, n = callee->parameterTypes()->length(); i < n; i++)
             currentMap.pop();
           auto returnType = currentMap.substituteReturnType(callee);
           currentMap.popTypeArgs();

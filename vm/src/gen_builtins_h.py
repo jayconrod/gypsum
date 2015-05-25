@@ -56,9 +56,15 @@ inline bool isBuiltinId(i64 id) {
 }
 
 
-inline word_t builtinIdToIndex(BuiltinId id) {
-  return static_cast<word_t>(~id);
+inline length_t builtinIdToIndex(BuiltinId id) {
+  return static_cast<length_t>(~id);
 }
+
+
+inline BuiltinId indexToBuiltinId(length_t index) {
+  return ~static_cast<BuiltinId>(index);
+}
+
 
 // Builtin class and type ids.
 """)

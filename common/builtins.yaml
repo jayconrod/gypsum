@@ -40,7 +40,7 @@
 - name: Nothing
   id: BUILTIN_NOTHING_CLASS_ID
   isPrimitive: false
-  supertype: Object
+  supertype: null
   constructors: []
   fields: []
   methods: []
@@ -157,6 +157,14 @@
       parameterTypes:
         - String
         - String
+- name: Package
+  id: BUILTIN_PACKAGE_CLASS_ID
+  isPrimitive: false
+  isOpaque: true
+  supertype: Object
+  constructors: []
+  methods: []
+  fields: []
 - name: unit
   id: BUILTIN_UNIT_TYPE_ID
   isPrimitive: true

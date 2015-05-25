@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2014 Jay Conrod. All rights reserved.
+# Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 # This file is part of CodeSwitch. Use of this source code is governed by
 # the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -39,6 +39,8 @@ enum Flag {
     flagsHFile.write("  NUM_FLAGS = %d" % i)
     flagsHFile.write("""
 };
+
+const Flag NO_FLAGS = static_cast<Flag>(0);
 
 }
 }

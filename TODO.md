@@ -49,6 +49,7 @@
   - ir classes
 - no optional parameters: prevent objects from being extended
 - use separate Id classes instead of integers
+- Replace Function.clas with .getReceiverClass()
 
 ## VM
 - use variadic arguments for API call
@@ -60,6 +61,9 @@
 
 # Bugs
 
+## Compiler
+- delete output file when an internal error is encountered
+
 ## VM
 - `read()` breaks when EOF is given. Exception is thrown in non-GC-safe place.
 - pattern matching performs an implicit downcast without telling the interpreter.
@@ -67,4 +71,4 @@
 - no way to express nullable types for casts in bytecode.
 - assertion when trying to instantiate Nothing. This should be a special case.
 
-# TODO: file issues for everything and delete this.
+# TODO: file issues for everything and delete this section.

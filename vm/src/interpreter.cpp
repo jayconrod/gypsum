@@ -17,9 +17,9 @@
 #include "bytecode.h"
 #include "flags.h"
 #include "function.h"
-#include "gc.h"
 #include "global.h"
 #include "handle.h"
+#include "name.h"
 #include "object.h"
 #include "package.h"
 #include "roots.h"
@@ -332,10 +332,29 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
+      case LDGF: {
+        auto depIndex = toLength(readVbn());
+        auto externIndex = toLength(readVbn());
+        auto value = function_->package()->dependencies()->get(depIndex)
+            ->linkedGlobals()->get(externIndex)->getRaw();
+        push(value);
+        break;
+      }
+
       case STG: {
         auto index = toLength(readVbn());
         auto value = pop<i64>();
         auto global = function_->package()->getGlobal(index);
+        global->setRaw(value);
+        break;
+      }
+
+      case STGF: {
+        auto depIndex = toLength(readVbn());
+        auto externIndex = toLength(readVbn());
+        auto value = pop<i64>();
+        auto global = function_->package()->dependencies()->get(depIndex)
+            ->linkedGlobals()->get(externIndex);
         global->setRaw(value);
         break;
       }
@@ -387,6 +406,22 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
+      case ALLOCOBJF: {
+        auto depIndex = toLength(readVbn());
+        auto externIndex = toLength(readVbn());
+        Object* obj = nullptr;
+        {
+          GCSafeScope gcSafe(this);
+          HandleScope handleScope(vm_);
+          auto clas = handle(function_->package()->dependencies()->get(depIndex)
+              ->linkedClasses()->get(externIndex));
+          auto meta = Class::ensureAndGetInstanceMeta(clas);
+          obj = *Object::create(vm_->heap(), meta);
+        }
+        push<Block*>(obj);
+        break;
+      }
+
       case ALLOCARRI: {
         auto classId = readVbn();
         auto length = readVbn();
@@ -401,6 +436,30 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
+      case ALLOCARRIF: {
+        auto depIndex = toLength(readVbn());
+        auto externIndex = toLength(readVbn());
+        auto length = toLength(readVbn());
+        Object* obj = nullptr;
+        {
+          GCSafeScope gcSafe(this);
+          HandleScope handleScope(vm_);
+          auto clas = handle(function_->package()->dependencies()->get(depIndex)
+              ->linkedClasses()->get(externIndex));
+          auto meta = Class::ensureAndGetInstanceMeta(clas);
+          obj = *Object::create(vm_->heap(), meta, length);
+        }
+        push<Block*>(obj);
+        break;
+      }
+
+      case PKG: {
+        auto depIndex = readVbn();
+        auto package = function_->package()->dependencies()->get(depIndex)->package();
+        push<Block*>(package);
+        break;
+      }
+
       case CLS: {
         auto classId = readVbn();
         Class* clas = isBuiltinId(classId)
@@ -410,8 +469,22 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
+      case CLSF: {
+        auto depIndex = toLength(readVbn());
+        auto externIndex = toLength(readVbn());
+        auto clas = function_->package()->dependencies()->get(depIndex)
+            ->linkedClasses()->get(externIndex);
+        push<Block*>(clas);
+        break;
+      }
+
       case TYC:
       case TYV:
+        readVbn();
+        break;
+
+      case TYCF:
+        readVbn();
         readVbn();
         break;
 
@@ -428,6 +501,15 @@ i64 Interpreter::call(const Handle<Function>& callee) {
           Persistent<Function> callee(function_->package()->getFunction(functionIndex));
           enter(callee);
         }
+        break;
+      }
+
+      case CALLGF: {
+        auto packageIndex = toLength(readVbn());
+        auto externIndex = toLength(readVbn());
+        Persistent<Function> callee(function_->package()->dependencies()->get(packageIndex)
+            ->linkedFunctions()->get(externIndex));
+        enter(callee);
         break;
       }
 
@@ -668,7 +750,7 @@ void Interpreter::handleBuiltin(BuiltinId id) {
 
     case BUILTIN_UNIT_TO_STRING_ID: {
       pop<Block*>();  // receiver
-      push<Block*>(vm_->roots()->getBuiltinName(BUILTIN_UNIT_TYPE_ID));
+      push<Block*>(vm_->roots()->getBuiltinName(BUILTIN_UNIT_TYPE_ID)->components()->get(0));
       break;
     }
 
@@ -750,7 +832,7 @@ void Interpreter::enter(const Handle<Function>& callee) {
   // Make sure we have pointer maps for the callee before we build a stack frame for it.
   // This may trigger garbage collection (since pointer maps are allocated like everything
   // else), but that's fine since we're at a safepoint, and we haven't built the frame yet.
-  ASSERT((callee->flags() & ABSTRACT_FLAG) == 0);
+  ASSERT((callee->flags() & (ABSTRACT_FLAG | EXTERN_FLAG)) == 0);
   ensurePointerMap(callee);
 
   stack_->align(kWordSize);

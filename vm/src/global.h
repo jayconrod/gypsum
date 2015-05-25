@@ -13,6 +13,7 @@
 namespace codeswitch {
 namespace internal {
 
+class Name;
 class Object;
 class Type;
 
@@ -20,10 +21,12 @@ class Global: public Block {
  public:
   static const BlockType kBlockType = GLOBAL_BLOCK_TYPE;
 
-  DEFINE_NEW(Global, GLOBAL_BLOCK_TYPE)
-  Global(u32 flags, Type* type);
-  static Local<Global> create(Heap* heap, u32 flags, const Handle<Type>& type);
+  DEFINE_NEW(Global)
+  Global(Name* name, u32 flags, Type* type);
+  static Local<Global> create(Heap* heap, const Handle<Name>& name,
+                              u32 flags, const Handle<Type>& type);
 
+  Name* name() const { return name_.get(); }
   u32 flags() const { return flags_; }
   Type* type() const { return type_.get(); }
 
@@ -42,6 +45,7 @@ class Global: public Block {
  private:
   DECLARE_POINTER_MAP()
 
+  Ptr<Name> name_;
   u32 flags_;
   Ptr<Type> type_;
   union {
@@ -51,6 +55,9 @@ class Global: public Block {
   // Update GLOBAL_POINTER_LIST if pointer members change.
   // Note that the value is not included in the pointer map, since it is not always a pointer.
 };
+
+
+std::ostream& operator << (std::ostream& os, const Global* global);
 
 
 }

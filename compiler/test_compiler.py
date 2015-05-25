@@ -14,30 +14,40 @@ from ast import *
 from compile_info import *
 from scope_analysis import *
 from type_analysis import *
+from externalization import externalize
 from compiler import *
+from ids import *
 from ir import *
 from ir_types import *
 import ir_instructions
 from ir_instructions import *
 from bytecode import *
-from flags import LET
+from flags import LET, PUBLIC, METHOD
 from compile_info import CompileInfo
 from builtins import *
 from errors import *
-from utils_test import TestCaseWithDefinitions
+from utils_test import MockPackageLoader, TestCaseWithDefinitions
+
 
 class TestCompiler(TestCaseWithDefinitions):
-    def compileFromSource(self, source):
+    def compileFromSource(self, source, packageNames=None, packageLoader=None):
+        assert packageNames is None or packageLoader is None
         filename = "(test)"
         rawTokens = lex(filename, source)
         layoutTokens = layout(rawTokens)
         ast = parse(filename, layoutTokens)
-        info = CompileInfo(ast)
+        if packageNames is None:
+            packageNames = []
+        if packageLoader is None:
+            packageNameFromString = lambda s: Name.fromString(s, isPackageName=True)
+            packageLoader = MockPackageLoader(map(packageNameFromString, packageNames))
+        info = CompileInfo(ast, Package(id=TARGET_PACKAGE_ID), packageLoader)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         analyzeTypes(info)
         convertClosures(info)
         flattenClasses(info)
+        externalize(info)
         compile(info)
         return info.package
 
@@ -52,7 +62,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def makeSimpleFunction(self, name, retTy, blocks,
                            typeParameters=None, parameterTypes=None,
-                           variables=None, attribs=frozenset()):
+                           variables=None, flags=frozenset()):
         dummyPackage = Package()
         if variables is None:
             variables = []
@@ -60,9 +70,11 @@ class TestCompiler(TestCaseWithDefinitions):
             typeParameters = []
         if parameterTypes is None:
             parameterTypes = [v.type for v in variables if v.kind is PARAMETER]
+        if isinstance(name, str):
+            name = Name.fromString(name)
         blockList = [BasicBlock(i, insts) for i, insts in enumerate(blocks)]
         function = dummyPackage.addFunction(name, None, retTy, typeParameters, parameterTypes,
-                                            variables, blockList, attribs)
+                                            variables, blockList, flags)
         return function
 
     def checkFunction(self, input, expected):
@@ -72,7 +84,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testEmptyGlobalInit(self):
         self.checkFunction("",
-                           self.makeSimpleFunction("$init", UnitType, [[
+                           self.makeSimpleFunction(PACKAGE_INIT_NAME, UnitType, [[
                                unit(),
                                ret()]]))
 
@@ -80,15 +92,17 @@ class TestCompiler(TestCaseWithDefinitions):
         source = "var o: Object\n" + \
                  "var i: i32"
         self.checkFunction(source,
-                           self.makeSimpleFunction("$init", UnitType, [[
+                           self.makeSimpleFunction(PACKAGE_INIT_NAME, UnitType, [[
                                unit(),
                                ret()]]))
 
     def testInitGlobal(self):
-        self.checkFunction("let x = 42",
-                           self.makeSimpleFunction("$init", UnitType, [[
+        package = self.compileFromSource("let x = 42")
+        x = package.findGlobal(name="x")
+        self.checkFunction(package,
+                           self.makeSimpleFunction(PACKAGE_INIT_NAME, UnitType, [[
                                i64(42),
-                               stg(0),
+                               stg(x.id.index),
                                unit(),
                                ret()]]))
 
@@ -137,7 +151,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                stlocal(-1),
                                unit(),
                                ret()]],
-                             variables=[self.makeVariable("x", type=I64Type)]))
+                             variables=[self.makeVariable("f.x", type=I64Type)]))
 
     def testSimpleVar(self):
         self.checkFunction("def f = { var x = 12; x; }",
@@ -146,18 +160,20 @@ class TestCompiler(TestCaseWithDefinitions):
                                stlocal(-1),
                                ldlocal(-1),
                                ret()]],
-                             variables=[self.makeVariable("x", type=I64Type)]))
+                             variables=[self.makeVariable("f.x", type=I64Type)]))
 
     def testVarWithSimpleCast(self):
-        self.checkFunction("def f = { var x: Object = \"foo\"; x; }",
+        package = self.compileFromSource("def f = { var x: Object = \"foo\"; x; }")
+        fooIndex = package.findString("foo")
+        self.checkFunction(package,
                            self.makeSimpleFunction("f", getRootClassType(), [[
-                               string(0),
-                               tyc(BUILTIN_ROOT_CLASS_ID),
+                               string(fooIndex),
+                               tyc(BUILTIN_ROOT_CLASS_ID.index),
                                cast(),
                                stlocal(-1),
                                ldlocal(-1),
                                ret()]],
-                            variables=[self.makeVariable("x", type=getRootClassType())]))
+                            variables=[self.makeVariable("f.x", type=getRootClassType())]))
 
     def testVarWithTypeParameterCast(self):
         source = "class Foo[static +T]\n" + \
@@ -168,32 +184,95 @@ class TestCompiler(TestCaseWithDefinitions):
         yType = ClassType(Foo, (getRootClassType(),))
         expected = self.makeSimpleFunction("f", yType, [[
             ldlocal(0),
-            tyc(BUILTIN_ROOT_CLASS_ID),
-            tyc(Foo.id),
+            tyc(BUILTIN_ROOT_CLASS_ID.index),
+            tyc(Foo.id.index),
             cast(),
             stlocal(-1),
             ldlocal(-1),
             ret()]],
           parameterTypes=[xType],
-          variables=[self.makeVariable("x", type=xType, kind=PARAMETER, flags=frozenset([LET])),
-                     self.makeVariable("y", type=yType)])
+          variables=[self.makeVariable("f.x", type=xType, kind=PARAMETER, flags=frozenset([LET])),
+                     self.makeVariable("f.y", type=yType)])
         self.assertEquals(expected, package.findFunction(name="f"))
+
+    def testLoadVariablePackage(self):
+        source = "def f = foo"
+        package = self.compileFromSource(source, packageNames=["foo"])
+        fooId = package.findDependency(pred=lambda dep: str(dep.name) == "foo").package.id
+        packageType = getPackageType()
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", packageType, [[
+                               pkg(fooId.index),
+                               ret()]]))
+
+    def testLoadPropertyPackage(self):
+        source = "def f = foo.bar"
+        package = self.compileFromSource(source, packageNames=["foo.bar"])
+        barId = package.findDependency(pred=lambda dep: str(dep.name) == "foo.bar").package.id
+        packageType = getPackageType()
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", packageType, [[
+                               pkg(barId.index),
+                               ret()]]))
 
     def testLoadGlobal(self):
         source = "let x = 42\n" + \
                  "def f = x"
-        self.checkFunction(source,
+        package = self.compileFromSource(source)
+        x = package.findGlobal(name="x")
+        self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
-                               ldg(0),
+                               ldg(x.id.index),
                                ret()]]))
 
     def testStoreGlobal(self):
         source = "var x: i64\n" + \
                  "def f = { x = 12; {}; }"
-        self.checkFunction(source,
+        package = self.compileFromSource(source)
+        x = package.findGlobal(name="x")
+        f = package.findFunction(name="f")
+        self.checkFunction(package,
                            self.makeSimpleFunction("f", UnitType, [[
                                i64(12),
-                               stg(0),
+                               stg(x.id.index),
+                               unit(),
+                               ret()]]))
+
+    def testLoadForeignGlobal(self):
+        foo = Package(name=Name(["foo"]))
+        self.assertIsNot(foo.id, TARGET_PACKAGE_ID)
+        self.assertIsNone(foo.id.index)
+        x = foo.addGlobal(Name(["x"]), None, I64Type, frozenset([PUBLIC]))
+        y = foo.addGlobal(Name(["y"]), None, I64Type, frozenset([PUBLIC]))
+        source = "def f = foo.y"
+        package = self.compileFromSource(source, packageLoader=MockPackageLoader([foo]))
+        depIndex = foo.id.index
+        self.assertIsNotNone(depIndex)
+        dep = package.dependencies[depIndex]
+        self.assertIs(foo, dep.package)
+        self.assertIs(y.id.packageId, foo.id)
+        self.assertNotIn(EXTERN, y.flags)
+        self.assertIsNot(dep.externGlobals[y.id.externIndex], y)
+        externY = dep.externGlobals[y.id.externIndex]
+        self.assertIs(externY.id, y.id)
+        self.assertIn(EXTERN, externY.flags)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               ldgf(depIndex, y.id.externIndex),
+                               ret()]]))
+
+    def testStoreForeignGlobal(self):
+        foo = Package(name=Name(["foo"]))
+        x = foo.addGlobal(Name(["x"]), None, I64Type, frozenset([PUBLIC]))
+        loader = MockPackageLoader([foo])
+        source = "def f =\n" + \
+                 "  foo.x = 12\n" + \
+                 "  {}"
+        package = self.compileFromSource(source, packageLoader=loader)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", UnitType, [[
+                               i64(12),
+                               stgf(foo.id.index, x.id.index),
                                unit(),
                                ret()]]))
 
@@ -206,7 +285,7 @@ class TestCompiler(TestCaseWithDefinitions):
                            self.makeSimpleFunction("f", I64Type, [[
                                ldlocal(0),
                                ret()]],
-                             variables=[self.makeVariable("x", type=I64Type,
+                             variables=[self.makeVariable("f.x", type=I64Type,
                                                           kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testSeveralParameters(self):
@@ -225,10 +304,10 @@ class TestCompiler(TestCaseWithDefinitions):
                                ldlocal(3),
                                ret()]],
                              variables=[
-                               self.makeVariable("a", type=I32Type, kind=PARAMETER),
-                               self.makeVariable("b", type=BooleanType, kind=PARAMETER),
-                               self.makeVariable("c", type=BooleanType, kind=PARAMETER),
-                               self.makeVariable("d", type=I32Type, kind=PARAMETER)]))
+                               self.makeVariable("f.a", type=I32Type, kind=PARAMETER),
+                               self.makeVariable("f.b", type=BooleanType, kind=PARAMETER),
+                               self.makeVariable("f.c", type=BooleanType, kind=PARAMETER),
+                               self.makeVariable("f.d", type=I32Type, kind=PARAMETER)]))
 
     def testAssign(self):
         self.checkFunction("def f =\n" + \
@@ -241,7 +320,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                dup(),
                                stlocal(-1),
                                ret()]],
-                             variables=[self.makeVariable("x", type=I64Type)]))
+                             variables=[self.makeVariable("f.x", type=I64Type)]))
 
     def testAssignConst(self):
         source = "def f =\n" + \
@@ -266,21 +345,22 @@ class TestCompiler(TestCaseWithDefinitions):
                                unit(),
                                ret()]],
                              parameterTypes=[I64Type],
-                             variables=[self.makeVariable("x", type=I64Type, kind=PARAMETER)]))
+                             variables=[self.makeVariable("f.x",
+                                                          type=I64Type, kind=PARAMETER)]))
 
     def testAssignVarWithSimpleCast(self):
         package = self.compileFromSource("def f(s: String, var o: Object) = { o = s; {}; }")
         expected = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
-            tyc(BUILTIN_ROOT_CLASS_ID),
+            tyc(BUILTIN_ROOT_CLASS_ID.index),
             cast(),
             stlocal(1),
             unit(),
             ret()]],
           parameterTypes=[getStringType(), getRootClassType()],
-          variables=[self.makeVariable("s", type=getStringType(),
+          variables=[self.makeVariable("f.s", type=getStringType(),
                                        kind=PARAMETER, flags=frozenset([LET])),
-                     self.makeVariable("o", type=getRootClassType(), kind=PARAMETER)])
+                     self.makeVariable("f.o", type=getRootClassType(), kind=PARAMETER)])
         self.assertEquals(expected, package.findFunction(name="f"))
 
     def testAssignVarWithTypeParameterCast(self):
@@ -292,15 +372,16 @@ class TestCompiler(TestCaseWithDefinitions):
         yType = ClassType(Foo, (getRootClassType(),))
         expected = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
-            tyc(BUILTIN_ROOT_CLASS_ID),
-            tyc(Foo.id),
+            tyc(BUILTIN_ROOT_CLASS_ID.index),
+            tyc(Foo.id.index),
             cast(),
             stlocal(1),
             unit(),
             ret()]],
           parameterTypes=[xType, yType],
-          variables=[self.makeVariable("x", type=xType, kind=PARAMETER, flags=frozenset([LET])),
-                     self.makeVariable("y", type=yType, kind=PARAMETER)])
+          variables=[self.makeVariable("f.x", type=xType, kind=PARAMETER,
+                                       flags=frozenset([LET])),
+                     self.makeVariable("f.y", type=yType, kind=PARAMETER)])
         self.assertEquals(expected, package.findFunction(name="f"))
 
     def testAssignShortProps(self):
@@ -323,7 +404,7 @@ class TestCompiler(TestCaseWithDefinitions):
                        st64(1),
                        ret()]],
                      parameterTypes=[clasTy],
-                     variables=[self.makeVariable("foo", type=clasTy,
+                     variables=[self.makeVariable("f.foo", type=clasTy,
                                                   kind=PARAMETER, flags=frozenset([LET]))])
         self.assertEquals(expected, package.findFunction(name="f"))
 
@@ -334,13 +415,13 @@ class TestCompiler(TestCaseWithDefinitions):
                                          "    this.self = this")
         clas = package.findClass(name="Foo")
         clasTy = ClassType(clas)
-        init = package.findFunction(name="$initializer")
-        expected = self.makeSimpleFunction("$constructor", UnitType, [[
+        init = package.findFunction(name=Name(["Foo", CLASS_INIT_SUFFIX]))
+        expected = self.makeSimpleFunction(Name(["Foo", CONSTRUCTOR_SUFFIX]), UnitType, [[
                        ldlocal(0),
-                       callg(getRootClass().constructors[0].id),
+                       callg(getRootClass().constructors[0].id.index),
                        drop(),
                        ldlocal(0),
-                       callg(init.id),
+                       callg(init.id.index),
                        drop(),
                        ldlocal(0),
                        ldlocal(0),
@@ -349,8 +430,10 @@ class TestCompiler(TestCaseWithDefinitions):
                        unit(),
                        ret()]],
                      parameterTypes=[clasTy],
-                     variables=[self.makeVariable("$this", type=clasTy,
-                                                  kind=PARAMETER, flags=frozenset([LET]))])
+                     variables=[self.makeVariable(Name(["Foo", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
+                                                  type=clasTy,
+                                                  kind=PARAMETER, flags=frozenset([LET]))],
+                     flags=frozenset([METHOD]))
         self.assertEquals(expected, clas.constructors[0])
 
     def testAssignConstField(self):
@@ -378,11 +461,34 @@ class TestCompiler(TestCaseWithDefinitions):
         clasTy = ClassType(package.classes[0], ())
         expected = self.makeSimpleFunction("f", clasTy, [[
                        ldlocal(0),
-                       ldp(0),
+                       ldpc(0),
                        ret()]],
                      parameterTypes=[clasTy],
-                     variables=[self.makeVariable("foo", type=clasTy,
+                     variables=[self.makeVariable("f.foo", type=clasTy,
                                                   kind=PARAMETER, flags=frozenset([LET]))])
+        self.assertEquals(expected, package.findFunction(name="f"))
+
+    def testLoadForeignPtrField(self):
+        fooPackage = Package(name=Name(["foo"]))
+        clas = fooPackage.addClass(Name(["Bar"]), None, [], [getRootClassType()], None,
+                                   [], [], [], frozenset([PUBLIC]))
+        field = fooPackage.newField(Name(["Bar", "x"]), None,
+                                    getRootClassType(), frozenset([LET, PUBLIC]))
+        field.index = 0
+        clas.fields.append(field)
+        ty = ClassType(clas)
+        loader = MockPackageLoader([fooPackage])
+
+        source = "def f(o: foo.Bar) = o.x"
+        package = self.compileFromSource(source, packageLoader=loader)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", getRootClassType(), [[
+                               ldlocal(0),
+                               ldpc(0),
+                               ret()]],
+                             parameterTypes=[ty],
+                             variables=[self.makeVariable("f.o", type=ty,
+                                        kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testAccumShortPropForEffect(self):
         package = self.compileFromSource("class Foo\n" +
@@ -402,7 +508,7 @@ class TestCompiler(TestCaseWithDefinitions):
                        i64(34),
                        ret()]],
                      parameterTypes=[clasTy],
-                     variables=[self.makeVariable("foo", type=clasTy,
+                     variables=[self.makeVariable("f.foo", type=clasTy,
                                                   kind=PARAMETER, flags=frozenset([LET]))])
         self.assertEquals(expected, package.findFunction(name="f"))
 
@@ -423,34 +529,40 @@ class TestCompiler(TestCaseWithDefinitions):
                        st64(0),
                        ret()]],
                      parameterTypes=[clasTy],
-                     variables=[self.makeVariable("foo", type=clasTy,
+                     variables=[self.makeVariable("f.foo", type=clasTy,
                                                   kind=PARAMETER, flags=frozenset([LET]))])
         self.assertEquals(expected, package.findFunction(name="f"))
 
     def testLoadNonNullableObject(self):
+        source = "class Foo\n" + \
+                 "  def this = { this.x = this; }\n" + \
+                 "  var x: Object\n" + \
+                 "def f = Foo.x"
+        package = self.compileFromSource(source)
+        Foo = package.findClass(name="Foo")
         ty = getRootClassType()
-        self.checkFunction("class Foo\n" + \
-                           "  def this = { this.x = this; }\n" + \
-                           "  var x: Object\n" + \
-                           "def f = Foo.x",
+        self.checkFunction(package,
                            self.makeSimpleFunction("f", ty, [[
-                               allocobj(0),
+                               allocobj(Foo.id.index),
                                dup(),
-                               callg(1),
+                               callg(Foo.constructors[0].id.index),
                                drop(),
                                ldpc(0),
                                ret()]]))
 
     def testLoadNullableObject(self):
+        source = "class Foo\n" + \
+                 "  def this = {}\n" + \
+                 "  var x: Object?\n" + \
+                 " def f = Foo.x"
+        package = self.compileFromSource(source)
+        Foo = package.findClass(name="Foo")
         ty = ClassType(getRootClass(), (), NULLABLE_TYPE_FLAG)
-        self.checkFunction("class Foo\n" + \
-                           "  def this = {}\n" + \
-                           "  var x: Object?\n" + \
-                           " def f = Foo.x",
+        self.checkFunction(package,
                            self.makeSimpleFunction("f", ty, [[
-                               allocobj(0),
+                               allocobj(Foo.id.index),
                                dup(),
-                               callg(1),
+                               callg(Foo.constructors[0].id.index),
                                drop(),
                                ldp(0),
                                ret()]]))
@@ -463,9 +575,9 @@ class TestCompiler(TestCaseWithDefinitions):
                                ldlocal(1),
                                eqp(),
                                ret()]],
-                             variables=[self.makeVariable("foo", type=ty,
+                             variables=[self.makeVariable("f.foo", type=ty,
                                                           kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable("bar", type=ty,
+                                        self.makeVariable("f.bar", type=ty,
                                                           kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testNullableNe(self):
@@ -476,9 +588,9 @@ class TestCompiler(TestCaseWithDefinitions):
                                ldlocal(1),
                                nep(),
                                ret()]],
-                             variables=[self.makeVariable("foo", type=ty,
+                             variables=[self.makeVariable("f.foo", type=ty,
                                                           kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable("bar", type=ty,
+                                        self.makeVariable("f.bar", type=ty,
                                                           kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testTruncI32(self):
@@ -487,7 +599,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                ldlocal(0),
                                trunci32(),
                                ret()]],
-                             variables=[self.makeVariable("n", type=I64Type,
+                             variables=[self.makeVariable("f.n", type=I64Type,
                                                           kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testSext16(self):
@@ -496,7 +608,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                ldlocal(0),
                                sexti16_8(),
                                ret()]],
-                             variables=[self.makeVariable("n", type=I8Type,
+                             variables=[self.makeVariable("f.n", type=I8Type,
                                                           kind=PARAMETER,
                                                           flags=frozenset([LET]))]))
 
@@ -507,7 +619,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                fcvti32(),
                                sexti64_32(),
                                ret()]],
-                             variables=[self.makeVariable("n", type=F32Type,
+                             variables=[self.makeVariable("f.n", type=F32Type,
                                                           kind=PARAMETER,
                                                           flags=frozenset([LET]))]))
 
@@ -541,7 +653,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                dup(),
                                stlocal(-1),
                                ret()]],
-                             variables=[self.makeVariable("x", type=I64Type)]))
+                             variables=[self.makeVariable("f.x", type=I64Type)]))
 
     def testAddFloat(self):
         self.checkFunction("def f = 1.2 + 3.4",
@@ -552,24 +664,30 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret()]]))
 
     def testConcatStrings(self):
+        package = self.compileFromSource("def f = \"foo\" + \"bar\"")
         stringClass = getStringClass()
-        concatMethod = stringClass.getMethod("+")
+        concatMethod = stringClass.findMethodByShortName("+")
         concatMethodIndex = stringClass.getMethodIndex(concatMethod)
-        self.checkFunction("def f = \"foo\" + \"bar\"",
+        fooIndex = package.findString("foo")
+        barIndex = package.findString("bar")
+        self.checkFunction(package,
                            self.makeSimpleFunction("f", getStringType(), [[
-                               ir_instructions.string(0),
-                               ir_instructions.string(1),
+                               string(fooIndex),
+                               string(barIndex),
                                callv(2, concatMethodIndex),
                                ret()]]))
 
     def testCompareStrings(self):
+        package = self.compileFromSource("def f = \"foo\" == \"bar\"")
         stringClass = getStringClass()
-        eqMethod = stringClass.getMethod("==")
+        eqMethod = stringClass.findMethodByShortName("==")
         eqMethodIndex = stringClass.getMethodIndex(eqMethod)
-        self.checkFunction("def f = \"foo\" == \"bar\"",
+        fooIndex = package.findString("foo")
+        barIndex = package.findString("bar")
+        self.checkFunction(package,
                            self.makeSimpleFunction("f", BooleanType, [[
-                               ir_instructions.string(0),
-                               ir_instructions.string(1),
+                               string(fooIndex),
+                               string(barIndex),
                                callv(2, eqMethodIndex),
                                ret()]]))
 
@@ -705,11 +823,11 @@ class TestCompiler(TestCaseWithDefinitions):
     def testTryWithMatch(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
-        typeofMethod = exnClass.getMethod("typeof")
+        typeofMethod = exnClass.findMethodByShortName("typeof")
         typeofMethodIndex = exnClass.getMethodIndex(typeofMethod)
         typeClass = getTypeClass()
         typeTy = ClassType(typeClass)
-        isSubtypeOfMethod = typeClass.getMethod("is-subtype-of")
+        isSubtypeOfMethod = typeClass.findMethodByShortName("is-subtype-of")
         isSubtypeOfMethodIndex = typeClass.getMethodIndex(isSubtypeOfMethod)
         self.checkFunction("def f = try 12 catch\n" +
                            "    case exn => 34",
@@ -722,10 +840,10 @@ class TestCompiler(TestCaseWithDefinitions):
                                dup(),
                                callv(1, typeofMethodIndex),
                                dup(),
-                               allocarri(typeClass.id, 1),
+                               allocarri(typeClass.id.index, 1),
                                dup(),
-                               cls(exnClass.id),
-                               callg(BUILTIN_TYPE_CTOR_ID),
+                               cls(exnClass.id.index),
+                               callg(BUILTIN_TYPE_CTOR_ID.index),
                                drop(),
                                callv(2, isSubtypeOfMethodIndex),
                                branchif(3, 5),
@@ -741,17 +859,17 @@ class TestCompiler(TestCaseWithDefinitions):
                                drop(),
                                throw(),
                              ]],
-                             variables=[self.makeVariable("exn", type=exnTy,
+                             variables=[self.makeVariable("f.exn", type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testTryWithMatchAndFinally(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
-        typeofMethod = exnClass.getMethod("typeof")
+        typeofMethod = exnClass.findMethodByShortName("typeof")
         typeofMethodIndex = exnClass.getMethodIndex(typeofMethod)
         typeClass = getTypeClass()
         typeTy = ClassType(typeClass)
-        isSubtypeOfMethod = typeClass.getMethod("is-subtype-of")
+        isSubtypeOfMethod = typeClass.findMethodByShortName("is-subtype-of")
         isSubtypeOfMethodIndex = typeClass.getMethodIndex(isSubtypeOfMethod)
         self.checkFunction("def f = try 12 catch\n" +
                            "    case exn => 34\n" +
@@ -768,10 +886,10 @@ class TestCompiler(TestCaseWithDefinitions):
                                dup(),
                                callv(1, typeofMethodIndex),
                                dup(),
-                               allocarri(BUILTIN_TYPE_CLASS_ID, 1),
+                               allocarri(BUILTIN_TYPE_CLASS_ID.index, 1),
                                dup(),
-                               cls(exnClass.id),
-                               callg(BUILTIN_TYPE_CTOR_ID),
+                               cls(exnClass.id.index),
+                               callg(BUILTIN_TYPE_CTOR_ID.index),
                                drop(),
                                callv(2, isSubtypeOfMethodIndex),
                                branchif(3, 5),
@@ -808,7 +926,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # block 8
                                throw(),
                              ]],
-                             variables=[self.makeVariable("exn", type=exnTy,
+                             variables=[self.makeVariable("f.exn", type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testAssignVarDefinedInCatch(self):
@@ -828,7 +946,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                ldlocal(0),
                                throw(),
                              ]],
-                             variables=[self.makeVariable("exn", type=exnTy,
+                             variables=[self.makeVariable("f.exn", type=exnTy,
                                                           kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testThrowInIfBody(self):
@@ -846,7 +964,7 @@ class TestCompiler(TestCaseWithDefinitions):
                              ], [
                                ret(),
                              ]],
-                             variables=[self.makeVariable("exn", type=exnTy,
+                             variables=[self.makeVariable("f.exn", type=exnTy,
                                                           kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testThrowInIfCondition(self):
@@ -856,7 +974,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                ldlocal(0),
                                throw(),
                              ]],
-                             variables=[self.makeVariable("exn", type=exnTy,
+                             variables=[self.makeVariable("f.exn", type=exnTy,
                                                           kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testThrowInWhileBody(self):
@@ -874,35 +992,35 @@ class TestCompiler(TestCaseWithDefinitions):
                                unit(),
                                ret(),
                              ]],
-                             variables=[self.makeVariable("exn", type=exnTy,
+                             variables=[self.makeVariable("f.exn", type=exnTy,
                                                           kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testThrowInTry(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
         typeClass = getTypeClass()
-        typeofMethodIndex = next(i for i, m in enumerate(exnClass.methods)
-                                 if m.name == "typeof")
-        subtypeMethodIndex = next(i for i, m in enumerate(typeClass.methods)
-                             if m.name == "is-subtype-of")
+        typeofMethod = exnClass.findMethodByShortName("typeof")
+        typeofMethodIndex = exnClass.getMethodIndex(typeofMethod)
+        subtypeMethod = typeClass.findMethodByShortName("is-subtype-of")
+        subtypeMethodIndex = typeClass.getMethodIndex(subtypeMethod)
         self.checkFunction("def f = try throw Exception catch\n" +
                            "  case exn => 1",
                            self.makeSimpleFunction("f", I64Type, [[
                                pushtry(1, 2),
                              ], [
-                               allocobj(BUILTIN_EXCEPTION_CLASS_ID),
+                               allocobj(BUILTIN_EXCEPTION_CLASS_ID.index),
                                dup(),
-                               callg(BUILTIN_EXCEPTION_CTOR_ID),
+                               callg(BUILTIN_EXCEPTION_CTOR_ID.index),
                                drop(),
                                throw(),
                              ], [
                                dup(),
                                callv(1, typeofMethodIndex),
                                dup(),
-                               allocarri(BUILTIN_TYPE_CLASS_ID, 1),
+                               allocarri(BUILTIN_TYPE_CLASS_ID.index, 1),
                                dup(),
-                               cls(BUILTIN_EXCEPTION_CLASS_ID),
-                               callg(BUILTIN_TYPE_CTOR_ID),
+                               cls(BUILTIN_EXCEPTION_CLASS_ID.index),
+                               callg(BUILTIN_TYPE_CTOR_ID.index),
                                drop(),
                                callv(2, subtypeMethodIndex),
                                branchif(3, 5),
@@ -918,7 +1036,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                drop(),
                                throw(),
                              ]],
-                             variables=[self.makeVariable("exn", type=exnTy,
+                             variables=[self.makeVariable("f.exn", type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testTryFinallyExpr(self):
@@ -1001,7 +1119,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                i64(1),
                                ret(),
                              ]],
-                             variables=[self.makeVariable("exn", type=exnTy,
+                             variables=[self.makeVariable("f.exn", type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testMatchExceptionWithArgument(self):
@@ -1046,8 +1164,8 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret(),
                              ]],
                            variables=[
-                             self.makeVariable("n", type=I64Type, kind=PARAMETER),
-                             self.makeVariable("p", type=I64Type)]))
+                             self.makeVariable("f.n", type=I64Type, kind=PARAMETER),
+                             self.makeVariable("f.p", type=I64Type)]))
 
     def testRequireParameterTypes(self):
         self.assertRaises(TypeException, self.compileFromSource, "def f(x) = 12")
@@ -1055,22 +1173,141 @@ class TestCompiler(TestCaseWithDefinitions):
     def testNullaryCall(self):
         source = "def f: i64 = 12\n" + \
                  "def g: i64 = f\n"
-        self.checkFunction(source,
-                           self.makeSimpleFunction("g", I64Type, [[
-                               callg(0),
-                               ret(),
-                             ]]))
+        package = self.compileFromSource(source)
+        f = package.findFunction(name="f")
+        g = package.findFunction(name="g")
+        self.assertEquals(g,
+                          self.makeSimpleFunction("g", I64Type, [[
+                              callg(f.id.index),
+                              ret(),
+                            ]]))
 
     def testFunctionCall(self):
         source = "def f(x: i64, y: i64): i64 = x\n" + \
                  "def g: i64 = f(12, 34)\n"
-        self.checkFunction(source,
-                           self.makeSimpleFunction("g", I64Type, [[
+        package = self.compileFromSource(source)
+        f = package.findFunction(name="f")
+        g = package.findFunction(name="g")
+        self.assertEquals(g,
+                          self.makeSimpleFunction("g", I64Type, [[
+                              i64(12),
+                              i64(34),
+                              callg(f.id.index),
+                              ret(),
+                            ]]))
+
+    def testForeignFunctionCall(self):
+        foo = Package(name=Name(["foo"]))
+        bar = foo.addFunction(Name(["bar"]), None, I64Type, [], [I64Type],
+                              None, None, frozenset([PUBLIC]))
+        loader = MockPackageLoader([foo])
+        source = "def f = foo.bar(12)"
+        package = self.compileFromSource(source, packageLoader=loader)
+        self.assertIs(foo.id, bar.id.packageId)
+        dep = package.dependencies[foo.id.index]
+        externBar = dep.externFunctions[bar.id.externIndex]
+        self.assertIn(EXTERN, externBar.flags)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", I64Type, [[
                                i64(12),
-                               i64(34),
-                               callg(0),
+                               callgf(foo.id.index, bar.id.externIndex),
+                               ret()]]))
+
+    def testForeignFunctionCallWithTypeArg(self):
+        foo = Package(name=Name(["foo"]))
+        T = foo.addTypeParameter(Name(["foo", "T"]), None,
+                                 getRootClassType(), getNothingClassType(), frozenset([STATIC]))
+        Tty = VariableType(T)
+        bar = foo.addFunction(Name(["bar"]), None, Tty, [T], [Tty],
+                              None, None, frozenset([PUBLIC]))
+        loader = MockPackageLoader([foo])
+        source = "def f(s: String) = foo.bar[String](s)"
+        package = self.compileFromSource(source, packageLoader=loader)
+        stringTy = getStringType()
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", stringTy, [[
+                               ldlocal(0),
+                               tyc(BUILTIN_STRING_CLASS_ID.index),
+                               callgf(foo.id.index, bar.id.externIndex),
+                               ret()]],
+                             parameterTypes=[stringTy],
+                             variables=[self.makeVariable("f.s", type=stringTy,
+                                                          kind=PARAMETER, flags=frozenset([LET]))]))
+
+    def testFunctionCallWithForeignTypeArg(self):
+        fooPackage = Package(name=Name(["foo"]))
+        barClass = fooPackage.addClass(Name(["Bar"]), None, [], [getRootClassType()],
+                                       None, [], [], [], frozenset([PUBLIC]))
+        barType = ClassType(barClass)
+        loader = MockPackageLoader([fooPackage])
+
+        source = "def id[static T](o: T) = o\n" + \
+                 "def f(o: foo.Bar) = id[foo.Bar](o)"
+        package = self.compileFromSource(source, packageLoader=loader)
+        idFunction = package.findFunction(name="id")
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", barType, [[
+                               ldlocal(0),
+                               tycf(barClass.id.packageId.index, barClass.id.externIndex),
+                               callg(idFunction.id.index),
                                ret(),
-                             ]]))
+                             ]],
+                             parameterTypes=[barType],
+                             variables=[self.makeVariable("f.o", type=barType,
+                                                          kind=PARAMETER, flags=frozenset([LET]))]))
+
+    def testMatchForeignType(self):
+        # try-catch is used for now, since full pattern matching hasn't been implemented yet.
+        fooPackage = Package(name=Name(["foo"]))
+        exceptionClass = getExceptionClass()
+        clas = fooPackage.addClass(Name(["Bar"]), None, [], [ClassType(exceptionClass)],
+                                None, [], [], [], frozenset([PUBLIC]))
+        loader = MockPackageLoader([fooPackage])
+
+        source = "def f =\n" + \
+                 "  try {} catch\n" + \
+                 "    case x: foo.Bar => {}"
+        package = self.compileFromSource(source, packageLoader=loader)
+
+        barType = ClassType(clas)
+        typeofMethod = exceptionClass.findMethodByShortName("typeof")
+        typeofMethodIndex = exceptionClass.getMethodIndex(typeofMethod)
+        typeClass = getTypeClass()
+        isSubtypeOfMethod = typeClass.findMethodByShortName("is-subtype-of")
+        isSubtypeOfMethodIndex = typeClass.getMethodIndex(isSubtypeOfMethod)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", UnitType, [[
+                               pushtry(1, 2),
+                             ], [
+                               unit(),
+                               poptry(4),
+                             ], [
+                               dup(),
+                               callv(1, typeofMethodIndex),
+                               dup(),
+                               allocarri(BUILTIN_TYPE_CLASS_ID.index, 1),
+                               dup(),
+                               clsf(clas.id.packageId.index, clas.id.externIndex),
+                               callg(BUILTIN_TYPE_CTOR_ID.index),
+                               drop(),
+                               callv(2, isSubtypeOfMethodIndex),
+                               branchif(3, 5),
+                             ], [
+                               tycf(clas.id.packageId.index, clas.id.externIndex),
+                               cast(),
+                               stlocal(-1),
+                               drop(),
+                               drop(),
+                               unit(),
+                               branch(4),
+                             ], [
+                               ret(),
+                             ], [
+                               drop(),
+                               throw(),
+                             ]],
+                             variables=[self.makeVariable("f.x", type=barType,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
 
     def testInitializer(self):
         source = "class Foo\n" + \
@@ -1080,7 +1317,7 @@ class TestCompiler(TestCaseWithDefinitions):
         clas = package.findClass(name="Foo")
         thisType = ClassType(clas)
         self.checkFunction(package,
-                           self.makeSimpleFunction("$initializer", UnitType, [[
+                           self.makeSimpleFunction(Name(["Foo", CLASS_INIT_SUFFIX]), UnitType, [[
                                ldlocal(0),
                                ldlocal(0),
                                stp(0),
@@ -1090,8 +1327,10 @@ class TestCompiler(TestCaseWithDefinitions):
                                unit(),
                                ret()]],
                              parameterTypes=[thisType],
-                             variables=[self.makeVariable("$this", type=thisType,
-                                                          kind=PARAMETER, flags=frozenset([LET]))]))
+                             variables=[self.makeVariable(Name(["Foo", CLASS_INIT_SUFFIX, RECEIVER_SUFFIX]),
+                                                          type=thisType,
+                                                          kind=PARAMETER, flags=frozenset([LET]))],
+                             flags=frozenset([METHOD])))
 
     def testDefaultCtorCallsInitializer(self):
         source = "class Foo"
@@ -1099,19 +1338,21 @@ class TestCompiler(TestCaseWithDefinitions):
         clas = package.findClass(name="Foo")
         thisType = ClassType(clas)
         ctor = clas.constructors[0]
-        init = package.findFunction(name="$initializer")
-        self.assertEquals(self.makeSimpleFunction("$constructor", UnitType, [[
+        init = package.findFunction(name=Name(["Foo", CLASS_INIT_SUFFIX]))
+        self.assertEquals(self.makeSimpleFunction(Name(["Foo", CONSTRUCTOR_SUFFIX]), UnitType, [[
                               ldlocal(0),
-                              callg(getRootClass().constructors[0].id),
+                              callg(getRootClass().constructors[0].id.index),
                               drop(),
                               ldlocal(0),
-                              callg(init.id),
+                              callg(init.id.index),
                               drop(),
                               unit(),
                               ret()]],
                             parameterTypes=[thisType],
-                            variables=[self.makeVariable("$this", type=thisType,
-                                                         kind=PARAMETER, flags=frozenset([LET]))]),
+                            variables=[self.makeVariable(Name(["Foo", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
+                                                         type=thisType,
+                                                         kind=PARAMETER, flags=frozenset([LET]))],
+                            flags=frozenset([METHOD])),
                           ctor)
 
     def testPrimaryCtorCallsInitializer(self):
@@ -1122,21 +1363,23 @@ class TestCompiler(TestCaseWithDefinitions):
         thisType = ClassType(clas)
         ctor = clas.constructors[0]
         init = clas.initializer
-        expected = self.makeSimpleFunction("$constructor", UnitType, [[
+        expected = self.makeSimpleFunction(Name(["Foo", CONSTRUCTOR_SUFFIX]), UnitType, [[
             ldlocal(0),
-            callg(getRootClass().constructors[0].id),
+            callg(getRootClass().constructors[0].id.index),
             drop(),
             ldlocal(1),
             ldlocal(0),
             st32(0),
             ldlocal(0),
-            callg(init.id),
+            callg(init.id.index),
             drop(),
             unit(),
             ret()]],
           parameterTypes=[thisType, I32Type],
-          variables=[self.makeVariable("$this", type=thisType,
-                                       kind=PARAMETER, flags=frozenset([LET]))])
+          variables=[self.makeVariable(Name(["Foo", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
+                                       type=thisType,
+                                       kind=PARAMETER, flags=frozenset([LET]))],
+          flags=frozenset([METHOD]))
         self.assertEquals(expected, ctor)
 
     def testSecondaryCtorCallsInitializer(self):
@@ -1150,12 +1393,12 @@ class TestCompiler(TestCaseWithDefinitions):
         thisType = ClassType(clas)
         ctor = clas.constructors[0]
         init = clas.initializer
-        expected = self.makeSimpleFunction("$constructor", UnitType, [[
+        expected = self.makeSimpleFunction(Name(["Foo", CONSTRUCTOR_SUFFIX]), UnitType, [[
             ldlocal(0),
-            callg(getRootClass().constructors[0].id),
+            callg(getRootClass().constructors[0].id.index),
             drop(),
             ldlocal(0),
-            callg(init.id),
+            callg(init.id.index),
             drop(),
             ldlocal(0),
             ldlocal(1),
@@ -1164,10 +1407,12 @@ class TestCompiler(TestCaseWithDefinitions):
             unit(),
             ret()]],
           parameterTypes=[thisType, I32Type],
-          variables=[self.makeVariable("$this", type=thisType,
+          variables=[self.makeVariable(Name(["Foo", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
+                                       type=thisType,
                                        kind=PARAMETER, flags=frozenset([LET])),
-                     self.makeVariable("x", type=I32Type,
-                                       kind=PARAMETER, flags=frozenset([LET]))])
+                     self.makeVariable(Name(["Foo", CONSTRUCTOR_SUFFIX, "x"]), type=I32Type,
+                                       kind=PARAMETER, flags=frozenset([LET]))],
+          flags=frozenset([METHOD]))
         self.assertEquals(expected, ctor)
 
     def testNullaryCtor(self):
@@ -1179,9 +1424,9 @@ class TestCompiler(TestCaseWithDefinitions):
         objType = ClassType(clas, ())
         self.checkFunction(package,
                            self.makeSimpleFunction("f", objType, [[
-                               allocobj(clas.id),
+                               allocobj(clas.id.index),
                                dup(),
-                               callg(clas.constructors[0].id),
+                               callg(clas.constructors[0].id.index),
                                drop(),
                                ret(),
                              ]]))
@@ -1197,8 +1442,8 @@ class TestCompiler(TestCaseWithDefinitions):
         objType = ClassType(clas, ())
         self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
-                               allocobj(clas.id),
-                               callg(clas.constructors[0].id),
+                               allocobj(clas.id.index),
+                               callg(clas.constructors[0].id.index),
                                drop(),
                                i64(12),
                                ret()]]))
@@ -1207,24 +1452,26 @@ class TestCompiler(TestCaseWithDefinitions):
         source = "class Foo(x: i32)"
         package = self.compileFromSource(source)
         clas = package.findClass(name="Foo")
-        init = package.findFunction(name="$initializer")
+        init = package.findFunction(name=Name(["Foo", CLASS_INIT_SUFFIX]))
         ctor = clas.constructors[0]
         thisType = ClassType(clas)
-        self.assertEquals(self.makeSimpleFunction("$constructor", UnitType, [[
+        self.assertEquals(self.makeSimpleFunction(Name(["Foo", CONSTRUCTOR_SUFFIX]), UnitType, [[
                               ldlocal(0),
-                              callg(getRootClass().constructors[0].id),
+                              callg(getRootClass().constructors[0].id.index),
                               drop(),
                               ldlocal(1),
                               ldlocal(0),
                               st32(0),
                               ldlocal(0),
-                              callg(init.id),
+                              callg(init.id.index),
                               drop(),
                               unit(),
                               ret()]],
                             parameterTypes=[thisType, I32Type],
-                            variables=[self.makeVariable("$this", type=thisType,
-                                                         kind=PARAMETER, flags=frozenset([LET]))]),
+                            variables=[self.makeVariable(Name(["Foo", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
+                                                         type=thisType,
+                                                         kind=PARAMETER, flags=frozenset([LET]))],
+                            flags=frozenset([METHOD])),
                           ctor)
 
     def testCtorWithArgs(self):
@@ -1236,14 +1483,35 @@ class TestCompiler(TestCaseWithDefinitions):
         objType = ClassType(clas, ())
         self.checkFunction(package,
                            self.makeSimpleFunction("f", objType, [[
-                               allocobj(clas.id),
+                               allocobj(clas.id.index),
                                dup(),
                                i64(1),
                                i64(2),
-                               callg(clas.constructors[0].id),
+                               callg(clas.constructors[0].id.index),
                                drop(),
                                ret(),
                              ]]))
+
+    def testForeignCtor(self):
+        fooPackage = Package(name=Name(["foo"]))
+        barClass = fooPackage.addClass(Name(["Bar"]), None, [], [getRootClassType()],
+                                       None, [], [], [], frozenset([PUBLIC]))
+        barTy = ClassType(barClass)
+        ctor = fooPackage.addFunction(Name(["Bar", CONSTRUCTOR_SUFFIX]), None, UnitType,
+                                      [], [barTy], None, None,
+                                      frozenset([PUBLIC, METHOD]))
+        barClass.constructors.append(ctor)
+        loader = MockPackageLoader([fooPackage])
+
+        source = "def f = foo.Bar"
+        package = self.compileFromSource(source, packageLoader=loader)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", barTy, [[
+                               allocobjf(barClass.id.packageId.index, barClass.id.externIndex),
+                               dup(),
+                               callgf(ctor.id.packageId.index, ctor.id.externIndex),
+                               drop(),
+                               ret()]]))
 
     def testNullaryMethod(self):
         source = "class Foo\n" + \
@@ -1251,7 +1519,7 @@ class TestCompiler(TestCaseWithDefinitions):
                  "def f(foo: Foo) = foo.get"
         package = self.compileFromSource(source)
         clas = package.findClass(name="Foo")
-        method = package.findFunction(name="get")
+        method = package.findFunction(name="Foo.get")
         index = clas.getMethodIndex(method)
         objType = ClassType(clas, ())
         self.checkFunction(package,
@@ -1260,7 +1528,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                callv(1, index),
                                ret()
                              ]],
-                             variables=[self.makeVariable("foo", type=objType,
+                             variables=[self.makeVariable("f.foo", type=objType,
                                                           kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testCaptureThis(self):
@@ -1269,50 +1537,52 @@ class TestCompiler(TestCaseWithDefinitions):
                  "  def f =\n" + \
                  "    def g = this.x"
         package = self.compileFromSource(source)
-        closureClass = package.findClass(name="$closure")
+        closureClass = package.findClass(name=Name(["Foo", "f", "g", CLOSURE_SUFFIX]))
         closureType = ClassType(closureClass)
         self.checkFunction(package,
-                           self.makeSimpleFunction("g", I64Type, [[
+                           self.makeSimpleFunction("Foo.f.g", I64Type, [[
                                ldlocal(0),
                                ldpc(0),
                                ldpc(0),
                                ld64(0),
                                ret()
                              ]],
-                             variables=[self.makeVariable("$this", type=closureType,
+                             variables=[self.makeVariable(Name(["Foo", "f", "g", RECEIVER_SUFFIX]),
+                                                          type=closureType,
                                                           kind=PARAMETER, flags=frozenset([LET]))],
-                             parameterTypes=[closureType]))
+                             parameterTypes=[closureType],
+                             flags=frozenset([METHOD])))
 
     def testCallClosure(self):
         source = "def foo(x: i64) =\n" + \
                  "  def bar = x\n" + \
                  "  bar"
         package = self.compileFromSource(source)
-        contextClass = package.findClass(name="$context")
+        contextClass = package.findClass(name=Name(["foo", CONTEXT_SUFFIX]))
         contextType = ClassType(contextClass)
-        closureClass = package.findClass(name="$closure")
+        closureClass = package.findClass(name=Name(["foo", "bar", CLOSURE_SUFFIX]))
         closureType = ClassType(closureClass)
         self.checkFunction(package,
                            self.makeSimpleFunction("foo", I64Type, [[
-                               allocobj(contextClass.id),
+                               allocobj(contextClass.id.index),
                                dup(),
-                               callg(contextClass.constructors[0].id),
+                               callg(contextClass.constructors[0].id.index),
                                drop(),
                                stlocal(-1),
                                ldlocal(0),
                                ldlocal(-1),
                                st64(0),
-                               allocobj(closureClass.id),
+                               allocobj(closureClass.id.index),
                                dup(),
                                ldlocal(-1),
-                               callg(closureClass.constructors[0].id),
+                               callg(closureClass.constructors[0].id.index),
                                drop(),
                                stlocal(-2),
                                ldlocal(-2),
                                callv(1, len(closureClass.methods) - 1),
                                ret()]],
-                             variables=[self.makeVariable("$context", type=contextType),
-                                        self.makeVariable("bar", type=closureType)],
+                             variables=[self.makeVariable(Name(["foo", CONTEXT_SUFFIX]), type=contextType),
+                                        self.makeVariable("foo.bar", type=closureType)],
                              parameterTypes=[I64Type]))
 
     def testCallAlternateCtor(self):
@@ -1321,17 +1591,19 @@ class TestCompiler(TestCaseWithDefinitions):
         package = self.compileFromSource(source)
         clas = package.findClass(name="Foo")
         ty = ClassType(clas)
-        expected = self.makeSimpleFunction("$constructor", UnitType, [[
+        expected = self.makeSimpleFunction(Name(["Foo", CONSTRUCTOR_SUFFIX]), UnitType, [[
                                                ldlocal(0),
                                                i64(12),
-                                               callg(clas.constructors[0].id),
+                                               callg(clas.constructors[0].id.index),
                                                drop(),
                                                unit(),
                                                ret()]],
-                                             variables=[self.makeVariable("$this", type=ty,
+                                             variables=[self.makeVariable(Name(["Foo", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
+                                                                          type=ty,
                                                                           kind=PARAMETER,
                                                                           flags=frozenset([LET]))],
-                                             parameterTypes=[ty])
+                                             parameterTypes=[ty],
+                                             flags=frozenset([METHOD]))
         self.assertEquals(expected, clas.constructors[1])
 
     def testCallAlternateCtorLater(self):
@@ -1349,19 +1621,20 @@ class TestCompiler(TestCaseWithDefinitions):
         foo = package.findClass(name="Foo")
         bar = package.findClass(name="Bar")
         barTy = ClassType(bar)
-        expected = self.makeSimpleFunction("$constructor", UnitType, [[
+        expected = self.makeSimpleFunction(Name(["Bar", CONSTRUCTOR_SUFFIX]), UnitType, [[
                                                ldlocal(0),
                                                i64(12),
-                                               callg(foo.constructors[0].id),
+                                               callg(foo.constructors[0].id.index),
                                                drop(),
                                                ldlocal(0),
-                                               callg(bar.initializer.id),
+                                               callg(bar.initializer.id.index),
                                                drop(),
                                                unit(),
                                                ret()]],
-                                             variables=[self.makeVariable("$this", type=barTy,
+                                             variables=[self.makeVariable(Name(["Bar", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]), type=barTy,
                                                                           kind=PARAMETER, flags=frozenset([LET]))],
-                                             parameterTypes=[barTy])
+                                             parameterTypes=[barTy],
+                                             flags=frozenset([METHOD]))
         self.assertEquals(expected, bar.constructors[0])
 
     def testCallDefaultSuperCtor(self):
@@ -1371,26 +1644,29 @@ class TestCompiler(TestCaseWithDefinitions):
         foo = package.findClass(name="Foo")
         bar = package.findClass(name="Bar")
         barTy = ClassType(bar)
-        expected = self.makeSimpleFunction("$constructor", UnitType, [[
+        expected = self.makeSimpleFunction(Name(["Bar", CONSTRUCTOR_SUFFIX]), UnitType, [[
                                                ldlocal(0),
-                                               callg(foo.constructors[0].id),
+                                               callg(foo.constructors[0].id.index),
                                                drop(),
                                                ldlocal(0),
-                                               callg(bar.initializer.id),
+                                               callg(bar.initializer.id.index),
                                                drop(),
                                                unit(),
                                                ret()]],
-                                             variables=[self.makeVariable("$this", type=barTy,
+                                             variables=[self.makeVariable(Name(["Bar", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
+                                                                          type=barTy,
                                                                           kind=PARAMETER,
                                                                           flags=frozenset([LET]))],
                                              parameterTypes=[barTy])
+        # TODO: I feel like there was supposed to be an assertion here.
 
     def testCallBuiltinFunction(self):
-        source = "def f = print(\"foo\")"
-        self.checkFunction(source,
+        package = self.compileFromSource("def f = print(\"foo\")")
+        fooIndex = package.findString("foo")
+        self.checkFunction(package,
                            self.makeSimpleFunction("f", UnitType, [[
-                               ir_instructions.string(0),
-                               callg(BUILTIN_PRINT_FUNCTION_ID),
+                               string(fooIndex),
+                               callg(BUILTIN_PRINT_FUNCTION_ID.index),
                                ret()]]))
 
     def testCallBuiltinPrimitiveMethod(self):
@@ -1398,7 +1674,7 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(source,
                            self.makeSimpleFunction("f", getStringType(), [[
                                unit(),
-                               callg(BUILTIN_UNIT_TO_STRING_ID),
+                               callg(BUILTIN_UNIT_TO_STRING_ID.index),
                                ret()]]))
 
     def testCallWithStaticClassTypeArgument(self):
@@ -1412,10 +1688,10 @@ class TestCompiler(TestCaseWithDefinitions):
         f = package.findFunction(name="f")
         expected = self.makeSimpleFunction("f", Cty, [[
                        ldlocal(0),
-                       tyc(C.id),
-                       callg(id.id),
+                       tyc(C.id.index),
+                       callg(id.id.index),
                        ret()]],
-                     variables=[self.makeVariable("o", type=Cty,
+                     variables=[self.makeVariable("f.o", type=Cty,
                                                   kind=PARAMETER, flags=frozenset([LET]))],
                      parameterTypes=[Cty])
         self.assertEquals(expected, f)
@@ -1424,16 +1700,17 @@ class TestCompiler(TestCaseWithDefinitions):
         source = "def id-outer[static TO](x: TO) = id-inner[TO](x)\n" + \
                  "def id-inner[static TI](x: TI) = x"
         package = self.compileFromSource(source)
-        T = package.findTypeParameter(name="TO")
+        T = package.findTypeParameter(name="id-outer.TO")
         Tty = VariableType(T)
         inner = package.findFunction(name="id-inner")
         outer = package.findFunction(name="id-outer")
         expected = self.makeSimpleFunction("id-outer", Tty, [[
             ldlocal(0),
-            tyv(T.id),
-            callg(inner.id),
+            tyv(T.id.index),
+            callg(inner.id.index),
             ret()]],
-          variables=[self.makeVariable("x", type=Tty, kind=PARAMETER, flags=frozenset([LET]))],
+          variables=[self.makeVariable("id-outer.x", type=Tty,
+                                       kind=PARAMETER, flags=frozenset([LET]))],
           typeParameters=[T],
           parameterTypes=[Tty])
         self.assertEquals(expected, outer)
@@ -1443,16 +1720,17 @@ class TestCompiler(TestCaseWithDefinitions):
                  "  def id-inner(x: T) = x\n" + \
                  "  id-inner(x)"
         package = self.compileFromSource(source)
-        T = package.findTypeParameter(name="T")
+        T = package.findTypeParameter(name="id-outer.T")
         Tty = VariableType(T)
         idOuter = package.findFunction(name="id-outer")
-        idInner = package.findFunction(name="id-inner")
+        idInner = package.findFunction(name="id-outer.id-inner")
         expected = self.makeSimpleFunction("id-outer", Tty, [[
             ldlocal(0),
-            tyv(T.id),
-            callg(idInner.id),
+            tyv(T.id.index),
+            callg(idInner.id.index),
             ret()]],
-          variables=[self.makeVariable("x", type=Tty, kind=PARAMETER, flags=frozenset([LET]))],
+          variables=[self.makeVariable("id-outer.x", type=Tty,
+                                       kind=PARAMETER, flags=frozenset([LET]))],
           typeParameters=[T],
           parameterTypes=[Tty])
         self.assertEquals(expected, idOuter)
@@ -1462,38 +1740,39 @@ class TestCompiler(TestCaseWithDefinitions):
                  "  def id-inner = x\n" + \
                  "  id-inner"
         package = self.compileFromSource(source)
-        T = package.findTypeParameter(name="T")
+        T = package.findTypeParameter(name="id-outer.T")
         Tty = VariableType(T)
         idOuter = package.findFunction(name="id-outer")
-        contextClass = package.findClass(name="$context")
-        closureClass = package.findClass(name="$closure")
-        idInner = package.findFunction(name="id-inner")
+        contextClass = package.findClass(name=Name(["id-outer", CONTEXT_SUFFIX]))
+        closureClass = package.findClass(name=Name(["id-outer", "id-inner", CLOSURE_SUFFIX]))
+        idInner = package.findFunction(name="id-outer.id-inner")
         idInnerMethodIndex = closureClass.getMethodIndex(idInner)
         expected = self.makeSimpleFunction("id-outer", Tty, [[
-            tyv(T.id),
-            allocobj(contextClass.id),
+            tyv(T.id.index),
+            allocobj(contextClass.id.index),
             dup(),
-            tyv(T.id),
-            callg(contextClass.constructors[0].id),
+            tyv(T.id.index),
+            callg(contextClass.constructors[0].id.index),
             drop(),
             stlocal(-1),
             ldlocal(0),
             ldlocal(-1),
             stp(0),
-            tyv(T.id),
-            allocobj(closureClass.id),
+            tyv(T.id.index),
+            allocobj(closureClass.id.index),
             dup(),
             ldlocal(-1),
-            tyv(T.id),
-            callg(closureClass.constructors[0].id),
+            tyv(T.id.index),
+            callg(closureClass.constructors[0].id.index),
             drop(),
             stlocal(-2),
             ldlocal(-2),
-            tyv(T.id),
+            tyv(T.id.index),
             callv(1, idInnerMethodIndex),
             ret()]],
-          variables=[self.makeVariable("$context", type=ClassType(contextClass)),
-                     self.makeVariable("id-inner", type=ClassType(closureClass))],
+          variables=[self.makeVariable(Name(["id-outer", CONTEXT_SUFFIX]),
+                                       type=ClassType(contextClass)),
+                     self.makeVariable("id-outer.id-inner", type=ClassType(closureClass))],
           typeParameters=[T],
           parameterTypes=[Tty])
         self.assertEquals(expected, idOuter)
@@ -1507,7 +1786,7 @@ class TestCompiler(TestCaseWithDefinitions):
         f = package.findFunction(name="f")
         Foo = package.findClass(name="Foo")
         FooType = ClassType(Foo, (getRootClassType(),))
-        toString = Foo.getMethod("to-string")
+        toString = Foo.findMethodByShortName("to-string")
         toStringIndex = Foo.getMethodIndex(toString)
         expected = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
@@ -1515,7 +1794,7 @@ class TestCompiler(TestCaseWithDefinitions):
             drop(),
             unit(),
             ret()]],
-          variables=[self.makeVariable("foo", type=FooType,
+          variables=[self.makeVariable("f.foo", type=FooType,
                                        kind=PARAMETER, flags=frozenset([LET]))],
           parameterTypes=[FooType])
         self.assertEquals(expected, f)
@@ -1530,16 +1809,16 @@ class TestCompiler(TestCaseWithDefinitions):
         f = package.findFunction(name="f")
         Foo = package.findClass(name="Foo")
         FooType = ClassType(Foo, (getRootClassType(),))
-        toString = Foo.getMethod("to-string")
+        toString = Foo.findMethodByShortName("to-string")
         toStringIndex = Foo.getMethodIndex(toString)
         expected = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
-            tyc(BUILTIN_ROOT_CLASS_ID),
+            tyc(BUILTIN_ROOT_CLASS_ID.index),
             callv(1, toStringIndex),
             drop(),
             unit(),
             ret()]],
-          variables=[self.makeVariable("foo", type=FooType,
+          variables=[self.makeVariable("f.foo", type=FooType,
                                        kind=PARAMETER, flags=frozenset([LET]))],
           parameterTypes=[FooType])
         self.assertEquals(expected, f)
@@ -1548,22 +1827,24 @@ class TestCompiler(TestCaseWithDefinitions):
         source = "class C[static T]"
         package = self.compileFromSource(source)
         C = package.findClass(name="C")
-        T = package.findTypeParameter(name="T")
+        T = package.findTypeParameter(name="C.T")
         Ctype = ClassType(C, (VariableType(T),))
-        expectedCtor = self.makeSimpleFunction("$constructor", UnitType, [[
+        expectedCtor = self.makeSimpleFunction(Name(["C", CONSTRUCTOR_SUFFIX]), UnitType, [[
             ldlocal(0),
-            callg(BUILTIN_ROOT_CLASS_CTOR_ID),
+            callg(BUILTIN_ROOT_CLASS_CTOR_ID.index),
             drop(),
             ldlocal(0),
-            tyv(T.id),
-            callg(C.initializer.id),
+            tyv(T.id.index),
+            callg(C.initializer.id.index),
             drop(),
             unit(),
             ret()]],
-          variables=[self.makeVariable("$this", type=Ctype,
+          variables=[self.makeVariable(Name(["C", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
+                                       type=Ctype,
                                        kind=PARAMETER, flags=frozenset([LET]))],
           typeParameters=[T],
-          parameterTypes=[Ctype])
+          parameterTypes=[Ctype],
+          flags=frozenset([METHOD]))
         self.assertEquals(expectedCtor, C.constructors[0])
 
     def testCallClassMethodsWithStaticTypeArgs(self):
@@ -1578,18 +1859,18 @@ class TestCompiler(TestCaseWithDefinitions):
         C = package.findClass(name="C")
         Box = package.findClass(name="Box")
         boxType = ClassType(Box, (ClassType(C),))
-        get = package.findFunction(name="get")
-        set = package.findFunction(name="set")
+        get = package.findFunction(name="Box.get")
+        set = package.findFunction(name="Box.set")
         f = package.findFunction(name="f")
         expectedF = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
             ldlocal(0),
-            tyc(C.id),
+            tyc(C.id.index),
             callv(1, Box.getMethodIndex(get)),
-            tyc(C.id),
+            tyc(C.id.index),
             callv(2, Box.getMethodIndex(set)),
             ret()]],
-          variables=[self.makeVariable("box", type=boxType,
+          variables=[self.makeVariable("f.box", type=boxType,
                                        kind=PARAMETER, flags=frozenset([LET]))],
           parameterTypes=[boxType])
         self.assertEquals(expectedF, f)

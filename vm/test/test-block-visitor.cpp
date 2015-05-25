@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -12,7 +12,9 @@
 #include "block-visitor.h"
 #include "bytecode.h"
 #include "function.h"
+#include "name.h"
 #include "package.h"
+#include "string.h"
 #include "roots.h"
 #include "type.h"
 
@@ -107,11 +109,11 @@ static u8 makeSmallVbn(i64 value) {
 
 static Local<Package> createTestPackage(Heap* heap) {
   auto roots = heap->vm()->roots();
-  auto typeList = BlockArray<Type>::create(heap, 3);
 
-  typeList->set(0, Type::rootClassType(roots));
-  typeList->set(1, Type::i8Type(roots));
-  typeList->set(2, Type::rootClassType(roots));
+  auto returnType = handle(Type::rootClassType(roots));
+  auto parameterTypes = BlockArray<Type>::create(heap, 2);
+  parameterTypes->set(0, Type::i8Type(roots));
+  parameterTypes->set(1, Type::rootClassType(roots));
 
   const u8 kByteIndex = makeSmallVbn(-1);
   const u8 kPtrIndex = makeSmallVbn(-2);
@@ -143,9 +145,10 @@ static Local<Package> createTestPackage(Heap* heap) {
   blockOffsetList->set(0, 0);
   auto package = Package::create(heap);
   auto functions = BlockArray<Function>::create(heap, 1);
-  Local<TaggedArray<TypeParameter>> emptyTypeParameters(
-      reinterpret_cast<TaggedArray<TypeParameter>*>(roots->emptyTaggedArray()));
-  auto function = Function::create(heap, 0, emptyTypeParameters, typeList,
+  Local<BlockArray<TypeParameter>> emptyTypeParameters(
+      reinterpret_cast<BlockArray<TypeParameter>*>(roots->emptyBlockArray()));
+  auto function = Function::create(heap, NAME("foo"),
+                                   0, emptyTypeParameters, returnType, parameterTypes,
                                    2 * kWordSize, instList, blockOffsetList, package);
   functions->set(0, *function);
   package->setFunctions(*functions);
@@ -176,8 +179,10 @@ TEST(BlockVisitorFunction) {
   HandleScope handleScope(&vm);
   auto package = *createTestPackage(heap);
   auto function = package->getFunction(0);
+  auto name = function->name();
   auto typeParameters = function->typeParameters();
-  auto types = function->types();
+  auto returnType = function->returnType();
+  auto parameterTypes = function->parameterTypes();
   auto localsSize = function->localsSize();
   auto instructionsSize = function->instructionsSize();
   auto blockOffsets = function->blockOffsets();
@@ -185,10 +190,12 @@ TEST(BlockVisitorFunction) {
   visitor.visit(function);
   word_t expected[] = {
       FUNCTION_BLOCK_TYPE << 2,
+      reinterpret_cast<word_t>(name) + 4,
       0,
       0,
       reinterpret_cast<word_t>(typeParameters) + 4,
-      reinterpret_cast<word_t>(types) + 4,
+      reinterpret_cast<word_t>(returnType) + 4,
+      reinterpret_cast<word_t>(parameterTypes) + 4,
       localsSize,
       instructionsSize,
       reinterpret_cast<word_t>(blockOffsets) + 4,

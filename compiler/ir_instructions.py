@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014-2015, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -20,6 +20,7 @@ class BasicBlock(BasicBlockBase):
 class Instruction(object):
     def __init__(self, *operands):
         assert len(operands) == self.info.operandCount
+        assert all(type(op) in (int, float) for op in operands)
         self.operands = tuple(operands)
 
     @staticmethod

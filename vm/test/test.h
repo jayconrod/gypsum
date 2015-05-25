@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -89,6 +89,18 @@ class Test ## name : public TestBase { \
 }; \
 Test ## name name ## Instance; \
 void Test ## name ::test()
+
+
+#define TEST_PROLOGUE \
+  VM vm; \
+  Heap* heap = vm.heap(); \
+  HandleScope handleScope(&vm); \
+  AllowAllocationScope allowAllocation(heap, true); \
+  Roots* roots = vm.roots(); \
+  USE(roots);
+
+#define STR(s) String::fromUtf8CString(heap, s)
+#define NAME(s) Name::fromString(heap, STR(s), Name::DEFN_NAME)
 
 
 // Ugly hack: bypass member protection for classes included after this. The "correct" way would

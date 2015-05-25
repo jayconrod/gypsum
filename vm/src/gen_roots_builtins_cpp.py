@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2014 Jay Conrod. All rights reserved.
+# Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 # This file is part of CodeSwitch. Use of this source code is governed by
 # the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -53,7 +53,7 @@ def initType(out, classData):
 
 def initName(out, classData):
     out.write("\n  { // %s\n" % classData["id"])
-    out.write("    auto name = String::rawFromUtf8CString(heap, \"%s\");\n" % classData["name"])
+    out.write("    auto name = nameFromUtf8CString(heap, \"%s\");\n" % classData["name"])
     out.write("    builtinNames_.push_back(name);\n  }")
 
 
@@ -61,8 +61,9 @@ def initClass(out, classData):
     assert not classData["isPrimitive"]
     out.write("\n  { // %s\n" % classData["id"])
     out.write("    auto clas = getBuiltinClass(%s);\n" % classData["id"])
-    out.write("    auto typeParameters = reinterpret_cast<TaggedArray<TypeParameter>*>(" +
-              "emptyTaggedArray());\n")
+    out.write("    auto name = getBuiltinName(%s);\n" % classData["id"])
+    out.write("    auto typeParameters = reinterpret_cast<BlockArray<TypeParameter>*>(" +
+              "emptyBlockArray());\n")
     if classData["supertype"] is None:
         out.write("    Type* supertype = nullptr;\n")
     else:
@@ -73,9 +74,11 @@ def initClass(out, classData):
         out.write("    auto fields = new(heap, %d) BlockArray<Field>;\n" %
                   len(classData["fields"]))
         for i, fieldData in enumerate(classData["fields"]):
+            out.write("    auto field%dName = nameFromUtf8CString(heap, \"%s\");\n" %
+                      (i, fieldData["name"]))
             typeName = fieldData["type"]
-            out.write("    auto field%d = new(heap) Field(0, %s);\n" %
-                      (i, getTypeFromName(typeName)))
+            out.write("    auto field%d = new(heap) Field(field%dName, 0, %s);\n" %
+                      (i, i, getTypeFromName(typeName)))
             out.write("    fields->set(%d, field%d);\n" % (i, i))
     if "elements" not in classData:
         out.write("    Type* elementType = nullptr;\n")
@@ -87,39 +90,50 @@ def initClass(out, classData):
                                 if field["name"] == "length")
         out.write("    auto lengthFieldIndex = %d;\n" % lengthFieldIndex)
     if len(classData["constructors"]) == 0:
-        out.write("    auto constructors = emptyi32Array();\n")
+        out.write("    auto constructors = reinterpret_cast<BlockArray<Function>*>(" +
+                  "emptyBlockArray());\n")
     else:
-        out.write("    auto constructors = new(heap, %d) IdArray;\n" %
+        out.write("    auto constructors = new(heap, %d) BlockArray<Function>;\n" %
                   len(classData["constructors"]))
         for i, ctorData in enumerate(classData["constructors"]):
-            out.write("    constructors->set(%d, %s);\n" %
+            out.write("    constructors->set(%d, getBuiltinFunction(%s));\n" %
                       (i, ctorData["id"]))
     allMethodIds = [method["id"] for method in findInheritedMethods(classData)]
     if len(allMethodIds) == 0:
-        out.write("    auto methods = emptyi32Array();\n")
+        out.write("    auto methods = reinterpret_cast<BlockArray<Function>*>(" +
+                  "emptyBlockArray());\n")
     else:
-        out.write("    auto methods = new(heap, %d) IdArray;\n" % len(allMethodIds))
+        out.write("    auto methods = new(heap, %d) BlockArray<Function>;\n" %
+                  len(allMethodIds))
         for i, id in enumerate(allMethodIds):
-            out.write("    methods->set(%d, %s);\n" % (i, id))
-    out.write("    ::new(clas) Class(0, typeParameters, supertype, fields, constructors, " +
-              "methods, nullptr, nullptr, elementType, lengthFieldIndex);\n")
-    out.write("    auto meta = clas->buildInstanceMeta();\n")
-    out.write("    clas->setInstanceMeta(meta);\n")
-    out.write("    builtinMetas_.push_back(meta);\n  }")
+            out.write("    methods->set(%d, getBuiltinFunction(%s));\n" % (i, id))
+    out.write("    ::new(clas) Class(name, 0, typeParameters, supertype, fields, " +
+              "constructors, methods, nullptr, nullptr, elementType, lengthFieldIndex);\n")
+    if classData.get("isOpaque"):
+        out.write("    builtinMetas_.push_back(nullptr);\n  }")
+    else:
+        out.write("    auto meta = clas->buildInstanceMeta();\n")
+        out.write("    clas->setInstanceMeta(meta);\n")
+        out.write("    builtinMetas_.push_back(meta);\n  }")
 
 
 def initFunction(out, functionData):
     out.write("\n  { // %s\n" % functionData["id"])
     out.write("    auto function = getBuiltinFunction(%s);\n" % functionData["id"])
-    typeNames = [functionData["returnType"]] + functionData["parameterTypes"]
-    out.write("    auto types = new(heap, %d) BlockArray<Type>;\n" % len(typeNames))
-    for i, name in enumerate(typeNames):
-        out.write("    types->set(%d, %s);\n" % (i, getTypeFromName(name)))
-    out.write("    ::new(function) Function(0, emptyTypeParameters, types, 0, " +
-              "emptyInstructions, nullptr, nullptr, nullptr);\n")
+    if "name" not in functionData:
+        out.write("    auto name = nameFromUtf8CString(heap, \"$constructor\");\n")
+    else:
+        out.write("    auto name = nameFromUtf8CString(heap, \"%s\");\n" %
+                  functionData["name"])
+    out.write("    auto returnType = %s;\n" % getTypeFromName(functionData["returnType"]))
+    out.write("    auto parameterTypes = new(heap, %d) BlockArray<Type>;\n" %
+              len(functionData["parameterTypes"]))
+    for i, name in enumerate(functionData["parameterTypes"]):
+        out.write("    parameterTypes->set(%d, %s);\n" % (i, getTypeFromName(name)))
+    out.write("    ::new(function) Function(name, 0, emptyTypeParameters, " +
+              "returnType, parameterTypes, 0, emptyInstructions, nullptr, nullptr, nullptr);\n")
     out.write("    function->setBuiltinId(%s);\n" % functionData["id"])
     out.write("  }")
-
 
 
 def findClass(name):
@@ -168,6 +182,7 @@ with open(rootsBuiltinsName, "w") as rootsBuiltinsFile:
 #include "class.h"
 #include "field.h"
 #include "function.h"
+#include "name.h"
 #include "string.h"
 #include "type.h"
 
@@ -175,6 +190,15 @@ using namespace std;
 
 namespace codeswitch {
 namespace internal {
+
+static Name* nameFromUtf8CString(Heap* heap, const char* cstr) {
+  auto vmstr = String::rawFromUtf8CString(heap, cstr);
+  auto components = new(heap, 1) BlockArray<String>;
+  components->set(0, vmstr);
+  auto name = new(heap) Name(components);
+  return name;
+}
+
 
 void Roots::initializeBuiltins(Heap* heap) {
   //
@@ -207,7 +231,7 @@ void Roots::initializeBuiltins(Heap* heap) {
     rootsBuiltinsFile.write("""
 
   //
-  // Initialize names
+  // Allocate and initialize names
   //""")
     for classData in classesData:
         initName(rootsBuiltinsFile, classData)
@@ -227,7 +251,7 @@ void Roots::initializeBuiltins(Heap* heap) {
   // Initialize functions
   //
   vector<u8> emptyInstructions;
-  auto emptyTypeParameters = reinterpret_cast<TaggedArray<TypeParameter>*>(emptyTaggedArray());
+  auto emptyTypeParameters = reinterpret_cast<BlockArray<TypeParameter>*>(emptyBlockArray());
 """)
     for classData in classesData:
         if not classData["isPrimitive"]:

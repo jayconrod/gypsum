@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014-2015, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -6,12 +6,14 @@
 
 import StringIO
 
-import visitor
+from ids import AstId
 import utils
+import visitor
 
 
 class AstNode(object):
     def __init__(self, location):
+        self.id = None
         self.location = location
 
     def __str__(self):
@@ -32,6 +34,21 @@ class AstNode(object):
 
     def children(self):
         return []
+
+
+class AstPackage(AstNode):
+    def __init__(self, modules, location):
+        super(AstPackage, self).__init__(location)
+        self.modules = modules
+
+    def __repr__(self):
+        return "AstPackage(%s)" % repr(self.modules)
+
+    def tag(self):
+        return "AstPackage"
+
+    def children(self):
+        return self.modules
 
 
 class AstModule(AstNode):
@@ -327,6 +344,22 @@ class AstClassType(AstType):
 
     def children(self):
         return self.typeArguments
+
+
+class AstProjectedType(AstType):
+    def __init__(self, left, right, location):
+        super(AstProjectedType, self).__init__(location)
+        self.left = left
+        self.right = right
+
+    def __repr__(self):
+        return "AstProjectedType(%s, %s)" % (repr(self.left), repr(self.right))
+
+    def tag(self):
+        return "ProjectedType"
+
+    def children(self):
+        return [self.left, self.right]
 
 
 class AstExpression(AstNode):
@@ -762,7 +795,7 @@ class AstPrinter(AstNodeVisitor):
         return "  " * self.indentLevel
 
     def visitDefault(self, node):
-        idStr = " #%d" % node.id if hasattr(node, "id") else ""
+        idStr = " #%d" % node.id.id if node.id is not None else ""
         self.out.write("%s%s %s%s\n" % (self.indentStr(), node.tag(), node.data(), idStr))
 
     def postVisit(self, node):
@@ -776,7 +809,7 @@ class AstEnumerator(AstNodeVisitor):
         self.counter = utils.Counter()
 
     def visitDefault(self, node):
-        node.id = self.counter()
+        node.id = AstId(self.counter())
 
     def postVisit(self, node):
         self.visitChildren(node)

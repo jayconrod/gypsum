@@ -3,11 +3,12 @@
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
 
-
 import os.path
 import re
 import yaml
 
+import flags
+import ids
 import ir
 import ir_types
 
@@ -15,10 +16,10 @@ import bytecode
 
 def registerBuiltins(bind):
     _initialize()
-    for key, value in _builtinClassNameMap.iteritems():
-        bind(key, value)
-    for key, value in _builtinFunctionNameMap.iteritems():
-        bind(key, value)
+    for clas in _builtinClasses:
+        bind(clas.name, clas)
+    for function in _builtinFunctions:
+        bind(function.name, function)
 
 
 def getRootClass():
@@ -46,27 +47,55 @@ def getStringClass():
     return _builtinClassNameMap["String"]
 
 
+def getPackageClass():
+    _initialize()
+    return _builtinClassNameMap["Package"]
+
+
 def getBuiltinClasses(includePrimitives):
+    _initialize()
     return [clas for clas in _builtinClassNameMap.itervalues()
             if includePrimitives or not hasattr(clas, "isPrimitive")]
 
 
+def getBuiltinClassById(idOrIndex):
+    _initialize()
+    if isinstance(idOrIndex, int):
+        id = bytecode.getBuiltinClassId(idOrIndex)
+    else:
+        assert isinstance(idOrIndex, ids.DefnId)
+        id = idOrIndex
+    return _builtinClassIdMap[id]
+
+
+def getBuiltinFunctionById(idOrIndex):
+    _initialize()
+    if isinstance(idOrIndex, int):
+        id = bytecode.getBuiltinFunctionId(idOrIndex)
+    else:
+        assert isinstance(idOrIndex, ids.DefnId)
+        id = idOrIndex
+    return _builtinFunctionIdMap[id]
+
+
 def getBuiltinClassFromType(ty):
     _initialize()
-    return _builtinClassTypeMap.get(ty)
+    return _builtinClassTypeMap.get(str(ty))
 
 
 def getBuiltinFunctions():
+    _initialize()
     return _builtinFunctionNameMap.values()
 
 
-def isBuiltinId(id):
-    return id < 0
-
+_builtinClasses = []
+_builtinFunctions = []
 
 _builtinClassNameMap = {}
 _builtinClassTypeMap = {}
+_builtinClassIdMap = {}
 _builtinFunctionNameMap = {}
+_builtinFunctionIdMap = {}
 
 _initialized = False
 
@@ -99,9 +128,13 @@ def _initialize():
             flags = frozenset([ir_types.NULLABLE_TYPE_FLAG] if m.group(2) == "?" else [])
             return ir_types.ClassType(clas, (), flags)
 
-    def buildFunction(functionData):
-        name = functionData.get("name", "$constructor")
-        id = getattr(bytecode,functionData["id"])
+    def buildFunction(functionData, namePrefix=None):
+        nameComponents = []
+        if namePrefix is not None:
+            nameComponents.append(namePrefix)
+        nameComponents.append(functionData.get("name", ir.CONSTRUCTOR_SUFFIX))
+        name = ir.Name(nameComponents)
+        id = getattr(bytecode, functionData["id"])
         function = ir.Function(name, None, id,
                                buildType(functionData["returnType"]),
                                [],
@@ -109,21 +142,24 @@ def _initialize():
                                [], [], frozenset())
         if "insts" in functionData:
             function.insts = functionData["insts"]
+        _builtinFunctionIdMap[id] = function
         return function
 
-    def buildMethod(functionData, clas):
-        function = buildFunction(functionData)
-        function.clas = clas
+    def buildMethod(functionData, classShortName):
+        function = buildFunction(functionData, classShortName)
+        function.flags |= frozenset([flags.METHOD])
         return function
 
-    def buildField(fieldData):
-        name = fieldData["name"]
+    def buildField(fieldData, classShortName):
+        name = ir.Name([classShortName, fieldData["name"]])
         ty = buildType(fieldData["type"])
         return ir.Field(name, None, ty, frozenset())
 
     def declareClass(classData):
-        clas = ir.Class(classData["name"], None, None, [],
+        name = ir.Name([classData["name"]])
+        clas = ir.Class(name, None, None, [],
                         None, None, None, None, None, frozenset())
+        _builtinClasses.append(clas)
         _builtinClassNameMap[classData["name"]] = clas
 
     def defineClass(classData):
@@ -139,8 +175,10 @@ def _initialize():
                 clas.supertypes = []
                 clas.fields = []
                 clas.methods = []
-            clas.constructors = [buildMethod(c, clas) for c in classData["constructors"]]
-            clas.fields += map(buildField, classData["fields"])
+            clas.constructors = [buildMethod(ctorData, classData["name"])
+                                 for ctorData in classData["constructors"]]
+            clas.fields += [buildField(fieldData, classData["name"])
+                            for fieldData in classData["fields"]]
         else:
             clas.supertypes = []
             clas.fields = []
@@ -148,13 +186,14 @@ def _initialize():
             clas.isPrimitive = True
         inheritedMethodCount = len(clas.methods)
         for m in classData["methods"]:
-            addMethod(clas.methods, inheritedMethodCount, buildMethod(m, clas))
+            addMethod(clas.methods, inheritedMethodCount, buildMethod(m, classData["name"]))
 
-        _builtinClassTypeMap[buildType(clas.name)] = clas
+        _builtinClassTypeMap[classData["name"]] = clas
+        _builtinClassIdMap[clas.id] = clas
 
     def addMethod(methods, inheritedCount, method):
         for i, m in enumerate(methods[:inheritedCount]):
-            if method.name == m.name and method.mayOverride(m):
+            if method.name.short() == m.name.short() and method.mayOverride(m):
                 method.override = m
                 methods[i] = method
                 return
@@ -162,6 +201,7 @@ def _initialize():
 
     def defineFunction(functionData):
         function = buildFunction(functionData)
+        _builtinFunctions.append(function)
         _builtinFunctionNameMap[function.name] = function
 
     builtinsPath = os.path.join(os.path.dirname(__file__), "..", "common", "builtins.yaml")
@@ -176,5 +216,4 @@ def _initialize():
 
 __all__ = ["registerBuiltins", "getRootClass", "getNothingClass",
            "getExceptionClass", "getTypeClass", "getStringClass",
-           "getBuiltinClasses", "getBuiltinClassFromType",
-           "getBuiltinFunctions", "isBuiltinId"]
+           "getBuiltinClasses", "getBuiltinClassFromType", "getBuiltinFunctions"]

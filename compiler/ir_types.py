@@ -322,7 +322,7 @@ class ClassType(ObjectType):
 
     def __str__(self):
         if len(self.typeArguments) == 0:
-            return self.clas.name
+            return str(self.clas.name)
         else:
             return "%s[%s]%s" % \
                    (self.clas.name,
@@ -374,7 +374,7 @@ class VariableType(ObjectType):
         self.typeParameter = typeParameter
 
     def __str__(self):
-        return self.typeParameter.name
+        return str(self.typeParameter.name)
 
     def __repr__(self):
         return "VariableType(%s)" % self.typeParameter.name
@@ -433,6 +433,10 @@ def getStringType():
     return ClassType(builtins.getStringClass())
 
 
+def getPackageType():
+    return ClassType(builtins.getPackageClass())
+
+
 # Extra variance symbols
 # Invariant means neither covariant nor contravariant.
 INVARIANT = "invariant"
@@ -461,6 +465,6 @@ def changeVariance(old, new):
 __all__ = ["BIVARIANT","INVARIANT", "UnitType", "BooleanType", "I8Type",
            "I16Type", "I32Type", "I64Type", "F32Type", "F64Type",
            "VariableType", "ClassType",  "NoType",
-           "getRootClassType", "getStringType", "getNullType",
+           "getRootClassType", "getStringType", "getPackageType", "getNullType",
            "getClassFromType", "NULLABLE_TYPE_FLAG", "changeVariance",
            "getNothingClassType"]

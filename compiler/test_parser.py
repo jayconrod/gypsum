@@ -261,6 +261,33 @@ class TestParser(unittest.TestCase):
     def testNullableClassType(self):
         self.checkParse(astClassType("C", [], set(["?"])), classType(), "C?")
 
+    def testSimpleProjectedType(self):
+        self.checkParse(astProjectedType(astClassType("A", [], set()),
+                                         astClassType("B", [], set())),
+                        ty(),
+                        "A.B")
+
+    def testMultipleProjectedType(self):
+        self.checkParse(astProjectedType(astClassType("A", [], set()),
+                                         astProjectedType(astClassType("B", [], set()),
+                                                          astClassType("C", [], set()))),
+                        ty(),
+                        "A.B.C")
+
+    def testProjectedTypeWithArgs(self):
+        self.checkParse(astProjectedType(astClassType("A", [astClassType("B", [], set())], set()),
+                                         astClassType("C", [astClassType("D", [], set())], set())),
+                        ty(),
+                        "A[B].C[D]")
+
+    def testProjectFromPrimitive(self):
+        self.assertRaises(ParseException, self.parseFromSource, ty(),
+                          "i64.A")
+
+    def testProjectPrimitive(self):
+        self.assertRaises(ParseException, self.parseFromSource, ty(),
+                          "A.i64")
+
     # Expressions
     def testIntExpr(self):
         values = [("-42", -42, 64),

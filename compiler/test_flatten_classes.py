@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014-2015, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -12,21 +12,25 @@ from parser import *
 from ast import *
 from scope_analysis import *
 from type_analysis import *
+from ids import *
 from ir import *
 from builtins import *
 from compile_info import CompileInfo
 from errors import *
+from utils_test import MockPackageLoader
 
 class TestFlattenClasses(unittest.TestCase):
     def setUp(self):
-        self.rootMethodNames = [m.name for m in getRootClass().methods]
+        self.rootMethodNames = [m.name.short() for m in getRootClass().methods]
 
     def analyzeFromSource(self, source):
         filename = "(test)"
         rawTokens = lex(filename, source)
         layoutTokens = layout(rawTokens)
         ast = parse(filename, layoutTokens)
-        info = CompileInfo(ast)
+        package = Package(TARGET_PACKAGE_ID)
+        packageLoader = MockPackageLoader([])
+        info = CompileInfo(ast, package, packageLoader)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         analyzeTypes(info)
@@ -37,7 +41,7 @@ class TestFlattenClasses(unittest.TestCase):
     def testSimpleClass(self):
         info = self.analyzeFromSource("class C")
         C = info.package.findClass(name="C")
-        self.assertEquals(self.rootMethodNames, [m.name for m in C.methods])
+        self.assertEquals(self.rootMethodNames, [m.name.short() for m in C.methods])
 
     def testDerivedClassWithMethods(self):
         source = "class A\n" + \
@@ -46,7 +50,8 @@ class TestFlattenClasses(unittest.TestCase):
                  "  def g = 12\n"
         info = self.analyzeFromSource(source)
         B = info.package.findClass(name="B")
-        self.assertEquals(self.rootMethodNames + ["f", "g"], [m.name for m in B.methods])
+        self.assertEquals(self.rootMethodNames + ["f", "g"],
+                          [m.name.short() for m in B.methods])
 
     def testDerivedClassWithOverloads(self):
         source = "class A\n" + \
@@ -55,7 +60,8 @@ class TestFlattenClasses(unittest.TestCase):
                  "  def f(x: i64) = x\n"
         info = self.analyzeFromSource(source)
         B = info.package.findClass(name="B")
-        self.assertEquals(self.rootMethodNames + ["f", "f"], [m.name for m in B.methods])
+        self.assertEquals(self.rootMethodNames + ["f", "f"],
+                          [m.name.short() for m in B.methods])
 
     def testDerivedClassWithOverride(self):
         source = "class A\n" + \
@@ -64,7 +70,8 @@ class TestFlattenClasses(unittest.TestCase):
                  "  def f(x: i32) = 12i32\n"
         info = self.analyzeFromSource(source)
         B = info.package.findClass(name="B")
-        self.assertEquals(self.rootMethodNames + ["f"], [m.name for m in B.methods])
+        self.assertEquals(self.rootMethodNames + ["f"],
+                          [m.name.short() for m in B.methods])
 
     def testMustOverrideInheritedAbstractMethod(self):
         source = "abstract class A\n" + \

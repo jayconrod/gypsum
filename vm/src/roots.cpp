@@ -12,6 +12,8 @@
 #include "function.h"
 #include "global.h"
 #include "handle.h"
+#include "hash-table.h"
+#include "name.h"
 #include "package.h"
 #include "stack.h"
 #include "string.h"
@@ -36,10 +38,17 @@ void Roots::initialize(Heap* heap) {
   freeMeta->lengthOffset_ = offsetof(Free, size_);
   basicRoots_[FREE_META_ROOT_INDEX] = freeMeta;
 
-  auto packageMeta = new(heap, 0, sizeof(Package), 0) Meta(PACKAGE_BLOCK_TYPE);
-  packageMeta->hasPointers_ = true;
-  packageMeta->objectPointerMap().setWord(0, Package::kPointerMap);
-  basicRoots_[PACKAGE_META_ROOT_INDEX] = packageMeta;
+  auto packageVersionMeta = new(heap, 0, sizeof(PackageVersion), 0)
+      Meta(PACKAGE_VERSION_BLOCK_TYPE);
+  packageVersionMeta->hasPointers_ = true;
+  packageVersionMeta->objectPointerMap().setWord(0, PackageVersion::kPointerMap);
+  basicRoots_[PACKAGE_VERSION_META_ROOT_INDEX] = packageVersionMeta;
+
+  auto packageDependencyMeta = new(heap, 0, sizeof(PackageDependency), 0)
+      Meta(PACKAGE_DEPENDENCY_BLOCK_TYPE);
+  packageDependencyMeta->hasPointers_ = true;
+  packageDependencyMeta->objectPointerMap().setWord(0, PackageDependency::kPointerMap);
+  basicRoots_[PACKAGE_DEPENDENCY_META_ROOT_INDEX] = packageDependencyMeta;
 
   auto stackMeta = new(heap, 0, sizeof(Stack), 1) Meta(STACK_BLOCK_TYPE);
   stackMeta->hasPointers_ = true;
@@ -48,6 +57,11 @@ void Roots::initialize(Heap* heap) {
   stackMeta->hasWordSizeLength_ = true;
   stackMeta->lengthOffset_ = offsetof(Stack, stackSize_);
   basicRoots_[STACK_META_ROOT_INDEX] = stackMeta;
+
+  auto nameMeta = new(heap, 0, sizeof(Name), 0) Meta(NAME_BLOCK_TYPE);
+  nameMeta->hasPointers_ = true;
+  nameMeta->objectPointerMap().setWord(0, Name::kPointerMap);
+  basicRoots_[NAME_META_ROOT_INDEX] = nameMeta;
 
   auto globalMeta = new(heap, 0, sizeof(Global), 0) Meta(GLOBAL_BLOCK_TYPE);
   globalMeta->hasPointers_ = true;
@@ -130,19 +144,60 @@ void Roots::initialize(Heap* heap) {
   auto erasedType = new(heap, 0) Type(Type::ERASED_TYPE, Type::NO_FLAGS);
   basicRoots_[ERASED_TYPE_ROOT_INDEX] = erasedType;
 
+  auto packageClass = getBuiltinClass(BUILTIN_PACKAGE_CLASS_ID);
+  auto packageMethods = packageClass->methods();
+  auto packageMeta = new(heap, packageMethods->length(), sizeof(Package), 0)
+      Meta(PACKAGE_BLOCK_TYPE);
+  packageMeta->hasPointers_ = true;
+  packageMeta->objectPointerMap().setWord(0, Package::kPointerMap);
+  packageMeta->setClass(packageClass);
+  for (length_t i = 0; i < packageMethods->length(); i++) {
+    auto method = packageMethods->get(i);
+    packageMeta->setData(i, method);
+  }
+  packageClass->setInstanceMeta(packageMeta);
+  basicRoots_[PACKAGE_META_ROOT_INDEX] = packageMeta;
+  builtinMetas_[builtinIdToIndex(BUILTIN_PACKAGE_CLASS_ID)] = packageMeta;
+
   Meta* typeMeta = getBuiltinClass(BUILTIN_TYPE_CLASS_ID)->instanceMeta();
   typeMeta->blockType_ = TYPE_BLOCK_TYPE;
   basicRoots_[TYPE_META_ROOT_INDEX] = typeMeta;
 
+  auto externTypeInfoMeta =
+      new(heap, 0, sizeof(ExternTypeInfo), 0) Meta(EXTERN_TYPE_INFO_BLOCK_TYPE);
+  externTypeInfoMeta->hasPointers_ = true;
+  externTypeInfoMeta->objectPointerMap().setWord(0, ExternTypeInfo::kPointerMap);
+  basicRoots_[EXTERN_TYPE_INFO_META_ROOT_INDEX] = externTypeInfoMeta;
+
   Meta* stringMeta = getBuiltinClass(BUILTIN_STRING_CLASS_ID)->instanceMeta();
   stringMeta->blockType_ = STRING_BLOCK_TYPE;
   basicRoots_[STRING_META_ROOT_INDEX] = stringMeta;
+
+  auto emptyString = new(heap, 0) String(nullptr);
+  basicRoots_[EMPTY_STRING_ROOT_INDEX] = emptyString;
 
   auto trueString = String::rawFromUtf8CString(heap, "true");
   basicRoots_[TRUE_STRING_ROOT_INDEX] = trueString;
 
   auto falseString = String::rawFromUtf8CString(heap, "false");
   basicRoots_[FALSE_STRING_ROOT_INDEX] = falseString;
+
+  typedef BlockHashMapTable<String, Block> DefaultBlockHashMapTable;
+  auto blockHashMapTableMeta = new(heap, 0, sizeof(DefaultBlockHashMapTable),
+                                   sizeof(DefaultBlockHashMapTable::Element))
+      Meta(DefaultBlockHashMapTable::kBlockType);
+  blockHashMapTableMeta->hasElementPointers_ = true;
+  blockHashMapTableMeta->lengthOffset_ = offsetof(DefaultBlockHashMapTable, capacity_);
+  blockHashMapTableMeta->elementPointerMap().setWord(
+      0, DefaultBlockHashMapTable::kElementPointerMap);
+  basicRoots_[BLOCK_HASH_MAP_TABLE_META_ROOT_INDEX] = blockHashMapTableMeta;
+
+  typedef BlockHashMap<String, Block> DefaultBlockHashMap;
+  auto blockHashMapMeta = new(heap, 0, sizeof(DefaultBlockHashMap), 0)
+      Meta(DefaultBlockHashMapTable::kBlockType);
+  blockHashMapMeta->hasPointers_ = true;
+  blockHashMapMeta->objectPointerMap().setWord(0, DefaultBlockHashMap::kPointerMap);
+  basicRoots_[BLOCK_HASH_MAP_META_ROOT_INDEX] = blockHashMapMeta;
 }
 
 
@@ -151,6 +206,9 @@ Meta* Roots::getMetaForBlockType(int type) {
     case META_BLOCK_TYPE: return metaMeta();
     case FREE_BLOCK_TYPE: return freeMeta();
     case PACKAGE_BLOCK_TYPE: return packageMeta();
+    case NAME_BLOCK_TYPE: return nameMeta();
+    case PACKAGE_VERSION_BLOCK_TYPE: return packageVersionMeta();
+    case PACKAGE_DEPENDENCY_BLOCK_TYPE: return packageDependencyMeta();
     case STACK_BLOCK_TYPE: return stackMeta();
     case GLOBAL_BLOCK_TYPE: return globalMeta();
     case FUNCTION_BLOCK_TYPE: return functionMeta();
@@ -162,7 +220,10 @@ Meta* Roots::getMetaForBlockType(int type) {
     case I64_ARRAY_BLOCK_TYPE: return i64ArrayMeta();
     case BLOCK_ARRAY_BLOCK_TYPE: return blockArrayMeta();
     case TAGGED_ARRAY_BLOCK_TYPE: return taggedArrayMeta();
+    case BLOCK_HASH_MAP_TABLE_BLOCK_TYPE: return blockHashMapTableMeta();
+    case BLOCK_HASH_MAP_BLOCK_TYPE: return blockHashMapMeta();
     case TYPE_BLOCK_TYPE: return typeMeta();
+    case EXTERN_TYPE_INFO_BLOCK_TYPE: return externTypeInfoMeta();
     case STRING_BLOCK_TYPE: return stringMeta();
     default:
       UNREACHABLE();
@@ -192,7 +253,7 @@ Type* Roots::getBuiltinType(BuiltinId id) const {
 }
 
 
-String* Roots::getBuiltinName(BuiltinId id) const {
+Name* Roots::getBuiltinName(BuiltinId id) const {
   auto index = builtinIdToIndex(id);
   ASSERT(index < builtinNames_.size());
   return builtinNames_[index];

@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -20,33 +20,24 @@ namespace internal {
 class Function;
 class VM;
 
-#define DEFINE_NEW(clas, type)                                                        \
+#define DEFINE_NEW(clas)                                                              \
   void* operator new (size_t, Heap* heap) {                                           \
     auto _block = reinterpret_cast<clas*>(heap->allocateUninitialized(sizeof(clas))); \
-    _block->setMetaWord(type);                                                        \
     return _block;                                                                    \
   }                                                                                   \
 
 
-// TODO: remove when no longer used
-#define ALLOCATE_WITH_GC(name, heap, type, call) do { \
-  type* _value = call;                                \
-  if (_value == nullptr) {                            \
-    (heap)->collectGarbage();                         \
-    _value = call;                                    \
-    if (_value == nullptr) {                          \
-      throw Error("out of memory");                   \
-    }                                                 \
-  }                                                   \
-  name = Local<type>(_value);                         \
-} while (false)                                       \
-
-
-// TODO: remove when no longer used
-#define DEFINE_ALLOCATION(heap, type, call)      \
-  Local<type> _result;                           \
-  ALLOCATE_WITH_GC(_result, heap, type, call);   \
-  return _result;                                \
+#define RETRY_WITH_GC(heap, stmt)                                                     \
+  do {                                                                                \
+    try {                                                                             \
+      stmt;                                                                           \
+      break;                                                                          \
+    } catch (const AllocationError& exn) {                                            \
+      if (!exn.shouldRetryAfterGC())                                                  \
+        throw;                                                                        \
+      (heap)->collectGarbage();                                                       \
+    }                                                                                 \
+  } while (true)                                                                      \
 
 
 /** Thrown when memory can't be allocated from the heap. Contains a flag that indicates whether

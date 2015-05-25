@@ -47,9 +47,12 @@ class Type: public Object {
     // Object forms
     CLASS_TYPE,
     VARIABLE_TYPE,
+
+    // Pseudo forms (still object forms)
+    EXTERN_CLASS_TYPE,
     ERASED_TYPE,
 
-    // Fake forms
+    // Other symbols
     FIRST_PRIMITIVE_TYPE = UNIT_TYPE,
     LAST_PRIMITIVE_TYPE = F64_TYPE,
     FIRST_OBJECT_TYPE = CLASS_TYPE,
@@ -140,6 +143,8 @@ class Type: public Object {
 
  private:
   friend class Roots;
+  friend class ExternTypeInfo;
+
   static const word_t kPointerMap = 0;
 
   length_t length_;
@@ -149,6 +154,38 @@ class Type: public Object {
 };
 
 std::ostream& operator << (std::ostream& os, const Type* type);
+
+
+class ExternTypeInfo: public Block {
+ public:
+  static const BlockType kBlockType = EXTERN_TYPE_INFO_BLOCK_TYPE;
+
+  DEFINE_NEW(ExternTypeInfo)
+  ExternTypeInfo(Type* type, Package* package, length_t dependencyIndex, length_t externIndex);
+  static Local<ExternTypeInfo> create(Heap* heap,
+                                      const Handle<Type>& type,
+                                      const Handle<Package>& package,
+                                      length_t dependencyIndex,
+                                      length_t externIndex);
+
+  Type* type() const { return type_.get(); }
+  Package* package() const { return package_.get(); }
+  length_t dependencyIndex() const { return dependencyIndex_; }
+  length_t externIndex() const { return externIndex_; }
+
+  void linkType();
+
+ private:
+  DECLARE_POINTER_MAP()
+
+  Ptr<Type> type_;
+  Ptr<Package> package_;
+  length_t dependencyIndex_;
+  length_t externIndex_;
+  // Update EXTERN_TYPE_INFO_POINTER_LIST if pointer members change.
+};
+
+std::ostream& operator << (std::ostream& os, const ExternTypeInfo* info);
 
 }
 }

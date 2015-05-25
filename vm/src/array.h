@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -10,7 +10,6 @@
 #include <iomanip>
 #include <iostream>
 #include "block.h"
-#include "gc.h"
 #include "heap.h"
 #include "tagged.h"
 #include "utils.h"
@@ -48,6 +47,7 @@ class Array: public Block {
   }
 
   length_t length() const { return length_; }
+  bool isEmpty() const { return length_ == 0; }
 
   T* elements() {
     return &mem<T>(this, sizeof(Array));
@@ -201,7 +201,6 @@ class I32Array: public DataArray<i32, I32_ARRAY_BLOCK_TYPE> {
 
 
 typedef I32Array LengthArray;
-typedef I32Array IdArray;
 
 
 class I64Array: public DataArray<i64, I64_ARRAY_BLOCK_TYPE> {

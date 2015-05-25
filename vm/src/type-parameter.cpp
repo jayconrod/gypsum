@@ -8,9 +8,11 @@
 
 #include <unordered_set>
 #include "block.h"
-#include "gc.h"
+#include "flags.h"
 #include "handle.h"
 #include "heap.h"
+#include "name.h"
+#include "string.h"
 #include "type.h"
 
 using namespace std;
@@ -19,6 +21,7 @@ namespace codeswitch {
 namespace internal {
 
 #define TYPE_PARAMETERS_POINTER_LIST(F) \
+  F(TypeParameter, name_)               \
   F(TypeParameter, upperBound_)         \
   F(TypeParameter, lowerBound_)         \
 
@@ -32,8 +35,9 @@ void* TypeParameter::operator new (size_t, Heap* heap) {
 }
 
 
-TypeParameter::TypeParameter(u32 flags, Type* upperBound, Type* lowerBound)
+TypeParameter::TypeParameter(Name* name, u32 flags, Type* upperBound, Type* lowerBound)
     : Block(TYPE_PARAMETER_BLOCK_TYPE),
+      name_(this, name),
       flags_(flags),
       upperBound_(this, upperBound),
       lowerBound_(this, lowerBound) { }
@@ -41,16 +45,26 @@ TypeParameter::TypeParameter(u32 flags, Type* upperBound, Type* lowerBound)
 
 Local<TypeParameter> TypeParameter::create(Heap* heap) {
   RETRY_WITH_GC(heap, return Local<TypeParameter>(
-      new(heap) TypeParameter(0, nullptr, nullptr)));
+      new(heap) TypeParameter(nullptr, 0, nullptr, nullptr)));
 }
 
 
 Local<TypeParameter> TypeParameter::create(Heap* heap,
+                                           const Handle<Name>& name,
                                            u32 flags,
                                            const Handle<Type>& upperBound,
                                            const Handle<Type>& lowerBound) {
   RETRY_WITH_GC(heap, return Local<TypeParameter>(
-      new(heap) TypeParameter(flags, upperBound.getOrNull(), lowerBound.getOrNull())));
+      new(heap) TypeParameter(*name, flags, upperBound.getOrNull(), lowerBound.getOrNull())));
+}
+
+
+bool TypeParameter::isCompatibleWith(const Handle<TypeParameter>& a,
+                                     const Handle<TypeParameter>& b) {
+  return a->name()->equals(b->name()) &&
+         (a->flags() | EXTERN_FLAG) == (b->flags() | EXTERN_FLAG) &&
+         a->upperBound()->equals(b->upperBound()) &&
+         a->lowerBound()->equals(b->lowerBound());
 }
 
 
@@ -85,6 +99,7 @@ Variance TypeParameter::variance() const {
 
 ostream& operator << (ostream& os, const TypeParameter* tp) {
   os << brief(tp)
+     << "\n  name: " << brief(tp->name())
      << "\n  upper bound: " << brief(tp->upperBound())
      << "\n  lower bound: " << brief(tp->lowerBound());
   return os;

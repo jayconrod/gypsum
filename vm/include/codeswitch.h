@@ -7,8 +7,8 @@
 #ifndef codeswitch_h
 #define codeswitch_h
 
-#include <cstdio>
-#include <stdint.h>   // cstdint is C++11 only
+#include <string>
+#include <cstdint>
 
 namespace codeswitch {
 
@@ -24,7 +24,7 @@ class VM {
 
   VM& operator = (const VM& vm);
 
-  Package loadPackage(const char* fileName);
+  Package loadPackage(const std::string& fileName);
 
  private:
   class Impl;

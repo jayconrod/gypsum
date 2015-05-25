@@ -14,6 +14,7 @@
 namespace codeswitch {
 namespace internal {
 
+class Name;
 class Type;
 
 class TypeParameter: public Block {
@@ -21,9 +22,10 @@ class TypeParameter: public Block {
   static const BlockType kBlockType = TYPE_PARAMETER_BLOCK_TYPE;
 
   void* operator new (size_t, Heap* heap);
-  TypeParameter(u32 flags, Type* upperBound, Type* lowerBound);
+  TypeParameter(Name* name, u32 flags, Type* upperBound, Type* lowerBound);
   static Local<TypeParameter> create(Heap* heap);
   static Local<TypeParameter> create(Heap* heap,
+                                     const Handle<Name>& name,
                                      u32 flags,
                                      const Handle<Type>& upperBound,
                                      const Handle<Type>& lowerBound);
@@ -33,6 +35,8 @@ class TypeParameter: public Block {
   // relationship. We may need to allocate TypeParameter objects early, then fill them after
   // other objects which refer to them have been allocated.
 
+  Name* name() const { return name_.get(); }
+  void setName(Name* name) { name_.set(this, name); }
   u32 flags() const { return flags_; }
   void setFlags(u32 newFlags) { flags_ = newFlags; }
   Type* upperBound() const { return upperBound_.get(); }
@@ -40,6 +44,7 @@ class TypeParameter: public Block {
   Type* lowerBound() const { return lowerBound_.get(); }
   void setLowerBound(Type* newLowerBound) { lowerBound_.set(this, newLowerBound); }
 
+  static bool isCompatibleWith(const Handle<TypeParameter>& a, const Handle<TypeParameter>& b);
   bool hasCommonBound(TypeParameter* other) const;
 
   Variance variance() const;
@@ -47,6 +52,7 @@ class TypeParameter: public Block {
  private:
   DECLARE_POINTER_MAP()
 
+  Ptr<Name> name_;
   u32 flags_;
   Ptr<Type> upperBound_;
   Ptr<Type> lowerBound_;

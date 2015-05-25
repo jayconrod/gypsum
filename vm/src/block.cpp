@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -8,11 +8,14 @@
 
 #include "array.h"
 #include "function.h"
-#include "gc.h"
 #include "handle.h"
 #include "heap.h"
 #include "roots.h"
 #include "stack.h"
+
+#ifdef DEBUG
+#include "hash-table.h"  // needed for dump
+#endif
 
 using namespace std;
 
@@ -50,10 +53,77 @@ static const char* kBlockTypeStrings[] = {
 
 
 ostream& operator << (std::ostream& os, brief b) {
-  os << kBlockTypeStrings[b.block_->meta()->blockType()]
-     << " @" << static_cast<const void*>(b.block_);
+  if (b.block_ == nullptr) {
+    os << "null";
+  } else {
+    os << kBlockTypeStrings[b.block_->meta()->blockType()]
+       << " @" << static_cast<const void*>(b.block_);
+  }
   return os;
 }
+
+
+#ifdef DEBUG
+// Forward declarations for `dump`, so that we don't need to include every header.
+// Unfortunately, we can't use macros to declare these because some of them are templated.
+class Package;
+ostream& operator << (ostream&, const Package*);
+class PackageVersion;
+ostream& operator << (ostream&, const PackageVersion*);
+class PackageDependency;
+ostream& operator << (ostream&, const PackageDependency*);
+class Stack;
+ostream& operator << (ostream&, const Stack*);
+class Name;
+ostream& operator << (ostream&, const Name*);
+class Global;
+ostream& operator << (ostream&, const Global*);
+class Function;
+ostream& operator << (ostream&, const Function*);
+class Class;
+ostream& operator << (ostream&, const Class*);
+class Field;
+ostream& operator << (ostream&, const Field*);
+class TypeParameter;
+ostream& operator << (ostream&, const TypeParameter*);
+class Object;
+ostream& operator << (ostream&, const Object*);
+class Type;
+ostream& operator << (ostream&, const Type*);
+class String;
+ostream& operator << (ostream&, const String*);
+
+
+void dump(const Block* block) {
+  switch (block->blockType()) {
+    case META_BLOCK_TYPE: cerr << reinterpret_cast<const Meta*>(block); break;
+    case FREE_BLOCK_TYPE: cerr << reinterpret_cast<const Free*>(block); break;
+    case PACKAGE_BLOCK_TYPE: cerr << reinterpret_cast<const Package*>(block); break;
+    case PACKAGE_VERSION_BLOCK_TYPE: cerr << reinterpret_cast<const PackageVersion*>(block); break;
+    case PACKAGE_DEPENDENCY_BLOCK_TYPE: cerr << reinterpret_cast<const PackageDependency*>(block); break;
+    case STACK_BLOCK_TYPE: cerr << reinterpret_cast<const Stack*>(block); break;
+    case NAME_BLOCK_TYPE: cerr << reinterpret_cast<const Name*>(block); break;
+    case GLOBAL_BLOCK_TYPE: cerr << reinterpret_cast<const Global*>(block); break;
+    case FUNCTION_BLOCK_TYPE: cerr << reinterpret_cast<const Function*>(block); break;
+    case CLASS_BLOCK_TYPE: cerr << reinterpret_cast<const Class*>(block); break;
+    case FIELD_BLOCK_TYPE: cerr << reinterpret_cast<const Field*>(block); break;
+    case TYPE_PARAMETER_BLOCK_TYPE: cerr << reinterpret_cast<const TypeParameter*>(block); break;
+    case I8_ARRAY_BLOCK_TYPE: cerr << reinterpret_cast<const I8Array*>(block); break;
+    case I32_ARRAY_BLOCK_TYPE: cerr << reinterpret_cast<const I32Array*>(block); break;
+    case I64_ARRAY_BLOCK_TYPE: cerr << reinterpret_cast<const I64Array*>(block); break;
+    case BLOCK_ARRAY_BLOCK_TYPE: cerr << reinterpret_cast<const BlockArray<Block>*>(block); break;
+    case TAGGED_ARRAY_BLOCK_TYPE: cerr << reinterpret_cast<const TaggedArray<Block>*>(block); break;
+    case BLOCK_HASH_MAP_TABLE_BLOCK_TYPE: cerr << reinterpret_cast<const BlockHashMapTable<Block*, Block*>*>(block); break;
+    case BLOCK_HASH_MAP_BLOCK_TYPE: cerr << reinterpret_cast<const BlockHashMap<Block*, Block*>*>(block); break;
+    case OBJECT_BLOCK_TYPE: cerr << reinterpret_cast<const Object*>(block); break;
+    case TYPE_BLOCK_TYPE: cerr << reinterpret_cast<const Type*>(block); break;
+    case STRING_BLOCK_TYPE: cerr << reinterpret_cast<const String*>(block); break;
+    default:
+      cerr << brief(block);
+  }
+  cerr << endl;
+}
+#endif
 
 
 void Block::relocate(word_t delta) {
@@ -140,13 +210,6 @@ VM* Block::getVM() const {
 Heap* Block::getHeap() const {
   return getVM()->heap();
 }
-
-
-#ifdef DEBUG
-void Block::dump() const {
-  cerr << brief(this) << endl;
-}
-#endif
 
 
 #define META_POINTER_LIST(F) \

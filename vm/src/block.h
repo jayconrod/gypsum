@@ -18,24 +18,30 @@
 namespace codeswitch {
 namespace internal {
 
-#define BLOCK_TYPE_LIST(V)             \
-V(Meta, META)                          \
-V(Free, FREE)                          \
-V(Package, PACKAGE)                    \
-V(Stack, STACK)                        \
-V(Global, GLOBAL)                      \
-V(Function, FUNCTION)                  \
-V(Class, CLASS)                        \
-V(Field, FIELD)                        \
-V(TypeParameter, TYPE_PARAMETER)       \
-V(I8Array, I8_ARRAY)                   \
-V(I32Array, I32_ARRAY)                 \
-V(I64Array, I64_ARRAY)                 \
-V(BlockArray, BLOCK_ARRAY)             \
-V(TaggedArray, TAGGED_ARRAY)           \
-V(Object, OBJECT)                      \
-V(Type, TYPE)                          \
-V(String, STRING)                      \
+#define BLOCK_TYPE_LIST(V)                                                     \
+V(Meta, META)                                                                  \
+V(Free, FREE)                                                                  \
+V(Package, PACKAGE)                                                            \
+V(PackageVersion, PACKAGE_VERSION)                                             \
+V(PackageDependency, PACKAGE_DEPENDENCY)                                       \
+V(Stack, STACK)                                                                \
+V(Name, NAME)                                                                  \
+V(Global, GLOBAL)                                                              \
+V(Function, FUNCTION)                                                          \
+V(Class, CLASS)                                                                \
+V(Field, FIELD)                                                                \
+V(TypeParameter, TYPE_PARAMETER)                                               \
+V(I8Array, I8_ARRAY)                                                           \
+V(I32Array, I32_ARRAY)                                                         \
+V(I64Array, I64_ARRAY)                                                         \
+V(BlockArray, BLOCK_ARRAY)                                                     \
+V(TaggedArray, TAGGED_ARRAY)                                                   \
+V(BlockHashMapTable, BLOCK_HASH_MAP_TABLE)                                     \
+V(BlockHashMap, BLOCK_HASH_MAP)                                                \
+V(Object, OBJECT)                                                              \
+V(Type, TYPE)                                                                  \
+V(ExternTypeInfo, EXTERN_TYPE_INFO)                                            \
+V(String, STRING)                                                              \
 
 
 #define ENUM_BLOCK_TYPE(Name, NAME) NAME##_BLOCK_TYPE,
@@ -144,10 +150,6 @@ BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
     metaWord_ = MetaWord(static_cast<BlockType>(mw >> MetaWord::kGcBitCount));
   }
 
-  #ifdef DEBUG
-  void dump() const;
-  #endif
-
  protected:
   void setElementsLength(word_t length);
 
@@ -164,12 +166,23 @@ BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
  */
 struct brief {
  public:
-  explicit brief(const Block* block)
-      : block_(block) { }
+  // We bypass the type system here to avoid a lot of extra includes. Whenever possible, we
+  // forward-declare a class instead of including its header. We don't want to include headers
+  // just to use `brief`.
+  explicit brief(const void* block)
+      : block_(reinterpret_cast<const Block*>(block)) { }
   const Block* block_;
 };
 
 std::ostream& operator << (std::ostream& os, brief b);
+
+
+#ifdef DEBUG
+/** Prints debugging information about any block on stderr. This is intended to be called
+ *  directly from the debugger.
+ */
+void dump(const Block* block);
+#endif
 
 
 // TODO: remove this when no longer needed for compatibility.

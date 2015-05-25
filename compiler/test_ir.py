@@ -6,14 +6,16 @@
 
 import unittest
 
-execfile("ir.py")
-
-from builtins import registerBuiltins, getNothingClass
+import builtins
+import bytecode
+import flags
+import ids
+import ir
 from ir_types import *
-from utils_test import TestCaseWithDefinitions
+import utils_test
 
 
-class TestIr(TestCaseWithDefinitions):
+class TestIr(utils_test.TestCaseWithDefinitions):
     builtins.registerBuiltins(lambda name, ir: None)
 
     def setUp(self):
@@ -37,7 +39,7 @@ class TestIr(TestCaseWithDefinitions):
         self.assertIs(self.base, commonClass)
 
     def testFindCommonBaseClassWithNothing(self):
-        nothing = getNothingClass()
+        nothing = builtins.getNothingClass()
         self.assertIs(self.A, self.A.findCommonBaseClass(nothing))
         self.assertIs(self.A, nothing.findCommonBaseClass(self.A))
 
@@ -70,24 +72,24 @@ class TestIr(TestCaseWithDefinitions):
 
     def testMayOverrideParamSub(self):
         rt = ClassType(self.base)
-        f1 = self.makeFunction("f", returnType=UnitType, parameterTypes=[rt, ClassType(self.A)])
-        f1.clas = self.base
+        f1 = self.makeFunction("f", returnType=UnitType, parameterTypes=[rt, ClassType(self.A)],
+                               flags=frozenset([flags.METHOD]))
         f2 = self.makeFunction("f", returnType=UnitType,
-                               parameterTypes=[rt, ClassType(self.base)])
-        f2.clas = self.base
+                               parameterTypes=[rt, ClassType(self.base)],
+                               flags=frozenset([flags.METHOD]))
         self.assertTrue(f2.mayOverride(f1))
         self.assertFalse(f1.mayOverride(f2))
 
     def testMayOverrideTypeParamsDiff(self):
         rt = ClassType(self.base)
         f1 = self.makeFunction("f", returnType=UnitType,
-                               typeParameters=[self.T], parameterTypes=[rt])
-        f1.clas = self.base
+                               typeParameters=[self.T], parameterTypes=[rt],
+                               flags=frozenset([flags.METHOD]))
         S = self.makeTypeParameter("S", upperBound=ClassType(self.base),
                                    lowerBound=ClassType(self.A))
         f2 = self.makeFunction("f", returnType=UnitType,
-                               typeParameters=[S], parameterTypes=[rt])
-        f2.clas = self.base
+                               typeParameters=[S], parameterTypes=[rt],
+                               flags=frozenset([flags.METHOD]))
         self.assertFalse(f2.mayOverride(f1))
         self.assertFalse(f1.mayOverride(f2))
 

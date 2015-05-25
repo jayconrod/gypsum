@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -38,7 +38,7 @@ Address AllocationRange::allocate(size_t size) {
   // We can safely check for overflow because unsigned addition is defined to wrap.
   bool overflow = newBase < base_;
   if (overflow || newBase > limit_)
-    throw AllocationError();
+    return 0;
   auto addr = base_;
   base_ = newBase;
   return addr;
@@ -152,7 +152,7 @@ Chunk::iterator& Chunk::iterator::operator ++ () {
 
 
 word_t Chunk::iterator::findNextIndex(Bitmap bitmap, word_t from, word_t limit) {
-  auto i = from;
+  word_t i;
   for (i = from; i < limit; i++) {
     if (bitmap[i])
       break;
@@ -162,7 +162,7 @@ word_t Chunk::iterator::findNextIndex(Bitmap bitmap, word_t from, word_t limit) 
 
 
 Chunk::iterator Chunk::begin() {
-  return iterator(this, iterator::findNextIndex(getBitmap(), 0, storageSize() / kWordSize));
+  return iterator(this, iterator::findNextIndex(getBitmap(), 0, getBitmap().bitCount()));
 }
 
 

@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2015 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -49,6 +49,13 @@ const length_t kIndexNotSet = ~0u;
 const length_t kPcNotSet = ~0u;
 typedef i32 id_t;
 const id_t kIdNotSet = -1;
+
+const id_t kLocalPackageId = -1;
+const id_t kBuiltinPackageId = -2;
+struct DefnId {
+  id_t packageId;
+  length_t defnIndex;
+};
 
 const int KB = 1024;
 const int MB = 1024 * KB;
@@ -103,6 +110,12 @@ T max(T a, T b) {
 
 
 template <class T>
+bool inRange(T x, T low, T high) {
+  return low <= x && x <= high;
+}
+
+
+template <class T>
 T& mem(Address base, word_t offset = 0, word_t index = 0) {
   return *reinterpret_cast<T*>(base + offset + index * sizeof(T));
 }
@@ -122,6 +135,17 @@ const T& mem(const void* base, word_t offset = 0, word_t index = 0) {
 
 inline word_t isPowerOf2(word_t n) {
   return (n & (n - 1UL)) == 0;
+}
+
+
+template <class T>
+inline T roundUpToPowerOf2(T n) {
+  if (n == 0)
+    return 0;
+  T p = 1;
+  while (p < n)
+    p <<= 1;
+  return p;
 }
 
 
