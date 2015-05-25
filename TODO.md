@@ -8,13 +8,12 @@
 - annotations
 - require "get", "set" for implicit calls
 - define getters, setters for fields automatically
+- variadic type parameterization
 - dynamic type parameterization
 - template type parameterization
 - arrays
 - native functions
-- packages
 - standard library
-- compile from multiple files
 - downcasting and type testing
 - pattern matching
 - default parameters
@@ -32,7 +31,6 @@
 ## VM features
 - native object access (depends on dynamic features)
 - native implementations for functions
-- packages
 
 ## Emacs mode
 - match types properly
@@ -43,13 +41,10 @@
 ## Compiler
 - Coding convention
 - improved debug output for scope, types, etc.
-- replace "$..." names with symbols
 - fewer classes should inherit from Data
   - compile info classes
   - ir classes
 - no optional parameters: prevent objects from being extended
-- use separate Id classes instead of integers
-- Replace Function.clas with .getReceiverClass()
 
 ## VM
 - use variadic arguments for API call
