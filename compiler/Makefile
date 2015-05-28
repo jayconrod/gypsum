@@ -1,4 +1,4 @@
-COMPILER_SOURCES := $(filter-out test_%.py,$(wildcard $(COMPILER_DIR)/*.py))
+COMPILER_SOURCES := $(filter-out test_%.py,$(wildcard $(COMPILER_DIR)/*.py)) $(COMPILER_DIR)/compiler
 COMMON_FILES := $(wildcard $(COMMON_DIR)/*.yaml)
 
 .PHONY: build-compiler check-compiler

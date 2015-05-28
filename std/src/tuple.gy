@@ -1,0 +1,8 @@
+// Copyright 2015, Jay Conrod. All rights reserved.
+//
+// This file is part of the Gypsum standard library. Use of this
+// source code is governed by the 3-clause BSD license that can be
+// found in the LICENSE.txt file.
+
+public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)
+  public def to-string = "(" + _1.to-string + ", " + _2.to-string + ")"

@@ -27,10 +27,21 @@
 - tail recursion
 - awesome for loops
 - dynamic features
+- doc annotations
 
 ## VM features
 - native object access (depends on dynamic features)
 - native implementations for functions
+- backtrace implementation for exceptions
+
+## Standard library features
+- tuples
+- lists
+- maps
+- sets
+- file i/o
+- net
+- concurrency
 
 ## Emacs mode
 - match types properly

@@ -247,7 +247,8 @@ class Serializer(object):
         self.outFile.write(struct.pack(FLAG_FORMAT, bits))
 
     def writeTypeParameterList(self, list):
-        assert all(not p.isForeign() and not p.isBuiltin() for p in list)
+        assert all(not p.isBuiltin() for p in list)
+        assert all(p.isForeign() for p in list) or all(not p.isForeign() for p in list)
         def writeId(typeParam):
             self.writeVbn(typeParam.id.externIndex
                           if flags.EXTERN in typeParam.flags \
@@ -369,7 +370,7 @@ class Deserializer(object):
             self.package.initFunction = self.package.functions[initFunctionIndex]
 
         nameStr = self.readString()
-        self.package.name = ir.PackageName.fromString(nameStr, isPackageName=True)
+        self.package.name = ir.Name.fromString(nameStr, isPackageName=True)
         versionStr = self.readString()
         self.package.version = ir.PackageVersion.fromString(versionStr)
 

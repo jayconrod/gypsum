@@ -89,7 +89,7 @@ $(OBJECTS):
 
 $(TEST_CSP_PACKAGES):
 	@mkdir -p $(dir $@)
-	$(GY_COMPILER) $< -o $@
+	$(GY_COMPILE) $< -o $@
 
 $(TEST_CSP_TESTS):
 	@mkdir -p $(dir $@)
@@ -128,10 +128,10 @@ $(foreach src,$(filter %.cpp,$(LIB_GEN)),\
   $(eval $(call objects,$(src)): $(src)))
 
 $(foreach src,$(TEST_GY_SOURCES),\
-  $(eval $(call csp_packages,$(src)): $(src) $(wildcard $(COMPILER_DIR)/*.py) $(GY_COMPILER)))
+  $(eval $(call csp_packages,$(src)): $(src) $(wildcard $(COMPILER_DIR)/*.py) $(GY_DEPS)))
 
 $(foreach pkg,$(TEST_CSP_PACKAGES),\
-  $(eval $(call csp_tests,$(pkg)): $(pkg) $(MKTEST) $(GY_COMPILER)))
+  $(eval $(call csp_tests,$(pkg)): $(pkg) $(MKTEST) $(GY_DEPS)))
 
 $(foreach dep,$(DEPS),\
   $(eval -include $(dep)))

@@ -112,3 +112,59 @@ class TestIr(utils_test.TestCaseWithDefinitions):
         B = self.makeClass("B", supertypes=[ClassType(A)])
         C = self.makeClass("C", supertypes=[ClassType(B)])
         self.assertEquals([B, A], C.findClassPathToBaseClass(A))
+
+
+class TestName(unittest.TestCase):
+    def testFromStringBasic(self):
+        name = ir.Name.fromString("foo")
+        self.assertEquals(ir.Name(["foo"]), name)
+        name = ir.Name.fromString("foo.bar.baz")
+        self.assertEquals(ir.Name(["foo", "bar", "baz"]), name)
+
+    def testFromStringChars(self):
+        name = ir.Name.fromString("||")
+        self.assertEquals(ir.Name(["||"]), name)
+        self.assertRaises(ValueError, ir.Name.fromString, "||", isPackageName=True)
+
+    def testUnicodeShortReturnsStr(self):
+        name = ir.Name([unicode("foo")])
+        self.assertEquals(str, type(name.short()))
+
+
+class TestPackageVersion(unittest.TestCase):
+    def testFromStringBasic(self):
+        version = ir.PackageVersion.fromString("1")
+        self.assertEquals(ir.PackageVersion([1]), version)
+        version = ir.PackageVersion.fromString("1.23")
+        self.assertEquals(ir.PackageVersion([1, 23]), version)
+
+
+class TestPackageDependency(unittest.TestCase):
+    def assertNameAndVersionEquals(self, expected, actual):
+        self.assertEquals(expected.name, actual.name)
+        self.assertEquals(expected.minVersion, actual.minVersion)
+        self.assertEquals(expected.maxVersion, actual.maxVersion)
+
+    def testFromStringBasic(self):
+        dep = ir.PackageDependency.fromString("foo.bar")
+        expected = ir.PackageDependency(ir.Name(["foo", "bar"]), None, None)
+        self.assertNameAndVersionEquals(expected, dep)
+
+    def testFromStringWithMin(self):
+        dep = ir.PackageDependency.fromString("foo.bar:1.2")
+        expected = ir.PackageDependency(ir.Name(["foo", "bar"]),
+                                        ir.PackageVersion([1, 2]), None)
+        self.assertNameAndVersionEquals(expected, dep)
+
+    def testFromStringWithMax(self):
+        dep = ir.PackageDependency.fromString("foo.bar:-3.4")
+        expected = ir.PackageDependency(ir.Name(["foo", "bar"]),
+                                        None, ir.PackageVersion([3, 4]))
+        self.assertNameAndVersionEquals(expected, dep)
+
+    def testFromStringWithBoth(self):
+        dep = ir.PackageDependency.fromString("foo.bar:1.2-3.4")
+        expected = ir.PackageDependency(ir.Name(["foo", "bar"]),
+                                        ir.PackageVersion([1, 2]),
+                                        ir.PackageVersion([3, 4]))
+        self.assertNameAndVersionEquals(expected, dep)

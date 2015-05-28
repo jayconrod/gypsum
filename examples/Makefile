@@ -13,7 +13,7 @@ build-examples: $(EXAMPLE_PACKAGES)
 
 $(EXAMPLE_PACKAGES):
 	@mkdir -p $(EXAMPLE_OUT_DIR)
-	$(GY_COMPILER) $< -o $@
+	$(GY_COMPILE) $< -o $@
 
 $(foreach src,$(EXAMPLE_SOURCES),\
-  $(eval $(call csp_packages,$(src)): $(src) $(GY_COMPILER)))
+  $(eval $(call csp_packages,$(src)): $(src) $(GY_DEPS)))

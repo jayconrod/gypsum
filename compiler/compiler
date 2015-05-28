@@ -44,6 +44,8 @@ cmdline.add_argument("-v", "--package-version", action="store", type=PackageVers
 cmdline.add_argument("-d", "--depends", action="append", type=PackageDependency.fromString,
                      default=[],
                      help="Additional package dependencies")
+cmdline.add_argument("--no-std", action="store_true",
+                     help="Do not add a dependency on the standard library")
 cmdline.add_argument("-P", "--package-path", action="append", type=str, default=[],
                      help="Directories containing packages that could be imported")
 cmdline.add_argument("-o", "--output", action="store",
@@ -95,6 +97,8 @@ try:
 
     package = Package(TARGET_PACKAGE_ID, args.package_name, args.package_version)
     package.dependencies.extend(args.depends)
+    if not args.no_std:
+        package.dependencies.append(PackageDependency.fromString("std:1"))
     info = CompileInfo(astPackage, package, loader)
 
     analyzeDeclarations(info)

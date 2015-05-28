@@ -28,7 +28,7 @@ COMMON_DIR := $(TOP)/common
 COMPILER_DIR := $(TOP)/compiler
 VM_DIR := $(TOP)/vm
 EXAMPLE_DIR := $(TOP)/examples
-
+STD_DIR := $(TOP)/std
 
 # Tools and commands
 CXX ?= g++
@@ -40,9 +40,15 @@ CXX_LINK_STATIC := $(AR) rcs
 RM ?= rm
 REMOVE := $(RM) -r
 PYTHON ?= python
-GY_COMPILER ?= $(OUT_DIR)/compiler
 PYINSTALLER := pyinstaller --noconfirm --log-level=WARN
 
+# Internal tools and dependencies.
+GY_COMPILER := $(OUT_DIR)/compiler
+GY_COMPILE := $(GY_COMPILER) --package-path $(OUT_DIR)
+STD_NAME := std
+STD_VERSION := 1
+STD_PACKAGE = $(OUT_DIR)/$(STD_NAME)-$(STD_VERSION).csp
+GY_DEPS := $(GY_COMPILER) $(STD_PACKAGE)
 
 # Flags
 CXXFLAGS := -Werror -Wall -Wno-invalid-offsetof
@@ -78,3 +84,4 @@ clean:
 include $(VM_DIR)/Makefile
 include $(COMPILER_DIR)/Makefile
 include $(EXAMPLE_DIR)/Makefile
+include $(STD_DIR)/Makefile

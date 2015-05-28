@@ -219,6 +219,23 @@ class TestSerialize(unittest.TestCase):
         self.des.readTypeParameter(outTypeParam)
         self.assertEquals(typeParam, outTypeParam)
 
+    def testRewriteForeignTypeParameter(self):
+        package = ir.Package(ids.TARGET_PACKAGE_ID)
+        otherPackage = ir.Package()
+        typeParam = otherPackage.addTypeParameter(ir.Name(["T"]), None,
+                                                  ir_types.getRootClassType(),
+                                                  ir_types.getNothingClassType(),
+                                                  frozenset([flags.STATIC]))
+        loader = utils_test.MockPackageLoader([otherPackage])
+        externalizer = externalization.Externalizer(package, loader)
+        foreignTypeParam = externalizer.externalizeDefn(typeParam)
+        self.ser.package = package
+        self.ser.writeTypeParameter(foreignTypeParam)
+        outTypeParam = ir.TypeParameter(None, None, foreignTypeParam.id, None, None, None)
+        self.des.package = package
+        self.des.readTypeParameter(outTypeParam)
+        self.assertEquals(foreignTypeParam, outTypeParam)
+
     def testRewriteClass(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
         typeParam = package.addTypeParameter(ir.Name(["Foo", "T"]), None,

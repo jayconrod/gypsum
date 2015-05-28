@@ -255,7 +255,10 @@ class Name(object):
                all(a == b for a, b in zip(self.components, components))
 
     def short(self):
-        return self.components[-1]
+        s = self.components[-1]
+        if isinstance(s, unicode):
+            s = str(s)
+        return s
 
 
 CLOSURE_SUFFIX = "$closure"
@@ -298,8 +301,8 @@ class PackageVersion(object):
 
 
 class PackageDependency(object):
-    dependencySrc = "%s(?::(%s)?(?:-(%s))?)?" % \
-                    (Name.nameSrc, PackageVersion.versionSrc, PackageVersion.versionSrc)
+    dependencySrc = "(%s)(?::(%s)?(?:-(%s))?)?" % \
+                    (Name.packageSrc, PackageVersion.versionSrc, PackageVersion.versionSrc)
     dependencyRex = re.compile(r"\A%s\Z" % dependencySrc)
 
     def __init__(self, name, minVersion, maxVersion):
@@ -321,7 +324,7 @@ class PackageDependency(object):
 
     @staticmethod
     def fromString(s):
-        m = re.match(s)
+        m = PackageDependency.dependencyRex.match(s)
         if not m:
             raise ValueError("invalid package dependency: " + s)
         name = Name.fromString(m.group(1))
@@ -352,6 +355,10 @@ class PackageDependency(object):
         for g in self.externGlobals:
             buf.write("%s\n\n" % g)
         return buf.getvalue()
+
+    def __repr__(self):
+        return "PackageDependency(%s, %s, %s)" % \
+            (repr(self.name), repr(self.minVersion), repr(self.maxVersion))
 
 
 class IrDefinition(data.Data):
