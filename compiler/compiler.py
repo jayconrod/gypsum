@@ -11,7 +11,7 @@ from bytecode import W8, W16, W32, W64, BUILTIN_TYPE_CLASS_ID, BUILTIN_TYPE_CTOR
 from ir import IrTopDefn, Class, Field, Function, Global, LOCAL, Package, PACKAGE_INIT_NAME, RECEIVER_SUFFIX, Variable
 from ir_types import UnitType, ClassType, VariableType, NULLABLE_TYPE_FLAG, getExceptionClassType
 import ir_instructions
-from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PACKAGE_INITIALIZER_HINT, DefnInfo
+from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PACKAGE_INITIALIZER_HINT, DefnInfo, NORMAL_MODE, STD_MODE, NOSTD_MODE
 from flags import ABSTRACT, STATIC, LET
 from errors import SemanticException
 from builtins import getTypeClass, getExceptionClass, getRootClass
@@ -363,6 +363,34 @@ class CompileVisitor(ast.AstNodeVisitor):
             else:
                 receiver = expr.left
             self.buildCall(useInfo, callInfo, receiver, [], [expr.right], mode)
+
+    def visitAstTupleExpression(self, expr, mode):
+        ty = self.info.getType(expr)
+        tupleClass = ty.clas
+        langMode = self.info.languageMode()
+        assert langMode is not NOSTD_MODE
+
+        # Allocate the tuple.
+        if langMode is NORMAL_MODE:
+            self.allocobjf(tupleClass.id.packageId.index, tupleClass.id.externIndex)
+        else:
+            assert langMode is STD_MODE
+            self.allocobj(tupleClass.id.index)
+        if mode is COMPILE_FOR_VALUE:
+            self.dup()
+
+        # Compile sub-expressions and type arguments.
+        for subexpr in expr.expressions:
+            self.visit(subexpr, mode)
+        for subexpr in expr.expressions:
+            argType = self.info.getType(subexpr)
+            self.buildStaticTypeArgument(argType)
+
+        # Construct the tuple.
+        ctor = tupleClass.constructors[0]
+        assert len(ctor.parameterTypes) == 1 + len(expr.expressions)
+        self.callFunction(ctor)
+        self.drop()
 
     def visitAstIfExpression(self, expr, mode):
         self.visit(expr.condition, COMPILE_FOR_VALUE)

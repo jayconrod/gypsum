@@ -85,7 +85,7 @@ def constructor():
 def superclass():
     def processArgs(parsed, loc):
         return ct.untangle(parsed)[1] if parsed is not None else []
-    args = ct.Opt(keyword("(") + ct.RepSep(expression(), keyword(",")) + keyword(")")) ^ processArgs
+    args = ct.Opt(keyword("(") + ct.RepSep(maybeBinopExpr(), keyword(",")) + keyword(")")) ^ processArgs
     def process(parsed, loc):
         if parsed is None:
             return None, None
@@ -200,7 +200,13 @@ def expression():
     def combine(left, right, loc):
         return ast.AstAssignExpression(left, right, loc)
     rhs = keyword("=") + ct.Lazy(expression) ^ (lambda p, _: p[1])
-    return ct.LeftRec(maybeBinopExpr(), rhs, combine)
+    return ct.LeftRec(maybeTupleExpr(), rhs, combine)
+
+
+def maybeTupleExpr():
+    def process(parsed, loc):
+        return parsed[0] if len(parsed) == 1 else ast.AstTupleExpression(parsed, loc)
+    return ct.Rep1Sep(maybeBinopExpr(), keyword(",")) ^ process
 
 
 def maybeBinopExpr():
@@ -287,7 +293,7 @@ def maybeCallExpr():
 
 def callSuffix():
     methodNameOpt = ct.Opt(keyword(".") + symbol ^ (lambda p, _: p[1]))
-    argumentsOpt = ct.Opt(keyword("(") + ct.RepSep(ct.Lazy(expression), keyword(",")) + keyword(")")) ^ \
+    argumentsOpt = ct.Opt(keyword("(") + ct.RepSep(ct.Lazy(maybeBinopExpr), keyword(",")) + keyword(")")) ^ \
         (lambda p, _: ct.untangle(p)[1] if p else None)
     getMethodOpt = ct.Opt(keyword("_")) ^ (lambda p, _: bool(p))
     return methodNameOpt + typeArguments() + argumentsOpt + getMethodOpt

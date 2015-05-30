@@ -24,6 +24,9 @@ def externalize(info):
     for ty in info.typeInfo.itervalues():
         externalizer.externalizeType(ty)
 
+    for defn in info.stdExternInfo.itervalues():
+        externalizer.externalizeDefn(defn)
+
 
 class Externalizer(object):
     def __init__(self, package, packageLoader):

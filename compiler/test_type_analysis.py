@@ -23,19 +23,21 @@ from utils_test import MockPackageLoader, TestCaseWithDefinitions
 
 
 class TestTypeAnalysis(TestCaseWithDefinitions):
-    def analyzeFromSource(self, source, packageNames=None, packageLoader=None):
+    def analyzeFromSource(self, source, name=None, packageNames=None, packageLoader=None):
         assert packageNames is None or packageLoader is None
         filename = "(test)"
         rawTokens = lex(filename, source)
         layoutTokens = layout(rawTokens)
         ast = parse(filename, layoutTokens)
+        if name is None:
+            name = Name(["test"])
         if packageNames is None:
             packageNames = []
         if packageLoader is None:
             packageNameFromString = lambda s: Name.fromString(s, isPackageName=True)
             packageLoader = MockPackageLoader(map(packageNameFromString, packageNames))
-        package = Package(TARGET_PACKAGE_ID)
-        info = CompileInfo(ast, package=package, packageLoader=packageLoader)
+        package = Package(TARGET_PACKAGE_ID, name=name)
+        info = CompileInfo(ast, package=package, packageLoader=packageLoader, isUsingStd=False)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         analyzeTypes(info)
@@ -566,6 +568,27 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testOrExpr(self):
         info = self.analyzeFromSource("def f = true || false")
         self.assertEquals(BooleanType, info.getType(info.ast.modules[0].definitions[0].body))
+
+    @unittest.skip("need std integration or mocking")
+    def testTupleExprNormal(self):
+        # make sure primitive values are not allowed
+        self.fail()
+
+    def testTupleExprStd(self):
+        source = "public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n" + \
+                 "let g = \"foo\", \"bar\""
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        tupleClass = info.package.findClass(name="Tuple2")
+        g = info.package.findGlobal(name="g")
+        self.assertEquals(ClassType(tupleClass, (getStringType(), getStringType())), g.type)
+
+    def testTupleExprStdPrimitive(self):
+        source = "public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n" + \
+                 "let g = 1, 2"
+        self.assertRaises(TypeException, self.analyzeFromSource, source, name=STD_NAME)
+
+    def testTupleExprNoStd(self):
+        self.assertRaises(TypeException, self.analyzeFromSource, "let x = \"foo\", \"bar\"")
 
     def testIfExpr(self):
         info = self.analyzeFromSource("def f = if (true) 12 else 34")

@@ -417,6 +417,21 @@ class TestParser(unittest.TestCase):
                                                                          "f")),
                         expression(), "o.f _")
 
+    def testTupleExprs(self):
+        self.checkParse(astTupleExpression([astVariableExpression("a"),
+                                            astVariableExpression("b")]),
+                        expression(), "a, b")
+        self.checkParse(astTupleExpression([astVariableExpression("a"),
+                                            astTupleExpression([astVariableExpression("b"),
+                                                                astVariableExpression("c")]),
+                                            astVariableExpression("d")]),
+                        expression(), "a, (b, c), d")
+        self.checkParse(astCallExpression(astVariableExpression("a"),
+                                          [],
+                                          [astTupleExpression([astVariableExpression("b"),
+                                                               astVariableExpression("c")])]),
+                        expression(), "a((b, c))")
+
     def testUnaryExpr(self):
         self.checkParse(astUnaryExpression("-", astVariableExpression("x")),
                         expression(), "-x")

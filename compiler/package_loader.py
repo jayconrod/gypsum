@@ -80,6 +80,7 @@ class PackageLoader(BasePackageLoader):
         return name in self.packageInfoByName
 
     def loadPackage(self, name):
+        self.ensurePackageInfo()
         info = self.packageInfoByName[name]
         if info.package is not None:
             return info.package

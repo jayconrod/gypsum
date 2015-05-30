@@ -18,11 +18,18 @@ CLOSURE_CONSTRUCTOR_HINT = "closure-constructor-hint"
 CLOSURE_CLASS_HINT = "closure-class-hint"
 PACKAGE_INITIALIZER_HINT = "package-initializer-hint"
 
+NORMAL_MODE = "normal-mode"
+STD_MODE = "std-mode"
+NOSTD_MODE = "nostd-mode"
+
+STD_NAME = ir.Name(["std"])
+
+MAX_TUPLE_LENGTH = 2
 
 class CompileInfo(object):
     """Contains state created and used by most compiler phases"""
 
-    def __init__(self, ast_, package, packageLoader):
+    def __init__(self, ast_, package, packageLoader, isUsingStd=True):
         if isinstance(ast_, ast.AstModule):
             ast_ = ast.AstPackage([ast_], location.NoLoc)
             ast_.id = ids.AstId(-1)
@@ -32,6 +39,7 @@ class CompileInfo(object):
         self.packageNames = self.packageLoader.getPackageNames()
         self.ast = ast_
         self.package = package
+        self.isUsingStd = isUsingStd
         self.scopes = {}  # keyed by ScopeId, AstId, and DefnId
         self.contextInfo = {}  # keyed by ScopeId
         self.closureInfo = {}  # keyed by ScopeId
@@ -41,6 +49,15 @@ class CompileInfo(object):
         self.typeInfo = {}  # keyed by AstId
         self.callInfo = {}  # keyed by AstId
         self.packageInfo = {}  # keyed by AstId
+        self.stdExternInfo = {} # keyed by DefnId
+
+    def languageMode(self):
+        if self.isUsingStd:
+            return NORMAL_MODE
+        elif self.package.name == STD_NAME:
+            return STD_MODE
+        else:
+            return NOSTD_MODE
 
 
 _dictNames = [("Scope", "scopes", (ids.ScopeId, ids.AstId, ids.DefnId, ids.PackageId)),
@@ -51,7 +68,8 @@ _dictNames = [("Scope", "scopes", (ids.ScopeId, ids.AstId, ids.DefnId, ids.Packa
               ("ClassInfo", "classInfo", (ids.DefnId,)),
               ("Type", "typeInfo", (ids.AstId,)),
               ("CallInfo", "callInfo", (ids.AstId,)),
-              ("PackageInfo", "packageInfo", (ids.AstId,))]
+              ("PackageInfo", "packageInfo", (ids.AstId,)),
+              ("StdExternInfo", "stdExternInfo", (ids.DefnId,))]
 
 def _addDictMethods(elemName, dictName, types):
     def cleanKey(self, key):
@@ -298,54 +316,9 @@ class PackageInfo(data.Data):
     ]
 
 
-def getExplicitTypeParameterCount(irDefn):
-    if hasattr(irDefn, "astDefn") and \
-       hasattr(irDefn.astDefn, "typeParameters"):
-        return len(irDefn.astDefn.typeParameters)
-    else:
-        return len(irDefn.typeParameters)
-
-
-def getExplicitTypeParameters(irDefn):
-    firstExplicit = len(irDefn.typeParameters) - getExplicitTypeParameterCount(irDefn)
-    return irDefn.typeParameters[firstExplicit:]
-
-
-def getImplicitTypeParameters(irDefn):
-    firstExplicit = len(irDefn.typeParameters) - getExplicitTypeParameterCount(irDefn)
-    return irDefn.typeParameters[:firstExplicit]
-
-
-def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes):
-    """Checks compatibility of arguments with the given function.
-
-    In Gypsum, some type arguments and argument types may be implied. Currently, this is
-    limited to arguments for parameters that were implied by the enclosing scope of the
-    function. This function checks compatibility with the given (explicit) type arguments and
-    argument types, including the receiver type (which may be None for regular function calls).
-    If the function is compatible, this function returns a (list(Type), list(Type)) tuple
-    containing the full list of type arguments and argument types (including the receiver).
-    If the function is not compatible, returns None."""
-    if receiverType is not None:
-        if isinstance(receiverType, ir_types.ObjectType):
-            receiverType = receiverType.substituteForBaseClass(irFunction.getReceiverClass())
-        implicitTypeArgs = list(receiverType.getTypeArguments())
-        allArgTypes = [receiverType] + argTypes
-    else:
-        implicitTypeParams = getImplicitTypeParameters(irFunction)
-        implicitTypeArgs = [ir_types.VariableType(t) for t in implicitTypeParams]
-        allArgTypes = argTypes
-    allTypeArgs = implicitTypeArgs + typeArgs
-
-    if irFunction.canCallWith(allTypeArgs, allArgTypes):
-        return (allTypeArgs, allArgTypes)
-    else:
-        return None
-
-
 __all__ = [ "CompileInfo", "ContextInfo", "ClosureInfo", "DefnInfo",
-            "ClassInfo", "UseInfo", "getAllArgumentTypes",
+            "ClassInfo", "UseInfo",
             "USE_AS_VALUE", "USE_AS_TYPE", "USE_AS_PROPERTY", "USE_AS_CONSTRUCTOR",
             "CONTEXT_CONSTRUCTOR_HINT", "CLOSURE_CONSTRUCTOR_HINT",
-            "getExplicitTypeParameters", "getImplicitTypeParameters",
+            "NORMAL_MODE", "STD_MODE", "NOSTD_MODE", "STD_NAME", "MAX_TUPLE_LENGTH",
             "NOT_HERITABLE"]

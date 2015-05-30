@@ -26,7 +26,7 @@ from externalization import externalize
 from compiler import compile
 from serialize import serialize
 from package_loader import PackageLoader
-from compile_info import CompileInfo
+from compile_info import CompileInfo, STD_NAME
 from errors import CompileException
 
 sys.setrecursionlimit(10000)
@@ -97,17 +97,19 @@ try:
 
     package = Package(TARGET_PACKAGE_ID, args.package_name, args.package_version)
     package.dependencies.extend(args.depends)
-    if not args.no_std:
-        package.dependencies.append(PackageDependency.fromString("std:1"))
-    info = CompileInfo(astPackage, package, loader)
+    isUsingStd = not args.no_std
+    if isUsingStd:
+        stdPackage = loader.loadPackage(STD_NAME)
+        package.ensureDependency(stdPackage)
+    info = CompileInfo(astPackage, package, loader, isUsingStd=isUsingStd)
 
     analyzeDeclarations(info)
     analyzeInheritance(info)
     if args.print_scope:
-        sys.stderr.write("--print-scope not supported right now")
+        sys.stderr.write("--print-scope not supported right now\n")
     analyzeTypes(info)
     if args.print_types:
-        sys.stderr.write("--print-types not supported right now")
+        sys.stderr.write("--print-types not supported right now\n")
     convertClosures(info)
     flattenClasses(info)
     externalize(info)

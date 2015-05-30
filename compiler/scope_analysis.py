@@ -20,7 +20,7 @@
 # - flattenClasses
 
 import ast
-from compile_info import ContextInfo, ClosureInfo, DefnInfo, ClassInfo, UseInfo, getAllArgumentTypes, USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, NOT_HERITABLE
+from compile_info import ContextInfo, ClosureInfo, DefnInfo, ClassInfo, UseInfo, USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, NOT_HERITABLE
 from data import Data
 from errors import TypeException, ScopeException
 from flags import *
@@ -431,12 +431,12 @@ class NameInfo(object):
                  isinstance(irDefn, ir.Function) and \
                  not irDefn.isMethod():
                 # Regular function
-                typesAndArgs = getAllArgumentTypes(irDefn, None, typeArgs, argTypes)
+                typesAndArgs = ir.getAllArgumentTypes(irDefn, None, typeArgs, argTypes)
                 match = typesAndArgs is not None
             elif isinstance(irDefn, ir.Function) and \
                  irDefn.isMethod():
                 # Method call
-                typesAndArgs = getAllArgumentTypes(irDefn, receiverType, typeArgs, argTypes)
+                typesAndArgs = ir.getAllArgumentTypes(irDefn, receiverType, typeArgs, argTypes)
                 match = typesAndArgs is not None
             else:
                 match = False

@@ -5,12 +5,13 @@
 
 
 import ast
+import compile_info
 from errors import TypeException
 import ir
 import ir_types as ir_t
 from builtins import getExceptionClass, getPackageClass, getNothingClass
 from utils import COMPILE_FOR_VALUE, COMPILE_FOR_MATCH
-from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, CallInfo, PackageInfo, getExplicitTypeParameters, getImplicitTypeParameters
+from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, CallInfo, PackageInfo
 from flags import COVARIANT, CONTRAVARIANT
 
 
@@ -122,7 +123,7 @@ class TypeVisitorBase(ast.AstNodeVisitor):
         flags = frozenset(map(astTypeFlagToIrTypeFlag, node.flags))
 
         if isinstance(irDefn, ir.Class):
-            explicitTypeParams = getExplicitTypeParameters(irDefn)
+            explicitTypeParams = ir.getExplicitTypeParameters(irDefn)
             if len(node.typeArguments) != len(explicitTypeParams):
                 raise TypeException(node.location,
                                     "%s: wrong number of type arguments; expected %d but have %d\n" %
@@ -130,7 +131,7 @@ class TypeVisitorBase(ast.AstNodeVisitor):
                                      len(explicitTypeParams),
                                      len(node.typeArguments)))
             explicitTypeArgs = self.handleAstClassTypeArgs(irDefn, node.typeArguments)
-            implicitTypeArgs = tuple(map(ir_t.VariableType, getImplicitTypeParameters(irDefn)))
+            implicitTypeArgs = tuple(map(ir_t.VariableType, ir.getImplicitTypeParameters(irDefn)))
             allTypeArgs = explicitTypeArgs + implicitTypeArgs
             return ir_t.ClassType(irDefn, allTypeArgs, flags)
         else:
@@ -326,7 +327,7 @@ class DeclarationTypeVisitor(TypeVisitorBase):
 
     def handleAstClassTypeArgs(self, irClass, nodes):
         typeArgs = tuple(map(self.visit, nodes))
-        typeParams = getExplicitTypeParameters(irClass)
+        typeParams = ir.getExplicitTypeParameters(irClass)
         assert len(typeParams) == len(typeArgs)
         for tp, ta, node in zip(typeParams, typeArgs, nodes):
             self.typeArgsToCheck.append((ta, tp, node.location))
@@ -645,6 +646,36 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                        [], [rightTy], True, node.location)
         return ty
 
+    def visitAstTupleExpression(self, node):
+        types = map(self.visit, node.expressions)
+        if len(types) > compile_info.MAX_TUPLE_LENGTH:
+            raise TypeException(node.location,
+                                "tuples longer than %d elements not supported" % len(types))
+        for (expr, ty) in zip(node.expressions, types):
+            if not ty.isObject():
+                raise TypeException(expr.location,
+                                    "expression with primitive type %s cannot be used in tuple" %
+                                    str(ty))
+
+        tupleClassName = "Tuple%d" % len(types)
+
+        mode = self.info.languageMode()
+        if mode is compile_info.NOSTD_MODE:
+            raise TypeException(node.location, "tuples not supported without std library")
+        elif mode is compile_info.NORMAL_MODE:
+            package = self.info.packageLoader.loadPackage(compile_info.STD_NAME)
+        else:
+            assert mode is compile_info.STD_MODE
+            package = self.info.package
+        tupleClass = package.findClass(name=tupleClassName)
+
+        if mode is compile_info.NORMAL_MODE:
+            self.info.setStdExternInfo(tupleClass.id, tupleClass)
+            ctor = tupleClass.constructors[0]
+            self.info.setStdExternInfo(ctor.id, ctor)
+
+        return ir_t.ClassType(tupleClass, tuple(types))
+
     def visitAstIfExpression(self, node):
         condTy = self.visit(node.condition)
         if not self.isConditionType(condTy):
@@ -752,7 +783,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         return ty
 
     def handleAstClassTypeArgs(self, irClass, typeArgs):
-        typeParams = getExplicitTypeParameters(irClass)
+        typeParams = ir.getExplicitTypeParameters(irClass)
         assert len(typeParams) == len(typeArgs)
         types = []
         for tp, ta in zip(typeParams, typeArgs):
@@ -883,14 +914,14 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
         if nameInfo.isClass():
             irClass = nameInfo.getDefnInfo().irDefn
-            explicitTypeParams = getExplicitTypeParameters(irClass)
+            explicitTypeParams = ir.getExplicitTypeParameters(irClass)
             if len(typeArgs) != len(explicitTypeParams):
                 raise TypeException(loc,
                                     "wrong number of type arguments: expected %d but have %d" %
                                     (len(typeArgs), len(explicitTypeParams)))
             if not all(tp.contains(ta) for tp, ta in zip(explicitTypeParams, typeArgs)):
                 raise TypeException(loc, "type error in type arguments for constructor")
-            implicitTypeParams = getImplicitTypeParameters(irClass)
+            implicitTypeParams = ir.getImplicitTypeParameters(irClass)
             classTypeArgs = tuple([ir_t.VariableType(tp) for tp in implicitTypeParams] + typeArgs)
             receiverType = ir_t.ClassType(irClass, classTypeArgs, None)
             typeArgs = []
@@ -960,7 +991,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                  self.variance not in [CONTRAVARIANT, ir_t.BIVARIANT]:
                 raise TypeException(loc, "contravariant type parameter used in invalid position")
         elif isinstance(ty, ir_t.ClassType):
-            typeParams = getExplicitTypeParameters(ty.clas)
+            typeParams = ir.getExplicitTypeParameters(ty.clas)
             typeArgs = ty.typeArguments[-len(typeParams):]
             for tp, ta in zip(typeParams, typeArgs):
                 with VarianceScope(self, tp.variance(), tp.clas):

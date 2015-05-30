@@ -534,6 +534,21 @@ class AstFunctionValueExpression(AstExpression):
         return [self.expr]
 
 
+class AstTupleExpression(AstExpression):
+    def __init__(self, expressions, location):
+        super(AstTupleExpression, self).__init__(location)
+        self.expressions = expressions
+
+    def __repr__(self):
+        return "AstTupleExpression(%s)" % repr(self.expressions)
+
+    def tag(self):
+        return "TupleExpression"
+
+    def children(self):
+        return self.expressions
+
+
 class AstIfExpression(AstExpression):
     def __init__(self, condition, trueExpr, falseExpr, location):
         super(AstIfExpression, self).__init__(location)

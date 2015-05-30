@@ -6,7 +6,6 @@
 
 import ast
 import builtins
-import compile_info
 import data
 import flags
 import ids
@@ -400,7 +399,7 @@ class Global(IrTopDefn):
         buf = StringIO.StringIO()
         if len(self.flags) > 0:
             buf.write(" ".join(self.flags) + " ")
-        buf.write("var %s%s" % (self.name, self.id))
+        buf.write("var %s%s: %s" % (self.name, self.id, str(self.type)))
         return buf.getvalue()
 
 
@@ -451,8 +450,8 @@ class Function(IrTopDefn):
 
     def mayOverride(self, other):
         assert self.isMethod() and other.isMethod()
-        selfExplicitTypeParameters = compile_info.getExplicitTypeParameters(self)
-        otherExplicitTypeParameters = compile_info.getExplicitTypeParameters(other)
+        selfExplicitTypeParameters = getExplicitTypeParameters(self)
+        otherExplicitTypeParameters = getExplicitTypeParameters(other)
         typeParametersAreCompatible = \
             len(selfExplicitTypeParameters) == len(otherExplicitTypeParameters) and \
             all(atp.isEquivalent(btp) for atp, btp in
@@ -741,6 +740,53 @@ class Variable(IrDefinition):
 
 class Field(IrDefinition):
     propertyNames = IrDefinition.propertyNames + ("type", "flags")
+
+
+# Miscellaneous functions for dealing with arguments and parameters.
+def getExplicitTypeParameterCount(irDefn):
+    if hasattr(irDefn, "astDefn") and \
+       hasattr(irDefn.astDefn, "typeParameters"):
+        return len(irDefn.astDefn.typeParameters)
+    else:
+        return len(irDefn.typeParameters)
+
+
+def getExplicitTypeParameters(irDefn):
+    firstExplicit = len(irDefn.typeParameters) - getExplicitTypeParameterCount(irDefn)
+    return irDefn.typeParameters[firstExplicit:]
+
+
+def getImplicitTypeParameters(irDefn):
+    firstExplicit = len(irDefn.typeParameters) - getExplicitTypeParameterCount(irDefn)
+    return irDefn.typeParameters[:firstExplicit]
+
+
+def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes):
+    """Checks compatibility of arguments with the given function.
+
+    In Gypsum, some type arguments and argument types may be implied. Currently, this is
+    limited to arguments for parameters that were implied by the enclosing scope of the
+    function. This function checks compatibility with the given (explicit) type arguments and
+    argument types, including the receiver type (which may be None for regular function calls).
+    If the function is compatible, this function returns a (list(Type), list(Type)) tuple
+    containing the full list of type arguments and argument types (including the receiver).
+    If the function is not compatible, returns None."""
+    if receiverType is not None:
+        if isinstance(receiverType, ir_types.ObjectType):
+            receiverType = receiverType.substituteForBaseClass(irFunction.getReceiverClass())
+        implicitTypeArgs = list(receiverType.getTypeArguments())
+        allArgTypes = [receiverType] + argTypes
+    else:
+        implicitTypeParams = getImplicitTypeParameters(irFunction)
+        implicitTypeArgs = [ir_types.VariableType(t) for t in implicitTypeParams]
+        allArgTypes = argTypes
+    allTypeArgs = implicitTypeArgs + typeArgs
+
+    if irFunction.canCallWith(allTypeArgs, allArgTypes):
+        return (allTypeArgs, allArgTypes)
+    else:
+        return None
+
 
 __all__ = [
     "Package",

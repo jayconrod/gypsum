@@ -30,18 +30,25 @@ from utils_test import MockPackageLoader, TestCaseWithDefinitions
 
 
 class TestCompiler(TestCaseWithDefinitions):
-    def compileFromSource(self, source, packageNames=None, packageLoader=None):
+    def __init__(self, *args):
+        super(TestCompiler, self).__init__(*args)
+        sys.setrecursionlimit(10000)
+
+    def compileFromSource(self, source, name=None, packageNames=None, packageLoader=None):
         assert packageNames is None or packageLoader is None
         filename = "(test)"
         rawTokens = lex(filename, source)
         layoutTokens = layout(rawTokens)
         ast = parse(filename, layoutTokens)
+        if name is None:
+            name = Name(["test"])
         if packageNames is None:
             packageNames = []
         if packageLoader is None:
             packageNameFromString = lambda s: Name.fromString(s, isPackageName=True)
             packageLoader = MockPackageLoader(map(packageNameFromString, packageNames))
-        info = CompileInfo(ast, Package(id=TARGET_PACKAGE_ID), packageLoader)
+        package = Package(id=TARGET_PACKAGE_ID, name=name)
+        info = CompileInfo(ast, package, packageLoader, isUsingStd=False)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         analyzeTypes(info)
@@ -726,6 +733,26 @@ class TestCompiler(TestCaseWithDefinitions):
                              ], [
                                ret(),
                              ]]))
+
+    def testTupleExpr(self):
+        source = "public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n" + \
+                 "def f = (\"foo\", \"bar\")._1"
+        package = self.compileFromSource(source, name=STD_NAME)
+        tupleClass = package.findClass(name="Tuple2")
+        fooIndex = package.findString("foo")
+        barIndex = package.findString("bar")
+        expected = self.makeSimpleFunction("f", getStringType(), [[
+                       allocobj(tupleClass.id.index),
+                       dup(),
+                       string(fooIndex),
+                       string(barIndex),
+                       tyc(BUILTIN_STRING_CLASS_ID.index),
+                       tyc(BUILTIN_STRING_CLASS_ID.index),
+                       callg(tupleClass.constructors[0].id.index),
+                       drop(),
+                       ldpc(0),
+                       ret()]])
+        self.assertEquals(expected, package.findFunction(name="f"))
 
     def testIfExpr(self):
         self.checkFunction("def f = if (true) 12 else 34",
