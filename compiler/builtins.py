@@ -139,7 +139,7 @@ def _initialize():
                                buildType(functionData["returnType"]),
                                [],
                                map(buildType, functionData["parameterTypes"]),
-                               [], [], frozenset())
+                               [], [], frozenset([flags.PUBLIC]))
         if "insts" in functionData:
             function.insts = functionData["insts"]
         _builtinFunctionIdMap[id] = function
@@ -153,12 +153,12 @@ def _initialize():
     def buildField(fieldData, classShortName):
         name = ir.Name([classShortName, fieldData["name"]])
         ty = buildType(fieldData["type"])
-        return ir.Field(name, None, ty, frozenset())
+        return ir.Field(name, None, ty, frozenset([flags.PUBLIC]))
 
     def declareClass(classData):
         name = ir.Name([classData["name"]])
         clas = ir.Class(name, None, None, [],
-                        None, None, None, None, None, frozenset())
+                        None, None, None, None, None, frozenset([flags.PUBLIC]))
         _builtinClasses.append(clas)
         _builtinClassNameMap[classData["name"]] = clas
 

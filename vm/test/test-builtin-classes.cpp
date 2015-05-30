@@ -7,6 +7,7 @@
 #include "test.h"
 
 #include "block.h"
+#include "flags.h"
 #include "handle.h"
 #include "heap.h"
 #include "string.h"
@@ -14,6 +15,13 @@
 #include "vm.h"
 
 using namespace codeswitch::internal;
+
+TEST(BuiltinClassPublic) {
+  VM vm;
+  auto clas = vm.roots()->getBuiltinClass(BUILTIN_ROOT_CLASS_ID);
+  ASSERT_EQ(PUBLIC_FLAG, PUBLIC_FLAG & clas->flags());
+}
+
 
 TEST(StringSize) {
   VM vm;

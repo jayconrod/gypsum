@@ -1395,3 +1395,56 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "def f = sort[Integer]"
         self.analyzeFromSource(source)
         # pass if no error
+
+    def testPublicGlobalPrivateClass(self):
+        source = "class Foo\n" + \
+                 "public let x = Foo"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testPublicGlobalPrivateClassWithArg(self):
+        source = "class Foo\n" + \
+                 "public class Bar[static T]\n" + \
+                 "public var x = Bar[Foo]"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testPublicFunctionPrivateTypeParam(self):
+        source = "class Foo\n" + \
+                 "public def f[static T <: Foo] = {}"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testPublicFunctionPrivateParam(self):
+        source = "class Foo\n" + \
+                 "public def f(foo: Foo) = {}"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testPublicFunctionPrivateReturn(self):
+        source = "class Foo\n" + \
+                 "public def f = Foo"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testPublicClassPrivateTypeParam(self):
+        source = "class Foo\n" + \
+                 "public class Bar[static T <: Foo]"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testPublicClassPrivateParam(self):
+        source = "class Foo\n" + \
+                 "public class Bar(foo: Foo)"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testPublicClassPrivateBase(self):
+        source = "class Foo\n" + \
+                 "public class Bar <: Foo"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testPublicClassPrivateMemberType(self):
+        source = "class Foo\n" + \
+                 "public class Bar\n" + \
+                 "  public let x: Foo"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testPublicClassProtectedMemberPrivateType(self):
+        source = "class Foo\n" + \
+                 "public class Bar\n" + \
+                 "  protected let x: Foo"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)

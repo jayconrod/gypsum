@@ -10,9 +10,10 @@ from errors import TypeException
 import ir
 import ir_types as ir_t
 from builtins import getExceptionClass, getPackageClass, getNothingClass
-from utils import COMPILE_FOR_VALUE, COMPILE_FOR_MATCH
+from utils import COMPILE_FOR_VALUE, COMPILE_FOR_MATCH, each
 from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, CallInfo, PackageInfo
-from flags import COVARIANT, CONTRAVARIANT
+from flags import COVARIANT, CONTRAVARIANT, PROTECTED, PUBLIC
+import scope_analysis
 
 
 def analyzeTypes(info):
@@ -400,6 +401,13 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def visitAstFunctionDefinition(self, node):
         self.handleFunctionCommon(node, node.returnType, node.body)
+        irDefn = self.info.getDefnInfo(node).irDefn
+        if self.isExternallyVisible(irDefn):
+            self.checkPublicType(irDefn.returnType, node.name, node.location)
+            each(lambda p: self.checkPublicTypeParameter(p, node.name, node.location),
+                 irDefn.typeParameters)
+            each(lambda ty: self.checkPublicType(ty, node.name, node.location),
+                 irDefn.parameterTypes)
 
     def visitAstClassDefinition(self, node):
         irClass = self.info.getDefnInfo(node).irDefn
@@ -440,6 +448,16 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             else:
                 self.visit(member)
 
+        if self.isExternallyVisible(irClass):
+            each(lambda p: self.checkPublicTypeParameter(p, node.name, node.location),
+                 irClass.typeParameters)
+            if node.constructor is not None:
+                ctor = self.info.getDefnInfo(node.constructor).irDefn
+                each(lambda arg: self.checkPublicType(arg, node.name, node.location),
+                     ctor.parameterTypes)
+            each(lambda ty: self.checkPublicType(ty, node.name, node.location),
+                 irClass.supertypes)
+
     def visitAstPrimaryConstructorDefinition(self, node):
         self.handleFunctionCommon(node, None, None)
 
@@ -478,6 +496,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         else:
             patTy = exprTy
         irDefn = self.info.getDefnInfo(node).irDefn
+        if self.isExternallyVisible(irDefn):
+            self.checkPublicType(patTy, node.name, node.location)
         irDefn.type = patTy
         self.scope().define(node.name)
         return patTy
@@ -996,6 +1016,35 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             for tp, ta in zip(typeParams, typeArgs):
                 with VarianceScope(self, tp.variance(), tp.clas):
                     self.checkTypeVariance(ta, loc)
+
+    def isExternallyVisible(self, irDefn):
+        """Returns true if the definition is visible to other packages. This is true if the
+        definition is public and is in the top-level scope, or if the definition is public
+        or protected and is a member of an externally visible class."""
+        scope = self.scope()
+        if isinstance(irDefn, ir.Function) or isinstance(irDefn, ir.Class):
+            scope = scope.parent
+        if frozenset([PUBLIC, PROTECTED]).isdisjoint(irDefn.flags):
+            return False
+        while not isinstance(scope, scope_analysis.GlobalScope):
+            if not isinstance(scope, scope_analysis.ClassScope):
+                return False
+            clas = scope.getIrDefn()
+            if frozenset([PUBLIC, PROTECTED]).isdisjoint(clas.flags):
+                return False
+            scope = scope.parent
+        return True
+
+    def checkPublicTypeParameter(self, param, name, loc):
+        self.checkPublicType(param.upperBound, name, loc)
+        self.checkPublicType(param.lowerBound, name, loc)
+
+    def checkPublicType(self, ty, name, loc):
+        if isinstance(ty, ir_t.ClassType):
+            if PUBLIC not in ty.clas.flags:
+                raise TypeException(loc, "public definition %s depends on non-public class %s" %
+                                    (name, ty.clas.name.short()))
+            each(lambda arg: self.checkPublicType(arg, name, loc), ty.typeArguments)
 
     def isTypeParameterAvailable(self, irTypeParameter):
         if self.functionStack[-1] is None:

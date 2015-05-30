@@ -128,7 +128,8 @@ class TestExternalization(unittest.TestCase):
         externBuiltinMethod = ir.Function(ir.Name(["Object", "to-string"]), None,
                                           builtinMethod.id, ir_types.getStringType(), [],
                                           [ir_types.getRootClassType()],
-                                          None, None, frozenset([flags.EXTERN, flags.METHOD]))
+                                          None, None,
+                                          frozenset([flags.EXTERN, flags.PUBLIC, flags.METHOD]))
         expected.methods = [expectedMethod, externBuiltinMethod]
         self.assertEquals(expected, externClass)
 
