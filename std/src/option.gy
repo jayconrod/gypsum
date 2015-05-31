@@ -1,0 +1,21 @@
+// Copyright 2015, Jay Conrod. All rights reserved.
+//
+// This file is part of the Gypsum standard library. Use of this
+// source code is governed by the 3-clause BSD license that can be
+// found in the LICENSE.txt file.
+
+public abstract class Option[static +T]
+  public abstract def is-defined: boolean
+  public abstract def get: T
+
+public class Some[static +T](value: T) <: Option[T]
+  public def is-defined = true
+  public def get = value
+  public def to-string = "Some(" + value.to-string + ")"
+
+class None-class <: Option[Nothing]
+  public def is-defined = false
+  public def get = throw Exception
+  public def to-string = "None"
+
+public let None: Option[Nothing] = None-class
