@@ -772,6 +772,25 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "var g: foo.Bar[Object]"
         self.assertRaises(TypeException, self.analyzeFromSource, source, packageLoader=loader)
 
+    def testTupleTypeNoStd(self):
+        source = "var g: (Object, Object)"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testTupleTypeStd(self):
+        source = "public class Tuple2[static +T1, static +T2]\n" + \
+                 "var g: (Object, Object)?"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        ty = info.package.findGlobal(name="g").type
+        tupleClass = info.package.findClass(name="Tuple2")
+        expected = ClassType(tupleClass, (getRootClassType(), getRootClassType()),
+                             frozenset([NULLABLE_TYPE_FLAG]))
+        self.assertEquals(expected, ty)
+
+    def testTuplePrimitive(self):
+        source = "public class Tuple2[static +T1, static +T2]\n" + \
+                 "var g: (i64, i64)"
+        self.assertRaises(TypeException, self.analyzeFromSource, source, name=STD_NAME)
+
     # Closures
     def testFunctionContextFields(self):
         source = "def f(x: i32) =\n" + \

@@ -20,7 +20,7 @@
 # - flattenClasses
 
 import ast
-from compile_info import ContextInfo, ClosureInfo, DefnInfo, ClassInfo, UseInfo, USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, NOT_HERITABLE
+from compile_info import ContextInfo, ClosureInfo, DefnInfo, ClassInfo, UseInfo, USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, NORMAL_MODE, STD_MODE, NOSTD_MODE, CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, NOT_HERITABLE
 from data import Data
 from errors import TypeException, ScopeException
 from flags import *
@@ -46,6 +46,10 @@ def analyzeDeclarations(info):
     - Create a ClassInfo object for each node which defines a class. These can be accessed later
       using info.{get,set,has}ClassInfo."""
     packageScope = PackageScope(PACKAGE_SCOPE_ID, None, info, info.packageNames, [], None)
+    if info.languageMode() is NORMAL_MODE:
+        # Load the std library so we can access class members even if there aren't any
+        # explicit references to the std library.
+        packageScope.scopeForPrefix("std")
     builtinScope = BuiltinGlobalScope(packageScope)
     globalScope = GlobalScope(info.ast, builtinScope)
     info.setScope(info.ast.id, globalScope)

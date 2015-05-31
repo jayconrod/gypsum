@@ -288,6 +288,13 @@ class TestParser(unittest.TestCase):
         self.assertRaises(ParseException, self.parseFromSource, ty(),
                           "A.i64")
 
+    def testTupleType(self):
+        self.checkParse(astTupleType([astClassType("A", [], set()),
+                                      astClassType("B", [astClassType("C", [], set())], set())],
+                                     set(["?"])),
+                        ty(),
+                        "(A, B[C])?")
+
     # Expressions
     def testIntExpr(self):
         values = [("-42", -42, 64),

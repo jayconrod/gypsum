@@ -11,7 +11,7 @@ import ir
 import ir_types as ir_t
 from builtins import getExceptionClass, getPackageClass, getNothingClass
 from utils import COMPILE_FOR_VALUE, COMPILE_FOR_MATCH, each
-from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, CallInfo, PackageInfo
+from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, NORMAL_MODE, STD_MODE, NOSTD_MODE, CallInfo, PackageInfo
 from flags import COVARIANT, CONTRAVARIANT, PROTECTED, PUBLIC
 import scope_analysis
 
@@ -197,6 +197,17 @@ class TypeVisitorBase(ast.AstNodeVisitor):
             return ir_t.ClassType(irDefn, tuple(typeArgs))
         else:
             raise NotImplementedError
+
+    def visitAstTupleType(self, node):
+        clas = self.info.getTupleClass(len(node.types), node.location)
+        def checkType(astType):
+            irType = self.visit(astType)
+            if irType.isPrimitive():
+                raise TypeException(astType.location, "primitive type cannot be part of tuple")
+            return irType
+        types = tuple(map(checkType, node.types))
+        flags = frozenset(map(astTypeFlagToIrTypeFlag, node.flags))
+        return ir_t.ClassType(clas, types, flags)
 
     def handleAstClassTypeArgs(self, irClass, nodes):
         raise NotImplementedError
@@ -667,7 +678,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         return ty
 
     def visitAstTupleExpression(self, node):
-        types = map(self.visit, node.expressions)
+        types = tuple(map(self.visit, node.expressions))
         if len(types) > compile_info.MAX_TUPLE_LENGTH:
             raise TypeException(node.location,
                                 "tuples longer than %d elements not supported" % len(types))
@@ -677,24 +688,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                     "expression with primitive type %s cannot be used in tuple" %
                                     str(ty))
 
-        tupleClassName = "Tuple%d" % len(types)
-
-        mode = self.info.languageMode()
-        if mode is compile_info.NOSTD_MODE:
-            raise TypeException(node.location, "tuples not supported without std library")
-        elif mode is compile_info.NORMAL_MODE:
-            package = self.info.packageLoader.loadPackage(compile_info.STD_NAME)
-        else:
-            assert mode is compile_info.STD_MODE
-            package = self.info.package
-        tupleClass = package.findClass(name=tupleClassName)
-
-        if mode is compile_info.NORMAL_MODE:
-            self.info.setStdExternInfo(tupleClass.id, tupleClass)
-            ctor = tupleClass.constructors[0]
-            self.info.setStdExternInfo(ctor.id, ctor)
-
-        return ir_t.ClassType(tupleClass, tuple(types))
+        clas = self.info.getTupleClass(len(types), node.location)
+        return ir_t.ClassType(clas, types)
 
     def visitAstIfExpression(self, node):
         condTy = self.visit(node.condition)

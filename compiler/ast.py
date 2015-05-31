@@ -362,6 +362,22 @@ class AstProjectedType(AstType):
         return [self.left, self.right]
 
 
+class AstTupleType(AstType):
+    def __init__(self, types, flags, location):
+        super(AstTupleType, self).__init__(location)
+        self.types = types
+        self.flags = flags
+
+    def __repr__(self):
+        return "AstTupleType(%s, %s)" % (repr(self.types), ", ".join(self.flags))
+
+    def tag(self):
+        return "TupleType"
+
+    def children(self):
+        return self.types
+
+
 class AstExpression(AstNode):
     pass
 

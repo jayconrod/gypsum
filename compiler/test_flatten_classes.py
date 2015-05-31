@@ -30,7 +30,7 @@ class TestFlattenClasses(unittest.TestCase):
         ast = parse(filename, layoutTokens)
         package = Package(TARGET_PACKAGE_ID)
         packageLoader = MockPackageLoader([])
-        info = CompileInfo(ast, package, packageLoader)
+        info = CompileInfo(ast, package, packageLoader, isUsingStd=False)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         analyzeTypes(info)

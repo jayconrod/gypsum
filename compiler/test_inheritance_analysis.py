@@ -34,7 +34,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
             packageLoader = MockPackageLoader([])
         ast = self.parseFromSource(source)
         info = CompileInfo(ast, package=Package(ids.TARGET_PACKAGE_ID),
-                           packageLoader=packageLoader)
+                           packageLoader=packageLoader, isUsingStd=False)
         analyzeDeclarations(info)
         analyzeInheritance(info)
         return info

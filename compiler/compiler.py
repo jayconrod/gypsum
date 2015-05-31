@@ -214,11 +214,6 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.uninitialized()
         self.storeVariable(defnInfo, ty)
 
-    def visitAstClassType(self, node, param):
-        assert STATIC in param.flags
-        ty = self.info.getType(node)
-        self.buildStaticTypeArgument(ty)
-
     def visitAstLiteralExpression(self, expr, mode):
         lit = expr.literal
         if isinstance(lit, ast.AstIntegerLiteral):
@@ -262,7 +257,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.dropForEffect(mode)
         elif isinstance(irDefn, Function) or isinstance(irDefn, Class):
             callInfo = self.info.getCallInfo(expr)
-            self.buildCall(useInfo, callInfo, None, [], [], mode)
+            self.buildCall(useInfo, callInfo, None, [], mode)
         else:
             assert isinstance(irDefn, Package)
             assert irDefn.id.index is not None
@@ -298,7 +293,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         elif isinstance(irDefn, Function):
             callInfo = self.info.getCallInfo(expr)
             receiver = expr.receiver if callInfo.receiverExprNeeded else None
-            self.buildCall(useInfo, callInfo, receiver, [], [], mode)
+            self.buildCall(useInfo, callInfo, receiver, [], mode)
         elif isinstance(irDefn, Global):
             self.loadVariable(useInfo.defnInfo)
         else:
@@ -317,22 +312,22 @@ class CompileVisitor(ast.AstNodeVisitor):
             receiver = expr.callee.receiver
         else:
             receiver = None
-        self.buildCall(useInfo, callInfo, receiver, expr.typeArguments, expr.arguments, mode)
+        self.buildCall(useInfo, callInfo, receiver, expr.arguments, mode)
 
     def visitCallThisExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)
         callInfo = self.info.getCallInfo(expr)
-        self.buildCall(useInfo, callInfo, expr.callee, [], expr.arguments, mode)
+        self.buildCall(useInfo, callInfo, expr.callee, expr.arguments, mode)
 
     def visitCallSuperExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)
         callInfo = self.info.getCallInfo(expr)
-        self.buildCall(useInfo, callInfo, expr.callee, [], expr.arguments, mode)
+        self.buildCall(useInfo, callInfo, expr.callee, expr.arguments, mode)
 
     def visitAstUnaryExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)
         callInfo = self.info.getCallInfo(expr)
-        self.buildCall(useInfo, callInfo, expr.expr, [], [], mode)
+        self.buildCall(useInfo, callInfo, expr.expr, [], mode)
 
     def visitAstBinaryExpression(self, expr, mode):
         opName = expr.operator
@@ -362,7 +357,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                 receiver = self.compileLValue(expr.left, ty)
             else:
                 receiver = expr.left
-            self.buildCall(useInfo, callInfo, receiver, [], [expr.right], mode)
+            self.buildCall(useInfo, callInfo, receiver, [expr.right], mode)
 
     def visitAstTupleExpression(self, expr, mode):
         ty = self.info.getType(expr)
@@ -824,7 +819,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.callv(len(method.parameterTypes), index)
         self.dropForEffect(mode)
 
-    def buildCall(self, useInfo, callInfo, receiver, typeArgs, argExprs, mode):
+    def buildCall(self, useInfo, callInfo, receiver, argExprs, mode):
         shouldDropForEffect = mode is COMPILE_FOR_EFFECT
         defnInfo = useInfo.defnInfo
         irDefn = defnInfo.irDefn

@@ -7,6 +7,7 @@
 import ast
 import builtins
 import data
+import errors
 import ids
 import ir
 import ir_types
@@ -58,6 +59,26 @@ class CompileInfo(object):
             return STD_MODE
         else:
             return NOSTD_MODE
+
+    def getTupleClass(self, n, loc):
+        langMode = self.languageMode()
+        if langMode is NOSTD_MODE:
+            raise errors.TypeException(loc, "tuples not supported without std library")
+        elif langMode is NORMAL_MODE:
+            package = self.packageLoader.loadPackage(STD_NAME)
+        else:
+            assert langMode is STD_MODE
+            package = self.package
+
+        tupleClassName = "Tuple%d" % n
+        tupleClass = package.findClass(name=tupleClassName)
+
+        if langMode is NORMAL_MODE:
+            self.setStdExternInfo(tupleClass.id, tupleClass)
+            ctor = tupleClass.constructors[0]
+            self.setStdExternInfo(ctor.id, ctor)
+
+        return tupleClass
 
 
 _dictNames = [("Scope", "scopes", (ids.ScopeId, ids.AstId, ids.DefnId, ids.PackageId)),

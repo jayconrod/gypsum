@@ -32,7 +32,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         ast = self.parseFromSource(source)
         package = Package(id=TARGET_PACKAGE_ID)
         packageLoader = MockPackageLoader([])
-        info = CompileInfo(ast, package, packageLoader)
+        info = CompileInfo(ast, package, packageLoader, isUsingStd=False)
         analyzeDeclarations(info)
         return info
 

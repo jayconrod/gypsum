@@ -160,7 +160,18 @@ def simpleType():
            (keyword("i64") ^ (lambda _, loc: ast.AstI64Type(loc))) | \
            (keyword("f32") ^ (lambda _, loc: ast.AstF32Type(loc))) | \
            (keyword("f64") ^ (lambda _, loc: ast.AstF64Type(loc))) | \
-           (keyword("boolean") ^ (lambda _, loc: ast.AstBooleanType(loc)))
+           (keyword("boolean") ^ (lambda _, loc: ast.AstBooleanType(loc))) | \
+           tupleType()
+
+
+def tupleType():
+    def process(parsed, loc):
+        _, first, _, rest, _, nullFlag = ct.untangle(parsed)
+        flags = set([nullFlag]) if nullFlag else set()
+        return ast.AstTupleType([first] + rest, flags, loc)
+    return keyword("(") + ct.Commit(ct.Lazy(ty) + keyword(",") +
+        ct.Rep1Sep(ct.Lazy(ty), keyword(",")) + keyword(")") +
+        ct.Opt(ct.Reserved(OPERATOR, "?"))) ^ process
 
 
 def classType():
