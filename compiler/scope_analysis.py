@@ -49,7 +49,7 @@ def analyzeDeclarations(info):
     if info.languageMode() is NORMAL_MODE:
         # Load the std library so we can access class members even if there aren't any
         # explicit references to the std library.
-        packageScope.scopeForPrefix("std")
+        packageScope.scopeForPrefix("std", NoLoc)
     builtinScope = BuiltinGlobalScope(packageScope)
     globalScope = GlobalScope(info.ast, builtinScope)
     info.setScope(info.ast.id, globalScope)
@@ -1317,14 +1317,14 @@ class PackageScope(Scope):
     def isForeign(self):
         return self.package is not None
 
-    def scopeForPrefix(self, component):
+    def scopeForPrefix(self, component, loc):
         if component in self.prefixScopes:
             return self.prefixScopes[component]
 
         defnInfo = self.bindings[component].getDefnInfo()
         name = defnInfo.irDefn.name
         if name in self.packageNames and isinstance(defnInfo.irDefn, ir.PackagePrefix):
-            defnInfo.irDefn = self.info.packageLoader.loadPackage(name)
+            defnInfo.irDefn = self.info.packageLoader.loadPackage(name, loc)
 
         scope = PackageScope(ScopeId(str(name)), self, self.info,
                              self.packageNames, name.components, defnInfo.irDefn)
@@ -1340,8 +1340,8 @@ class PackageScope(Scope):
         if isinstance(irDefn, ir.PackagePrefix):
             packageName = ir.Name(self.prefix + [name])
             if packageName in self.packageNames:
-                defnInfo.irDefn = self.info.packageLoader.loadPackage(packageName)
-                self.scopeForPrefix(name)  # force scope to be created
+                defnInfo.irDefn = self.info.packageLoader.loadPackage(packageName, NoLoc)
+                self.scopeForPrefix(name, NoLoc)  # force scope to be created
         return nameInfo
 
     def requiresCapture(self):

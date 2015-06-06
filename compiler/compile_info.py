@@ -65,7 +65,7 @@ class CompileInfo(object):
         if langMode is NOSTD_MODE:
             raise errors.TypeException(loc, "tuples not supported without std library")
         elif langMode is NORMAL_MODE:
-            package = self.packageLoader.loadPackage(STD_NAME)
+            package = self.packageLoader.loadPackage(STD_NAME, location.NoLoc)
         else:
             assert langMode is STD_MODE
             package = self.package

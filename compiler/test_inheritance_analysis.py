@@ -19,7 +19,7 @@ from parser import *
 from scope_analysis import *
 from builtins import getRootClass, getExceptionClass
 from bytecode import BUILTIN_ROOT_CLASS_ID
-from utils_test import MockPackageLoader
+from utils_test import FakePackageLoader
 
 class TestInheritanceAnalysis(unittest.TestCase):
     def parseFromSource(self, source):
@@ -31,7 +31,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
 
     def analyzeFromSource(self, source, packageLoader=None):
         if packageLoader is None:
-            packageLoader = MockPackageLoader([])
+            packageLoader = FakePackageLoader([])
         ast = self.parseFromSource(source)
         info = CompileInfo(ast, package=Package(ids.TARGET_PACKAGE_ID),
                            packageLoader=packageLoader, isUsingStd=False)
@@ -68,7 +68,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
                                         None, [], [], [], frozenset([PUBLIC]))
         field = package.newField(Name(["x"]), None, None, frozenset([PUBLIC]))
         foreignClass.fields = [field]
-        loader = MockPackageLoader([package])
+        loader = FakePackageLoader([package])
         source = "class Baz <: foo.Bar"
         info = self.analyzeFromSource(source, packageLoader=loader)
         bazClass = info.package.findClass(name="Baz")
@@ -90,7 +90,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
                                     None, [], [], [], frozenset([PUBLIC]))
         bazClass = package.addClass(Name(["Baz"]), None, [], [ClassType(barClass)],
                                     None, [], [], [], frozenset())
-        loader = MockPackageLoader([package])
+        loader = FakePackageLoader([package])
         info = self.analyzeFromSource("class Quux <: foo.Bar", packageLoader=loader)
         barClassInfo = info.getClassInfo(barClass)
         bazClassInfo = info.getClassInfo(bazClass)
@@ -101,7 +101,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
         barClass = fooPackage.addClass(Name(["Bar"]), None, [], [getRootClassType()],
                                        None, [], [], [], frozenset([PUBLIC]))
         bazPackage = Package(name=Name(["baz"]))
-        loader = MockPackageLoader([fooPackage, bazPackage])
+        loader = FakePackageLoader([fooPackage, bazPackage])
         bazPackage.dependencies.append(PackageDependency.fromPackage(fooPackage))
         quuxClass = bazPackage.addClass(Name(["Quux"]), None, [], [ClassType(barClass)],
                                         None, [], [], [], frozenset([PUBLIC]))
@@ -141,7 +141,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
         package = Package(name=Name(["foo"]))
         barClass = package.addClass(Name(["Bar"]), None, [], [getRootClassType()],
                                     None, [], [], [], frozenset([PUBLIC]))
-        loader = MockPackageLoader([package])
+        loader = FakePackageLoader([package])
         source = "class Baz <: foo.Bar\n" + \
                  "def f[static T <: Baz >: foo.Bar]"
         self.assertRaises(ScopeException, self.analyzeFromSource, source, packageLoader=loader)

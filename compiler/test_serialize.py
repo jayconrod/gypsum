@@ -100,7 +100,7 @@ class TestSerialize(unittest.TestCase):
         otherPackage = ir.Package()
         method = otherPackage.addFunction(ir.Name(["foo"]), None, ir_types.UnitType, [], [],
                                            None, None, frozenset([flags.METHOD]))
-        loader = utils_test.MockPackageLoader([otherPackage])
+        loader = utils_test.FakePackageLoader([otherPackage])
         externalizer = externalization.Externalizer(package, loader)
         externMethod = externalizer.externalizeDefn(method)
         self.ser.package = package
@@ -160,7 +160,7 @@ class TestSerialize(unittest.TestCase):
     def testRewriteExternClassType(self):
         package = ir.Package(id=ids.TARGET_PACKAGE_ID)
         depPackage = ir.Package()
-        loader = utils_test.MockPackageLoader([depPackage])
+        loader = utils_test.FakePackageLoader([depPackage])
         depClass = depPackage.addClass(ir.Name(["C"]), None, [], [ir_types.getRootClassType()],
                                        None, [], [], [], frozenset([flags.PUBLIC]))
         externalizer = externalization.Externalizer(package, loader)
@@ -226,7 +226,7 @@ class TestSerialize(unittest.TestCase):
                                                   ir_types.getRootClassType(),
                                                   ir_types.getNothingClassType(),
                                                   frozenset([flags.STATIC]))
-        loader = utils_test.MockPackageLoader([otherPackage])
+        loader = utils_test.FakePackageLoader([otherPackage])
         externalizer = externalization.Externalizer(package, loader)
         foreignTypeParam = externalizer.externalizeDefn(typeParam)
         self.ser.package = package
@@ -257,7 +257,7 @@ class TestSerialize(unittest.TestCase):
                                           [ty], None, None,
                                           frozenset([flags.PUBLIC, flags.METHOD]))
         otherPackage = ir.Package()
-        loader = utils_test.MockPackageLoader([otherPackage])
+        loader = utils_test.FakePackageLoader([otherPackage])
         otherMethod = otherPackage.addFunction(ir.Name(["Foo", "o"]), None, ir_types.I64Type,
                                                [], [ir_types.getRootClassType()], None, None,
                                                frozenset([flags.PUBLIC, flags.METHOD]))

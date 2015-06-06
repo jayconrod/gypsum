@@ -99,7 +99,7 @@ try:
     package.dependencies.extend(args.depends)
     isUsingStd = not args.no_std
     if isUsingStd:
-        stdPackage = loader.loadPackage(STD_NAME)
+        stdPackage = loader.loadPackage(STD_NAME, NoLoc)
         package.ensureDependency(stdPackage)
     info = CompileInfo(astPackage, package, loader, isUsingStd=isUsingStd)
 

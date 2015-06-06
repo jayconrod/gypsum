@@ -14,6 +14,10 @@ class CompileException(Exception):
         return "%s: %s error: %s" % (self.location, self.kind, self.message)
 
 
+class PackageException(CompileException):
+    kind = "package"
+
+
 class LexException(CompileException):
     kind = "lexical"
 

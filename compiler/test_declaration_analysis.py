@@ -16,7 +16,7 @@ from ir import *
 from ids import *
 from errors import *
 from flags import *
-from utils_test import MockPackageLoader, TestCaseWithDefinitions
+from utils_test import FakePackageLoader, TestCaseWithDefinitions
 from location import NoLoc
 
 
@@ -31,7 +31,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
     def analyzeFromSource(self, source):
         ast = self.parseFromSource(source)
         package = Package(id=TARGET_PACKAGE_ID)
-        packageLoader = MockPackageLoader([])
+        packageLoader = FakePackageLoader([])
         info = CompileInfo(ast, package, packageLoader, isUsingStd=False)
         analyzeDeclarations(info)
         return info
@@ -387,7 +387,7 @@ class TestPackageScope(unittest.TestCase):
         packageNameFromString = lambda s: Name.fromString(s, isPackageName=True)
         names = map(packageNameFromString, args)
         package = Package(id=TARGET_PACKAGE_ID)
-        packageLoader = MockPackageLoader(names)
+        packageLoader = FakePackageLoader(names)
         info = CompileInfo(None, package, packageLoader)
         scope = PackageScope(PACKAGE_SCOPE_ID, None, info, names, [], None)
         return info, scope
@@ -414,25 +414,25 @@ class TestPackageScope(unittest.TestCase):
 
     def testNotFoundCompound(self):
         info, scope = self.infoAndScopeWithPackageNames(["foo.bar"])
-        scope = scope.scopeForPrefix("foo")
+        scope = scope.scopeForPrefix("foo", NoLoc)
         self.assertRaises(ScopeException, scope.lookup, "baz", NoLoc)
 
     def testFoundCompound(self):
         info, scope = self.infoAndScopeWithPackageNames(["foo.bar"])
-        scope = scope.scopeForPrefix("foo")
+        scope = scope.scopeForPrefix("foo", NoLoc)
         nameInfo = scope.lookup("bar", NoLoc)
         self.assertTrue(nameInfo.isPackage())
 
     def testFoundCompoundPrefix(self):
         info, scope = self.infoAndScopeWithPackageNames(["foo.bar.baz"])
-        scope = scope.scopeForPrefix("foo")
+        scope = scope.scopeForPrefix("foo", NoLoc)
         nameInfo = scope.lookup("bar", NoLoc)
         self.assertFalse(nameInfo.isPackage())
         self.assertTrue(nameInfo.isPackagePrefix())
 
     def testFoundCompoundWithPrefix(self):
         info, scope = self.infoAndScopeWithPackageNames(["foo.bar", "foo.bar.baz"])
-        scope = scope.scopeForPrefix("foo")
+        scope = scope.scopeForPrefix("foo", NoLoc)
         nameInfo = scope.lookup("bar", NoLoc)
         self.assertTrue(nameInfo.isPackage())
 
@@ -461,11 +461,11 @@ class TestPackageScope(unittest.TestCase):
                                         frozenset([PRIVATE, EXTERN]))
         clas.fields = [publicField, privateField]
 
-        packageLoader = MockPackageLoader([package])
+        packageLoader = FakePackageLoader([package])
         info = CompileInfo(None, Package(id=TARGET_PACKAGE_ID), packageLoader)
         topPackageScope = PackageScope(PACKAGE_SCOPE_ID, None, info,
                                        packageLoader.getPackageNames(), [], None)
-        fooPackageScope = topPackageScope.scopeForPrefix("foo")
+        fooPackageScope = topPackageScope.scopeForPrefix("foo", NoLoc)
 
         defnInfo = fooPackageScope.lookup("C", NoLoc).getDefnInfo()
         self.assertIs(clas, defnInfo.irDefn)

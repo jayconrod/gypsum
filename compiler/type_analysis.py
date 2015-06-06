@@ -195,7 +195,8 @@ class TypeVisitorBase(ast.AstNodeVisitor):
                 scope = self.info.getScope(defnInfo.irDefn)
             else:
                 assert isinstance(defnInfo.irDefn, ir.PackagePrefix)
-                scope = self.info.getScope(defnInfo.scopeId).scopeForPrefix(component.name)
+                scope = self.info.getScope(defnInfo.scopeId).scopeForPrefix(component.name,
+                                                                            component.location)
             isProjected = True
 
         irDefn = defnInfo.irDefn
@@ -596,7 +597,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 packageNameInfo = nextNameInfo
                 packageNameLength += 1
                 prefixScopeId = packageNameInfo.getDefnInfo().scopeId
-                scope = self.info.getScope(prefixScopeId).scopeForPrefix(name)
+                scope = self.info.getScope(prefixScopeId).scopeForPrefix(name, node.location)
 
             if packageNameLength > 0:
                 defnInfo = packageNameInfo.getDefnInfo()
@@ -967,7 +968,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.info.setCallInfo(useAstId, callInfo)
         if isinstance(irDefn, ir.Package):
             defnScope = self.info.getScope(defnInfo.scopeId)
-            packageInfo = PackageInfo(irDefn, defnScope.scopeForPrefix(name).scopeId)
+            packageInfo = PackageInfo(irDefn, defnScope.scopeForPrefix(name, loc).scopeId)
             self.info.setPackageInfo(useAstId, packageInfo)
 
         self.scope().use(defnInfo, useAstId, useKind, loc)

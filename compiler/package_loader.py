@@ -8,6 +8,7 @@ import os
 import os.path
 import re
 
+import errors
 import ir
 import serialize
 
@@ -79,8 +80,11 @@ class PackageLoader(BasePackageLoader):
         self.ensurePackageInfo()
         return name in self.packageInfoByName
 
-    def loadPackage(self, name):
+    def loadPackage(self, name, loc):
         self.ensurePackageInfo()
+        if name not in self.packageInfoByName:
+            raise errors.PackageException(loc, "%s: could not find package" % str(name))
+
         info = self.packageInfoByName[name]
         if info.package is not None:
             return info.package
@@ -90,7 +94,7 @@ class PackageLoader(BasePackageLoader):
         self.packageInfoById[package.id] = info
 
         for dep in package.dependencies:
-            dep.package = self.loadPackage(dep.name)
+            dep.package = self.loadPackage(dep.name, loc)
 
         self.runLoadHooks(package)
         return package

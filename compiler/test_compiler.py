@@ -26,7 +26,7 @@ from flags import LET, PUBLIC, METHOD
 from compile_info import CompileInfo
 from builtins import *
 from errors import *
-from utils_test import MockPackageLoader, TestCaseWithDefinitions
+from utils_test import FakePackageLoader, TestCaseWithDefinitions
 
 
 class TestCompiler(TestCaseWithDefinitions):
@@ -46,7 +46,7 @@ class TestCompiler(TestCaseWithDefinitions):
             packageNames = []
         if packageLoader is None:
             packageNameFromString = lambda s: Name.fromString(s, isPackageName=True)
-            packageLoader = MockPackageLoader(map(packageNameFromString, packageNames))
+            packageLoader = FakePackageLoader(map(packageNameFromString, packageNames))
         package = Package(id=TARGET_PACKAGE_ID, name=name)
         info = CompileInfo(ast, package, packageLoader, isUsingStd=False)
         analyzeDeclarations(info)
@@ -252,7 +252,7 @@ class TestCompiler(TestCaseWithDefinitions):
         x = foo.addGlobal(Name(["x"]), None, I64Type, frozenset([PUBLIC]))
         y = foo.addGlobal(Name(["y"]), None, I64Type, frozenset([PUBLIC]))
         source = "def f = foo.y"
-        package = self.compileFromSource(source, packageLoader=MockPackageLoader([foo]))
+        package = self.compileFromSource(source, packageLoader=FakePackageLoader([foo]))
         depIndex = foo.id.index
         self.assertIsNotNone(depIndex)
         dep = package.dependencies[depIndex]
@@ -271,7 +271,7 @@ class TestCompiler(TestCaseWithDefinitions):
     def testStoreForeignGlobal(self):
         foo = Package(name=Name(["foo"]))
         x = foo.addGlobal(Name(["x"]), None, I64Type, frozenset([PUBLIC]))
-        loader = MockPackageLoader([foo])
+        loader = FakePackageLoader([foo])
         source = "def f =\n" + \
                  "  foo.x = 12\n" + \
                  "  {}"
@@ -484,7 +484,7 @@ class TestCompiler(TestCaseWithDefinitions):
         field.index = 0
         clas.fields.append(field)
         ty = ClassType(clas)
-        loader = MockPackageLoader([fooPackage])
+        loader = FakePackageLoader([fooPackage])
 
         source = "def f(o: foo.Bar) = o.x"
         package = self.compileFromSource(source, packageLoader=loader)
@@ -1183,7 +1183,7 @@ class TestCompiler(TestCaseWithDefinitions):
         foo = Package(name=Name(["foo"]))
         bar = foo.addFunction(Name(["bar"]), None, I64Type, [], [I64Type],
                               None, None, frozenset([PUBLIC]))
-        loader = MockPackageLoader([foo])
+        loader = FakePackageLoader([foo])
         source = "def f = foo.bar(12)"
         package = self.compileFromSource(source, packageLoader=loader)
         self.assertIs(foo.id, bar.id.packageId)
@@ -1203,7 +1203,7 @@ class TestCompiler(TestCaseWithDefinitions):
         Tty = VariableType(T)
         bar = foo.addFunction(Name(["bar"]), None, Tty, [T], [Tty],
                               None, None, frozenset([PUBLIC]))
-        loader = MockPackageLoader([foo])
+        loader = FakePackageLoader([foo])
         source = "def f(s: String) = foo.bar[String](s)"
         package = self.compileFromSource(source, packageLoader=loader)
         stringTy = getStringType()
@@ -1222,7 +1222,7 @@ class TestCompiler(TestCaseWithDefinitions):
         barClass = fooPackage.addClass(Name(["Bar"]), None, [], [getRootClassType()],
                                        None, [], [], [], frozenset([PUBLIC]))
         barType = ClassType(barClass)
-        loader = MockPackageLoader([fooPackage])
+        loader = FakePackageLoader([fooPackage])
 
         source = "def id[static T](o: T) = o\n" + \
                  "def f(o: foo.Bar) = id[foo.Bar](o)"
@@ -1245,7 +1245,7 @@ class TestCompiler(TestCaseWithDefinitions):
         exceptionClass = getExceptionClass()
         clas = fooPackage.addClass(Name(["Bar"]), None, [], [ClassType(exceptionClass)],
                                 None, [], [], [], frozenset([PUBLIC]))
-        loader = MockPackageLoader([fooPackage])
+        loader = FakePackageLoader([fooPackage])
 
         source = "def f =\n" + \
                  "  try {} catch\n" + \
@@ -1482,7 +1482,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                       [], [barTy], None, None,
                                       frozenset([PUBLIC, METHOD]))
         barClass.constructors.append(ctor)
-        loader = MockPackageLoader([fooPackage])
+        loader = FakePackageLoader([fooPackage])
 
         source = "def f = foo.Bar"
         package = self.compileFromSource(source, packageLoader=loader)

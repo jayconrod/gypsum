@@ -22,7 +22,7 @@ class TestExternalization(unittest.TestCase):
         self.rootClassType = ir_types.getRootClassType()
         self.nothingClassType = ir_types.getNothingClassType()
         self.otherPackage = ir.Package()
-        self.packageLoader = utils_test.MockPackageLoader([self.otherPackage])
+        self.packageLoader = utils_test.FakePackageLoader([self.otherPackage])
         self.externalizer = externalization.Externalizer(self.package, self.packageLoader)
 
         field = self.otherPackage.newField(ir.Name(["x"]), None, ir_types.I64Type,

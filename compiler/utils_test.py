@@ -100,9 +100,9 @@ class TestCaseWithDefinitions(unittest.TestCase):
         return name
 
 
-class MockPackageLoader(BasePackageLoader):
+class FakePackageLoader(BasePackageLoader):
     def __init__(self, packagesOrPackageNames):
-        super(MockPackageLoader, self).__init__()
+        super(FakePackageLoader, self).__init__()
         if len(packagesOrPackageNames) == 0:
             self.packageNames = []
             self.packages = {}
@@ -121,7 +121,7 @@ class MockPackageLoader(BasePackageLoader):
     def isPackage(self, name):
         return name in self.packageNames
 
-    def loadPackage(self, name):
+    def loadPackage(self, name, loc):
         assert name in self.packageNames
         if name not in self.packages:
             self.packages[name] = Package(name=name)
@@ -130,7 +130,7 @@ class MockPackageLoader(BasePackageLoader):
         if package.id not in self.loadedIds:
             self.loadedIds.add(package.id)
             for dep in package.dependencies:
-                dep.package = self.loadPackage(dep.name)
+                dep.package = self.loadPackage(dep.name, loc)
             self.runLoadHooks(package)
         return package
 

@@ -19,7 +19,7 @@ from scope_analysis import *
 from type_analysis import *
 from flags import *
 from builtins import getRootClass, getStringClass, getNothingClass, getExceptionClass
-from utils_test import MockPackageLoader, TestCaseWithDefinitions
+from utils_test import FakePackageLoader, TestCaseWithDefinitions
 
 
 class TestTypeAnalysis(TestCaseWithDefinitions):
@@ -35,7 +35,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
             packageNames = []
         if packageLoader is None:
             packageNameFromString = lambda s: Name.fromString(s, isPackageName=True)
-            packageLoader = MockPackageLoader(map(packageNameFromString, packageNames))
+            packageLoader = FakePackageLoader(map(packageNameFromString, packageNames))
         package = Package(TARGET_PACKAGE_ID, name=name)
         info = CompileInfo(ast, package=package, packageLoader=packageLoader, isUsingStd=False)
         analyzeDeclarations(info)
@@ -328,7 +328,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "var x = foo.bar"
         foo = Package(name=Name(["foo"]))
         bar = foo.addGlobal(Name(["bar"]), None, UnitType, frozenset([PUBLIC, LET]))
-        info = self.analyzeFromSource(source, packageLoader=MockPackageLoader([foo]))
+        info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         x = info.package.findGlobal(name="x")
         self.assertEquals(UnitType, x.type)
         self.assertEquals(UnitType, info.getType(info.ast.modules[0].definitions[0].expression))
@@ -338,7 +338,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         foo = Package(name=Name(["foo"]))
         bar = foo.addFunction(Name(["bar"]), None, UnitType, [], [], None, None,
                               frozenset([PUBLIC]))
-        info = self.analyzeFromSource(source, packageLoader=MockPackageLoader([foo]))
+        info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         x = info.package.findGlobal(name="x")
         self.assertEquals(UnitType, x.type)
         self.assertEquals(UnitType, info.getType(info.ast.modules[0].definitions[0].expression))
@@ -352,7 +352,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                None, UnitType, [], [barType], None, None,
                                frozenset([PUBLIC, METHOD]))
         bar.constructors.append(ctor)
-        packageLoader = MockPackageLoader([foo])
+        packageLoader = FakePackageLoader([foo])
 
         source = "var x = foo.Bar"
         info = self.analyzeFromSource(source, packageLoader=packageLoader)
@@ -366,7 +366,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         foo = Package(name=Name(["foo"]))
         bar = foo.addFunction(Name(["bar"]), None, I64Type, [], [I64Type],
                               None, None, frozenset([PUBLIC]))
-        info = self.analyzeFromSource(source, packageLoader=MockPackageLoader([foo]))
+        info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         x = info.package.findGlobal(name="x")
         self.assertEquals(I64Type, x.type)
 
@@ -378,7 +378,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         Tty = VariableType(T)
         bar = foo.addFunction(Name(["bar"]), None, Tty, [T], [Tty], None, None,
                               frozenset([PUBLIC]))
-        info = self.analyzeFromSource(source, packageLoader=MockPackageLoader([foo]))
+        info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         x = info.package.findGlobal(name="x")
         self.assertEquals(getStringType(), x.type)
 
@@ -386,7 +386,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         otherPackage = Package(name=Name(["foo"]))
         clas = otherPackage.addClass(Name(["Bar"]), None, [], [getRootClassType()], None,
                                      [], [], [], frozenset([PUBLIC]))
-        loader = MockPackageLoader([otherPackage])
+        loader = FakePackageLoader([otherPackage])
         source = "def id[static T](x: T) = x\n" + \
                  "def f(x: foo.Bar) = id[foo.Bar](x)"
         info = self.analyzeFromSource(source, packageLoader=loader)
@@ -403,7 +403,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                    [], [], [], frozenset([PUBLIC]))
         clas.fields.append(fooPackage.newField(Name(["Bar", "x"]), None, I64Type,
                                                frozenset([PUBLIC])))
-        loader = MockPackageLoader([fooPackage])
+        loader = FakePackageLoader([fooPackage])
 
         source = "def f(o: foo.Bar) = o.x"
         info = self.analyzeFromSource(source, packageLoader=loader)
@@ -416,7 +416,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                    [], [], [], frozenset([PUBLIC]))
         clas.fields.append(fooPackage.newField(Name(["Bar", "x"]), None, I64Type,
                                                frozenset([PUBLIC])))
-        loader = MockPackageLoader([fooPackage])
+        loader = FakePackageLoader([fooPackage])
 
         source = "def f(o: foo.Bar) = o.x = 12"
         info = self.analyzeFromSource(source, packageLoader=loader)
@@ -430,7 +430,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         m = fooPackage.addFunction(Name(["Bar", "m"]), None, I64Type, [], [ClassType(clas)],
                                    None, None, frozenset([PUBLIC, METHOD]))
         clas.methods.append(m)
-        loader = MockPackageLoader([fooPackage])
+        loader = FakePackageLoader([fooPackage])
 
         source = "def f(o: foo.Bar) = o.m"
         info = self.analyzeFromSource(source, packageLoader=loader)
@@ -448,7 +448,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         clas.constructors = [ctor]
         field = fooPackage.newField(Name(["Bar", "x"]), None, I64Type, frozenset([PUBLIC]))
         clas.fields = [field]
-        packageLoader = MockPackageLoader([fooPackage])
+        packageLoader = FakePackageLoader([fooPackage])
 
         source = "class Baz <: foo.Bar\n" + \
                  "def f(o: Baz) = o.x"
@@ -468,7 +468,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         m = fooPackage.addFunction(Name(["Bar", "m"]), None, ty, [], [ty], None, None,
                                    frozenset([PUBLIC, METHOD]))
         clas.methods.append(m)
-        packageLoader = MockPackageLoader([fooPackage])
+        packageLoader = FakePackageLoader([fooPackage])
 
         source = "class Baz <: foo.Bar\n" + \
                  "def f(o: Baz) = o.m"
@@ -729,7 +729,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         package = Package(name=Name(["foo"]))
         clas = package.addClass(Name(["Bar"]), None, [], [getRootClassType()],
                                 None, [], [], [], frozenset([PUBLIC]))
-        loader = MockPackageLoader([package])
+        loader = FakePackageLoader([package])
         source = "var g: foo.Bar"
         info = self.analyzeFromSource(source, packageLoader=loader)
         expectedType = ClassType(clas)
@@ -737,7 +737,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(expectedType, g.type)
 
     def testForeignProjectedPackageType(self):
-        loader = MockPackageLoader([Name(["foo", "bar"])])
+        loader = FakePackageLoader([Name(["foo", "bar"])])
         source = "var g: foo.bar"
         self.assertRaises(TypeException, self.analyzeFromSource, source, packageLoader=loader)
 
@@ -745,7 +745,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         package = Package(name=Name(["foo"]))
         clas = package.addClass(Name(["Bar"]), None, [], [getRootClassType()],
                                 None, [], [], [], frozenset([PUBLIC]))
-        loader = MockPackageLoader([package])
+        loader = FakePackageLoader([package])
         source = "var g: foo[String].Bar"
         self.assertRaises(TypeException, self.analyzeFromSource, source, packageLoader=loader)
 
@@ -755,7 +755,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                          getNothingClassType(), frozenset([STATIC]))
         clas = package.addClass(Name(["Bar"]), None, [param], [getRootClassType()],
                                 None, [], [], [], frozenset([PUBLIC]))
-        loader = MockPackageLoader([package])
+        loader = FakePackageLoader([package])
         source = "var g: foo.Bar[String]"
         info = self.analyzeFromSource(source, packageLoader=loader)
         expectedType = ClassType(clas, (getStringType(),))
@@ -768,7 +768,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                          getNothingClassType(), frozenset([STATIC]))
         clas = package.addClass(Name(["Bar"]), None, [param], [getRootClassType()],
                                 None, [], [], [], frozenset([PUBLIC]))
-        loader = MockPackageLoader([package])
+        loader = FakePackageLoader([package])
         source = "var g: foo.Bar[Object]"
         self.assertRaises(TypeException, self.analyzeFromSource, source, packageLoader=loader)
 

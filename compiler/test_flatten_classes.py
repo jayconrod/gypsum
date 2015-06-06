@@ -17,7 +17,7 @@ from ir import *
 from builtins import *
 from compile_info import CompileInfo
 from errors import *
-from utils_test import MockPackageLoader
+from utils_test import FakePackageLoader
 
 class TestFlattenClasses(unittest.TestCase):
     def setUp(self):
@@ -29,7 +29,7 @@ class TestFlattenClasses(unittest.TestCase):
         layoutTokens = layout(rawTokens)
         ast = parse(filename, layoutTokens)
         package = Package(TARGET_PACKAGE_ID)
-        packageLoader = MockPackageLoader([])
+        packageLoader = FakePackageLoader([])
         info = CompileInfo(ast, package, packageLoader, isUsingStd=False)
         analyzeDeclarations(info)
         analyzeInheritance(info)

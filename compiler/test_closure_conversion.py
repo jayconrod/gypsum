@@ -19,7 +19,7 @@ from ir_types import *
 from errors import *
 from builtins import *
 from flags import LET
-from utils_test import MockPackageLoader, TestCaseWithDefinitions
+from utils_test import FakePackageLoader, TestCaseWithDefinitions
 
 
 class TestClosureConversion(TestCaseWithDefinitions):
@@ -29,7 +29,7 @@ class TestClosureConversion(TestCaseWithDefinitions):
         layoutTokens = layout(rawTokens)
         ast = parse(filename, layoutTokens)
         package = Package(TARGET_PACKAGE_ID)
-        packageLoader = MockPackageLoader([])
+        packageLoader = FakePackageLoader([])
         info = CompileInfo(ast, package, packageLoader, isUsingStd=False)
         analyzeDeclarations(info)
         analyzeInheritance(info)
