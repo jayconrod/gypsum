@@ -850,12 +850,6 @@ class TestCompiler(TestCaseWithDefinitions):
     def testTryWithMatch(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
-        typeofMethod = exnClass.findMethodByShortName("typeof")
-        typeofMethodIndex = exnClass.getMethodIndex(typeofMethod)
-        typeClass = getTypeClass()
-        typeTy = ClassType(typeClass)
-        isSubtypeOfMethod = typeClass.findMethodByShortName("is-subtype-of")
-        isSubtypeOfMethodIndex = typeClass.getMethodIndex(isSubtypeOfMethod)
         self.checkFunction("def f = try 12 catch\n" +
                            "    case exn => 34",
                            self.makeSimpleFunction("f", I64Type, [[
@@ -864,19 +858,10 @@ class TestCompiler(TestCaseWithDefinitions):
                                i64(12),
                                poptry(4),
                              ], [
-                               dup(),
-                               callv(1, typeofMethodIndex),
-                               dup(),
-                               allocarri(typeClass.id.index, 1),
-                               dup(),
-                               cls(exnClass.id.index),
-                               callg(BUILTIN_TYPE_CTOR_ID.index),
-                               drop(),
-                               callv(2, isSubtypeOfMethodIndex),
+                               true(),
                                branchif(3, 5),
                              ], [
                                stlocal(-1),
-                               drop(),
                                drop(),
                                i64(34),
                                branch(4),
@@ -892,12 +877,6 @@ class TestCompiler(TestCaseWithDefinitions):
     def testTryWithMatchAndFinally(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
-        typeofMethod = exnClass.findMethodByShortName("typeof")
-        typeofMethodIndex = exnClass.getMethodIndex(typeofMethod)
-        typeClass = getTypeClass()
-        typeTy = ClassType(typeClass)
-        isSubtypeOfMethod = typeClass.findMethodByShortName("is-subtype-of")
-        isSubtypeOfMethodIndex = typeClass.getMethodIndex(isSubtypeOfMethod)
         self.checkFunction("def f = try 12 catch\n" +
                            "    case exn => 34\n" +
                            "  finally 56",
@@ -910,20 +889,11 @@ class TestCompiler(TestCaseWithDefinitions):
                                poptry(4),
                              ], [
                                # block 2
-                               dup(),
-                               callv(1, typeofMethodIndex),
-                               dup(),
-                               allocarri(BUILTIN_TYPE_CLASS_ID.index, 1),
-                               dup(),
-                               cls(exnClass.id.index),
-                               callg(BUILTIN_TYPE_CTOR_ID.index),
-                               drop(),
-                               callv(2, isSubtypeOfMethodIndex),
+                               true(),
                                branchif(3, 5),
                              ], [
                                # block 3
                                stlocal(-1),
-                               drop(),
                                drop(),
                                i64(34),
                                branch(4),
@@ -1025,11 +995,6 @@ class TestCompiler(TestCaseWithDefinitions):
     def testThrowInTry(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
-        typeClass = getTypeClass()
-        typeofMethod = exnClass.findMethodByShortName("typeof")
-        typeofMethodIndex = exnClass.getMethodIndex(typeofMethod)
-        subtypeMethod = typeClass.findMethodByShortName("is-subtype-of")
-        subtypeMethodIndex = typeClass.getMethodIndex(subtypeMethod)
         self.checkFunction("def f = try throw Exception catch\n" +
                            "  case exn => 1",
                            self.makeSimpleFunction("f", I64Type, [[
@@ -1041,19 +1006,10 @@ class TestCompiler(TestCaseWithDefinitions):
                                drop(),
                                throw(),
                              ], [
-                               dup(),
-                               callv(1, typeofMethodIndex),
-                               dup(),
-                               allocarri(BUILTIN_TYPE_CLASS_ID.index, 1),
-                               dup(),
-                               cls(BUILTIN_EXCEPTION_CLASS_ID.index),
-                               callg(BUILTIN_TYPE_CTOR_ID.index),
-                               drop(),
-                               callv(2, subtypeMethodIndex),
+                               true(),
                                branchif(3, 5),
                              ], [
                                stlocal(-1),
-                               drop(),
                                drop(),
                                i64(1),
                                branch(4),
@@ -1311,7 +1267,6 @@ class TestCompiler(TestCaseWithDefinitions):
                              ], [
                                dup(),
                                callv(1, typeofMethodIndex),
-                               dup(),
                                allocarri(BUILTIN_TYPE_CLASS_ID.index, 1),
                                dup(),
                                clsf(clas.id.packageId.index, clas.id.externIndex),
@@ -1323,7 +1278,6 @@ class TestCompiler(TestCaseWithDefinitions):
                                tycf(clas.id.packageId.index, clas.id.externIndex),
                                cast(),
                                stlocal(-1),
-                               drop(),
                                drop(),
                                unit(),
                                branch(4),

@@ -15,6 +15,7 @@ from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PAC
 from flags import ABSTRACT, STATIC, LET
 from errors import SemanticException
 from builtins import getTypeClass, getExceptionClass, getRootClass
+import type_analysis
 from utils import Counter, COMPILE_FOR_EFFECT, COMPILE_FOR_VALUE, COMPILE_FOR_UNINITIALIZED, COMPILE_FOR_MATCH
 
 def compile(info):
@@ -194,20 +195,30 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.unpackParameter(param, id)
 
     def visitAstVariablePattern(self, pat, mode, ty=None, successBlock=None, failBlock=None):
+        assert mode is COMPILE_FOR_UNINITIALIZED or ty is not None
         defnInfo = self.info.getDefnInfo(pat)
-        if mode is COMPILE_FOR_UNINITIALIZED and \
-           isinstance(defnInfo.irDefn, Global):
+        if mode is COMPILE_FOR_UNINITIALIZED and isinstance(defnInfo.irDefn, Global):
             # Globals are automatically uninitialized.
             return
 
-        if mode is COMPILE_FOR_MATCH:
-            patTy = self.info.getType(pat)
-            typeClass = getTypeClass()
-            self.dup()
-            self.buildType(patTy, pat.location)
-            isSubtypeOfMethod = typeClass.findMethodByShortName("is-subtype-of")
-            index = typeClass.getMethodIndex(isSubtypeOfMethod)
-            self.callv(2, index)
+        mustMatch = type_analysis.patternMustMatch(pat, ty, self.info) if ty else None
+
+        if mode is COMPILE_FOR_EFFECT:
+            assert mustMatch
+        elif mode is COMPILE_FOR_MATCH:
+            assert successBlock is not None and failBlock is not None
+            if mustMatch:
+                self.true()
+            else:
+                self.dup()  # value
+                typeofMethod = getRootClass().findMethodByShortName("typeof")
+                self.buildCallSimpleMethod(typeofMethod, COMPILE_FOR_VALUE)
+                patTy = self.info.getType(pat)
+                typeClass = getTypeClass()
+                self.buildType(patTy, pat.location)
+                isSubtypeOfMethod = typeClass.findMethodByShortName("is-subtype-of")
+                index = typeClass.getMethodIndex(isSubtypeOfMethod)
+                self.callv(2, index)
             self.branchif(successBlock.id, failBlock.id)
             self.setCurrentBlock(successBlock)
         elif mode is COMPILE_FOR_UNINITIALIZED:
@@ -525,16 +536,12 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.setCurrentBlock(doneBlock)
 
     def visitAstPartialFunctionExpression(self, expr, mode, ty, doneBlock, failBlock):
-        self.dup()
-        typeofMethod = getRootClass().findMethodByShortName("typeof")
-        self.buildCallSimpleMethod(typeofMethod, COMPILE_FOR_VALUE)
         for case in expr.cases[:-1]:
             nextBlock = self.newBlock()
             self.visitAstPartialFunctionCase(case, mode, ty, doneBlock, nextBlock)
-            self.setCurrentBlock(nextBlock)
         self.visitAstPartialFunctionCase(expr.cases[-1], mode, ty, doneBlock, failBlock)
         self.setCurrentBlock(failBlock)
-        self.drop()
+        self.drop()  # value
         self.setCurrentBlock(None)
 
     def visitAstPartialFunctionCase(self, expr, mode, ty, doneBlock, failBlock):
@@ -546,7 +553,6 @@ class CompileVisitor(ast.AstNodeVisitor):
             successBlock = self.newBlock()
             self.branchif(successBlock.id, failBlock.id)
             self.setCurrentBlock(successBlock)
-        self.drop()  # type
         self.drop()  # value
         self.visit(expr.expression, mode)
         self.branch(doneBlock.id)
@@ -636,7 +642,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                 self.storeVariable(defnInfo, paramType)
         else:
             self.ldlocal(index)
-            self.visit(param.pattern, COMPILE_FOR_EFFECT)
+            self.visit(param.pattern, COMPILE_FOR_EFFECT, paramType)
 
     def compileStatements(self, scopeId, parameters, statements, mode):
         # Create a context if needed.

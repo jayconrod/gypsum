@@ -48,6 +48,15 @@ def analyzeTypes(info):
                                     func.name)
 
 
+def patternMustMatch(pat, ty, info):
+    """Returns true if a pattern will match any value of the given type. This is required for
+    patterns in parameters and variable definitions. Type analysis must have already run on
+    the pattern for this to work."""
+    assert isinstance(pat, ast.AstVariablePattern)
+    patTy = info.getType(pat)
+    return ty.isSubtypeOf(patTy)
+
+
 class TypeVisitorBase(ast.AstNodeVisitor):
     """Provides common functionality for type visitors, namely the visitor functions for the
     various AstType subclasses."""
@@ -409,6 +418,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         else:
             exprTy = None
         self.visit(node.pattern, exprTy)
+        assert exprTy is None or patternMustMatch(node.pattern, exprTy, self.info)
 
     def visitAstFunctionDefinition(self, node):
         self.handleFunctionCommon(node, node.returnType, node.body)
@@ -1128,4 +1138,4 @@ class VarianceScope(object):
             assert flag is ir_t.INVARIANT
             return 0
 
-__all__ = ["analyzeTypes"]
+__all__ = ["analyzeTypes", "patternMustMatch"]
