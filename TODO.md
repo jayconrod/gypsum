@@ -69,6 +69,8 @@
 
 ## Compiler
 - delete output file when an internal error is encountered
+- return from try/catch with finally does not execute finally
+- return from finally should be an error
 
 ## VM
 - `read()` breaks when EOF is given. Exception is thrown in non-GC-safe place.

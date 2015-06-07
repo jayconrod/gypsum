@@ -77,6 +77,17 @@
         - UninitializedException
   fields: []
   methods: []
+- name: MatchException
+  id: BUILTIN_MATCH_EXCEPTION_CLASS_ID
+  isPrimitive: false
+  supertype: Exception
+  constructors:
+    - id: BUILTIN_MATCH_EXCEPTION_CTOR_ID
+      returnType: unit
+      parameterTypes:
+        - MatchException
+  fields: []
+  methods: []
 - name: Type
   id: BUILTIN_TYPE_CLASS_ID
   isPrimitive: false

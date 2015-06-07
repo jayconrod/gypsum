@@ -57,6 +57,22 @@ def patternMustMatch(pat, ty, info):
     return ty.isSubtypeOf(patTy)
 
 
+def partialFunctionCaseMustMatch(case, ty, info):
+    """Returns True if the partial function case must match any value of the given type.
+    This is undecidable, so this actually just returns True if the pattern must match and
+    there is no condition."""
+    assert isinstance(case, ast.AstPartialFunctionCase)
+    return patternMustMatch(case.pattern, ty, info) and case.condition is None
+
+
+def partialFunctionMustMatch(expr, ty, info):
+    """Returns True if the partial function must match any value of the given type. Currently,
+    this just returns True if there is any individual case which must match, but in the future
+    it may account for disjoint cases matching everything."""
+    assert isinstance(expr, ast.AstPartialFunctionExpression)
+    return any(partialFunctionCaseMustMatch(case, ty, info) for case in expr.cases)
+
+
 class TypeVisitorBase(ast.AstNodeVisitor):
     """Provides common functionality for type visitors, namely the visitor functions for the
     various AstType subclasses."""
@@ -514,6 +530,10 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                not exprTy.isSubtypeOf(varTy):
                 raise TypeException(node.location,
                                     "%s: expression doesn't match declared type" % node.name)
+            elif mode is COMPILE_FOR_MATCH and \
+                 exprTy.isDisjoint(varTy):
+                raise TypeException(node.location,
+                                    "%s: expression cannot match declared type" % node.name)
             patTy = varTy
         else:
             patTy = exprTy
@@ -720,6 +740,11 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             raise TypeException(node.condition.location, "condition must be boolean")
         self.visit(node.body)
         return ir_t.UnitType
+
+    def visitAstMatchExpression(self, node):
+        exprTy = self.visit(node.expression)
+        resultTy = self.visit(node.matcher, exprTy)
+        return resultTy
 
     def visitAstThrowExpression(self, node):
         exnTy = self.visit(node.exception)

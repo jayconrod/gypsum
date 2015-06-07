@@ -614,6 +614,33 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource("def f = while (true) 12")
         self.assertEquals(UnitType, info.getType(info.ast.modules[0].definitions[0].body))
 
+    def testMatchExprVarNoType(self):
+        info = self.analyzeFromSource("def f(x: i64) = match (x) { case y => y.to-string; }")
+        matchAst = info.ast.modules[0].definitions[0].body
+        self.assertEquals(getStringType(), info.getType(matchAst))
+        self.assertEquals(I64Type, info.getType(matchAst.matcher.cases[0].pattern))
+        self.assertEquals(getStringType(), info.getType(matchAst.matcher.cases[0].expression))
+
+    def testMatchExprVarWithType(self):
+        info = self.analyzeFromSource("def f(x: i64) = match (x) { case y: i64 => y; }")
+        matchAst = info.ast.modules[0].definitions[0].body
+        self.assertEquals(I64Type, info.getType(matchAst))
+
+    def testMatchExprVarWithCond(self):
+        info = self.analyzeFromSource("def f(x: i64) = match (x) { case y if x == 0 => y; }")
+        matchAst = info.ast.modules[0].definitions[0].body
+        self.assertEquals(I64Type, info.getType(matchAst))
+        self.assertEquals(BooleanType, info.getType(matchAst.matcher.cases[0].condition))
+        self.assertEquals(I64Type, info.getType(matchAst.matcher.cases[0].expression))
+
+    def testMatchExprVarWithBadCond(self):
+        source = "def f(x: i64) = match (x) { case y if x => y; }"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testMatchExprVarDisjoint(self):
+        source = "def f(x: i64) = match (x) { case y: String => y; }"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     def testThrowExpr(self):
         info = self.analyzeFromSource("def f(exn: Exception) = throw exn")
         self.assertEquals(ClassType(getNothingClass()),

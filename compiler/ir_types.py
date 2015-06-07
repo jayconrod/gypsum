@@ -45,6 +45,10 @@ class Type(data.Data):
     def isSubtypeOf(self, other):
         return self.lub(other) == other
 
+    def isDisjoint(self, other):
+        lub = self.lub(other)
+        return self != lub and other != lub
+
     def isPrimitive(self):
         raise NotImplementedError
 

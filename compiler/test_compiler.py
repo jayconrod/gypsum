@@ -847,7 +847,107 @@ class TestCompiler(TestCaseWithDefinitions):
                              ret(),
                            ]]))
 
-    def testTryWithMatch(self):
+    def testMatchExprWithIntVar(self):
+        self.checkFunction("def f = match (12) { case y => y; }",
+                           self.makeSimpleFunction("f", I64Type, [[
+                             i64(12),
+                             stlocal(-1),
+                             ldlocal(-1),
+                             branch(1),
+                           ], [
+                             ret(),
+                           ]],
+                           variables=[self.makeVariable("f.y", type=I64Type,
+                                                        kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testMatchAllCasesTerminate(self):
+        source = "def f =\n" + \
+                 "  match (12)\n" + \
+                 "    case x if false => return 1\n" + \
+                 "    case y if true => return 2\n" + \
+                 "  return 3"
+        self.checkFunction(source,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               i64(12),
+                               dup(),
+                               stlocal(-1),
+                               false(),
+                               branchif(1, 2),
+                             ], [
+                               drop(),
+                               i64(1),
+                               ret(),
+                             ], [
+                               dup(),
+                               stlocal(-2),
+                               true(),
+                               branchif(3, 4),
+                             ], [
+                               drop(),
+                               i64(2),
+                               ret(),
+                             ], [
+                               allocobj(BUILTIN_MATCH_EXCEPTION_CLASS_ID.index),
+                               dup(),
+                               callg(BUILTIN_MATCH_EXCEPTION_CTOR_ID.index),
+                               drop(),
+                               throw(),
+                             ]],
+                             variables=[self.makeVariable("f.x", type=I64Type,
+                                                          kind=LOCAL, flags=frozenset([LET])),
+                                        self.makeVariable("f.y", type=I64Type,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testMatchUnreachableAfterMustMatchCase(self):
+        source = "def f =\n" + \
+                 "  match (12)\n" + \
+                 "    case x => return 1\n" + \
+                 "    case y if false => return 2\n" + \
+                 "  return 3"
+        self.checkFunction(source,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               i64(12),
+                               stlocal(-1),
+                               i64(1),
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.x", type=I64Type,
+                                                          kind=LOCAL, flags=frozenset([LET])),
+                                        self.makeVariable("f.y", type=I64Type,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testMatchNotUnreachableAfterSomeTermination(self):
+        source = "def f =\n" + \
+                 "  match (12)\n" + \
+                 "    case x if false => return 1\n" + \
+                 "    case y => 2\n" + \
+                 "  3"
+        self.checkFunction(source,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               i64(12),
+                               dup(),
+                               stlocal(-1),
+                               false(),
+                               branchif(1, 2),
+                             ], [
+                               drop(),
+                               i64(1),
+                               ret(),
+                             ], [
+                               stlocal(-2),
+                               i64(2),
+                               drop(),
+                               branch(3),
+                             ], [
+                               i64(3),
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.x", type=I64Type,
+                                                          kind=LOCAL, flags=frozenset([LET])),
+                                        self.makeVariable("f.y", type=I64Type,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testTryValueMustCatch(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
         self.checkFunction("def f = try 12 catch\n" +
@@ -856,25 +956,182 @@ class TestCompiler(TestCaseWithDefinitions):
                                pushtry(1, 2),
                              ], [
                                i64(12),
-                               poptry(4),
-                             ], [
-                               true(),
-                               branchif(3, 5),
+                               poptry(3),
                              ], [
                                stlocal(-1),
+                               i64(34),
+                               branch(3),
+                             ], [
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.exn", type=exnTy,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testTryValueMayCatch(self):
+        exnClass = getExceptionClass()
+        exnTy = ClassType(exnClass)
+        self.checkFunction("def f = try 12 catch { case exn if false => 34; }",
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0
+                               pushtry(1, 2),
+                             ], [
+                               # block 1 (try)
+                               i64(12),
+                               poptry(4),
+                             ], [
+                               # block 2 (catch)
+                               dup(),
+                               stlocal(-1),
+                               false(),
+                               branchif(3, 5),
+                             ], [
+                               # block 3 (catch case)
                                drop(),
                                i64(34),
                                branch(4),
                              ], [
+                               # block 4 (done)
                                ret(),
                              ], [
-                               drop(),
+                               # block 5 (rethrow)
                                throw(),
                              ]],
                              variables=[self.makeVariable("f.exn", type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
-    def testTryWithMatchAndFinally(self):
+    def testTryEffectMustCatch(self):
+        exnClass = getExceptionClass()
+        exnTy = ClassType(exnClass)
+        self.checkFunction("def f = { try 12 catch { case exn => 34; }; {}; }",
+                           self.makeSimpleFunction("f", UnitType, [[
+                               # block 0
+                               pushtry(1, 2),
+                             ], [
+                               # block 1 (try)
+                               i64(12),
+                               drop(),
+                               poptry(3),
+                             ], [
+                               # block 2 (catch)
+                               stlocal(-1),
+                               i64(34),
+                               drop(),
+                               branch(3),
+                             ], [
+                               # block 3 (done)
+                               unit(),
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.exn", type=exnTy,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testTryEffectMayCatch(self):
+        exnClass = getExceptionClass()
+        exnTy = ClassType(exnClass)
+        self.checkFunction("def f = { try 12 catch { case exn if false => 34; }; {}; }",
+                           self.makeSimpleFunction("f", UnitType, [[
+                               # block 0
+                               pushtry(1, 2),
+                             ], [
+                               # block 1 (try)
+                               i64(12),
+                               drop(),
+                               poptry(4),
+                             ], [
+                               # block 2 (catch)
+                               dup(),
+                               stlocal(-1),
+                               false(),
+                               branchif(3, 5),
+                             ], [
+                               # block 3 (catch case)
+                               drop(),
+                               i64(34),
+                               drop(),
+                               branch(4),
+                             ], [
+                               # block 4 (done)
+                               unit(),
+                               ret(),
+                             ], [
+                               # block 5 (rethrow)
+                               throw(),
+                             ]],
+                             variables=[self.makeVariable("f.exn", type=exnTy,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testTryValueFinally(self):
+        exnClass = getExceptionClass()
+        exnTy = ClassType(exnClass)
+        self.checkFunction("def f = try 12 finally 34",
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0
+                               pushtry(1, 3),
+                             ], [
+                               # block 1 (try)
+                               i64(12),
+                               poptry(2),
+                             ], [
+                               # block 2 (try-finally)
+                               null(),
+                               branch(4),
+                             ], [
+                               # block 3 (throw-finally)
+                               uninitialized(),
+                               swap(),
+                               branch(4),
+                             ], [
+                               # block 4 (finally)
+                               i64(34),
+                               drop(),
+                               dup(),
+                               null(),
+                               eqp(),
+                               branchif(5, 6),
+                             ], [
+                               # block 5 (done)
+                               drop(),
+                               ret(),
+                             ], [
+                               # block 6 (rethrow)
+                               throw(),
+                             ]]))
+
+    def testTryEffectFinally(self):
+        exnClass = getExceptionClass()
+        exnTy = ClassType(exnClass)
+        self.checkFunction("def f = { try 12 finally 34; {}; }",
+                           self.makeSimpleFunction("f", UnitType, [[
+                               # block 0
+                               pushtry(1, 3),
+                             ], [
+                               # block 1 (try)
+                               i64(12),
+                               drop(),
+                               poptry(2),
+                             ], [
+                               # block 2 (try-finally)
+                               null(),
+                               branch(3),
+                             ], [
+                               # block 3 (finally)
+                               i64(34),
+                               drop(),
+                               dup(),
+                               null(),
+                               eqp(),
+                               branchif(4, 5),
+                             ], [
+                               # block 4 (done)
+                               drop(),
+                               unit(),
+                               ret(),
+                             ], [
+                               # block 5 (rethrow)
+                               throw(),
+                             ]]))
+
+    def testTryValueMustMatchFinally(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
         self.checkFunction("def f = try 12 catch\n" +
@@ -882,45 +1139,249 @@ class TestCompiler(TestCaseWithDefinitions):
                            "  finally 56",
                            self.makeSimpleFunction("f", I64Type, [[
                                # block 0
-                               pushtry(1, 2),
+                               pushtry(1, 3),
                              ], [
-                               # block 1
+                               # block 1 (try)
                                i64(12),
-                               poptry(4),
+                               poptry(2),
                              ], [
-                               # block 2
-                               true(),
-                               branchif(3, 5),
-                             ], [
-                               # block 3
-                               stlocal(-1),
-                               drop(),
-                               i64(34),
-                               branch(4),
-                             ], [
-                               # block 4
+                               # block 2 (try-finally)
                                null(),
-                               branch(6),
+                               branch(8),
                              ], [
-                               # block 5
+                               # block 3 (catch-try)
+                               pushtry(4, 7),
+                             ], [
+                               # block 4 (catch)
+                               dup(),
+                               stlocal(-1),
+                               i64(34),
+                               branch(5),
+                             ], [
+                               # block 5 (catch-normal)
+                               poptry(6),
+                             ], [
+                               # block 6 (catch-normal-finally)
+                               swap(),
+                               drop(),
+                               null(),
+                               branch(8),
+                             ], [
+                               # block 7 (catch-throw-finally)
+                               swap(),
                                drop(),
                                uninitialized(),
                                swap(),
-                               branch(6),
+                               branch(8),
                              ], [
-                               # block 6
+                               # block 8 (finally)
                                i64(56),
                                drop(),
                                dup(),
                                null(),
                                eqp(),
-                               branchif(7, 8),
+                               branchif(9, 10),
                              ], [
-                               # block 7
+                               # block 9 (finally-continue)
                                drop(),
                                ret(),
                              ], [
-                               # block 8
+                               # block 10
+                               throw(),
+                             ]],
+                             variables=[self.makeVariable("f.exn", type=exnTy,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testTryValueMayCatchFinally(self):
+        exnClass = getExceptionClass()
+        exnTy = ClassType(exnClass)
+        self.checkFunction("def f = try 12 catch { case exn if false => 34; } finally 56",
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0
+                               pushtry(1, 3),
+                             ], [
+                               # block 1 (try)
+                               i64(12),
+                               poptry(2),
+                             ], [
+                               # block 2 (try-finally)
+                               null(),
+                               branch(10),
+                             ], [
+                               # block 3 (catch-try)
+                               pushtry(4, 9),
+                             ], [
+                               # block 4 (catch)
+                               dup(),
+                               dup(),
+                               stlocal(-1),
+                               false(),
+                               branchif(5, 8),
+                             ], [
+                               # block 5 (catch case)
+                               drop(),
+                               i64(34),
+                               branch(6),
+                             ], [
+                               # block 6 (catch-normal)
+                               poptry(7),
+                             ], [
+                               # block 7 (catch-normal-finally)
+                               swap(),
+                               drop(),
+                               null(),
+                               branch(10),
+                             ], [
+                               # block 8 (catch-miss)
+                               poptry(9),
+                             ], [
+                               # block 9 (catch-throw-finally)
+                               swap(),
+                               drop(),
+                               uninitialized(),
+                               swap(),
+                               branch(10),
+                             ], [
+                               # block 10 (finally)
+                               i64(56),
+                               drop(),
+                               dup(),
+                               null(),
+                               eqp(),
+                               branchif(11, 12),
+                             ], [
+                               # block 11 (done)
+                               drop(),
+                               ret(),
+                             ], [
+                               # block 12 (rethrow)
+                               throw(),
+                             ]],
+                             variables=[self.makeVariable("f.exn", type=exnTy,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testTryEffectMustCatchFinally(self):
+        exnClass = getExceptionClass()
+        exnTy = ClassType(exnClass)
+        self.checkFunction("def f = { try 12 catch { case exn => 34; } finally 56; {}; }",
+                           self.makeSimpleFunction("f", UnitType, [[
+                               # block 0
+                               pushtry(1, 3),
+                             ], [
+                               # block 1 (try)
+                               i64(12),
+                               drop(),
+                               poptry(2),
+                             ], [
+                               # block 2 (try-finally)
+                               null(),
+                               branch(8),
+                             ], [
+                               # block 3 (catch-try)
+                               pushtry(4, 7),
+                             ], [
+                               # block 4 (catch)
+                               dup(),
+                               stlocal(-1),
+                               i64(34),
+                               drop(),
+                               branch(5),
+                             ], [
+                               # block 5 (catch-normal)
+                               poptry(6),
+                             ], [
+                               # block 6 (catch-normal-finally)
+                               drop(),
+                               null(),
+                               branch(8),
+                             ], [
+                               # block 7 (catch-throw-finally)
+                               swap(),
+                               drop(),
+                               branch(8),
+                             ], [
+                               # block 8 (finally)
+                               i64(56),
+                               drop(),
+                               dup(),
+                               null(),
+                               eqp(),
+                               branchif(9, 10),
+                             ], [
+                               # block 9 (done)
+                               drop(),
+                               unit(),
+                               ret(),
+                             ], [
+                               # block 10 (rethrow)
+                               throw(),
+                             ]],
+                             variables=[self.makeVariable("f.exn", type=exnTy,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testTryEffectMayCatchFinally(self):
+        exnClass = getExceptionClass()
+        exnTy = ClassType(exnClass)
+        self.checkFunction("def f = { try 12 catch { case exn if false => 34; } finally 56; {}; }",
+                           self.makeSimpleFunction("f", UnitType, [[
+                               # block 0
+                               pushtry(1, 3),
+                             ], [
+                               # block 1 (try)
+                               i64(12),
+                               drop(),
+                               poptry(2),
+                             ], [
+                               # block 2 (try-finally)
+                               null(),
+                               branch(10),
+                             ], [
+                               # block 3 (catch-try)
+                               pushtry(4, 9),
+                             ], [
+                               # block 4 (catch)
+                               dup(),
+                               dup(),
+                               stlocal(-1),
+                               false(),
+                               branchif(5, 8),
+                             ], [
+                               # block 5 (catch case)
+                               drop(),
+                               i64(34),
+                               drop(),
+                               branch(6),
+                             ], [
+                               # block 6 (catch-normal)
+                               poptry(7),
+                             ], [
+                               # block 7 (catch-normal-finally)
+                               drop(),
+                               null(),
+                               branch(10),
+                             ], [
+                               # block 8 (catch-miss)
+                               poptry(9),
+                             ], [
+                               # block 9 (catch-throw-finally)
+                               swap(),
+                               drop(),
+                               branch(10),
+                             ], [
+                               # block 10 (finally)
+                               i64(56),
+                               drop(),
+                               dup(),
+                               null(),
+                               eqp(),
+                               branchif(11, 12),
+                             ], [
+                               # block 11 (done)
+                               drop(),
+                               unit(),
+                               ret(),
+                             ], [
+                               # block 12 (rethrow)
                                throw(),
                              ]],
                              variables=[self.makeVariable("f.exn", type=exnTy,
@@ -1006,18 +1467,11 @@ class TestCompiler(TestCaseWithDefinitions):
                                drop(),
                                throw(),
                              ], [
-                               true(),
-                               branchif(3, 5),
-                             ], [
                                stlocal(-1),
-                               drop(),
                                i64(1),
-                               branch(4),
+                               branch(3),
                              ], [
                                ret(),
-                             ], [
-                               drop(),
-                               throw(),
                              ]],
                              variables=[self.makeVariable("f.exn", type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
@@ -1278,13 +1732,11 @@ class TestCompiler(TestCaseWithDefinitions):
                                tycf(clas.id.packageId.index, clas.id.externIndex),
                                cast(),
                                stlocal(-1),
-                               drop(),
                                unit(),
                                branch(4),
                              ], [
                                ret(),
                              ], [
-                               drop(),
                                throw(),
                              ]],
                              variables=[self.makeVariable("f.x", type=barType,
