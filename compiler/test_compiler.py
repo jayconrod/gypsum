@@ -860,6 +860,78 @@ class TestCompiler(TestCaseWithDefinitions):
                            variables=[self.makeVariable("f.y", type=I64Type,
                                                         kind=LOCAL, flags=frozenset([LET]))]))
 
+    def testMatchExprWithIntShadow(self):
+        source = "def f(x: i64) =\n" + \
+                 "  let y = 12\n" + \
+                 "  match (x)\n" + \
+                 "    case y => y\n" + \
+                 "    case z => z"
+        self.checkFunction(source,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               i64(12),
+                               stlocal(-1),
+                               ldlocal(0),
+                               ldlocal(-1),
+                               dupi(1),
+                               eqi64(),
+                               branchif(1, 2),
+                             ], [
+                               drop(),
+                               ldlocal(-1),
+                               branch(3),
+                             ], [
+                               stlocal(-2),
+                               ldlocal(-2),
+                               branch(3),
+                             ], [
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.x", type=I64Type,
+                                                          kind=PARAMETER,
+                                                          flags=frozenset([LET])),
+                                        self.makeVariable("f.y", type=I64Type,
+                                                          kind=LOCAL, flags=frozenset([LET])),
+                                        self.makeVariable("f.z", type=I64Type,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testMatchExprWithObjectShadow(self):
+        source = "def f(x: Object) =\n" + \
+                 "  let y = \"foo\"\n" + \
+                 "  match (x)\n" + \
+                 "    case y => y\n" + \
+                 "    case z => z"
+        package = self.compileFromSource(source)
+        fooIndex = package.findString("foo")
+        stringClass = getStringClass()
+        eqMethod = stringClass.getMethod("==")
+        eqIndex = stringClass.getMethodIndex(eqMethod)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", getRootClassType(), [[
+                               string(fooIndex),
+                               stlocal(-1),
+                               ldlocal(0),
+                               ldlocal(-1),
+                               dupi(1),
+                               callv(2, eqIndex),
+                               branchif(1, 2),
+                             ], [
+                               drop(),
+                               ldlocal(-1),
+                               branch(3),
+                             ], [
+                               stlocal(-2),
+                               ldlocal(-2),
+                               branch(3),
+                             ], [
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.x", type=getRootClassType(),
+                                                          kind=PARAMETER, flags=frozenset([LET])),
+                                        self.makeVariable("f.y", type=getStringType(),
+                                                          kind=LOCAL, flags=frozenset([LET])),
+                                        self.makeVariable("f.z", type=getRootClassType(),
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
     def testMatchAllCasesTerminate(self):
         source = "def f =\n" + \
                  "  match (12)\n" + \

@@ -633,6 +633,16 @@ class Scope(ast.AstNodeVisitor):
         """Returns true if a symbol is defined in this scope."""
         return self.getDefinition(name) is not None
 
+    def isShadow(self, name):
+        """Returns true if a symbol is defined in an outer scope."""
+        assert self.isBound(name)
+        scope = self.parent
+        while scope is not None:
+            if scope.isBound(name):
+                return True
+            scope = scope.parent
+        return False
+
     def getDefinition(self, name):
         """Returns NameInfo for a symbol defined in this scope or None."""
         return self.bindings.get(name)
@@ -644,6 +654,19 @@ class Scope(ast.AstNodeVisitor):
     def define(self, name):
         assert isinstance(name, str)
         self.defined.add(name)
+
+    def deleteVar(self, name):
+        """Deletes the local variable defined at this node, and removes it from the scope's
+        bindings and from the defnInfo table. This is useful when we don't know if an
+        expression is defining or using a variable. We define it first, then delete it if we
+        don't need it."""
+        assert self.isBound(name) and not self.isDefined(name)
+        nameInfo = self.bindings[name]
+        assert not nameInfo.isOverloaded()
+        defnInfo = nameInfo.getDefnInfo()
+        assert isinstance(defnInfo.irDefn, ir.Variable) and defnInfo.irDefn.kind is not None
+        defnInfo.irDefn.kind = None
+        del(self.bindings[name])
 
     def use(self, defnInfo, useAstId, useKind, loc):
         """Creates, registers, and returns UseInfo for a given definition.

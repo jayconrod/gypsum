@@ -53,8 +53,13 @@ def patternMustMatch(pat, ty, info):
     patterns in parameters and variable definitions. Type analysis must have already run on
     the pattern for this to work."""
     assert isinstance(pat, ast.AstVariablePattern)
-    patTy = info.getType(pat)
-    return ty.isSubtypeOf(patTy)
+    if info.hasUseInfo(pat):
+        # This pattern compares the expression to another value, rather than defining
+        # a new variable.
+        return False
+    else:
+        patTy = info.getType(pat)
+        return ty.isSubtypeOf(patTy)
 
 
 def partialFunctionCaseMustMatch(case, ty, info):
@@ -522,6 +527,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             varTy = self.visit(node.ty)
         else:
             varTy = None
+
+        scope = self.scope()
         if varTy is None and exprTy is None:
             raise TypeException(node.location, "%s: type not specified" % node.name)
         elif varTy is not None:
@@ -530,18 +537,33 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                not exprTy.isSubtypeOf(varTy):
                 raise TypeException(node.location,
                                     "%s: expression doesn't match declared type" % node.name)
-            elif mode is COMPILE_FOR_MATCH and \
-                 exprTy.isDisjoint(varTy):
-                raise TypeException(node.location,
-                                    "%s: expression cannot match declared type" % node.name)
+            elif mode is COMPILE_FOR_MATCH:
+                if scope.isShadow(node.name):
+                    raise TypeException(node.location,
+                                        "%s: pattern that refers to another definition cannot have a type" %
+                                        node.name)
+                elif exprTy.isDisjoint(varTy):
+                    raise TypeException(node.location,
+                                        "%s: expression cannot match declared type" % node.name)
             patTy = varTy
         else:
-            patTy = exprTy
+            if mode is COMPILE_FOR_MATCH and scope.isShadow(node.name):
+                # Inside a match, if we refer to a definition in an outside scope, we don't
+                # define a new definition to shadow it; we check if the expression equals it,
+                # which means that we treat this as a variable use. We can't detect this in
+                # declaration analysis without making an extra pass.
+                scope.deleteVar(node.name)
+                patTy = self.handlePossibleCall(scope, node.name, node.id, None,
+                                                [], [], False, node.location)
+                return patTy
+            else:
+                patTy = exprTy
+
         irDefn = self.info.getDefnInfo(node).irDefn
         if self.isExternallyVisible(irDefn):
             self.checkPublicType(patTy, node.name, node.location)
         irDefn.type = patTy
-        self.scope().define(node.name)
+        scope.define(node.name)
         return patTy
 
     def visitAstLiteralExpression(self, node):

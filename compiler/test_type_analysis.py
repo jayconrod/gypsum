@@ -641,6 +641,24 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "def f(x: i64) = match (x) { case y: String => y; }"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
+    def testMatchExprShadow(self):
+        source = "def f(x: Object) =\n" + \
+                 "  let y = \"foo\"\n" + \
+                 "  match (x)\n" + \
+                 "    case y => y"
+        info = self.analyzeFromSource(source)
+        matchAst = info.ast.modules[0].definitions[0].body.statements[1]
+        self.assertEquals(getStringType(), info.getType(matchAst))
+        self.assertEquals(getStringType(), info.getType(matchAst.matcher.cases[0].pattern))
+        self.assertEquals(getStringType(), info.getType(matchAst.matcher.cases[0].expression))
+
+    def testMatchExprShadowWithType(self):
+        source = "def f(x: Object) =\n" + \
+                 "  let y = \"foo\"\n" + \
+                 "  match (x)\n" + \
+                 "    case y: Object => y"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     def testThrowExpr(self):
         info = self.analyzeFromSource("def f(exn: Exception) = throw exn")
         self.assertEquals(ClassType(getNothingClass()),

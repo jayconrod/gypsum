@@ -613,18 +613,21 @@ class Class(IrTopDefn):
 
     def getField(self, name):
         for f in self.fields:
-            if f.name == name:
+            if f.name.short() == name:
                 return f
         return None
 
-    def getMember(self, name):
+    def getMethod(self, name):
         for m in self.methods:
-            if m.name == name:
+            if m.name.short() == name:
                 return m
-        for f in self.fields:
-            if f.name == name:
-                return f
         return None
+
+    def getMember(self, name):
+        method = self.getMethod(name)
+        if method is not None:
+            return method
+        return self.getField(name)
 
     def getMethodIndex(self, method):
         for i, m in enumerate(self.methods):

@@ -9,7 +9,7 @@ from functools import partial
 import ast
 from bytecode import W8, W16, W32, W64, BUILTIN_TYPE_CLASS_ID, BUILTIN_TYPE_CTOR_ID, instInfoByCode, BUILTIN_MATCH_EXCEPTION_CLASS_ID, BUILTIN_MATCH_EXCEPTION_CTOR_ID
 from ir import IrTopDefn, Class, Field, Function, Global, LOCAL, Package, PACKAGE_INIT_NAME, RECEIVER_SUFFIX, Variable
-from ir_types import UnitType, ClassType, VariableType, NULLABLE_TYPE_FLAG, getExceptionClassType
+from ir_types import UnitType, ClassType, VariableType, NULLABLE_TYPE_FLAG, getExceptionClassType, getClassFromType
 import ir_instructions
 from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PACKAGE_INITIALIZER_HINT, DefnInfo, NORMAL_MODE, STD_MODE, NOSTD_MODE
 from flags import ABSTRACT, STATIC, LET
@@ -206,6 +206,18 @@ class CompileVisitor(ast.AstNodeVisitor):
         if mode is COMPILE_FOR_EFFECT:
             assert mustMatch
         elif mode is COMPILE_FOR_MATCH:
+            if self.info.hasUseInfo(pat):
+                assert failBlock is not None
+                successBlock = self.newBlock()
+                self.loadSymbol(pat, mode)
+                self.dupi(1)  # value
+                patTy = self.info.getType(pat)
+                self.buildCallNamedMethod(patTy, "==", COMPILE_FOR_VALUE)
+                self.branchif(successBlock.id, failBlock.id)
+                self.setCurrentBlock(successBlock)
+                self.drop()
+                return
+
             if not mustMatch:
                 assert failBlock is not None
                 assert ty.isObject()
@@ -258,21 +270,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.dropForEffect(mode)
 
     def visitAstVariableExpression(self, expr, mode):
-        useInfo = self.info.getUseInfo(expr)
-        irDefn = useInfo.defnInfo.irDefn
-        if isinstance(irDefn, Variable) or \
-           isinstance(irDefn, Field) or \
-           isinstance(irDefn, Global):
-            # Parameter, local, or context variable.
-            self.loadVariable(useInfo.defnInfo)
-            self.dropForEffect(mode)
-        elif isinstance(irDefn, Function) or isinstance(irDefn, Class):
-            callInfo = self.info.getCallInfo(expr)
-            self.buildCall(useInfo, callInfo, None, [], mode)
-        else:
-            assert isinstance(irDefn, Package)
-            assert irDefn.id.index is not None
-            self.pkg(irDefn.id.index)
+        self.loadSymbol(expr, mode)
 
     def visitAstThisExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)
@@ -794,6 +792,23 @@ class CompileVisitor(ast.AstNodeVisitor):
         if mode is COMPILE_FOR_VALUE and needUnit:
             self.unit()
 
+    def loadSymbol(self, node, mode):
+        useInfo = self.info.getUseInfo(node)
+        irDefn = useInfo.defnInfo.irDefn
+        if isinstance(irDefn, Variable) or \
+           isinstance(irDefn, Field) or \
+           isinstance(irDefn, Global):
+            # Parameter, local, or context variable.
+            self.loadVariable(useInfo.defnInfo)
+            self.dropForEffect(mode)
+        elif isinstance(irDefn, Function) or isinstance(irDefn, Class):
+            callInfo = self.info.getCallInfo(node)
+            self.buildCall(useInfo, callInfo, None, [], mode)
+        else:
+            assert isinstance(irDefn, Package)
+            assert irDefn.id.index is not None
+            self.pkg(irDefn.id.index)
+
     def loadVariable(self, varOrDefnInfo):
         if isinstance(varOrDefnInfo, Variable):
             var = varOrDefnInfo
@@ -937,9 +952,17 @@ class CompileVisitor(ast.AstNodeVisitor):
             elif isinstance(stmt, ast.AstClassDefinition):
                 raise NotImplementedError
 
+    def buildCallNamedMethod(self, receiverType, name, mode):
+        receiverClass = getClassFromType(receiverType)
+        method = receiverClass.getMethod(name)
+        self.buildCallSimpleMethod(method, mode)
+
     def buildCallSimpleMethod(self, method, mode):
-        index = method.getReceiverClass().getMethodIndex(method)
-        self.callv(len(method.parameterTypes), index)
+        if hasattr(method, "insts"):
+            self.addBuiltinInstructions(method.insts)
+        else:
+            index = method.getReceiverClass().getMethodIndex(method)
+            self.callv(len(method.parameterTypes), index)
         self.dropForEffect(mode)
 
     def buildCall(self, useInfo, callInfo, receiver, argExprs, mode):
@@ -1020,9 +1043,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             compileArgs()
             compileTypeArgs()
             if hasattr(irDefn, "insts"):
-                for instName in irDefn.insts:
-                    inst = getattr(ir_instructions,instName)
-                    self.add(inst())
+                self.addBuiltinInstructions(irDefn.insts)
             elif irDefn.isFinal():
                 # Calls to final methods can be made directly. This includes constructors and
                 # primitive methods which can't be called virtually.
@@ -1099,6 +1120,11 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.dup()
         self.callg(BUILTIN_MATCH_EXCEPTION_CTOR_ID.index)
         self.drop()
+
+    def addBuiltinInstructions(self, insts):
+        for instName in insts:
+            inst = getattr(ir_instructions, instName)
+            self.add(inst())
 
     def getScopeId(self):
         if isinstance(self.astDefn, ast.AstPrimaryConstructorDefinition):
