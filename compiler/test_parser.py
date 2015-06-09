@@ -232,11 +232,17 @@ class TestParser(unittest.TestCase):
 
     # Patterns
     def testVarPatternNoType(self):
-        self.checkParse(astVariablePattern("x", None), varPattern(), "x")
+        self.checkParse(astVariablePattern("x", None), pattern(), "x")
 
     def testVarPatternWithType(self):
         self.checkParse(astVariablePattern("x", astClassType("T", [], set())),
-                        varPattern(), "x: T")
+                        pattern(), "x: T")
+
+    def testBlankPatternNoType(self):
+        self.checkParse(astBlankPattern(None), pattern(), "_")
+
+    def testBlankPatternWithType(self):
+        self.checkParse(astBlankPattern(astClassType("T", [], set())), pattern(), "_: T")
 
     # Types
     def testSimpleTypes(self):

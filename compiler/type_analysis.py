@@ -52,14 +52,17 @@ def patternMustMatch(pat, ty, info):
     """Returns true if a pattern will match any value of the given type. This is required for
     patterns in parameters and variable definitions. Type analysis must have already run on
     the pattern for this to work."""
-    assert isinstance(pat, ast.AstVariablePattern)
-    if info.hasUseInfo(pat):
-        # This pattern compares the expression to another value, rather than defining
-        # a new variable.
-        return False
+    if isinstance(pat, ast.AstVariablePattern):
+        if info.hasUseInfo(pat):
+            # This pattern compares the expression to another value, rather than defining
+            # a new variable.
+            return False
+        else:
+            patTy = info.getType(pat)
+            return ty.isSubtypeOf(patTy)
     else:
-        patTy = info.getType(pat)
-        return ty.isSubtypeOf(patTy)
+        assert isinstance(pat, ast.AstBlankPattern)
+        return True
 
 
 def partialFunctionCaseMustMatch(case, ty, info):
@@ -365,6 +368,13 @@ class DeclarationTypeVisitor(TypeVisitorBase):
             raise TypeException(node.location, "%s: type not specified" % node.name)
         return self.visit(node.ty)
 
+    def visitAstBlankPattern(self, node, isParam=False):
+        if not isParam:
+            return None
+        if node.ty is None:
+            raise TypeException(node.location, "type not specified")
+        return self.visit(node.ty)
+
     def visitDefault(self, node):
         self.visitChildren(node)
 
@@ -523,47 +533,39 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         return ty
 
     def visitAstVariablePattern(self, node, exprTy, mode=COMPILE_FOR_VALUE):
+        scope = self.scope()
+        isShadow = mode is COMPILE_FOR_MATCH and scope.isShadow(node.name)
         if node.ty is not None:
+            if isShadow:
+                raise TypeException(node.location,
+                                    "%s: pattern that refers to another definition cannot have a type" %
+                                    node.name)
             varTy = self.visit(node.ty)
         else:
-            varTy = None
-
-        scope = self.scope()
-        if varTy is None and exprTy is None:
-            raise TypeException(node.location, "%s: type not specified" % node.name)
-        elif varTy is not None:
-            if mode is COMPILE_FOR_VALUE and \
-               exprTy is not None and \
-               not exprTy.isSubtypeOf(varTy):
-                raise TypeException(node.location,
-                                    "%s: expression doesn't match declared type" % node.name)
-            elif mode is COMPILE_FOR_MATCH:
-                if scope.isShadow(node.name):
-                    raise TypeException(node.location,
-                                        "%s: pattern that refers to another definition cannot have a type" %
-                                        node.name)
-                elif exprTy.isDisjoint(varTy):
-                    raise TypeException(node.location,
-                                        "%s: expression cannot match declared type" % node.name)
-            patTy = varTy
-        else:
-            if mode is COMPILE_FOR_MATCH and scope.isShadow(node.name):
+            if isShadow:
                 # Inside a match, if we refer to a definition in an outside scope, we don't
                 # define a new definition to shadow it; we check if the expression equals it,
                 # which means that we treat this as a variable use. We can't detect this in
                 # declaration analysis without making an extra pass.
                 scope.deleteVar(node.name)
-                patTy = self.handlePossibleCall(scope, node.name, node.id, None,
+                varTy = self.handlePossibleCall(scope, node.name, node.id, None,
                                                 [], [], False, node.location)
-                return patTy
             else:
-                patTy = exprTy
+                varTy = None
 
-        irDefn = self.info.getDefnInfo(node).irDefn
-        if self.isExternallyVisible(irDefn):
-            self.checkPublicType(patTy, node.name, node.location)
-        irDefn.type = patTy
-        scope.define(node.name)
+        patTy = self.findPatternType(varTy, exprTy, mode, node.name, node.location)
+
+        if not isShadow:
+            irDefn = self.info.getDefnInfo(node).irDefn
+            if self.isExternallyVisible(irDefn):
+                self.checkPublicType(patTy, node.name, node.location)
+            irDefn.type = patTy
+            scope.define(node.name)
+        return patTy
+
+    def visitAstBlankPattern(self, node, exprTy, mode=COMPILE_FOR_VALUE):
+        blankTy = self.visit(node.ty) if node.ty is not None else None
+        patTy = self.findPatternType(blankTy, exprTy, mode, None, node.location)
         return patTy
 
     def visitAstLiteralExpression(self, node):
@@ -854,6 +856,24 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                     raise TypeException(node.location,
                                         "covariant type parameter used in invalid position")
         return ty
+
+    def findPatternType(self, patTy, exprTy, mode, name, loc):
+        nameStr = "%s: " % name if name is not None else ""
+        scope = self.scope()
+        if patTy is None and exprTy is None:
+            raise TypeException(loc, nameStr + "type not specified")
+        elif patTy is not None:
+            if mode is COMPILE_FOR_VALUE and \
+               exprTy is not None and \
+               not exprTy.isSubtypeOf(patTy):
+                raise TypeException(loc, nameStr + "expression doesn't match declared type")
+            elif mode is COMPILE_FOR_MATCH and \
+                 exprTy.isDisjoint(patTy):
+                raise TypeException(loc, nameStr + "expression cannot match declared type")
+            else:
+                return patTy
+        else:
+            return exprTy
 
     def handleAstClassTypeArgs(self, irClass, typeArgs):
         typeParams = ir.getExplicitTypeParameters(irClass)

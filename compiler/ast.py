@@ -256,6 +256,21 @@ class AstVariablePattern(AstNode):
         return [self.ty] if self.ty else []
 
 
+class AstBlankPattern(AstNode):
+    def __init__(self, ty, location):
+        super(AstBlankPattern, self).__init__(location)
+        self.ty = ty
+
+    def __repr__(self):
+        return "AstBlankPattern(%s)" % (repr(self.ty))
+
+    def tag(self):
+        return "BlankPattern"
+
+    def children(self):
+        return [self.ty] if self.ty else []
+
+
 class AstType(AstNode):
     pass
 

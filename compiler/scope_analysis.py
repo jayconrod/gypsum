@@ -952,12 +952,14 @@ class FunctionScope(Scope):
                 irDefn = None
             else:
                 name = self.makeName(ir.ANON_PARAMETER_SUFFIX)
-                irDefn = ir.Variable(name, None, ir.PARAMETER, flags)
+                irDefn = ir.Variable(name, astDefn, None, ir.PARAMETER, flags)
                 irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, ast.AstVariablePattern):
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([LET]), astDefn.location)
-            kind = ir.PARAMETER if isinstance(astVarDefn, ast.AstParameter) else ir.LOCAL
+            isParameter = isinstance(astVarDefn, ast.AstParameter) and \
+                          astVarDefn.pattern is astDefn
+            kind = ir.PARAMETER if isParameter else ir.LOCAL
             irDefn = ir.Variable(name, astDefn, None, kind, flags)
             irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, ast.AstFunctionDefinition):

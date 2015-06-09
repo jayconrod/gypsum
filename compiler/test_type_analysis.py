@@ -56,6 +56,10 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "def f(x): i32 = f(x)"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
+    def testBlankParamNoType(self):
+        source = "def f(_): i64 = 0"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     def testRecursiveGlobal(self):
         source = "def f = x\n" + \
                  "let x = f"
@@ -641,7 +645,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "def f(x: i64) = match (x) { case y: String => y; }"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
-    def testMatchExprShadow(self):
+    def testMatchExprVarShadow(self):
         source = "def f(x: Object) =\n" + \
                  "  let y = \"foo\"\n" + \
                  "  match (x)\n" + \
@@ -652,11 +656,35 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(getStringType(), info.getType(matchAst.matcher.cases[0].pattern))
         self.assertEquals(getStringType(), info.getType(matchAst.matcher.cases[0].expression))
 
-    def testMatchExprShadowWithType(self):
+    def testMatchExprVarShadowWithType(self):
         source = "def f(x: Object) =\n" + \
                  "  let y = \"foo\"\n" + \
                  "  match (x)\n" + \
                  "    case y: Object => y"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testMatchExprBlankNoType(self):
+        source = "def f(x: String) =\n" + \
+                 "  match (x)\n" + \
+                 "    case _ => x"
+        info = self.analyzeFromSource(source)
+        matchAst = info.ast.modules[0].definitions[0].body.statements[0]
+        self.assertEquals(getStringType(), info.getType(matchAst))
+        self.assertEquals(getStringType(), info.getType(matchAst.matcher.cases[0].pattern))
+
+    def testMatchExprBlankWithType(self):
+        source = "def f(x: String) =\n" + \
+                 "  match (x)\n" + \
+                 "    case _: Object => x"
+        info = self.analyzeFromSource(source)
+        matchAst = info.ast.modules[0].definitions[0].body.statements[0]
+        self.assertEquals(getStringType(), info.getType(matchAst))
+        self.assertEquals(getRootClassType(), info.getType(matchAst.matcher.cases[0].pattern))
+
+    def testMatchExprWithDisjointType(self):
+        source = "def f(x: String) =\n" + \
+                 "  match (x)\n" + \
+                 "    case _: i64 => x"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testThrowExpr(self):

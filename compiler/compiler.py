@@ -237,6 +237,11 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.uninitialized()
         self.storeVariable(defnInfo, ty)
 
+    def visitAstBlankPattern(self, pat, mode, ty=None, failBlock=None):
+        if mode is COMPILE_FOR_UNINITIALIZED:
+            return
+        self.drop()
+
     def visitAstLiteralExpression(self, expr, mode):
         lit = expr.literal
         if isinstance(lit, ast.AstIntegerLiteral):
@@ -755,6 +760,8 @@ class CompileVisitor(ast.AstNodeVisitor):
             else:
                 self.ldlocal(index)
                 self.storeVariable(defnInfo, paramType)
+        elif isinstance(param.pattern, ast.AstBlankPattern):
+            pass
         else:
             self.ldlocal(index)
             self.visit(param.pattern, COMPILE_FOR_EFFECT, paramType)

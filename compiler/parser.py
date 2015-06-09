@@ -132,7 +132,8 @@ def parameter():
 
 # Patterns
 def pattern():
-    return varPattern()
+    return varPattern() | \
+           blankPattern()
 
 
 def varPattern():
@@ -141,6 +142,14 @@ def varPattern():
         ty = parsedTy[1] if parsedTy else None
         return ast.AstVariablePattern(name, ty, loc)
     return symbol + ct.Opt(keyword(":") + ty()) ^ process
+
+
+def blankPattern():
+    def process(parsed, loc):
+        _, parsedTy = parsed
+        ty = parsedTy[1] if parsedTy else None
+        return ast.AstBlankPattern(ty, loc)
+    return keyword("_") + ct.Opt(keyword(":") + ty()) ^ process
 
 
 # Types

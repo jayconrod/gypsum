@@ -202,6 +202,15 @@ class TestCompiler(TestCaseWithDefinitions):
                      self.makeVariable("f.y", type=yType)])
         self.assertEquals(expected, package.findFunction(name="f"))
 
+    def testBlankVar(self):
+        self.checkFunction("def f = { var _ = 12; {}; }",
+                           self.makeSimpleFunction("f", UnitType, [[
+                               i64(12),
+                               drop(),
+                               unit(),
+                               ret(),
+                             ]]))
+
     def testLoadVariablePackage(self):
         source = "def f = foo"
         package = self.compileFromSource(source, packageNames=["foo"])
@@ -294,6 +303,14 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret()]],
                              variables=[self.makeVariable("f.x", type=I64Type,
                                                           kind=PARAMETER, flags=frozenset([LET]))]))
+
+    def testBlankParameter(self):
+        self.checkFunction("def f(_: i64) = 0",
+                           self.makeSimpleFunction("f", I64Type, [[
+                               i64(0),
+                               ret()]],
+                             variables=[self.makeVariable("f.$parameter", type=I64Type,
+                                                          kind=PARAMETER, flags=frozenset([]))]))
 
     def testSeveralParameters(self):
         self.checkFunction("def f(var a: i32, var b: boolean, var c: boolean, var d: i32) =\n" + \
@@ -931,6 +948,17 @@ class TestCompiler(TestCaseWithDefinitions):
                                                           kind=LOCAL, flags=frozenset([LET])),
                                         self.makeVariable("f.z", type=getRootClassType(),
                                                           kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testMatchExprWithBlankPattern(self):
+        self.checkFunction("def f = match (12) { case _ => 34; }",
+                           self.makeSimpleFunction("f", I64Type, [[
+                               i64(12),
+                               drop(),
+                               i64(34),
+                               branch(1),
+                             ], [
+                               ret(),
+                             ]]))
 
     def testMatchAllCasesTerminate(self):
         source = "def f =\n" + \
