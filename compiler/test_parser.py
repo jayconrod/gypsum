@@ -244,6 +244,11 @@ class TestParser(unittest.TestCase):
     def testBlankPatternWithType(self):
         self.checkParse(astBlankPattern(astClassType("T", [], set())), pattern(), "_: T")
 
+    def testLiteralPatterns(self):
+        self.checkParse(astLiteralPattern(astIntegerLiteral(12, 64)), pattern(), "12")
+        self.checkParse(astLiteralPattern(astBooleanLiteral(True)), pattern(), "true")
+        self.checkParse(astLiteralPattern(astNullLiteral()), pattern(), "null")
+
     # Types
     def testSimpleTypes(self):
         self.checkParse(astUnitType(), ty(), "unit")

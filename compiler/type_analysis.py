@@ -10,7 +10,7 @@ from errors import TypeException
 import ir
 import ir_types as ir_t
 from builtins import getExceptionClass, getPackageClass, getNothingClass
-from utils import COMPILE_FOR_VALUE, COMPILE_FOR_MATCH, each
+from utils import COMPILE_FOR_VALUE, COMPILE_FOR_MATCH, COMPILE_FOR_UNINITIALIZED, COMPILE_FOR_EFFECT, each
 from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, NORMAL_MODE, STD_MODE, NOSTD_MODE, CallInfo, PackageInfo
 from flags import COVARIANT, CONTRAVARIANT, PROTECTED, PUBLIC
 import scope_analysis
@@ -60,9 +60,11 @@ def patternMustMatch(pat, ty, info):
         else:
             patTy = info.getType(pat)
             return ty.isSubtypeOf(patTy)
-    else:
-        assert isinstance(pat, ast.AstBlankPattern)
+    elif isinstance(pat, ast.AstBlankPattern):
         return True
+    else:
+        assert isinstance(pat, ast.AstLiteralPattern)
+        return False
 
 
 def partialFunctionCaseMustMatch(case, ty, info):
@@ -243,6 +245,33 @@ class TypeVisitorBase(ast.AstNodeVisitor):
         flags = frozenset(map(astTypeFlagToIrTypeFlag, node.flags))
         return ir_t.ClassType(clas, types, flags)
 
+    def visitAstIntegerLiteral(self, node):
+        typeMap = { 8: ir_t.I8Type, 16: ir_t.I16Type, 32: ir_t.I32Type, 64: ir_t.I64Type }
+        if node.width not in typeMap:
+            raise TypeException(node.location, "invalid integer literal width: %d" % node.width)
+        minValue = -2 ** (node.width - 1)
+        maxValue = 2 ** (node.width - 1) - 1
+        if node.value < minValue or maxValue < node.value:
+            raise TypeException(node.location,
+                                "interger literal value %d does not fit in %d bits" %
+                                (node.value, node.width))
+        return typeMap[node.width]
+
+    def visitAstFloatLiteral(self, node):
+        typeMap = { 32: ir_t.F32Type, 64: ir_t.F64Type }
+        if node.width not in typeMap:
+            raise TypeException(node.location, "invalid float literal width: %d" % node.width)
+        return typeMap[node.width]
+
+    def visitAstStringLiteral(self, node):
+        return ir_t.getStringType()
+
+    def visitAstBooleanLiteral(self, node):
+        return ir_t.BooleanType
+
+    def visitAstNullLiteral(self, node):
+        return ir_t.getNullType()
+
     def handleAstClassTypeArgs(self, irClass, nodes):
         raise NotImplementedError
 
@@ -359,7 +388,11 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         self.typeParamsToCheck.append((irParam, node.location))
 
     def visitAstParameter(self, node):
-        return self.visit(node.pattern, True)
+        patTy = self.visit(node.pattern, True)
+        if not patternMustMatch(node.pattern, patTy, self.info):
+            raise TypeException(node.location,
+                                "patterns which might not match can't be used as parameters")
+        return patTy
 
     def visitAstVariablePattern(self, node, isParam=False):
         if not isParam:
@@ -374,6 +407,9 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         if node.ty is None:
             raise TypeException(node.location, "type not specified")
         return self.visit(node.ty)
+
+    def visitAstLiteralPattern(self, node, isParam=False):
+        return self.visit(node.literal)
 
     def visitDefault(self, node):
         self.visitChildren(node)
@@ -447,9 +483,11 @@ class DefinitionTypeVisitor(TypeVisitorBase):
     def visitAstVariableDefinition(self, node):
         if node.expression is not None:
             exprTy = self.visit(node.expression)
+            mode = COMPILE_FOR_EFFECT
         else:
             exprTy = None
-        self.visit(node.pattern, exprTy)
+            mode = COMPILE_FOR_UNINITIALIZED
+        self.visit(node.pattern, exprTy, mode)
         assert exprTy is None or patternMustMatch(node.pattern, exprTy, self.info)
 
     def visitAstFunctionDefinition(self, node):
@@ -527,12 +565,12 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         else:
             variance = self.variance
         with VarianceScope(self, variance):
-            ty = self.visit(node.pattern, None)
+            ty = self.visit(node.pattern, None, COMPILE_FOR_EFFECT)
         if self.info.hasDefnInfo(node):
             self.info.getDefnInfo(node).irDefn.type = ty
         return ty
 
-    def visitAstVariablePattern(self, node, exprTy, mode=COMPILE_FOR_VALUE):
+    def visitAstVariablePattern(self, node, exprTy, mode):
         scope = self.scope()
         isShadow = mode is COMPILE_FOR_MATCH and scope.isShadow(node.name)
         if node.ty is not None:
@@ -563,9 +601,14 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             scope.define(node.name)
         return patTy
 
-    def visitAstBlankPattern(self, node, exprTy, mode=COMPILE_FOR_VALUE):
+    def visitAstBlankPattern(self, node, exprTy, mode):
         blankTy = self.visit(node.ty) if node.ty is not None else None
         patTy = self.findPatternType(blankTy, exprTy, mode, None, node.location)
+        return patTy
+
+    def visitAstLiteralPattern(self, node, exprTy, mode):
+        litTy = self.visit(node.literal)
+        patTy = self.findPatternType(litTy, exprTy, mode, None, node.location)
         return patTy
 
     def visitAstLiteralExpression(self, node):
@@ -814,33 +857,6 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             retTy = self.visit(node.expression)
         self.checkAndHandleReturnType(retTy, node.location)
         return ir_t.NoType
-
-    def visitAstIntegerLiteral(self, node):
-        typeMap = { 8: ir_t.I8Type, 16: ir_t.I16Type, 32: ir_t.I32Type, 64: ir_t.I64Type }
-        if node.width not in typeMap:
-            raise TypeException(node.location, "invalid integer literal width: %d" % node.width)
-        minValue = -2 ** (node.width - 1)
-        maxValue = 2 ** (node.width - 1) - 1
-        if node.value < minValue or maxValue < node.value:
-            raise TypeException(node.location,
-                                "interger literal value %d does not fit in %d bits" %
-                                (node.value, node.width))
-        return typeMap[node.width]
-
-    def visitAstFloatLiteral(self, node):
-        typeMap = { 32: ir_t.F32Type, 64: ir_t.F64Type }
-        if node.width not in typeMap:
-            raise TypeException(node.location, "invalid float literal width: %d" % node.width)
-        return typeMap[node.width]
-
-    def visitAstStringLiteral(self, node):
-        return ir_t.getStringType()
-
-    def visitAstBooleanLiteral(self, node):
-        return ir_t.BooleanType
-
-    def visitAstNullLiteral(self, node):
-        return ir_t.getNullType()
 
     def visitAstClassType(self, node):
         ty = super(DefinitionTypeVisitor, self).visitAstClassType(node)

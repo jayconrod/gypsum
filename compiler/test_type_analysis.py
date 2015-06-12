@@ -60,6 +60,14 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "def f(_): i64 = 0"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
+    def testIntLiteralParam(self):
+        source = "def f(12): i64 = 0"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testNullLiteralParam(self):
+        source = "def f(null): i64 = 0"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     def testRecursiveGlobal(self):
         source = "def f = x\n" + \
                  "let x = f"
@@ -680,6 +688,15 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         matchAst = info.ast.modules[0].definitions[0].body.statements[0]
         self.assertEquals(getStringType(), info.getType(matchAst))
         self.assertEquals(getRootClassType(), info.getType(matchAst.matcher.cases[0].pattern))
+
+    def testMatchExprIntLiteral(self):
+        source = "def f =\n" + \
+                 "  match (12)\n" + \
+                 "    case 34 => 56"
+        info = self.analyzeFromSource(source)
+        matchAst = info.ast.modules[0].definitions[0].body.statements[0]
+        self.assertEquals(I64Type, info.getType(matchAst))
+        self.assertEquals(I64Type, info.getType(matchAst.matcher.cases[0].pattern))
 
     def testMatchExprWithDisjointType(self):
         source = "def f(x: String) =\n" + \

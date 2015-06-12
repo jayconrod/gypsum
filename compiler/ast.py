@@ -271,6 +271,21 @@ class AstBlankPattern(AstNode):
         return [self.ty] if self.ty else []
 
 
+class AstLiteralPattern(AstNode):
+    def __init__(self, literal, location):
+        super(AstLiteralPattern, self).__init__(location)
+        self.literal = literal
+
+    def __repr__(self):
+        return "AstLiteralPattern(%s)" % repr(self.literal)
+
+    def tag(self):
+        return "LiteralPattern"
+
+    def children(self):
+        return [self.literal]
+
+
 class AstType(AstNode):
     pass
 

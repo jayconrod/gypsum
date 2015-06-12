@@ -133,7 +133,8 @@ def parameter():
 # Patterns
 def pattern():
     return varPattern() | \
-           blankPattern()
+           blankPattern() | \
+           litPattern()
 
 
 def varPattern():
@@ -150,6 +151,10 @@ def blankPattern():
         ty = parsedTy[1] if parsedTy else None
         return ast.AstBlankPattern(ty, loc)
     return keyword("_") + ct.Opt(keyword(":") + ty()) ^ process
+
+
+def litPattern():
+    return literal() ^ ast.AstLiteralPattern
 
 
 # Types

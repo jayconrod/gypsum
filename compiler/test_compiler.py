@@ -960,6 +960,73 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret(),
                              ]]))
 
+    def testMatchExprWithIntLiteral(self):
+        self.checkFunction("def f = match (12) { case 34 => 56; case _ => 78; }",
+                           self.makeSimpleFunction("f", I64Type, [[
+                               i64(12),
+                               dup(),
+                               i64(34),
+                               eqi64(),
+                               branchif(1, 2),
+                             ], [
+                               drop(),
+                               i64(56),
+                               branch(3),
+                             ], [
+                               drop(),
+                               i64(78),
+                               branch(3),
+                             ], [
+                               ret(),
+                             ]]))
+
+    def testMatchExprWithStringLiteral(self):
+        source = "def f = match (\"foo\") { case \"bar\" => 12; case _ => 34; }"
+        package = self.compileFromSource(source)
+        fooIndex = package.findString("foo")
+        barIndex = package.findString("bar")
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               string(fooIndex),
+                               string(barIndex),
+                               dupi(1),
+                               callg(BUILTIN_STRING_EQ_OP_ID.index),
+                               branchif(1, 2),
+                             ], [
+                               drop(),
+                               i64(12),
+                               branch(3),
+                             ], [
+                               drop(),
+                               i64(34),
+                               branch(3),
+                             ], [
+                               ret(),
+                             ]]))
+
+    def testMatchExprWithNullLiteral(self):
+        xType = ClassType(getRootClass(), (), NULLABLE_TYPE_FLAG)
+        self.checkFunction("def f(x: Object?) = match (x) { case null => 0; case _ => 1; }",
+                           self.makeSimpleFunction("f", I64Type, [[
+                               ldlocal(0),
+                               dup(),
+                               null(),
+                               eqp(),
+                               branchif(1, 2),
+                             ], [
+                               drop(),
+                               i64(0),
+                               branch(3),
+                             ], [
+                               drop(),
+                               i64(1),
+                               branch(3),
+                             ], [
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.x", type=xType,
+                                                          kind=PARAMETER, flags=frozenset([LET]))]))
+
     def testMatchAllCasesTerminate(self):
         source = "def f =\n" + \
                  "  match (12)\n" + \

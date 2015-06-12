@@ -7,14 +7,14 @@
 from functools import partial
 
 import ast
-from bytecode import W8, W16, W32, W64, BUILTIN_TYPE_CLASS_ID, BUILTIN_TYPE_CTOR_ID, instInfoByCode, BUILTIN_MATCH_EXCEPTION_CLASS_ID, BUILTIN_MATCH_EXCEPTION_CTOR_ID
+from bytecode import W8, W16, W32, W64, BUILTIN_TYPE_CLASS_ID, BUILTIN_TYPE_CTOR_ID, instInfoByCode, BUILTIN_MATCH_EXCEPTION_CLASS_ID, BUILTIN_MATCH_EXCEPTION_CTOR_ID, BUILTIN_STRING_EQ_OP_ID
 from ir import IrTopDefn, Class, Field, Function, Global, LOCAL, Package, PACKAGE_INIT_NAME, RECEIVER_SUFFIX, Variable
-from ir_types import UnitType, ClassType, VariableType, NULLABLE_TYPE_FLAG, getExceptionClassType, getClassFromType
+from ir_types import UnitType, ClassType, VariableType, NULLABLE_TYPE_FLAG, getExceptionClassType, getClassFromType, getStringType, getRootClassType
 import ir_instructions
 from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PACKAGE_INITIALIZER_HINT, DefnInfo, NORMAL_MODE, STD_MODE, NOSTD_MODE
 from flags import ABSTRACT, STATIC, LET
 from errors import SemanticException
-from builtins import getTypeClass, getExceptionClass, getRootClass
+from builtins import getTypeClass, getExceptionClass, getRootClass, getStringClass
 import type_analysis
 from utils import Counter, COMPILE_FOR_EFFECT, COMPILE_FOR_VALUE, COMPILE_FOR_UNINITIALIZED, COMPILE_FOR_MATCH
 
@@ -220,16 +220,8 @@ class CompileVisitor(ast.AstNodeVisitor):
 
             if not mustMatch:
                 assert failBlock is not None
-                assert ty.isObject()
                 self.dup()  # value
-                typeofMethod = getRootClass().findMethodByShortName("typeof")
-                self.buildCallSimpleMethod(typeofMethod, COMPILE_FOR_VALUE)
-                patTy = self.info.getType(pat)
-                typeClass = getTypeClass()
-                self.buildType(patTy, pat.location)
-                isSubtypeOfMethod = typeClass.findMethodByShortName("is-subtype-of")
-                index = typeClass.getMethodIndex(isSubtypeOfMethod)
-                self.callv(2, index)
+                self.buildIsSubtypeOf(self.info.getType(pat), pat.location)
                 successBlock = self.newBlock()
                 self.branchif(successBlock.id, failBlock.id)
                 self.setCurrentBlock(successBlock)
@@ -242,36 +234,31 @@ class CompileVisitor(ast.AstNodeVisitor):
             return
         self.drop()
 
-    def visitAstLiteralExpression(self, expr, mode):
-        lit = expr.literal
-        if isinstance(lit, ast.AstIntegerLiteral):
-            if lit.width == 8:
-                self.i8(lit.value)
-            elif lit.width == 16:
-                self.i16(lit.value)
-            elif lit.width == 32:
-                self.i32(lit.value)
-            else:
-                assert lit.width == 64
-                self.i64(lit.value)
-        elif isinstance(lit, ast.AstFloatLiteral):
-            if lit.width == 32:
-                self.f32(lit.value)
-            else:
-                assert lit.width == 64
-                self.f64(lit.value)
-        elif isinstance(lit, ast.AstStringLiteral):
-            id = self.info.package.findOrAddString(lit.value)
-            self.string(id)
-        elif isinstance(lit, ast.AstBooleanLiteral):
-            if lit.value:
-                self.true()
-            else:
-                self.false()
+    def visitAstLiteralPattern(self, pat, mode, ty=None, failBlock=None):
+        if mode is COMPILE_FOR_UNINITIALIZED:
+            return
+        lit = pat.literal
+        ty = self.info.getType(pat)
+        if isinstance(lit, ast.AstStringLiteral):
+            # String.== is an actual method, so the literal needs to be the receiver.
+            self.buildLiteral(lit)
+            self.dupi(1)  # value
+            self.callg(BUILTIN_STRING_EQ_OP_ID.index)
         elif isinstance(lit, ast.AstNullLiteral):
-            self.null()
+            self.dup()
+            self.null(),
+            self.eqp()
         else:
-            raise NotImplementedError
+            self.dup()  # value
+            self.buildLiteral(lit)
+            self.buildCallNamedMethod(ty, "==", COMPILE_FOR_VALUE)
+        successBlock = self.newBlock()
+        self.branchif(successBlock.id, failBlock.id)
+        self.setCurrentBlock(successBlock)
+        self.drop()
+
+    def visitAstLiteralExpression(self, expr, mode):
+        self.buildLiteral(expr.literal)
         self.dropForEffect(mode)
 
     def visitAstVariableExpression(self, expr, mode):
@@ -959,6 +946,36 @@ class CompileVisitor(ast.AstNodeVisitor):
             elif isinstance(stmt, ast.AstClassDefinition):
                 raise NotImplementedError
 
+    def buildLiteral(self, lit):
+        if isinstance(lit, ast.AstIntegerLiteral):
+            if lit.width == 8:
+                self.i8(lit.value)
+            elif lit.width == 16:
+                self.i16(lit.value)
+            elif lit.width == 32:
+                self.i32(lit.value)
+            else:
+                assert lit.width == 64
+                self.i64(lit.value)
+        elif isinstance(lit, ast.AstFloatLiteral):
+            if lit.width == 32:
+                self.f32(lit.value)
+            else:
+                assert lit.width == 64
+                self.f64(lit.value)
+        elif isinstance(lit, ast.AstStringLiteral):
+            id = self.info.package.findOrAddString(lit.value)
+            self.string(id)
+        elif isinstance(lit, ast.AstBooleanLiteral):
+            if lit.value:
+                self.true()
+            else:
+                self.false()
+        elif isinstance(lit, ast.AstNullLiteral):
+            self.null()
+        else:
+            raise NotImplementedError
+
     def buildCallNamedMethod(self, receiverType, name, mode):
         receiverClass = getClassFromType(receiverType)
         method = receiverClass.getMethod(name)
@@ -1081,6 +1098,16 @@ class CompileVisitor(ast.AstNodeVisitor):
             if lvalue.onStack():
                 self.swap()
         lvalue.assign()
+
+    def buildIsSubtypeOf(self, ty, loc):
+        assert ty.isObject()
+        typeofMethod = getRootClass().findMethodByShortName("typeof")
+        self.buildCallSimpleMethod(typeofMethod, COMPILE_FOR_VALUE)
+        typeClass = getTypeClass()
+        self.buildType(ty, loc)
+        isSubtypeOfMethod = typeClass.findMethodByShortName("is-subtype-of")
+        index = typeClass.getMethodIndex(isSubtypeOfMethod)
+        self.callv(2, index)
 
     def buildType(self, ty, location):
         assert isinstance(ty, ClassType)
