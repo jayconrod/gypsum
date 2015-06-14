@@ -478,12 +478,12 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
-      case TYC:
-      case TYV:
+      case TYCS:
+      case TYVS:
         readVbn();
         break;
 
-      case TYCF:
+      case TYCSF:
         readVbn();
         readVbn();
         break;

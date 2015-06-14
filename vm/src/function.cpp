@@ -560,7 +560,7 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
-        case TYC: {
+        case TYCS: {
           i64 classId = readVbn(bytecode, &pcOffset);
           Local<Class> clas;
           if (isBuiltinId(classId)) {
@@ -575,7 +575,7 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
-        case TYCF: {
+        case TYCSF: {
           auto depIndex = readVbn(bytecode, &pcOffset);
           auto externIndex = readVbn(bytecode, &pcOffset);
           auto clas = handle(package->dependencies()->get(depIndex)
@@ -587,7 +587,7 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
-        case TYV: {
+        case TYVS: {
           auto typeParamId = readVbn(bytecode, &pcOffset);
           ASSERT(!isBuiltinId(typeParamId));
           Local<TypeParameter> param(package->getTypeParameter(typeParamId));

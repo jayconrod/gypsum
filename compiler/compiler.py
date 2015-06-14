@@ -1125,7 +1125,7 @@ class CompileVisitor(ast.AstNodeVisitor):
     def buildImplicitStaticTypeArguments(self, typeParams):
         for param in typeParams:
             assert not param.isForeign()
-            self.tyv(param.id.index)
+            self.tyvs(param.id.index)
 
     def buildStaticTypeArguments(self, types):
         for ty in types:
@@ -1136,12 +1136,12 @@ class CompileVisitor(ast.AstNodeVisitor):
             for arg in ty.typeArguments:
                 self.buildStaticTypeArgument(arg)
             if ty.clas.isForeign():
-                self.tycf(ty.clas.id.packageId.index, ty.clas.id.externIndex)
+                self.tycsf(ty.clas.id.packageId.index, ty.clas.id.externIndex)
             else:
-                self.tyc(ty.clas.id.index)
+                self.tycs(ty.clas.id.index)
         elif isinstance(ty, VariableType):
             assert not ty.typeParameter.isForeign()
-            self.tyv(ty.typeParameter.id.index)
+            self.tyvs(ty.typeParameter.id.index)
         else:
             raise NotImplementedError
 

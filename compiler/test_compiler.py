@@ -175,7 +175,7 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(package,
                            self.makeSimpleFunction("f", getRootClassType(), [[
                                string(fooIndex),
-                               tyc(BUILTIN_ROOT_CLASS_ID.index),
+                               tycs(BUILTIN_ROOT_CLASS_ID.index),
                                cast(),
                                stlocal(-1),
                                ldlocal(-1),
@@ -191,8 +191,8 @@ class TestCompiler(TestCaseWithDefinitions):
         yType = ClassType(Foo, (getRootClassType(),))
         expected = self.makeSimpleFunction("f", yType, [[
             ldlocal(0),
-            tyc(BUILTIN_ROOT_CLASS_ID.index),
-            tyc(Foo.id.index),
+            tycs(BUILTIN_ROOT_CLASS_ID.index),
+            tycs(Foo.id.index),
             cast(),
             stlocal(-1),
             ldlocal(-1),
@@ -376,7 +376,7 @@ class TestCompiler(TestCaseWithDefinitions):
         package = self.compileFromSource("def f(s: String, var o: Object) = { o = s; {}; }")
         expected = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
-            tyc(BUILTIN_ROOT_CLASS_ID.index),
+            tycs(BUILTIN_ROOT_CLASS_ID.index),
             cast(),
             stlocal(1),
             unit(),
@@ -396,8 +396,8 @@ class TestCompiler(TestCaseWithDefinitions):
         yType = ClassType(Foo, (getRootClassType(),))
         expected = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
-            tyc(BUILTIN_ROOT_CLASS_ID.index),
-            tyc(Foo.id.index),
+            tycs(BUILTIN_ROOT_CLASS_ID.index),
+            tycs(Foo.id.index),
             cast(),
             stlocal(1),
             unit(),
@@ -763,8 +763,8 @@ class TestCompiler(TestCaseWithDefinitions):
                        dup(),
                        string(fooIndex),
                        string(barIndex),
-                       tyc(BUILTIN_STRING_CLASS_ID.index),
-                       tyc(BUILTIN_STRING_CLASS_ID.index),
+                       tycs(BUILTIN_STRING_CLASS_ID.index),
+                       tycs(BUILTIN_STRING_CLASS_ID.index),
                        callg(tupleClass.constructors[0].id.index),
                        drop(),
                        ldpc(0),
@@ -1831,7 +1831,7 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(package,
                            self.makeSimpleFunction("f", stringTy, [[
                                ldlocal(0),
-                               tyc(BUILTIN_STRING_CLASS_ID.index),
+                               tycs(BUILTIN_STRING_CLASS_ID.index),
                                callgf(foo.id.index, bar.id.externIndex),
                                ret()]],
                              parameterTypes=[stringTy],
@@ -1852,7 +1852,7 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(package,
                            self.makeSimpleFunction("f", barType, [[
                                ldlocal(0),
-                               tycf(barClass.id.packageId.index, barClass.id.externIndex),
+                               tycsf(barClass.id.packageId.index, barClass.id.externIndex),
                                callg(idFunction.id.index),
                                ret(),
                              ]],
@@ -1896,7 +1896,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                callv(2, isSubtypeOfMethodIndex),
                                branchif(3, 5),
                              ], [
-                               tycf(clas.id.packageId.index, clas.id.externIndex),
+                               tycsf(clas.id.packageId.index, clas.id.externIndex),
                                cast(),
                                stlocal(-1),
                                unit(),
@@ -2288,7 +2288,7 @@ class TestCompiler(TestCaseWithDefinitions):
         f = package.findFunction(name="f")
         expected = self.makeSimpleFunction("f", Cty, [[
                        ldlocal(0),
-                       tyc(C.id.index),
+                       tycs(C.id.index),
                        callg(id.id.index),
                        ret()]],
                      variables=[self.makeVariable("f.o", type=Cty,
@@ -2306,7 +2306,7 @@ class TestCompiler(TestCaseWithDefinitions):
         outer = package.findFunction(name="id-outer")
         expected = self.makeSimpleFunction("id-outer", Tty, [[
             ldlocal(0),
-            tyv(T.id.index),
+            tyvs(T.id.index),
             callg(inner.id.index),
             ret()]],
           variables=[self.makeVariable("id-outer.x", type=Tty,
@@ -2326,7 +2326,7 @@ class TestCompiler(TestCaseWithDefinitions):
         idInner = package.findFunction(name="id-outer.id-inner")
         expected = self.makeSimpleFunction("id-outer", Tty, [[
             ldlocal(0),
-            tyv(T.id.index),
+            tyvs(T.id.index),
             callg(idInner.id.index),
             ret()]],
           variables=[self.makeVariable("id-outer.x", type=Tty,
@@ -2348,26 +2348,26 @@ class TestCompiler(TestCaseWithDefinitions):
         idInner = package.findFunction(name="id-outer.id-inner")
         idInnerMethodIndex = closureClass.getMethodIndex(idInner)
         expected = self.makeSimpleFunction("id-outer", Tty, [[
-            tyv(T.id.index),
+            tyvs(T.id.index),
             allocobj(contextClass.id.index),
             dup(),
-            tyv(T.id.index),
+            tyvs(T.id.index),
             callg(contextClass.constructors[0].id.index),
             drop(),
             stlocal(-1),
             ldlocal(0),
             ldlocal(-1),
             stp(0),
-            tyv(T.id.index),
+            tyvs(T.id.index),
             allocobj(closureClass.id.index),
             dup(),
             ldlocal(-1),
-            tyv(T.id.index),
+            tyvs(T.id.index),
             callg(closureClass.constructors[0].id.index),
             drop(),
             stlocal(-2),
             ldlocal(-2),
-            tyv(T.id.index),
+            tyvs(T.id.index),
             callv(1, idInnerMethodIndex),
             ret()]],
           variables=[self.makeVariable(Name(["id-outer", CONTEXT_SUFFIX]),
@@ -2413,7 +2413,7 @@ class TestCompiler(TestCaseWithDefinitions):
         toStringIndex = Foo.getMethodIndex(toString)
         expected = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
-            tyc(BUILTIN_ROOT_CLASS_ID.index),
+            tycs(BUILTIN_ROOT_CLASS_ID.index),
             callv(1, toStringIndex),
             drop(),
             unit(),
@@ -2434,7 +2434,7 @@ class TestCompiler(TestCaseWithDefinitions):
             callg(BUILTIN_ROOT_CLASS_CTOR_ID.index),
             drop(),
             ldlocal(0),
-            tyv(T.id.index),
+            tyvs(T.id.index),
             callg(C.initializer.id.index),
             drop(),
             unit(),
@@ -2465,9 +2465,9 @@ class TestCompiler(TestCaseWithDefinitions):
         expectedF = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
             ldlocal(0),
-            tyc(C.id.index),
+            tycs(C.id.index),
             callv(1, Box.getMethodIndex(get)),
-            tyc(C.id.index),
+            tycs(C.id.index),
             callv(2, Box.getMethodIndex(set)),
             ret()]],
           variables=[self.makeVariable("f.box", type=boxType,
