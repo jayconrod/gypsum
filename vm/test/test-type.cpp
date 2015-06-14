@@ -20,6 +20,18 @@
 using namespace std;
 using namespace codeswitch::internal;
 
+TEST(CreateWithFlags) {
+  TEST_PROLOGUE
+
+  auto oldType = handle(Type::rootClassType(vm.roots()));
+  auto newType = Type::createWithFlags(heap, oldType, Type::NULLABLE_FLAG);
+  ASSERT_EQ(oldType->length(), newType->length());
+  ASSERT_EQ(oldType->form(), newType->form());
+  ASSERT_EQ(oldType->asClass(), newType->asClass());
+  ASSERT_TRUE(newType->isNullable());
+}
+
+
 TEST(PrimitiveTypeEquals) {
   VM vm;
 

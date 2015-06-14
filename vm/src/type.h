@@ -74,8 +74,9 @@ class Type: public Object {
   void* operator new (size_t, void* place, length_t length);
   explicit Type(Form primitive, Flags flags = NO_FLAGS);
   explicit Type(Class* clas, Flags flags = NO_FLAGS);
-  explicit Type(Class* clas, const std::vector<Local<Type>>& typeArgs, Flags flags = NO_FLAGS);
+  Type(Class* clas, const std::vector<Local<Type>>& typeArgs, Flags flags = NO_FLAGS);
   explicit Type(TypeParameter* param, Flags flags = NO_FLAGS);
+  Type(Type* type, Flags flags);
   static Local<Type> create(Heap* heap, Form primitive, Flags flags = NO_FLAGS);
   static Local<Type> create(Heap* heap, const Handle<Class>& clas, Flags fags = NO_FLAGS);
   static Local<Type> create(Heap* heap,
@@ -85,6 +86,7 @@ class Type: public Object {
   static Local<Type> create(Heap* heap,
                             const Handle<TypeParameter>& param,
                             Flags flags = NO_FLAGS);
+  static Local<Type> createWithFlags(Heap* heap, const Handle<Type>& type, Flags flags);
 
   static Type* primitiveTypeFromForm(Roots* roots, Form form);
   static Type* unitType(Roots* roots);

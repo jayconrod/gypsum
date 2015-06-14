@@ -81,6 +81,17 @@ Type::Type(TypeParameter* param, Flags flags)
 }
 
 
+Type::Type(Type* type, Flags flags)
+    : Object(TYPE_BLOCK_TYPE),
+      form_(type->form_),
+      flags_(flags) {
+  ASSERT(length_ == type->length_);
+  for (length_t i = 0; i < length_; i++) {
+    elements_[i].set(this, type->elements_[i].get());
+  }
+}
+
+
 Local<Type> Type::create(Heap* heap, Form primitive, Flags flags) {
   RETRY_WITH_GC(heap, return Local<Type>(new(heap, 0) Type(primitive, flags)));
 }
@@ -102,6 +113,11 @@ Local<Type> Type::create(Heap* heap,
 
 Local<Type> Type::create(Heap* heap, const Handle<TypeParameter>& param, Flags flags) {
   RETRY_WITH_GC(heap, return Local<Type>(new(heap, 1) Type(*param, flags)));
+}
+
+
+Local<Type> Type::createWithFlags(Heap* heap, const Handle<Type>& type, Flags flags) {
+  RETRY_WITH_GC(heap, return Local<Type>(new(heap, type->length()) Type(*type, flags)));
 }
 
 

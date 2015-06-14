@@ -587,12 +587,69 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
+        case TYCD: {
+          i64 classId = readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          Local<Class> clas;
+          if (isBuiltinId(classId)) {
+            clas = handle(roots->getBuiltinClass(static_cast<BuiltinId>(classId)));
+          } else {
+            clas = handle(package->getClass(classId));
+          }
+          vector<Local<Type>> typeArgs;
+          currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
+          auto type = Type::create(heap, clas, typeArgs);
+          currentMap.pushTypeArg(type);
+          auto valueType = handle(roots->getBuiltinType(BUILTIN_TYPE_CLASS_ID));
+          currentMap.push(valueType);
+          break;
+        }
+
+        case TYCDF: {
+          auto depIndex = readVbn(bytecode, &pcOffset);
+          auto externIndex = readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          auto clas = handle(package->dependencies()->get(depIndex)
+              ->linkedClasses()->get(externIndex));
+          vector<Local<Type>> typeArgs;
+          currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
+          auto type = Type::create(heap, clas, typeArgs);
+          currentMap.pushTypeArg(type);
+          auto valueType = handle(roots->getBuiltinType(BUILTIN_TYPE_CLASS_ID));
+          currentMap.push(valueType);
+          break;
+        }
+
         case TYVS: {
           auto typeParamId = readVbn(bytecode, &pcOffset);
           ASSERT(!isBuiltinId(typeParamId));
           Local<TypeParameter> param(package->getTypeParameter(typeParamId));
           auto type = Type::create(heap, param, Type::NO_FLAGS);
           currentMap.pushTypeArg(type);
+          break;
+        }
+
+        case TYFLAGS: {
+          auto rawFlags = readVbn(bytecode, &pcOffset);
+          auto flags = static_cast<Type::Flags>(rawFlags);
+          ASSERT(flags == rawFlags && flags < Type::LAST_FLAG);
+          auto type = Type::createWithFlags(heap, currentMap.popTypeArg(), flags);
+          currentMap.pushTypeArg(type);
+          break;
+        }
+
+        case TYFLAGD: {
+          auto rawFlags = readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          auto flags = static_cast<Type::Flags>(rawFlags);
+          ASSERT(flags == rawFlags && flags < Type::LAST_FLAG);
+          auto type = Type::createWithFlags(heap, currentMap.popTypeArg(), flags);
+          currentMap.pushTypeArg(type);
+          auto valueType = handle(roots->getBuiltinType(BUILTIN_TYPE_CLASS_ID));
+          currentMap.push(valueType);
           break;
         }
 

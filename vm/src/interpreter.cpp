@@ -11,6 +11,7 @@
 #include <sstream>
 #include <string>
 #include <type_traits>
+#include <vector>
 #include "array.h"
 #include "block.h"
 #include "builtins.h"
@@ -487,6 +488,55 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         readVbn();
         readVbn();
         break;
+
+      case TYCD: {
+        auto classId = readVbn();
+        Type* type = nullptr;
+        {
+          GCSafeScope gcSafe(this);
+          HandleScope handleScope(vm_);
+          auto clas = handle(isBuiltinId(classId)
+              ? vm_->roots()->getBuiltinClass(classId)
+              : function_->package()->getClass(classId));
+          vector<Local<Type>> typeArgs(
+              clas->typeParameterCount(), handle(vm_->roots()->erasedType()));
+          type = *Type::create(vm_->heap(), clas, typeArgs);
+        }
+        push<Block*>(type);
+        break;
+      }
+
+      case TYCDF: {
+        auto depIndex = readVbn();
+        auto externIndex = readVbn();
+        Type* type = nullptr;
+        {
+          GCSafeScope gcSafe(this);
+          HandleScope handleScope(vm_);
+          auto clas = handle(function_->package()->dependencies()->get(depIndex)
+              ->linkedClasses()->get(externIndex));
+          vector<Local<Type>> typeArgs(
+              clas->typeParameterCount(), handle(vm_->roots()->erasedType()));
+          type = *Type::create(vm_->heap(), clas, typeArgs);
+        }
+        push<Block*>(type);
+        break;
+      }
+
+      case TYFLAGS:
+        break;
+
+      case TYFLAGD: {
+        auto flags = static_cast<Type::Flags>(readVbn());
+        {
+          GCSafeScope gcSafe(this);
+          HandleScope handleScope(vm_);
+          auto type = handle(mem<Type*>(stack_->sp()));
+          type = Type::createWithFlags(vm_->heap(), type, flags);
+          mem<Type*>(stack_->sp()) = *type;
+        }
+        break;
+      }
 
       case CAST:
         break;
