@@ -634,7 +634,7 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         case TYFLAGS: {
           auto rawFlags = readVbn(bytecode, &pcOffset);
           auto flags = static_cast<Type::Flags>(rawFlags);
-          ASSERT(flags == rawFlags && flags < Type::LAST_FLAG);
+          ASSERT(flags == rawFlags && (flags & Type::FLAGS_MASK) == flags);
           auto type = Type::createWithFlags(heap, currentMap.popTypeArg(), flags);
           currentMap.pushTypeArg(type);
           break;
@@ -657,6 +657,33 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           auto type = currentMap.popTypeArg();
           currentMap.pop();
           currentMap.push(type);
+          break;
+        }
+
+        case CASTC: {
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          auto type = currentMap.popTypeArg();
+          currentMap.pop();
+          currentMap.pop();
+          currentMap.push(type);
+          break;
+        }
+
+        case CASTCBR: {
+          i64 trueBlockIndex = readVbn(bytecode, &pcOffset);
+          i64 falseBlockIndex = readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          auto type = currentMap.popTypeArg();
+          currentMap.pop();
+          currentMap.pcOffset = function->blockOffset(falseBlockIndex);
+          blocksToVisit.push_back(currentMap);
+          currentMap.pcOffset = function->blockOffset(trueBlockIndex);
+          currentMap.pop();
+          currentMap.push(type);
+          blocksToVisit.push_back(move(currentMap));
+          blockDone = true;
           break;
         }
 
@@ -698,19 +725,6 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           auto packageClass = handle(roots->getBuiltinClass(BUILTIN_PACKAGE_CLASS_ID));
           auto type = Type::create(heap, packageClass);
           currentMap.push(type);
-          break;
-        }
-
-        case CLS: {
-          readVbn(bytecode, &pcOffset);
-          currentMap.push(handle(Type::rootClassType(roots)));
-          break;
-        }
-
-        case CLSF: {
-          readVbn(bytecode, &pcOffset);
-          readVbn(bytecode, &pcOffset);
-          currentMap.push(handle(Type::rootClassType(roots)));
           break;
         }
 

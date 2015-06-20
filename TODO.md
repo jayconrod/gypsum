@@ -76,7 +76,8 @@
 - `read()` breaks when EOF is given. Exception is thrown in non-GC-safe place.
 - pattern matching performs an implicit downcast without telling the interpreter.
   We probably need a type-check-and-branch pattern.
-- no way to express nullable types for casts in bytecode.
 - assertion when trying to instantiate Nothing. This should be a special case.
+- ldp, ldpc, and other instructions which may throw exceptions should be GC-safe.
+  No pointer map is recorded for these, even though we might allocate an exception.
 
 # TODO: file issues for everything and delete this section.

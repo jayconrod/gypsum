@@ -63,7 +63,8 @@ class Type: public Object {
   enum Flags {
     NO_FLAGS = 0,
     NULLABLE_FLAG = 1 << 0,
-    LAST_FLAG = NULLABLE_FLAG
+    LAST_FLAG = NULLABLE_FLAG,
+    FLAGS_MASK = (LAST_FLAG << 1) - 1
   };
 
   typedef std::pair<Local<TypeParameter>, Local<Type>> Binding;

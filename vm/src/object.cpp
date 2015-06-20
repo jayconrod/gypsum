@@ -6,10 +6,14 @@
 
 #include "object.h"
 
+#include <vector>
 #include <cstring>
 #include "block.h"
+#include "flags.h"
 #include "handle.h"
 #include "heap.h"
+#include "type.h"
+#include "type-parameter.h"
 
 using namespace std;
 
@@ -51,6 +55,19 @@ Local<Object> Object::create(Heap* heap, const Handle<Meta>& meta) {
 
 Local<Object> Object::create(Heap* heap, const Handle<Meta>& meta, length_t length) {
   RETRY_WITH_GC(heap, return Local<Object>(new(heap, *meta, length) Object));
+}
+
+
+Local<Type> Object::typeof(const Handle<Object>& object) {
+  auto clas = handle(object->meta()->clas());
+  vector<Local<Type>> typeArgs;
+  typeArgs.reserve(clas->typeParameterCount());
+  for (length_t i = 0; i < clas->typeParameterCount(); i++) {
+    ASSERT((clas->typeParameter(i)->flags() & STATIC_FLAG) != 0);
+    typeArgs.push_back(handle(object->getVM()->roots()->erasedType()));
+  }
+  auto type = Type::create(object->getHeap(), clas, typeArgs);
+  return type;
 }
 
 

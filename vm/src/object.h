@@ -13,6 +13,8 @@
 namespace codeswitch {
 namespace internal {
 
+class Type;
+
 class Object: public Block {
  public:
   static const BlockType kBlockType = OBJECT_BLOCK_TYPE;
@@ -22,6 +24,8 @@ class Object: public Block {
   Object();
   static Local<Object> create(Heap* heap, const Handle<Meta>& meta);
   static Local<Object> create(Heap* heap, const Handle<Meta>& meta, length_t length);
+
+  static Local<Type> typeof(const Handle<Object>& object);
 
  protected:
   explicit Object(BlockType blockType);

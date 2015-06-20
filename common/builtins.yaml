@@ -88,6 +88,17 @@
         - MatchException
   fields: []
   methods: []
+- name: CastException
+  id: BUILTIN_CAST_EXCEPTION_CLASS_ID
+  isPrimitive: false
+  supertype: Exception
+  constructors:
+    - id: BUILTIN_CAST_EXCEPTION_CTOR_ID
+      returnType: unit
+      parameterTypes:
+        - CastException
+  fields: []
+  methods: []
 - name: Type
   id: BUILTIN_TYPE_CLASS_ID
   isPrimitive: false

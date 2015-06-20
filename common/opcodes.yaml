@@ -44,8 +44,6 @@
 - {name: "allocarri", iops: 2, term: false}
 - {name: "allocarrif", iops: 3, term: false}
 - {name: "pkg", iops: 1, term: false}
-- {name: "cls", iops: 1, term: false}
-- {name: "clsf", iops: 2, term: false}
 - {name: "tycs", iops: 1, term: false}
 - {name: "tycsf", iops: 2, term: false}
 - {name: "tycd", iops: 1, term: false}
@@ -54,6 +52,8 @@
 - {name: "tyflags", iops: 1, term: false}
 - {name: "tyflagd", iops: 1, term: false}
 - {name: "cast", iops: 0, term: false}
+- {name: "castc", iops: 0, term: false}
+- {name: "castcbr", iops: 2, term: true}
 - {name: "callg", iops: 1, term: false}
 - {name: "callgf", iops: 2, term: false}
 - {name: "callv", iops: 2, term: false}

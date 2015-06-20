@@ -461,24 +461,6 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
-      case CLS: {
-        auto classId = readVbn();
-        Class* clas = isBuiltinId(classId)
-            ? vm_->roots()->getBuiltinClass(classId)
-            : function_->package()->getClass(classId);
-        push<Block*>(clas);
-        break;
-      }
-
-      case CLSF: {
-        auto depIndex = toLength(readVbn());
-        auto externIndex = toLength(readVbn());
-        auto clas = function_->package()->dependencies()->get(depIndex)
-            ->linkedClasses()->get(externIndex);
-        push<Block*>(clas);
-        break;
-      }
-
       case TYCS:
       case TYVS:
         readVbn();
@@ -524,6 +506,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       }
 
       case TYFLAGS:
+        readVbn();
         break;
 
       case TYFLAGD: {
@@ -540,6 +523,55 @@ i64 Interpreter::call(const Handle<Function>& callee) {
 
       case CAST:
         break;
+
+      case CASTC:
+        {
+          GCSafeScope gcSafe(this);
+          HandleScope handleScope(vm_);
+          auto type = handle(mem<Type*>(stack_->sp() + kPrepareForGCSize));
+          auto object = handle(mem<Object*>(stack_->sp() + kPrepareForGCSize + kSlotSize));
+          auto nullOk = *object != nullptr || type->isNullable();
+          bool isSubtype;
+          if (!nullOk) {
+            isSubtype = false;
+          } else {
+            auto objectType = Object::typeof(object);
+            isSubtype = Type::isSubtypeOf(objectType, type);
+          }
+          if (!isSubtype) {
+            // TODO: use throwBuiltinException when fixed.
+            auto meta = handle(vm_->roots()->getBuiltinMeta(BUILTIN_CAST_EXCEPTION_CLASS_ID));
+            auto exn = Object::create(vm_->heap(), meta);
+            doThrow(*exn);
+            break;
+          }
+        }
+        pop<Block*>();
+        // object stays on top of the stack.
+        break;
+
+      case CASTCBR: {
+        auto trueBlockIndex = toLength(readVbn());
+        auto falseBlockIndex = toLength(readVbn());
+        auto isSubtype = false;
+        {
+          GCSafeScope gcSafe(this);
+          HandleScope handleScope(vm_);
+          auto type = handle(mem<Type*>(stack_->sp(), kPrepareForGCSize));
+          auto object = handle(mem<Object*>(stack_->sp(), kPrepareForGCSize + kSlotSize));
+          auto nullOk = *object != nullptr || type->isNullable();
+          if (!nullOk) {
+            isSubtype = false;
+          } else {
+            auto objectType = Object::typeof(object);
+            isSubtype = Type::isSubtypeOf(objectType, type);
+          }
+        }
+        pop<Block*>();
+        // object stays on top of the stack.
+        pcOffset_ = function_->blockOffset(isSubtype ? trueBlockIndex : falseBlockIndex);
+        break;
+      }
 
       case CALLG: {
         auto functionId = readVbn();
@@ -710,15 +742,8 @@ void Interpreter::handleBuiltin(BuiltinId id) {
       {
         GCSafeScope gcSafe(this);
         HandleScope handleScope(vm_);
-        auto receiver = handle(mem<Block*>(stack_->sp() + kPrepareForGCSize));
-        auto clas = handle(receiver->meta()->clas());
-        vector<Local<Type>> typeArgs;
-        typeArgs.reserve(clas->typeParameterCount());
-        for (length_t i = 0; i < clas->typeParameterCount(); i++) {
-          ASSERT((clas->typeParameter(i)->flags() & STATIC_FLAG) != 0);
-          typeArgs.push_back(handle(vm_->roots()->erasedType()));
-        }
-        type = *Type::create(vm_->heap(), clas, typeArgs);
+        auto receiver = handle(mem<Object*>(stack_->sp() + kPrepareForGCSize));
+        type = *Object::typeof(receiver);
       }
       pop<Block*>();  // receiver
       push<Block*>(type);

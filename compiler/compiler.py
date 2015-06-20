@@ -16,7 +16,7 @@ from flags import ABSTRACT, STATIC, LET
 from errors import SemanticException
 from builtins import getTypeClass, getExceptionClass, getRootClass, getStringClass
 import type_analysis
-from utils import Counter, COMPILE_FOR_EFFECT, COMPILE_FOR_VALUE, COMPILE_FOR_UNINITIALIZED, COMPILE_FOR_MATCH
+from utils import Counter, COMPILE_FOR_EFFECT, COMPILE_FOR_VALUE, COMPILE_FOR_UNINITIALIZED, COMPILE_FOR_MATCH, each
 
 def compile(info):
     for clas in info.package.classes:
@@ -220,10 +220,10 @@ class CompileVisitor(ast.AstNodeVisitor):
 
             if not mustMatch:
                 assert failBlock is not None
-                self.dup()  # value
-                self.buildIsSubtypeOf(self.info.getType(pat), pat.location)
                 successBlock = self.newBlock()
-                self.branchif(successBlock.id, failBlock.id)
+                ty = self.info.getType(pat)
+                self.buildType(self.info.getType(pat), pat.location)
+                self.castcbr(successBlock.id, failBlock.id)
                 self.setCurrentBlock(successBlock)
         elif mode is COMPILE_FOR_UNINITIALIZED:
             self.uninitialized()
@@ -1099,28 +1099,22 @@ class CompileVisitor(ast.AstNodeVisitor):
                 self.swap()
         lvalue.assign()
 
-    def buildIsSubtypeOf(self, ty, loc):
-        assert ty.isObject()
-        typeofMethod = getRootClass().findMethodByShortName("typeof")
-        self.buildCallSimpleMethod(typeofMethod, COMPILE_FOR_VALUE)
-        typeClass = getTypeClass()
-        self.buildType(ty, loc)
-        isSubtypeOfMethod = typeClass.findMethodByShortName("is-subtype-of")
-        index = typeClass.getMethodIndex(isSubtypeOfMethod)
-        self.callv(2, index)
-
-    def buildType(self, ty, location):
+    def buildType(self, ty, loc):
+        """Builds a type on the static type argument stack and simultaneously builds an
+        equivalent Type object on the value stack. This is useful for checked casts and other
+        type tests."""
         assert isinstance(ty, ClassType)
+        assert len(ty.clas.typeParameters) == len(ty.typeArguments)
         if any(STATIC in param.flags for param in ty.clas.typeParameters):
-            raise SemanticException(location, "cannot match type with static parameters")
-        self.allocarri(BUILTIN_TYPE_CLASS_ID.index, 1)
-        self.dup()
+            raise SemanticException(loc,
+                                    "cannot dynamically check a type with static type parameters")
+        each(lambda arg: self.buildType(arg, loc), ty.typeArguments)
         if ty.clas.isForeign():
-            self.clsf(ty.clas.id.packageId.index, ty.clas.id.externIndex)
+            self.tycdf(ty.clas.id.packageId.index, ty.clas.id.externIndex)
         else:
-            self.cls(ty.clas.id.index)
-        self.callg(BUILTIN_TYPE_CTOR_ID.index)
-        self.drop()
+            self.tycd(ty.clas.id.index)
+        if ty.isNullable():
+            self.tyflagd(1)
 
     def buildImplicitStaticTypeArguments(self, typeParams):
         for param in typeParams:
@@ -1139,6 +1133,8 @@ class CompileVisitor(ast.AstNodeVisitor):
                 self.tycsf(ty.clas.id.packageId.index, ty.clas.id.externIndex)
             else:
                 self.tycs(ty.clas.id.index)
+            if ty.isNullable():
+                self.tyflags(1)
         elif isinstance(ty, VariableType):
             assert not ty.typeParameter.isForeign()
             self.tyvs(ty.typeParameter.id.index)
