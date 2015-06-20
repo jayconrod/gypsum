@@ -877,6 +877,52 @@ class TestCompiler(TestCaseWithDefinitions):
                            variables=[self.makeVariable("f.y", type=I64Type,
                                                         kind=LOCAL, flags=frozenset([LET]))]))
 
+    def testMatchExprWithVarWithErasedTypeArg(self):
+        source = "class Foo[static T]\n" + \
+                 "def f(x: Object) =\n" + \
+                 "  match (x)\n" + \
+                 "    case y: Foo[_] => 12\n" + \
+                 "    case _ => 34"
+        package = self.compileFromSource(source)
+        Foo = package.findClass(name="Foo")
+        T = package.findTypeParameter(name="Foo.T")
+        yType = ClassType(Foo, (VariableType(T),))
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               ldlocal(0),
+                               tyvd(T.id.index),
+                               tycd(Foo.id.index),
+                               castcbr(1, 2),
+                             ], [
+                               stlocal(-1),
+                               i64(12),
+                               branch(3),
+                             ], [
+                               drop(),
+                               i64(34),
+                               branch(3),
+                             ], [
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.x", type=getRootClassType(),
+                                                          kind=PARAMETER, flags=frozenset([LET])),
+                                        self.makeVariable("f.y", type=yType,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testMatchExprWithVarWithRealTypeArg(self):
+        source = "class Foo[static T]\n" + \
+                 "def f(x: Object) =\n" + \
+                 "  match (x)\n" + \
+                 "    case y: Foo[String] => {}"
+        self.assertRaises(SemanticException, self.compileFromSource, source)
+
+    def testMatchExprWithVarWithOtherTypeArg(self):
+        source = "class Foo[static T]\n" + \
+                 "def f[static S](x: Object) =\n" + \
+                 "  match (x)\n" + \
+                 "    case y: Foo[S] => {}"
+        self.assertRaises(SemanticException, self.compileFromSource, source)
+
     def testMatchExprWithIntShadow(self):
         source = "def f(x: i64) =\n" + \
                  "  let y = 12\n" + \

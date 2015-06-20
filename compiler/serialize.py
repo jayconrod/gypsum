@@ -313,7 +313,7 @@ class Deserializer(object):
     def deserialize(self):
         self.readHeader()
         for i in xrange(len(self.package.dependencies)):
-            self.package.dependencies[i] = self.readDependencyHeader()
+            self.package.dependencies[i] = self.readDependencyHeader(i)
         for i in xrange(len(self.package.strings)):
             self.package.strings[i] = self.readString()
         for gbl in self.package.globals:
@@ -481,6 +481,7 @@ class Deserializer(object):
         typeParameterCount = self.readVbn()
         dep.externTypeParameters = \
             self.createEmptyTypeParameterList(typeParameterCount, packageId)
+        return dep
 
     def readDependency(self, dep):
         for g in dep.externGlobals:

@@ -141,9 +141,6 @@ void Roots::initialize(Heap* heap) {
                                     Type::NULLABLE_FLAG);
   basicRoots_[NULL_TYPE_ROOT_INDEX] = nullType;
 
-  auto erasedType = new(heap, 0) Type(Type::ERASED_TYPE, Type::NO_FLAGS);
-  basicRoots_[ERASED_TYPE_ROOT_INDEX] = erasedType;
-
   auto packageClass = getBuiltinClass(BUILTIN_PACKAGE_CLASS_ID);
   auto packageMethods = packageClass->methods();
   auto packageMeta = new(heap, packageMethods->length(), sizeof(Package), 0)

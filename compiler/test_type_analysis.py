@@ -535,6 +535,11 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "def g = f(true, 1)"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
+    def testCallTypeArgOutOfBounds(self):
+        source = "def f[static T <: String] = {}\n" + \
+                 "var g = f[Object]"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     def testCallNullaryCtor(self):
         info = self.analyzeFromSource("class Foo\n" +
                                       "  def this = {}\n" +
@@ -876,10 +881,38 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                              frozenset([NULLABLE_TYPE_FLAG]))
         self.assertEquals(expected, ty)
 
-    def testTuplePrimitive(self):
+    def testTupleTypePrimitive(self):
         source = "public class Tuple2[static +T1, static +T2]\n" + \
                  "var g: (i64, i64)"
         self.assertRaises(TypeException, self.analyzeFromSource, source, name=STD_NAME)
+
+    def testErasedTypeAlone(self):
+        source = "var g: _"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testErasedTypeFunctionArg(self):
+        source = "def f[static T] = {}\n" + \
+                 "var g = f[_]"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testErasedTypeClassArg(self):
+        source = "class Foo[static T <: String]\n" + \
+                 "var g: Foo[_]"
+        info = self.analyzeFromSource(source)
+        ty = info.package.findGlobal(name="g").type
+        Foo = info.package.findClass(name="Foo")
+        T = info.package.findTypeParameter(name="Foo.T")
+        self.assertEquals(ClassType(Foo, (VariableType(T),)), ty)
+
+    def testErasedTupleTypeArg(self):
+        source = "public class Tuple2[static +T1, static +T2]\n" + \
+                 "var g: (_, _)"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        ty = info.package.findGlobal(name="g").type
+        Tuple2 = info.package.findClass(name="Tuple2")
+        T1 = info.package.findTypeParameter(name="Tuple2.T1")
+        T2 = info.package.findTypeParameter(name="Tuple2.T2")
+        self.assertEquals(ClassType(Tuple2, (VariableType(T1), VariableType(T2))), ty)
 
     # Closures
     def testFunctionContextFields(self):

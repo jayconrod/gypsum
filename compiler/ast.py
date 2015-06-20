@@ -408,6 +408,14 @@ class AstTupleType(AstType):
         return self.types
 
 
+class AstErasedType(AstType):
+    def __repr__(self):
+        return "AstErasedType"
+
+    def tag(self):
+        return "ErasedType"
+
+
 class AstExpression(AstNode):
     pass
 

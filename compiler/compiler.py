@@ -1103,18 +1103,23 @@ class CompileVisitor(ast.AstNodeVisitor):
         """Builds a type on the static type argument stack and simultaneously builds an
         equivalent Type object on the value stack. This is useful for checked casts and other
         type tests."""
-        assert isinstance(ty, ClassType)
-        assert len(ty.clas.typeParameters) == len(ty.typeArguments)
-        if any(STATIC in param.flags for param in ty.clas.typeParameters):
-            raise SemanticException(loc,
-                                    "cannot dynamically check a type with static type parameters")
-        each(lambda arg: self.buildType(arg, loc), ty.typeArguments)
-        if ty.clas.isForeign():
-            self.tycdf(ty.clas.id.packageId.index, ty.clas.id.externIndex)
+        if isinstance(ty, VariableType):
+            assert not ty.typeParameter.isForeign()
+            self.tyvd(ty.typeParameter.id.index)
         else:
-            self.tycd(ty.clas.id.index)
-        if ty.isNullable():
-            self.tyflagd(1)
+            assert isinstance(ty, ClassType)
+            assert len(ty.clas.typeParameters) == len(ty.typeArguments)
+            for param, arg in zip(ty.clas.typeParameters, ty.typeArguments):
+                if STATIC in param.flags and arg != VariableType(param):
+                    raise SemanticException(
+                        loc, "cannot dynamically check a type with static type parameters")
+                self.buildType(arg, loc)
+            if ty.clas.isForeign():
+                self.tycdf(ty.clas.id.packageId.index, ty.clas.id.externIndex)
+            else:
+                self.tycd(ty.clas.id.index)
+            if ty.isNullable():
+                self.tyflagd(1)
 
     def buildImplicitStaticTypeArguments(self, typeParams):
         for param in typeParams:

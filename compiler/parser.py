@@ -175,6 +175,7 @@ def simpleType():
            (keyword("f32") ^ (lambda _, loc: ast.AstF32Type(loc))) | \
            (keyword("f64") ^ (lambda _, loc: ast.AstF64Type(loc))) | \
            (keyword("boolean") ^ (lambda _, loc: ast.AstBooleanType(loc))) | \
+           (keyword("_") ^ (lambda _, loc: ast.AstErasedType(loc))) | \
            tupleType()
 
 

@@ -13,7 +13,10 @@ def get-value(obj: Object) =
     case ptr-obj: PtrMember => ptr-obj.value
     case int-obj: IntMember => int-obj.value.to-string
 
-def main =
+class Box[static T](value: T)
+
+
+def test-match-members =
   let ptr-obj = PtrMember("foo")
   if (get-value(ptr-obj) != "foo")
     throw Exception
@@ -21,3 +24,17 @@ def main =
   let int-obj = IntMember(12)
   if (get-value(int-obj) != "12")
     throw Exception
+
+
+def test-match-type-with-erased-arg =
+  let obj: Object = Box[String]("foo")
+  let result = match (obj)
+    case x: Box[_] => true
+    case _ => false
+  if (!result)
+    throw Exception
+
+
+def main =
+  //test-match-members
+  test-match-type-with-erased-arg

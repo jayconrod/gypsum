@@ -293,7 +293,7 @@ class PackageVersion(object):
         return cmp(self.components, other.components)
 
     def __repr__(self):
-        return "PackageVersion(%s)" % ".".join(self.components)
+        return "PackageVersion(%s)" % ".".join(map(repr, self.components))
 
     def __str__(self):
         return ".".join(str(c) for c in self.components)

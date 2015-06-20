@@ -306,6 +306,9 @@ class TestParser(unittest.TestCase):
                         ty(),
                         "(A, B[C])?")
 
+    def testErasedType(self):
+        self.checkParse(astErasedType(), ty(), "_")
+
     # Expressions
     def testIntExpr(self):
         values = [("-42", -42, 64),

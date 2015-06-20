@@ -474,16 +474,24 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       case TYCD: {
         auto classId = readVbn();
         Type* type = nullptr;
+        auto count = kLengthNotSet;
         {
           GCSafeScope gcSafe(this);
           HandleScope handleScope(vm_);
           auto clas = handle(isBuiltinId(classId)
               ? vm_->roots()->getBuiltinClass(classId)
               : function_->package()->getClass(classId));
-          vector<Local<Type>> typeArgs(
-              clas->typeParameterCount(), handle(vm_->roots()->erasedType()));
+          count = clas->typeParameterCount();
+          vector<Local<Type>> typeArgs;
+          typeArgs.reserve(count);
+          for (length_t i = 0; i < count; i++) {
+            size_t offset = kPrepareForGCSize + (count - i - 1) * kSlotSize;
+            auto arg = handle(mem<Type*>(stack_->sp(), offset));
+            typeArgs.push_back(arg);
+          }
           type = *Type::create(vm_->heap(), clas, typeArgs);
         }
+        stack_->setSp(stack_->sp() + count * kSlotSize);
         push<Block*>(type);
         break;
       }
@@ -492,14 +500,35 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         auto depIndex = readVbn();
         auto externIndex = readVbn();
         Type* type = nullptr;
+        auto count = kLengthNotSet;
         {
           GCSafeScope gcSafe(this);
           HandleScope handleScope(vm_);
           auto clas = handle(function_->package()->dependencies()->get(depIndex)
               ->linkedClasses()->get(externIndex));
-          vector<Local<Type>> typeArgs(
-              clas->typeParameterCount(), handle(vm_->roots()->erasedType()));
+          count = clas->typeParameterCount();
+          vector<Local<Type>> typeArgs;
+          typeArgs.reserve(count);
+          for (length_t i = 0; i < count; i++) {
+            size_t offset = kPrepareForGCSize + (count - i - 1) * kSlotSize;
+            auto arg = handle(mem<Type*>(stack_->sp(), offset));
+            typeArgs.push_back(arg);
+          }
           type = *Type::create(vm_->heap(), clas, typeArgs);
+        }
+        stack_->setSp(stack_->sp() + count * kSlotSize);
+        push<Block*>(type);
+        break;
+      }
+
+      case TYVD: {
+        auto typeParamId = readVbn();
+        Type* type = nullptr;
+        {
+          GCSafeScope gcSafe(this);
+          HandleScope handleScope(vm_);
+          auto typeParam = handle(function_->package()->getTypeParameter(typeParamId));
+          type = *Type::create(vm_->heap(), typeParam);
         }
         push<Block*>(type);
         break;

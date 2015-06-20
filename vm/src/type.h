@@ -50,14 +50,13 @@ class Type: public Object {
 
     // Pseudo forms (still object forms)
     EXTERN_CLASS_TYPE,
-    ERASED_TYPE,
 
     // Other symbols
     FIRST_PRIMITIVE_TYPE = UNIT_TYPE,
     LAST_PRIMITIVE_TYPE = F64_TYPE,
     FIRST_OBJECT_TYPE = CLASS_TYPE,
-    LAST_OBJECT_TYPE = ERASED_TYPE,
-    LAST_TYPE = ERASED_TYPE
+    LAST_OBJECT_TYPE = EXTERN_CLASS_TYPE,
+    LAST_TYPE = EXTERN_CLASS_TYPE
   };
 
   enum Flags {
@@ -118,7 +117,6 @@ class Type: public Object {
   Class* asClass() const;
   bool isVariable() const;
   TypeParameter* asVariable() const;
-  bool isErased() const;
   Class* effectiveClass() const;
   bool isRootClass() const;
   bool isObject() const;

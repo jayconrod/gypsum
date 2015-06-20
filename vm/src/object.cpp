@@ -63,8 +63,9 @@ Local<Type> Object::typeof(const Handle<Object>& object) {
   vector<Local<Type>> typeArgs;
   typeArgs.reserve(clas->typeParameterCount());
   for (length_t i = 0; i < clas->typeParameterCount(); i++) {
-    ASSERT((clas->typeParameter(i)->flags() & STATIC_FLAG) != 0);
-    typeArgs.push_back(handle(object->getVM()->roots()->erasedType()));
+    auto typeParam = handle(clas->typeParameter(i));
+    ASSERT((typeParam->flags() & STATIC_FLAG) != 0);
+    typeArgs.push_back(Type::create(object->getHeap(), typeParam));
   }
   auto type = Type::create(object->getHeap(), clas, typeArgs);
   return type;

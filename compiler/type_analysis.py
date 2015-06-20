@@ -166,7 +166,7 @@ class TypeVisitorBase(ast.AstNodeVisitor):
                                     (node.name,
                                      len(explicitTypeParams),
                                      len(node.typeArguments)))
-            explicitTypeArgs = self.handleAstClassTypeArgs(irDefn, node.typeArguments)
+            explicitTypeArgs = self.handleClassTypeArgs(irDefn, node.typeArguments)
             implicitTypeArgs = tuple(map(ir_t.VariableType, ir.getImplicitTypeParameters(irDefn)))
             allTypeArgs = explicitTypeArgs + implicitTypeArgs
             return ir_t.ClassType(irDefn, allTypeArgs, flags)
@@ -212,7 +212,7 @@ class TypeVisitorBase(ast.AstNodeVisitor):
                     raise TypeException(component.location,
                                         "%s: non-type definition does not accept type arguments" %
                                         component.name)
-                typeArgs.extend(self.handleAstClassTypeArgs(defnInfo.irDefn,
+                typeArgs.extend(self.handleClassTypeArgs(defnInfo.irDefn,
                                                             component.typeArguments))
 
             if isinstance(defnInfo.irDefn, ir.Package) or \
@@ -236,14 +236,12 @@ class TypeVisitorBase(ast.AstNodeVisitor):
 
     def visitAstTupleType(self, node):
         clas = self.info.getTupleClass(len(node.types), node.location)
-        def checkType(astType):
-            irType = self.visit(astType)
-            if irType.isPrimitive():
-                raise TypeException(astType.location, "primitive type cannot be part of tuple")
-            return irType
-        types = tuple(map(checkType, node.types))
+        types = self.handleClassTypeArgs(clas, node.types)
         flags = frozenset(map(astTypeFlagToIrTypeFlag, node.flags))
         return ir_t.ClassType(clas, types, flags)
+
+    def visitAstErasedType(self, node):
+        raise TypeException(node.location, "erased type can only be used as a type argument")
 
     def visitAstIntegerLiteral(self, node):
         typeMap = { 8: ir_t.I8Type, 16: ir_t.I16Type, 32: ir_t.I32Type, 64: ir_t.I64Type }
@@ -272,8 +270,14 @@ class TypeVisitorBase(ast.AstNodeVisitor):
     def visitAstNullLiteral(self, node):
         return ir_t.getNullType()
 
-    def handleAstClassTypeArgs(self, irClass, nodes):
+    def handleClassTypeArgs(self, irClass, nodes):
         raise NotImplementedError
+
+    def buildClassTypeArg(self, irParam, node):
+        if isinstance(node, ast.AstErasedType):
+            return ir_t.VariableType(irParam)
+        else:
+            return self.visit(node)
 
     def handleResult(self, node, result, *unused):
         if result is not None:
@@ -414,13 +418,15 @@ class DeclarationTypeVisitor(TypeVisitorBase):
     def visitDefault(self, node):
         self.visitChildren(node)
 
-    def handleAstClassTypeArgs(self, irClass, nodes):
-        typeArgs = tuple(map(self.visit, nodes))
+    def handleClassTypeArgs(self, irClass, nodes):
         typeParams = ir.getExplicitTypeParameters(irClass)
-        assert len(typeParams) == len(typeArgs)
-        for tp, ta, node in zip(typeParams, typeArgs, nodes):
-            self.typeArgsToCheck.append((ta, tp, node.location))
-        return typeArgs
+        assert len(typeParams) == len(nodes)
+        typeArgs = []
+        for param, node in zip(typeParams, nodes):
+            arg = self.buildClassTypeArg(param, node)
+            self.typeArgsToCheck.append((arg, param, node.location))
+            typeArgs.append(arg)
+        return tuple(typeArgs)
 
     def setMethodReceiverType(self, irFunction):
         assert irFunction.variables[0].name.short() == ir.RECEIVER_SUFFIX
@@ -891,13 +897,13 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         else:
             return exprTy
 
-    def handleAstClassTypeArgs(self, irClass, typeArgs):
+    def handleClassTypeArgs(self, irClass, typeArgs):
         typeParams = ir.getExplicitTypeParameters(irClass)
         assert len(typeParams) == len(typeArgs)
         types = []
         for tp, ta in zip(typeParams, typeArgs):
             with VarianceScope.forArgument(self, tp.variance()):
-                ty = self.visit(ta)
+                ty = self.buildClassTypeArg(tp, ta)
             if not (tp.lowerBound.isSubtypeOf(ty) and
                     ty.isSubtypeOf(tp.upperBound)):
                 raise TypeException(ta.location, "%s: type argument is not in bounds" % tp.name)

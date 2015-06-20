@@ -284,11 +284,6 @@ TypeParameter* Type::asVariable() const {
 }
 
 
-bool Type::isErased() const {
-  return form() == ERASED_TYPE;
-}
-
-
 Class* Type::effectiveClass() const {
   ASSERT(isClass() || isVariable());
   auto ty = this;
@@ -453,7 +448,7 @@ bool Type::isSubtypeOfWithVariance(Local<Type> left, Local<Type> right, Variance
 bool Type::equals(Type* other) const {
   if (form() != other->form() || flags() != other->flags())
     return false;
-  if (isPrimitive() || isErased()) {
+  if (isPrimitive()) {
     return true;
   } else if (isClass()) {
     if (asClass() != other->asClass())
@@ -501,9 +496,6 @@ Local<Type> Type::substituteForBaseClass(const Handle<Type>& type,
                                          const Handle<Class>& clas) {
   ASSERT(type->isObject());
   Local<Type> currentType(type);
-  if (currentType->isErased())
-    return currentType;
-
   while (currentType->isVariable()) {
     currentType = handle(currentType->asVariable()->upperBound());
   }
@@ -524,8 +516,8 @@ Local<Type> Type::substituteForInheritance(const Handle<Type>& type,
                                            const Handle<Class>& baseClass) {
   ASSERT(receiverClass->isSubclassOf(*baseClass));
 
-  // Build a list of supertypes on the path from receiverClass to base. We will need to iterate over
-  // this in reverse. Note that this does not include receiverClass.
+  // Build a list of supertypes on the path from receiverClass to base. We will need to iterate
+  // over this in reverse. Note that this does not include receiverClass.
   vector<Local<Type>> supertypes;
   Local<Class> clas(receiverClass);
   while (*clas != *baseClass) {
