@@ -534,6 +534,21 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
+      case TYVDF: {
+        auto depIndex = readVbn();
+        auto externIndex = readVbn();
+        Type* type = nullptr;
+        {
+          GCSafeScope gcSafe(this);
+          HandleScope handleScope(vm_);
+          auto typeParam = handle(function_->package()->dependencies()->get(depIndex)
+              ->linkedTypeParameters()->get(externIndex));
+          type = *Type::create(vm_->heap(), typeParam);
+        }
+        push<Block*>(type);
+        break;
+      }
+
       case TYFLAGS:
         readVbn();
         break;

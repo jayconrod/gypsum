@@ -941,6 +941,7 @@ class FunctionScope(Scope):
             checkFlags(flags, frozenset([STATIC]), astDefn.location)
             if STATIC not in flags:
                 raise NotImplementedError
+            flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
             irDefn = self.info.package.addTypeParameter(name, astDefn,
                                                         None, None, flags)
             irScopeDefn.typeParameters.append(irDefn)
@@ -1192,6 +1193,7 @@ class ClassScope(Scope):
             checkFlags(flags, frozenset([STATIC, COVARIANT, CONTRAVARIANT]), astDefn.location)
             if STATIC not in flags:
                 raise NotImplementedError
+            flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
             irDefn = self.info.package.addTypeParameter(name, astDefn,
                                                         None, None, flags)
             irDefn.clas = irScopeDefn

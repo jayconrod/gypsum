@@ -68,7 +68,7 @@ build-vm: $(PROGRAMS)
 check: check-vm
 
 check-vm: $(TEST)
-	@$(TEST)
+	@CS_PACKAGE_PATH="$(OUT_DIR)" $(TEST)
 
 $(PROGRAMS) $(TEST):
 	$(CXX_LINK_EXEC) $(LDFLAGS) $^ -o $@

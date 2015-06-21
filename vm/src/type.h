@@ -50,13 +50,14 @@ class Type: public Object {
 
     // Pseudo forms (still object forms)
     EXTERN_CLASS_TYPE,
+    EXTERN_VARIABLE_TYPE,
 
     // Other symbols
     FIRST_PRIMITIVE_TYPE = UNIT_TYPE,
     LAST_PRIMITIVE_TYPE = F64_TYPE,
     FIRST_OBJECT_TYPE = CLASS_TYPE,
-    LAST_OBJECT_TYPE = EXTERN_CLASS_TYPE,
-    LAST_TYPE = EXTERN_CLASS_TYPE
+    LAST_OBJECT_TYPE = EXTERN_VARIABLE_TYPE,
+    LAST_TYPE = EXTERN_VARIABLE_TYPE
   };
 
   enum Flags {

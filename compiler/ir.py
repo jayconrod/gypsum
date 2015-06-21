@@ -120,6 +120,9 @@ class Package(object):
         for c in self.classes:
             if flags.PUBLIC in c.flags:
                 addExport(c)
+        for p in self.typeParameters:
+            if flags.PUBLIC in c.flags:
+                addExport(p)
 
         return self.exports
 
@@ -136,12 +139,20 @@ class Package(object):
             assert all(isinstance(f, Function) for f in dep.linkedFunctions)
             dep.linkedClasses = [depExports[c.name] for c in dep.externClasses]
             assert all(isinstance(c, Class) for c in dep.linkedClasses)
+            dep.linkedTypeParameters = [depExports[p.name] for p in dep.externTypeParameters]
+            assert all(isinstance(p, TypeParameter) for p in dep.linkedTypeParameters)
 
         for ty in self.externTypes:
-            assert flags.EXTERN in ty.clas.flags
-            depIndex = ty.clas.id.packageId.index
-            externIndex = ty.clas.id.externIndex
-            ty.clas = self.dependencies[depIndex].linkedClasses[externIndex]
+            if isinstance(ty, ir_types.ClassType):
+                assert flags.EXTERN in ty.clas.flags
+                depIndex = ty.clas.id.packageId.index
+                externIndex = ty.clas.id.externIndex
+                ty.clas = self.dependencies[depIndex].linkedClasses[externIndex]
+            else:
+                assert isinstance(ty, ir_types.VariableType)
+                depIndex = ty.typeParameter.id.packageId.index
+                externIndex = ty.typeParameter.id.externIndex
+                ty.typeParameter = self.dependencies[depIndex].linkedTypeParameters[externIndex]
         self.externTypes = None
 
     def addName(self, name):
@@ -318,8 +329,9 @@ class PackageDependency(object):
         self.linkedFunctions = None
         self.externClasses = []
         self.linkedClasses = None
-        self.externMethods = []
         self.externTypeParameters = []
+        self.linkedTypeParameters = None
+        self.externMethods = []
 
     @staticmethod
     def fromString(s):
@@ -353,6 +365,12 @@ class PackageDependency(object):
         buf.write("\n\n")
         for g in self.externGlobals:
             buf.write("%s\n\n" % g)
+        for f in self.externFunctions:
+            buf.write("%s\n\n" % f)
+        for c in self.externClasses:
+            buf.write("%s\n\n" % c)
+        for p in self.externTypeParameters:
+            buf.write("%s\n\n" % p)
         return buf.getvalue()
 
     def __repr__(self):

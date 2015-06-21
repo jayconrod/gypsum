@@ -97,7 +97,7 @@ Persistent<Package> VM::loadPackage(const string& fileName) {
 
 
 void VM::addPackage(const Handle<Package>& package) {
-  packages_.push_back(Persistent<Package>(package));
+  loadPackageDependenciesAndInitialize(package);
 }
 
 

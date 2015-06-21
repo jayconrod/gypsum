@@ -1104,8 +1104,10 @@ class CompileVisitor(ast.AstNodeVisitor):
         equivalent Type object on the value stack. This is useful for checked casts and other
         type tests."""
         if isinstance(ty, VariableType):
-            assert not ty.typeParameter.isForeign()
-            self.tyvd(ty.typeParameter.id.index)
+            if ty.typeParameter.isForeign():
+                self.tyvdf(ty.typeParameter.id.packageId.index, ty.typeParameter.id.externIndex)
+            else:
+                self.tyvd(ty.typeParameter.id.index)
         else:
             assert isinstance(ty, ClassType)
             assert len(ty.clas.typeParameters) == len(ty.typeArguments)

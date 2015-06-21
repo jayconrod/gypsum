@@ -35,6 +35,16 @@ def test-match-type-with-erased-arg =
     throw Exception
 
 
+def test-match-type-with-erased-foreign-arg =
+  let obj: Object = std.Tuple2[String, String]("foo", "bar")
+  let result = match (obj)
+    case x: std.Tuple2[_, _] => true
+    case _ => false
+  if (!result)
+    throw Exception
+
+
 def main =
-  //test-match-members
+  test-match-members
   test-match-type-with-erased-arg
+  test-match-type-with-erased-foreign-arg

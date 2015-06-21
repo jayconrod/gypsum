@@ -50,6 +50,7 @@
 - {name: "tycdf", iops: 2, term: false}
 - {name: "tyvs", iops: 1, term: false}
 - {name: "tyvd", iops: 1, term: false}
+- {name: "tyvdf", iops: 2, term: false}
 - {name: "tyflags", iops: 1, term: false}
 - {name: "tyflagd", iops: 1, term: false}
 - {name: "cast", iops: 0, term: false}

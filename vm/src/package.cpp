@@ -293,6 +293,16 @@ void Package::ensureExports(Heap* heap, const Handle<Package>& package) {
     }
   }
 
+  auto typeParameters = handle(package->typeParameters());
+  for (length_t i = 0; i < typeParameters->length(); i++) {
+    auto typeParameter = handle(typeParameters->get(i));
+    if ((typeParameter->flags() & PUBLIC_FLAG) != 0) {
+      auto name = handle(typeParameter->name());
+      ASSERT(!exports->contains(*name));
+      ExportMap::add(heap, exports, name, typeParameter);
+    }
+  }
+
   package->setExports(*exports);
 }
 
@@ -361,6 +371,24 @@ void Package::link(Heap* heap, const Handle<Package>& package) {
       }
     }
     dependency->setLinkedClasses(*linkedClasses);
+
+    ASSERT(dependency->linkedTypeParameters() == nullptr);
+    auto externTypeParameters = handle(dependency->externTypeParameters());
+    auto typeParameterCount = externTypeParameters->length();
+    auto linkedTypeParameters = BlockArray<TypeParameter>::create(heap, typeParameterCount);
+    {
+      AllowAllocationScope noAllocation(heap, false);
+      for (length_t j = 0; j < typeParameterCount; j++) {
+        auto externTypeParameter = externTypeParameters->get(j);
+        auto name = externTypeParameter->name();
+        auto linkedTypeParameter = depExports->getOrElse(name, nullptr);
+        if (!linkedTypeParameter || !isa<TypeParameter>(linkedTypeParameter)) {
+          throw Error("link error");
+        }
+        linkedTypeParameters->set(j, block_cast<TypeParameter>(linkedTypeParameter));
+      }
+    }
+    dependency->setLinkedTypeParameters(*linkedTypeParameters);
   }
 
   auto externTypes = handle(package->externTypes());
@@ -470,8 +498,9 @@ ostream& operator << (ostream& os, const PackageVersion* version) {
   F(PackageDependency, linkedFunctions_)      \
   F(PackageDependency, externClasses_)        \
   F(PackageDependency, linkedClasses_)        \
-  F(PackageDependency, externMethods_)        \
   F(PackageDependency, externTypeParameters_) \
+  F(PackageDependency, linkedTypeParameters_) \
+  F(PackageDependency, externMethods_)        \
 
 DEFINE_POINTER_MAP(PackageDependency, PACKAGE_DEPENDENCY_POINTER_LIST)
 
@@ -487,8 +516,9 @@ PackageDependency::PackageDependency(Name* name,
                                      BlockArray<Function>* linkedFunctions,
                                      BlockArray<Class>* externClasses,
                                      BlockArray<Class>* linkedClasses,
-                                     BlockArray<Function>* externMethods,
-                                     BlockArray<TypeParameter>* externTypeParameters)
+                                     BlockArray<TypeParameter>* externTypeParameters,
+                                     BlockArray<TypeParameter>* linkedTypeParameters,
+                                     BlockArray<Function>* externMethods)
     : Block(PACKAGE_DEPENDENCY_BLOCK_TYPE),
       name_(this, name),
       minVersion_(this, minVersion),
@@ -499,13 +529,16 @@ PackageDependency::PackageDependency(Name* name,
       linkedFunctions_(this, linkedFunctions),
       externClasses_(this, externClasses),
       linkedClasses_(this, linkedClasses),
-      externMethods_(this, externMethods),
-      externTypeParameters_(this, externTypeParameters) {
+      externTypeParameters_(this, externTypeParameters),
+      linkedTypeParameters_(this, linkedTypeParameters),
+      externMethods_(this, externMethods) {
   ASSERT(minVersion == nullptr || maxVersion == nullptr ||
          minVersion->compare(maxVersion) <= 0);
   ASSERT(linkedGlobals == nullptr || externGlobals->length() == linkedGlobals->length());
   ASSERT(linkedFunctions == nullptr || externFunctions->length() == linkedFunctions->length());
   ASSERT(linkedClasses == nullptr || externClasses->length() == linkedClasses->length());
+  ASSERT(linkedTypeParameters == nullptr ||
+         externTypeParameters->length() == linkedTypeParameters->length());
 }
 
 
@@ -520,14 +553,16 @@ Local<PackageDependency> PackageDependency::create(
     const Handle<BlockArray<Function>>& linkedFunctions,
     const Handle<BlockArray<Class>>& externClasses,
     const Handle<BlockArray<Class>>& linkedClasses,
-    const Handle<BlockArray<Function>>& externMethods,
-    const Handle<BlockArray<TypeParameter>>& externTypeParameters) {
+    const Handle<BlockArray<TypeParameter>>& externTypeParameters,
+    const Handle<BlockArray<TypeParameter>>& linkedTypeParameters,
+    const Handle<BlockArray<Function>>& externMethods) {
   RETRY_WITH_GC(heap, return Local<PackageDependency>(new(heap) PackageDependency(
       *name, minVersion.getOrNull(), maxVersion.getOrNull(),
       *externGlobals, linkedGlobals.getOrNull(),
       *externFunctions, linkedFunctions.getOrNull(),
-      *externClasses, linkedClasses.getOrNull(), *externMethods,
-      *externTypeParameters)));
+      *externClasses, linkedClasses.getOrNull(),
+      *externTypeParameters, linkedTypeParameters.getOrNull(),
+      *externMethods)));
 }
 
 
@@ -538,19 +573,20 @@ Local<PackageDependency> PackageDependency::create(Heap* heap,
                                                    length_t globalCount,
                                                    length_t functionCount,
                                                    length_t classCount,
-                                                   length_t methodCount,
-                                                   length_t typeParameterCount) {
+                                                   length_t typeParameterCount,
+                                                   length_t methodCount) {
   auto externGlobals = BlockArray<Global>::create(heap, globalCount);
   auto externFunctions = BlockArray<Function>::create(heap, functionCount);
   auto externClasses = BlockArray<Class>::create(heap, classCount);
-  auto externMethods = BlockArray<Function>::create(heap, methodCount);
   auto externTypeParameters = BlockArray<TypeParameter>::create(heap, typeParameterCount);
+  auto externMethods = BlockArray<Function>::create(heap, methodCount);
   RETRY_WITH_GC(heap, return Local<PackageDependency>(new(heap) PackageDependency(
       *name, minVersion.getOrNull(), maxVersion.getOrNull(),
       *externGlobals, nullptr,
       *externFunctions, nullptr,
-      *externClasses, nullptr, *externMethods,
-      *externTypeParameters)));
+      *externClasses, nullptr,
+      *externTypeParameters, nullptr,
+      *externMethods)));
 }
 
 
@@ -629,6 +665,13 @@ void PackageDependency::setLinkedClasses(BlockArray<Class>* linkedClasses) {
 }
 
 
+void PackageDependency::setLinkedTypeParameters(
+    BlockArray<TypeParameter>* linkedTypeParameters) {
+  ASSERT(externTypeParameters_.get()->length() == linkedTypeParameters->length());
+  linkedTypeParameters_.set(this, linkedTypeParameters);
+}
+
+
 bool PackageDependency::isSatisfiedBy(const Name* name,
                                       const PackageVersion* version) const {
   return this->name()->equals(name) &&
@@ -649,8 +692,9 @@ ostream& operator << (ostream& os, const PackageDependency* dep) {
      << "\n  linkedfunctions: " << brief(dep->linkedFunctions())
      << "\n  externClasses: " << brief(dep->externClasses())
      << "\n  linkedClasses: " << brief(dep->linkedClasses())
-     << "\n  externMethods: " << brief(dep->externMethods())
-     << "\n  externTypeParameters: " << brief(dep->externTypeParameters());
+     << "\n  externTypeParameters: " << brief(dep->externTypeParameters())
+     << "\n  linkedTypeParameters: " << brief(dep->linkedTypeParameters())
+     << "\n  externMethods: " << brief(dep->externMethods());
   return os;
 }
 
@@ -796,6 +840,9 @@ void Loader::readTypeParameter(const Local<TypeParameter>& param) {
 
 
 Local<Type> Loader::readType() {
+  const i64 kBuiltinPackageIndex = -2;
+  const i64 kLocalPackageIndex = -1;
+
   auto bits = readWordVbn();
   auto form = static_cast<Type::Form>(bits & 0xf);
   auto flags = static_cast<Type::Flags>(bits >> 4);
@@ -809,9 +856,6 @@ Local<Type> Loader::readType() {
   if (isPrimitive) {
     return handle(Type::primitiveTypeFromForm(roots(), form));
   } else if (form == Type::CLASS_TYPE) {
-    const i64 kBuiltinPackageIndex = -2;
-    const i64 kLocalPackageIndex = -1;
-
     auto depIndex = readVbn();
     auto defnIndex = readVbn();
 
@@ -825,7 +869,7 @@ Local<Type> Loader::readType() {
       }
       clas = handle(package_->classes()->get(defnIndex));
     } else {
-      if (depIndex >= package_->dependencies()->length()) {
+      if (depIndex < 0 || depIndex >= package_->dependencies()->length()) {
         throw Error("invalid package index");
       }
       auto dep = handle(package_->dependencies()->get(depIndex));
@@ -859,9 +903,34 @@ Local<Type> Loader::readType() {
     return ty;
   } else {
     ASSERT(form == Type::VARIABLE_TYPE);
-    auto index = readLengthVbn();
-    auto param = getTypeParameter(index);
+    auto depIndex = readVbn();
+    auto defnIndex = readVbn();
+
+    Local<TypeParameter> param;
+    bool isExtern = false;
+    if (depIndex == kLocalPackageIndex) {
+      if (defnIndex < 0 || defnIndex >= package_->typeParameters()->length()) {
+        throw Error("invalid definition index");
+      }
+      param = handle(package_->typeParameters()->get(defnIndex));
+    } else {
+      if (depIndex < 0 || depIndex >= package_->dependencies()->length()) {
+        throw Error("invalid package index");
+      }
+      auto dep = handle(package_->dependencies()->get(depIndex));
+      if (defnIndex < 0 || defnIndex >= dep->externTypeParameters()->length()) {
+        throw Error("invalid definition index");
+      }
+      param = handle(dep->externTypeParameters()->get(defnIndex));
+      isExtern = true;
+    }
+
     auto ty = Type::create(heap(), param, flags);
+    if (isExtern) {
+      auto info = ExternTypeInfo::create(heap(), ty, package_, depIndex, defnIndex);
+      externTypes_.push_back(info);
+    }
+
     return ty;
   }
 }
@@ -976,7 +1045,7 @@ Local<Package> PackageLoader::load() {
       throw Error("package file is corrupt");
     auto majorVersion = readValue<u16>();
     auto minorVersion = readValue<u16>();
-    if (majorVersion != 0 || minorVersion != 17)
+    if (majorVersion != 0 || minorVersion != 18)
       throw Error("package file has wrong format version");
 
     package_ = handleScope.escape(*Package::create(heap()));
@@ -1130,7 +1199,8 @@ Local<PackageDependency> PackageLoader::readDependencyHeader() {
 
   auto dep = PackageDependency::create(heap(), name, minVersion, maxVersion,
                                        globalCount, functionCount,
-                                       classCount, methodCount, typeParameterCount);
+                                       classCount, typeParameterCount,
+                                       methodCount);
 
   // We need to pre-allocate methods, classes, type parameters so that other definitions
   // and types can refer to them. Normally, functions can't be preallocated since they have

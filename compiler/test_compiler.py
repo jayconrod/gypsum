@@ -909,6 +909,42 @@ class TestCompiler(TestCaseWithDefinitions):
                                         self.makeVariable("f.y", type=yType,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
+    def testMatchExprWithVarWithErasedForeignTypeArg(self):
+        foo = Package(name=Name(["foo"]))
+        T = foo.addTypeParameter(Name(["Foo", "T"]), None,
+                                 getRootClassType(), getNothingClassType(), frozenset([PUBLIC]))
+        Foo = foo.addClass(Name(["Foo"]), None, [T], [getRootClassType()], None,
+                           [], [], [], frozenset([PUBLIC]))
+        loader = FakePackageLoader([foo])
+
+        source = "def f(x: Object) =\n" + \
+                 "  match (x)\n" + \
+                 "    case y: foo.Foo[_] => 12\n" + \
+                 "    case _ => 34"
+        package = self.compileFromSource(source, packageLoader=loader)
+        yType = ClassType(Foo, (VariableType(T),))
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               ldlocal(0),
+                               tyvdf(foo.id.index, T.id.externIndex),
+                               tycdf(foo.id.index, Foo.id.externIndex),
+                               castcbr(1, 2),
+                             ], [
+                               stlocal(-1),
+                               i64(12),
+                               branch(3),
+                             ], [
+                               drop(),
+                               i64(34),
+                               branch(3),
+                             ], [
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.x", type=getRootClassType(),
+                                                          kind=PARAMETER, flags=frozenset([LET])),
+                                        self.makeVariable("f.y", type=yType,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
     def testMatchExprWithVarWithRealTypeArg(self):
         source = "class Foo[static T]\n" + \
                  "def f(x: Object) =\n" + \

@@ -581,12 +581,18 @@ Local<ExternTypeInfo> ExternTypeInfo::create(Heap* heap,
 
 void ExternTypeInfo::linkType() {
   auto type = type_.get();
-  ASSERT(type->form() == Type::EXTERN_CLASS_TYPE &&
-         type->length() >= 1 && type->elements_[0].get() == this);
-  auto linkedClass = package_.get()->dependencies()->get(dependencyIndex_)
-      ->linkedClasses()->get(externIndex_);
-  type->elements_[0].set(type, linkedClass);
-  type->form_ = Type::CLASS_TYPE;
+  ASSERT(type->length() >= 1 && type->elements_[0].get() == this);
+  auto dep = package_.get()->dependencies()->get(dependencyIndex_);
+  if (type->form() == Type::EXTERN_CLASS_TYPE) {
+    auto linkedClass = dep->linkedClasses()->get(externIndex_);
+    type->elements_[0].set(type, linkedClass);
+    type->form_ = Type::CLASS_TYPE;
+  } else {
+    ASSERT(type->form() == Type::EXTERN_VARIABLE_TYPE);
+    auto linkedTypeParameter = dep->linkedTypeParameters()->get(externIndex_);
+    type->elements_[0].set(type, linkedTypeParameter);
+    type->form_ = Type::VARIABLE_TYPE;
+  }
 }
 
 

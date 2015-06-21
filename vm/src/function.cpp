@@ -643,6 +643,20 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
+        case TYVDF: {
+          auto depIndex = readVbn(bytecode, &pcOffset);
+          auto externIndex = readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          auto param = handle(package->dependencies()->get(depIndex)
+              ->linkedTypeParameters()->get(externIndex));
+          auto type = Type::create(heap, param);
+          currentMap.pushTypeArg(type);
+          auto valueType = handle(roots->getBuiltinType(BUILTIN_TYPE_CLASS_ID));
+          currentMap.push(valueType);
+          break;
+        }
+
         case TYFLAGS: {
           auto rawFlags = readVbn(bytecode, &pcOffset);
           auto flags = static_cast<Type::Flags>(rawFlags);

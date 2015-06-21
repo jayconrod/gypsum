@@ -44,7 +44,7 @@ def deserialize(fileName):
 HEADER_FORMAT = "<Ihhqiiiiiiii"
 MAGIC = 0x676b7073
 MAJOR_VERSION = 0
-MINOR_VERSION = 17
+MINOR_VERSION = 18
 
 FLAG_FORMAT = "<i"
 
@@ -223,7 +223,9 @@ class Serializer(object):
         else:
             assert isinstance(type, ir_types.VariableType)
             form = 9
-            defnIndex = type.typeParameter.id.index
+            param = type.typeParameter
+            packageIndex = param.id.getPackageIndex()
+            defnIndex = param.id.getDefnIndex()
         flags = 0
         if ir_types.NULLABLE_TYPE_FLAG in type.flags:
             flags = flags | 1
@@ -540,8 +542,17 @@ class Deserializer(object):
             if isExtern:
                 self.package.externTypes.append(ty)
         elif form == 9:
-            param = self.readId(self.package.typeParameters)
+            packageIndex = self.readVbn()
+            defnIndex = self.readVbn()
+            isExtern = False
+            if packageIndex == ids.LOCAL_PACKAGE_INDEX:
+                param = self.package.typeParameters[defnIndex]
+            else:
+                param = self.package.dependencies[packageIndex].externTypeParameters[defnIndex]
+                isExtern = True
             ty = ir_types.VariableType(param, flags)
+            if isExtern:
+                self.package.externTypes.append(ty)
         else:
             raise IOError("invalid type flags")
 
