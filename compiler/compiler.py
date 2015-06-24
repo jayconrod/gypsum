@@ -257,6 +257,60 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.setCurrentBlock(successBlock)
         self.drop()
 
+    def visitAstTuplePattern(self, pat, mode, ty=None, failBlock=None):
+        if mode is COMPILE_FOR_UNINITIALIZED:
+            return
+
+        # Check whether the object being matched is actually a tuple.
+        tupleClass = self.info.getTupleClass(len(pat.patterns), pat.location)
+        typeArgs = None
+        if isinstance(ty, ClassType) and ty.clas is tupleClass:
+            typeArgs = ty.typeArguments
+        else:
+            erasedTupleTypeArgs = tuple(VariableType(p) for p in tupleClass.typeParameters)
+            erasedTupleType = ClassType(tupleClass, erasedTupleTypeArgs)
+            self.buildType(erasedTupleType, pat.location)
+            isTupleBlock = self.newBlock()
+            self.castcbr(isTupleBlock.id, failBlock.id)
+            self.setCurrentBlock(isTupleBlock)
+            typeArgs = [getRootClassType()] * len(pat.patterns)
+
+        # Find the last non-blank pattern. We don't need to duplicate the tuple for it.
+        def isBlank(p, pty):
+            return isinstance(p, ast.AstBlankPattern) and \
+                   type_analysis.patternMustMatch(p, pty, self.info)
+
+        lastMatchingIndex = None
+        for i in xrange(len(pat.patterns) - 1, -1, -1):
+            if not isBlank(pat.patterns[i], typeArgs[i]):
+                lastMatchingIndex = i
+                break
+
+        # Check if all the patterns will match. If so, we don't need failure code.
+        elementsMustMatch = all(type_analysis.patternMustMatch(p, pty, self.info)
+                                for p, pty in zip(pat.patterns, typeArgs))
+        elementFailBlock = None if elementsMustMatch else self.newBlock()
+
+        # Recurse into each pattern. Don't bother with blank patterns without types.
+        for i, (p, pty) in enumerate(zip(pat.patterns, typeArgs)):
+            if not isBlank(p, pty):
+                if i != lastMatchingIndex:
+                    self.dup()
+                self.ldp(i)
+                self.visit(p, mode, pty, elementFailBlock)
+
+        # Clean up.
+        if not elementsMustMatch:
+            successBlock = self.currentBlock
+            self.setCurrentBlock(elementFailBlock)
+            self.drop()
+            self.branch(failBlock.id)
+            self.setCurrentBlock(successBlock)
+
+        # Consume tuple value on success if no patterns were matched.
+        if lastMatchingIndex is None:
+            self.drop()
+
     def visitAstLiteralExpression(self, expr, mode):
         self.buildLiteral(expr.literal)
         self.dropForEffect(mode)

@@ -62,9 +62,16 @@ def patternMustMatch(pat, ty, info):
             return ty.isSubtypeOf(patTy)
     elif isinstance(pat, ast.AstBlankPattern):
         return True
-    else:
-        assert isinstance(pat, ast.AstLiteralPattern)
+    elif isinstance(pat, ast.AstLiteralPattern):
         return False
+    else:
+        assert isinstance(pat, ast.AstTuplePattern)
+        tupleClass = info.getTupleClass(len(pat.patterns), pat.location)
+        if isinstance(ty, ir_t.ClassType) and ty.clas is tupleClass:
+            return all(patternMustMatch(p, ety, info)
+                       for p, ety in zip(pat.patterns, ty.typeArguments))
+        else:
+            return False
 
 
 def partialFunctionCaseMustMatch(case, ty, info):
@@ -415,6 +422,13 @@ class DeclarationTypeVisitor(TypeVisitorBase):
     def visitAstLiteralPattern(self, node, isParam=False):
         return self.visit(node.literal)
 
+    def visitAstTuplePattern(self, node, isParam=False):
+        if not isParam:
+            return None
+        patternTypes = tuple(self.visit(p, True) for p in node.patterns)
+        tupleClass = self.info.getTupleClass(len(node.patterns), node.location)
+        return ir_t.ClassType(tupleClass, patternTypes)
+
     def visitDefault(self, node):
         self.visitChildren(node)
 
@@ -615,6 +629,18 @@ class DefinitionTypeVisitor(TypeVisitorBase):
     def visitAstLiteralPattern(self, node, exprTy, mode):
         litTy = self.visit(node.literal)
         patTy = self.findPatternType(litTy, exprTy, mode, None, node.location)
+        return patTy
+
+    def visitAstTuplePattern(self, node, exprTy, mode):
+        tupleClass = self.info.getTupleClass(len(node.patterns), node.location)
+        if isinstance(exprTy, ir_t.ClassType) and exprTy.clas is tupleClass:
+            elementTypes = tuple(self.visit(p, ety, mode)
+                                 for p, ety in zip(node.patterns, exprTy.typeArguments))
+        else:
+            elementTypes = tuple(self.visit(p, ir_t.getRootClassType(), mode)
+                                 for p in node.patterns)
+        tupleTy = ir_t.ClassType(tupleClass, elementTypes)
+        patTy = self.findPatternType(tupleTy, exprTy, mode, None, node.location)
         return patTy
 
     def visitAstLiteralExpression(self, node):

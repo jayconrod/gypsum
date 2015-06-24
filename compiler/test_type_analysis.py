@@ -60,12 +60,43 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "def f(_): i64 = 0"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
+    def testBlankParamWithType(self):
+        source = "def f(_: i64): i64 = 0"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        self.assertEquals([I64Type], f.parameterTypes)
+
     def testIntLiteralParam(self):
         source = "def f(12): i64 = 0"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testNullLiteralParam(self):
         source = "def f(null): i64 = 0"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testTupleParam(self):
+        source = "public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n" + \
+                 "def f((x: String, y: String)) = x"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        tupleClass = info.package.findClass(name="Tuple2")
+        f = info.package.findFunction(name="f")
+        self.assertEquals([ClassType(tupleClass, (getStringType(), getStringType()))],
+                          f.parameterTypes)
+        self.assertEquals(getStringType(), f.returnType)
+
+    def testTupleParamWithBadElement(self):
+        source = "public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n" + \
+                 "def f((x: String, \"bar\")) = x"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testTupleParamWithPrimitiveElement(self):
+        source = "public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n" + \
+                 "def f((x: String, 12)) = x"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testTupleParamWithUntypedElement(self):
+        source = "public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n" + \
+                 "def f((x: String, y)) = x"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testRecursiveGlobal(self):
@@ -702,6 +733,20 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         matchAst = info.ast.modules[0].definitions[0].body.statements[0]
         self.assertEquals(I64Type, info.getType(matchAst))
         self.assertEquals(I64Type, info.getType(matchAst.matcher.cases[0].pattern))
+
+    def testMatchExprTuple(self):
+        source = "public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n" + \
+                 "def f(x: Object) =\n" + \
+                 "  match (x)\n" + \
+                 "    case (y: String, z: String) => y"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        tupleClass = info.package.findClass(name="Tuple2")
+        matchAst = info.ast.modules[0].definitions[1].body.statements[0]
+        self.assertEquals(ClassType(tupleClass, (getStringType(), getStringType())),
+                          info.getType(matchAst.matcher.cases[0].pattern))
+        self.assertEquals(getStringType(),
+                          info.getType(matchAst.matcher.cases[0].pattern.patterns[0]))
+        self.assertEquals(getStringType(), info.getType(matchAst.matcher.cases[0].expression))
 
     def testMatchExprWithDisjointType(self):
         source = "def f(x: String) =\n" + \

@@ -286,6 +286,21 @@ class AstLiteralPattern(AstNode):
         return [self.literal]
 
 
+class AstTuplePattern(AstNode):
+    def __init__(self, patterns, location):
+        super(AstTuplePattern, self).__init__(location)
+        self.patterns = patterns
+
+    def __repr__(self):
+        return "AstTuplePattern(%s)" % repr(self.patterns)
+
+    def tag(self):
+        return "TuplePattern"
+
+    def children(self):
+        return self.patterns
+
+
 class AstType(AstNode):
     pass
 
@@ -849,10 +864,10 @@ class AstStringLiteral(AstLiteral):
 
 
 class AstNodeVisitor(visitor.Visitor):
-    def visitChildren(self, node):
+    def visitChildren(self, node, *args):
         for child in node.children():
             if child is not None:
-                self.visit(child)
+                self.visit(child, *args)
 
 
 class AstPrinter(AstNodeVisitor):

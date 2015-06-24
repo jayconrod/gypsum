@@ -134,7 +134,8 @@ def parameter():
 def pattern():
     return varPattern() | \
            blankPattern() | \
-           litPattern()
+           litPattern() | \
+           tuplePattern()
 
 
 def varPattern():
@@ -155,6 +156,14 @@ def blankPattern():
 
 def litPattern():
     return literal() ^ ast.AstLiteralPattern
+
+
+def tuplePattern():
+    def process(parsed, loc):
+        _, ps, _ = ct.untangle(parsed)
+        return ast.AstTuplePattern(ps, loc) if len(ps) > 1 else ps[0]
+    return keyword("(") + ct.Commit(ct.Rep1Sep(ct.Lazy(pattern), keyword(",")) + keyword(")")) \
+        ^ process
 
 
 # Types

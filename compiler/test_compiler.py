@@ -312,6 +312,25 @@ class TestCompiler(TestCaseWithDefinitions):
                              variables=[self.makeVariable("f.$parameter", type=I64Type,
                                                           kind=PARAMETER, flags=frozenset([]))]))
 
+    def testTupleParameter(self):
+        source = "public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n" + \
+                 "def f((x: String, _: String)) = x"
+        package = self.compileFromSource(source, name=STD_NAME)
+        tupleClass = package.findClass(name="Tuple2")
+        tupleType = ClassType(tupleClass, (getStringType(), getStringType()))
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", getStringType(), [[
+                               ldlocal(0),
+                               ldp(0),
+                               stlocal(-1),
+                               ldlocal(-1),
+                               ret()
+                             ]],
+                             variables=[self.makeVariable(Name(["f", ANON_PARAMETER_SUFFIX]),
+                                                          type=tupleType, kind=PARAMETER),
+                                        self.makeVariable("f.x", type=getStringType(),
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
     def testSeveralParameters(self):
         self.checkFunction("def f(var a: i32, var b: boolean, var c: boolean, var d: i32) =\n" + \
                            "  a = 1i32\n" + \
@@ -1108,6 +1127,29 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]],
                              variables=[self.makeVariable("f.x", type=xType,
                                                           kind=PARAMETER, flags=frozenset([LET]))]))
+
+    def testMatchExprWithTuple(self):
+        pass
+        # source = "public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n" + \
+        #          "def f(x: Object) =\n" + \
+        #          "  match (x)\n" + \
+        #          "    case (y: String, _) => 12\n" + \
+        #          "    case _ => 34"
+        # package = self.compileFromSource(source, name=STD_NAME)
+        # tupleClass = package.findClass(name="Tuple2")
+        # T1 = tupleClass.typeParameters[0]
+        # T2 = tupleClass.typeParameters[0]
+        # self.checkFunction(package,
+        #                    self.makeSimpleFunction("f", I64Type, [[
+        #                        ldlocal(0),
+        #                        tyvd(T1.id.index),
+        #                        tyvd(T2.id.index),
+        #                        tycd(tupleClass.id.index),
+        #                        castcbr(1, 2),
+        #                      ], [
+        #                        ldp(0),
+        #                        tycd(BUILTIN_STRING_CLASS_ID.index),
+
 
     def testMatchAllCasesTerminate(self):
         source = "def f =\n" + \

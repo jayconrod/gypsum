@@ -1453,8 +1453,8 @@ class ScopeVisitor(ast.AstNodeVisitor):
             visitor.visit(node.condition)
         visitor.visit(node.expression)
 
-    def visitDefault(self, node, unused=None):
-        self.visitChildren(node)
+    def visitDefault(self, node, *args):
+        self.visitChildren(node, *args)
 
 
 class DeclarationVisitor(ScopeVisitor):
