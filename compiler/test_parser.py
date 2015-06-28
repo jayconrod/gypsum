@@ -256,6 +256,10 @@ class TestParser(unittest.TestCase):
         self.checkParse(astTuplePattern([astBlankPattern(None), astBlankPattern(None)]),
                         pattern(), "(_, _)")
 
+    def testTuplePatternWithoutParenthesis(self):
+        self.checkParse(astTuplePattern([astBlankPattern(None), astBlankPattern(None)]),
+                        pattern(), "_, _")
+
     # Types
     def testSimpleTypes(self):
         self.checkParse(astUnitType(), ty(), "unit")

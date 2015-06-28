@@ -127,15 +127,21 @@ def parameter():
     def process(parsed, loc):
         [ats, var, pat] = ct.untangle(parsed)
         return ast.AstParameter(ats, var, pat, loc)
-    return attribs() + ct.Opt(keyword("var")) + pattern() ^ process
+    return attribs() + ct.Opt(keyword("var")) + simplePattern() ^ process
 
 
 # Patterns
 def pattern():
+    def process(parsed, loc):
+        return parsed[0] if len(parsed) == 1 else ast.AstTuplePattern(parsed, loc)
+    return ct.Rep1Sep(simplePattern(), keyword(",")) ^ process
+
+
+def simplePattern():
     return varPattern() | \
            blankPattern() | \
            litPattern() | \
-           tuplePattern()
+           groupPattern()
 
 
 def varPattern():
@@ -158,12 +164,11 @@ def litPattern():
     return literal() ^ ast.AstLiteralPattern
 
 
-def tuplePattern():
+def groupPattern():
     def process(parsed, loc):
-        _, ps, _ = ct.untangle(parsed)
-        return ast.AstTuplePattern(ps, loc) if len(ps) > 1 else ps[0]
-    return keyword("(") + ct.Commit(ct.Rep1Sep(ct.Lazy(pattern), keyword(",")) + keyword(")")) \
-        ^ process
+        _, p, _ = ct.untangle(parsed)
+        return p
+    return keyword("(") + ct.Commit(ct.Lazy(pattern) + keyword(")")) ^ process
 
 
 # Types
@@ -503,7 +508,7 @@ def lambdaExpr():
         [_, n, tps, _, ps, _, b] = ct.untangle(parsed)
         return ast.AstLambdaExpression(n, tps, ps, b, loc)
     return keyword("lambda") + ct.Commit(ct.Opt(symbol) + typeParameters() + keyword("(") + \
-        ct.RepSep(pattern(), keyword(",")) + keyword(")") + ct.Lazy(expression)) ^ process
+        ct.RepSep(simplePattern(), keyword(",")) + keyword(")") + ct.Lazy(expression)) ^ process
 
 
 def returnExpr():
