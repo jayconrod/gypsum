@@ -151,7 +151,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         ctor = clas.constructors[0]
         self.assertEquals(UnitType, ctor.returnType)
         self.assertEquals([ClassType(clas), I32Type], ctor.parameterTypes)
-        self.assertEquals([ClassType(clas)], [v.type for v in ctor.variables])
+        self.assertEquals([ClassType(clas), I32Type], [v.type for v in ctor.variables])
 
     def testSecondaryConstructorsReturnUnit(self):
         source = "class Foo\n" + \
@@ -159,6 +159,27 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source)
         clas = info.package.findClass(name="Foo")
         self.assertEquals(UnitType, clas.constructors[0].returnType)
+
+    def testCallSuperWithoutPrimaryOrDefaultConstructor(self):
+        source = "class Foo(x: i64)\n" + \
+                 "class Bar <: Foo(12)\n" + \
+                 "  def this(x: i64) =\n" + \
+                 "    super(x)"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testPrimaryConstructorCallSuper(self):
+        source = "class Foo(x: i64)\n" + \
+                 "class Bar(y: i64) <: Foo(y)"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(I64Type,
+                          info.getType(info.ast.modules[0].definitions[1].superArgs[0]))
+
+    def testDefaultConstructorCallSuper(self):
+        source = "class Foo(x: i64)\n" + \
+                 "class Bar <: Foo(12)"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(I64Type,
+                          info.getType(info.ast.modules[0].definitions[1].superArgs[0]))
 
     def testInitializerAndDefaultConstructorThisType(self):
         source = "class Foo"
@@ -397,7 +418,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         bar.constructors.append(ctor)
         packageLoader = FakePackageLoader([foo])
 
-        source = "var x = foo.Bar"
+        source = "var x = foo.Bar()"
         info = self.analyzeFromSource(source, packageLoader=packageLoader)
         x = info.package.findGlobal(name="x")
         self.assertEquals(barType, x.type)
@@ -574,7 +595,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testCallNullaryCtor(self):
         info = self.analyzeFromSource("class Foo\n" +
                                       "  def this = {}\n" +
-                                      "def f = Foo")
+                                      "def f = Foo()")
         clas = info.package.findClass(name="Foo")
         function = info.package.findFunction(name="f")
         self.assertEquals(ClassType(clas, ()), function.returnType)
@@ -778,8 +799,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                       "  def this = {}\n" +
                                       "class B <: Base\n" +
                                       "  def this = {}\n" +
-                                      "def f = try A catch\n" +
-                                      "    case exn => B\n" +
+                                      "def f = try A() catch\n" +
+                                      "    case exn => B()\n" +
                                       "  finally 12")
         baseTy = ClassType(info.package.findClass(name="Base"), ())
         astBody = info.ast.modules[0].definitions[3].body
@@ -830,7 +851,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(UnitType, info.package.findFunction(name="f").returnType)
 
     def testConstructRootClass(self):
-        info = self.analyzeFromSource("def f = Object")
+        info = self.analyzeFromSource("def f = Object()")
         rootClass = getRootClass()
         self.assertEquals(ClassType(rootClass, ()), info.getType(info.ast.modules[0].definitions[0].body))
 
@@ -1095,9 +1116,9 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "class B <: A\n" + \
                  "  def this = {}\n" + \
                  "class Foo\n" + \
-                 "  def m = A\n" + \
+                 "  def m = A()\n" + \
                  "class Bar <: Foo\n" + \
-                 "  def m = B\n"
+                 "  def m = B()\n"
         info = self.analyzeFromSource(source)
         fooClass = info.package.findClass(name="Foo")
         barClass = info.package.findClass(name="Bar")
@@ -1490,7 +1511,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertIs(calleeCtor, info.getUseInfo(call).defnInfo.irDefn)
 
     def testEnsureParamTypeInfoForDefaultCtor(self):
-        source = "let x = Foo\n" + \
+        source = "let x = Foo()\n" + \
                  "class Foo"
         info = self.analyzeFromSource(source)
         Foo = info.package.findClass(name="Foo")
@@ -1499,7 +1520,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     # Tests for usage
     def testUseClassBeforeDefinition(self):
-        source = "def f = C\n" + \
+        source = "def f = C()\n" + \
                  "class C\n" + \
                  "  def this = {}"
         info = self.analyzeFromSource(source)
@@ -1543,7 +1564,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testUseGlobalClassInGlobal(self):
         source = "class C\n" + \
                  "  def this = {}\n" + \
-                 "var x = C\n"
+                 "var x = C()\n"
         info = self.analyzeFromSource(source)
         self.assertIs(info.getDefnInfo(info.ast.modules[0].definitions[0].members[0]),
                       info.getUseInfo(info.ast.modules[0].definitions[1].expression).defnInfo)
@@ -1551,7 +1572,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testUseGlobalClassInFunction(self):
         source = "class C\n" + \
                  "  def this = {}\n" + \
-                 "def f = C"
+                 "def f = C()"
         info = self.analyzeFromSource(source)
         self.assertIs(info.getDefnInfo(info.ast.modules[0].definitions[0].members[0]),
                       info.getUseInfo(info.ast.modules[0].definitions[1].body).defnInfo)
@@ -1560,7 +1581,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "class C\n" + \
                  "  def this = {}\n" + \
                  "class D\n" + \
-                 "  var x = C\n"
+                 "  var x = C()\n"
         info = self.analyzeFromSource(source)
         self.assertIs(info.getDefnInfo(info.ast.modules[0].definitions[0].members[0]),
                       info.getUseInfo(info.ast.modules[0].definitions[1].members[0].expression).defnInfo)

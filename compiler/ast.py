@@ -546,7 +546,10 @@ class AstCallExpression(AstExpression):
         return "CallExpression"
 
     def children(self):
-        return [self.callee] + self.typeArguments + self.arguments
+        result = [self.callee] + self.typeArguments
+        if self.arguments is not None:
+            result.extend(self.arguments)
+        return result
 
 
 class AstUnaryExpression(AstExpression):

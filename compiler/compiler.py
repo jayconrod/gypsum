@@ -55,77 +55,17 @@ class CompileVisitor(ast.AstNodeVisitor):
             return
 
         # Get the body of the function as a list of statements. Also parameters.
-        if isinstance(self.astDefn, ast.AstFunctionDefinition):
-            if self.astDefn.body is None:
-                assert ABSTRACT in self.function.flags
-                return
-            parameters = self.astDefn.parameters
-            if isinstance(self.astDefn.body, ast.AstBlockExpression):
-                statements = self.astDefn.body.statements
-            else:
-                statements = [self.astDefn.body]
-        elif isinstance(self.astDefn, ast.AstClassDefinition):
-            parameters = None
-            statements = self.astDefn.members
-        else:
-            assert isinstance(self.astDefn, ast.AstPrimaryConstructorDefinition)
-            parameters = self.astDefn.parameters
-            statements = []
+        parameters, statements = self.getParametersAndStatements()
 
         # Set ids (and therefore, fp-offsets) for each local variable.
         self.enumerateLocals()
         self.enumerateParameters(parameters)
 
-        # If this is a constructor, the first statement may be a "this" or "super" call.
-        altCtorCalled = False
-        superCtorCalled = False
-        if self.function.isConstructor() and \
-           len(statements) > 0 and \
-           isinstance(statements[0], ast.AstCallExpression):
-            if isinstance(statements[0].callee, ast.AstThisExpression):
-                self.visitCallThisExpression(statements[0], COMPILE_FOR_EFFECT)
-                altCtorCalled = True
-                superCtorCalled = True
-                del statements[0]
-            elif isinstance(statements[0].callee, ast.AstSuperExpression):
-                self.visitCallSuperExpression(statements[0], COMPILE_FOR_EFFECT)
-                superCtorCalled = True
-                del statements[0]
-
-        # If this is a constructor that doesn't call any alternate constructor or super
-        # constructor, try to find a default super constructor, and call that.
-        if self.function.isConstructor() and not superCtorCalled:
-            supertype = self.function.getReceiverClass().supertypes[0]
-            superclass = supertype.clas
-            defaultSuperCtors = [ctor for ctor in superclass.constructors if
-                                 len(ctor.parameterTypes) == 1]
-            assert len(defaultSuperCtors) <= 1
-            if len(defaultSuperCtors) == 0:
-                raise SemanticException(self.function.getReceiverClass().getLocation(),
-                                        "no default constructor in superclass %s" %
-                                        superclass.name)
-            self.loadThis()
-            self.buildStaticTypeArguments(supertype.typeArguments)
-            self.callg(defaultSuperCtors[0].id.index)
-            self.drop()
-
-        # If this is a primary constructor, unpack the parameters before calling the
-        # initializer. In this case, unpacking the parameters means storing them into the
-        # object. The initializer may need to access them.
-        if self.function.isConstructor() and \
-           isinstance(self.function.astDefn, ast.AstPrimaryConstructorDefinition):
-            self.unpackParameters(parameters)
-            parameters = None
-
-        # If this is a constructor that doesn't call any alternate constructor, call the
-        # initializer before we evaluate the body.
-        if self.function.isConstructor() and not altCtorCalled:
-            irInitializer = self.function.getReceiverClass().initializer
-            if irInitializer is not None:
-                self.loadThis()
-                self.buildImplicitStaticTypeArguments(self.function.typeParameters)
-                self.callg(irInitializer.id.index)
-                self.drop()
+        # If this is a constructor, some different handling is required. We need to unpack
+        # parameters early, since they may be stored in fields or passed to superconstructors.
+        # We also need to check for calls to superconstructors or alternate constructors.
+        if self.function.isConstructor():
+            parameters, statements = self.constructorPreamble(parameters, statements)
 
         # Compile those statements.
         mode = COMPILE_FOR_EFFECT if self.function.isConstructor() else COMPILE_FOR_VALUE
@@ -168,6 +108,90 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.ret()
 
         self.function.blocks = self.blocks
+
+    def getParametersAndStatements(self):
+        if isinstance(self.astDefn, ast.AstFunctionDefinition):
+            if self.astDefn.body is None:
+                assert ABSTRACT in self.function.flags
+                return
+            parameters = self.astDefn.parameters
+            if isinstance(self.astDefn.body, ast.AstBlockExpression):
+                statements = self.astDefn.body.statements
+            else:
+                statements = [self.astDefn.body]
+        elif isinstance(self.astDefn, ast.AstClassDefinition):
+            parameters = []
+            statements = self.astDefn.members
+        else:
+            assert isinstance(self.astDefn, ast.AstPrimaryConstructorDefinition)
+            parameters = self.astDefn.parameters
+            statements = []
+        return parameters, statements
+
+    def constructorPreamble(self, parameters, statements):
+        assert self.function.isConstructor()
+
+        # Unpack parameters. They may be stored in fields. They may be needed to call
+        # superconstructors.
+        self.unpackParameters(parameters)
+        parameters = []
+
+        # The first statement may be a `this` or `super` call.
+        altCtorCalled = False
+        superCtorCalled = False
+        if len(statements) > 0 and \
+           isinstance(statements[0], ast.AstCallExpression):
+            if isinstance(statements[0].callee, ast.AstThisExpression):
+                self.visitCallThisExpression(statements[0], COMPILE_FOR_EFFECT)
+                altCtorCalled = True
+                superCtorCalled = True
+                statements = statements[1:]
+            elif isinstance(statements[0].callee, ast.AstSuperExpression):
+                self.visitCallSuperExpression(statements[0], COMPILE_FOR_EFFECT)
+                superCtorCalled = True
+                statements = statements[1:]
+        elif isinstance(self.astDefn, ast.AstClassDefinition) and \
+             self.info.hasUseInfo(self.astDefn):
+            superCtorCalled = True
+            arguments = self.astDefn.superArgs if self.astDefn.superArgs is not None else []
+            self.buildCall(self.info.getUseInfo(self.astDefn),
+                           self.info.getCallInfo(self.astDefn),
+                           None, arguments, COMPILE_FOR_EFFECT, allowAllocation=False)
+        elif isinstance(self.astDefn, ast.AstPrimaryConstructorDefinition):
+            superCtorCalled = True
+            astClassDefn = self.function.getReceiverClass().astDefn
+            arguments = astClassDefn.superArgs if astClassDefn.superArgs is not None else []
+            self.buildCall(self.info.getUseInfo(astClassDefn),
+                           self.info.getCallInfo(astClassDefn),
+                           None, arguments, COMPILE_FOR_EFFECT, allowAllocation=False)
+
+        # If no superconstructor was called, try to find a default superconstructor,
+        # and call that.
+        if not superCtorCalled:
+            supertype = self.function.getReceiverClass().supertypes[0]
+            superclass = supertype.clas
+            defaultSuperCtors = [ctor for ctor in superclass.constructors if
+                                 len(ctor.parameterTypes) == 1]
+            assert len(defaultSuperCtors) <= 1
+            if len(defaultSuperCtors) == 0:
+                raise SemanticException(self.function.getReceiverClass().getLocation(),
+                                        "no default constructor in superclass %s" %
+                                        superclass.name)
+            self.loadThis()
+            self.buildStaticTypeArguments(supertype.typeArguments)
+            self.callg(defaultSuperCtors[0].id.index)
+            self.drop()
+
+        # If no alternate constructor was called, call the initializer.
+        if not altCtorCalled:
+            irInitializer = self.function.getReceiverClass().initializer
+            if irInitializer is not None:
+                self.loadThis()
+                self.buildImplicitStaticTypeArguments(self.function.typeParameters)
+                self.callg(irInitializer.id.index)
+                self.drop()
+
+        return parameters, statements
 
     def visitAstVariableDefinition(self, defn, mode):
         assert mode is COMPILE_FOR_EFFECT
@@ -372,12 +396,14 @@ class CompileVisitor(ast.AstNodeVisitor):
     def visitCallThisExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)
         callInfo = self.info.getCallInfo(expr)
-        self.buildCall(useInfo, callInfo, expr.callee, expr.arguments, mode)
+        self.buildCall(useInfo, callInfo, expr.callee, expr.arguments,
+                       mode, allowAllocation=False)
 
     def visitCallSuperExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)
         callInfo = self.info.getCallInfo(expr)
-        self.buildCall(useInfo, callInfo, expr.callee, expr.arguments, mode)
+        self.buildCall(useInfo, callInfo, expr.callee, expr.arguments,
+                       mode, allowAllocation=False)
 
     def visitAstUnaryExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)
@@ -1043,7 +1069,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.callv(len(method.parameterTypes), index)
         self.dropForEffect(mode)
 
-    def buildCall(self, useInfo, callInfo, receiver, argExprs, mode):
+    def buildCall(self, useInfo, callInfo, receiver, argExprs, mode, allowAllocation=True):
         shouldDropForEffect = mode is COMPILE_FOR_EFFECT
         defnInfo = useInfo.defnInfo
         irDefn = defnInfo.irDefn
@@ -1062,21 +1088,26 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.buildStaticTypeArguments(callInfo.typeArguments)
 
         if not irDefn.isConstructor() and not irDefn.isMethod():
-            # Global or static function
+            # Global or static function.
             assert receiver is None
             compileArgs()
             compileTypeArgs()
             self.callFunction(irDefn)
 
         elif receiver is None and irDefn.isConstructor():
-            # Constructor
+            # Constructor.
             assert receiver is None
             compileTypeArgs()
-            if irDefn.getReceiverClass().isForeign():
-                receiverClassId = irDefn.getReceiverClass().id
-                self.allocobjf(receiverClassId.packageId.index, receiverClassId.externIndex)
+            if allowAllocation:
+                if irDefn.getReceiverClass().isForeign():
+                    receiverClassId = irDefn.getReceiverClass().id
+                    self.allocobjf(receiverClassId.packageId.index, receiverClassId.externIndex)
+                else:
+                    self.allocobj(irDefn.getReceiverClass().id.index)
             else:
-                self.allocobj(irDefn.getReceiverClass().id.index)
+                # This is a constructor called from another constructor. Load receiver instead
+                # of allocating a new object.
+                self.loadThis()
             if mode is COMPILE_FOR_VALUE:
                 self.dup()
             compileArgs()

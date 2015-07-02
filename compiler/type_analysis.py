@@ -539,12 +539,17 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
         hasPrimaryOrDefaultCtor = node.constructor is not None or \
                                   not node.hasConstructors()
-        if node.superArgs is not None and \
-           (len(node.superArgs) > 0 or hasPrimaryOrDefaultCtor):
+        if node.superArgs is not None and not hasPrimaryOrDefaultCtor:
+            raise TypeException(node.location,
+                                ("%s: called superconstructor from class definition, but there "
+                                 "is no primary or default constructor"))
+        if node.superArgs is not None or hasPrimaryOrDefaultCtor:
             supertype = irClass.supertypes[0]
-            superArgTypes = map(self.visit, node.superArgs)
+            superArgTypes = map(self.visit, node.superArgs) \
+                            if node.superArgs is not None \
+                            else []
             self.handleMethodCall(ir.CONSTRUCTOR_SUFFIX, node.id, supertype,
-                                  [], superArgTypes, False, node.location)
+                                  [], superArgTypes, True, False, node.location)
 
         irInitializer = irClass.initializer
         irInitializer.parameterTypes = [thisType]
@@ -607,7 +612,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 # declaration analysis without making an extra pass.
                 scope.deleteVar(node.name)
                 varTy = self.handlePossibleCall(scope, node.name, node.id, None,
-                                                [], [], False, node.location)
+                                                [], [], False, False, node.location)
             else:
                 varTy = None
 
@@ -649,7 +654,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def visitAstVariableExpression(self, node):
         ty = self.handlePossibleCall(self.scope(), node.name, node.id, None,
-                                     [], [], False, node.location)
+                                     [], [], False, False, node.location)
         return ty
 
     def visitAstThisExpression(self, node):
@@ -745,24 +750,27 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             self.info.package.ensureDependency(package)
             n, name = nodeNames[packageNameLength]
             receiverType = self.handlePossibleCall(scope, name, node.id, None,
-                                                   [], [], False, node.location)
+                                                   [], [], False, False, node.location)
             start = packageNameLength + 1
 
         for i in xrange(start, len(nodeNames)):
             n, name = nodeNames[i]
             assert isinstance(n, ast.AstPropertyExpression)
             receiverType = self.handleMethodCall(name, n.id, receiverType,
-                                                 [], [], False, n.location)
+                                                 [], [], False, False, n.location)
             self.info.setType(n, receiverType)
 
         return receiverType
 
     def visitAstCallExpression(self, node):
         typeArgs = map(self.visit, node.typeArguments)
-        argTypes = map(self.visit, node.arguments)
+        hasArguments = node.arguments is not None
+        arguments = node.arguments if hasArguments else []
+        argTypes = map(self.visit, arguments)
         if isinstance(node.callee, ast.AstVariableExpression):
             ty = self.handlePossibleCall(self.scope(), node.callee.name, node.id,
-                                         None, typeArgs, argTypes, False, node.location)
+                                         None, typeArgs, argTypes,
+                                         hasArguments, False, node.location)
         elif isinstance(node.callee, ast.AstPropertyExpression):
             receiverType = self.visit(node.callee.receiver)
             receiverUseInfo = self.info.getUseInfo(node.callee.receiver)
@@ -770,16 +778,18 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 packageInfo = self.info.getPackageInfo(node.callee.receiver)
                 packageScope = self.info.getScope(packageInfo.scopeId)
                 ty = self.handlePossibleCall(packageScope, node.callee.propertyName, node.id,
-                                             None, typeArgs, argTypes, False, node.location)
+                                             None, typeArgs, argTypes,
+                                             hasArguments, False, node.location)
             else:
                 ty = self.handleMethodCall(node.callee.propertyName, node.id,
                                            receiverType, typeArgs, argTypes,
-                                           False, node.location)
+                                           hasArguments, False, node.location)
         elif isinstance(node.callee, ast.AstThisExpression) or \
              isinstance(node.callee, ast.AstSuperExpression):
             receiverType = self.visit(node.callee)
             self.handleMethodCall(ir.CONSTRUCTOR_SUFFIX, node.id,
-                                  receiverType, typeArgs, argTypes, False, node.location)
+                                  receiverType, typeArgs, argTypes,
+                                  hasArguments, False, node.location)
             ty = ir_t.UnitType
         else:
             # TODO: callable expression
@@ -789,7 +799,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
     def visitAstUnaryExpression(self, node):
         receiverType = self.visit(node.expr)
         ty = self.handleMethodCall(node.operator, node.id, receiverType,
-                                   [], [], False, node.location)
+                                   [], [], True, False, node.location)
         return ty
 
     def visitAstBinaryExpression(self, node):
@@ -804,7 +814,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             ty = ir_t.BooleanType
         else:
             ty = self.handleMethodCall(node.operator, node.id, leftTy,
-                                       [], [rightTy], True, node.location)
+                                       [], [rightTy], True, True, node.location)
         return ty
 
     def visitAstTupleExpression(self, node):
@@ -1026,16 +1036,16 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             raise NotImplementedError
 
     def handleMethodCall(self, name, useAstId, receiverType,
-                         typeArgs, argTypes, mayAssign, loc):
+                         typeArgs, argTypes, hasArgs, mayAssign, loc):
         irClass = ir_t.getClassFromType(receiverType)
         scope = self.info.getScope(irClass)
         return self.handlePossibleCall(scope, name, useAstId,
                                        receiverType, typeArgs, argTypes,
-                                       mayAssign, loc)
+                                       hasArgs, mayAssign, loc)
 
     def handlePossibleCall(self, scope, name, useAstId,
                            receiverType, typeArgs, argTypes,
-                           mayAssign, loc):
+                           hasArgs, mayAssign, loc):
         receiverIsExplicit = receiverType is not None
         if not receiverIsExplicit and self.hasReceiverType():
             receiverType = self.getReceiverType()
@@ -1054,6 +1064,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                 name)
 
         if nameInfo.isClass():
+            if not hasArgs:
+                raise TypeException(loc, "%s is a class and cannot be used as a value" % name)
             irClass = nameInfo.getDefnInfo().irDefn
             explicitTypeParams = ir.getExplicitTypeParameters(irClass)
             if len(typeArgs) != len(explicitTypeParams):

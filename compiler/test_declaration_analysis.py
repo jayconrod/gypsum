@@ -102,7 +102,11 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.assertEquals(1, len(clas.constructors))
         self.assertIs(ctor, clas.constructors[0])
         self.assertEquals([self.makeVariable(Name(["C", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
-                                             kind=PARAMETER, flags=frozenset([LET]))],
+                                             kind=PARAMETER, flags=frozenset([LET])),
+                           self.makeVariable(Name(["C", "x"]), kind=PARAMETER,
+                                             flags=frozenset([LET])),
+                           self.makeVariable(Name(["C", "y"]), kind=PARAMETER,
+                                             flags=frozenset([LET]))],
                           ctor.variables)
         self.assertEquals([self.makeField("C.x", flags=frozenset([LET])),
                            self.makeField("C.y", flags=frozenset([LET]))],

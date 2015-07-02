@@ -167,8 +167,34 @@ class TestUseAnalysis(TestCaseWithDefinitions):
 
     def testCallAbstractClassCtor(self):
         source = "abstract class A\n" + \
-                 "def f = A"
+                 "def f = A()"
         self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
+
+    def testUseSuperCtorFromPrimaryCtor(self):
+        source = "class Foo(x: i64)\n" + \
+                 "class Bar(y: i64) <: Foo(y)"
+        info = self.analyzeFromSourceWithTypes(source)
+        fooPrimaryCtorDefnInfo = \
+          info.getDefnInfo(info.ast.modules[0].definitions[0].constructor)
+        use = info.getUseInfo(info.ast.modules[0].definitions[1])
+        self.assertIs(fooPrimaryCtorDefnInfo, use.defnInfo)
+
+    def testUseSuperCtorFromDefaultCtor(self):
+        source = "class Foo(x: i64)\n" + \
+                 "class Bar <: Foo(12)"
+        info = self.analyzeFromSourceWithTypes(source)
+        fooPrimaryCtorDefnInfo = \
+          info.getDefnInfo(info.ast.modules[0].definitions[0].constructor)
+        use = info.getUseInfo(info.ast.modules[0].definitions[1])
+        self.assertIs(fooPrimaryCtorDefnInfo, use.defnInfo)
+
+    def testUseSuperCtorImplicit(self):
+        source = "class Foo\n" + \
+                 "class Bar <: Foo"
+        info = self.analyzeFromSourceWithTypes(source)
+        fooDefaultCtor = info.package.findClass(name="Foo").constructors[0]
+        use = info.getUseInfo(info.ast.modules[0].definitions[1])
+        self.assertIs(use.defnInfo.irDefn, fooDefaultCtor)
 
     # Regression tests
     def testUseTypeParameterInLaterPrimaryCtor(self):
