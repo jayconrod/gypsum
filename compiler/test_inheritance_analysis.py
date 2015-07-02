@@ -206,3 +206,29 @@ class TestInheritanceAnalysis(unittest.TestCase):
         info = self.analyzeFromSource(source)
         scope = info.getScope(info.ast.modules[0].definitions[1])
         self.assertIs(None, scope.getDefinition("T"))
+
+    def testInheritStaticMethod(self):
+        source = "class A\n" + \
+                 "  static def f = 12\n" + \
+                 "class B <: A"
+        info = self.analyzeFromSource(source)
+        scope = info.getScope(info.ast.modules[0].definitions[1])
+        self.assertTrue(scope.isBound("f"))
+
+    def testInheritedStaticMethodDoesntConflictWithStaticMethod(self):
+        source = "class A\n" + \
+                 "  static def f = 12\n" + \
+                 "class B <: A\n" + \
+                 "  static def f = 34"
+        info = self.analyzeFromSource(source)
+        scope = info.getScope(info.ast.modules[0].definitions[1])
+        self.assertEquals(2, len(scope.getDefinition("f").overloads))
+
+    def testInheritedStaticMethodDoesntConflictWithNormalMethod(self):
+        source = "class A\n" + \
+                 "  static def f = 12\n" + \
+                 "class B <: A\n" + \
+                 "  def f = 34"
+        info = self.analyzeFromSource(source)
+        scope = info.getScope(info.ast.modules[0].definitions[1])
+        self.assertEquals(2, len(scope.getDefinition("f").overloads))
