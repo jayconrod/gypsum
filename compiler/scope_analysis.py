@@ -574,12 +574,12 @@ class Scope(ast.AstNodeVisitor):
         irInitializerName = name.withSuffix(ir.CLASS_INIT_SUFFIX)
         irInitializer = self.info.package.addFunction(irInitializerName, astDefn,
                                                       None, list(implicitTypeParams),
-                                                      None, [], None, frozenset([METHOD]))
+                                                      None, [], None, frozenset())
         self.makeMethod(irInitializer, irDefn)
         irDefn.initializer = irInitializer
 
         if not astDefn.hasConstructors():
-            ctorFlags = (flags & frozenset([PUBLIC, PROTECTED])) | frozenset([METHOD])
+            ctorFlags = flags & frozenset([PUBLIC, PROTECTED])
             irDefaultCtorName = name.withSuffix(ir.CONSTRUCTOR_SUFFIX)
             irDefaultCtor = self.info.package.addFunction(irDefaultCtorName, astDefn,
                                                           None, list(implicitTypeParams),
@@ -915,9 +915,14 @@ class FunctionScope(Scope):
         self.info.setScope(self.getIrDefn().id, self)
 
     def configureAsMethod(self, astClassScopeId, irClassDefn):
-        defnInfo = self.getDefnInfo()
-        irMethod = defnInfo.irDefn
-        self.makeMethod(irMethod, irClassDefn)
+        """Configures this scope as a method scope.
+
+        Binds and defines the `this` parameter, and
+        adds the given parent class to the closure context map. `makeMethod` should have already
+        been called on the function definition; this method does not modify the method itself.
+        """
+        irMethod = self.getIrDefn()
+        assert irMethod.isMethod()
         this = irMethod.variables[0]
         self.bind("this", DefnInfo(this, self.scopeId))
         self.define("this")
@@ -1164,19 +1169,27 @@ class ClassScope(Scope):
                 checkFlags(flags, frozenset([PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
                 irDefn = self.info.package.addFunction(name, astDefn,
                                                        None, implicitTypeParams,
-                                                       None, [], None,
-                                                       flags | frozenset([METHOD]))
+                                                       None, [], None, flags)
+                self.makeMethod(irDefn, irScopeDefn)
                 irScopeDefn.constructors.append(irDefn)
             else:
                 name = self.makeName(astDefn.name)
-                checkFlags(flags, frozenset([ABSTRACT, PUBLIC, PROTECTED, PRIVATE]),
-                           astDefn.location)
-                irDefn = self.info.package.addFunction(name, astDefn,
-                                                       None, implicitTypeParams,
-                                                       None, [], None,
-                                                       flags | frozenset([METHOD]))
-                irScopeDefn.methods.append(irDefn)
-            # We don't need to call makeMethod here because the inner FunctionScope will do it.
+                if STATIC in flags:
+                    checkFlags(flags, frozenset([STATIC, PUBLIC, PROTECTED, PRIVATE]),
+                               astDefn.location)
+                    irDefn = self.info.package.addFunction(name, astDefn,
+                                                           None, implicitTypeParams,
+                                                           None, [], None, flags)
+                else:
+                    checkFlags(flags, frozenset([ABSTRACT, PUBLIC, PROTECTED, PRIVATE]),
+                               astDefn.location)
+                    irDefn = self.info.package.addFunction(name, astDefn,
+                                                           None, implicitTypeParams,
+                                                           None, [], None, flags)
+                    self.makeMethod(irDefn, irScopeDefn)
+                    irScopeDefn.methods.append(irDefn)
+                    # We don't need to call makeMethod here because the inner FunctionScope
+                    # will do it.
         elif isinstance(astDefn, ast.AstPrimaryConstructorDefinition):
             name = self.makeName(ir.CONSTRUCTOR_SUFFIX)
             checkFlags(flags, frozenset([PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
@@ -1185,9 +1198,9 @@ class ClassScope(Scope):
             implicitTypeParams = self.getImplicitTypeParameters()
             irDefn = self.info.package.addFunction(name, astDefn,
                                                    None, implicitTypeParams,
-                                                   None, [], None, flags | frozenset([METHOD]))
-            irScopeDefn.constructors.append(irDefn)
+                                                   None, [], None, flags)
             self.makeMethod(irDefn, irScopeDefn)
+            irScopeDefn.constructors.append(irDefn)
         elif isinstance(astDefn, ast.AstTypeParameter):
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([STATIC, COVARIANT, CONTRAVARIANT]), astDefn.location)
@@ -1233,12 +1246,13 @@ class ClassScope(Scope):
         pass
 
     def newLocalScope(self, prefix, ast):
-        scope = FunctionScope(prefix, ast, self)
-        return scope
+        return FunctionScope(prefix, ast, self)
 
     def newScopeForFunction(self, prefix, ast):
         scope = FunctionScope(prefix, ast, self)
-        scope.configureAsMethod(self.scopeId, self.getIrDefn())
+        irDefn = scope.getIrDefn()
+        if irDefn.isMethod():
+            scope.configureAsMethod(self.scopeId, self.getIrDefn())
         return scope
 
     def newScopeForClass(self, prefix, ast):

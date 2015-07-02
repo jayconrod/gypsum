@@ -210,6 +210,14 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                                                                       flags=frozenset([LET]))})
         self.assertEquals(expectedClosureInfo, info.getClosureInfo(scopeId))
 
+    def testDefineClassStaticFunction(self):
+        info = self.analyzeFromSource("class C { static def f = 12; };")
+        astDefn = info.ast.modules[0].definitions[0].members[0]
+        scopeId = info.getScope(info.ast.modules[0].definitions[0]).scopeId
+        expectedFunction = self.makeFunction("C.f", flags=frozenset([STATIC]))
+        expectedDefnInfo = DefnInfo(expectedFunction, scopeId)
+        self.assertEquals(expectedDefnInfo, info.getDefnInfo(astDefn))
+
     @unittest.skip("inner classes not supported yet")
     def testDefineClassClass(self):
         info = self.analyzeFromSource("class C { class D; };")
