@@ -684,13 +684,21 @@ class Scope(ast.AstNodeVisitor):
             assert useKind in [USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY]
             self.info.package.ensureDependency(irDefn)
 
-        if hasattr(irDefn, "flags") and \
-           ((PRIVATE in irDefn.flags and \
-             not self.isWithin(defnInfo.inheritedScopeId)) or \
-            (PROTECTED in irDefn.flags and \
-             not self.isWithin(defnInfo.scopeId))):
-            raise ScopeException(loc, "%s: not allowed to be used in this scope" %
-                                 irDefn.name)
+        if hasattr(irDefn, "flags"):
+            if PRIVATE in irDefn.flags and not self.isWithin(defnInfo.inheritedScopeId):
+                raise ScopeException(loc,
+                                     "%s: definition is private and cannot be used here" %
+                                     irDefn.name)
+            if PROTECTED in irDefn.flags and not self.isWithin(defnInfo.scopeId):
+                raise ScopeException(loc,
+                                     "%s: definition is protected and cannot be used here" %
+                                     irDefn.name)
+            if STATIC not in irDefn.flags and \
+               useKind is USE_AS_VALUE and \
+               self.isStaticWithin(defnInfo.scopeId):
+                raise ScopeException(loc,
+                                     "%s: definition is non-static, accessed from a static scope" %
+                                     irDefn.name)
 
         if useKind is USE_AS_CONSTRUCTOR and \
            ABSTRACT in irDefn.getReceiverClass().flags:
@@ -734,6 +742,30 @@ class Scope(ast.AstNodeVisitor):
         while current is not None and current.scopeId != id:
             current = current.parent
         return current is not None
+
+    def isStaticWithin(self, scopeOrId):
+        """Returns true if this scope is within the given scope and at least one top-level
+        scope between the current scope and the given scope (including the current scope but
+        not the given scope) is defined by a static definition. If this is true, then
+        non-static definitions bound in the given scope cannot be used in this scope."""
+        id = scopeOrId.scopeId if isinstance(scopeOrId, Scope) else scopeOrId
+        if self.scopeId is id or self.scopeId is GLOBAL_SCOPE_ID:
+            return False
+
+        current = self
+        isWithin = False
+        isStatic = False
+        isGlobal = False
+        while True:
+            if not self.isLocal():
+                isStatic |= STATIC in self.getIrDefn().flags
+            current = current.parent
+            isWithin |= current.scopeId is id
+            isGlobal |= isinstance(current, GlobalScope)
+            if current.scopeId is id or isWithin or isGlobal:
+                break
+
+        return isWithin and isStatic and not isGlobal
 
     def topLocalScope(self, defnScope=None):
         """Returns the top-most local scope which is still below defnScope."""

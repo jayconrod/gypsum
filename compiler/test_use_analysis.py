@@ -196,6 +196,36 @@ class TestUseAnalysis(TestCaseWithDefinitions):
         use = info.getUseInfo(info.ast.modules[0].definitions[1])
         self.assertIs(use.defnInfo.irDefn, fooDefaultCtor)
 
+    def testUseGlobalFromStaticMethod(self):
+        source = "let x = 12\n" + \
+                 "class Foo\n" + \
+                 "  static def f = x"
+        info = self.analyzeFromSourceWithTypes(source)
+        x = info.package.findGlobal(name="x")
+        use = info.getUseInfo(info.ast.modules[0].definitions[1].members[0].body)
+        self.assertIs(x, use.defnInfo.irDefn)
+
+    def testUseFieldFromStaticMethod(self):
+        source = "class Foo\n" + \
+                 "  let x = 12\n" + \
+                 "  static def f = x"
+        self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
+
+    def testUseMethodFromStaticMethod(self):
+        source = "class Foo\n" + \
+                 "  def f = 12\n" + \
+                 "  static def g = f"
+        self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
+
+    def testUseStaticMethodFromStaticMethod(self):
+        source = "class Foo\n" + \
+                 "  static def f = 12\n" + \
+                 "  static def g = f"
+        info = self.analyzeFromSourceWithTypes(source)
+        f = info.package.findFunction(name="Foo.f")
+        use = info.getUseInfo(info.ast.modules[0].definitions[0].members[1].body)
+        self.assertIs(f, use.defnInfo.irDefn)
+
     # Regression tests
     def testUseTypeParameterInLaterPrimaryCtor(self):
         source = "class Foo\n" + \
