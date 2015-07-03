@@ -558,6 +558,38 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source)
         self.assertEquals(I32Type, info.package.findFunction(name="f").returnType)
 
+    def testCallStaticMethodFromMethod(self):
+        source = "class Foo\n" + \
+                 "  static def f = 12\n" + \
+                 "  def g = f"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(I64Type, info.package.findFunction(name="Foo.g").returnType)
+
+    def testCallOverloadedStaticMethod(self):
+        source = "class Foo\n" + \
+                 "  static def f(x: i64) = x\n" + \
+                 "  static def f(x: String) = x\n" + \
+                 "  def g = f(12)"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(I64Type, info.package.findFunction(name="Foo.g").returnType)
+
+    def testCallStaticMethodOverloadedWithNonStaticMethod(self):
+        source = "class Foo\n" + \
+                 "  static def f(x: i64) = x\n" + \
+                 "  def f(x: String) = x\n" + \
+                 "  def g1 = f(12)\n" + \
+                 "  def g2 = f(\"bar\")"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(I64Type, info.package.findFunction(name="Foo.g1").returnType)
+        self.assertEquals(getStringType(), info.package.findFunction(name="Foo.g2").returnType)
+
+    def testStaticDoesNotReduceOverloadAmbiguity(self):
+        source = "class Foo\n" + \
+                 "  static def f(x: i64) = x\n" + \
+                 "  def f(x: i64) = x\n" + \
+                 "  static def g = f"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     def testCall(self):
         source = "def f(x: i64, y: boolean) = x\n" + \
                  "def g = f(1, true)"

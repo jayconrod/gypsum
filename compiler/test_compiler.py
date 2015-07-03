@@ -2628,6 +2628,30 @@ class TestCompiler(TestCaseWithDefinitions):
           parameterTypes=[boxType])
         self.assertEquals(expectedF, f)
 
+    def testCallStaticMethodFromMethod(self):
+        source = "class Foo\n" + \
+                 "  static def f = 12\n" + \
+                 "  def g = f"
+        package = self.compileFromSource(source)
+        foo = package.findClass(name="Foo")
+        fooType = ClassType(foo)
+        f = package.findFunction(name="Foo.f")
+        self.checkFunction(package,
+                           self.makeSimpleFunction("Foo.f", I64Type, [[
+                               i64(12),
+                               ret(),
+                             ]],
+                             flags=frozenset([STATIC])))
+        self.checkFunction(package,
+                           self.makeSimpleFunction("Foo.g", I64Type, [[
+                               callg(f.id.index),
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable(Name(["Foo", "g", RECEIVER_SUFFIX]),
+                                                          type=fooType, kind=PARAMETER,
+                                                          flags=frozenset([LET]))],
+                             flags=frozenset([METHOD])))
+
     def testBlockOrdering(self):
         sys.setrecursionlimit(2000)
         source = "def f =\n" + \
