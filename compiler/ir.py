@@ -471,7 +471,8 @@ class Function(IrTopDefn):
         return hasattr(receiverClass, "isPrimitive") and receiverClass.isPrimitive
 
     def mayOverride(self, other):
-        assert self.isMethod() and other.isMethod()
+        if not self.isMethod() or not other.isMethod():
+            return False
         selfExplicitTypeParameters = getExplicitTypeParameters(self)
         otherExplicitTypeParameters = getExplicitTypeParameters(other)
         typeParametersAreCompatible = \

@@ -14,6 +14,7 @@ from ir import *
 from ir_types import *
 from layout import layout
 from lexer import *
+from location import NoLoc
 from parser import *
 from scope_analysis import *
 from type_analysis import *
@@ -624,6 +625,39 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  static def f(x: T) = x\n" + \
                  "def g = Foo.f"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testStaticMethodDoesNotOverrideStatic(self):
+        source = "class Foo\n" + \
+                 "  static def f = 12\n" + \
+                 "class Bar <: Foo\n" + \
+                 "  static def f = 34"
+        info = self.analyzeFromSource(source)
+        barScope = info.getScope(info.ast.modules[0].definitions[1])
+        fNameInfo = barScope.lookup("f", NoLoc, localOnly=True)
+        fNameInfo.resolveOverrides()
+        self.assertEquals({}, fNameInfo.overrides)
+
+    def testStaticMethodDoesNotOverrideNormal(self):
+        source = "class Foo\n" + \
+                 "  def f = 12\n" + \
+                 "class Bar <: Foo\n" + \
+                 "  static def f = 12"
+        info = self.analyzeFromSource(source)
+        barScope = info.getScope(info.ast.modules[0].definitions[1])
+        fNameInfo = barScope.lookup("f", NoLoc, localOnly=True)
+        fNameInfo.resolveOverrides()
+        self.assertEquals({}, fNameInfo.overrides)
+
+    def testNormalMethodDoesNotOverrideStatic(self):
+        source = "class Foo\n" + \
+                 "  static def f = 12\n" + \
+                 "class Bar <: Foo\n" + \
+                 "  def f = 12"
+        info = self.analyzeFromSource(source)
+        barScope = info.getScope(info.ast.modules[0].definitions[1])
+        fNameInfo = barScope.lookup("f", NoLoc, localOnly=True)
+        fNameInfo.resolveOverrides()
+        self.assertEquals({}, fNameInfo.overrides)
 
     def testCall(self):
         source = "def f(x: i64, y: boolean) = x\n" + \
