@@ -12,7 +12,7 @@ import ir_types as ir_t
 from builtins import getExceptionClass, getPackageClass, getNothingClass
 from utils import COMPILE_FOR_VALUE, COMPILE_FOR_MATCH, COMPILE_FOR_UNINITIALIZED, COMPILE_FOR_EFFECT, each
 from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, NORMAL_MODE, STD_MODE, NOSTD_MODE, CallInfo, ScopePrefixInfo
-from flags import COVARIANT, CONTRAVARIANT, PROTECTED, PUBLIC
+from flags import COVARIANT, CONTRAVARIANT, PROTECTED, PUBLIC, STATIC
 import scope_analysis
 
 
@@ -625,7 +625,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 # declaration analysis without making an extra pass.
                 scope.deleteVar(node.name)
                 varTy = self.handlePossibleCall(scope, node.name, node.id, None,
-                                                [], [], False, False, False, node.location)
+                                                [], [], False, False, False, False,
+                                                node.location)
             else:
                 varTy = None
 
@@ -667,7 +668,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def visitAstVariableExpression(self, node, mayBePrefix=False):
         ty = self.handlePossibleCall(self.scope(), node.name, node.id, None,
-                                     [], [], False, False, mayBePrefix, node.location)
+                                     [], [], False, False, False, mayBePrefix, node.location)
         return ty
 
     def visitAstThisExpression(self, node):
@@ -711,11 +712,15 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         if self.info.hasScopePrefixInfo(node.receiver):
             receiverScope = self.info.getScope(
                 self.info.getScopePrefixInfo(node.receiver).scopeId)
+            hasReceiver = False
         else:
             receiverScope = self.info.getScope(ir_t.getClassFromType(receiverType))
+            hasReceiver = True
         ty = self.handlePossibleCall(receiverScope, node.propertyName, node.id, receiverType,
-                                     typeArgs=[], argTypes=[], hasArgs=False, mayAssign=False,
-                                     mayBePrefix=mayBePrefix, loc=node.location)
+                                     typeArgs=[], argTypes=[],
+                                     hasReceiver=hasReceiver, hasArgs=False,
+                                     mayAssign=False, mayBePrefix=mayBePrefix,
+                                     loc=node.location)
         return ty
 
     def visitAstCallExpression(self, node, mayBePrefix=False):
@@ -729,18 +734,22 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         if isinstance(node.callee, ast.AstVariableExpression):
             ty = self.handlePossibleCall(self.scope(), node.callee.name, node.id,
                                          None, typeArgs, argTypes,
-                                         hasArgs, mayAssign=False, mayBePrefix=mayBePrefix,
+                                         hasArgs=hasArgs, hasReceiver=False,
+                                         mayAssign=False, mayBePrefix=mayBePrefix,
                                          loc=node.location)
         elif isinstance(node.callee, ast.AstPropertyExpression):
             receiverType = self.visitPossiblePrefix(node.callee.receiver)
             if self.info.hasScopePrefixInfo(node.callee.receiver):
                 receiverScope = self.info.getScope(
                     self.info.getScopePrefixInfo(node.callee.receiver).scopeId)
+                hasReceiver = False
             else:
                 receiverScope = self.info.getScope(ir_t.getClassFromType(receiverType))
+                hasReceiver = True
             ty = self.handlePossibleCall(receiverScope, node.callee.propertyName, node.id,
                                          receiverType, typeArgs, argTypes,
-                                         hasArgs, mayAssign=False, mayBePrefix=mayBePrefix,
+                                         hasReceiver=hasReceiver, hasArgs=hasArgs,
+                                         mayAssign=False, mayBePrefix=mayBePrefix,
                                          loc=node.location)
         elif isinstance(node.callee, ast.AstThisExpression) or \
              isinstance(node.callee, ast.AstSuperExpression):
@@ -1000,11 +1009,13 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         scope = self.info.getScope(irClass)
         return self.handlePossibleCall(scope, name, useAstId,
                                        receiverType, typeArgs, argTypes,
-                                       hasArgs, mayAssign, False, loc)
+                                       hasReceiver=True, hasArgs=hasArgs,
+                                       mayAssign=mayAssign, mayBePrefix=False,
+                                       loc=loc)
 
     def handlePossibleCall(self, scope, name, useAstId,
                            receiverType, typeArgs, argTypes,
-                           hasArgs, mayAssign, mayBePrefix, loc):
+                           hasReceiver, hasArgs, mayAssign, mayBePrefix, loc):
         receiverIsExplicit = receiverType is not None
         if not receiverIsExplicit and self.hasReceiverType():
             receiverType = self.getReceiverType()
@@ -1070,6 +1081,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                               (isinstance(irDefn, ir.Function) and \
                                irDefn.isMethod() and \
                                not irDefn.isConstructor()))
+        if receiverExprNeeded and not hasReceiver:
+            raise TypeException(loc, "%s: cannot access without receiver" % name)
         callInfo = CallInfo(allTypeArgs, receiverExprNeeded)
         self.info.setCallInfo(useAstId, callInfo)
 

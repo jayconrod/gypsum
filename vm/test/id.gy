@@ -4,4 +4,4 @@ def id-inner[static T](value: T) = value
 def main =
   var s = id-outer[String]("foo")
   if (s != "foo")
-    throw Exception
+    throw Exception()

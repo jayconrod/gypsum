@@ -28,5 +28,5 @@ def main =
   var old-list = List[String]("foo", List[String]("bar", List[String]("baz", null)))
   var new-list = map[String](AppendString("x"), old-list)
   if ("foox barx bazx" != new-list.to-string)
-    throw Exception
+    throw Exception()
   0

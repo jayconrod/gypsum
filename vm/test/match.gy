@@ -19,11 +19,11 @@ class Box[static T](value: T)
 def test-match-members =
   let ptr-obj = PtrMember("foo")
   if (get-value(ptr-obj) != "foo")
-    throw Exception
+    throw Exception()
 
   let int-obj = IntMember(12)
   if (get-value(int-obj) != "12")
-    throw Exception
+    throw Exception()
 
 
 def test-match-type-with-erased-arg =
@@ -32,7 +32,7 @@ def test-match-type-with-erased-arg =
     case x: Box[_] => true
     case _ => false
   if (!result)
-    throw Exception
+    throw Exception()
 
 
 def test-match-type-with-erased-foreign-arg =
@@ -41,7 +41,7 @@ def test-match-type-with-erased-foreign-arg =
     case x: std.Tuple2[_, _] => true
     case _ => false
   if (!result)
-    throw Exception
+    throw Exception()
 
 
 def main =

@@ -15,7 +15,7 @@ public class Some[static +T](value: T) <: Option[T]
 
 class None-class <: Option[Nothing]
   public def is-defined = false
-  public def get = throw Exception
+  public def get = throw Exception()
   public def to-string = "None"
 
-public let None: Option[Nothing] = None-class
+public let None: Option[Nothing] = None-class()

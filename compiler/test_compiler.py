@@ -2693,3 +2693,30 @@ class TestCompiler(TestCaseWithDefinitions):
                                branch(9),
                              ], [
                                ret()]]))
+
+    # Regression tests
+    def testPrimaryCtorCallsSuperCtorWithTypeArgs(self):
+        source = "class Foo[static T]\n" + \
+                 "class Bar <: Foo[Nothing]"
+        package = self.compileFromSource(source)
+        foo = package.findClass(name="Foo")
+        bar = package.findClass(name="Bar")
+        self.checkFunction(package,
+                           self.makeSimpleFunction(Name(["Bar", CONSTRUCTOR_SUFFIX]),
+                                                   UnitType,
+                                                   [[
+                                                       ldlocal(0),
+                                                       tycs(BUILTIN_NOTHING_CLASS_ID.index),
+                                                       callg(foo.constructors[0].id.index),
+                                                       drop(),
+                                                       ldlocal(0),
+                                                       callg(bar.initializer.id.index),
+                                                       drop(),
+                                                       unit(),
+                                                       ret(),
+                                                   ]],
+                                                   variables=[self.makeVariable(Name(["Bar", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
+                                                                                type=ClassType(bar),
+                                                                                kind=PARAMETER,
+                                                                                flags=frozenset([LET]))],
+                                                   flags=frozenset([METHOD])))

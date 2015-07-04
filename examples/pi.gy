@@ -31,7 +31,7 @@ def integrate-circle =
 // approximation.
 def sqrt(n: f64) =
   if (n < -1e4)
-    throw Exception
+    throw Exception()
   var x = 1.
   var i = 0
   while (i < 10)

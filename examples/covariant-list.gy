@@ -23,10 +23,10 @@ abstract class List[static +T]
 // List[Nothing]. Nothing is a built-in class which acts as a sub-class of all classes. That
 // means Nil is a member of every List type.
 class Nil-class <: List[Nothing]
-  def head = throw Exception
-  def tail = throw Exception
+  def head = throw Exception()
+  def tail = throw Exception()
 
-let Nil = Nil-class
+let Nil = Nil-class()
 
 // Next, we define Cons, which is a single element in a List.
 class Cons[static +T](value: T, next: List[T]) <: List[T]

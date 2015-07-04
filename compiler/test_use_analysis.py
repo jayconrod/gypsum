@@ -287,6 +287,12 @@ class TestUseAnalysis(TestCaseWithDefinitions):
         use = info.getUseInfo(info.ast.modules[0].definitions[2].body)
         self.assertIs(f, use.defnInfo.irDefn)
 
+    def testUseNonStaticMethodFromGlobal(self):
+        source = "class Foo\n" + \
+                 "  def f = 12\n" + \
+                 "def g = Foo.f"
+        self.assertRaises(TypeException, self.analyzeFromSourceWithTypes, source)
+
     # Regression tests
     def testUseTypeParameterInLaterPrimaryCtor(self):
         source = "class Foo\n" + \

@@ -56,6 +56,8 @@ class CompileVisitor(ast.AstNodeVisitor):
 
         # Get the body of the function as a list of statements. Also parameters.
         parameters, statements = self.getParametersAndStatements()
+        if statements is None:
+            return
 
         # Set ids (and therefore, fp-offsets) for each local variable.
         self.enumerateLocals()
@@ -113,7 +115,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         if isinstance(self.astDefn, ast.AstFunctionDefinition):
             if self.astDefn.body is None:
                 assert ABSTRACT in self.function.flags
-                return
+                return None, None
             parameters = self.astDefn.parameters
             if isinstance(self.astDefn.body, ast.AstBlockExpression):
                 statements = self.astDefn.body.statements
@@ -1097,8 +1099,8 @@ class CompileVisitor(ast.AstNodeVisitor):
         elif receiver is None and irDefn.isConstructor():
             # Constructor.
             assert receiver is None
-            compileTypeArgs()
             if allowAllocation:
+                compileTypeArgs()
                 if irDefn.getReceiverClass().isForeign():
                     receiverClassId = irDefn.getReceiverClass().id
                     self.allocobjf(receiverClassId.packageId.index, receiverClassId.externIndex)

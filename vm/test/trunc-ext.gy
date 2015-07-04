@@ -41,16 +41,16 @@ def main =
 
 def check-i8(expected: i8, actual: i8) =
   if (expected != actual)
-    throw Exception
+    throw Exception()
 
 def check-i16(expected: i16, actual: i16) =
   if (expected != actual)
-    throw Exception
+    throw Exception()
 
 def check-i32(expected: i32, actual: i32) =
   if (expected != actual)
-    throw Exception
+    throw Exception()
 
 def check-i64(expected: i64, actual: i64) =
   if (expected != actual)
-    throw Exception
+    throw Exception()
