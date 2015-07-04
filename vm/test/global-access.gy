@@ -9,8 +9,8 @@ var hello = "hello" + world
 
 def main =
   if (hello != "hello, world")
-    throw Exception
+    throw Exception()
   hello = "goodbye, world"
   if (hello != "goodbye, world")
-    throw Exception
+    throw Exception()
   0

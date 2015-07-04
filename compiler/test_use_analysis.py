@@ -167,8 +167,131 @@ class TestUseAnalysis(TestCaseWithDefinitions):
 
     def testCallAbstractClassCtor(self):
         source = "abstract class A\n" + \
-                 "def f = A"
+                 "def f = A()"
         self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
+
+    def testUseSuperCtorFromPrimaryCtor(self):
+        source = "class Foo(x: i64)\n" + \
+                 "class Bar(y: i64) <: Foo(y)"
+        info = self.analyzeFromSourceWithTypes(source)
+        fooPrimaryCtorDefnInfo = \
+          info.getDefnInfo(info.ast.modules[0].definitions[0].constructor)
+        use = info.getUseInfo(info.ast.modules[0].definitions[1])
+        self.assertIs(fooPrimaryCtorDefnInfo, use.defnInfo)
+
+    def testUseSuperCtorFromDefaultCtor(self):
+        source = "class Foo(x: i64)\n" + \
+                 "class Bar <: Foo(12)"
+        info = self.analyzeFromSourceWithTypes(source)
+        fooPrimaryCtorDefnInfo = \
+          info.getDefnInfo(info.ast.modules[0].definitions[0].constructor)
+        use = info.getUseInfo(info.ast.modules[0].definitions[1])
+        self.assertIs(fooPrimaryCtorDefnInfo, use.defnInfo)
+
+    def testUseSuperCtorImplicit(self):
+        source = "class Foo\n" + \
+                 "class Bar <: Foo"
+        info = self.analyzeFromSourceWithTypes(source)
+        fooDefaultCtor = info.package.findClass(name="Foo").constructors[0]
+        use = info.getUseInfo(info.ast.modules[0].definitions[1])
+        self.assertIs(use.defnInfo.irDefn, fooDefaultCtor)
+
+    def testUseGlobalFromStaticMethod(self):
+        source = "let x = 12\n" + \
+                 "class Foo\n" + \
+                 "  static def f = x"
+        info = self.analyzeFromSourceWithTypes(source)
+        x = info.package.findGlobal(name="x")
+        use = info.getUseInfo(info.ast.modules[0].definitions[1].members[0].body)
+        self.assertIs(x, use.defnInfo.irDefn)
+
+    def testUseFieldFromStaticMethod(self):
+        source = "class Foo\n" + \
+                 "  let x = 12\n" + \
+                 "  static def f = x"
+        self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
+
+    def testUseMethodFromStaticMethod(self):
+        source = "class Foo\n" + \
+                 "  def f = 12\n" + \
+                 "  static def g = f"
+        self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
+
+    def testUseStaticMethodFromStaticMethod(self):
+        source = "class Foo\n" + \
+                 "  static def f = 12\n" + \
+                 "  static def g = f"
+        info = self.analyzeFromSourceWithTypes(source)
+        f = info.package.findFunction(name="Foo.f")
+        use = info.getUseInfo(info.ast.modules[0].definitions[0].members[1].body)
+        self.assertIs(f, use.defnInfo.irDefn)
+
+    def testUsePrivateStaticMethodFromStaticMethod(self):
+        source = "class Foo\n" + \
+                 "  private static def f = 12\n" + \
+                 "  static def g = f"
+        info = self.analyzeFromSourceWithTypes(source)
+        f = info.package.findFunction(name="Foo.f")
+        use = info.getUseInfo(info.ast.modules[0].definitions[0].members[1].body)
+        self.assertIs(f, use.defnInfo.irDefn)
+
+    def testUseInheritedStaticMethod(self):
+        source = "class Foo\n" + \
+                 "  static def f = 12\n" + \
+                 "class Bar <: Foo\n" + \
+                 "  static def g = f"
+        info = self.analyzeFromSourceWithTypes(source)
+        f = info.package.findFunction(name="Foo.f")
+        use = info.getUseInfo(info.ast.modules[0].definitions[1].members[0].body)
+        self.assertIs(f, use.defnInfo.irDefn)
+
+    def testUseInheritedStaticPrivateMethod(self):
+        source = "class Foo\n" + \
+                 "  private static def f = 12\n" + \
+                 "class Bar <: Foo\n" + \
+                 "  static def g = f"
+        self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
+
+    def testUseInheritedStaticProtectedMethod(self):
+        source = "class Foo\n" + \
+                 "  protected static def f = 12\n" + \
+                 "class Bar <: Foo\n" + \
+                 "  static def g = f"
+        info = self.analyzeFromSourceWithTypes(source)
+        f = info.package.findFunction(name="Foo.f")
+        use = info.getUseInfo(info.ast.modules[0].definitions[1].members[0].body)
+        self.assertIs(f, use.defnInfo.irDefn)
+
+    def testUseStaticMethodFromGlobal(self):
+        source = "class Foo\n" + \
+                 "  static def f = 12\n" + \
+                 "def g = Foo.f"
+        info = self.analyzeFromSourceWithTypes(source)
+        f = info.package.findFunction(name="Foo.f")
+        use = info.getUseInfo(info.ast.modules[0].definitions[1].body)
+        self.assertIs(f, use.defnInfo.irDefn)
+
+    def testUseStaticPrivateMethodFromGlobal(self):
+        source = "class Foo\n" + \
+                 "  private static def f = 12\n" + \
+                 "def g = Foo.f"
+        self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
+
+    def testUseInheritedStaticMethodFromGlobal(self):
+        source = "class Foo\n" + \
+                 "  static def f = 12\n" + \
+                 "class Bar <: Foo\n" + \
+                 "def g = Bar.f"
+        info = self.analyzeFromSourceWithTypes(source)
+        f = info.package.findFunction(name="Foo.f")
+        use = info.getUseInfo(info.ast.modules[0].definitions[2].body)
+        self.assertIs(f, use.defnInfo.irDefn)
+
+    def testUseNonStaticMethodFromGlobal(self):
+        source = "class Foo\n" + \
+                 "  def f = 12\n" + \
+                 "def g = Foo.f"
+        self.assertRaises(TypeException, self.analyzeFromSourceWithTypes, source)
 
     # Regression tests
     def testUseTypeParameterInLaterPrimaryCtor(self):

@@ -11,8 +11,8 @@ import ir
 import ir_types as ir_t
 from builtins import getExceptionClass, getPackageClass, getNothingClass
 from utils import COMPILE_FOR_VALUE, COMPILE_FOR_MATCH, COMPILE_FOR_UNINITIALIZED, COMPILE_FOR_EFFECT, each
-from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, NORMAL_MODE, STD_MODE, NOSTD_MODE, CallInfo, PackageInfo
-from flags import COVARIANT, CONTRAVARIANT, PROTECTED, PUBLIC
+from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, NORMAL_MODE, STD_MODE, NOSTD_MODE, CallInfo, ScopePrefixInfo
+from flags import COVARIANT, CONTRAVARIANT, PROTECTED, PUBLIC, STATIC
 import scope_analysis
 
 
@@ -114,7 +114,7 @@ class TypeVisitorBase(ast.AstNodeVisitor):
         assert self.hasReceiverType()
         return self.receiverTypeStack[-1]
 
-    def preVisit(self, node, *unused):
+    def preVisit(self, node, *unusedArgs, **unusedKwargs):
         if self.info.hasScope(node.id):
             scope = self.info.getScope(node.id)
             self.scopeStack.append(scope)
@@ -125,7 +125,7 @@ class TypeVisitorBase(ast.AstNodeVisitor):
             else:
                 self.receiverTypeStack.append(None)
 
-    def postVisit(self, node, *unused):
+    def postVisit(self, node, *unusedArgs, **unusedKwargs):
         if self.info.hasScope(node.id):
             assert self.scopeStack[-1] is self.info.getScope(node.id)
             self.scopeStack.pop()
@@ -277,6 +277,19 @@ class TypeVisitorBase(ast.AstNodeVisitor):
     def visitAstNullLiteral(self, node):
         return ir_t.getNullType()
 
+    def isPrefixNode(self, node):
+        return isinstance(node, ast.AstVariableExpression) or \
+               isinstance(node, ast.AstPropertyExpression) or \
+               (isinstance(node, ast.AstCallExpression) and \
+                node.arguments is None and \
+                self.isPrefixNode(node.callee))
+
+    def visitPossiblePrefix(self, node):
+        if self.isPrefixNode(node):
+            return self.visit(node, mayBePrefix=True)
+        else:
+            return self.visit(node)
+
     def handleClassTypeArgs(self, irClass, nodes):
         raise NotImplementedError
 
@@ -286,7 +299,7 @@ class TypeVisitorBase(ast.AstNodeVisitor):
         else:
             return self.visit(node)
 
-    def handleResult(self, node, result, *unused):
+    def handleResult(self, node, result, *unusedArgs, **unusedKwargs):
         if result is not None:
             self.info.setType(node, result)
         return result
@@ -476,8 +489,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         # parameters defined in `varianceClass` are restricted.
         self.variance = ir_t.BIVARIANT
 
-    def preVisit(self, node, *unused):
-        super(DefinitionTypeVisitor, self).preVisit(node, *unused)
+    def preVisit(self, node, *args, **kwargs):
+        super(DefinitionTypeVisitor, self).preVisit(node, *args, **kwargs)
         if not self.info.hasDefnInfo(node):
             return
         irDefn = self.info.getDefnInfo(node).irDefn
@@ -486,8 +499,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         elif isinstance(irDefn, ir.Function):
             self.functionStack.append(FunctionState(irDefn))
 
-    def postVisit(self, node, *unused):
-        super(DefinitionTypeVisitor, self).postVisit(node, *unused)
+    def postVisit(self, node, *args, **kwargs):
+        super(DefinitionTypeVisitor, self).postVisit(node, *args, **kwargs)
         if not self.info.hasDefnInfo(node):
             return
         irDefn = self.info.getDefnInfo(node).irDefn
@@ -539,12 +552,17 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
         hasPrimaryOrDefaultCtor = node.constructor is not None or \
                                   not node.hasConstructors()
-        if node.superArgs is not None and \
-           (len(node.superArgs) > 0 or hasPrimaryOrDefaultCtor):
+        if node.superArgs is not None and not hasPrimaryOrDefaultCtor:
+            raise TypeException(node.location,
+                                ("%s: called superconstructor from class definition, but there "
+                                 "is no primary or default constructor"))
+        if node.superArgs is not None or hasPrimaryOrDefaultCtor:
             supertype = irClass.supertypes[0]
-            superArgTypes = map(self.visit, node.superArgs)
+            superArgTypes = map(self.visit, node.superArgs) \
+                            if node.superArgs is not None \
+                            else []
             self.handleMethodCall(ir.CONSTRUCTOR_SUFFIX, node.id, supertype,
-                                  [], superArgTypes, False, node.location)
+                                  [], superArgTypes, True, False, node.location)
 
         irInitializer = irClass.initializer
         irInitializer.parameterTypes = [thisType]
@@ -607,7 +625,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 # declaration analysis without making an extra pass.
                 scope.deleteVar(node.name)
                 varTy = self.handlePossibleCall(scope, node.name, node.id, None,
-                                                [], [], False, node.location)
+                                                [], [], False, False, False, False,
+                                                node.location)
             else:
                 varTy = None
 
@@ -647,9 +666,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         ty = self.visit(node.literal)
         return ty
 
-    def visitAstVariableExpression(self, node):
+    def visitAstVariableExpression(self, node, mayBePrefix=False):
         ty = self.handlePossibleCall(self.scope(), node.name, node.id, None,
-                                     [], [], False, node.location)
+                                     [], [], False, False, False, mayBePrefix, node.location)
         return ty
 
     def visitAstThisExpression(self, node):
@@ -688,98 +707,56 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                 (str(leftTy), str(rightTy)))
         return leftTy
 
-    def visitAstPropertyExpression(self, node):
-        # We handle sequences of property expressions all at once without recursing. This is
-        # because some part of the sequence may be a package name. Prefixes of package names
-        # are invalid expressions and cannot be typed. We also don't want to add dependencies
-        # on packages whose names are prefixes of other package names.
-        nodeNames = [(node, node.propertyName)]
-        n = node.receiver
-        while isinstance(n, ast.AstPropertyExpression):
-            nodeNames.append((n, n.propertyName))
-            n = n.receiver
-        nodeNames.append((n, n.name if isinstance(n, ast.AstVariableExpression) else None))
-        nodeNames.reverse()
-
-        packageNameLength = 0
-        package = None
-        scope = self.scope()
-        if nodeNames[0][1] is not None:
-            # The expression starts with a variable expression, which could be the start
-            # of a package name.
-            packageNameInfo = None
-            while packageNameLength < len(nodeNames):
-                node, name = nodeNames[packageNameLength]
-                nextNameInfo = scope.lookup(name, node.location)
-                if not (nextNameInfo.isPackagePrefix() or nextNameInfo.isPackage()):
-                    break
-                packageNameInfo = nextNameInfo
-                packageNameLength += 1
-                prefixScopeId = packageNameInfo.getDefnInfo().scopeId
-                scope = self.info.getScope(prefixScopeId).scopeForPrefix(name, node.location)
-
-            if packageNameLength > 0:
-                defnInfo = packageNameInfo.getDefnInfo()
-                package = defnInfo.irDefn
-                if not isinstance(package, ir.Package):
-                    assert isinstance(package, ir.PackagePrefix)
-                    raise TypeException(node.location,
-                                        "%s is not the full name of a package" %
-                                        str(package.name))
-                packageNode, _ = nodeNames[packageNameLength - 1]
-                self.scope().use(defnInfo, packageNode.id, USE_AS_VALUE, packageNode.location)
-                packageInfo = PackageInfo(package, scope.scopeId)
-                self.info.setPackageInfo(packageNode, packageInfo)
-                packageType = ir_t.getPackageType()
-                self.info.setType(packageNode, packageType)
-
-        # Now we know the package prefix (if there was one), we can deal with the rest of
-        # the expression.
-        if packageNameLength == 0:
-            receiverType = self.visit(nodeNames[0][0])
-            start = 1
-        elif packageNameLength == len(nodeNames):
-            receiverType = packageType
-            start = len(nodeNames)
+    def visitAstPropertyExpression(self, node, mayBePrefix=False):
+        receiverType = self.visitPossiblePrefix(node.receiver)
+        if self.info.hasScopePrefixInfo(node.receiver):
+            receiverScope = self.info.getScope(
+                self.info.getScopePrefixInfo(node.receiver).scopeId)
+            hasReceiver = False
         else:
-            self.info.package.ensureDependency(package)
-            n, name = nodeNames[packageNameLength]
-            receiverType = self.handlePossibleCall(scope, name, node.id, None,
-                                                   [], [], False, node.location)
-            start = packageNameLength + 1
+            receiverScope = self.info.getScope(ir_t.getClassFromType(receiverType))
+            hasReceiver = True
+        ty = self.handlePossibleCall(receiverScope, node.propertyName, node.id, receiverType,
+                                     typeArgs=[], argTypes=[],
+                                     hasReceiver=hasReceiver, hasArgs=False,
+                                     mayAssign=False, mayBePrefix=mayBePrefix,
+                                     loc=node.location)
+        return ty
 
-        for i in xrange(start, len(nodeNames)):
-            n, name = nodeNames[i]
-            assert isinstance(n, ast.AstPropertyExpression)
-            receiverType = self.handleMethodCall(name, n.id, receiverType,
-                                                 [], [], False, n.location)
-            self.info.setType(n, receiverType)
-
-        return receiverType
-
-    def visitAstCallExpression(self, node):
+    def visitAstCallExpression(self, node, mayBePrefix=False):
         typeArgs = map(self.visit, node.typeArguments)
-        argTypes = map(self.visit, node.arguments)
+        hasArgs = node.arguments is not None
+        arguments = node.arguments if hasArgs else []
+        argTypes = map(self.visit, arguments)
+        if hasArgs:
+            mayBePrefix = False
+
         if isinstance(node.callee, ast.AstVariableExpression):
             ty = self.handlePossibleCall(self.scope(), node.callee.name, node.id,
-                                         None, typeArgs, argTypes, False, node.location)
+                                         None, typeArgs, argTypes,
+                                         hasArgs=hasArgs, hasReceiver=False,
+                                         mayAssign=False, mayBePrefix=mayBePrefix,
+                                         loc=node.location)
         elif isinstance(node.callee, ast.AstPropertyExpression):
-            receiverType = self.visit(node.callee.receiver)
-            receiverUseInfo = self.info.getUseInfo(node.callee.receiver)
-            if isinstance(receiverUseInfo.defnInfo.irDefn, ir.Package):
-                packageInfo = self.info.getPackageInfo(node.callee.receiver)
-                packageScope = self.info.getScope(packageInfo.scopeId)
-                ty = self.handlePossibleCall(packageScope, node.callee.propertyName, node.id,
-                                             None, typeArgs, argTypes, False, node.location)
+            receiverType = self.visitPossiblePrefix(node.callee.receiver)
+            if self.info.hasScopePrefixInfo(node.callee.receiver):
+                receiverScope = self.info.getScope(
+                    self.info.getScopePrefixInfo(node.callee.receiver).scopeId)
+                hasReceiver = False
             else:
-                ty = self.handleMethodCall(node.callee.propertyName, node.id,
-                                           receiverType, typeArgs, argTypes,
-                                           False, node.location)
+                receiverScope = self.info.getScope(ir_t.getClassFromType(receiverType))
+                hasReceiver = True
+            ty = self.handlePossibleCall(receiverScope, node.callee.propertyName, node.id,
+                                         receiverType, typeArgs, argTypes,
+                                         hasReceiver=hasReceiver, hasArgs=hasArgs,
+                                         mayAssign=False, mayBePrefix=mayBePrefix,
+                                         loc=node.location)
         elif isinstance(node.callee, ast.AstThisExpression) or \
              isinstance(node.callee, ast.AstSuperExpression):
             receiverType = self.visit(node.callee)
             self.handleMethodCall(ir.CONSTRUCTOR_SUFFIX, node.id,
-                                  receiverType, typeArgs, argTypes, False, node.location)
+                                  receiverType, typeArgs, argTypes,
+                                  hasArgs, False, node.location)
             ty = ir_t.UnitType
         else:
             # TODO: callable expression
@@ -789,7 +766,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
     def visitAstUnaryExpression(self, node):
         receiverType = self.visit(node.expr)
         ty = self.handleMethodCall(node.operator, node.id, receiverType,
-                                   [], [], False, node.location)
+                                   [], [], True, False, node.location)
         return ty
 
     def visitAstBinaryExpression(self, node):
@@ -804,7 +781,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             ty = ir_t.BooleanType
         else:
             ty = self.handleMethodCall(node.operator, node.id, leftTy,
-                                       [], [rightTy], True, node.location)
+                                       [], [rightTy], True, True, node.location)
         return ty
 
     def visitAstTupleExpression(self, node):
@@ -1020,25 +997,30 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 self.visit(irDefn.astVarDefn)
         elif isinstance(irDefn, ir.Class) or \
              isinstance(irDefn, ir.TypeParameter) or \
-             isinstance(irDefn, ir.Package):
+             isinstance(irDefn, ir.Package) or \
+             isinstance(irDefn, ir.PackagePrefix):
             pass   # already done in previous pass.
         else:
             raise NotImplementedError
 
     def handleMethodCall(self, name, useAstId, receiverType,
-                         typeArgs, argTypes, mayAssign, loc):
+                         typeArgs, argTypes, hasArgs, mayAssign, loc):
         irClass = ir_t.getClassFromType(receiverType)
         scope = self.info.getScope(irClass)
         return self.handlePossibleCall(scope, name, useAstId,
                                        receiverType, typeArgs, argTypes,
-                                       mayAssign, loc)
+                                       hasReceiver=True, hasArgs=hasArgs,
+                                       mayAssign=mayAssign, mayBePrefix=False,
+                                       loc=loc)
 
     def handlePossibleCall(self, scope, name, useAstId,
                            receiverType, typeArgs, argTypes,
-                           mayAssign, loc):
+                           hasReceiver, hasArgs, mayAssign, mayBePrefix, loc):
         receiverIsExplicit = receiverType is not None
         if not receiverIsExplicit and self.hasReceiverType():
             receiverType = self.getReceiverType()
+
+        assert not mayBePrefix or not hasArgs
 
         assert name != ir.CONSTRUCTOR_SUFFIX or receiverIsExplicit
         if name == ir.CONSTRUCTOR_SUFFIX or receiverIsExplicit:
@@ -1048,10 +1030,24 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
         nameInfo = scope.lookup(name, loc,
                                 localOnly=receiverIsExplicit, mayBeAssignment=mayAssign)
-        if nameInfo.isPackagePrefix():
-            raise TypeException(loc,
-                                "%s is part of a package name prefix and is not valid here" %
-                                name)
+        if nameInfo.isScope():
+            isPrefix = mayBePrefix
+            if isPrefix:
+                defnInfo = nameInfo.getDefnInfo()
+                if isinstance(defnInfo.irDefn, ir.Class):
+                    defnScopeId = self.info.getScope(defnInfo.irDefn).scopeId
+                else:
+                    parentScope = self.info.getScope(defnInfo.scopeId)
+                    defnScopeId = parentScope.scopeForPrefix(name, loc).scopeId
+                scopePrefixInfo = ScopePrefixInfo(defnInfo.irDefn, defnScopeId)
+                self.info.setScopePrefixInfo(useAstId, scopePrefixInfo)
+            else:
+                if nameInfo.isClass() and not hasArgs:
+                    raise TypeException(loc, "class name can't be used as a value")
+                elif nameInfo.isPackagePrefix():
+                    raise TypeException(loc, "package prefix can't be used as a value")
+        else:
+            isPrefix = False
 
         if nameInfo.isClass():
             irClass = nameInfo.getDefnInfo().irDefn
@@ -1065,26 +1061,30 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             implicitTypeParams = ir.getImplicitTypeParameters(irClass)
             classTypeArgs = tuple([ir_t.VariableType(tp) for tp in implicitTypeParams] + typeArgs)
             receiverType = ir_t.ClassType(irClass, classTypeArgs, None)
-            typeArgs = []
-            nameInfo = nameInfo.getInfoForConstructors(self.info)
-            receiverIsExplicit = True
-            useKind = USE_AS_CONSTRUCTOR
+            if isPrefix:
+                defnInfo = nameInfo.getDefnInfo()
+                allTypeArgs = classTypeArgs
+                allArgTypes = []
+            else:
+                nameInfo = nameInfo.getInfoForConstructors(self.info)
+                useKind = USE_AS_CONSTRUCTOR
+                defnInfo, allTypeArgs, allArgTypes = \
+                    nameInfo.findDefnInfoWithArgTypes(receiverType, True, [], argTypes, loc)
+        else:
+            defnInfo, allTypeArgs, allArgTypes = \
+                nameInfo.findDefnInfoWithArgTypes(receiverType, receiverIsExplicit,
+                                                  typeArgs, argTypes, loc)
 
-        (defnInfo, allTypeArgs, allArgTypes) = \
-            nameInfo.findDefnInfoWithArgTypes(receiverType, receiverIsExplicit,
-                                              typeArgs, argTypes, loc)
         irDefn = defnInfo.irDefn
         receiverExprNeeded = receiverIsExplicit and \
                              (isinstance(irDefn, ir.Field) or \
                               (isinstance(irDefn, ir.Function) and \
                                irDefn.isMethod() and \
                                not irDefn.isConstructor()))
+        if receiverExprNeeded and not hasReceiver:
+            raise TypeException(loc, "%s: cannot access without receiver" % name)
         callInfo = CallInfo(allTypeArgs, receiverExprNeeded)
         self.info.setCallInfo(useAstId, callInfo)
-        if isinstance(irDefn, ir.Package):
-            defnScope = self.info.getScope(defnInfo.scopeId)
-            packageInfo = PackageInfo(irDefn, defnScope.scopeForPrefix(name, loc).scopeId)
-            self.info.setPackageInfo(useAstId, packageInfo)
 
         self.scope().use(defnInfo, useAstId, useKind, loc)
         self.ensureTypeInfoForDefn(irDefn)
@@ -1105,9 +1105,12 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         elif isinstance(irDefn, ir.Variable) or \
              isinstance(irDefn, ir.Global):
             return irDefn.type
-        else:
-            assert isinstance(irDefn, ir.Package)
+        elif isinstance(irDefn, ir.Package) or \
+             isinstance(irDefn, ir.PackagePrefix):
             return ir_t.getPackageType()
+        else:
+            assert isinstance(irDefn, ir.Class)
+            return receiverType
 
     def findBaseClassForField(self, receiverClass, field):
         # At this point, classes haven't been flattened yet, so we have to search up the

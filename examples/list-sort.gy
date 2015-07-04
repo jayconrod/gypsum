@@ -74,26 +74,26 @@ abstract class List[static +T]
 // type, so `Nil` (the sole instance) can be used as any kind of empty list.
 // There are no instances of `Nothing`.
 class Nil-class <: List[Nothing]
-  def head = throw Exception
-  def tail = throw Exception
+  def head = throw Exception()
+  def tail = throw Exception()
   def length = 0
 
   def take(n: i64) =
     if (n == 0)
       Nil
     else
-      throw Exception
+      throw Exception()
 
   def drop(n: i64) =
     if (n == 0)
       Nil
     else
-      throw Exception
+      throw Exception()
 
   def to-string = "Nil"
 
 // `Nil` is the sole instance of `Nil-class`.
-let Nil = Nil-class
+let Nil = Nil-class()
 
 
 // `Cons` represents non-empty lists. It contains an element of the list

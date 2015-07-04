@@ -10,7 +10,7 @@ def main =
   var pi = integrate-circle
   var expected = 3.141592653589793
   if (abs(pi - expected) >= 1e4)
-    throw Exception
+    throw Exception()
   0.
 
 
@@ -35,7 +35,7 @@ def integrate-circle =
 // which gets us pretty close.
 def sqrt(n: f64) =
   if (n < -1e4)
-    throw Exception
+    throw Exception()
   var x = 1.
   var i = 0
   while (i < 10)

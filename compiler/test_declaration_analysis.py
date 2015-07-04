@@ -102,7 +102,11 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.assertEquals(1, len(clas.constructors))
         self.assertIs(ctor, clas.constructors[0])
         self.assertEquals([self.makeVariable(Name(["C", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
-                                             kind=PARAMETER, flags=frozenset([LET]))],
+                                             kind=PARAMETER, flags=frozenset([LET])),
+                           self.makeVariable(Name(["C", "x"]), kind=PARAMETER,
+                                             flags=frozenset([LET])),
+                           self.makeVariable(Name(["C", "y"]), kind=PARAMETER,
+                                             flags=frozenset([LET]))],
                           ctor.variables)
         self.assertEquals([self.makeField("C.x", flags=frozenset([LET])),
                            self.makeField("C.y", flags=frozenset([LET]))],
@@ -209,6 +213,14 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                                                                       kind=PARAMETER,
                                                                       flags=frozenset([LET]))})
         self.assertEquals(expectedClosureInfo, info.getClosureInfo(scopeId))
+
+    def testDefineClassStaticFunction(self):
+        info = self.analyzeFromSource("class C { static def f = 12; };")
+        astDefn = info.ast.modules[0].definitions[0].members[0]
+        scopeId = info.getScope(info.ast.modules[0].definitions[0]).scopeId
+        expectedFunction = self.makeFunction("C.f", flags=frozenset([STATIC]))
+        expectedDefnInfo = DefnInfo(expectedFunction, scopeId)
+        self.assertEquals(expectedDefnInfo, info.getDefnInfo(astDefn))
 
     @unittest.skip("inner classes not supported yet")
     def testDefineClassClass(self):

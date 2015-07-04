@@ -127,14 +127,14 @@ class TestParser(unittest.TestCase):
                         "public class C;")
 
     def testSubclass(self):
-        ast = astClassDefinition([], "Sub", [], None, astClassType("Base", [], set()), [], [])
+        ast = astClassDefinition([], "Sub", [], None, astClassType("Base", [], set()), None, [])
         self.checkParse(ast, classDefn(), "class Sub <: Base;")
 
     def testSubclassWithTypeArgs(self):
         ast = astClassDefinition([], "Sub", [], None,
                                  astClassType("Base", [astClassType("X", [], set()),
                                                        astClassType("Y", [], set())], set()),
-                                 [], [])
+                                 None, [])
         self.checkParse(ast, classDefn(), "class Sub <: Base[X, Y];")
 
     def testSubclassWithSuperArgs(self):
@@ -407,7 +407,7 @@ class TestParser(unittest.TestCase):
     def testCallExpr3(self):
         self.checkParse(astCallExpression(astVariableExpression("f"),
                                           [astClassType("T", [], set())],
-                                          []),
+                                          None),
                         expression(), "f[T]")
 
     def testCallExpr4(self):
@@ -420,7 +420,7 @@ class TestParser(unittest.TestCase):
         self.checkParse(astCallExpression(astPropertyExpression(astVariableExpression("o"),
                                                                 "f"),
                                           [astClassType("T", [], set())],
-                                          []),
+                                          None),
                         expression(), "o.f[T]")
 
     def testCallMethod2(self):

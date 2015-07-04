@@ -6,11 +6,11 @@
 
 def check-eq(left: String, right: String) =
   if (left != right)
-    throw Exception
+    throw Exception()
 
 def check-true(expr: boolean) =
   if (!expr)
-    throw Exception
+    throw Exception()
 
 def main =
   check-eq("foobar", "foo" + "bar")

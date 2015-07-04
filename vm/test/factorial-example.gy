@@ -22,6 +22,6 @@ def factorial-recursive(n: i64): i64 =
 def main =
   let n = 5
   if (120 != factorial-iterative(n))
-    throw Exception
+    throw Exception()
   if (120 != factorial-recursive(n))
-    throw Exception
+    throw Exception()

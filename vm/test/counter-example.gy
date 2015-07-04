@@ -6,7 +6,7 @@
 
 def check-eq(a: i64, b: i64) =
   if (a != b)
-    throw Exception
+    throw Exception()
 
 
 def test-counter(var n: i64, var inc: i64) =

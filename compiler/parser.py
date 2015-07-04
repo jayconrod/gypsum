@@ -84,7 +84,7 @@ def constructor():
 
 def superclass():
     def processArgs(parsed, loc):
-        return ct.untangle(parsed)[1] if parsed is not None else []
+        return ct.untangle(parsed)[1] if parsed is not None else None
     args = ct.Opt(keyword("(") + ct.RepSep(maybeBinopExpr(), keyword(",")) + keyword(")")) ^ processArgs
     def process(parsed, loc):
         if parsed is None:
@@ -351,7 +351,6 @@ def processCall(receiver, parsed, loc):
          arguments is not None:
         hasArguments = typeArguments is not None or arguments is not None
         typeArguments = [] if typeArguments is None else typeArguments
-        arguments = [] if arguments is None else arguments
         if methodName is not None:
             method = ast.AstPropertyExpression(receiver, methodName, loc)
         else:

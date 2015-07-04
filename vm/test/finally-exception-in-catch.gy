@@ -13,7 +13,7 @@ var finally-executed = false
 
 
 def main =
-  let outer-exn = Exception
+  let outer-exn = Exception()
   try
     inner-fn(outer-exn)
   catch
@@ -21,7 +21,7 @@ def main =
 
 
 def inner-fn(outer-exn: Exception): unit =
-  let inner-exn = Exception
+  let inner-exn = Exception()
   try
     throw inner-exn
   catch

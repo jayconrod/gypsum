@@ -1,6 +1,6 @@
 def check-eq(expected: String, actual: String) =
   if (expected != actual)
-    throw Exception
+    throw Exception()
 
 def main =
   check-eq("unit", {}.to-string)

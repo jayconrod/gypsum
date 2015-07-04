@@ -35,25 +35,25 @@ abstract class List[static +T]
 
 
 class Nil-class <: List[Nothing]
-  def head = throw Exception
-  def tail = throw Exception
+  def head = throw Exception()
+  def tail = throw Exception()
   def length = 0
 
   def take(n: i64) =
     if (n == 0)
       Nil
     else
-      throw Exception
+      throw Exception()
 
   def drop(n: i64) =
     if (n == 0)
       Nil
     else
-      throw Exception
+      throw Exception()
 
   def to-string = "Nil"
 
-let Nil = Nil-class
+let Nil = Nil-class()
 
 
 class Cons[static +T](value: T, next: List[T]) <: List[T]
@@ -126,4 +126,4 @@ def main =
                               Cons[Integer](Integer(3),
                                   Cons[Integer](Integer(4), Nil))))
   if (!equals[Integer](expected-list, sorted-list))
-    throw Exception
+    throw Exception()

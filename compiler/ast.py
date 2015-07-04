@@ -546,7 +546,10 @@ class AstCallExpression(AstExpression):
         return "CallExpression"
 
     def children(self):
-        return [self.callee] + self.typeArguments + self.arguments
+        result = [self.callee] + self.typeArguments
+        if self.arguments is not None:
+            result.extend(self.arguments)
+        return result
 
 
 class AstUnaryExpression(AstExpression):
@@ -864,10 +867,10 @@ class AstStringLiteral(AstLiteral):
 
 
 class AstNodeVisitor(visitor.Visitor):
-    def visitChildren(self, node, *args):
+    def visitChildren(self, node, *args, **kwargs):
         for child in node.children():
             if child is not None:
-                self.visit(child, *args)
+                self.visit(child, *args, **kwargs)
 
 
 class AstPrinter(AstNodeVisitor):

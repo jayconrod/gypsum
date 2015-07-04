@@ -49,7 +49,7 @@ class CompileInfo(object):
         self.classInfo = {}  # keyed by DefnId
         self.typeInfo = {}  # keyed by AstId
         self.callInfo = {}  # keyed by AstId
-        self.packageInfo = {}  # keyed by AstId
+        self.scopePrefixInfo = {}  # keyed by AstId
         self.stdExternInfo = {} # keyed by DefnId
 
     def languageMode(self):
@@ -89,7 +89,7 @@ _dictNames = [("Scope", "scopes", (ids.ScopeId, ids.AstId, ids.DefnId, ids.Packa
               ("ClassInfo", "classInfo", (ids.DefnId,)),
               ("Type", "typeInfo", (ids.AstId,)),
               ("CallInfo", "callInfo", (ids.AstId,)),
-              ("PackageInfo", "packageInfo", (ids.AstId,)),
+              ("ScopePrefixInfo", "scopePrefixInfo", (ids.AstId,)),
               ("StdExternInfo", "stdExternInfo", (ids.DefnId,))]
 
 def _addDictMethods(elemName, dictName, types):
@@ -324,15 +324,15 @@ class CallInfo(data.Data):
     ]
 
 
-class PackageInfo(data.Data):
-    """Defined for variable and property expressions which are actually just package names.
+class ScopePrefixInfo(data.Data):
+    """Defined for variable and property expressions which are actually just scope names.
     This helps us access definitions inside packages later."""
 
     propertyNames = [
-        # The package being referenced.
-        "package",
+        # The package or class definition that defines the scope being referenced.
+        "scopeDefn",
 
-        # The PackageScope for the package being referenced.
+        # The id of the scope being referenced.
         "scopeId",
     ]
 

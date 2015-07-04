@@ -6,7 +6,7 @@
 
 def main =
   if (0x40200000i32 != 2.5f32.to-i32-bits)
-    throw Exception
+    throw Exception()
   if (0x4004000000000000i64 != 2.5f64.to-i64-bits)
-    throw Exception
+    throw Exception()
   0

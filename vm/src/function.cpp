@@ -204,6 +204,7 @@ struct FrameState {
   }
 
   void popTypeArgs(length_t count, vector<Local<Type>>* poppedArgs) {
+    ASSERT(count <= typeArgs.size());
     if (poppedArgs != nullptr)
       poppedArgs->assign(typeArgs.end() - count, typeArgs.end());
     typeArgs.erase(typeArgs.end() - count, typeArgs.end());

@@ -7,7 +7,7 @@
 def main =
   var x = fac(5i8)
   if (x != 120i8)
-    throw Exception
+    throw Exception()
   0i32
 
 def fac(var n: i8) =

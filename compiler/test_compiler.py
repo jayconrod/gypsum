@@ -580,7 +580,7 @@ class TestCompiler(TestCaseWithDefinitions):
         source = "class Foo\n" + \
                  "  def this = { this.x = this; }\n" + \
                  "  var x: Object\n" + \
-                 "def f = Foo.x"
+                 "def f = Foo().x"
         package = self.compileFromSource(source)
         Foo = package.findClass(name="Foo")
         ty = getRootClassType()
@@ -597,7 +597,7 @@ class TestCompiler(TestCaseWithDefinitions):
         source = "class Foo\n" + \
                  "  def this = {}\n" + \
                  "  var x: Object?\n" + \
-                 " def f = Foo.x"
+                 " def f = Foo().x"
         package = self.compileFromSource(source)
         Foo = package.findClass(name="Foo")
         ty = ClassType(getRootClass(), (), NULLABLE_TYPE_FLAG)
@@ -1684,7 +1684,7 @@ class TestCompiler(TestCaseWithDefinitions):
                  "    {}\n" + \
                  "  catch\n" + \
                  "    case x =>\n" + \
-                 "      x = Exception\n" + \
+                 "      x = Exception()\n" + \
                  "      {}"
         self.assertRaises(SemanticException, self.compileFromSource, source)
 
@@ -1747,7 +1747,7 @@ class TestCompiler(TestCaseWithDefinitions):
     def testThrowInTry(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
-        self.checkFunction("def f = try throw Exception catch\n" +
+        self.checkFunction("def f = try throw Exception() catch\n" +
                            "  case exn => 1",
                            self.makeSimpleFunction("f", I64Type, [[
                                pushtry(1, 2),
@@ -1841,7 +1841,7 @@ class TestCompiler(TestCaseWithDefinitions):
         exnTy = ClassType(getExceptionClass())
         self.checkFunction("def f =\n" +
                            "  return 1\n" +
-                           "  try throw Exception catch\n" +
+                           "  try throw Exception() catch\n" +
                            "    case exn => 2\n",
                            self.makeSimpleFunction("f", I64Type, [[
                                i64(1),
@@ -2079,12 +2079,12 @@ class TestCompiler(TestCaseWithDefinitions):
         ctor = clas.constructors[0]
         init = clas.initializer
         expected = self.makeSimpleFunction(Name(["Foo", CONSTRUCTOR_SUFFIX]), UnitType, [[
-            ldlocal(0),
-            callg(getRootClass().constructors[0].id.index),
-            drop(),
             ldlocal(1),
             ldlocal(0),
             st32(0),
+            ldlocal(0),
+            callg(getRootClass().constructors[0].id.index),
+            drop(),
             ldlocal(0),
             callg(init.id.index),
             drop(),
@@ -2093,6 +2093,8 @@ class TestCompiler(TestCaseWithDefinitions):
           parameterTypes=[thisType, I32Type],
           variables=[self.makeVariable(Name(["Foo", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
                                        type=thisType,
+                                       kind=PARAMETER, flags=frozenset([LET])),
+                     self.makeVariable(Name(["Foo", "x"]), type=I32Type,
                                        kind=PARAMETER, flags=frozenset([LET]))],
           flags=frozenset([METHOD]))
         self.assertEquals(expected, ctor)
@@ -2133,7 +2135,7 @@ class TestCompiler(TestCaseWithDefinitions):
     def testNullaryCtor(self):
         source = "class Foo\n" + \
                  "  def this = {}\n" + \
-                 "def f = Foo\n"
+                 "def f = Foo()\n"
         package = self.makePackage(source)
         clas = package.findClass(name="Foo")
         objType = ClassType(clas, ())
@@ -2150,7 +2152,7 @@ class TestCompiler(TestCaseWithDefinitions):
         source = "class Foo\n" + \
                  "  def this = {}\n" + \
                  "def f =\n" + \
-                 "  Foo\n" + \
+                 "  Foo()\n" + \
                  "  12"
         package = self.makePackage(source)
         clas = package.findClass(name="Foo")
@@ -2171,12 +2173,12 @@ class TestCompiler(TestCaseWithDefinitions):
         ctor = clas.constructors[0]
         thisType = ClassType(clas)
         self.assertEquals(self.makeSimpleFunction(Name(["Foo", CONSTRUCTOR_SUFFIX]), UnitType, [[
-                              ldlocal(0),
-                              callg(getRootClass().constructors[0].id.index),
-                              drop(),
                               ldlocal(1),
                               ldlocal(0),
                               st32(0),
+                              ldlocal(0),
+                              callg(getRootClass().constructors[0].id.index),
+                              drop(),
                               ldlocal(0),
                               callg(init.id.index),
                               drop(),
@@ -2185,6 +2187,8 @@ class TestCompiler(TestCaseWithDefinitions):
                             parameterTypes=[thisType, I32Type],
                             variables=[self.makeVariable(Name(["Foo", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
                                                          type=thisType,
+                                                         kind=PARAMETER, flags=frozenset([LET])),
+                                       self.makeVariable(Name(["Foo", "x"]), type=I32Type,
                                                          kind=PARAMETER, flags=frozenset([LET]))],
                             flags=frozenset([METHOD])),
                           ctor)
@@ -2218,7 +2222,7 @@ class TestCompiler(TestCaseWithDefinitions):
         barClass.constructors.append(ctor)
         loader = FakePackageLoader([fooPackage])
 
-        source = "def f = foo.Bar"
+        source = "def f = foo.Bar()"
         package = self.compileFromSource(source, packageLoader=loader)
         self.checkFunction(package,
                            self.makeSimpleFunction("f", barTy, [[
@@ -2328,7 +2332,41 @@ class TestCompiler(TestCaseWithDefinitions):
                  "    this(x)"
         self.assertRaises(SemanticException, self.compileFromSource, source)
 
-    def testCallSuperCtor(self):
+    def testCallSuperCtorFromPrimary(self):
+        source = "class Foo(x: i64)\n" + \
+                 "class Bar(y: i64) <: Foo(y)"
+        package = self.compileFromSource(source)
+        foo = package.findClass(name="Foo")
+        bar = package.findClass(name="Bar")
+        barTy = ClassType(bar)
+        self.checkFunction(package,
+                           self.makeSimpleFunction(Name(["Bar", CONSTRUCTOR_SUFFIX]),
+                               UnitType,
+                               [[
+                                   ldlocal(1),
+                                   ldlocal(0),
+                                   st64(bar.fields[1].index),
+                                   ldlocal(0),
+                                   ldlocal(0),
+                                   ld64(bar.fields[1].index),
+                                   callg(foo.constructors[0].id.index),
+                                   drop(),
+                                   ldlocal(0),
+                                   callg(bar.initializer.id.index),
+                                   drop(),
+                                   unit(),
+                                   ret(),
+                               ]],
+                               variables=[self.makeVariable(Name(["Bar", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
+                                                            type=barTy,
+                                                            kind=PARAMETER,
+                                                            flags=frozenset([LET])),
+                                          self.makeVariable(Name(["Bar", "y"]),
+                                                            type=I64Type, kind=PARAMETER,
+                                                            flags=frozenset([LET]))],
+                               flags=frozenset([METHOD])))
+
+    def testCallSuperCtorFromSecondary(self):
         source = "class Foo(a: i64)\n" + \
                  "class Bar <: Foo\n" + \
                  "  def this = super(12)"
@@ -2590,6 +2628,30 @@ class TestCompiler(TestCaseWithDefinitions):
           parameterTypes=[boxType])
         self.assertEquals(expectedF, f)
 
+    def testCallStaticMethodFromMethod(self):
+        source = "class Foo\n" + \
+                 "  static def f = 12\n" + \
+                 "  def g = f"
+        package = self.compileFromSource(source)
+        foo = package.findClass(name="Foo")
+        fooType = ClassType(foo)
+        f = package.findFunction(name="Foo.f")
+        self.checkFunction(package,
+                           self.makeSimpleFunction("Foo.f", I64Type, [[
+                               i64(12),
+                               ret(),
+                             ]],
+                             flags=frozenset([STATIC])))
+        self.checkFunction(package,
+                           self.makeSimpleFunction("Foo.g", I64Type, [[
+                               callg(f.id.index),
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable(Name(["Foo", "g", RECEIVER_SUFFIX]),
+                                                          type=fooType, kind=PARAMETER,
+                                                          flags=frozenset([LET]))],
+                             flags=frozenset([METHOD])))
+
     def testBlockOrdering(self):
         sys.setrecursionlimit(2000)
         source = "def f =\n" + \
@@ -2631,3 +2693,30 @@ class TestCompiler(TestCaseWithDefinitions):
                                branch(9),
                              ], [
                                ret()]]))
+
+    # Regression tests
+    def testPrimaryCtorCallsSuperCtorWithTypeArgs(self):
+        source = "class Foo[static T]\n" + \
+                 "class Bar <: Foo[Nothing]"
+        package = self.compileFromSource(source)
+        foo = package.findClass(name="Foo")
+        bar = package.findClass(name="Bar")
+        self.checkFunction(package,
+                           self.makeSimpleFunction(Name(["Bar", CONSTRUCTOR_SUFFIX]),
+                                                   UnitType,
+                                                   [[
+                                                       ldlocal(0),
+                                                       tycs(BUILTIN_NOTHING_CLASS_ID.index),
+                                                       callg(foo.constructors[0].id.index),
+                                                       drop(),
+                                                       ldlocal(0),
+                                                       callg(bar.initializer.id.index),
+                                                       drop(),
+                                                       unit(),
+                                                       ret(),
+                                                   ]],
+                                                   variables=[self.makeVariable(Name(["Bar", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
+                                                                                type=ClassType(bar),
+                                                                                kind=PARAMETER,
+                                                                                flags=frozenset([LET]))],
+                                                   flags=frozenset([METHOD])))

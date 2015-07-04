@@ -27,9 +27,9 @@ def main =
   var box2 = Box[Object](original-string)
 
   if (!box1.contains-same-value[Object](box2))
-    throw Exception
+    throw Exception()
 
   set-box-value[String](box1, replacement-string)
   if (get-box-value[String](box1) !== replacement-string)
-    throw Exception
+    throw Exception()
   0

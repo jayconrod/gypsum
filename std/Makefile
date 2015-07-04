@@ -13,4 +13,4 @@ $(STD_PACKAGE): $(STD_SOURCES) $(GY_COMPILER)
 check: check-std
 
 # TODO: write a testing framework and add some tests.
-check-std:
+check-std: build-std

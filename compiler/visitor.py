@@ -5,32 +5,33 @@
 
 
 class Visitor(object):
-    def visit(self, obj, *args):
-        self.preVisit(obj, *args)
+    def visit(self, obj, *args, **kwargs):
+        self.preVisit(obj, *args, **kwargs)
         className = obj.__class__.__name__
         methodName = self.getMethodName(className)
         if hasattr(self, methodName):
-            result = getattr(self, methodName)(obj, *args)
+            method = getattr(self, methodName)
+            result = method(obj, *args, **kwargs)
         else:
-            result = self.visitDefault(obj, *args)
+            result = self.visitDefault(obj, *args, **kwargs)
 
-        result = self.handleResult(obj, result, *args)
-        self.postVisit(obj, *args)
+        result = self.handleResult(obj, result, *args, **kwargs)
+        self.postVisit(obj, *args, **kwargs)
         return result
 
     def getMethodName(self, className):
         return "visit" + className
 
-    def visitDefault(self, obj, *args):
+    def visitDefault(self, obj, *args, **kwargs):
         raise NotImplementedError
 
-    def preVisit(self, obj, *args):
+    def preVisit(self, obj, *args, **kwargs):
         pass
 
-    def postVisit(self, obj, *args):
+    def postVisit(self, obj, *args, **kwargs):
         pass
 
-    def handleResult(self, obj, result, *args):
+    def handleResult(self, obj, result, *args, **kwargs):
         return result
 
 __all__ = ["Visitor"]
