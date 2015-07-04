@@ -262,6 +262,31 @@ class TestUseAnalysis(TestCaseWithDefinitions):
         use = info.getUseInfo(info.ast.modules[0].definitions[1].members[0].body)
         self.assertIs(f, use.defnInfo.irDefn)
 
+    def testUseStaticMethodFromGlobal(self):
+        source = "class Foo\n" + \
+                 "  static def f = 12\n" + \
+                 "def g = Foo.f"
+        info = self.analyzeFromSourceWithTypes(source)
+        f = info.package.findFunction(name="Foo.f")
+        use = info.getUseInfo(info.ast.modules[0].definitions[1].body)
+        self.assertIs(f, use.defnInfo.irDefn)
+
+    def testUseStaticPrivateMethodFromGlobal(self):
+        source = "class Foo\n" + \
+                 "  private static def f = 12\n" + \
+                 "def g = Foo.f"
+        self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
+
+    def testUseInheritedStaticMethodFromGlobal(self):
+        source = "class Foo\n" + \
+                 "  static def f = 12\n" + \
+                 "class Bar <: Foo\n" + \
+                 "def g = Bar.f"
+        info = self.analyzeFromSourceWithTypes(source)
+        f = info.package.findFunction(name="Foo.f")
+        use = info.getUseInfo(info.ast.modules[0].definitions[2].body)
+        self.assertIs(f, use.defnInfo.irDefn)
+
     # Regression tests
     def testUseTypeParameterInLaterPrimaryCtor(self):
         source = "class Foo\n" + \

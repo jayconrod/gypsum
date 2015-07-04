@@ -387,7 +387,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         useInfo = self.info.getUseInfo(expr)
         callInfo = self.info.getCallInfo(expr) if self.info.hasCallInfo(expr) else None
         if isinstance(expr.callee, ast.AstPropertyExpression) and \
-           not self.info.hasPackageInfo(expr.callee.receiver):
+           not self.info.hasScopePrefixInfo(expr.callee.receiver):
             receiver = expr.callee.receiver
         else:
             receiver = None

@@ -867,10 +867,10 @@ class AstStringLiteral(AstLiteral):
 
 
 class AstNodeVisitor(visitor.Visitor):
-    def visitChildren(self, node, *args):
+    def visitChildren(self, node, *args, **kwargs):
         for child in node.children():
             if child is not None:
-                self.visit(child, *args)
+                self.visit(child, *args, **kwargs)
 
 
 class AstPrinter(AstNodeVisitor):

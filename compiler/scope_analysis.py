@@ -333,6 +333,9 @@ class NameInfo(object):
         return not self.isOverloaded() and \
                isinstance(self.getDefnInfo().irDefn, ir.Package)
 
+    def isScope(self):
+        return self.isClass() or self.isPackagePrefix() or self.isPackage()
+
     def getInfoForConstructors(self, info):
         assert self.isClass()
         irClass = self.getDefnInfo().irDefn
@@ -431,15 +434,8 @@ class NameInfo(object):
                 # Non-function
                 typesAndArgs = (None, None)
                 match = True
-            elif not receiverIsExplicit and \
-                 isinstance(irDefn, ir.Function) and \
-                 not irDefn.isMethod():
-                # Regular function
-                typesAndArgs = ir.getAllArgumentTypes(irDefn, None, typeArgs, argTypes)
-                match = typesAndArgs is not None
-            elif isinstance(irDefn, ir.Function) and \
-                 irDefn.isMethod():
-                # Method call
+            elif isinstance(irDefn, ir.Function):
+                # Function, method, static method, or constructor.
                 typesAndArgs = ir.getAllArgumentTypes(irDefn, receiverType, typeArgs, argTypes)
                 match = typesAndArgs is not None
             else:
@@ -1218,6 +1214,9 @@ class ClassScope(Scope):
                     irDefn = self.info.package.addFunction(name, astDefn,
                                                            None, implicitTypeParams,
                                                            None, [], None, flags)
+                    # TODO: this is a hack. Find a cleaner way to link the function to the
+                    # enclosing class. This is needed to get implied type arguments.
+                    irDefn.clas = irScopeDefn
                 else:
                     checkFlags(flags, frozenset([ABSTRACT, PUBLIC, PROTECTED, PRIVATE]),
                                astDefn.location)

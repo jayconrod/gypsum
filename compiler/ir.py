@@ -427,9 +427,13 @@ class Function(IrTopDefn):
                      "variables", "blocks", "flags")
 
     def getReceiverClass(self):
-        assert self.isMethod()
-        ty = self.parameterTypes[0]
-        return builtins.getBuiltinClassFromType(ty) if ty.isPrimitive() else ty.clas
+        if self.isMethod():
+            ty = self.parameterTypes[0]
+            return builtins.getBuiltinClassFromType(ty) if ty.isPrimitive() else ty.clas
+        else:
+            # TODO: this is a hack. Find a cleaner way to do this that doesn't require
+            # this hidden property.
+            return self.clas
 
     def canCallWith(self, typeArgs, argTypes):
         if len(self.typeParameters) != len(typeArgs):
@@ -792,11 +796,14 @@ def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes):
     If the function is compatible, this function returns a (list(Type), list(Type)) tuple
     containing the full list of type arguments and argument types (including the receiver).
     If the function is not compatible, returns None."""
-    if receiverType is not None:
+    if receiverType is not None and \
+       (flags.STATIC in irFunction.flags or flags.METHOD in irFunction.flags):
         if isinstance(receiverType, ir_types.ObjectType):
             receiverType = receiverType.substituteForBaseClass(irFunction.getReceiverClass())
         implicitTypeArgs = list(receiverType.getTypeArguments())
-        allArgTypes = [receiverType] + argTypes
+        allArgTypes = argTypes \
+                      if flags.STATIC in irFunction.flags \
+                      else [receiverType] + argTypes
     else:
         implicitTypeParams = getImplicitTypeParameters(irFunction)
         implicitTypeArgs = [ir_types.VariableType(t) for t in implicitTypeParams]

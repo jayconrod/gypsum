@@ -375,7 +375,6 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source, packageNames=["foo.bar"])
         packageType = getPackageType()
         self.assertEquals(packageType, info.getType(info.ast.modules[0].definitions[0].expression))
-        self.assertFalse(info.hasType(info.ast.modules[0].definitions[0].expression.receiver))
 
     def testPropertyPackagePrefix(self):
         source = "var x = foo.bar"
@@ -565,7 +564,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source)
         self.assertEquals(I64Type, info.package.findFunction(name="Foo.g").returnType)
 
-    def testCallOverloadedStaticMethod(self):
+    def testCallOverloadedStaticMethodFromMethod(self):
         source = "class Foo\n" + \
                  "  static def f(x: i64) = x\n" + \
                  "  static def f(x: String) = x\n" + \
@@ -573,7 +572,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source)
         self.assertEquals(I64Type, info.package.findFunction(name="Foo.g").returnType)
 
-    def testCallStaticMethodOverloadedWithNonStaticMethod(self):
+    def testCallStaticMethodOverloadedWithNonStaticMethodFromMethod(self):
         source = "class Foo\n" + \
                  "  static def f(x: i64) = x\n" + \
                  "  def f(x: String) = x\n" + \
@@ -588,6 +587,42 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  static def f(x: i64) = x\n" + \
                  "  def f(x: i64) = x\n" + \
                  "  static def g = f"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testCallStaticMethodFromGlobal(self):
+        source = "class Foo\n" + \
+                 "  static def f = 12\n" + \
+                 "def g = Foo.f"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(I64Type, info.package.findFunction(name="g").returnType)
+
+    def testCallStaticMethodFromGlobalWithTypeArg(self):
+        source = "class Foo[static T]\n" + \
+                 "  static def f(x: T) = x\n" + \
+                 "def g = Foo[String].f(\"foo\")"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(getStringType(), info.package.findFunction(name="g").returnType)
+
+    def testCallStaticInheritedMethodFromGlobal(self):
+        source = "class Foo\n" + \
+                 "  static def f = 12\n" + \
+                 "class Bar <: Foo\n" + \
+                 "def g = Bar.f"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(I64Type, info.package.findFunction(name="g").returnType)
+
+    def testCallStaticInheritedMethodFromGlobalWithTypeArg(self):
+        source = "class Foo[static T]\n" + \
+                 "  static def f(x: T) = x\n" + \
+                 "class Bar <: Foo[String]\n" + \
+                 "def g = Bar.f(\"foo\")"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(getStringType(), info.package.findFunction(name="g").returnType)
+
+    def testCallStaticMethodFromGlobalMissingTypeArg(self):
+        source = "class Foo[static T]\n" + \
+                 "  static def f(x: T) = x\n" + \
+                 "def g = Foo.f"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testCall(self):
