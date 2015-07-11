@@ -540,11 +540,16 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         f = info.package.findFunction(name="f")
         self.assertEquals(ty, f.returnType)
 
-    def testProjectTypeParameter(self):
+    def testProjectClassFromTypeParameter(self):
         source = "class Foo\n" + \
                  "  class Bar\n" + \
                  "def f[static T <: Foo](x: T.Bar) = {}"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testProjectTypeParameterFromClass(self):
+        source = "class Foo[static T]\n" + \
+                 "def f(x: Foo[String].T) = x"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
     def testCallMethodWithNullableReceiver(self):
         source = "class Foo\n" + \

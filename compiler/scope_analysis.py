@@ -626,7 +626,12 @@ class Scope(ast.AstNodeVisitor):
            not defnScope.isDefined(name) and \
            self.isLocalWithin(defnScope):
             raise ScopeException(loc, "%s: used before being defined" % name)
-        return defnScope.getDefinition(name)
+        nameInfo = defnScope.getDefinition(name)
+        if localOnly and \
+           not nameInfo.isOverloaded() and \
+           isinstance(nameInfo.getDefnInfo().irDefn, ir.TypeParameter):
+            raise ScopeException(loc, "%s: cannot access type parameter by projection" % name)
+        return nameInfo
 
     def isBound(self, name):
         """Returns true if a symbol is defined in this scope."""
