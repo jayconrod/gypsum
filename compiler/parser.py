@@ -171,16 +171,22 @@ def groupPattern():
     return keyword("(") + ct.Commit(ct.Lazy(pattern) + keyword(")")) ^ process
 
 
+# Scope prefix
+def scopePrefix():
+    return ct.Rep1Sep(scopePrefixComponent(), keyword("."))
+
+
+def scopePrefixComponent():
+    def process(parsed, loc):
+        name, args = parsed
+        if args is None:
+            args = []
+        return ast.AstScopePrefixComponent(name, args, loc)
+    return symbol + typeArguments() ^ process
+
+
 # Types
 def ty():
-    return simpleType() | projectedType()
-
-
-def tyOpt():
-    return ct.Opt(keyword(":") + ty() ^ (lambda p, _: p[1]))
-
-
-def simpleType():
     return (keyword("unit") ^ (lambda _, loc: ast.AstUnitType(loc))) | \
            (keyword("i8") ^ (lambda _, loc: ast.AstI8Type(loc))) | \
            (keyword("i16") ^ (lambda _, loc: ast.AstI16Type(loc))) | \
@@ -190,7 +196,12 @@ def simpleType():
            (keyword("f64") ^ (lambda _, loc: ast.AstF64Type(loc))) | \
            (keyword("boolean") ^ (lambda _, loc: ast.AstBooleanType(loc))) | \
            (keyword("_") ^ (lambda _, loc: ast.AstErasedType(loc))) | \
-           tupleType()
+           tupleType() | \
+           classType()
+
+
+def tyOpt():
+    return ct.Opt(keyword(":") + ty() ^ (lambda p, _: p[1]))
 
 
 def tupleType():
@@ -205,28 +216,14 @@ def tupleType():
 
 def classType():
     def process(parsed, loc):
-        name, typeArgs, nullFlag = ct.untangle(parsed)
-        typeArgs = [] if typeArgs is None else typeArgs
-        flags = set([nullFlag]) if nullFlag else set()
-        return ast.AstClassType(name, typeArgs, flags, loc)
-    return symbol + typeArguments() + ct.Opt(ct.Reserved(OPERATOR, "?")) ^ process
-
-
-def projectableType():
-    return classType()
-
-
-def projectedType():
-    def process(parsed, loc):
-        if len(parsed) == 1:
-            return parsed[0]
-        else:
-            n = len(parsed)
-            projected = parsed[n - 1]
-            for i in xrange(n - 2, -1, -1):
-                projected = ast.AstProjectedType(parsed[i], projected, loc)
-            return projected
-    return ct.Rep1Sep(projectableType(), keyword(".")) ^ process
+        prefixComponents, nullFlag = ct.untangle(parsed)
+        prefix = prefixComponents[:-1]
+        last = prefixComponents[-1]
+        name = last.name
+        typeArgs = last.typeArguments if last.typeArguments is not None else []
+        flags = set([nullFlag]) if nullFlag is not None else set()
+        return ast.AstClassType(prefix, name, typeArgs, flags, loc)
+    return scopePrefix() + ct.Opt(ct.Reserved(OPERATOR, "?")) ^ process
 
 
 def typeArguments():

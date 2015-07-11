@@ -1605,21 +1605,31 @@ class InheritanceVisitor(ScopeVisitor):
         return irDefn
 
     def lookupTypeDefn(self, scope, astType):
-        if isinstance(astType, ast.AstClassType):
-            nameInfo = scope.lookup(astType.name, astType.location, ignoreDefnOrder=True)
-            if nameInfo.isOverloaded():
-                raise ScopeException(astType.location, "inheritance from overloaded symbol")
-            defnInfo = nameInfo.getDefnInfo()
-            self.scope.use(defnInfo, astType.id, USE_AS_TYPE, astType.location)
-            irDefn = defnInfo.irDefn
-        elif isinstance(astType, ast.AstProjectedType):
-            outerDefn = self.lookupTypeDefn(scope, astType.left)
-            if not self.info.hasScope(outerDefn):
-                raise ScopeException(astType.left.location,
-                                     "projection from definition which does not have a scope")
-            irDefn = self.lookupTypeDefn(self.info.getScope(outerDefn), astType.right)
-        else:
+        if not isinstance(astType, ast.AstClassType):
             raise ScopeException(astType.location, "inheritance from non-class type")
+
+        hasPrefix = False
+        for component in astType.prefix:
+            nameInfo = scope.lookup(component.name, component.location,
+                                    localOnly=hasPrefix, ignoreDefnOrder=True)
+            if not nameInfo.isScope():
+                raise ScopeException(component.location,
+                                     "%s: not a scope name" % component.name)
+            defnInfo = nameInfo.getDefnInfo()
+            irDefn = defnInfo.irDefn
+            if isinstance(irDefn, ir.PackagePrefix):
+                scope = self.info.getScope(defnInfo.scopeId).scopeForPrefix(name, loc)
+            else:
+                scope = self.info.getScope(irDefn)
+            hasPrefix = True
+
+        nameInfo = scope.lookup(astType.name, astType.location,
+                                localOnly=hasPrefix, ignoreDefnOrder=True)
+        if nameInfo.isOverloaded():
+            raise ScopeException(astType.location, "%s: not a type name" % astType.name)
+        irDefn = nameInfo.getDefnInfo().irDefn
+        if not isinstance(irDefn, ir.IrDefinition) or not irDefn.isTypeDefn():
+            raise ScopeException(astType.location, "%s: not a type name" % astType.name)
         return irDefn
 
 

@@ -156,12 +156,16 @@ class TypeVisitorBase(ast.AstNodeVisitor):
         return ir_t.F64Type
 
     def visitAstClassType(self, node):
-        nameInfo = self.scope().lookup(node.name, node.location)
-        if nameInfo.isOverloaded() or not nameInfo.getDefnInfo().irDefn.isTypeDefn():
-            raise TypeException(node.location, "%s: does not refer to a type" % node.name)
+        scope, prefixTypeArgs = self.handleScopePrefix(node.prefix)
+        hasPrefix = scope is not self.scope()
+        nameInfo = scope.lookup(node.name, node.location, localOnly=hasPrefix)
+        if nameInfo.isOverloaded():
+            raise TypeException(node.location, "%s: not a type definition" % node.name)
         defnInfo = nameInfo.getDefnInfo()
+        irDefn = defnInfo.irDefn
+        if not isinstance(irDefn, ir.IrDefinition) or not irDefn.isTypeDefn():
+            raise TypeException(node.location, "%s: not a type definition" % node.name)
         self.scope().use(defnInfo, node.id, USE_AS_TYPE, node.location)
-        irDefn = nameInfo.getDefnInfo().irDefn
 
         flags = frozenset(map(astTypeFlagToIrTypeFlag, node.flags))
 
@@ -169,77 +173,26 @@ class TypeVisitorBase(ast.AstNodeVisitor):
             explicitTypeParams = ir.getExplicitTypeParameters(irDefn)
             if len(node.typeArguments) != len(explicitTypeParams):
                 raise TypeException(node.location,
-                                    "%s: wrong number of type arguments; expected %d but have %d\n" %
+                                    "%s: wrong number of type arguments; expected %d but have %d" %
                                     (node.name,
                                      len(explicitTypeParams),
                                      len(node.typeArguments)))
+            if not hasPrefix:
+                # If there is no prefix, the class is defined in a parent scope. There may be
+                # some type parameters
+                assert len(prefixTypeArgs) == 0
+                implicitTypeParams = ir.getImplicitTypeParameters(irDefn)
+                prefixTypeArgs = map(ir_t.VariableType, implicitTypeParams)
             explicitTypeArgs = self.handleClassTypeArgs(irDefn, node.typeArguments)
-            implicitTypeArgs = tuple(map(ir_t.VariableType, ir.getImplicitTypeParameters(irDefn)))
-            allTypeArgs = explicitTypeArgs + implicitTypeArgs
-            return ir_t.ClassType(irDefn, allTypeArgs, flags)
+            typeArgs = tuple(prefixTypeArgs + list(explicitTypeArgs))
+            return ir_t.ClassType(irDefn, typeArgs, flags)
         else:
             assert isinstance(irDefn, ir.TypeParameter)
             if len(node.typeArguments) > 0:
                 raise TypeException(node.location,
-                                    "%s: type parameter cannot accept type arguments" %
-                                    irDefn.name)
+                                    "%s: variable type does not accept type arguments" %
+                                    node.name)
             return ir_t.VariableType(irDefn)
-
-    def visitAstProjectedType(self, node):
-        components = []
-        def flatten(node):
-            if isinstance(node, ast.AstClassType):
-                components.append(node)
-            else:
-                assert isinstance(node, ast.AstProjectedType)
-                flatten(node.left)
-                flatten(node.right)
-        flatten(node)
-
-        scope = self.scope()
-        defnInfo = None  # don't cache irDefn, since Scope.use may externalize it.
-        isProjected = False
-        typeArgs = []
-        for component in components:
-            nameInfo = scope.lookup(component.name, component.location, localOnly=isProjected)
-            if nameInfo.isOverloaded():
-                raise TypeException(component.location,
-                                    "%s: cannot project from overloaded symbol" %
-                                    component.name)
-            defnInfo = nameInfo.getDefnInfo()
-            if not isinstance(defnInfo.irDefn, ir.Package) and \
-               not isinstance(defnInfo.irDefn, ir.PackagePrefix) and \
-               not isinstance(defnInfo.irDefn, ir.Class):
-                raise TypeException(component.location,
-                                    "%s: cannot project from non-class type" %
-                                    component.name)
-
-            if len(component.typeArguments) > 0:
-                if not isinstance(defnInfo.irDefn, ir.IrDefinition):
-                    raise TypeException(component.location,
-                                        "%s: non-type definition does not accept type arguments" %
-                                        component.name)
-                typeArgs.extend(self.handleClassTypeArgs(defnInfo.irDefn,
-                                                            component.typeArguments))
-
-            if isinstance(defnInfo.irDefn, ir.Package) or \
-               isinstance(defnInfo.irDefn, ir.IrDefinition):
-                self.scope().use(defnInfo, component.id, USE_AS_TYPE, component.location)
-                scope = self.info.getScope(defnInfo.irDefn)
-            else:
-                assert isinstance(defnInfo.irDefn, ir.PackagePrefix)
-                scope = self.info.getScope(defnInfo.scopeId).scopeForPrefix(component.name,
-                                                                            component.location)
-            isProjected = True
-
-        irDefn = defnInfo.irDefn
-        if isinstance(irDefn, ir.Package) or not irDefn.isTypeDefn():
-            raise TypeException(node.location, "cannot project a non-type definition")
-        if isinstance(irDefn, ir.Class):
-            assert len(typeArgs) == len(irDefn.typeParameters)
-            return ir_t.ClassType(irDefn, tuple(typeArgs))
-        else:
-            raise NotImplementedError
 
     def visitAstTupleType(self, node):
         clas = self.info.getTupleClass(len(node.types), node.location)
@@ -289,6 +242,57 @@ class TypeVisitorBase(ast.AstNodeVisitor):
             return self.visit(node, mayBePrefix=True)
         else:
             return self.visit(node)
+
+    def handleScopePrefix(self, prefix):
+        """Processes the components of a scope prefix (a list of AstScopePrefixComponent). This
+        looks up each component in the list and checks type arguments (using
+        handleClassTypeArgs). Returns a scope and a list of Types, which will be implicit
+        type arguments for whatever is after the prefix."""
+        scope = self.scope()
+        typeArgs = []
+        hasPrefix = False
+        for component in prefix:
+            # Look up the next component.
+            nameInfo = scope.lookup(component.name, component.location, localOnly=hasPrefix)
+            if not nameInfo.isScope():
+                raise TypeException(component.location,
+                                    "%s: does not refer to a scope" % component.name)
+            defnInfo = nameInfo.getDefnInfo()
+            irDefn = defnInfo.irDefn
+
+            # Check type arguments.
+            if isinstance(irDefn, ir.Class):
+                explicitTypeParams = ir.getExplicitTypeParameters(irDefn)
+                if len(component.typeArguments) != len(explicitTypeParams):
+                    raise TypeException(component.location,
+                                        "%s: wrong number of type arguments; expected %d but have %d\n" %
+                                        (component.name,
+                                         len(explicitTypeParams),
+                                         len(component.typeArguments)))
+                if not hasPrefix:
+                    # If this is the first prefix, the class is defined in a parent scope.
+                    # There may be some type parameters defined in one of its parent scopes
+                    # which are implied here.
+                    implicitTypeParams = ir.getImplicitTypeParameters(irDefn)
+                    implicitTypeArgs = map(ir_t.VariableType, implicitTypeParams)
+                    typeArgs.extend(implicitTypeArgs)
+                explicitTypeArgs = self.handleClassTypeArgs(irDefn, component.typeArguments)
+                typeArgs.extend(explicitTypeArgs)
+            else:
+                if len(component.typeArguments) > 0:
+                    raise TypeException(component.location,
+                                        "%s: non-type definition does not accept type arguments" %
+                                        component.name)
+
+            # Find the next scope.
+            if isinstance(irDefn, ir.PackagePrefix):
+                scope = self.info.getScope(defnInfo.scopeId).scopeForPrefix(component.name,
+                                                                            component.location)
+            else:
+                scope = self.info.getScope(irDefn)
+            hasPrefix = True
+
+        return scope, typeArgs
 
     def handleClassTypeArgs(self, irClass, nodes):
         raise NotImplementedError

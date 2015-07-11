@@ -191,6 +191,25 @@ class AstPrimaryConstructorDefinition(AstDefinition):
         return self.attribs + self.parameters
 
 
+class AstScopePrefixComponent(AstNode):
+    def __init__(self, name, typeArguments, location):
+        super(AstScopePrefixComponent, self).__init__(location)
+        self.name = name
+        self.typeArguments = typeArguments
+
+    def __repr__(self):
+        return "AstScopePrefixComponent(%s, %s)" % (self.name, self.typeArguments)
+
+    def tag(self):
+        return "ScopePrefixComponent"
+
+    def data(self):
+        return self.name
+
+    def children(self):
+        return self.typeArguments if self.typeArguments is not None else []
+
+
 class AstTypeParameter(AstDefinition):
     def __init__(self, attribs, variance, name, upperBound, lowerBound, location):
         super(AstTypeParameter, self).__init__(attribs, location)
@@ -370,15 +389,16 @@ class AstBooleanType(AstType):
 
 
 class AstClassType(AstType):
-    def __init__(self, name, typeArguments, flags, location):
+    def __init__(self, prefix, name, typeArguments, flags, location):
         super(AstClassType, self).__init__(location)
+        self.prefix = prefix
         self.name = name
         self.typeArguments = typeArguments
         self.flags = flags
 
     def __repr__(self):
-        return "AstClassType(%s, %s, %s)" % \
-               (repr(self.name), repr(self.typeArguments),
+        return "AstClassType(%s, %s, %s, %s)" % \
+               (repr(self.prefix), repr(self.name), repr(self.typeArguments),
                 ", ".join(self.flags))
 
     def tag(self):
@@ -388,23 +408,12 @@ class AstClassType(AstType):
         return self.name + " " + ", ".join(self.flags)
 
     def children(self):
-        return self.typeArguments
-
-
-class AstProjectedType(AstType):
-    def __init__(self, left, right, location):
-        super(AstProjectedType, self).__init__(location)
-        self.left = left
-        self.right = right
-
-    def __repr__(self):
-        return "AstProjectedType(%s, %s)" % (repr(self.left), repr(self.right))
-
-    def tag(self):
-        return "ProjectedType"
-
-    def children(self):
-        return [self.left, self.right]
+        nodes = []
+        if self.prefix is not None:
+            nodes.extend(self.prefix)
+        if self.typeArguments is not None:
+            nodes.extend(self.typeArguments)
+        return nodes
 
 
 class AstTupleType(AstType):

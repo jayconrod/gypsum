@@ -89,9 +89,9 @@ class TestParser(unittest.TestCase):
         self.checkParse(astFunctionDefinition([], "f",
                                               [astTypeParameter([], None, "S", None, None),
                                                astTypeParameter([], None, "T", None, None)],
-                                              [astParameter([], None, astVariablePattern("x", astClassType("S", [], set()))),
-                                               astParameter([], None, astVariablePattern("y", astClassType("T", [], set())))],
-                                              astClassType("A", [], set()),
+                                              [astParameter([], None, astVariablePattern("x", astClassType([], "S", [], set()))),
+                                               astParameter([], None, astVariablePattern("y", astClassType([], "T", [], set())))],
+                                              astClassType([], "A", [], set()),
                                               astVariableExpression("x")),
                         functionDefn(),
                         "def f[S, T](x: S, y: T): A = x;")
@@ -127,19 +127,19 @@ class TestParser(unittest.TestCase):
                         "public class C;")
 
     def testSubclass(self):
-        ast = astClassDefinition([], "Sub", [], None, astClassType("Base", [], set()), None, [])
+        ast = astClassDefinition([], "Sub", [], None, astClassType([], "Base", [], set()), None, [])
         self.checkParse(ast, classDefn(), "class Sub <: Base;")
 
     def testSubclassWithTypeArgs(self):
         ast = astClassDefinition([], "Sub", [], None,
-                                 astClassType("Base", [astClassType("X", [], set()),
-                                                       astClassType("Y", [], set())], set()),
+                                 astClassType([], "Base", [astClassType([], "X", [], set()),
+                                                           astClassType([], "Y", [], set())], set()),
                                  None, [])
         self.checkParse(ast, classDefn(), "class Sub <: Base[X, Y];")
 
     def testSubclassWithSuperArgs(self):
         ast = astClassDefinition([], "Sub", [], None,
-                                 astClassType("Base", [], set()),
+                                 astClassType([], "Base", [], set()),
                                  [astVariableExpression("x"), astVariableExpression("y")], [])
         self.checkParse(ast, classDefn(), "class Sub <: Base(x, y);")
 
@@ -189,8 +189,8 @@ class TestParser(unittest.TestCase):
 
     def testTypeParameter(self):
         self.checkParse(astTypeParameter([], None, "T",
-                                         astClassType("U", [], set()),
-                                         astClassType("L", [], set())),
+                                         astClassType([], "U", [], set()),
+                                         astClassType([], "L", [], set())),
                         typeParameter(),
                         "T <: U >: L")
 
@@ -235,14 +235,14 @@ class TestParser(unittest.TestCase):
         self.checkParse(astVariablePattern("x", None), pattern(), "x")
 
     def testVarPatternWithType(self):
-        self.checkParse(astVariablePattern("x", astClassType("T", [], set())),
+        self.checkParse(astVariablePattern("x", astClassType([], "T", [], set())),
                         pattern(), "x: T")
 
     def testBlankPatternNoType(self):
         self.checkParse(astBlankPattern(None), pattern(), "_")
 
     def testBlankPatternWithType(self):
-        self.checkParse(astBlankPattern(astClassType("T", [], set())), pattern(), "_: T")
+        self.checkParse(astBlankPattern(astClassType([], "T", [], set())), pattern(), "_: T")
 
     def testLiteralPatterns(self):
         self.checkParse(astLiteralPattern(astIntegerLiteral(12, 64)), pattern(), "12")
@@ -260,6 +260,29 @@ class TestParser(unittest.TestCase):
         self.checkParse(astTuplePattern([astBlankPattern(None), astBlankPattern(None)]),
                         pattern(), "_, _")
 
+    # Scope prefix
+    def testScopePrefixSimple(self):
+        self.checkParse([astScopePrefixComponent("A", [])],
+                        scopePrefix(), "A")
+
+    def testScopePrefixCompound(self):
+        self.checkParse([astScopePrefixComponent("A", []),
+                         astScopePrefixComponent("B", [])],
+                        scopePrefix(), "A.B")
+
+    def testScopePrefixCompoundWithTypeArgs(self):
+        self.checkParse([astScopePrefixComponent("A", [astI8Type()]),
+                         astScopePrefixComponent("B", [astI32Type()])],
+                        scopePrefix(), "A[i8].B[i32]")
+
+    def testScopePrefixComponent(self):
+        self.checkParse(astScopePrefixComponent("A", []),
+                        scopePrefixComponent(), "A")
+
+    def testScopePrefixComponentWithTypeArgs(self):
+        self.checkParse(astScopePrefixComponent("A", [astI8Type(), astI16Type()]),
+                        scopePrefixComponent(), "A[i8, i16]")
+
     # Types
     def testSimpleTypes(self):
         self.checkParse(astUnitType(), ty(), "unit")
@@ -272,47 +295,47 @@ class TestParser(unittest.TestCase):
         self.checkParse(astF64Type(), ty(), "f64")
 
     def testClassTypeSimple(self):
-        self.checkParse(astClassType("C", [], set()), classType(), "C")
+        self.checkParse(astClassType([], "C", [], set()), classType(), "C")
 
     def testClassTypeArgs(self):
-        self.checkParse(astClassType("A", [astClassType("B", [astClassType("C", [], set())], set()),
-                                           astClassType("D", [], set())], set()),
+        self.checkParse(astClassType([], "A", [astClassType([], "B", [astClassType([], "C", [], set())], set()),
+                                               astClassType([], "D", [], set())], set()),
                         classType(),
                         "A[B[C], D]")
 
     def testNullableClassType(self):
-        self.checkParse(astClassType("C", [], set(["?"])), classType(), "C?")
+        self.checkParse(astClassType([], "C", [], set(["?"])), classType(), "C?")
 
-    def testSimpleProjectedType(self):
-        self.checkParse(astProjectedType(astClassType("A", [], set()),
-                                         astClassType("B", [], set())),
+    def testSimpleScopedType(self):
+        self.checkParse(astClassType([astScopePrefixComponent("A", [])],
+                                     "B", [], set()),
                         ty(),
                         "A.B")
 
-    def testMultipleProjectedType(self):
-        self.checkParse(astProjectedType(astClassType("A", [], set()),
-                                         astProjectedType(astClassType("B", [], set()),
-                                                          astClassType("C", [], set()))),
+    def testCompoundScopedType(self):
+        self.checkParse(astClassType([astScopePrefixComponent("A", []),
+                                      astScopePrefixComponent("B", [])],
+                                     "C", [], set()),
                         ty(),
                         "A.B.C")
 
-    def testProjectedTypeWithArgs(self):
-        self.checkParse(astProjectedType(astClassType("A", [astClassType("B", [], set())], set()),
-                                         astClassType("C", [astClassType("D", [], set())], set())),
+    def testScopedTypeWithArgs(self):
+        self.checkParse(astClassType([astScopePrefixComponent("A", [astClassType([], "B", [], set())])],
+                                     "C", [astClassType([], "D", [], set())], set()),
                         ty(),
                         "A[B].C[D]")
 
-    def testProjectFromPrimitive(self):
+    def testScopeFromPrimitive(self):
         self.assertRaises(ParseException, self.parseFromSource, ty(),
                           "i64.A")
 
-    def testProjectPrimitive(self):
+    def testPrimitiveInScope(self):
         self.assertRaises(ParseException, self.parseFromSource, ty(),
                           "A.i64")
 
     def testTupleType(self):
-        self.checkParse(astTupleType([astClassType("A", [], set()),
-                                      astClassType("B", [astClassType("C", [], set())], set())],
+        self.checkParse(astTupleType([astClassType([], "A", [], set()),
+                                      astClassType([], "B", [astClassType([], "C", [], set())], set())],
                                      set(["?"])),
                         ty(),
                         "(A, B[C])?")
@@ -406,20 +429,20 @@ class TestParser(unittest.TestCase):
 
     def testCallExpr3(self):
         self.checkParse(astCallExpression(astVariableExpression("f"),
-                                          [astClassType("T", [], set())],
+                                          [astClassType([], "T", [], set())],
                                           None),
                         expression(), "f[T]")
 
     def testCallExpr4(self):
         self.checkParse(astCallExpression(astVariableExpression("f"),
-                                          [astClassType("T", [], set())],
+                                          [astClassType([], "T", [], set())],
                                           [astVariableExpression("a")]),
                         expression(), "f[T](a)")
 
     def testCallMethod1(self):
         self.checkParse(astCallExpression(astPropertyExpression(astVariableExpression("o"),
                                                                 "f"),
-                                          [astClassType("T", [], set())],
+                                          [astClassType([], "T", [], set())],
                                           None),
                         expression(), "o.f[T]")
 
@@ -433,7 +456,7 @@ class TestParser(unittest.TestCase):
     def testCallMethod3(self):
         self.checkParse(astCallExpression(astPropertyExpression(astVariableExpression("o"),
                                                                 "f"),
-                                          [astClassType("T", [], set())],
+                                          [astClassType([], "T", [], set())],
                                           [astVariableExpression("a")]),
                         expression(), "o.f[T](a)")
 
@@ -694,8 +717,8 @@ class TestParser(unittest.TestCase):
         self.checkParse(astLambdaExpression(None,
                                             [astTypeParameter([], None, "S", None, None),
                                              astTypeParameter([], None, "T", None, None)],
-                                            [astVariablePattern("x", astClassType("S", [], set())),
-                                             astVariablePattern("y", astClassType("T", [], set()))],
+                                            [astVariablePattern("x", astClassType([], "S", [], set())),
+                                             astVariablePattern("y", astClassType([], "T", [], set()))],
                                             astVariableExpression("x")),
                         expression(),
                         "lambda [S, T](x: S, y: T) x")
@@ -703,7 +726,7 @@ class TestParser(unittest.TestCase):
     def testLambdaExprWithName(self):
         self.checkParse(astLambdaExpression("f",
                                             [astTypeParameter([], None, "T", None, None)],
-                                            [astVariablePattern("x", astClassType("T", [], set()))],
+                                            [astVariablePattern("x", astClassType([], "T", [], set()))],
                                             astCallExpression(astVariableExpression("f"),
                                                               [],
                                                               [astVariableExpression("x")])),
