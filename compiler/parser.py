@@ -138,10 +138,25 @@ def pattern():
 
 
 def simplePattern():
-    return varPattern() | \
+    return varOrValuePattern() | \
            blankPattern() | \
            litPattern() | \
            groupPattern()
+
+
+def varOrValuePattern():
+    def process(parsed, loc):
+        prefix, typeSuffix = parsed
+        if len(prefix[-1].typeArguments) > 0:
+            return ct.FailValue("can't have type arguments at the end of variable or value pattern")
+        ty = typeSuffix[1] if typeSuffix is not None else None
+        if len(prefix) == 1:
+            return ast.AstVariablePattern(prefix[0].name, ty, loc)
+        else:
+            if ty is not None:
+                return ct.FailValue("can't have type for value pattern")
+            return ast.AstValuePattern(prefix[:-1], prefix[-1].name, loc)
+    return scopePrefix() + ct.Opt(keyword(":") + ty()) ^ process
 
 
 def varPattern():

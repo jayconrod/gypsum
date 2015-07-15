@@ -337,6 +337,30 @@ class CompileVisitor(ast.AstNodeVisitor):
         if lastMatchingIndex is None:
             self.drop()
 
+    def visitAstValuePattern(self, pat, mode, ty=None, failBlock=None):
+        if mode is COMPILE_FOR_UNINITIALIZED:
+            return
+        assert mode is COMPILE_FOR_MATCH
+
+        irDefn = self.info.getUseInfo(pat).defnInfo.irDefn
+        assert isinstance(irDefn, Global)
+        if ty.isPrimitive():
+            # The == operator for primitives is symmetric. Putting the matched value
+            # first is a little more compact.
+            self.dup()
+            self.loadGlobal(irDefn)
+            self.buildCallNamedMethod(ty, "==", COMPILE_FOR_VALUE)
+        else:
+            # The == operator for the matching value could be anything, so we want to make
+            # sure to call the method on the value from this pattern.
+            self.loadGlobal(irDefn)
+            self.dupi(1)
+            self.buildCallNamedMethod(ty, "==", COMPILE_FOR_VALUE)
+        successBlock = self.newBlock()
+        self.branchif(successBlock.id, failBlock.id)
+        self.setCurrentBlock(successBlock)
+        self.drop()
+
     def visitAstLiteralExpression(self, expr, mode):
         self.buildLiteral(expr.literal)
         self.dropForEffect(mode)

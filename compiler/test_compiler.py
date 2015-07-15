@@ -1151,6 +1151,72 @@ class TestCompiler(TestCaseWithDefinitions):
         #                        tycd(BUILTIN_STRING_CLASS_ID.index),
 
 
+    def testMatchExprWithValuePrimitive(self):
+        foo = Package(name=Name(["foo"]))
+        bar = foo.addGlobal(Name(["bar"]), None, I64Type, frozenset([PUBLIC, LET]))
+        loader = FakePackageLoader([foo])
+
+        source = "def f(x: i64) =\n" + \
+                 "  match (x)\n" + \
+                 "    case foo.bar => 12\n" + \
+                 "    case _ => 34"
+        package = self.compileFromSource(source, packageLoader=loader)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               ldlocal(0),
+                               dup(),
+                               ldgf(bar.id.packageId.index, bar.id.externIndex),
+                               eqi64(),
+                               branchif(1, 2),
+                             ], [
+                               drop(),
+                               i64(12),
+                               branch(3),
+                             ], [
+                               drop(),
+                               i64(34),
+                               branch(3),
+                             ], [
+                               ret()
+                             ]],
+                             variables=[self.makeVariable("f.x", type=I64Type, kind=PARAMETER,
+                                                          flags=frozenset([LET]))]))
+
+    def testMatchExprWithValueObject(self):
+        stringType = getStringType()
+        stringClass = stringType.clas
+        foo = Package(name=Name(["foo"]))
+        bar = foo.addGlobal(Name(["bar"]), None, stringType, frozenset([PUBLIC, LET]))
+        loader = FakePackageLoader([foo])
+
+        source = "def f(x: String) =\n" + \
+                 "  match (x)\n" + \
+                 "    case foo.bar => 12\n" + \
+                 "    case _ => 34"
+        package = self.compileFromSource(source, packageLoader=loader)
+        eqMethod = stringClass.getMethod("==")
+        eqMethodIndex = stringClass.getMethodIndex(eqMethod)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               ldlocal(0),
+                               ldgf(bar.id.packageId.index, bar.id.externIndex),
+                               dupi(1),
+                               callv(2, eqMethodIndex),
+                               branchif(1, 2),
+                             ], [
+                               drop(),
+                               i64(12),
+                               branch(3),
+                             ], [
+                               drop(),
+                               i64(34),
+                               branch(3),
+                             ], [
+                               ret()
+                             ]],
+                             variables=[self.makeVariable("f.x", type=stringType,
+                                                          kind=PARAMETER, flags=frozenset([LET]))]))
+
     def testMatchAllCasesTerminate(self):
         source = "def f =\n" + \
                  "  match (12)\n" + \

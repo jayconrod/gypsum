@@ -64,14 +64,16 @@ def patternMustMatch(pat, ty, info):
         return True
     elif isinstance(pat, ast.AstLiteralPattern):
         return False
-    else:
-        assert isinstance(pat, ast.AstTuplePattern)
+    elif isinstance(pat, ast.AstTuplePattern):
         tupleClass = info.getTupleClass(len(pat.patterns), pat.location)
         if isinstance(ty, ir_t.ClassType) and ty.clas is tupleClass:
             return all(patternMustMatch(p, ety, info)
                        for p, ety in zip(pat.patterns, ty.typeArguments))
         else:
             return False
+    else:
+        assert isinstance(pat, ast.AstValuePattern)
+        return False
 
 
 def partialFunctionCaseMustMatch(case, ty, info):
@@ -446,6 +448,25 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         tupleClass = self.info.getTupleClass(len(node.patterns), node.location)
         return ir_t.ClassType(tupleClass, patternTypes)
 
+    def visitAstValuePattern(self, node, isParam=False):
+        scope, typeArgs = self.handleScopePrefix(node.prefix)
+        hasPrefix = scope is not self.scope()
+        loc = node.location
+        nameInfo = scope.lookup(node.name, loc, localOnly=hasPrefix)
+        if nameInfo.isOverloaded():
+            raise TypeException(loc,
+                                "%s: only globals and static fields may be referenced in a value pattern" %
+                                node.name)
+        defnInfo = nameInfo.getDefnInfo()
+        irDefn = defnInfo.irDefn
+        if not isinstance(irDefn, ir.Global) and \
+           not (isinstance(irDefn, ir.Field) and STATIC in irDefn.flags):
+            raise TypeException(loc,
+                                "%s: only globals and static fields may be referenced in a value pattern" %
+                                node.name)
+        self.scope().use(defnInfo, node.id, USE_AS_VALUE, loc)
+        return irDefn.type
+
     def visitDefault(self, node):
         self.visitChildren(node)
 
@@ -664,6 +685,11 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                  for p in node.patterns)
         tupleTy = ir_t.ClassType(tupleClass, elementTypes)
         patTy = self.findPatternType(tupleTy, exprTy, mode, None, node.location)
+        return patTy
+
+    def visitAstValuePattern(self, node, exprTy, mode):
+        irDefn = self.info.getUseInfo(node.id).defnInfo.irDefn
+        patTy = self.findPatternType(irDefn.type, exprTy, mode, None, node.location)
         return patTy
 
     def visitAstLiteralExpression(self, node):

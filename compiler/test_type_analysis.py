@@ -100,6 +100,13 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "def f((x: String, y)) = x"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
+    def testValueParam(self):
+        foo = Package(name=Name(["foo"]))
+        foo.addGlobal(Name(["bar"]), None, UnitType, frozenset([PUBLIC, LET]))
+        source = "def f(foo.bar) = 12"
+        self.assertRaises(TypeException, self.analyzeFromSource,
+                          source, packageLoader=FakePackageLoader([foo]))
+
     def testRecursiveGlobal(self):
         source = "def f = x\n" + \
                  "let x = f"
@@ -874,6 +881,16 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(getStringType(),
                           info.getType(matchAst.matcher.cases[0].pattern.patterns[0]))
         self.assertEquals(getStringType(), info.getType(matchAst.matcher.cases[0].expression))
+
+    def testMatchExprValue(self):
+        foo = Package(name=Name(["foo"]))
+        foo.addGlobal(Name(["bar"]), None, I64Type, frozenset([PUBLIC, LET]))
+        source = "def f(x: i64) =\n" + \
+                 "  match (x)\n" + \
+                 "    case foo.bar => 1"
+        info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
+        matchAst = info.ast.modules[0].definitions[0].body.statements[0]
+        self.assertEquals(I64Type, info.getType(matchAst.matcher.cases[0].pattern))
 
     def testMatchExprWithDisjointType(self):
         source = "def f(x: String) =\n" + \

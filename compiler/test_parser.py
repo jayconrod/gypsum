@@ -260,6 +260,10 @@ class TestParser(unittest.TestCase):
         self.checkParse(astTuplePattern([astBlankPattern(None), astBlankPattern(None)]),
                         pattern(), "_, _")
 
+    def testValuePattern(self):
+        self.checkParse(astValuePattern([astScopePrefixComponent("foo", [])], "bar"),
+                        pattern(), "foo.bar")
+
     # Scope prefix
     def testScopePrefixSimple(self):
         self.checkParse([astScopePrefixComponent("A", [])],

@@ -320,6 +320,22 @@ class AstTuplePattern(AstNode):
         return self.patterns
 
 
+class AstValuePattern(AstNode):
+    def __init__(self, prefix, name, location):
+        super(AstValuePattern, self).__init__(location)
+        self.prefix = prefix
+        self.name = name
+
+    def __repr__(self):
+        return "AstValuePattern(%s, %s)" % (repr(self.prefix), self.name)
+
+    def tag(self):
+        return "ValuePattern"
+
+    def children(self):
+        return self.prefix
+
+
 class AstType(AstNode):
     pass
 
