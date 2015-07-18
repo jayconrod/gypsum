@@ -71,6 +71,11 @@
 - delete output file when an internal error is encountered
 - return from try/catch with finally does not execute finally
 - return from finally should be an error
+- scope bindings should be flagged, depending on whether they can be looked up from other
+  scopes. Right now, we can look up local variables from function scopes with prefixes.
+- the pattern '_: type' matches anything without type checking
+- flag bindings depending on whether they can be looked up from outside of the scope. right now,
+  we can look up local variables from inside functions with a scope prefix.
 
 ## VM
 - `read()` breaks when EOF is given. Exception is thrown in non-GC-safe place.
@@ -79,5 +84,6 @@
 - assertion when trying to instantiate Nothing. This should be a special case.
 - ldp, ldpc, and other instructions which may throw exceptions should be GC-safe.
   No pointer map is recorded for these, even though we might allocate an exception.
+- ldg, ldgf need to check whether the global was initialized and throw an exception if not.
 
 # TODO: file issues for everything and delete this section.
