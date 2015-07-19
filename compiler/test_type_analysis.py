@@ -20,7 +20,7 @@ from scope_analysis import *
 from type_analysis import *
 from flags import *
 from builtins import getRootClass, getStringClass, getNothingClass, getExceptionClass
-from utils_test import FakePackageLoader, TestCaseWithDefinitions
+from utils_test import FakePackageLoader, TestCaseWithDefinitions, OPTION_SOURCE, TUPLE_SOURCE
 
 
 class TestTypeAnalysis(TestCaseWithDefinitions):
@@ -76,7 +76,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testTupleParam(self):
-        source = "public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n" + \
+        source = TUPLE_SOURCE + \
                  "def f((x: String, y: String)) = x"
         info = self.analyzeFromSource(source, name=STD_NAME)
         tupleClass = info.package.findClass(name="Tuple2")
@@ -86,17 +86,17 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(getStringType(), f.returnType)
 
     def testTupleParamWithBadElement(self):
-        source = "public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n" + \
+        source = TUPLE_SOURCE + \
                  "def f((x: String, \"bar\")) = x"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testTupleParamWithPrimitiveElement(self):
-        source = "public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n" + \
+        source = TUPLE_SOURCE + \
                  "def f((x: String, 12)) = x"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testTupleParamWithUntypedElement(self):
-        source = "public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n" + \
+        source = TUPLE_SOURCE + \
                  "def f((x: String, y)) = x"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
@@ -106,6 +106,10 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "def f(foo.bar) = 12"
         self.assertRaises(TypeException, self.analyzeFromSource,
                           source, packageLoader=FakePackageLoader([foo]))
+
+    def testDestructureParam(self):
+        source = "def f(foo(x: String)) = 12"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testRecursiveGlobal(self):
         source = "def f = x\n" + \
@@ -757,7 +761,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.fail()
 
     def testTupleExprStd(self):
-        source = "public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n" + \
+        source = TUPLE_SOURCE + \
                  "let g = \"foo\", \"bar\""
         info = self.analyzeFromSource(source, name=STD_NAME)
         tupleClass = info.package.findClass(name="Tuple2")
@@ -765,7 +769,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(ClassType(tupleClass, (getStringType(), getStringType())), g.type)
 
     def testTupleExprStdPrimitive(self):
-        source = "public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n" + \
+        source = TUPLE_SOURCE + \
                  "let g = 1, 2"
         self.assertRaises(TypeException, self.analyzeFromSource, source, name=STD_NAME)
 
@@ -869,7 +873,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(I64Type, info.getType(matchAst.matcher.cases[0].pattern))
 
     def testMatchExprTuple(self):
-        source = "public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n" + \
+        source = TUPLE_SOURCE + \
                  "def f(x: Object) =\n" + \
                  "  match (x)\n" + \
                  "    case (y: String, z: String) => y"
@@ -891,6 +895,93 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         matchAst = info.ast.modules[0].definitions[0].body.statements[0]
         self.assertEquals(I64Type, info.getType(matchAst.matcher.cases[0].pattern))
+
+    def testMatchExprDestructureWithoutMatcher(self):
+        source = "class Foo\n" + \
+                 "def f(x: Object) =\n" + \
+                 "  match (x)\n" + \
+                 "    case Foo(_) => 12"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testMatchExprDestructureWithFunctionMatcher(self):
+        source = OPTION_SOURCE + \
+                 "class A\n" + \
+                 "def Matcher(x: A): Option[String] = Some[String](\"matched\")\n" + \
+                 "def f(x: A) =\n" + \
+                 "  match (x)\n" + \
+                 "    case Matcher(s) => s"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        A = info.package.findClass(name="A")
+        f = info.package.findFunction(name="f")
+        matchCase = info.ast.modules[0].definitions[-1].body.statements[0].matcher.cases[0]
+        self.assertEquals(getStringType(), info.getType(matchCase.pattern))
+        self.assertEquals(getStringType(), info.getType(matchCase.pattern.patterns[0]))
+        self.assertEquals(getStringType(), f.returnType)
+
+    def testMatchExprDestructureWithFunctionMatcherTuple(self):
+        source = OPTION_SOURCE + \
+                 TUPLE_SOURCE + \
+                 "def Matcher(x: Object): Option[(String, String)] = None\n" + \
+                 "def f(x: Object) =\n" + \
+                 "  match (x)\n" + \
+                 "    case Matcher(a, b) => a"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        f = info.package.findFunction(name="f")
+        tupleClass = info.package.findClass(name="Tuple2")
+        matchCase = info.ast.modules[0].definitions[-1].body.statements[0].matcher.cases[0]
+        self.assertEquals(ClassType(tupleClass, (getStringType(), getStringType())),
+                          info.getType(matchCase.pattern))
+        self.assertEquals(getStringType(), info.getType(matchCase.pattern.patterns[0]))
+        self.assertEquals(getStringType(), info.getType(matchCase.pattern.patterns[1]))
+        self.assertEquals(getStringType(), f.returnType)
+
+    def testMatchExprDestructureWithBadMatcherFunctionArgs(self):
+        source = OPTION_SOURCE + \
+                 "def Matcher: Option[String] = Some[String](\"matched\")\n" + \
+                 "def f(x: Object) =\n" + \
+                 "  match (x)\n" + \
+                 "    case Matcher(s) => s"
+        self.assertRaises(TypeException, self.analyzeFromSource, source, name=STD_NAME)
+
+    def testMatchExprDestructureWithMatcherStaticMethod(self):
+        source = OPTION_SOURCE + \
+                 "class Foo\n" + \
+                 "  static def try-match(obj: Object) = None\n" + \
+                 "def f(x: Object) =\n" + \
+                 "  match (x)\n" + \
+                 "    case Foo(a) => 12"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        matchCase = info.ast.modules[0].definitions[-1].body.statements[0].matcher.cases[0]
+        self.assertEquals(getNothingClassType(), info.getType(matchCase.pattern))
+        self.assertEquals(getNothingClassType(), info.getType(matchCase.pattern.patterns[0]))
+
+    def testMatchExprDestructureWithMethod(self):
+        source = OPTION_SOURCE + \
+                 "class Matcher\n" + \
+                 "  def try-match(obj: Object) = None\n" + \
+                 "def f(x: Object) =\n" + \
+                 "  let m = Matcher()\n" + \
+                 "  match (x)\n" + \
+                 "    case m(a) => 12"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        matchCase = info.ast.modules[0].definitions[-1].body.statements[1].matcher.cases[0]
+        self.assertEquals(getNothingClassType(), info.getType(matchCase.pattern))
+        self.assertEquals(getNothingClassType(), info.getType(matchCase.pattern.patterns[0]))
+
+    def testMatchExprDestructureWithMethodInScope(self):
+        source = OPTION_SOURCE + \
+                 "class Foo[static T]\n" + \
+                 "  def matcher(obj: T) = Some[T](obj)\n" + \
+                 "  def f(obj: T) =\n" + \
+                 "    match (obj)\n" + \
+                 "      case matcher(x) => x"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        T = info.package.findTypeParameter(name="Foo.T")
+        f = info.package.findFunction(name="Foo.f")
+        matchCase = info.ast.modules[0].definitions[-1].members[1].body.statements[0].matcher.cases[0]
+        self.assertEquals(VariableType(T), info.getType(matchCase.pattern))
+        self.assertEquals(VariableType(T), info.getType(matchCase.pattern.patterns[0]))
+        self.assertEquals(VariableType(T), f.returnType)
 
     def testMatchExprWithDisjointType(self):
         source = "def f(x: String) =\n" + \
@@ -1061,7 +1152,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testTupleTypeStd(self):
-        source = "public class Tuple2[static +T1, static +T2]\n" + \
+        source = TUPLE_SOURCE + \
                  "var g: (Object, Object)?"
         info = self.analyzeFromSource(source, name=STD_NAME)
         ty = info.package.findGlobal(name="g").type
@@ -1071,7 +1162,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(expected, ty)
 
     def testTupleTypePrimitive(self):
-        source = "public class Tuple2[static +T1, static +T2]\n" + \
+        source = TUPLE_SOURCE + \
                  "var g: (i64, i64)"
         self.assertRaises(TypeException, self.analyzeFromSource, source, name=STD_NAME)
 
@@ -1094,7 +1185,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(ClassType(Foo, (VariableType(T),)), ty)
 
     def testErasedTupleTypeArg(self):
-        source = "public class Tuple2[static +T1, static +T2]\n" + \
+        source = TUPLE_SOURCE + \
                  "var g: (_, _)"
         info = self.analyzeFromSource(source, name=STD_NAME)
         ty = info.package.findGlobal(name="g").type

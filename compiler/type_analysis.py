@@ -6,7 +6,7 @@
 
 import ast
 import compile_info
-from errors import TypeException
+from errors import ScopeException, TypeException
 import ir
 import ir_types as ir_t
 from builtins import getExceptionClass, getPackageClass, getNothingClass
@@ -60,10 +60,6 @@ def patternMustMatch(pat, ty, info):
         else:
             patTy = info.getType(pat)
             return ty.isSubtypeOf(patTy)
-    elif isinstance(pat, ast.AstBlankPattern):
-        return True
-    elif isinstance(pat, ast.AstLiteralPattern):
-        return False
     elif isinstance(pat, ast.AstTuplePattern):
         tupleClass = info.getTupleClass(len(pat.patterns), pat.location)
         if isinstance(ty, ir_t.ClassType) and ty.clas is tupleClass:
@@ -71,8 +67,9 @@ def patternMustMatch(pat, ty, info):
                        for p, ety in zip(pat.patterns, ty.typeArguments))
         else:
             return False
+    elif isinstance(pat, ast.AstBlankPattern):
+        return True
     else:
-        assert isinstance(pat, ast.AstValuePattern)
         return False
 
 
@@ -424,6 +421,10 @@ class DeclarationTypeVisitor(TypeVisitorBase):
                                 "patterns which might not match can't be used as parameters")
         return patTy
 
+    # We visit patterns to find the correct types for function parameters. Some patterns can't
+    # directly be part of function parameters, but they may be part of other patterns, so
+    # we need to type them all.
+
     def visitAstVariablePattern(self, node, isParam=False):
         if not isParam:
             return None
@@ -449,23 +450,19 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         return ir_t.ClassType(tupleClass, patternTypes)
 
     def visitAstValuePattern(self, node, isParam=False):
-        scope, typeArgs = self.handleScopePrefix(node.prefix)
-        hasPrefix = scope is not self.scope()
-        loc = node.location
-        nameInfo = scope.lookup(node.name, loc, localOnly=hasPrefix)
-        if nameInfo.isOverloaded():
-            raise TypeException(loc,
-                                "%s: only globals and static fields may be referenced in a value pattern" %
-                                node.name)
-        defnInfo = nameInfo.getDefnInfo()
-        irDefn = defnInfo.irDefn
-        if not isinstance(irDefn, ir.Global) and \
-           not (isinstance(irDefn, ir.Field) and STATIC in irDefn.flags):
-            raise TypeException(loc,
-                                "%s: only globals and static fields may be referenced in a value pattern" %
-                                node.name)
-        self.scope().use(defnInfo, node.id, USE_AS_VALUE, loc)
-        return irDefn.type
+        if not isParam:
+            return None
+        # Need to raise this early, since patternMustMatch is only called after a type is
+        # returned. We may not be able to determine the type of this pattern, since it can
+        # involve function calls as part of the scope prefix.
+        raise TypeException(node.location, "value pattern can't be used in a parameter")
+
+    def visitAstDestructurePattern(self, node, isParam=False):
+        if not isParam:
+            return None
+        # Need to raise this early, since patternMustMatch is only called after a type
+        # is returned.
+        raise TypeException(node.location, "destructure pattern can't be used in a parameter")
 
     def visitDefault(self, node):
         self.visitChildren(node)
@@ -688,9 +685,100 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         return patTy
 
     def visitAstValuePattern(self, node, exprTy, mode):
-        irDefn = self.info.getUseInfo(node.id).defnInfo.irDefn
-        patTy = self.findPatternType(irDefn.type, exprTy, mode, None, node.location)
+        scope, receiverType = self.handlePatternScopePrefix(node.prefix)
+        patTy = self.handlePossibleCall(scope, node.name, node.id, receiverType, [], [],
+                                        hasReceiver=(receiverType is not None),
+                                        hasArgs=False, mayAssign=False, mayBePrefix=False,
+                                        loc=node.location)
         return patTy
+
+    def visitAstDestructurePattern(self, node, exprTy, mode):
+        scope, receiverType = self.handlePatternScopePrefix(node.prefix[:-1])
+        hasPrefix = scope is not self.scope()
+        last = node.prefix[-1]
+        typeArgs = map(self.visit, last.typeArguments)
+        nameInfo = scope.lookup(last.name, last.location, localOnly=hasPrefix)
+        if nameInfo.isOverloaded() or isinstance(nameInfo.getDefnInfo().irDefn, ir.Function):
+            # Call to possibly overloaded matcher function.
+            receiverIsExplicit = receiverType is not None
+            if not receiverIsExplicit and not hasPrefix and self.hasReceiverType():
+                receiverType = self.getReceiverType()
+            defnInfo, allTypeArgs, allArgTypes = \
+                nameInfo.findDefnInfoWithArgTypes(receiverType, receiverIsExplicit,
+                                                  typeArgs, [exprTy], last.location)
+            callInfo = CallInfo(allTypeArgs, receiverIsExplicit)
+            self.info.setCallInfo(node.id, callInfo)
+            scope.use(defnInfo, node.id,
+                      USE_AS_PROPERTY if receiverIsExplicit else USE_AS_VALUE, node.location)
+            irDefn = defnInfo.irDefn
+            returnType = irDefn.returnType.substitute(irDefn.typeParameters, allTypeArgs)
+        else:
+            # This was just another prefix. Finish up the bookkeeping.
+            matcherDefnInfo = nameInfo.getDefnInfo()
+            scope.use(matcherDefnInfo, last.id,
+                      USE_AS_PROPERTY if receiverType is not None else USE_AS_VALUE,
+                      node.location)
+            matcherIrDefn = matcherDefnInfo.irDefn
+            self.ensureTypeInfoForDefn(matcherIrDefn)
+            if isinstance(matcherIrDefn, ir.Global) or \
+               isinstance(matcherIrDefn, ir.Field) or \
+               isinstance(matcherIrDefn, ir.Variable):
+                if len(typeArgs) > 0:
+                    raise TypeException(last.location,
+                                        "cannot apply type arguments to value in destructure pattern")
+                matcherReceiverType = matcherIrDefn.type
+                matcherHasReceiver = True
+                matcherClass = ir_t.getClassFromType(matcherReceiverType)
+            elif isinstance(matcherIrDefn, ir.Class):
+                if not matcherIrDefn.canApplyTypeArgs(typeArgs):
+                    raise TypeException(last.location,
+                                        "type arguments could not be applied for this class")
+                matcherScopeId = self.info.getScope(matcherIrDefn).scopeId
+                matcherScopePrefixInfo = ScopePrefixInfo(matcherIrDefn, matcherScopeId)
+                self.info.setScopePrefixInfo(last.id, matcherScopePrefixInfo)
+                matcherReceiverType = ir_t.ClassType(matcherIrDefn, typeArgs)
+                matcherHasReceiver = False
+                matcherClass = matcherIrDefn
+            else:
+                raise TypeException(last.location, "cannot use this definition for matching")
+
+            # Look up the try-match method.
+            matcherScope = self.info.getScope(matcherClass)
+            try:
+                returnType = self.handlePossibleCall(matcherScope, "try-match", node.id,
+                                                     matcherReceiverType, [], [exprTy],
+                                                     hasReceiver=matcherHasReceiver,
+                                                     hasArgs=True, mayAssign=False,
+                                                     mayBePrefix=False, loc=node.location)
+            except ScopeException:
+                raise TypeException(node.location, "cannot match without `try-match` method")
+
+        # Determine the expression types of the sub-patterns, based on what the matcher returns.
+        # If there is one pattern, it should return Option[T1], and T1 is the expression type
+        # (T1 may be a tuple). If there are more, it should return Option[(T1, ..., Tn)], and
+        # T1, ..., Tn are the expression types.
+        optionClass = self.info.getStdClass("Option", node.location)
+        if not returnType.isObject() or \
+           not ir_t.getClassFromType(returnType).isSubclassOf(optionClass):
+            raise TypeException(node.location, "matcher must return std.Option")
+        returnType = returnType.substituteForBaseClass(optionClass)
+        returnTypeArg = returnType.typeArguments[0]
+        n = len(node.patterns)
+        if n == 1:
+            patternTypes = [returnTypeArg]
+        else:
+            tupleClass = self.info.getTupleClass(len(node.patterns), node.location)
+            if not returnTypeArg.isObject() or \
+               not ir_t.getClassFromType(returnTypeArg).isSubclassOf(tupleClass):
+                raise TypeException(node.location,
+                                    "matcher must return std.Option[std.Tuple%d]" % n)
+            returnTypeArg = returnTypeArg.substituteForBaseClass(tupleClass)
+            patternTypes = returnTypeArg.typeArguments
+        for subPat, subExprTy in zip(node.patterns, patternTypes):
+            self.visit(subPat, subExprTy, mode)
+
+        # We return the Some type argument as the pattern type. This isn't really used though.
+        return returnTypeArg
 
     def visitAstLiteralExpression(self, node):
         ty = self.visit(node.literal)
@@ -1047,7 +1135,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                            receiverType, typeArgs, argTypes,
                            hasReceiver, hasArgs, mayAssign, mayBePrefix, loc):
         receiverIsExplicit = receiverType is not None
-        if not receiverIsExplicit and self.hasReceiverType():
+        if not receiverIsExplicit and scope is self.scope() and self.hasReceiverType():
             receiverType = self.getReceiverType()
 
         assert not mayBePrefix or not hasArgs
@@ -1141,6 +1229,30 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         else:
             assert isinstance(irDefn, ir.Class)
             return receiverType
+
+    def handlePatternScopePrefix(self, prefix):
+        scope = self.scope()
+        hasPrefix = False
+        receiverType = None
+        for component in prefix:
+            # Look up the type of the next component.
+            typeArgs = map(self.visit, component.typeArguments)
+            ty = self.handlePossibleCall(scope, component.name, component.id, receiverType,
+                                         typeArgs, [], hasReceiver=(receiverType is not None),
+                                         hasArgs=False, mayAssign=False,
+                                         mayBePrefix=(receiverType is None),
+                                         loc=component.location)
+
+            # Determine the next scope and the receiver type. If this is just a prefix, there
+            # is no receiver type yet.
+            if self.info.hasScopePrefixInfo(component.id):
+                scope = self.info.getScope(self.info.getScopePrefixInfo(component.id).scopeId)
+                assert receiverType is None
+            else:
+                scope = self.info.getScope(ir_t.getClassFromType(ty))
+                receiverType = ty
+
+        return scope, receiverType
 
     def findBaseClassForField(self, receiverClass, field):
         # At this point, classes haven't been flattened yet, so we have to search up the

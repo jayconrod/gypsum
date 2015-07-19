@@ -336,6 +336,23 @@ class AstValuePattern(AstNode):
         return self.prefix
 
 
+class AstDestructurePattern(AstNode):
+    def __init__(self, prefix, patterns, location):
+        super(AstDestructurePattern, self).__init__(location)
+        self.prefix = prefix
+        self.patterns = patterns
+
+    def __repr__(self):
+        return "AstDestructurePattern(%s, %s)" % \
+            (repr(self.prefix), self.patterns)
+
+    def tag(self):
+        return "DestructurePattern"
+
+    def children(self):
+        return self.prefix + self.patterns
+
+
 class AstType(AstNode):
     pass
 

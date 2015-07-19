@@ -26,7 +26,7 @@ from flags import LET, PUBLIC, METHOD
 from compile_info import CompileInfo
 from builtins import *
 from errors import *
-from utils_test import FakePackageLoader, TestCaseWithDefinitions
+from utils_test import FakePackageLoader, OPTION_SOURCE, TestCaseWithDefinitions, TUPLE_SOURCE
 
 
 class TestCompiler(TestCaseWithDefinitions):
@@ -1216,6 +1216,193 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]],
                              variables=[self.makeVariable("f.x", type=stringType,
                                                           kind=PARAMETER, flags=frozenset([LET]))]))
+
+    def testMatchExprDestructureSome(self):
+        source = OPTION_SOURCE + \
+                 "def f(obj: Object) =\n" + \
+                 "  match (obj)\n" + \
+                 "    case Some[Object](x: String) => x\n" + \
+                 "    case _ => \"no\""
+        package = self.compileFromSource(source, name=STD_NAME)
+        stringType = getStringType()
+        tryMatch = package.findFunction(name="Some.try-match")
+        some = package.findClass(name="Some")
+        get = some.findMethodByShortName("get")
+        getIndex = some.getMethodIndex(get)
+        value = some.fields[0]
+        T = some.typeParameters[0]
+        noIndex = package.findString("no")
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", stringType, [[
+                               # block 0
+                               ldlocal(0),
+                               dup(),
+                               tycs(BUILTIN_ROOT_CLASS_ID.index),
+                               callg(tryMatch.id.index),
+                               tyvd(T.id.index),
+                               tycd(some.id.index),
+                               castcbr(1, 3),
+                             ], [
+                               # block 1
+                               tycs(BUILTIN_ROOT_CLASS_ID.index),
+                               callv(1, getIndex),
+                               tycd(BUILTIN_STRING_CLASS_ID.index),
+                               castcbr(2, 3),
+                             ], [
+                               # block 2
+                               stlocal(-1),
+                               drop(),
+                               ldlocal(-1),
+                               branch(5),
+                             ], [
+                               # block 3
+                               drop(),
+                               branch(4),
+                             ], [
+                               # block 4
+                               drop(),
+                               string(noIndex),
+                               branch(5),
+                             ], [
+                               # block 5
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.obj", type=getRootClassType(),
+                                                          kind=PARAMETER, flags=frozenset([LET])),
+                                        self.makeVariable("f.x", type=stringType, kind=LOCAL,
+                                                          flags=frozenset([LET]))]))
+
+    def testMatchDestructureSomeTupleFromFunction(self):
+        source = TUPLE_SOURCE + \
+                 OPTION_SOURCE + \
+                 "def Matcher(obj: Object) = Some[(String, String)]((\"foo\", \"bar\"))\n" + \
+                 "def f(obj: Object) =\n" + \
+                 "  match (obj)\n" + \
+                 "    case Matcher(x, y) => 12\n" + \
+                 "    case _ => 34"
+        package = self.compileFromSource(source, name=STD_NAME)
+        Matcher = package.findFunction(name="Matcher")
+        Some = package.findClass(name="Some")
+        T = Some.typeParameters[0]
+        get = Some.findMethodByShortName("get")
+        getIndex = Some.getMethodIndex(get)
+        Tuple2 = package.findClass(name="Tuple2")
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0
+                               ldlocal(0),
+                               dup(),
+                               callg(Matcher.id.index),
+                               tyvd(T.id.index),
+                               tycd(Some.id.index),
+                               castcbr(1, 5),
+                             ], [
+                               # block 1
+                               tycs(BUILTIN_ROOT_CLASS_ID.index),
+                               callv(1, getIndex),
+                               tyvd(Tuple2.typeParameters[0].id.index),
+                               tyvd(Tuple2.typeParameters[1].id.index),
+                               tycd(Tuple2.id.index),
+                               castc(),
+                               dup(),
+                               ldpc(0),
+                               tycd(BUILTIN_STRING_CLASS_ID.index),
+                               castcbr(2, 4),
+                             ], [
+                               # block 2
+                               stlocal(-1),
+                               ldpc(1),
+                               tycd(BUILTIN_STRING_CLASS_ID.index),
+                               castcbr(3, 5),
+                             ], [
+                               # block 3
+                               stlocal(-2),
+                               drop(),
+                               i64(12),
+                               branch(7),
+                             ], [
+                               # block 4
+                               drop(),
+                               branch(5),
+                             ], [
+                               # block 5
+                               drop(),
+                               branch(6),
+                             ], [
+                               # block 6
+                               drop(),
+                               i64(34),
+                               branch(7),
+                             ], [
+                               # block 7
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.obj", type=getRootClassType(),
+                                                          kind=PARAMETER, flags=frozenset([LET])),
+                                        self.makeVariable("f.x", type=getStringType(),
+                                                          kind=LOCAL, flags=frozenset([LET])),
+                                        self.makeVariable("f.y", type=getStringType(),
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testMatchExprDestructureFromMethod(self):
+        source = OPTION_SOURCE + \
+                 "class Foo\n" + \
+                 "  def Matcher(obj: Object): Option[String] = None\n" + \
+                 "  def f(obj: Object) =\n" + \
+                 "    match (obj)\n" + \
+                 "      case Matcher(x) => 12\n" + \
+                 "      case _ => 34"
+        package = self.compileFromSource(source, name=STD_NAME)
+        Foo = package.findClass(name="Foo")
+        Matcher = Foo.findMethodByShortName("Matcher")
+        MatcherIndex = Foo.getMethodIndex(Matcher)
+        Some = package.findClass(name="Some")
+        get = Some.findMethodByShortName("get")
+        getIndex = Some.getMethodIndex(get)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("Foo.f", I64Type, [[
+                               # block 0
+                               ldlocal(1),
+                               ldlocal(0),
+                               dupi(1),
+                               callv(2, MatcherIndex),
+                               tyvd(Some.typeParameters[0].id.index),
+                               tycd(Some.id.index),
+                               castcbr(1, 3),
+                             ], [
+                               # block 1
+                               tycs(BUILTIN_ROOT_CLASS_ID.index),
+                               callv(1, getIndex),
+                               tycd(BUILTIN_STRING_CLASS_ID.index),
+                               castcbr(2, 3),
+                             ], [
+                               # block 2
+                               stlocal(-1),
+                               drop(),
+                               i64(12),
+                               branch(5),
+                             ], [
+                               # block 3
+                               drop(),
+                               branch(4),
+                             ], [
+                               # block 4
+                               drop(),
+                               i64(34),
+                               branch(5),
+                             ], [
+                               # block 5
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable(Name(["Foo", "f", RECEIVER_SUFFIX]),
+                                                          type=ClassType(Foo),
+                                                          kind=PARAMETER, flags=frozenset([LET])),
+                                        self.makeVariable("Foo.f.obj", type=getRootClassType(),
+                                                          kind=PARAMETER, flags=frozenset([LET])),
+                                        self.makeVariable("Foo.f.x", type=getStringType(),
+                                                          kind=LOCAL, flags=frozenset([LET]))],
+                             flags=frozenset([METHOD])))
+
 
     def testMatchAllCasesTerminate(self):
         source = "def f =\n" + \

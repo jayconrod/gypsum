@@ -264,6 +264,18 @@ class TestParser(unittest.TestCase):
         self.checkParse(astValuePattern([astScopePrefixComponent("foo", [])], "bar"),
                         pattern(), "foo.bar")
 
+    def testDestructurePatternSimple(self):
+        self.checkParse(astDestructurePattern([astScopePrefixComponent("Foo", [])],
+                                              [astVariablePattern("x", None)]),
+                        pattern(), "Foo(x)")
+
+    def testDestructurePatternAdvanced(self):
+        self.checkParse(astDestructurePattern([astScopePrefixComponent("foo", []),
+                                               astScopePrefixComponent("Bar", [astErasedType()])],
+                                              [astVariablePattern("x", None),
+                                               astVariablePattern("y", None)]),
+                        pattern(), "foo.Bar[_](x, y)")
+
     # Scope prefix
     def testScopePrefixSimple(self):
         self.checkParse([astScopePrefixComponent("A", [])],

@@ -410,6 +410,20 @@ class IrTopDefn(IrDefinition):
         return not self.isBuiltin() and not self.isForeign()
 
 
+class ParameterizedDefn(IrTopDefn):
+    def canApplyTypeArgs(self, typeArgs):
+        if len(self.typeParameters) != len(typeArgs):
+            return False
+        upperBounds = [param.upperBound.substitute(self.typeParameters, typeArgs)
+                       for param in self.typeParameters]
+        lowerBounds = [param.lowerBound.substitute(self.typeParameters, typeArgs)
+                       for param in self.typeParameters]
+        return all(typeArg.isSubtypeOf(upperBound) and
+                   lowerBound.isSubtypeOf(typeArg)
+                   for typeArg, lowerBound, upperBound
+                   in zip(typeArgs, lowerBounds, upperBounds))
+
+
 class Global(IrTopDefn):
     propertyNames = IrTopDefn.propertyNames + ("type", "flags")
 
@@ -421,7 +435,7 @@ class Global(IrTopDefn):
         return buf.getvalue()
 
 
-class Function(IrTopDefn):
+class Function(ParameterizedDefn):
     propertyNames = IrTopDefn.propertyNames + \
                     ("returnType", "typeParameters", "parameterTypes",
                      "variables", "blocks", "flags")
@@ -436,16 +450,7 @@ class Function(IrTopDefn):
             return self.clas
 
     def canCallWith(self, typeArgs, argTypes):
-        if len(self.typeParameters) != len(typeArgs):
-            return False
-        upperBounds = [param.upperBound.substitute(self.typeParameters, typeArgs)
-                       for param in self.typeParameters]
-        lowerBounds = [param.lowerBound.substitute(self.typeParameters, typeArgs)
-                       for param in self.typeParameters]
-        if not all(typeArg.isSubtypeOf(upperBound) and
-                   lowerBound.isSubtypeOf(typeArg)
-                   for typeArg, lowerBound, upperBound
-                   in zip(typeArgs, lowerBounds, upperBounds)):
+        if not self.canApplyTypeArgs(typeArgs):
             return False
 
         if len(self.parameterTypes) != len(argTypes):
@@ -521,7 +526,7 @@ class Function(IrTopDefn):
         return buf.getvalue()
 
 
-class Class(IrTopDefn):
+class Class(ParameterizedDefn):
     propertyNames = IrTopDefn.propertyNames + ("typeParameters", "supertypes",
                      "initializer", "constructors", "fields", "methods", "flags")
 

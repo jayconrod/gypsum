@@ -235,7 +235,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             if self.info.hasUseInfo(pat):
                 assert failBlock is not None
                 successBlock = self.newBlock()
-                self.loadSymbol(pat, mode)
+                self.buildLoadOrNullaryCall(pat, mode)
                 self.dupi(1)  # value
                 patTy = self.info.getType(pat)
                 self.buildCallNamedMethod(patTy, "==", COMPILE_FOR_VALUE)
@@ -342,22 +342,109 @@ class CompileVisitor(ast.AstNodeVisitor):
             return
         assert mode is COMPILE_FOR_MATCH
 
-        irDefn = self.info.getUseInfo(pat).defnInfo.irDefn
-        assert isinstance(irDefn, Global)
+        def buildValue():
+            self.buildPrefix(pat.prefix)
+            self.buildLoadOrNullaryCall(pat, COMPILE_FOR_VALUE,
+                                        receiverIsExplicit=(len(pat.prefix) > 0))
+
         if ty.isPrimitive():
             # The == operator for primitives is symmetric. Putting the matched value
             # first is a little more compact.
             self.dup()
-            self.loadGlobal(irDefn)
+            buildValue()
             self.buildCallNamedMethod(ty, "==", COMPILE_FOR_VALUE)
         else:
             # The == operator for the matching value could be anything, so we want to make
             # sure to call the method on the value from this pattern.
-            self.loadGlobal(irDefn)
+            buildValue()
             self.dupi(1)
             self.buildCallNamedMethod(ty, "==", COMPILE_FOR_VALUE)
         successBlock = self.newBlock()
         self.branchif(successBlock.id, failBlock.id)
+        self.setCurrentBlock(successBlock)
+        self.drop()
+
+    def visitAstDestructurePattern(self, pat, mode, ty=None, failBlock=None):
+        if mode is COMPILE_FOR_UNINITIALIZED:
+            for subPat in pat.patterns:
+                self.visit(subPat, COMPILE_FOR_UNINITIALIZED)
+            return
+        assert mode is COMPILE_FOR_MATCH
+
+        irDefn = self.info.getUseInfo(pat).defnInfo.irDefn
+        callInfo = self.info.getCallInfo(pat)
+
+        # Compile the prefix. Note that the matcher may be explicitly referenced in the last
+        # prefix component, so we don't compile that here.
+        if not self.info.hasUseInfo(pat.prefix[-1]):
+            self.buildPrefix(pat.prefix[:-1])
+            hasPrefix = len(pat.prefix) > 1
+        else:
+            self.buildPrefix(pat.prefix)
+            hasPrefix = len(pat.prefix) > 0
+
+        # Call the matcher function.
+        if irDefn.isMethod():
+            if not hasPrefix:
+                self.loadImplicitReceiver(irDefn)
+            self.dupi(1)
+            self.buildStaticTypeArguments(callInfo.typeArguments)
+            self.callMethod(irDefn)
+        else:
+            self.dup()
+            self.buildStaticTypeArguments(callInfo.typeArguments)
+            self.callFunction(irDefn)
+
+        # Check if it returned Some.
+        someClass = self.info.getStdClass("Some", pat.location)
+        someType = ClassType.forReceiver(someClass)
+        self.buildType(someType, pat.location)
+        matcherSuccessBlock = self.newBlock()
+        dropSomeBlock = self.newBlock()
+        self.castcbr(matcherSuccessBlock.id, dropSomeBlock.id)
+
+        # Get the value out of the Some. Cast it to a tuple if we need to.
+        self.setCurrentBlock(matcherSuccessBlock)
+        self.buildStaticTypeArgument(getRootClassType())
+        self.buildCallNamedMethod(someType, "get", COMPILE_FOR_VALUE)
+        n = len(pat.patterns)
+        if n > 1:
+            tupleClass = self.info.getTupleClass(n, pat.location)
+            tupleTypeArgs = tuple(VariableType(p) for p in tupleClass.typeParameters)
+            tupleType = ClassType(tupleClass, tupleTypeArgs)
+            self.buildType(tupleType, pat.location)
+            self.castc()
+
+        # If there is just one pattern inside, pass the value to that pattern. Otherwise,
+        # load each value out of the tuple and pass those to the patterns. Note that we pass
+        # Object as the expression type for each tuple. We haven't properly type checked the
+        # value we pulled out of the Some[_]. We need to type check these values at runtime,
+        # but the type checks should never fail.
+        successBlock = None
+        if n == 1:
+            self.visit(pat.patterns[0], mode, getRootClassType(), dropSomeBlock)
+            successBlock = self.currentBlock
+        else:
+            dropFieldBlock = self.newBlock()
+            for i in xrange(n - 1):
+                self.dup()
+                self.ldpc(i)
+                self.visit(pat.patterns[i], mode, getRootClassType(), dropFieldBlock)
+            self.ldpc(n - 1)
+            self.visit(pat.patterns[-1], mode, getRootClassType(), dropSomeBlock)
+            successBlock = self.currentBlock
+
+            # If one of the sub-patterns failed to match, we need to drop the field.
+            self.setCurrentBlock(dropFieldBlock)
+            self.drop()
+            self.branch(dropSomeBlock.id)
+
+        # If the matcher did not return Some, drop the return value.
+        self.setCurrentBlock(dropSomeBlock)
+        self.drop()
+        self.branch(failBlock.id)
+
+        # Go back to the success block and drop the last field.
         self.setCurrentBlock(successBlock)
         self.drop()
 
@@ -366,14 +453,10 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.dropForEffect(mode)
 
     def visitAstVariableExpression(self, expr, mode):
-        self.loadSymbol(expr, mode)
+        self.buildLoadOrNullaryCall(expr, mode)
 
     def visitAstThisExpression(self, expr, mode):
-        useInfo = self.info.getUseInfo(expr)
-        irDefn = useInfo.defnInfo.irDefn
-        assert isinstance(irDefn, Variable) or isinstance(irDefn, Field)
-        self.loadVariable(useInfo.defnInfo)
-        self.dropForEffect(mode)
+        self.buildLoadOrNullaryCall(expr, mode)
 
     def visitAstSuperExpression(self, expr, mode):
         raise SemanticException(expr.location, "`super` is only valid as part of a call")
@@ -389,21 +472,9 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.buildAssignment(lvalue, mode)
 
     def visitAstPropertyExpression(self, expr, mode):
-        useInfo = self.info.getUseInfo(expr)
-        irDefn = useInfo.defnInfo.irDefn
-        if isinstance(irDefn, Field):
+        if not self.info.hasScopePrefixInfo(expr.receiver):
             self.visit(expr.receiver, COMPILE_FOR_VALUE)
-            self.loadField(irDefn)
-            self.dropForEffect(mode)
-        elif isinstance(irDefn, Function):
-            callInfo = self.info.getCallInfo(expr)
-            receiver = expr.receiver if callInfo.receiverExprNeeded else None
-            self.buildCall(useInfo, callInfo, receiver, [], mode)
-        elif isinstance(irDefn, Global):
-            self.loadVariable(useInfo.defnInfo)
-        else:
-            assert isinstance(irDefn, Package)
-            self.pkg(irDefn.id.index)
+        self.buildLoadOrNullaryCall(expr, mode, receiverIsExplicit=True)
 
     def visitAstCallExpression(self, expr, mode):
         if not isinstance(expr.callee, ast.AstVariableExpression) and \
@@ -892,22 +963,48 @@ class CompileVisitor(ast.AstNodeVisitor):
         if mode is COMPILE_FOR_VALUE and needUnit:
             self.unit()
 
-    def loadSymbol(self, node, mode):
+    def buildPrefix(self, prefix):
+        # Locate the end of the prefix. None of the stuff before this is compiled.
+        prefixIndex = len(prefix) - 1
+        while prefixIndex >= 0:
+            if self.info.hasScopePrefixInfo(prefix[prefixIndex]):
+                break
+            prefixIndex -= 1
+
+        # Generate instructions for each component.
+        index = prefixIndex + 1
+        while index < len(prefix):
+            self.buildLoadOrNullaryCall(prefix[index], COMPILE_FOR_VALUE,
+                                        receiverIsExplicit=(index > 0))
+            index += 1
+
+    def buildLoadOrNullaryCall(self, node, mode, receiverIsExplicit=False):
         useInfo = self.info.getUseInfo(node)
-        irDefn = useInfo.defnInfo.irDefn
-        if isinstance(irDefn, Variable) or \
-           isinstance(irDefn, Field) or \
-           isinstance(irDefn, Global):
-            # Parameter, local, or context variable.
-            self.loadVariable(useInfo.defnInfo)
-            self.dropForEffect(mode)
-        elif isinstance(irDefn, Function) or isinstance(irDefn, Class):
+        defnInfo = useInfo.defnInfo
+        irDefn = defnInfo.irDefn
+        if isinstance(irDefn, Variable):
+            self.ldlocal(irDefn.index)
+        elif isinstance(irDefn, Global):
+            self.loadGlobal(irDefn)
+        elif isinstance(irDefn, Field):
+            if not receiverIsExplicit:
+                self.loadContext(defnInfo.scopeId)
+            self.loadField(irDefn)
+        elif isinstance(irDefn, Function):
             callInfo = self.info.getCallInfo(node)
-            self.buildCall(useInfo, callInfo, None, [], mode)
+            if irDefn.isMethod():
+                if not receiverIsExplicit:
+                    self.loadImplicitReceiver(irDefn)
+                self.buildStaticTypeArguments(callInfo.typeArguments)
+                self.callMethod(irDefn)
+            else:
+                assert not receiverIsExplicit
+                self.buildStaticTypeArguments(callInfo.typeArguments)
+                self.callFunction(irDefn)
         else:
             assert isinstance(irDefn, Package)
-            assert irDefn.id.index is not None
             self.pkg(irDefn.id.index)
+        self.dropForEffect(mode)
 
     def loadVariable(self, varOrDefnInfo):
         if isinstance(varOrDefnInfo, Variable):
@@ -961,7 +1058,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         closureInfo = self.info.getClosureInfo(self.getScopeId())
         loc = closureInfo.irClosureContexts[scopeId]
         if isinstance(loc, Variable):
-            self.loadVariable(loc)
+            self.ldlocal(loc.index)
         elif isinstance(loc, Field):
             self.loadThis()
             self.loadField(loc)
@@ -1002,6 +1099,16 @@ class CompileVisitor(ast.AstNodeVisitor):
     def loadThis(self):
         assert self.function.isMethod()
         self.ldlocal(0)
+
+    def loadImplicitReceiver(self, method):
+        if self.info.hasClosureInfo(method):
+            closureVar = self.info.getClosureInfo(method).irClosureVar  # may be None
+        else:
+            closureVar = None
+        if closureVar is not None:
+            self.loadVariable(closureVar)
+        else:
+            self.loadContext(self.info.getDefnInfo(method).scopeId)
 
     def isContextNeeded(self, scopeId):
         return scopeId is not None and \
@@ -1085,15 +1192,17 @@ class CompileVisitor(ast.AstNodeVisitor):
     def buildCallNamedMethod(self, receiverType, name, mode):
         receiverClass = getClassFromType(receiverType)
         method = receiverClass.getMethod(name)
-        self.buildCallSimpleMethod(method, mode)
+        self.callMethod(method)
+        self.dropForEffect(mode)
 
-    def buildCallSimpleMethod(self, method, mode):
+    def callMethod(self, method):
         if hasattr(method, "insts"):
             self.addBuiltinInstructions(method.insts)
+        elif method.isFinal():
+            self.callFunction(method)
         else:
             index = method.getReceiverClass().getMethodIndex(method)
             self.callv(len(method.parameterTypes), index)
-        self.dropForEffect(mode)
 
     def buildCall(self, useInfo, callInfo, receiver, argExprs, mode, allowAllocation=True):
         shouldDropForEffect = mode is COMPILE_FOR_EFFECT

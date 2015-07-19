@@ -56,6 +56,8 @@
   - compile info classes
   - ir classes
 - no optional parameters: prevent objects from being extended
+- AST classes should always be referenced through module and should not start with Ast
+- Does NameInfo.findDefnInfoWithArgTypes need to return allArgTypes? Seems unused.
 
 ## VM
 - use variadic arguments for API call
@@ -76,6 +78,11 @@
 - the pattern '_: type' matches anything without type checking
 - flag bindings depending on whether they can be looked up from outside of the scope. right now,
   we can look up local variables from inside functions with a scope prefix.
+- in type analysis, we check whether to do a local lookup based on whether the scope is same
+  as current. we might have a prefix for the same scope though, so a local lookup would
+  be unsafe.
+- in type analysis handlePossibleCall, receiver may only be implicit if there is no prefix before,
+  and we have no way to know that. same in visitAstDestructurePattern.
 
 ## VM
 - `read()` breaks when EOF is given. Exception is thrown in non-GC-safe place.

@@ -60,25 +60,28 @@ class CompileInfo(object):
         else:
             return NOSTD_MODE
 
-    def getTupleClass(self, n, loc):
+    def getStdClass(self, name, loc):
         langMode = self.languageMode()
         if langMode is NOSTD_MODE:
-            raise errors.TypeException(loc, "tuples not supported without std library")
+            raise errors.TypeException(loc, "%s: not available without std library" % name)
         elif langMode is NORMAL_MODE:
             package = self.packageLoader.loadPackage(STD_NAME, location.NoLoc)
         else:
             assert langMode is STD_MODE
             package = self.package
 
-        tupleClassName = "Tuple%d" % n
-        tupleClass = package.findClass(name=tupleClassName)
+        clas = package.findClass(name=name)
 
         if langMode is NORMAL_MODE:
-            self.setStdExternInfo(tupleClass.id, tupleClass)
-            ctor = tupleClass.constructors[0]
-            self.setStdExternInfo(ctor.id, ctor)
+            self.setStdExternInfo(someClass.id, someClass)
+            for ctor in clas.constructors:
+                self.setStdExternInfo(ctor.id, ctor)
 
-        return tupleClass
+        return clas
+
+    def getTupleClass(self, n, loc):
+        name = "Tuple%d" % n
+        return self.getStdClass(name, loc)
 
 
 _dictNames = [("Scope", "scopes", (ids.ScopeId, ids.AstId, ids.DefnId, ids.PackageId)),
@@ -105,7 +108,9 @@ def _addDictMethods(elemName, dictName, types):
             return astId
         elif isinstance(key, ir.IrDefinition):
             defnId = key.id
-            if ids.DefnId in types:
+            if ids.AstId in types and key.astDefn is not None:
+                return key.astDefn.id
+            elif ids.DefnId in types:
                 return defnId
             elif ids.ScopeId in types:
                 if defnId in self.scopes:

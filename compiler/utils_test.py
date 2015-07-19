@@ -12,6 +12,18 @@ from package_loader import BasePackageLoader
 from utils import Counter
 
 
+OPTION_SOURCE = "public class Option[static +T]\n" + \
+                "public class Some[static +T](value: T) <: Option[T]\n" + \
+                "  public def get = value\n" + \
+                "  public static def try-match(obj: Object): Option[Object] =\n" + \
+                "    match (obj)\n" + \
+                "      case some: Some[_] => some\n" + \
+                "      case _ => None\n" + \
+                "class None-class <: Option[Nothing]\n" + \
+                "public let None: Option[Nothing] = None-class()\n"
+
+TUPLE_SOURCE = "class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n"
+
 class TestCaseWithDefinitions(unittest.TestCase):
     def setUp(self):
         self.globalCounter = Counter()

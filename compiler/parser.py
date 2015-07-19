@@ -138,33 +138,38 @@ def pattern():
 
 
 def simplePattern():
-    return varOrValuePattern() | \
+    return prefixedPattern() | \
            blankPattern() | \
            litPattern() | \
            groupPattern()
 
 
-def varOrValuePattern():
+def prefixedPattern():
     def process(parsed, loc):
-        prefix, typeSuffix = parsed
-        if len(prefix[-1].typeArguments) > 0:
-            return ct.FailValue("can't have type arguments at the end of variable or value pattern")
-        ty = typeSuffix[1] if typeSuffix is not None else None
-        if len(prefix) == 1:
-            return ast.AstVariablePattern(prefix[0].name, ty, loc)
+        prefix, suffix = parsed
+        if len(prefix) == 1 and (suffix is None or isinstance(suffix, ast.AstType)):
+            mayHaveTypeArgs = False
+            result = ast.AstVariablePattern(prefix[0].name, suffix, loc)
+        elif suffix is None:
+            mayHaveTypeArgs = False
+            result = ast.AstValuePattern(prefix[:-1], prefix[-1].name, loc)
+        elif isinstance(suffix, list):
+            mayHaveTypeArgs = True
+            result = ast.AstDestructurePattern(prefix, suffix, loc)
         else:
-            if ty is not None:
-                return ct.FailValue("can't have type for value pattern")
-            return ast.AstValuePattern(prefix[:-1], prefix[-1].name, loc)
-    return scopePrefix() + ct.Opt(keyword(":") + ty()) ^ process
+            return ct.FailValue("invalid variable, value, or destructure pattern")
+        if not mayHaveTypeArgs and len(prefix[-1].typeArguments) > 0:
+            return ct.FailValue("can't have type arguments at end of variable or value pattern")
+        return result
 
+    def processSuffix(parsed, loc):
+        return ct.untangle(parsed)[1]
+    argumentSuffix = (keyword("(") + ct.Rep1Sep(ct.Lazy(simplePattern), keyword(",")) +
+                      keyword(")") ^ processSuffix)
+    typeSuffix = keyword(":") + ty() ^ processSuffix
+    suffix = argumentSuffix | typeSuffix
 
-def varPattern():
-    def process(parsed, loc):
-        (name, parsedTy) = parsed
-        ty = parsedTy[1] if parsedTy else None
-        return ast.AstVariablePattern(name, ty, loc)
-    return symbol + ct.Opt(keyword(":") + ty()) ^ process
+    return scopePrefix() + ct.Opt(suffix) ^ process
 
 
 def blankPattern():
