@@ -26,6 +26,10 @@ def serialize(package, fileName):
     try:
         serializer = Serializer(package, outFile)
         serializer.serialize()
+    except:
+        if fileName != "-":
+            os.remove(fileName)
+        raise
     finally:
         if shouldClose:
             outFile.close()

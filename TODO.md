@@ -70,7 +70,6 @@
 # Bugs
 
 ## Compiler
-- delete output file when an internal error is encountered
 - return from try/catch with finally does not execute finally
 - return from finally should be an error
 - scope bindings should be flagged, depending on whether they can be looked up from other
