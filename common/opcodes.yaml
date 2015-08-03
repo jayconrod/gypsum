@@ -1,184 +1,184 @@
-- {name: "nop", iops: 0, term: false}
-- {name: "ret", iops: 0, term: true}
-- {name: "branch", iops: 1, term: true}
-- {name: "branchif", iops: 2, term: true}
-- {name: "pushtry", iops: 2, term: true}
-- {name: "poptry", iops: 1, term: true}
-- {name: "throw", iops: 0, term: true}
-- {name: "drop", iops: 0, term: false}
-- {name: "dup", iops: 0, term: false}
-- {name: "dupi", iops: 1, term: false}
-- {name: "swap", iops: 0, term: false}
-- {name: "swap2", iops: 0, term: false}
-- {name: "unit", iops: 0, term: false}
-- {name: "true", iops: 0, term: false}
-- {name: "false", iops: 0, term: false}
-- {name: "null", iops: 0, term: false}
-- {name: "uninitialized", iops: 0, term: false}
-- {name: "i8", iops: 1, term: false}
-- {name: "i16", iops: 1, term: false}
-- {name: "i32", iops: 1, term: false}
-- {name: "i64", iops: 1, term: false}
-- {name: "f32", iops: 1, term: false}
-- {name: "f64", iops: 1, term: false}
-- {name: "string", iops: 1, term: false}
-- {name: "ldlocal", iops: 1, term: false}
-- {name: "stlocal", iops: 1, term: false}
-- {name: "ldg", iops: 1, term: false}
-- {name: "ldgf", iops: 2, term: false}
-- {name: "stg", iops: 1, term: false}
-- {name: "stgf", iops: 2, term: false}
-- {name: "ld8", iops: 1, term: false}
-- {name: "ld16", iops: 1, term: false}
-- {name: "ld32", iops: 1, term: false}
-- {name: "ld64", iops: 1, term: false}
-- {name: "ldp", iops: 1, term: false}
-- {name: "ldpc", iops: 1, term: false}
-- {name: "st8", iops: 1, term: false}
-- {name: "st16", iops: 1, term: false}
-- {name: "st32", iops: 1, term: false}
-- {name: "st64", iops: 1, term: false}
-- {name: "stp", iops: 1, term: false}
-- {name: "allocobj", iops: 1, term: false}
-- {name: "allocobjf", iops: 2, term: false}
-- {name: "allocarri", iops: 2, term: false}
-- {name: "allocarrif", iops: 3, term: false}
-- {name: "pkg", iops: 1, term: false}
-- {name: "tycs", iops: 1, term: false}
-- {name: "tycsf", iops: 2, term: false}
-- {name: "tycd", iops: 1, term: false}
-- {name: "tycdf", iops: 2, term: false}
-- {name: "tyvs", iops: 1, term: false}
-- {name: "tyvd", iops: 1, term: false}
-- {name: "tyvdf", iops: 2, term: false}
-- {name: "tyflags", iops: 1, term: false}
-- {name: "tyflagd", iops: 1, term: false}
-- {name: "cast", iops: 0, term: false}
-- {name: "castc", iops: 0, term: false}
-- {name: "castcbr", iops: 2, term: true}
-- {name: "callg", iops: 1, term: false}
-- {name: "callgf", iops: 2, term: false}
-- {name: "callv", iops: 2, term: false}
-- {name: "eqp", iops: 0, term: false}
-- {name: "nep", iops: 0, term: false}
-- {name: "addi8", iops: 0, term: false}
-- {name: "addi16", iops: 0, term: false}
-- {name: "addi32", iops: 0, term: false}
-- {name: "addi64", iops: 0, term: false}
-- {name: "addf32", iops: 0, term: false}
-- {name: "addf64", iops: 0, term: false}
-- {name: "subi8", iops: 0, term: false}
-- {name: "subi16", iops: 0, term: false}
-- {name: "subi32", iops: 0, term: false}
-- {name: "subi64", iops: 0, term: false}
-- {name: "subf32", iops: 0, term: false}
-- {name: "subf64", iops: 0, term: false}
-- {name: "muli8", iops: 0, term: false}
-- {name: "muli16", iops: 0, term: false}
-- {name: "muli32", iops: 0, term: false}
-- {name: "muli64", iops: 0, term: false}
-- {name: "mulf32", iops: 0, term: false}
-- {name: "mulf64", iops: 0, term: false}
-- {name: "divi8", iops: 0, term: false}
-- {name: "divi16", iops: 0, term: false}
-- {name: "divi32", iops: 0, term: false}
-- {name: "divi64", iops: 0, term: false}
-- {name: "divf32", iops: 0, term: false}
-- {name: "divf64", iops: 0, term: false}
-- {name: "modi8", iops: 0, term: false}
-- {name: "modi16", iops: 0, term: false}
-- {name: "modi32", iops: 0, term: false}
-- {name: "modi64", iops: 0, term: false}
-- {name: "lsli8", iops: 0, term: false}
-- {name: "lsli16", iops: 0, term: false}
-- {name: "lsli32", iops: 0, term: false}
-- {name: "lsli64", iops: 0, term: false}
-- {name: "lsri8", iops: 0, term: false}
-- {name: "lsri16", iops: 0, term: false}
-- {name: "lsri32", iops: 0, term: false}
-- {name: "lsri64", iops: 0, term: false}
-- {name: "asri8", iops: 0, term: false}
-- {name: "asri16", iops: 0, term: false}
-- {name: "asri32", iops: 0, term: false}
-- {name: "asri64", iops: 0, term: false}
-- {name: "andi8", iops: 0, term: false}
-- {name: "andi16", iops: 0, term: false}
-- {name: "andi32", iops: 0, term: false}
-- {name: "andi64", iops: 0, term: false}
-- {name: "ori8", iops: 0, term: false}
-- {name: "ori16", iops: 0, term: false}
-- {name: "ori32", iops: 0, term: false}
-- {name: "ori64", iops: 0, term: false}
-- {name: "xori8", iops: 0, term: false}
-- {name: "xori16", iops: 0, term: false}
-- {name: "xori32", iops: 0, term: false}
-- {name: "xori64", iops: 0, term: false}
-- {name: "eqi8", iops: 0, term: false}
-- {name: "eqi16", iops: 0, term: false}
-- {name: "eqi32", iops: 0, term: false}
-- {name: "eqi64", iops: 0, term: false}
-- {name: "eqf32", iops: 0, term: false}
-- {name: "eqf64", iops: 0, term: false}
-- {name: "nei8", iops: 0, term: false}
-- {name: "nei16", iops: 0, term: false}
-- {name: "nei32", iops: 0, term: false}
-- {name: "nei64", iops: 0, term: false}
-- {name: "nef32", iops: 0, term: false}
-- {name: "nef64", iops: 0, term: false}
-- {name: "lti8", iops: 0, term: false}
-- {name: "lti16", iops: 0, term: false}
-- {name: "lti32", iops: 0, term: false}
-- {name: "lti64", iops: 0, term: false}
-- {name: "ltf32", iops: 0, term: false}
-- {name: "ltf64", iops: 0, term: false}
-- {name: "lei8", iops: 0, term: false}
-- {name: "lei16", iops: 0, term: false}
-- {name: "lei32", iops: 0, term: false}
-- {name: "lei64", iops: 0, term: false}
-- {name: "lef32", iops: 0, term: false}
-- {name: "lef64", iops: 0, term: false}
-- {name: "gti8", iops: 0, term: false}
-- {name: "gti16", iops: 0, term: false}
-- {name: "gti32", iops: 0, term: false}
-- {name: "gti64", iops: 0, term: false}
-- {name: "gtf32", iops: 0, term: false}
-- {name: "gtf64", iops: 0, term: false}
-- {name: "gei8", iops: 0, term: false}
-- {name: "gei16", iops: 0, term: false}
-- {name: "gei32", iops: 0, term: false}
-- {name: "gei64", iops: 0, term: false}
-- {name: "gef32", iops: 0, term: false}
-- {name: "gef64", iops: 0, term: false}
-- {name: "negi8", iops: 0, term: false}
-- {name: "negi16", iops: 0, term: false}
-- {name: "negi32", iops: 0, term: false}
-- {name: "negi64", iops: 0, term: false}
-- {name: "negf32", iops: 0, term: false}
-- {name: "negf64", iops: 0, term: false}
-- {name: "invi8", iops: 0, term: false}
-- {name: "invi16", iops: 0, term: false}
-- {name: "invi32", iops: 0, term: false}
-- {name: "invi64", iops: 0, term: false}
-- {name: "notb", iops: 0, term: false}
-- {name: "trunci8", iops: 0, term: false}
-- {name: "trunci16", iops: 0, term: false}
-- {name: "trunci32", iops: 0, term: false}
-- {name: "truncf32", iops: 0, term: false}
-- {name: "sexti16_8", iops: 0, term: false}
-- {name: "sexti32_8", iops: 0, term: false}
-- {name: "sexti64_8", iops: 0, term: false}
-- {name: "sexti32_16", iops: 0, term: false}
-- {name: "sexti64_16", iops: 0, term: false}
-- {name: "sexti64_32", iops: 0, term: false}
-- {name: "zexti16", iops: 0, term: false}
-- {name: "zexti32", iops: 0, term: false}
-- {name: "zexti64", iops: 0, term: false}
-- {name: "extf64", iops: 0, term: false}
-- {name: "fcvti32", iops: 0, term: false}
-- {name: "fcvti64", iops: 0, term: false}
-- {name: "icvtf32", iops: 0, term: false}
-- {name: "icvtf64", iops: 0, term: false}
-- {name: "ftoi32", iops: 0, term: false}
-- {name: "ftoi64", iops: 0, term: false}
-- {name: "itof32", iops: 0, term: false}
-- {name: "itof64", iops: 0, term: false}
+- {name: "nop", iops: 0, push: 0, pop: 0, term: false}
+- {name: "ret", iops: 0, push: 0, pop: 1, term: true}
+- {name: "branch", iops: 1, push: 0, pop: 0, term: true}
+- {name: "branchif", iops: 2, push: 0, pop: 1, term: true}
+- {name: "pushtry", iops: 2, push: 0, pop: 0, term: true}
+- {name: "poptry", iops: 1, push: 0, pop: 0, term: true}
+- {name: "throw", iops: 0, push: 0, pop: 1, term: true}
+- {name: "drop", iops: 0, push: 0, pop: 1, term: false}
+- {name: "dup", iops: 0, push: 1, pop: 0, term: false}
+- {name: "dupi", iops: 1, push: 1, pop: 0, term: false}
+- {name: "swap", iops: 0, push: 2, pop: 2, term: false}
+- {name: "swap2", iops: 0, push: 3, pop: 3, term: false}
+- {name: "unit", iops: 0, push: 1, pop: 0, term: false}
+- {name: "true", iops: 0, push: 1, pop: 0, term: false}
+- {name: "false", iops: 0, push: 1, pop: 0, term: false}
+- {name: "null", iops: 0, push: 1, pop: 0, term: false}
+- {name: "uninitialized", iops: 0, push: 1, pop: 0, term: false}
+- {name: "i8", iops: 1, push: 1, pop: 0, term: false}
+- {name: "i16", iops: 1, push: 1, pop: 0, term: false}
+- {name: "i32", iops: 1, push: 1, pop: 0, term: false}
+- {name: "i64", iops: 1, push: 1, pop: 0, term: false}
+- {name: "f32", iops: 1, push: 1, pop: 0, term: false}
+- {name: "f64", iops: 1, push: 1, pop: 0, term: false}
+- {name: "string", iops: 1, push: 1, pop: 0, term: false}
+- {name: "ldlocal", iops: 1, push: 1, pop: 0, term: false}
+- {name: "stlocal", iops: 1, push: 0, pop: 1, term: false}
+- {name: "ldg", iops: 1, push: 1, pop: 0, term: false}
+- {name: "ldgf", iops: 2, push: 1, pop: 0, term: false}
+- {name: "stg", iops: 1, push: 0, pop: 1, term: false}
+- {name: "stgf", iops: 2, push: 0, pop: 1, term: false}
+- {name: "ld8", iops: 1, push: 1, pop: 1, term: false}
+- {name: "ld16", iops: 1, push: 1, pop: 1, term: false}
+- {name: "ld32", iops: 1, push: 1, pop: 1, term: false}
+- {name: "ld64", iops: 1, push: 1, pop: 1, term: false}
+- {name: "ldp", iops: 1, push: 1, pop: 1, term: false}
+- {name: "ldpc", iops: 1, push: 1, pop: 1, term: false}
+- {name: "st8", iops: 1, push: 0, pop: 2, term: false}
+- {name: "st16", iops: 1, push: 0, pop: 2, term: false}
+- {name: "st32", iops: 1, push: 0, pop: 2, term: false}
+- {name: "st64", iops: 1, push: 0, pop: 2, term: false}
+- {name: "stp", iops: 1, push: 0, pop: 2, term: false}
+- {name: "allocobj", iops: 1, push: 1, pop: 0, term: false}
+- {name: "allocobjf", iops: 2, push: 1, pop: 0, term: false}
+- {name: "allocarri", iops: 2, push: 1, pop: 0, term: false}
+- {name: "allocarrif", iops: 3, push: 1, pop: 0, term: false}
+- {name: "pkg", iops: 1, push: 1, pop: 0, term: false}
+- {name: "tycs", iops: 1, push: 0, pop: 0, term: false}
+- {name: "tycsf", iops: 2, push: 0, pop: 0, term: false}
+- {name: "tycd", iops: 1, push: 1, pop: ~, term: false}
+- {name: "tycdf", iops: 2, push: 1, pop: ~, term: false}
+- {name: "tyvs", iops: 1, push: 0, pop: 0, term: false}
+- {name: "tyvd", iops: 1, push: 1, pop: 0, term: false}
+- {name: "tyvdf", iops: 2, push: 1, pop: 0, term: false}
+- {name: "tyflags", iops: 1, push: 0, pop: 0, term: false}
+- {name: "tyflagd", iops: 1, push: 1, pop: 1, term: false}
+- {name: "cast", iops: 0, push: 1, pop: 1, term: false}
+- {name: "castc", iops: 0, push: 1, pop: 2, term: false}
+- {name: "castcbr", iops: 2, push: 1, pop: 2, term: true}
+- {name: "callg", iops: 1, push: 1, pop: ~, term: false}
+- {name: "callgf", iops: 2, push: 1, pop: ~, term: false}
+- {name: "callv", iops: 2, push: 1, pop: ~, term: false}
+- {name: "eqp", iops: 0, push: 1, pop: 2, term: false}
+- {name: "nep", iops: 0, push: 1, pop: 2, term: false}
+- {name: "addi8", iops: 0, push: 1, pop: 2, term: false}
+- {name: "addi16", iops: 0, push: 1, pop: 2, term: false}
+- {name: "addi32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "addi64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "addf32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "addf64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "subi8", iops: 0, push: 1, pop: 2, term: false}
+- {name: "subi16", iops: 0, push: 1, pop: 2, term: false}
+- {name: "subi32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "subi64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "subf32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "subf64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "muli8", iops: 0, push: 1, pop: 2, term: false}
+- {name: "muli16", iops: 0, push: 1, pop: 2, term: false}
+- {name: "muli32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "muli64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "mulf32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "mulf64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "divi8", iops: 0, push: 1, pop: 2, term: false}
+- {name: "divi16", iops: 0, push: 1, pop: 2, term: false}
+- {name: "divi32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "divi64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "divf32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "divf64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "modi8", iops: 0, push: 1, pop: 2, term: false}
+- {name: "modi16", iops: 0, push: 1, pop: 2, term: false}
+- {name: "modi32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "modi64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "lsli8", iops: 0, push: 1, pop: 2, term: false}
+- {name: "lsli16", iops: 0, push: 1, pop: 2, term: false}
+- {name: "lsli32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "lsli64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "lsri8", iops: 0, push: 1, pop: 2, term: false}
+- {name: "lsri16", iops: 0, push: 1, pop: 2, term: false}
+- {name: "lsri32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "lsri64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "asri8", iops: 0, push: 1, pop: 2, term: false}
+- {name: "asri16", iops: 0, push: 1, pop: 2, term: false}
+- {name: "asri32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "asri64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "andi8", iops: 0, push: 1, pop: 2, term: false}
+- {name: "andi16", iops: 0, push: 1, pop: 2, term: false}
+- {name: "andi32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "andi64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "ori8", iops: 0, push: 1, pop: 2, term: false}
+- {name: "ori16", iops: 0, push: 1, pop: 2, term: false}
+- {name: "ori32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "ori64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "xori8", iops: 0, push: 1, pop: 2, term: false}
+- {name: "xori16", iops: 0, push: 1, pop: 2, term: false}
+- {name: "xori32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "xori64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "eqi8", iops: 0, push: 1, pop: 2, term: false}
+- {name: "eqi16", iops: 0, push: 1, pop: 2, term: false}
+- {name: "eqi32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "eqi64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "eqf32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "eqf64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "nei8", iops: 0, push: 1, pop: 2, term: false}
+- {name: "nei16", iops: 0, push: 1, pop: 2, term: false}
+- {name: "nei32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "nei64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "nef32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "nef64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "lti8", iops: 0, push: 1, pop: 2, term: false}
+- {name: "lti16", iops: 0, push: 1, pop: 2, term: false}
+- {name: "lti32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "lti64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "ltf32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "ltf64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "lei8", iops: 0, push: 1, pop: 2, term: false}
+- {name: "lei16", iops: 0, push: 1, pop: 2, term: false}
+- {name: "lei32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "lei64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "lef32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "lef64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "gti8", iops: 0, push: 1, pop: 2, term: false}
+- {name: "gti16", iops: 0, push: 1, pop: 2, term: false}
+- {name: "gti32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "gti64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "gtf32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "gtf64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "gei8", iops: 0, push: 1, pop: 2, term: false}
+- {name: "gei16", iops: 0, push: 1, pop: 2, term: false}
+- {name: "gei32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "gei64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "gef32", iops: 0, push: 1, pop: 2, term: false}
+- {name: "gef64", iops: 0, push: 1, pop: 2, term: false}
+- {name: "negi8", iops: 0, push: 1, pop: 1, term: false}
+- {name: "negi16", iops: 0, push: 1, pop: 1, term: false}
+- {name: "negi32", iops: 0, push: 1, pop: 1, term: false}
+- {name: "negi64", iops: 0, push: 1, pop: 1, term: false}
+- {name: "negf32", iops: 0, push: 1, pop: 1, term: false}
+- {name: "negf64", iops: 0, push: 1, pop: 1, term: false}
+- {name: "invi8", iops: 0, push: 1, pop: 1, term: false}
+- {name: "invi16", iops: 0, push: 1, pop: 1, term: false}
+- {name: "invi32", iops: 0, push: 1, pop: 1, term: false}
+- {name: "invi64", iops: 0, push: 1, pop: 1, term: false}
+- {name: "notb", iops: 0, push: 1, pop: 1, term: false}
+- {name: "trunci8", iops: 0, push: 1, pop: 1, term: false}
+- {name: "trunci16", iops: 0, push: 1, pop: 1, term: false}
+- {name: "trunci32", iops: 0, push: 1, pop: 1, term: false}
+- {name: "truncf32", iops: 0, push: 1, pop: 1, term: false}
+- {name: "sexti16_8", iops: 0, push: 1, pop: 1, term: false}
+- {name: "sexti32_8", iops: 0, push: 1, pop: 1, term: false}
+- {name: "sexti64_8", iops: 0, push: 1, pop: 1, term: false}
+- {name: "sexti32_16", iops: 0, push: 1, pop: 1, term: false}
+- {name: "sexti64_16", iops: 0, push: 1, pop: 1, term: false}
+- {name: "sexti64_32", iops: 0, push: 1, pop: 1, term: false}
+- {name: "zexti16", iops: 0, push: 1, pop: 1, term: false}
+- {name: "zexti32", iops: 0, push: 1, pop: 1, term: false}
+- {name: "zexti64", iops: 0, push: 1, pop: 1, term: false}
+- {name: "extf64", iops: 0, push: 1, pop: 1, term: false}
+- {name: "fcvti32", iops: 0, push: 1, pop: 1, term: false}
+- {name: "fcvti64", iops: 0, push: 1, pop: 1, term: false}
+- {name: "icvtf32", iops: 0, push: 1, pop: 1, term: false}
+- {name: "icvtf64", iops: 0, push: 1, pop: 1, term: false}
+- {name: "ftoi32", iops: 0, push: 1, pop: 1, term: false}
+- {name: "ftoi64", iops: 0, push: 1, pop: 1, term: false}
+- {name: "itof32", iops: 0, push: 1, pop: 1, term: false}
+- {name: "itof64", iops: 0, push: 1, pop: 1, term: false}

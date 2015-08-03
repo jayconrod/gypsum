@@ -14,7 +14,7 @@ import ir_instructions
 from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PACKAGE_INITIALIZER_HINT, DefnInfo, NORMAL_MODE, STD_MODE, NOSTD_MODE
 from flags import ABSTRACT, STATIC, LET
 from errors import SemanticException
-from builtins import getTypeClass, getExceptionClass, getRootClass, getStringClass
+from builtins import getTypeClass, getExceptionClass, getRootClass, getStringClass, getBuiltinFunctionById, getBuiltinClassById
 import type_analysis
 from utils import Counter, COMPILE_FOR_EFFECT, COMPILE_FOR_VALUE, COMPILE_FOR_UNINITIALIZED, COMPILE_FOR_MATCH, each
 
@@ -40,13 +40,18 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.function = function
         self.astDefn = function.astDefn if hasattr(function, "astDefn") else None
         self.compileHint = function.compileHint if hasattr(function, "compileHint") else None
+        assert self.astDefn is not None or self.compileHint is not None
         self.info = info
         self.blocks = []
+        self.stackHeights = []
         self.nextBlockId = Counter()
         self.currentBlock = None
+        self.currentStackHeight = None
         self.unreachable = False
-        self.setCurrentBlock(self.newBlock())
-        assert self.astDefn is not None or self.compileHint is not None
+
+        firstBlock = self.newBlock()
+        self.setStackHeightForBlock(firstBlock, 0)
+        self.setCurrentBlock(firstBlock)
 
     def compile(self):
         # Handle special implicit functions.
@@ -181,7 +186,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                                         superclass.name)
             self.loadThis()
             self.buildStaticTypeArguments(supertype.typeArguments)
-            self.callg(defaultSuperCtors[0].id.index)
+            self.callg(defaultSuperCtors[0])
             self.drop()
 
         # If no alternate constructor was called, call the initializer.
@@ -190,7 +195,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             if irInitializer is not None:
                 self.loadThis()
                 self.buildImplicitStaticTypeArguments(self.function.typeParameters)
-                self.callg(irInitializer.id.index)
+                self.callg(irInitializer)
                 self.drop()
 
         return parameters, statements
@@ -234,11 +239,11 @@ class CompileVisitor(ast.AstNodeVisitor):
         elif mode is COMPILE_FOR_MATCH:
             if self.info.hasUseInfo(pat):
                 assert failBlock is not None
-                successBlock = self.newBlock()
                 self.buildLoadOrNullaryCall(pat, mode)
                 self.dupi(1)  # value
                 patTy = self.info.getType(pat)
                 self.buildCallNamedMethod(patTy, "==", COMPILE_FOR_VALUE)
+                successBlock = self.newBlock()
                 self.branchif(successBlock.id, failBlock.id)
                 self.setCurrentBlock(successBlock)
                 self.drop()
@@ -269,7 +274,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             # String.== is an actual method, so the literal needs to be the receiver.
             self.buildLiteral(lit)
             self.dupi(1)  # value
-            self.callg(BUILTIN_STRING_EQ_OP_ID.index)
+            self.callg(getBuiltinFunctionById(BUILTIN_STRING_EQ_OP_ID))
         elif isinstance(lit, ast.AstNullLiteral):
             self.dup()
             self.null(),
@@ -327,11 +332,11 @@ class CompileVisitor(ast.AstNodeVisitor):
 
         # Clean up.
         if not elementsMustMatch:
-            successBlock = self.currentBlock
+            successState = self.saveCurrentBlock()
             self.setCurrentBlock(elementFailBlock)
             self.drop()
             self.branch(failBlock.id)
-            self.setCurrentBlock(successBlock)
+            self.restoreCurrentBlock(successState)
 
         # Consume tuple value on success if no patterns were matched.
         if lastMatchingIndex is None:
@@ -420,10 +425,10 @@ class CompileVisitor(ast.AstNodeVisitor):
         # Object as the expression type for each tuple. We haven't properly type checked the
         # value we pulled out of the Some[_]. We need to type check these values at runtime,
         # but the type checks should never fail.
-        successBlock = None
+        successState = None
         if n == 1:
             self.visit(pat.patterns[0], mode, getRootClassType(), dropSomeBlock)
-            successBlock = self.currentBlock
+            successState = self.saveCurrentBlock()
         else:
             dropFieldBlock = self.newBlock()
             for i in xrange(n - 1):
@@ -432,7 +437,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                 self.visit(pat.patterns[i], mode, getRootClassType(), dropFieldBlock)
             self.ldpc(n - 1)
             self.visit(pat.patterns[-1], mode, getRootClassType(), dropSomeBlock)
-            successBlock = self.currentBlock
+            successState = self.saveCurrentBlock()
 
             # If one of the sub-patterns failed to match, we need to drop the field.
             self.setCurrentBlock(dropFieldBlock)
@@ -445,7 +450,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.branch(failBlock.id)
 
         # Go back to the success block and drop the last field.
-        self.setCurrentBlock(successBlock)
+        self.restoreCurrentBlock(successState)
         self.drop()
 
     def visitAstLiteralExpression(self, expr, mode):
@@ -545,10 +550,10 @@ class CompileVisitor(ast.AstNodeVisitor):
 
         # Allocate the tuple.
         if langMode is NORMAL_MODE:
-            self.allocobjf(tupleClass.id.packageId.index, tupleClass.id.externIndex)
+            self.allocobjf(tupleClass)
         else:
             assert langMode is STD_MODE
-            self.allocobj(tupleClass.id.index)
+            self.allocobj(tupleClass)
         if mode is COMPILE_FOR_VALUE:
             self.dup()
 
@@ -623,11 +628,12 @@ class CompileVisitor(ast.AstNodeVisitor):
             failBlock = self.newBlock()
             # we generate the failure code before compiling the partial function, since we may
             # be unreachable if all the cases terminate.
-            currentBlock = self.currentBlock
+            self.setStackHeightForBlock(failBlock, self.currentStackHeight)
+            blockState = self.saveCurrentBlock()
             self.setCurrentBlock(failBlock)
             self.buildMatchException()
             self.throw()
-            self.setCurrentBlock(currentBlock)
+            self.restoreCurrentBlock(blockState)
         else:
             failBlock = None
         self.visitAstPartialFunctionExpression(expr.matcher, mode, exprTy, doneBlock, failBlock)
@@ -848,18 +854,45 @@ class CompileVisitor(ast.AstNodeVisitor):
         if self.unreachable:
             return
         self.currentBlock.instructions.append(inst)
+        self.currentStackHeight += inst.stackDelta()
+        assert self.currentStackHeight >= 0
+        if inst.isTerminator():
+            for succId in inst.successorIds():
+                if self.stackHeights[succId] is None:
+                    self.stackHeights[succId] = self.currentStackHeight
+                else:
+                    assert self.stackHeights[succId] == self.currentStackHeight
+            if isinstance(inst, ir_instructions.pushtry):
+                # exception is implicitly pushed on stack
+                self.stackHeights[inst.successorIds()[1]] += 1
 
     def newBlock(self):
         if self.unreachable:
             return ir_instructions.BasicBlock(-1, [])
         block = ir_instructions.BasicBlock(self.nextBlockId(), [])
         self.blocks.append(block)
+        self.stackHeights.append(None)
         return block
 
     def setCurrentBlock(self, block):
         if self.unreachable:
             return
         self.currentBlock = block
+        assert self.stackHeights[block.id] is not None
+        self.currentStackHeight = self.stackHeights[block.id]
+
+    def saveCurrentBlock(self):
+        return self.currentBlock, self.currentStackHeight
+
+    def restoreCurrentBlock(self, state):
+        if self.unreachable:
+            return
+        self.currentBlock = state[0]
+        self.currentStackHeight = state[1]
+
+    def setStackHeightForBlock(self, block, stackHeight):
+        assert self.stackHeights[block.id] is None
+        self.stackHeights[block.id] = stackHeight
 
     def setUnreachable(self):
         self.unreachable = True
@@ -1003,7 +1036,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                 self.callFunction(irDefn)
         else:
             assert isinstance(irDefn, Package)
-            self.pkg(irDefn.id.index)
+            self.pkg(irDefn)
         self.dropForEffect(mode)
 
     def loadVariable(self, varOrDefnInfo):
@@ -1025,9 +1058,9 @@ class CompileVisitor(ast.AstNodeVisitor):
 
     def loadGlobal(self, globl):
         if globl.isForeign():
-            self.ldgf(globl.id.packageId.index, globl.id.externIndex)
+            self.ldgf(globl)
         else:
-            self.ldg(globl.id.index)
+            self.ldg(globl)
 
     def storeVariable(self, varOrDefnInfo, valueType=None):
         if isinstance(varOrDefnInfo, Variable):
@@ -1050,9 +1083,9 @@ class CompileVisitor(ast.AstNodeVisitor):
 
     def storeGlobal(self, globl):
         if globl.isForeign():
-            self.stgf(globl.id.packageId.index, globl.id.externIndex)
+            self.stgf(globl)
         else:
-            self.stg(globl.id.index)
+            self.stg(globl)
 
     def loadContext(self, scopeId):
         closureInfo = self.info.getClosureInfo(self.getScopeId())
@@ -1125,10 +1158,10 @@ class CompileVisitor(ast.AstNodeVisitor):
         contextCtor = contextClass.constructors[0]
         assert contextClass.typeParameters == contextCtor.typeParameters
         self.buildImplicitStaticTypeArguments(contextClass.typeParameters)
-        self.allocobj(contextClass.id.index)
+        self.allocobj(contextClass)
         self.dup()
         self.buildImplicitStaticTypeArguments(contextCtor.typeParameters)
-        self.callg(contextCtor.id.index)
+        self.callg(contextCtor)
         self.drop()
         irContextVar = self.info.getClosureInfo(contextId).irClosureContexts[contextId]
         self.storeVariable(irContextVar)
@@ -1148,12 +1181,12 @@ class CompileVisitor(ast.AstNodeVisitor):
                 capturedScopeIds = closureInfo.capturedScopeIds()
                 assert len(closureCtor.parameterTypes) == len(capturedScopeIds) + 1
                 self.buildImplicitStaticTypeArguments(closureClass.typeParameters)
-                self.allocobj(closureClass.id.index)
+                self.allocobj(closureClass)
                 self.dup()
                 for id in capturedScopeIds:
                     self.loadContext(id)
                 self.buildImplicitStaticTypeArguments(closureCtor.typeParameters)
-                self.callg(closureCtor.id.index)
+                self.callg(closureCtor)
                 self.drop()
                 self.storeVariable(closureInfo.irClosureVar)
             elif isinstance(stmt, ast.AstClassDefinition):
@@ -1235,10 +1268,9 @@ class CompileVisitor(ast.AstNodeVisitor):
             if allowAllocation:
                 compileTypeArgs()
                 if irDefn.getReceiverClass().isForeign():
-                    receiverClassId = irDefn.getReceiverClass().id
-                    self.allocobjf(receiverClassId.packageId.index, receiverClassId.externIndex)
+                    self.allocobjf(irDefn.getReceiverClass())
                 else:
-                    self.allocobj(irDefn.getReceiverClass().id.index)
+                    self.allocobj(irDefn.getReceiverClass())
             else:
                 # This is a constructor called from another constructor. Load receiver instead
                 # of allocating a new object.
@@ -1305,9 +1337,9 @@ class CompileVisitor(ast.AstNodeVisitor):
 
     def callFunction(self, function):
         if function.isForeign():
-            self.callgf(function.id.packageId.index, function.id.externIndex)
+            self.callgf(function)
         else:
-            self.callg(function.id.index)
+            self.callg(function)
 
     def buildAssignment(self, lvalue, mode):
         if mode is COMPILE_FOR_VALUE:
@@ -1325,9 +1357,9 @@ class CompileVisitor(ast.AstNodeVisitor):
         type tests."""
         if isinstance(ty, VariableType):
             if ty.typeParameter.isForeign():
-                self.tyvdf(ty.typeParameter.id.packageId.index, ty.typeParameter.id.externIndex)
+                self.tyvdf(ty.typeParameter)
             else:
-                self.tyvd(ty.typeParameter.id.index)
+                self.tyvd(ty.typeParameter)
         else:
             assert isinstance(ty, ClassType)
             assert len(ty.clas.typeParameters) == len(ty.typeArguments)
@@ -1337,16 +1369,16 @@ class CompileVisitor(ast.AstNodeVisitor):
                         loc, "cannot dynamically check a type with static type parameters")
                 self.buildType(arg, loc)
             if ty.clas.isForeign():
-                self.tycdf(ty.clas.id.packageId.index, ty.clas.id.externIndex)
+                self.tycdf(ty.clas)
             else:
-                self.tycd(ty.clas.id.index)
+                self.tycd(ty.clas)
             if ty.isNullable():
                 self.tyflagd(1)
 
     def buildImplicitStaticTypeArguments(self, typeParams):
         for param in typeParams:
             assert not param.isForeign()
-            self.tyvs(param.id.index)
+            self.tyvs(param)
 
     def buildStaticTypeArguments(self, types):
         for ty in types:
@@ -1357,14 +1389,14 @@ class CompileVisitor(ast.AstNodeVisitor):
             for arg in ty.typeArguments:
                 self.buildStaticTypeArgument(arg)
             if ty.clas.isForeign():
-                self.tycsf(ty.clas.id.packageId.index, ty.clas.id.externIndex)
+                self.tycsf(ty.clas)
             else:
-                self.tycs(ty.clas.id.index)
+                self.tycs(ty.clas)
             if ty.isNullable():
                 self.tyflags(1)
         elif isinstance(ty, VariableType):
             assert not ty.typeParameter.isForeign()
-            self.tyvs(ty.typeParameter.id.index)
+            self.tyvs(ty.typeParameter)
         else:
             raise NotImplementedError
 
@@ -1373,9 +1405,9 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.cast()
 
     def buildMatchException(self):
-        self.allocobj(BUILTIN_MATCH_EXCEPTION_CLASS_ID.index)
+        self.allocobj(getBuiltinClassById(BUILTIN_MATCH_EXCEPTION_CLASS_ID))
         self.dup()
-        self.callg(BUILTIN_MATCH_EXCEPTION_CTOR_ID.index)
+        self.callg(getBuiltinFunctionById(BUILTIN_MATCH_EXCEPTION_CTOR_ID))
         self.drop()
 
     def addBuiltinInstructions(self, insts):
@@ -1432,8 +1464,8 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.blocks = orderedBlockList
 
 
-def _makeInstBuilder(inst):
-    return lambda self, *operands: self.add(inst(*operands))
+def _makeInstBuilder(instClass):
+    return lambda self, *operands: self.add(instClass(*operands))
 
 for _inst in instInfoByCode:
     setattr(CompileVisitor, _inst.name, _makeInstBuilder(ir_instructions.__dict__[_inst.name]))

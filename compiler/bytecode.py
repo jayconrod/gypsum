@@ -10,7 +10,14 @@ import yaml
 import ids
 import utils
 
-InstInfo = namedtuple("InstInfo", ["name", "opcode", "operandCount", "isTerminator"])
+InstInfo = namedtuple("InstInfo", [
+    "name",
+    "opcode",
+    "operandCount",
+    "pushCount",
+    "popCount",
+    "isTerminator",
+])
 
 _c = utils.Counter()
 instInfoByName = {}
@@ -18,7 +25,8 @@ instInfoByCode = []
 
 with utils.openCommonFile("opcodes.yaml") as _opcodesFile:
     for _opc in yaml.load(_opcodesFile.read()):
-        _info = InstInfo(_opc["name"], _c(), _opc["iops"], _opc["term"])
+        _info = InstInfo(_opc["name"], _c(), _opc["iops"],
+                         _opc["push"], _opc["pop"], _opc["term"])
         instInfoByName[_opc["name"]] = _info
         instInfoByCode.append(_info)
 

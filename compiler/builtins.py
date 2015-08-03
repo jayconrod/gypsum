@@ -213,6 +213,16 @@ def _initialize():
     for fn in functions:
         defineFunction(fn)
 
-__all__ = ["registerBuiltins", "getRootClass", "getNothingClass",
-           "getExceptionClass", "getTypeClass", "getStringClass",
-           "getBuiltinClasses", "getBuiltinClassFromType", "getBuiltinFunctions"]
+__all__ = [
+    "registerBuiltins",
+    "getRootClass",
+    "getNothingClass",
+    "getExceptionClass",
+    "getTypeClass",
+    "getStringClass",
+    "getBuiltinClasses",
+    "getBuiltinClassById",
+    "getBuiltinFunctionById",
+    "getBuiltinClassFromType",
+    "getBuiltinFunctions"
+]
