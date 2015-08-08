@@ -9,7 +9,7 @@ from functools import partial
 import ast
 from bytecode import W8, W16, W32, W64, BUILTIN_TYPE_CLASS_ID, BUILTIN_TYPE_CTOR_ID, instInfoByCode, BUILTIN_MATCH_EXCEPTION_CLASS_ID, BUILTIN_MATCH_EXCEPTION_CTOR_ID, BUILTIN_STRING_EQ_OP_ID
 from ir import IrTopDefn, Class, Field, Function, Global, LOCAL, Package, PACKAGE_INIT_NAME, RECEIVER_SUFFIX, Variable
-from ir_types import UnitType, ClassType, VariableType, NULLABLE_TYPE_FLAG, getExceptionClassType, getClassFromType, getStringType, getRootClassType
+from ir_types import UnitType, BooleanType, I8Type, I16Type, I32Type, I64Type, F32Type, F64Type, ClassType, VariableType, NULLABLE_TYPE_FLAG, getExceptionClassType, getClassFromType, getStringType, getRootClassType
 import ir_instructions
 from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PACKAGE_INITIALIZER_HINT, DefnInfo, NORMAL_MODE, STD_MODE, NOSTD_MODE
 from flags import ABSTRACT, STATIC, LET
@@ -35,6 +35,28 @@ def assignFieldIndices(clas, info):
         field.index = index
 
 
+class TryState(object):
+    def __init__(self, parent, ast, mode, tryStackHeight, finallyBlock):
+        self.parent = parent
+        self.ast = ast
+        self.mode = mode
+        self.tryStackHeight = tryStackHeight
+        self.finallyBlock = finallyBlock
+        self.returnFinallyBlock = None
+        self.finallyReturnBlock = None
+
+    def setReturnFinallyBlocks(self, returnFinallyBlock, finallyReturnBlock):
+        assert self.returnFinallyBlock is None and self.finallyReturnBlock is None
+        if returnFinallyBlock.id == -1:
+            return
+        assert finallyReturnBlock.id != -1
+        self.returnFinallyBlock = returnFinallyBlock
+        self.finallyReturnBlock = finallyReturnBlock
+
+    def hasReturn(self):
+        return self.returnFinallyBlock is not None
+
+
 class CompileVisitor(ast.AstNodeVisitor):
     def __init__(self, function, info):
         self.function = function
@@ -48,6 +70,8 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.currentBlock = None
         self.currentStackHeight = None
         self.unreachable = False
+        self.tryStateStack = []
+        self.labels = []
 
         firstBlock = self.newBlock()
         self.setStackHeightForBlock(firstBlock, 0)
@@ -257,7 +281,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                 self.castcbr(successBlock.id, failBlock.id)
                 self.setCurrentBlock(successBlock)
         elif mode is COMPILE_FOR_UNINITIALIZED:
-            self.uninitialized()
+            self.buildUninitialized(self.info.getType(pat))
         self.storeVariable(defnInfo, ty)
 
     def visitAstBlankPattern(self, pat, mode, ty=None, failBlock=None):
@@ -645,6 +669,35 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.setUnreachable()
 
     def visitAstTryCatchExpression(self, expr, mode):
+        if self.unreachable:
+            return
+
+        # Stack discipline:
+        # - before: nothing on the stack before we enter the try-catch-finally expression will
+        #     be accessed or modified.
+        # - try: when entering the try clause, we execute pushtry, which pushes an entry on
+        #     the exception handler stack, which is separate from the value stack. The try
+        #     expression is expected to push one value if mode is COMPILE_FOR_VALUE. Otherwise,
+        #     the stack should be the same height.
+        # - catch: the catch clause should not be reachable; it should only be mentioned by
+        #     the poptry instruction used to enter the try clause. When entering, there will
+        #     be one additional value on the stack: the exception. If there is also a finally
+        #     clause, the content of the catch clause will be wrapped in another
+        #     pushtry/poptry pair to catch any thrown or rethrown exceptions. If the catch
+        #     clause finishes normally and there's no finally clause and the mode is
+        #     COMPILE_FOR_VALUE, there should be one additional value on the stack, the result.
+        #     If the mode is COMPILE_FOR_EFFECT, the stack should be at the starting height.
+        #     If there is a finally clause, see below for additional values.
+        # - finally: if there is a finally clause, it must be executed regardless of whether
+        #    evaluation completes normally, an exception was thrown, or a return was executed.
+        #    The finally clause expects four additional values on stack: the result of
+        #    evaluation (may be uninitialized or zero of the correct type), the exception if
+        #    there was one (uninitialized if not), a return value (may be uninitialized or
+        #    zero), and a continuation label that the finally clause will branch to after
+        #    evaluation. Note that finally clause may need to branch to an outer finally
+        #    clause before branching to the continuation. If a finally clause throws or returns,
+        #    that replaces the thrown exception or return value and the continuation on stack.
+
         haveCatch = expr.catchHandler is not None
         haveFinally = expr.finallyHandler is not None
         haveBoth = haveCatch and haveFinally
@@ -652,42 +705,46 @@ class CompileVisitor(ast.AstNodeVisitor):
         mustMatch = haveCatch and \
             type_analysis.partialFunctionMustMatch(expr.catchHandler, exnTy, self.info)
 
+        initialStackHeight = self.currentStackHeight
+
         # Create blocks. Some blocks may not be needed, depending on which handlers we have.
         tryBlock = self.newBlock()
-        catchTryBlock = self.newBlock() if haveBoth else None
+        tryCatchBlock = self.newBlock() if haveBoth else None
         catchBlock = self.newBlock() if haveCatch else None
         catchNormalBlock = self.newBlock() if haveBoth else None
         catchMissBlock = self.newBlock() if haveBoth and not mustMatch else None
+        catchThrowBlock = self.newBlock() if haveCatch and not haveFinally else None
         catchThrowFinallyBlock = self.newBlock() if haveBoth else None
         catchNormalFinallyBlock = self.newBlock() if haveBoth else None
         tryFinallyBlock = self.newBlock() if haveFinally else None
-        throwFinallyBlock = self.newBlock() \
-                            if haveFinally and not haveCatch and mode is COMPILE_FOR_VALUE \
-                            else None
+        throwFinallyBlock = self.newBlock() if haveFinally and not haveCatch else None
         finallyBlock = self.newBlock() if haveFinally else None
-        rethrowBlock = self.newBlock() if haveFinally or (haveCatch and not mustMatch) else None
+        finallyRethrowBlock = self.newBlock() if haveFinally else None
         doneBlock = self.newBlock()
 
         # Add some aliases for try and catch outcomes to simplify the code here.
         if haveBoth:
             tryNormalBlock = tryFinallyBlock
-            exceptionBlock = catchTryBlock
+            exceptionBlock = tryCatchBlock
             catchSuccessBlock = catchNormalBlock
             catchFailBlock = catchMissBlock
         elif haveCatch:
             tryNormalBlock = doneBlock
             exceptionBlock = catchBlock
             catchSuccessBlock = doneBlock
-            catchFailBlock = rethrowBlock
+            catchFailBlock = catchThrowBlock
         else:
             assert haveFinally
             tryNormalBlock = tryFinallyBlock
-            if mode is COMPILE_FOR_VALUE:
-                exceptionBlock = throwFinallyBlock
-            else:
-                exceptionBlock = finallyBlock
+            exceptionBlock = throwFinallyBlock
             catchSuccessBlock = None
             catchFailBlock = None
+
+        # Set up try state.
+        finallyStackHeight = self.currentStackHeight + 3
+        parentTryState = self.tryStateStack[-1] if len(self.tryStateStack) > 0 else None
+        tryState = TryState(parentTryState, expr, mode, self.currentStackHeight, finallyBlock)
+        self.tryStateStack.append(tryState)
 
         # Enter the try expression.
         # Stack at this point: [...]
@@ -699,12 +756,13 @@ class CompileVisitor(ast.AstNodeVisitor):
         with UnreachableScope(self):
             self.visit(expr.expression, mode)
             self.poptry(tryNormalBlock.id)
+            unreachableAfterTry = self.unreachable
 
         # If we have both catch and finally, we need to make sure we still execute the finally
         # if the catch throws an exception. So we wrap the catch in another try.
         # Stack at this point: [exception ...]
-        if catchTryBlock is not None:
-            self.setCurrentBlock(catchTryBlock)
+        if tryCatchBlock is not None:
+            self.setCurrentBlock(tryCatchBlock)
             self.pushtry(catchBlock.id, catchThrowFinallyBlock.id)
 
         # If we have a catch handler, we compile it like a normal pattern match.
@@ -717,7 +775,10 @@ class CompileVisitor(ast.AstNodeVisitor):
             with UnreachableScope(self):
                 self.visitAstPartialFunctionExpression(expr.catchHandler, mode,
                                                        exnTy, catchSuccessBlock, catchFailBlock)
+                unreachableAfterCatch = self.unreachable
             assert self.isDetached()
+        else:
+            unreachableAfterCatch = True
 
         # If we have both catch and finally, once we handle an exception, we need to break out
         # of the try wrapped around the catch handler.
@@ -733,72 +794,170 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.setCurrentBlock(catchMissBlock)
             self.poptry(catchThrowFinallyBlock.id)
 
+        # If we could not handle an exception, or if a new exception was thrown while we were
+        # handling an exception, we need to rethrow it here.
+        # Stack at this point: [exception ...]
+        if catchThrowBlock is not None:
+            self.setStackHeightForBlock(catchThrowBlock, initialStackHeight + 1)
+            self.setCurrentBlock(catchThrowBlock)
+            self.throw()
+
         # If we have both catch and finally, we need to handle exceptions thrown by the catch
         # handler. We also come here if an exception couldn't be handled. The exception on
         # top replaces the other exception.
         # Stack at this point: [exception exception ...]
         if catchThrowFinallyBlock is not None:
+            self.setStackHeightForBlock(catchThrowFinallyBlock, initialStackHeight + 2)
             self.setCurrentBlock(catchThrowFinallyBlock)
             self.swap()
             self.drop()
             if mode is COMPILE_FOR_VALUE:
-                self.uninitialized()
+                self.buildUninitialized(self.info.getType(expr))
                 self.swap()
+            if tryState.hasReturn():
+                self.buildUninitialized(self.function.returnType)
+            self.label(finallyRethrowBlock.id)
             self.branch(finallyBlock.id)
 
         # If we have both catch and finally, after we've handled the exception and broken out
-        # of the try, we need to push null so the finally doesn't try to throw anything.
+        # of the try, we need to adjust the stack for the finally and tell it to continue
+        # normally once it's done.
         # Stack at this point: [result exception ...]
         if catchNormalFinallyBlock is not None:
             self.setCurrentBlock(catchNormalFinallyBlock)
             if mode is COMPILE_FOR_VALUE:
                 self.swap()
             self.drop()
-            self.null()
+            self.buildUninitialized(getExceptionClassType())
+            if tryState.hasReturn():
+                self.buildUninitialized(self.function.returnType)
+            self.label(doneBlock.id)
             self.branch(finallyBlock.id)
 
-        # If we have finally, after the try expression completes normally, we need to push null
-        # so the finally doesn't try to throw anything.
+        # If we have finally, after the try expression completes normally, adjust the stack
+        # for the finally and tell it to continue normally once it's done.
         # Stack at this point: [result ...]
         if tryFinallyBlock is not None:
+            self.setStackHeightForBlock(tryFinallyBlock,
+                                        initialStackHeight + \
+                                            (1 if mode is COMPILE_FOR_VALUE else 0))
             self.setCurrentBlock(tryFinallyBlock)
-            self.null()
+            self.buildUninitialized(getExceptionClassType())
+            if tryState.hasReturn():
+                self.buildUninitialized(self.function.returnType)
+            self.label(doneBlock.id)
             self.branch(finallyBlock.id)
 
-        # If we have finally but not catch and we're compiling for value, after the try
-        # expression throws an exception, we need to push a fake value so the finally block
-        # has a fixed-height stack.
+        # If we have finally but not catch, after the try expression throws an exception,
+        # adjust the stack for the finally and tell it to rethrow once it's done.
         # Stack at this point: [exception ...]
         if throwFinallyBlock is not None:
+            self.setStackHeightForBlock(throwFinallyBlock, initialStackHeight + 1)
             self.setCurrentBlock(throwFinallyBlock)
-            self.uninitialized()
-            self.swap()
+            if mode is COMPILE_FOR_VALUE:
+                self.buildUninitialized(self.info.getType(expr))
+                self.swap()
+            if tryState.hasReturn():
+                self.buildUninitialized(self.function.returnType)
+            self.label(finallyRethrowBlock.id)
             self.branch(finallyBlock.id)
 
-        # If we have finally, we execute the finally handler then check whether there was an
-        # exception. null indicates no exception.
-        # Stack at this point: [exception? result ...]
+        # If there was a return expression in the try clause or the catch clause, we must ensure
+        # the finally clause and all the finally clauses above it are executed. The return
+        # expression branched into tryState.returnFinallyBlock, but we need to fill that in.
+        # Stack at this point: [return ...]
+        if tryState.hasReturn():
+            assert haveFinally
+
+            # Generate blocks to chain finally clauses together, if needed. This might have
+            # been partially done already. We work from the top down.
+            previousTryState = None
+            for currentTryState in self.tryStateStack:
+                if currentTryState.finallyBlock is None or \
+                   currentTryState.finallyReturnBlock is not None:
+                    continue
+                currentTryState.finallyReturnBlock = self.newBlock()
+                self.setStackHeightForBlock(
+                    currentTryState.finallyReturnBlock,
+                    initialStackHeight + (3 if mode is COMPILE_FOR_VALUE else 2))
+                self.setCurrentBlock(currentTryState.finallyReturnBlock)
+                if previousTryState is None:
+                    self.ret()
+                else:
+                    if mode is COMPILE_FOR_VALUE and \
+                       previousTryState.mode is COMPILE_FOR_EFFECT:
+                        self.swap2()  # swap return and value
+                        self.drop()   # drop value
+                        self.swap()   # swap return and exception
+                    elif mode is COMPILE_FOR_EFFECT and \
+                         previousTryState.mode is COMPILE_FOR_VALUE:
+                        self.buildUninitialized(self.info.getType(previousTryState.ast)) # value
+                        self.swap2()  # swap value and exception
+                        self.swap()   # swap exception and return
+                    else:
+                        assert mode is previousTryState.mode
+                    self.label(previousTryState.finallyReturnBlock)
+                    self.branch(previousTryState.finallyBlock)
+
+            # Generate code to get from a return to the finally.
+            self.setCurrentBlock(tryState.returnFinallyBlock)
+            if mode is COMPILE_FOR_VALUE:
+                self.buildUninitialized(self.info.getType(expr))
+                self.swap()
+            self.buildUninitialized(getExceptionClassType())
+            self.swap()
+            self.label(tryState.finallyReturnBlock.id)
+            self.branch(finallyBlock.id)
+
+        # Pop tryStateStack. This prevents return expressions inside the finally clause from
+        # branching to the top of the finally clause, causing infinite loops.
+        self.tryStateStack.pop()
+
+        # If we have finally, we execute the finally handler, then branch to the continuation.
+        # We may proceed normally (possibly with a result), rethrow an exception, return
+        # from the function, or chain to a higher finally handler (in case of return). The
+        # continuation tells us where to go, and everything we need is on the stack.
+        # Stack at this point: [continuation return exception value ...]
         if finallyBlock is not None:
+            finallyStackHeight = initialStackHeight + 2 + \
+                                 (1 if mode is COMPILE_FOR_VALUE else 0) + \
+                                 (1 if tryState.hasReturn() else 0)
+            self.setStackHeightForBlock(finallyBlock, finallyStackHeight)
             self.setCurrentBlock(finallyBlock)
             self.visit(expr.finallyHandler, COMPILE_FOR_EFFECT)
-            self.dup()
-            self.null()
-            self.eqp()
-            self.branchif(doneBlock.id, rethrowBlock.id)
+            finallyBlockIds = [finallyRethrowBlock.id]
+            if not (unreachableAfterTry and unreachableAfterCatch):
+                finallyBlockIds.append(doneBlock.id)
+            if tryState.hasReturn():
+                finallyBlockIds.append(tryState.finallyReturnBlock.id)
+            self.branchl(*finallyBlockIds)
+            unreachableAfterFinally = self.unreachable
+        else:
+            unreachableAfterFinally = False
 
-        # If we could not handle an exception, or if a new exception was thrown while we were
-        # handling an exception, we need to rethrow it here.
-        # Stack at this point: [exception ...]
-        if rethrowBlock is not None:
-            self.setCurrentBlock(rethrowBlock)
+        # If we have finally, and an exception was thrown, we rethrow the exception after the
+        # finally. This is one of the possible continuations.
+        # Stack at this point: [return exception value ...]
+        if finallyRethrowBlock is not None:
+            self.setCurrentBlock(finallyRethrowBlock)
+            if tryState.hasReturn():
+                self.drop()
             self.throw()
 
-        # Everything has been handled. If we came through a finally, we need to pop the null
-        # exception off the stack.
-        # Stack at this point: [result, ...]
+        # If we were unreachable after both try and catch or if we were unreachable after
+        # finally, we cannot continue normally.
+        if unreachableAfterFinally or (unreachableAfterTry and unreachableAfterCatch):
+            self.setUnreachable()
+
+        # Everything has been handled. If we came through a finally, we need to pop the extra
+        # values off the stack.
+        # Stack at this point: [return exception result ...]
         self.setCurrentBlock(doneBlock)
         if haveFinally:
-            self.drop()
+            if tryState.hasReturn():
+                self.dropi(2)
+            else:
+                self.drop()
 
     def visitAstPartialFunctionExpression(self, expr, mode, ty, doneBlock, failBlock):
         allCasesTerminate = True
@@ -839,11 +998,32 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.detach()
 
     def visitAstReturnExpression(self, expr, mode):
+        tryState = self.tryStateStack[-1] if len(self.tryStateStack) > 0 else None
+        hasFinally = tryState is not None and tryState.finallyBlock is not None
+        if hasFinally:
+            # We need to execute the finally expression before returning. Before evaluating
+            # the return expression, we drop values on the stack to match the height of the
+            # finally expression.
+            stackDelta = self.currentStackHeight - tryState.tryStackHeight
+            assert stackDelta >= 0
+            if stackDelta == 1:
+                self.drop()
+            else:
+                self.dropi(stackDelta)
+
+        # Evaluate the expression being returned.
         if expr.expression is None:
             self.unit()
         else:
             self.visit(expr.expression, COMPILE_FOR_VALUE)
-        self.ret()
+
+        if hasFinally:
+            if tryState.returnFinallyBlock is None and not self.unreachable:
+                # This block will be filled in when the finally clause is compiled.
+                tryState.returnFinallyBlock = self.newBlock()
+            self.branch(tryState.returnFinallyBlock.id)
+        else:
+            self.ret()
         self.setUnreachable()
 
     def dropForEffect(self, mode):
@@ -891,15 +1071,17 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.currentStackHeight = state[1]
 
     def setStackHeightForBlock(self, block, stackHeight):
-        assert self.stackHeights[block.id] is None
+        assert self.stackHeights[block.id] is None or self.stackHeights[block.id] == stackHeight
         self.stackHeights[block.id] = stackHeight
 
     def setUnreachable(self):
         self.unreachable = True
         self.currentBlock = None
+        self.currentStackHeight = None
 
     def detach(self):
         self.currentBlock = None
+        self.currentStackHeight = None
 
     def isDetached(self):
         return self.currentBlock is None
@@ -1222,6 +1404,30 @@ class CompileVisitor(ast.AstNodeVisitor):
         else:
             raise NotImplementedError
 
+    def buildUninitialized(self, ty):
+        if ty is UnitType:
+            self.unit()
+        elif ty is BooleanType:
+            self.false()
+        elif ty is I8Type:
+            self.i8(0)
+        elif ty is I16Type:
+            self.i16(0)
+        elif ty is I32Type:
+            self.i32(0)
+        elif ty is I64Type:
+            self.i64(0)
+        elif ty is F32Type:
+            self.f32(0.)
+        elif ty is F64Type:
+            self.f64(0.)
+        else:
+            assert ty.isObject()
+            if ty.isNullable():
+                self.null()
+            else:
+                self.uninitialized()
+
     def buildCallNamedMethod(self, receiverType, name, mode):
         receiverClass = getClassFromType(receiverType)
         method = receiverClass.getMethod(name)
@@ -1422,6 +1628,11 @@ class CompileVisitor(ast.AstNodeVisitor):
             astDefn = self.astDefn
         return self.info.getScope(astDefn).scopeId
 
+    def label(self, id):
+        inst = self.label_(id)
+        self.labels.append(inst)
+        return inst
+
     def orderBlocks(self):
         # Clear the "id" attribute of each block. None will indicate a block has not been
         # been visited yet. -1 indicates a block is being visited but doesn't have an id yet.
@@ -1448,13 +1659,22 @@ class CompileVisitor(ast.AstNodeVisitor):
             if block.id is not None:
                 block.id = liveBlockCount - block.id - 1
 
-        # Update terminating instructions to point to the new block ids.
+        # Update terminating instructions and labels to point to the new block ids.
         for block in self.blocks:
             if block.id is None:   # dead block
                 continue
             inst = block.instructions[-1]
             successorIds = [self.blocks[id].id for id in inst.successorIds()]
             inst.setSuccessorIds(successorIds)
+
+        for label in self.labels:
+            newId = self.blocks[label.blockId()].id
+            if newId is None:
+                # Labels may point to dead blocks, likely because the corresponding branchl
+                # instruction was unreachable. When this happens, point to -1, which the
+                # interpreter will handle specially.
+                newId = -1
+            label.setBlockId(newId)
 
         # Rebuild the block list with the new order.
         orderedBlockList = [None] * liveBlockCount
@@ -1465,10 +1685,15 @@ class CompileVisitor(ast.AstNodeVisitor):
 
 
 def _makeInstBuilder(instClass):
-    return lambda self, *operands: self.add(instClass(*operands))
+    def instBuilder(self, *operands):
+        inst = instClass(*operands)
+        self.add(inst)
+        return inst
+    return instBuilder
 
 for _inst in instInfoByCode:
-    setattr(CompileVisitor, _inst.name, _makeInstBuilder(ir_instructions.__dict__[_inst.name]))
+    _name = _inst.name + ("_" if hasattr(CompileVisitor, _inst.name) else "")
+    setattr(CompileVisitor, _name, _makeInstBuilder(ir_instructions.__dict__[_inst.name]))
 
 
 class UnreachableScope(object):

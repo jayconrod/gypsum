@@ -80,6 +80,35 @@ class Instruction(object):
         return utils.hashList([self.info.opcode] + self.operands)
 
 
+class label(Instruction):
+    def blockId(self):
+        return self.operands[0]
+
+    def setBlockId(self, id):
+        self.operands = (id,)
+
+
+class branchl(Instruction):
+    def __init__(self, *blockIds):
+        super(branchl, self).__init__()
+        assert all(type(id) is int for id in blockIds)
+        self.blockIds = blockIds
+
+    def successorIds(self):
+        return self.blockIds
+
+    def setSuccessorIds(self, newSuccessorIds):
+        self.blockIds = newSuccessorIds
+
+    def __str__(self):
+        return super(branchl, self).__str__() + " # " + ", ".join(map(str, self.blockIds))
+
+
+class dropi(Instruction):
+    def popCount(self):
+        return self.operands[0]
+
+
 class ldg(Instruction):
     def __init__(self, globl):
         assert isinstance(globl, ir.Global) and (globl.isLocal() or globl.isBuiltin())

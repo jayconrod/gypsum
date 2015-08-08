@@ -2,10 +2,13 @@
 - {name: "ret", iops: 0, push: 0, pop: 1, term: true}
 - {name: "branch", iops: 1, push: 0, pop: 0, term: true}
 - {name: "branchif", iops: 2, push: 0, pop: 1, term: true}
+- {name: "label", iops: 1, push: 1, pop: 0, term: false}
+- {name: "branchl", iops: 0, push: 0, pop: 1, term: true}
 - {name: "pushtry", iops: 2, push: 0, pop: 0, term: true}
 - {name: "poptry", iops: 1, push: 0, pop: 0, term: true}
 - {name: "throw", iops: 0, push: 0, pop: 1, term: true}
 - {name: "drop", iops: 0, push: 0, pop: 1, term: false}
+- {name: "dropi", iops: 1, push: 0, pop: ~, term: false}
 - {name: "dup", iops: 0, push: 1, pop: 0, term: false}
 - {name: "dupi", iops: 1, push: 1, pop: 0, term: false}
 - {name: "swap", iops: 0, push: 2, pop: 2, term: false}
