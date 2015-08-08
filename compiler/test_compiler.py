@@ -2074,7 +2074,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                i64(200),
                                dropi(2),
                                i64(12),
-                               branch(2),
+                               poptry(2),
                              ], [
                                # block 2 (return finally)
                                i64(0),  # value
@@ -2103,6 +2103,563 @@ class TestCompiler(TestCaseWithDefinitions):
                                # block 6 (finally return)
                                ret(),
                              ]]))
+
+    def testTryReturn(self):
+        exnTy = ClassType(getExceptionClass())
+        self.checkFunction("def f = try return 12 catch { case exn => 34; }",
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0 [...]
+                               pushtry(1, 2),
+                             ], [
+                               # block 1 (try) [...]
+                               i64(12),
+                               ret(),
+                             ], [
+                               # block 2 (catch) [exception ...]
+                               stlocal(-1),
+                               i64(34),
+                               branch(3),
+                             ], [
+                               # block 3 (done) [value ...]
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.exn", type=exnTy,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testTryFinallyReturnTwice(self):
+        self.checkFunction("def f = try if (true) return 1 else return 2 finally 3",
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0 [...]
+                               pushtry(1, 5),
+                             ], [
+                               # block 1 (try) [...]
+                               true(),
+                               branchif(2, 3),
+                             ], [
+                               # block 2 [...]
+                               i64(1),
+                               poptry(4),
+                             ], [
+                               # block 3 [...]
+                               i64(2),
+                               poptry(4),
+                             ], [
+                               # block 4 [return ...]
+                               unit(),
+                               swap(),
+                               uninitialized(),
+                               swap(),
+                               label(8),
+                               branch(6),
+                             ], [
+                               # block 5 (throw-finally) [exception ...]
+                               unit(),
+                               swap(),
+                               i64(0),
+                               label(7),
+                               branch(6),
+                             ], [
+                               # block 6 (finally) [continuation return exception value ...]
+                               i64(3),
+                               drop(),
+                               branchl(),
+                             ], [
+                               # block 7 (finally-rethrow) [return exception value ...]
+                               drop(),
+                               throw(),
+                             ], [
+                               # block 8 (return) [return exception value ...]
+                               ret(),
+                             ]]))
+
+    def testTryCatchFinallyReturns(self):
+        self.checkFunction("def f = try return 1 catch { case _ => return 2; } finally 3",
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0 [...]
+                               pushtry(1, 3),
+                             ], [
+                               # block 1 (try) [...]
+                               i64(1),
+                               poptry(2),
+                             ], [
+                               # block 2 (try-return-finally) [return ...]
+                               unit(),
+                               swap(),
+                               uninitialized(),
+                               swap(),
+                               label(9),
+                               branch(7),
+                             ], [
+                               # block 3 (try-catch) [exception ...]
+                               pushtry(4, 6),
+                             ], [
+                               # block 4 (catch) [exception ...]
+                               dup(),
+                               drop(),
+                               i64(2),
+                               poptry(5),
+                             ], [
+                               # block 5 (catch-return-finally) [return exception ...]
+                               swap(),
+                               drop(),
+                               unit(),
+                               swap(),
+                               uninitialized(),
+                               swap(),
+                               label(9),
+                               branch(7),
+                             ], [
+                               # block 6 (catch-throw-finally) [exception exception ...]
+                               swap(),
+                               drop(),
+                               unit(),
+                               swap(),
+                               i64(0),
+                               label(8),
+                               branch(7),
+                             ], [
+                               # block 7 (finally) [continuation return exception value ...]
+                               i64(3),
+                               drop(),
+                               branchl(),
+                             ], [
+                               # block 8 (finally-rethrow) [return exception value ...]
+                               drop(),
+                               throw(),
+                             ], [
+                               # block 9 (finally-return) [return exception value ...]
+                               ret(),
+                             ]]))
+
+    def testReturnFromFinally(self):
+        self.checkFunction("def f = try 12 finally return 34",
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0 [...]
+                               pushtry(1, 3),
+                             ], [
+                               # block 1 (try) [...]
+                               i64(12),
+                               poptry(2),
+                             ], [
+                               # block 2 (try-finally) [value ...]
+                               uninitialized(),
+                               label(-1),
+                               branch(4),
+                             ], [
+                               # block 3 (throw-finally) [exception ...]
+                               i64(0),
+                               swap(),
+                               label(-1),
+                               branch(4),
+                             ], [
+                               # block 4 (finally) [continuation exception value ...]
+                               i64(34),
+                               ret(),
+                             ]]))
+
+    def testReturnFromNestedTry(self):
+        source = "def f =\n" + \
+                 "  try\n" + \
+                 "    try\n" + \
+                 "      return 12\n" + \
+                 "      {}\n" + \
+                 "    finally 34\n" + \
+                 "    56\n" + \
+                 "  catch\n" + \
+                 "    case _ => 78"
+        self.checkFunction(source,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0 [...]
+                               pushtry(1, 8),
+                             ], [
+                               # block 1 (outer try) [...]
+                               pushtry(2, 4),
+                             ], [
+                               # block 2 (inner try) [...]
+                               i64(12),
+                               poptry(3),
+                             ], [
+                               # block 3 (inner try-return-finally) [return ...]
+                               uninitialized(),
+                               swap(),
+                               label(7),
+                               branch(5),
+                             ], [
+                               # block 4 (inner throw-finally) [exception ...]
+                               i64(0),
+                               label(6),
+                               branch(5),
+                             ], [
+                               # block 5 (inner finally) [continuation return exception ...]
+                               i64(34),
+                               drop(),
+                               branchl(),
+                             ], [
+                               # block 6 (inner finally-rethrow) [return exception ...]
+                               drop(),
+                               throw(),
+                             ], [
+                               # block 7 (inner finally-return) [return exception ...]
+                               ret(),
+                             ], [
+                               # block 8 (outer catch) [exception ...]
+                               drop(),
+                               i64(78),
+                               branch(9),
+                             ], [
+                               # block 9 (outer done) [value ...]
+                               ret(),
+                             ]]))
+
+    def testReturnFromNestedTry2(self):
+        source = "def f =\n" + \
+                 "  try\n" + \
+                 "    try\n" + \
+                 "      return 1\n" + \
+                 "    catch\n" + \
+                 "      case _ => 2\n" + \
+                 "  finally\n" + \
+                 "    3"
+        self.checkFunction(source,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0 [...]
+                               pushtry(1, 7),
+                             ], [
+                               # block 1 (outer try) [...]
+                               pushtry(2, 4),
+                             ], [
+                               # block 2 (inner try) [...]
+                               i64(1),
+                               poptry(3),
+                             ], [
+                               # block 3 (inner try-return-finally) [return ...]
+                               i64(0),
+                               swap(),
+                               uninitialized(),
+                               swap(),
+                               label(11),
+                               branch(8),
+                             ], [
+                               # block 4 (inner catch) [exception ...]
+                               drop(),
+                               i64(2),
+                               branch(5),
+                             ], [
+                               # block 5 (inner done) [value ...]
+                               poptry(6),
+                             ], [
+                               # block 6 (outer try-finally) [value ...]
+                               uninitialized(),
+                               i64(0),
+                               label(10),
+                               branch(8),
+                             ], [
+                               # block 7 (outer throw-finally) [exception ...]
+                               i64(0),
+                               swap(),
+                               i64(0),
+                               label(9),
+                               branch(8),
+                             ], [
+                               # block 8 (outer finally)
+                               # [continuation return exception value ...]
+                               i64(3),
+                               drop(),
+                               branchl(),
+                             ], [
+                               # block 9 (outer finally-rethrow)
+                               drop(),
+                               throw(),
+                             ], [
+                               # block 10 (outer done)
+                               dropi(2),
+                               ret(),
+                             ], [
+                               # block 11 (outer finally-return)
+                               ret(),
+                             ]]))
+
+    def testReturnFromTripleNestedTryFinally(self):
+        source = "def f =\n" + \
+                 "  try\n" + \
+                 "    try\n" + \
+                 "      try\n" + \
+                 "        return 1\n" + \
+                 "      finally\n" + \
+                 "        3\n" + \
+                 "    catch\n" + \
+                 "      case _ => return 4\n" + \
+                 "  finally\n" + \
+                 "    5"
+        self.checkFunction(source,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0 [...]
+                               pushtry(1, 11),
+                             ], [
+                               # block 1 (outer try) [...]
+                               pushtry(2, 9),
+                             ], [
+                               # block 2 (middle try) [...]
+                               pushtry(3, 5),
+                             ], [
+                               # block 3 (inner try) [...]
+                               i64(1),
+                               poptry(4),
+                             ], [
+                               # block 4 (inner try-finally-return) [return ...]
+                               unit(),
+                               swap(),
+                               uninitialized(),
+                               swap(),
+                               label(8),
+                               branch(6),
+                             ], [
+                               # block 5 (inner throw-finally) [exception ...]
+                               unit(),
+                               swap(),
+                               i64(0),
+                               label(7),
+                               branch(6),
+                             ], [
+                               # block 6 (inner finally)
+                               # [continuation return exception value ...]
+                               i64(3),
+                               drop(),
+                               branchl(),
+                             ], [
+                               # block 7 (inner finally-rethrow) [return exception value ...]
+                               drop(),
+                               throw(),
+                             ], [
+                               # block 8 (inner finally-return) [return exception value ...]
+                               label(14),
+                               branch(12),
+                             ], [
+                               # block 9 (middle catch) [exception ...]
+                               drop(),
+                               i64(4),
+                               poptry(10),
+                             ], [
+                               # block 10 (middle catch-return-finally) [return ...]
+                               unit(),
+                               swap(),
+                               uninitialized(),
+                               swap(),
+                               label(14),
+                               branch(12),
+                             ], [
+                               # block 11 (outer throw-finally) [exception ...]
+                               unit(),
+                               swap(),
+                               i64(0),
+                               label(13),
+                               branch(12),
+                             ], [
+                               # block 12 (outer finally)
+                               # [continuation return exception value ...]
+                               i64(5),
+                               drop(),
+                               branchl(),
+                             ], [
+                               # block 13 (outer finally-rethrow) [return exception value ...]
+                               drop(),
+                               throw(),
+                             ], [
+                               # block 14 (outer finally-return) [return exception value ...]
+                               ret(),
+                             ]]))
+
+    def testReturnFromNestedFinally(self):
+        source = "def f =\n" + \
+                 "  try\n" + \
+                 "    try\n" + \
+                 "      1\n" + \
+                 "    finally\n" + \
+                 "      return 2\n" + \
+                 "  finally\n" + \
+                 "    3"
+        self.checkFunction(source,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0 [...]
+                               pushtry(1, 7),
+                             ], [
+                               # block 1 (outer try) [...]
+                               pushtry(2, 4),
+                             ], [
+                               # block 2 (inner try) [...]
+                               i64(1),
+                               poptry(3),
+                             ], [
+                               # block 3 (inner try-finally) [value ...]
+                               uninitialized(),
+                               label(-1),
+                               branch(5),
+                             ], [
+                               # block 4 (inner throw-finally) [exception ...]
+                               i64(0),
+                               swap(),
+                               label(-1),
+                               branch(5),
+                             ], [
+                               # block 5 (inner finally) [continuation exception value ...]
+                               dropi(3),
+                               i64(2),
+                               poptry(6),
+                             ], [
+                               # block 6 (outer try-return-finally) [return ...]
+                               i64(0),
+                               swap(),
+                               uninitialized(),
+                               swap(),
+                               label(10),
+                               branch(8),
+                             ], [
+                               # block 7 (outer throw-finally) [exception ...]
+                               i64(0),
+                               swap(),
+                               i64(0),
+                               label(9),
+                               branch(8),
+                             ], [
+                               # block 8 (outer finally)
+                               # [continuation return exception value ...]
+                               i64(3),
+                               drop(),
+                               branchl(),
+                             ], [
+                               # block 9 (outer finally-rethrow) [return exception value ...]
+                               drop(),
+                               throw(),
+                             ], [
+                               # block 10 (outer finally-return) [return exception value ...]
+                               ret(),
+                             ]]))
+
+    def testReturnFromNestedTryDifferentTypes(self):
+        source = "def f =\n" + \
+                 "  try\n" + \
+                 "    if (true)\n" + \
+                 "      let x = try\n" + \
+                 "        if (true) return true else 2\n" + \
+                 "      finally\n" + \
+                 "        3\n" + \
+                 "      true\n" + \
+                 "    else\n" + \
+                 "      false\n" + \
+                 "  finally\n" + \
+                 "    4"
+        self.checkFunction(source,
+                           self.makeSimpleFunction("f", BooleanType, [[
+                               # block 0 [...]
+                               pushtry(1, 17),
+                             ], [
+                               # block 1 (outer try) [...]
+                               true(),
+                               branchif(2, 14),
+                             ], [
+                               # block 2 [...]
+                               pushtry(3, 9),
+                             ], [
+                               # block 3 (inner try) [...]
+                               true(),
+                               branchif(4, 6),
+                             ], [
+                               # block 4 [...]
+                               true(),
+                               poptry(5),
+                             ], [
+                               # block 5 (inner try-return-finally) [return ...]
+                               i64(0),
+                               swap(),
+                               uninitialized(),
+                               swap(),
+                               label(13),
+                               branch(10),
+                             ], [
+                               # block 6 [...]
+                               i64(2),
+                               branch(7),
+                             ], [
+                               # block 7 [value ...]
+                               poptry(8),
+                             ], [
+                               # block 8 (inner try-finally) [value ...]
+                               uninitialized(),
+                               false(),
+                               label(12),
+                               branch(10),
+                             ], [
+                               # block 9 (inner throw-finally) [exception ...]
+                               i64(0),
+                               swap(),
+                               false(),
+                               label(11),
+                               branch(10),
+                             ], [
+                               # block 10 (inner finally)
+                               # [continuation return exception value ...]
+                               i64(3),
+                               drop(),
+                               branchl(),
+                             ], [
+                               # block 11 (inner finally-rethrow) [return exception value ...]
+                               drop(),
+                               throw(),
+                             ], [
+                               # block 12 (inner done) [return exception value ...]
+                               dropi(2),
+                               stlocal(-1),
+                               true(),
+                               branch(15),
+                             ], [
+                               # block 13 (inner finally-return) [return exception value ...]
+                               swap2(),
+                               drop(),
+                               false(),
+                               swap2(),
+                               label(21),
+                               branch(18),
+                             ], [
+                               # block 14 [...]
+                               false(),
+                               branch(15),
+                             ], [
+                               # block 15 [value ...]
+                               poptry(16),
+                             ], [
+                               # block 16 (outer try-finally) [value ...]
+                               uninitialized(),
+                               false(),
+                               label(20),
+                               branch(18),
+                             ], [
+                               # block 17 (outer throw-finally) [exception ...]
+                               false(),
+                               swap(),
+                               false(),
+                               label(19),
+                               branch(18),
+                             ], [
+                               # block 18 (outer finally)
+                               # [continuation return exception value ...]
+                               i64(4),
+                               drop(),
+                               branchl(),
+                             ], [
+                               # block 19 (outer finally-rethrow) [return exception value ...]
+                               drop(),
+                               throw(),
+                             ], [
+                               # block 20 (outer done) [return exception value ...]
+                               dropi(2),
+                               ret(),
+                             ], [
+                               # block 21 (outer finally-return) [return exception value ...]
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.x", type=I64Type,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
 
     def testReturn(self):
         self.checkFunction("def f = return 12",

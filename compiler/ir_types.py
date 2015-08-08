@@ -229,6 +229,9 @@ class Type(data.Data):
     def isNullable(self):
         return NULLABLE_TYPE_FLAG in self.flags
 
+    def uninitializedType(self):
+        raise NotImplementedError
+
 
 class SimpleType(Type):
     propertyNames = Type.propertyNames + ("name", "width")
@@ -267,6 +270,9 @@ class SimpleType(Type):
     def isNullable(self):
         assert NULLABLE_TYPE_FLAG not in self.flags
         return False
+
+    def uninitializedType(self):
+        return self
 
 
 # NoType is the bottom of the type lattice. No values have this type. Expressions which don't
@@ -308,6 +314,9 @@ class ObjectType(Type):
         call this method on B, we will get A[C]. Note that this goes in the reverse direction
         from `substituteForInheritance`."""
         raise NotImplementedError
+
+    def uninitializedType(self):
+        return getNullType() if self.isNullable() else getNothingClassType()
 
 
 class ClassType(ObjectType):

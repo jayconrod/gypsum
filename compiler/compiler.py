@@ -9,7 +9,7 @@ from functools import partial
 import ast
 from bytecode import W8, W16, W32, W64, BUILTIN_TYPE_CLASS_ID, BUILTIN_TYPE_CTOR_ID, instInfoByCode, BUILTIN_MATCH_EXCEPTION_CLASS_ID, BUILTIN_MATCH_EXCEPTION_CTOR_ID, BUILTIN_STRING_EQ_OP_ID
 from ir import IrTopDefn, Class, Field, Function, Global, LOCAL, Package, PACKAGE_INIT_NAME, RECEIVER_SUFFIX, Variable
-from ir_types import UnitType, BooleanType, I8Type, I16Type, I32Type, I64Type, F32Type, F64Type, ClassType, VariableType, NULLABLE_TYPE_FLAG, getExceptionClassType, getClassFromType, getStringType, getRootClassType
+from ir_types import NoType, UnitType, BooleanType, I8Type, I16Type, I32Type, I64Type, F32Type, F64Type, ClassType, VariableType, NULLABLE_TYPE_FLAG, getExceptionClassType, getClassFromType, getStringType, getRootClassType
 import ir_instructions
 from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PACKAGE_INITIALIZER_HINT, DefnInfo, NORMAL_MODE, STD_MODE, NOSTD_MODE
 from flags import ABSTRACT, STATIC, LET
@@ -42,19 +42,46 @@ class TryState(object):
         self.mode = mode
         self.tryStackHeight = tryStackHeight
         self.finallyBlock = finallyBlock
-        self.returnFinallyBlock = None
+        self.returnFound = False
+        self.isInCatch = False
+        self.tryReturnFinallyBlock = None
+        self.catchReturnFinallyBlock = None
         self.finallyReturnBlock = None
 
-    def setReturnFinallyBlocks(self, returnFinallyBlock, finallyReturnBlock):
-        assert self.returnFinallyBlock is None and self.finallyReturnBlock is None
-        if returnFinallyBlock.id == -1:
-            return
-        assert finallyReturnBlock.id != -1
-        self.returnFinallyBlock = returnFinallyBlock
-        self.finallyReturnBlock = finallyReturnBlock
-
     def hasReturn(self):
-        return self.returnFinallyBlock is not None
+        return self.returnFound
+
+    def hasFinally(self):
+        currentState = self
+        while currentState is not None:
+            if currentState.finallyBlock is not None:
+                return True
+            currentState = currentState.parent
+        return False
+
+    def moveToCatch(self):
+        self.isInCatch = True
+
+    def getReturnStackHeight(self):
+        # Normally when we return, we want to drop the stack to where the try started. If the
+        # return is inside a catch clause where there is also a finally clause, we implicitly
+        # wrap the catch inside an additional try. So the stack height of that implicit try
+        # is where we pop to.
+        exceptionSlot = 1 if self.isInCatch and self.finallyBlock is not None else 0
+        return self.tryStackHeight + exceptionSlot
+
+    def getReturnFinallyBlock(self):
+        return self.catchReturnFinallyBlock if self.isInCatch else self.tryReturnFinallyBlock
+
+    def setReturnFinallyBlock(self, block):
+        if self.isInCatch:
+            self.catchReturnFinallyBlock = block
+        else:
+            self.tryReturnFinallyBlock = block
+        currentState = self
+        while currentState is not None:
+            currentState.returnFound = True
+            currentState = currentState.parent
 
 
 class CompileVisitor(ast.AstNodeVisitor):
@@ -768,6 +795,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         # If we have a catch handler, we compile it like a normal pattern match.
         # Stack at this point: [| exception ...]
         if catchBlock is not None:
+            tryState.moveToCatch()
             self.setCurrentBlock(catchBlock)
             if haveFinally:
                 # We're inside another try, so we can't consume the exception.
@@ -783,14 +811,14 @@ class CompileVisitor(ast.AstNodeVisitor):
         # If we have both catch and finally, once we handle an exception, we need to break out
         # of the try wrapped around the catch handler.
         # Stack at this point: [result | exception ...]
-        if catchNormalBlock is not None:
+        if catchNormalBlock is not None and not unreachableAfterCatch:
             self.setCurrentBlock(catchNormalBlock)
             self.poptry(catchNormalFinallyBlock.id)
 
         # If we have both catch and finally, if we can't handle an exception, we need to break
         # out of the try wrapped around the catch handler.
         # Stack at this point: [exception | exception ...]
-        if catchMissBlock is not None:
+        if catchMissBlock is not None and not unreachableAfterCatch:
             self.setCurrentBlock(catchMissBlock)
             self.poptry(catchThrowFinallyBlock.id)
 
@@ -823,7 +851,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         # of the try, we need to adjust the stack for the finally and tell it to continue
         # normally once it's done.
         # Stack at this point: [result exception ...]
-        if catchNormalFinallyBlock is not None:
+        if catchNormalFinallyBlock is not None and not unreachableAfterCatch:
             self.setCurrentBlock(catchNormalFinallyBlock)
             if mode is COMPILE_FOR_VALUE:
                 self.swap()
@@ -862,13 +890,11 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.label(finallyRethrowBlock.id)
             self.branch(finallyBlock.id)
 
-        # If there was a return expression in the try clause or the catch clause, we must ensure
-        # the finally clause and all the finally clauses above it are executed. The return
-        # expression branched into tryState.returnFinallyBlock, but we need to fill that in.
-        # Stack at this point: [return ...]
-        if tryState.hasReturn():
-            assert haveFinally
-
+        # If there was a return expression in the try clause or the catch clause and there is
+        # a finally clause in this expression or any above it, we must ensure the finally
+        # clauses are executed. The return expressions branch into
+        # tryState.{try,catch}ReturnFinallyBlock. We need to generate those and chain them.
+        if tryState.hasReturn() and tryState.hasFinally():
             # Generate blocks to chain finally clauses together, if needed. This might have
             # been partially done already. We work from the top down.
             previousTryState = None
@@ -894,20 +920,53 @@ class CompileVisitor(ast.AstNodeVisitor):
                         self.buildUninitialized(self.info.getType(previousTryState.ast)) # value
                         self.swap2()  # swap value and exception
                         self.swap()   # swap exception and return
+                    elif mode is COMPILE_FOR_VALUE and \
+                         previousTryState.mode is COMPILE_FOR_VALUE:
+                        exprType = self.info.getType(expr)
+                        previousType = self.info.getType(previousTryState.ast)
+                        if exprType.uninitializedType() != previousType.uninitializedType():
+                            self.swap2()  # swap return and value
+                            self.drop()   # drop value
+                            self.buildUninitialized(previousType)
+                            self.swap2()  # swap value and return
                     else:
                         assert mode is previousTryState.mode
-                    self.label(previousTryState.finallyReturnBlock)
-                    self.branch(previousTryState.finallyBlock)
+                    self.label(previousTryState.finallyReturnBlock.id)
+                    self.branch(previousTryState.finallyBlock.id)
+                previousTryState = currentTryState
 
-            # Generate code to get from a return to the finally.
-            self.setCurrentBlock(tryState.returnFinallyBlock)
-            if mode is COMPILE_FOR_VALUE:
-                self.buildUninitialized(self.info.getType(expr))
+            # Generate code to get from return to a finally. We need different code for returns
+            # inside try and catch expressions, since the catch has an exception on stack which
+            # isn't there with try. We assume that the return branches to these blocks with
+            # a poptry instruction.
+            lastTryStateWithFinally = next(tryState
+                                           for tryState in reversed(self.tryStateStack)
+                                           if tryState.finallyBlock is not None)
+            if tryState.tryReturnFinallyBlock is not None:
+                # Stack at this point: [return ...]
+                self.setCurrentBlock(tryState.tryReturnFinallyBlock)
+                if mode is COMPILE_FOR_VALUE:
+                    self.buildUninitialized(self.info.getType(lastTryStateWithFinally.ast))
+                    self.swap()
+                self.buildUninitialized(getExceptionClassType())
                 self.swap()
-            self.buildUninitialized(getExceptionClassType())
-            self.swap()
-            self.label(tryState.finallyReturnBlock.id)
-            self.branch(finallyBlock.id)
+                self.label(lastTryStateWithFinally.finallyReturnBlock.id)
+                self.branch(lastTryStateWithFinally.finallyBlock.id)
+
+            if tryState.catchReturnFinallyBlock is not None:
+                # Stack at this point: [return exception ...]
+                self.setCurrentBlock(tryState.catchReturnFinallyBlock)
+                if finallyBlock is not None:
+                    # Drop the exception if it wasn't consumed.
+                    self.swap()
+                    self.drop()
+                if mode is COMPILE_FOR_VALUE:
+                    self.buildUninitialized(self.info.getType(lastTryStateWithFinally.ast))
+                    self.swap()
+                self.buildUninitialized(getExceptionClassType())
+                self.swap()
+                self.label(lastTryStateWithFinally.finallyReturnBlock.id)
+                self.branch(lastTryStateWithFinally.finallyBlock.id)
 
         # Pop tryStateStack. This prevents return expressions inside the finally clause from
         # branching to the top of the finally clause, causing infinite loops.
@@ -999,16 +1058,16 @@ class CompileVisitor(ast.AstNodeVisitor):
 
     def visitAstReturnExpression(self, expr, mode):
         tryState = self.tryStateStack[-1] if len(self.tryStateStack) > 0 else None
-        hasFinally = tryState is not None and tryState.finallyBlock is not None
+        hasFinally = tryState is not None and tryState.hasFinally()
         if hasFinally:
             # We need to execute the finally expression before returning. Before evaluating
             # the return expression, we drop values on the stack to match the height of the
             # finally expression.
-            stackDelta = self.currentStackHeight - tryState.tryStackHeight
+            stackDelta = self.currentStackHeight - tryState.getReturnStackHeight()
             assert stackDelta >= 0
             if stackDelta == 1:
                 self.drop()
-            else:
+            elif stackDelta > 1:
                 self.dropi(stackDelta)
 
         # Evaluate the expression being returned.
@@ -1018,10 +1077,12 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.visit(expr.expression, COMPILE_FOR_VALUE)
 
         if hasFinally:
-            if tryState.returnFinallyBlock is None and not self.unreachable:
+            returnFinallyBlock = tryState.getReturnFinallyBlock()
+            if returnFinallyBlock is None and not self.unreachable:
                 # This block will be filled in when the finally clause is compiled.
-                tryState.returnFinallyBlock = self.newBlock()
-            self.branch(tryState.returnFinallyBlock.id)
+                returnFinallyBlock = self.newBlock()
+                tryState.setReturnFinallyBlock(returnFinallyBlock)
+            self.poptry(returnFinallyBlock.id)
         else:
             self.ret()
         self.setUnreachable()
@@ -1405,7 +1466,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             raise NotImplementedError
 
     def buildUninitialized(self, ty):
-        if ty is UnitType:
+        if ty is UnitType or ty is NoType:
             self.unit()
         elif ty is BooleanType:
             self.false()
