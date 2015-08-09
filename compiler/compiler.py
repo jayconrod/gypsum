@@ -818,7 +818,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         # If we have both catch and finally, if we can't handle an exception, we need to break
         # out of the try wrapped around the catch handler.
         # Stack at this point: [exception | exception ...]
-        if catchMissBlock is not None and not unreachableAfterCatch:
+        if catchMissBlock is not None:
             self.setCurrentBlock(catchMissBlock)
             self.poptry(catchThrowFinallyBlock.id)
 

@@ -146,7 +146,11 @@ class Serializer(object):
             blockOffsetTable.append(len(buf))
             for inst in block.instructions:
                 buf.append(inst.opcode())
-                if isinstance(inst, ir_instructions.f32):
+                if isinstance(inst, ir_instructions.branchl):
+                    self.encodeVbn(inst.operandCount(), buf)
+                    for i in xrange(inst.operandCount()):
+                        self.encodeVbn(inst.op(i), buf)
+                elif isinstance(inst, ir_instructions.f32):
                     self.encodeFloat(32, inst.op(0), buf)
                 elif isinstance(inst, ir_instructions.f64):
                     self.encodeFloat(64, inst.op(0), buf)

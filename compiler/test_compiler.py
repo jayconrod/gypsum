@@ -1630,7 +1630,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # block 4 (finally) [continuation exception value ...]
                                i64(34),
                                drop(),
-                               branchl(),
+                               branchl(5, 6),
                              ], [
                                # block 5 (finally-rethrow) [exception value ...]
                                throw(),
@@ -1665,7 +1665,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # block 4 (finally)
                                i64(34),
                                drop(),
-                               branchl(),
+                               branchl(5, 6),
                              ], [
                                # block 5 (finally-rethrow)
                                throw(),
@@ -1725,7 +1725,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # block 8 (finally) [continuation exception value ...]
                                i64(56),
                                drop(),
-                               branchl(),
+                               branchl(9, 10),
                              ], [
                                # block 9 (finally-rethrow) [exception value ...]
                                throw(),
@@ -1793,7 +1793,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # block 10 (finally) [continuation exception value ...]
                                i64(56),
                                drop(),
-                               branchl(),
+                               branchl(11, 12),
                              ], [
                                # block 11 (finally-rethrow) [exception value ...]
                                throw(),
@@ -1851,7 +1851,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # block 8 (finally) [continuation exception ...]
                                i64(56),
                                drop(),
-                               branchl(),
+                               branchl(9, 10),
                              ], [
                                # block 9 (finally-rethrow) [exception ...]
                                throw(),
@@ -1919,7 +1919,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # block 10 (finally)
                                i64(56),
                                drop(),
-                               branchl(),
+                               branchl(11, 12),
                              ], [
                                # block 11 (finally-rethrow)
                                throw(),
@@ -2045,7 +2045,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # block 4 (finally) [continuation exception value ...]
                                i64(34),
                                drop(),
-                               branchl(),
+                               branchl(5, 6),
                              ], [
                                # block 5 (finally-rethrow) [exception value ...]
                                throw(),
@@ -2094,7 +2094,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # block 4 (finally)
                                i64(34),
                                stg(g),
-                               branchl(),  # 5 or 6
+                               branchl(5, 6),
                              ], [
                                # block 5 (finally rethrow)
                                drop(),
@@ -2162,7 +2162,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # block 6 (finally) [continuation return exception value ...]
                                i64(3),
                                drop(),
-                               branchl(),
+                               branchl(7, 8),
                              ], [
                                # block 7 (finally-rethrow) [return exception value ...]
                                drop(),
@@ -2221,7 +2221,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # block 7 (finally) [continuation return exception value ...]
                                i64(3),
                                drop(),
-                               branchl(),
+                               branchl(8, 9),
                              ], [
                                # block 8 (finally-rethrow) [return exception value ...]
                                drop(),
@@ -2293,7 +2293,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # block 5 (inner finally) [continuation return exception ...]
                                i64(34),
                                drop(),
-                               branchl(),
+                               branchl(6, 7),
                              ], [
                                # block 6 (inner finally-rethrow) [return exception ...]
                                drop(),
@@ -2365,7 +2365,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # [continuation return exception value ...]
                                i64(3),
                                drop(),
-                               branchl(),
+                               branchl(9, 10, 11),
                              ], [
                                # block 9 (outer finally-rethrow)
                                drop(),
@@ -2425,7 +2425,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # [continuation return exception value ...]
                                i64(3),
                                drop(),
-                               branchl(),
+                               branchl(7, 8),
                              ], [
                                # block 7 (inner finally-rethrow) [return exception value ...]
                                drop(),
@@ -2459,7 +2459,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # [continuation return exception value ...]
                                i64(5),
                                drop(),
-                               branchl(),
+                               branchl(13, 14),
                              ], [
                                # block 13 (outer finally-rethrow) [return exception value ...]
                                drop(),
@@ -2525,7 +2525,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # [continuation return exception value ...]
                                i64(3),
                                drop(),
-                               branchl(),
+                               branchl(9, 10),
                              ], [
                                # block 9 (outer finally-rethrow) [return exception value ...]
                                drop(),
@@ -2600,7 +2600,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # [continuation return exception value ...]
                                i64(3),
                                drop(),
-                               branchl(),
+                               branchl(11, 12, 13),
                              ], [
                                # block 11 (inner finally-rethrow) [return exception value ...]
                                drop(),
@@ -2644,7 +2644,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # [continuation return exception value ...]
                                i64(4),
                                drop(),
-                               branchl(),
+                               branchl(19, 20, 21),
                              ], [
                                # block 19 (outer finally-rethrow) [return exception value ...]
                                drop(),

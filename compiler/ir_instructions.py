@@ -37,7 +37,7 @@ class Instruction(object):
         return self.info.opcode
 
     def operandCount(self):
-        return self.info.operandCount
+        return len(self.operands)
 
     def isTerminator(self):
         return self.info.isTerminator
@@ -89,19 +89,11 @@ class label(Instruction):
 
 
 class branchl(Instruction):
-    def __init__(self, *blockIds):
-        super(branchl, self).__init__()
-        assert all(type(id) is int for id in blockIds)
-        self.blockIds = blockIds
-
-    def successorIds(self):
-        return self.blockIds
-
-    def setSuccessorIds(self, newSuccessorIds):
-        self.blockIds = newSuccessorIds
-
-    def __str__(self):
-        return super(branchl, self).__str__() + " # " + ", ".join(map(str, self.blockIds))
+    def __init__(self, *operands):
+        # Do not call super __init__, since it checks for a specific number of operands,
+        # and that's not defined for this instruction.
+        assert all(type(op) is int for op in operands)
+        self.operands = tuple(operands)
 
 
 class dropi(Instruction):
