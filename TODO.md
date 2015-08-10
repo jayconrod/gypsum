@@ -70,8 +70,6 @@
 # Bugs
 
 ## Compiler
-- return from try/catch with finally does not execute finally
-- return from finally should be an error
 - scope bindings should be flagged, depending on whether they can be looked up from other
   scopes. Right now, we can look up local variables from function scopes with prefixes.
 - the pattern '_: type' matches anything without type checking
