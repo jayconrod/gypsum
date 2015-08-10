@@ -109,7 +109,7 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(package,
                            self.makeSimpleFunction(PACKAGE_INIT_NAME, UnitType, [[
                                i64(42),
-                               stg(x.id.index),
+                               stg(x),
                                unit(),
                                ret()]]))
 
@@ -175,7 +175,7 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(package,
                            self.makeSimpleFunction("f", getRootClassType(), [[
                                string(fooIndex),
-                               tycs(BUILTIN_ROOT_CLASS_ID.index),
+                               tycs(getRootClass()),
                                cast(),
                                stlocal(-1),
                                ldlocal(-1),
@@ -191,8 +191,8 @@ class TestCompiler(TestCaseWithDefinitions):
         yType = ClassType(Foo, (getRootClassType(),))
         expected = self.makeSimpleFunction("f", yType, [[
             ldlocal(0),
-            tycs(BUILTIN_ROOT_CLASS_ID.index),
-            tycs(Foo.id.index),
+            tycs(getRootClass()),
+            tycs(Foo),
             cast(),
             stlocal(-1),
             ldlocal(-1),
@@ -213,22 +213,22 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testLoadVariablePackage(self):
         source = "def f = foo"
-        package = self.compileFromSource(source, packageNames=["foo"])
-        fooId = package.findDependency(pred=lambda dep: str(dep.name) == "foo").package.id
+        foo = Package(name=Name(["foo"]))
+        package = self.compileFromSource(source, packageLoader=FakePackageLoader([foo]))
         packageType = getPackageType()
         self.checkFunction(package,
                            self.makeSimpleFunction("f", packageType, [[
-                               pkg(fooId.index),
+                               pkg(foo),
                                ret()]]))
 
     def testLoadPropertyPackage(self):
         source = "def f = foo.bar"
-        package = self.compileFromSource(source, packageNames=["foo.bar"])
-        barId = package.findDependency(pred=lambda dep: str(dep.name) == "foo.bar").package.id
+        fooBar = Package(name=Name(["foo", "bar"]))
+        package = self.compileFromSource(source, packageLoader=FakePackageLoader([fooBar]))
         packageType = getPackageType()
         self.checkFunction(package,
                            self.makeSimpleFunction("f", packageType, [[
-                               pkg(barId.index),
+                               pkg(fooBar),
                                ret()]]))
 
     def testLoadGlobal(self):
@@ -238,7 +238,7 @@ class TestCompiler(TestCaseWithDefinitions):
         x = package.findGlobal(name="x")
         self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
-                               ldg(x.id.index),
+                               ldg(x),
                                ret()]]))
 
     def testStoreGlobal(self):
@@ -250,7 +250,7 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(package,
                            self.makeSimpleFunction("f", UnitType, [[
                                i64(12),
-                               stg(x.id.index),
+                               stg(x),
                                unit(),
                                ret()]]))
 
@@ -274,7 +274,7 @@ class TestCompiler(TestCaseWithDefinitions):
         self.assertIn(EXTERN, externY.flags)
         self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
-                               ldgf(depIndex, y.id.externIndex),
+                               ldgf(y),
                                ret()]]))
 
     def testStoreForeignGlobal(self):
@@ -288,7 +288,7 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(package,
                            self.makeSimpleFunction("f", UnitType, [[
                                i64(12),
-                               stgf(foo.id.index, x.id.index),
+                               stgf(x),
                                unit(),
                                ret()]]))
 
@@ -395,7 +395,7 @@ class TestCompiler(TestCaseWithDefinitions):
         package = self.compileFromSource("def f(s: String, var o: Object) = { o = s; {}; }")
         expected = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
-            tycs(BUILTIN_ROOT_CLASS_ID.index),
+            tycs(getRootClass()),
             cast(),
             stlocal(1),
             unit(),
@@ -415,8 +415,8 @@ class TestCompiler(TestCaseWithDefinitions):
         yType = ClassType(Foo, (getRootClassType(),))
         expected = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
-            tycs(BUILTIN_ROOT_CLASS_ID.index),
-            tycs(Foo.id.index),
+            tycs(getRootClass()),
+            tycs(Foo),
             cast(),
             stlocal(1),
             unit(),
@@ -461,10 +461,10 @@ class TestCompiler(TestCaseWithDefinitions):
         init = package.findFunction(name=Name(["Foo", CLASS_INIT_SUFFIX]))
         expected = self.makeSimpleFunction(Name(["Foo", CONSTRUCTOR_SUFFIX]), UnitType, [[
                        ldlocal(0),
-                       callg(getRootClass().constructors[0].id.index),
+                       callg(getRootClass().constructors[0]),
                        drop(),
                        ldlocal(0),
-                       callg(init.id.index),
+                       callg(init),
                        drop(),
                        ldlocal(0),
                        ldlocal(0),
@@ -586,9 +586,9 @@ class TestCompiler(TestCaseWithDefinitions):
         ty = getRootClassType()
         self.checkFunction(package,
                            self.makeSimpleFunction("f", ty, [[
-                               allocobj(Foo.id.index),
+                               allocobj(Foo),
                                dup(),
-                               callg(Foo.constructors[0].id.index),
+                               callg(Foo.constructors[0]),
                                drop(),
                                ldpc(0),
                                ret()]]))
@@ -603,9 +603,9 @@ class TestCompiler(TestCaseWithDefinitions):
         ty = ClassType(getRootClass(), (), NULLABLE_TYPE_FLAG)
         self.checkFunction(package,
                            self.makeSimpleFunction("f", ty, [[
-                               allocobj(Foo.id.index),
+                               allocobj(Foo),
                                dup(),
-                               callg(Foo.constructors[0].id.index),
+                               callg(Foo.constructors[0]),
                                drop(),
                                ldp(0),
                                ret()]]))
@@ -778,13 +778,13 @@ class TestCompiler(TestCaseWithDefinitions):
         fooIndex = package.findString("foo")
         barIndex = package.findString("bar")
         expected = self.makeSimpleFunction("f", getStringType(), [[
-                       allocobj(tupleClass.id.index),
+                       allocobj(tupleClass),
                        dup(),
                        string(fooIndex),
                        string(barIndex),
-                       tycs(BUILTIN_STRING_CLASS_ID.index),
-                       tycs(BUILTIN_STRING_CLASS_ID.index),
-                       callg(tupleClass.constructors[0].id.index),
+                       tycs(getStringClass()),
+                       tycs(getStringClass()),
+                       callg(tupleClass.constructors[0]),
                        drop(),
                        ldpc(0),
                        ret()]])
@@ -909,8 +909,8 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
                                ldlocal(0),
-                               tyvd(T.id.index),
-                               tycd(Foo.id.index),
+                               tyvd(T),
+                               tycd(Foo),
                                castcbr(1, 2),
                              ], [
                                stlocal(-1),
@@ -945,8 +945,8 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
                                ldlocal(0),
-                               tyvdf(foo.id.index, T.id.externIndex),
-                               tycdf(foo.id.index, Foo.id.externIndex),
+                               tyvdf(T),
+                               tycdf(Foo),
                                castcbr(1, 2),
                              ], [
                                stlocal(-1),
@@ -1091,7 +1091,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                string(fooIndex),
                                string(barIndex),
                                dupi(1),
-                               callg(BUILTIN_STRING_EQ_OP_ID.index),
+                               callg(getBuiltinFunctionById(BUILTIN_STRING_EQ_OP_ID)),
                                branchif(1, 2),
                              ], [
                                drop(),
@@ -1142,9 +1142,9 @@ class TestCompiler(TestCaseWithDefinitions):
         # self.checkFunction(package,
         #                    self.makeSimpleFunction("f", I64Type, [[
         #                        ldlocal(0),
-        #                        tyvd(T1.id.index),
-        #                        tyvd(T2.id.index),
-        #                        tycd(tupleClass.id.index),
+        #                        tyvd(T1),
+        #                        tyvd(T2),
+        #                        tycd(tupleClass),
         #                        castcbr(1, 2),
         #                      ], [
         #                        ldp(0),
@@ -1165,7 +1165,7 @@ class TestCompiler(TestCaseWithDefinitions):
                            self.makeSimpleFunction("f", I64Type, [[
                                ldlocal(0),
                                dup(),
-                               ldgf(bar.id.packageId.index, bar.id.externIndex),
+                               ldgf(bar),
                                eqi64(),
                                branchif(1, 2),
                              ], [
@@ -1199,7 +1199,7 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
                                ldlocal(0),
-                               ldgf(bar.id.packageId.index, bar.id.externIndex),
+                               ldgf(bar),
                                dupi(1),
                                callv(2, eqMethodIndex),
                                branchif(1, 2),
@@ -1237,16 +1237,16 @@ class TestCompiler(TestCaseWithDefinitions):
                                # block 0
                                ldlocal(0),
                                dup(),
-                               tycs(BUILTIN_ROOT_CLASS_ID.index),
-                               callg(tryMatch.id.index),
-                               tyvd(T.id.index),
-                               tycd(some.id.index),
+                               tycs(getRootClass()),
+                               callg(tryMatch),
+                               tyvd(T),
+                               tycd(some),
                                castcbr(1, 3),
                              ], [
                                # block 1
-                               tycs(BUILTIN_ROOT_CLASS_ID.index),
+                               tycs(getRootClass()),
                                callv(1, getIndex),
-                               tycd(BUILTIN_STRING_CLASS_ID.index),
+                               tycd(getStringClass()),
                                castcbr(2, 3),
                              ], [
                                # block 2
@@ -1292,27 +1292,27 @@ class TestCompiler(TestCaseWithDefinitions):
                                # block 0
                                ldlocal(0),
                                dup(),
-                               callg(Matcher.id.index),
-                               tyvd(T.id.index),
-                               tycd(Some.id.index),
+                               callg(Matcher),
+                               tyvd(T),
+                               tycd(Some),
                                castcbr(1, 5),
                              ], [
                                # block 1
-                               tycs(BUILTIN_ROOT_CLASS_ID.index),
+                               tycs(getRootClass()),
                                callv(1, getIndex),
-                               tyvd(Tuple2.typeParameters[0].id.index),
-                               tyvd(Tuple2.typeParameters[1].id.index),
-                               tycd(Tuple2.id.index),
+                               tyvd(Tuple2.typeParameters[0]),
+                               tyvd(Tuple2.typeParameters[1]),
+                               tycd(Tuple2),
                                castc(),
                                dup(),
                                ldpc(0),
-                               tycd(BUILTIN_STRING_CLASS_ID.index),
+                               tycd(getStringClass()),
                                castcbr(2, 4),
                              ], [
                                # block 2
                                stlocal(-1),
                                ldpc(1),
-                               tycd(BUILTIN_STRING_CLASS_ID.index),
+                               tycd(getStringClass()),
                                castcbr(3, 5),
                              ], [
                                # block 3
@@ -1366,14 +1366,14 @@ class TestCompiler(TestCaseWithDefinitions):
                                ldlocal(0),
                                dupi(1),
                                callv(2, MatcherIndex),
-                               tyvd(Some.typeParameters[0].id.index),
-                               tycd(Some.id.index),
+                               tyvd(Some.typeParameters[0]),
+                               tycd(Some),
                                castcbr(1, 3),
                              ], [
                                # block 1
-                               tycs(BUILTIN_ROOT_CLASS_ID.index),
+                               tycs(getRootClass()),
                                callv(1, getIndex),
-                               tycd(BUILTIN_STRING_CLASS_ID.index),
+                               tycd(getStringClass()),
                                castcbr(2, 3),
                              ], [
                                # block 2
@@ -1431,9 +1431,9 @@ class TestCompiler(TestCaseWithDefinitions):
                                i64(2),
                                ret(),
                              ], [
-                               allocobj(BUILTIN_MATCH_EXCEPTION_CLASS_ID.index),
+                               allocobj(getBuiltinClassById(BUILTIN_MATCH_EXCEPTION_CLASS_ID)),
                                dup(),
-                               callg(BUILTIN_MATCH_EXCEPTION_CTOR_ID.index),
+                               callg(getBuiltinFunctionById(BUILTIN_MATCH_EXCEPTION_CTOR_ID)),
                                drop(),
                                throw(),
                              ]],
@@ -1609,36 +1609,35 @@ class TestCompiler(TestCaseWithDefinitions):
         exnTy = ClassType(exnClass)
         self.checkFunction("def f = try 12 finally 34",
                            self.makeSimpleFunction("f", I64Type, [[
-                               # block 0
+                               # block 0 [...]
                                pushtry(1, 3),
                              ], [
-                               # block 1 (try)
+                               # block 1 (try) [...]
                                i64(12),
                                poptry(2),
                              ], [
-                               # block 2 (try-finally)
-                               null(),
-                               branch(4),
-                             ], [
-                               # block 3 (throw-finally)
+                               # block 2 (try-finally) [value ...]
                                uninitialized(),
-                               swap(),
+                               label(6),
                                branch(4),
                              ], [
-                               # block 4 (finally)
+                               # block 3 (throw-finally) [exception ...]
+                               i64(0),
+                               swap(),
+                               label(5),
+                               branch(4),
+                             ], [
+                               # block 4 (finally) [continuation exception value ...]
                                i64(34),
                                drop(),
-                               dup(),
-                               null(),
-                               eqp(),
-                               branchif(5, 6),
+                               branchl(5, 6),
                              ], [
-                               # block 5 (done)
+                               # block 5 (finally-rethrow) [exception value ...]
+                               throw(),
+                             ], [
+                               # block 6 (done) [exception value ...]
                                drop(),
                                ret(),
-                             ], [
-                               # block 6 (rethrow)
-                               throw(),
                              ]]))
 
     def testTryEffectFinally(self):
@@ -1655,24 +1654,26 @@ class TestCompiler(TestCaseWithDefinitions):
                                poptry(2),
                              ], [
                                # block 2 (try-finally)
-                               null(),
-                               branch(3),
+                               uninitialized(),
+                               label(6),
+                               branch(4),
                              ], [
-                               # block 3 (finally)
+                               # block 3 (throw-finally)
+                               label(5),
+                               branch(4),
+                             ], [
+                               # block 4 (finally)
                                i64(34),
                                drop(),
-                               dup(),
-                               null(),
-                               eqp(),
-                               branchif(4, 5),
+                               branchl(5, 6),
                              ], [
-                               # block 4 (done)
+                               # block 5 (finally-rethrow)
+                               throw(),
+                             ], [
+                               # block 6 (done)
                                drop(),
                                unit(),
                                ret(),
-                             ], [
-                               # block 5 (rethrow)
-                               throw(),
                              ]]))
 
     def testTryValueMustMatchFinally(self):
@@ -1682,56 +1683,56 @@ class TestCompiler(TestCaseWithDefinitions):
                            "    case exn => 34\n" +
                            "  finally 56",
                            self.makeSimpleFunction("f", I64Type, [[
-                               # block 0
+                               # block 0 [...]
                                pushtry(1, 3),
                              ], [
-                               # block 1 (try)
+                               # block 1 (try) [...]
                                i64(12),
                                poptry(2),
                              ], [
-                               # block 2 (try-finally)
-                               null(),
+                               # block 2 (try-finally) [value ...]
+                               uninitialized(),
+                               label(10),
                                branch(8),
                              ], [
-                               # block 3 (catch-try)
+                               # block 3 (catch-try) [exception ...]
                                pushtry(4, 7),
                              ], [
-                               # block 4 (catch)
+                               # block 4 (catch) [exception ...]
                                dup(),
                                stlocal(-1),
                                i64(34),
                                branch(5),
                              ], [
-                               # block 5 (catch-normal)
+                               # block 5 (catch-normal) [value exception ...]
                                poptry(6),
                              ], [
-                               # block 6 (catch-normal-finally)
-                               swap(),
-                               drop(),
-                               null(),
-                               branch(8),
-                             ], [
-                               # block 7 (catch-throw-finally)
+                               # block 6 (catch-normal-finally) [value exception ...]
                                swap(),
                                drop(),
                                uninitialized(),
-                               swap(),
+                               label(10),
                                branch(8),
                              ], [
-                               # block 8 (finally)
+                               # block 7 (catch-throw-finally) [exception exception ...]
+                               swap(),
+                               drop(),
+                               i64(0),
+                               swap(),
+                               label(9),
+                               branch(8),
+                             ], [
+                               # block 8 (finally) [continuation exception value ...]
                                i64(56),
                                drop(),
-                               dup(),
-                               null(),
-                               eqp(),
-                               branchif(9, 10),
+                               branchl(9, 10),
                              ], [
-                               # block 9 (finally-continue)
+                               # block 9 (finally-rethrow) [exception value ...]
+                               throw(),
+                             ], [
+                               # block 10 (done) [exception value ...]
                                drop(),
                                ret(),
-                             ], [
-                               # block 10
-                               throw(),
                              ]],
                              variables=[self.makeVariable("f.exn", type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
@@ -1741,65 +1742,65 @@ class TestCompiler(TestCaseWithDefinitions):
         exnTy = ClassType(exnClass)
         self.checkFunction("def f = try 12 catch { case exn if false => 34; } finally 56",
                            self.makeSimpleFunction("f", I64Type, [[
-                               # block 0
+                               # block 0 [...]
                                pushtry(1, 3),
                              ], [
-                               # block 1 (try)
+                               # block 1 (try) [...]
                                i64(12),
                                poptry(2),
                              ], [
-                               # block 2 (try-finally)
-                               null(),
+                               # block 2 (try-finally) [value ...]
+                               uninitialized(),
+                               label(12),
                                branch(10),
                              ], [
-                               # block 3 (catch-try)
+                               # block 3 (catch-try) [exception ...]
                                pushtry(4, 9),
                              ], [
-                               # block 4 (catch)
+                               # block 4 (catch) [exception ...]
                                dup(),
                                dup(),
                                stlocal(-1),
                                false(),
                                branchif(5, 8),
                              ], [
-                               # block 5 (catch case)
+                               # block 5 (catch case) [exception exception ...]
                                drop(),
                                i64(34),
                                branch(6),
                              ], [
-                               # block 6 (catch-normal)
+                               # block 6 (catch-normal) [value exception ...]
                                poptry(7),
                              ], [
-                               # block 7 (catch-normal-finally)
-                               swap(),
-                               drop(),
-                               null(),
-                               branch(10),
-                             ], [
-                               # block 8 (catch-miss)
-                               poptry(9),
-                             ], [
-                               # block 9 (catch-throw-finally)
+                               # block 7 (catch-normal-finally) [value exception ...]
                                swap(),
                                drop(),
                                uninitialized(),
-                               swap(),
+                               label(12),
                                branch(10),
                              ], [
-                               # block 10 (finally)
+                               # block 8 (catch-miss) [exception exception ...]
+                               poptry(9),
+                             ], [
+                               # block 9 (catch-throw-finally) [exception exception ...]
+                               swap(),
+                               drop(),
+                               i64(0),
+                               swap(),
+                               label(11),
+                               branch(10),
+                             ], [
+                               # block 10 (finally) [continuation exception value ...]
                                i64(56),
                                drop(),
-                               dup(),
-                               null(),
-                               eqp(),
-                               branchif(11, 12),
+                               branchl(11, 12),
                              ], [
-                               # block 11 (done)
+                               # block 11 (finally-rethrow) [exception value ...]
+                               throw(),
+                             ], [
+                               # block 12 (done) [exception value ...]
                                drop(),
                                ret(),
-                             ], [
-                               # block 12 (rethrow)
-                               throw(),
                              ]],
                              variables=[self.makeVariable("f.exn", type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
@@ -1809,56 +1810,56 @@ class TestCompiler(TestCaseWithDefinitions):
         exnTy = ClassType(exnClass)
         self.checkFunction("def f = { try 12 catch { case exn => 34; } finally 56; {}; }",
                            self.makeSimpleFunction("f", UnitType, [[
-                               # block 0
+                               # block 0 [...]
                                pushtry(1, 3),
                              ], [
-                               # block 1 (try)
+                               # block 1 (try) [...]
                                i64(12),
                                drop(),
                                poptry(2),
                              ], [
-                               # block 2 (try-finally)
-                               null(),
+                               # block 2 (try-finally) [...]
+                               uninitialized(),
+                               label(10),
                                branch(8),
                              ], [
-                               # block 3 (catch-try)
+                               # block 3 (catch-try) [exception ...]
                                pushtry(4, 7),
                              ], [
-                               # block 4 (catch)
+                               # block 4 (catch) [exception ...]
                                dup(),
                                stlocal(-1),
                                i64(34),
                                drop(),
                                branch(5),
                              ], [
-                               # block 5 (catch-normal)
+                               # block 5 (catch-normal) [exception ...]
                                poptry(6),
                              ], [
-                               # block 6 (catch-normal-finally)
+                               # block 6 (catch-normal-finally) [exception ...]
                                drop(),
-                               null(),
+                               uninitialized(),
+                               label(10),
                                branch(8),
                              ], [
-                               # block 7 (catch-throw-finally)
+                               # block 7 (catch-throw-finally) [exception exception ...]
                                swap(),
                                drop(),
+                               label(9),
                                branch(8),
                              ], [
-                               # block 8 (finally)
+                               # block 8 (finally) [continuation exception ...]
                                i64(56),
                                drop(),
-                               dup(),
-                               null(),
-                               eqp(),
-                               branchif(9, 10),
+                               branchl(9, 10),
                              ], [
-                               # block 9 (done)
+                               # block 9 (finally-rethrow) [exception ...]
+                               throw(),
+                             ], [
+                               # block 10 (done) [exception ...]
                                drop(),
                                unit(),
                                ret(),
-                             ], [
-                               # block 10 (rethrow)
-                               throw(),
                              ]],
                              variables=[self.makeVariable("f.exn", type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
@@ -1868,65 +1869,65 @@ class TestCompiler(TestCaseWithDefinitions):
         exnTy = ClassType(exnClass)
         self.checkFunction("def f = { try 12 catch { case exn if false => 34; } finally 56; {}; }",
                            self.makeSimpleFunction("f", UnitType, [[
-                               # block 0
+                               # block 0 [...]
                                pushtry(1, 3),
                              ], [
-                               # block 1 (try)
+                               # block 1 (try) [...]
                                i64(12),
                                drop(),
                                poptry(2),
                              ], [
-                               # block 2 (try-finally)
-                               null(),
+                               # block 2 (try-finally) [...]
+                               uninitialized(),
+                               label(12),
                                branch(10),
                              ], [
-                               # block 3 (catch-try)
+                               # block 3 (try-catch) [exception ...]
                                pushtry(4, 9),
                              ], [
-                               # block 4 (catch)
+                               # block 4 (catch) [exception ...]
                                dup(),
                                dup(),
                                stlocal(-1),
                                false(),
                                branchif(5, 8),
                              ], [
-                               # block 5 (catch case)
+                               # block 5 [exception exception ...]
                                drop(),
                                i64(34),
                                drop(),
                                branch(6),
                              ], [
-                               # block 6 (catch-normal)
+                               # block 6 (catch-normal) [exception ...]
                                poptry(7),
                              ], [
-                               # block 7 (catch-normal-finally)
+                               # block 7 (catch-normal-finally) [exception ...]
                                drop(),
-                               null(),
+                               uninitialized(),
+                               label(12),
                                branch(10),
                              ], [
-                               # block 8 (catch-miss)
+                               # block 8 (catch-miss) [exception exception ...]
                                poptry(9),
                              ], [
                                # block 9 (catch-throw-finally)
                                swap(),
                                drop(),
+                               label(11),
                                branch(10),
                              ], [
                                # block 10 (finally)
                                i64(56),
                                drop(),
-                               dup(),
-                               null(),
-                               eqp(),
-                               branchif(11, 12),
+                               branchl(11, 12),
                              ], [
-                               # block 11 (done)
+                               # block 11 (finally-rethrow)
+                               throw(),
+                             ], [
+                               # block 12 (done)
                                drop(),
                                unit(),
                                ret(),
-                             ], [
-                               # block 12 (rethrow)
-                               throw(),
                              ]],
                              variables=[self.makeVariable("f.exn", type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
@@ -2005,9 +2006,9 @@ class TestCompiler(TestCaseWithDefinitions):
                            self.makeSimpleFunction("f", I64Type, [[
                                pushtry(1, 2),
                              ], [
-                               allocobj(BUILTIN_EXCEPTION_CLASS_ID.index),
+                               allocobj(getExceptionClass()),
                                dup(),
-                               callg(BUILTIN_EXCEPTION_CTOR_ID.index),
+                               callg(getBuiltinFunctionById(BUILTIN_EXCEPTION_CTOR_ID)),
                                drop(),
                                throw(),
                              ], [
@@ -2023,30 +2024,642 @@ class TestCompiler(TestCaseWithDefinitions):
     def testTryFinallyExpr(self):
         self.checkFunction("def f = try 12 finally 34",
                            self.makeSimpleFunction("f", I64Type, [[
+                               # block 0 [...]
                                pushtry(1, 3),
                              ], [
+                               # block 1 (try) [...]
                                i64(12),
                                poptry(2),
                              ], [
-                               null(),
-                               branch(4),
-                             ], [
+                               # block 2 (try-finally) [value ...]
                                uninitialized(),
-                               swap(),
+                               label(6),
                                branch(4),
                              ], [
+                               # block 3 (throw-finally) [exception ...]
+                               i64(0),
+                               swap(),
+                               label(5),
+                               branch(4),
+                             ], [
+                               # block 4 (finally) [continuation exception value ...]
                                i64(34),
                                drop(),
-                               dup(),
-                               null(),
-                               eqp(),
-                               branchif(5, 6),
+                               branchl(5, 6),
                              ], [
+                               # block 5 (finally-rethrow) [exception value ...]
+                               throw(),
+                             ], [
+                               # block 6 (done) [exception value ...]
                                drop(),
                                ret(),
-                             ], [
-                               throw(),
                              ]]))
+
+    def testTryFinallyReturn(self):
+        source = "var g = 0\n" + \
+                 "def f =\n" + \
+                 "  try\n" + \
+                 "    100 + (200 + return 12)\n" + \
+                 "  finally\n" + \
+                 "    g = 34\n"
+        package = self.compileFromSource(source)
+        g = package.findGlobal(name="g")
+        self.checkFunction(source,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0 (entry)
+                               pushtry(1, 3),
+                             ], [
+                               # block 1 (try)
+                               i64(100),
+                               i64(200),
+                               dropi(2),
+                               i64(12),
+                               poptry(2),
+                             ], [
+                               # block 2 (return finally)
+                               i64(0),  # value
+                               swap(),
+                               uninitialized(),  # exception
+                               swap(),
+                               label(6),
+                               branch(4),
+                             ], [
+                               # block 3 (catch finally)
+                               i64(0),  # value
+                               swap(),
+                               i64(0),  # return
+                               label(5),
+                               branch(4),
+                             ], [
+                               # block 4 (finally)
+                               i64(34),
+                               stg(g),
+                               branchl(5, 6),
+                             ], [
+                               # block 5 (finally rethrow)
+                               drop(),
+                               throw(),
+                             ], [
+                               # block 6 (finally return)
+                               ret(),
+                             ]]))
+
+    def testTryReturn(self):
+        exnTy = ClassType(getExceptionClass())
+        self.checkFunction("def f = try return 12 catch { case exn => 34; }",
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0 [...]
+                               pushtry(1, 2),
+                             ], [
+                               # block 1 (try) [...]
+                               i64(12),
+                               ret(),
+                             ], [
+                               # block 2 (catch) [exception ...]
+                               stlocal(-1),
+                               i64(34),
+                               branch(3),
+                             ], [
+                               # block 3 (done) [value ...]
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.exn", type=exnTy,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testTryFinallyReturnTwice(self):
+        self.checkFunction("def f = try if (true) return 1 else return 2 finally 3",
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0 [...]
+                               pushtry(1, 5),
+                             ], [
+                               # block 1 (try) [...]
+                               true(),
+                               branchif(2, 3),
+                             ], [
+                               # block 2 [...]
+                               i64(1),
+                               poptry(4),
+                             ], [
+                               # block 3 [...]
+                               i64(2),
+                               poptry(4),
+                             ], [
+                               # block 4 [return ...]
+                               unit(),
+                               swap(),
+                               uninitialized(),
+                               swap(),
+                               label(8),
+                               branch(6),
+                             ], [
+                               # block 5 (throw-finally) [exception ...]
+                               unit(),
+                               swap(),
+                               i64(0),
+                               label(7),
+                               branch(6),
+                             ], [
+                               # block 6 (finally) [continuation return exception value ...]
+                               i64(3),
+                               drop(),
+                               branchl(7, 8),
+                             ], [
+                               # block 7 (finally-rethrow) [return exception value ...]
+                               drop(),
+                               throw(),
+                             ], [
+                               # block 8 (return) [return exception value ...]
+                               ret(),
+                             ]]))
+
+    def testTryCatchFinallyReturns(self):
+        self.checkFunction("def f = try return 1 catch { case _ => return 2; } finally 3",
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0 [...]
+                               pushtry(1, 3),
+                             ], [
+                               # block 1 (try) [...]
+                               i64(1),
+                               poptry(2),
+                             ], [
+                               # block 2 (try-return-finally) [return ...]
+                               unit(),
+                               swap(),
+                               uninitialized(),
+                               swap(),
+                               label(9),
+                               branch(7),
+                             ], [
+                               # block 3 (try-catch) [exception ...]
+                               pushtry(4, 6),
+                             ], [
+                               # block 4 (catch) [exception ...]
+                               dup(),
+                               drop(),
+                               i64(2),
+                               poptry(5),
+                             ], [
+                               # block 5 (catch-return-finally) [return exception ...]
+                               swap(),
+                               drop(),
+                               unit(),
+                               swap(),
+                               uninitialized(),
+                               swap(),
+                               label(9),
+                               branch(7),
+                             ], [
+                               # block 6 (catch-throw-finally) [exception exception ...]
+                               swap(),
+                               drop(),
+                               unit(),
+                               swap(),
+                               i64(0),
+                               label(8),
+                               branch(7),
+                             ], [
+                               # block 7 (finally) [continuation return exception value ...]
+                               i64(3),
+                               drop(),
+                               branchl(8, 9),
+                             ], [
+                               # block 8 (finally-rethrow) [return exception value ...]
+                               drop(),
+                               throw(),
+                             ], [
+                               # block 9 (finally-return) [return exception value ...]
+                               ret(),
+                             ]]))
+
+    def testReturnFromFinally(self):
+        self.checkFunction("def f = try 12 finally return 34",
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0 [...]
+                               pushtry(1, 3),
+                             ], [
+                               # block 1 (try) [...]
+                               i64(12),
+                               poptry(2),
+                             ], [
+                               # block 2 (try-finally) [value ...]
+                               uninitialized(),
+                               label(-1),
+                               branch(4),
+                             ], [
+                               # block 3 (throw-finally) [exception ...]
+                               i64(0),
+                               swap(),
+                               label(-1),
+                               branch(4),
+                             ], [
+                               # block 4 (finally) [continuation exception value ...]
+                               i64(34),
+                               ret(),
+                             ]]))
+
+    def testReturnFromNestedTry(self):
+        source = "def f =\n" + \
+                 "  try\n" + \
+                 "    try\n" + \
+                 "      return 12\n" + \
+                 "      {}\n" + \
+                 "    finally 34\n" + \
+                 "    56\n" + \
+                 "  catch\n" + \
+                 "    case _ => 78"
+        self.checkFunction(source,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0 [...]
+                               pushtry(1, 8),
+                             ], [
+                               # block 1 (outer try) [...]
+                               pushtry(2, 4),
+                             ], [
+                               # block 2 (inner try) [...]
+                               i64(12),
+                               poptry(3),
+                             ], [
+                               # block 3 (inner try-return-finally) [return ...]
+                               uninitialized(),
+                               swap(),
+                               label(7),
+                               branch(5),
+                             ], [
+                               # block 4 (inner throw-finally) [exception ...]
+                               i64(0),
+                               label(6),
+                               branch(5),
+                             ], [
+                               # block 5 (inner finally) [continuation return exception ...]
+                               i64(34),
+                               drop(),
+                               branchl(6, 7),
+                             ], [
+                               # block 6 (inner finally-rethrow) [return exception ...]
+                               drop(),
+                               throw(),
+                             ], [
+                               # block 7 (inner finally-return) [return exception ...]
+                               ret(),
+                             ], [
+                               # block 8 (outer catch) [exception ...]
+                               drop(),
+                               i64(78),
+                               branch(9),
+                             ], [
+                               # block 9 (outer done) [value ...]
+                               ret(),
+                             ]]))
+
+    def testReturnFromNestedTry2(self):
+        source = "def f =\n" + \
+                 "  try\n" + \
+                 "    try\n" + \
+                 "      return 1\n" + \
+                 "    catch\n" + \
+                 "      case _ => 2\n" + \
+                 "  finally\n" + \
+                 "    3"
+        self.checkFunction(source,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0 [...]
+                               pushtry(1, 7),
+                             ], [
+                               # block 1 (outer try) [...]
+                               pushtry(2, 4),
+                             ], [
+                               # block 2 (inner try) [...]
+                               i64(1),
+                               poptry(3),
+                             ], [
+                               # block 3 (inner try-return-finally) [return ...]
+                               i64(0),
+                               swap(),
+                               uninitialized(),
+                               swap(),
+                               label(11),
+                               branch(8),
+                             ], [
+                               # block 4 (inner catch) [exception ...]
+                               drop(),
+                               i64(2),
+                               branch(5),
+                             ], [
+                               # block 5 (inner done) [value ...]
+                               poptry(6),
+                             ], [
+                               # block 6 (outer try-finally) [value ...]
+                               uninitialized(),
+                               i64(0),
+                               label(10),
+                               branch(8),
+                             ], [
+                               # block 7 (outer throw-finally) [exception ...]
+                               i64(0),
+                               swap(),
+                               i64(0),
+                               label(9),
+                               branch(8),
+                             ], [
+                               # block 8 (outer finally)
+                               # [continuation return exception value ...]
+                               i64(3),
+                               drop(),
+                               branchl(9, 10, 11),
+                             ], [
+                               # block 9 (outer finally-rethrow)
+                               drop(),
+                               throw(),
+                             ], [
+                               # block 10 (outer done)
+                               dropi(2),
+                               ret(),
+                             ], [
+                               # block 11 (outer finally-return)
+                               ret(),
+                             ]]))
+
+    def testReturnFromTripleNestedTryFinally(self):
+        source = "def f =\n" + \
+                 "  try\n" + \
+                 "    try\n" + \
+                 "      try\n" + \
+                 "        return 1\n" + \
+                 "      finally\n" + \
+                 "        3\n" + \
+                 "    catch\n" + \
+                 "      case _ => return 4\n" + \
+                 "  finally\n" + \
+                 "    5"
+        self.checkFunction(source,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0 [...]
+                               pushtry(1, 11),
+                             ], [
+                               # block 1 (outer try) [...]
+                               pushtry(2, 9),
+                             ], [
+                               # block 2 (middle try) [...]
+                               pushtry(3, 5),
+                             ], [
+                               # block 3 (inner try) [...]
+                               i64(1),
+                               poptry(4),
+                             ], [
+                               # block 4 (inner try-finally-return) [return ...]
+                               unit(),
+                               swap(),
+                               uninitialized(),
+                               swap(),
+                               label(8),
+                               branch(6),
+                             ], [
+                               # block 5 (inner throw-finally) [exception ...]
+                               unit(),
+                               swap(),
+                               i64(0),
+                               label(7),
+                               branch(6),
+                             ], [
+                               # block 6 (inner finally)
+                               # [continuation return exception value ...]
+                               i64(3),
+                               drop(),
+                               branchl(7, 8),
+                             ], [
+                               # block 7 (inner finally-rethrow) [return exception value ...]
+                               drop(),
+                               throw(),
+                             ], [
+                               # block 8 (inner finally-return) [return exception value ...]
+                               label(14),
+                               branch(12),
+                             ], [
+                               # block 9 (middle catch) [exception ...]
+                               drop(),
+                               i64(4),
+                               poptry(10),
+                             ], [
+                               # block 10 (middle catch-return-finally) [return ...]
+                               unit(),
+                               swap(),
+                               uninitialized(),
+                               swap(),
+                               label(14),
+                               branch(12),
+                             ], [
+                               # block 11 (outer throw-finally) [exception ...]
+                               unit(),
+                               swap(),
+                               i64(0),
+                               label(13),
+                               branch(12),
+                             ], [
+                               # block 12 (outer finally)
+                               # [continuation return exception value ...]
+                               i64(5),
+                               drop(),
+                               branchl(13, 14),
+                             ], [
+                               # block 13 (outer finally-rethrow) [return exception value ...]
+                               drop(),
+                               throw(),
+                             ], [
+                               # block 14 (outer finally-return) [return exception value ...]
+                               ret(),
+                             ]]))
+
+    def testReturnFromNestedFinally(self):
+        source = "def f =\n" + \
+                 "  try\n" + \
+                 "    try\n" + \
+                 "      1\n" + \
+                 "    finally\n" + \
+                 "      return 2\n" + \
+                 "  finally\n" + \
+                 "    3"
+        self.checkFunction(source,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0 [...]
+                               pushtry(1, 7),
+                             ], [
+                               # block 1 (outer try) [...]
+                               pushtry(2, 4),
+                             ], [
+                               # block 2 (inner try) [...]
+                               i64(1),
+                               poptry(3),
+                             ], [
+                               # block 3 (inner try-finally) [value ...]
+                               uninitialized(),
+                               label(-1),
+                               branch(5),
+                             ], [
+                               # block 4 (inner throw-finally) [exception ...]
+                               i64(0),
+                               swap(),
+                               label(-1),
+                               branch(5),
+                             ], [
+                               # block 5 (inner finally) [continuation exception value ...]
+                               dropi(3),
+                               i64(2),
+                               poptry(6),
+                             ], [
+                               # block 6 (outer try-return-finally) [return ...]
+                               i64(0),
+                               swap(),
+                               uninitialized(),
+                               swap(),
+                               label(10),
+                               branch(8),
+                             ], [
+                               # block 7 (outer throw-finally) [exception ...]
+                               i64(0),
+                               swap(),
+                               i64(0),
+                               label(9),
+                               branch(8),
+                             ], [
+                               # block 8 (outer finally)
+                               # [continuation return exception value ...]
+                               i64(3),
+                               drop(),
+                               branchl(9, 10),
+                             ], [
+                               # block 9 (outer finally-rethrow) [return exception value ...]
+                               drop(),
+                               throw(),
+                             ], [
+                               # block 10 (outer finally-return) [return exception value ...]
+                               ret(),
+                             ]]))
+
+    def testReturnFromNestedTryDifferentTypes(self):
+        source = "def f =\n" + \
+                 "  try\n" + \
+                 "    if (true)\n" + \
+                 "      let x = try\n" + \
+                 "        if (true) return true else 2\n" + \
+                 "      finally\n" + \
+                 "        3\n" + \
+                 "      true\n" + \
+                 "    else\n" + \
+                 "      false\n" + \
+                 "  finally\n" + \
+                 "    4"
+        self.checkFunction(source,
+                           self.makeSimpleFunction("f", BooleanType, [[
+                               # block 0 [...]
+                               pushtry(1, 17),
+                             ], [
+                               # block 1 (outer try) [...]
+                               true(),
+                               branchif(2, 14),
+                             ], [
+                               # block 2 [...]
+                               pushtry(3, 9),
+                             ], [
+                               # block 3 (inner try) [...]
+                               true(),
+                               branchif(4, 6),
+                             ], [
+                               # block 4 [...]
+                               true(),
+                               poptry(5),
+                             ], [
+                               # block 5 (inner try-return-finally) [return ...]
+                               i64(0),
+                               swap(),
+                               uninitialized(),
+                               swap(),
+                               label(13),
+                               branch(10),
+                             ], [
+                               # block 6 [...]
+                               i64(2),
+                               branch(7),
+                             ], [
+                               # block 7 [value ...]
+                               poptry(8),
+                             ], [
+                               # block 8 (inner try-finally) [value ...]
+                               uninitialized(),
+                               false(),
+                               label(12),
+                               branch(10),
+                             ], [
+                               # block 9 (inner throw-finally) [exception ...]
+                               i64(0),
+                               swap(),
+                               false(),
+                               label(11),
+                               branch(10),
+                             ], [
+                               # block 10 (inner finally)
+                               # [continuation return exception value ...]
+                               i64(3),
+                               drop(),
+                               branchl(11, 12, 13),
+                             ], [
+                               # block 11 (inner finally-rethrow) [return exception value ...]
+                               drop(),
+                               throw(),
+                             ], [
+                               # block 12 (inner done) [return exception value ...]
+                               dropi(2),
+                               stlocal(-1),
+                               true(),
+                               branch(15),
+                             ], [
+                               # block 13 (inner finally-return) [return exception value ...]
+                               swap2(),
+                               drop(),
+                               false(),
+                               swap2(),
+                               label(21),
+                               branch(18),
+                             ], [
+                               # block 14 [...]
+                               false(),
+                               branch(15),
+                             ], [
+                               # block 15 [value ...]
+                               poptry(16),
+                             ], [
+                               # block 16 (outer try-finally) [value ...]
+                               uninitialized(),
+                               false(),
+                               label(20),
+                               branch(18),
+                             ], [
+                               # block 17 (outer throw-finally) [exception ...]
+                               false(),
+                               swap(),
+                               false(),
+                               label(19),
+                               branch(18),
+                             ], [
+                               # block 18 (outer finally)
+                               # [continuation return exception value ...]
+                               i64(4),
+                               drop(),
+                               branchl(19, 20, 21),
+                             ], [
+                               # block 19 (outer finally-rethrow) [return exception value ...]
+                               drop(),
+                               throw(),
+                             ], [
+                               # block 20 (outer done) [return exception value ...]
+                               dropi(2),
+                               ret(),
+                             ], [
+                               # block 21 (outer finally-return) [return exception value ...]
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.x", type=I64Type,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
 
     def testReturn(self):
         self.checkFunction("def f = return 12",
@@ -2159,7 +2772,7 @@ class TestCompiler(TestCaseWithDefinitions):
         g = package.findFunction(name="g")
         self.assertEquals(g,
                           self.makeSimpleFunction("g", I64Type, [[
-                              callg(f.id.index),
+                              callg(f),
                               ret(),
                             ]]))
 
@@ -2173,7 +2786,7 @@ class TestCompiler(TestCaseWithDefinitions):
                           self.makeSimpleFunction("g", I64Type, [[
                               i64(12),
                               i64(34),
-                              callg(f.id.index),
+                              callg(f),
                               ret(),
                             ]]))
 
@@ -2191,7 +2804,7 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
                                i64(12),
-                               callgf(foo.id.index, bar.id.externIndex),
+                               callgf(bar),
                                ret()]]))
 
     def testForeignFunctionCallWithTypeArg(self):
@@ -2208,8 +2821,8 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(package,
                            self.makeSimpleFunction("f", stringTy, [[
                                ldlocal(0),
-                               tycs(BUILTIN_STRING_CLASS_ID.index),
-                               callgf(foo.id.index, bar.id.externIndex),
+                               tycs(getStringClass()),
+                               callgf(bar),
                                ret()]],
                              parameterTypes=[stringTy],
                              variables=[self.makeVariable("f.s", type=stringTy,
@@ -2229,8 +2842,8 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(package,
                            self.makeSimpleFunction("f", barType, [[
                                ldlocal(0),
-                               tycsf(barClass.id.packageId.index, barClass.id.externIndex),
-                               callg(idFunction.id.index),
+                               tycsf(barClass),
+                               callg(idFunction),
                                ret(),
                              ]],
                              parameterTypes=[barType],
@@ -2251,11 +2864,6 @@ class TestCompiler(TestCaseWithDefinitions):
         package = self.compileFromSource(source, packageLoader=loader)
 
         barType = ClassType(clas)
-        typeofMethod = exceptionClass.findMethodByShortName("typeof")
-        typeofMethodIndex = exceptionClass.getMethodIndex(typeofMethod)
-        typeClass = getTypeClass()
-        isSubtypeOfMethod = typeClass.findMethodByShortName("is-subtype-of")
-        isSubtypeOfMethodIndex = typeClass.getMethodIndex(isSubtypeOfMethod)
         self.checkFunction(package,
                            self.makeSimpleFunction("f", UnitType, [[
                                pushtry(1, 2),
@@ -2263,7 +2871,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                unit(),
                                poptry(4),
                              ], [
-                               tycdf(clas.id.packageId.index, clas.id.externIndex),
+                               tycdf(clas),
                                castcbr(3, 5),
                              ], [
                                stlocal(-1),
@@ -2309,10 +2917,10 @@ class TestCompiler(TestCaseWithDefinitions):
         init = package.findFunction(name=Name(["Foo", CLASS_INIT_SUFFIX]))
         self.assertEquals(self.makeSimpleFunction(Name(["Foo", CONSTRUCTOR_SUFFIX]), UnitType, [[
                               ldlocal(0),
-                              callg(getRootClass().constructors[0].id.index),
+                              callg(getRootClass().constructors[0]),
                               drop(),
                               ldlocal(0),
-                              callg(init.id.index),
+                              callg(init),
                               drop(),
                               unit(),
                               ret()]],
@@ -2336,10 +2944,10 @@ class TestCompiler(TestCaseWithDefinitions):
             ldlocal(0),
             st32(0),
             ldlocal(0),
-            callg(getRootClass().constructors[0].id.index),
+            callg(getRootClass().constructors[0]),
             drop(),
             ldlocal(0),
-            callg(init.id.index),
+            callg(init),
             drop(),
             unit(),
             ret()]],
@@ -2365,10 +2973,10 @@ class TestCompiler(TestCaseWithDefinitions):
         init = clas.initializer
         expected = self.makeSimpleFunction(Name(["Foo", CONSTRUCTOR_SUFFIX]), UnitType, [[
             ldlocal(0),
-            callg(getRootClass().constructors[0].id.index),
+            callg(getRootClass().constructors[0]),
             drop(),
             ldlocal(0),
-            callg(init.id.index),
+            callg(init),
             drop(),
             ldlocal(0),
             ldlocal(1),
@@ -2394,9 +3002,9 @@ class TestCompiler(TestCaseWithDefinitions):
         objType = ClassType(clas, ())
         self.checkFunction(package,
                            self.makeSimpleFunction("f", objType, [[
-                               allocobj(clas.id.index),
+                               allocobj(clas),
                                dup(),
-                               callg(clas.constructors[0].id.index),
+                               callg(clas.constructors[0]),
                                drop(),
                                ret(),
                              ]]))
@@ -2412,8 +3020,8 @@ class TestCompiler(TestCaseWithDefinitions):
         objType = ClassType(clas, ())
         self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
-                               allocobj(clas.id.index),
-                               callg(clas.constructors[0].id.index),
+                               allocobj(clas),
+                               callg(clas.constructors[0]),
                                drop(),
                                i64(12),
                                ret()]]))
@@ -2430,10 +3038,10 @@ class TestCompiler(TestCaseWithDefinitions):
                               ldlocal(0),
                               st32(0),
                               ldlocal(0),
-                              callg(getRootClass().constructors[0].id.index),
+                              callg(getRootClass().constructors[0]),
                               drop(),
                               ldlocal(0),
-                              callg(init.id.index),
+                              callg(init),
                               drop(),
                               unit(),
                               ret()]],
@@ -2455,11 +3063,11 @@ class TestCompiler(TestCaseWithDefinitions):
         objType = ClassType(clas, ())
         self.checkFunction(package,
                            self.makeSimpleFunction("f", objType, [[
-                               allocobj(clas.id.index),
+                               allocobj(clas),
                                dup(),
                                i64(1),
                                i64(2),
-                               callg(clas.constructors[0].id.index),
+                               callg(clas.constructors[0]),
                                drop(),
                                ret(),
                              ]]))
@@ -2479,9 +3087,9 @@ class TestCompiler(TestCaseWithDefinitions):
         package = self.compileFromSource(source, packageLoader=loader)
         self.checkFunction(package,
                            self.makeSimpleFunction("f", barTy, [[
-                               allocobjf(barClass.id.packageId.index, barClass.id.externIndex),
+                               allocobjf(barClass),
                                dup(),
-                               callgf(ctor.id.packageId.index, ctor.id.externIndex),
+                               callgf(ctor),
                                drop(),
                                ret()]]))
 
@@ -2536,18 +3144,18 @@ class TestCompiler(TestCaseWithDefinitions):
         closureType = ClassType(closureClass)
         self.checkFunction(package,
                            self.makeSimpleFunction("foo", I64Type, [[
-                               allocobj(contextClass.id.index),
+                               allocobj(contextClass),
                                dup(),
-                               callg(contextClass.constructors[0].id.index),
+                               callg(contextClass.constructors[0]),
                                drop(),
                                stlocal(-1),
                                ldlocal(0),
                                ldlocal(-1),
                                st64(0),
-                               allocobj(closureClass.id.index),
+                               allocobj(closureClass),
                                dup(),
                                ldlocal(-1),
-                               callg(closureClass.constructors[0].id.index),
+                               callg(closureClass.constructors[0]),
                                drop(),
                                stlocal(-2),
                                ldlocal(-2),
@@ -2566,7 +3174,7 @@ class TestCompiler(TestCaseWithDefinitions):
         expected = self.makeSimpleFunction(Name(["Foo", CONSTRUCTOR_SUFFIX]), UnitType, [[
                                                ldlocal(0),
                                                i64(12),
-                                               callg(clas.constructors[0].id.index),
+                                               callg(clas.constructors[0]),
                                                drop(),
                                                unit(),
                                                ret()]],
@@ -2602,10 +3210,10 @@ class TestCompiler(TestCaseWithDefinitions):
                                    ldlocal(0),
                                    ldlocal(0),
                                    ld64(bar.fields[1].index),
-                                   callg(foo.constructors[0].id.index),
+                                   callg(foo.constructors[0]),
                                    drop(),
                                    ldlocal(0),
-                                   callg(bar.initializer.id.index),
+                                   callg(bar.initializer),
                                    drop(),
                                    unit(),
                                    ret(),
@@ -2630,10 +3238,10 @@ class TestCompiler(TestCaseWithDefinitions):
         expected = self.makeSimpleFunction(Name(["Bar", CONSTRUCTOR_SUFFIX]), UnitType, [[
                                                ldlocal(0),
                                                i64(12),
-                                               callg(foo.constructors[0].id.index),
+                                               callg(foo.constructors[0]),
                                                drop(),
                                                ldlocal(0),
-                                               callg(bar.initializer.id.index),
+                                               callg(bar.initializer),
                                                drop(),
                                                unit(),
                                                ret()]],
@@ -2652,10 +3260,10 @@ class TestCompiler(TestCaseWithDefinitions):
         barTy = ClassType(bar)
         expected = self.makeSimpleFunction(Name(["Bar", CONSTRUCTOR_SUFFIX]), UnitType, [[
                                                ldlocal(0),
-                                               callg(foo.constructors[0].id.index),
+                                               callg(foo.constructors[0]),
                                                drop(),
                                                ldlocal(0),
-                                               callg(bar.initializer.id.index),
+                                               callg(bar.initializer),
                                                drop(),
                                                unit(),
                                                ret()]],
@@ -2672,7 +3280,7 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(package,
                            self.makeSimpleFunction("f", UnitType, [[
                                string(fooIndex),
-                               callg(BUILTIN_PRINT_FUNCTION_ID.index),
+                               callg(getBuiltinFunctionById(BUILTIN_PRINT_FUNCTION_ID)),
                                ret()]]))
 
     def testCallBuiltinPrimitiveMethod(self):
@@ -2680,7 +3288,7 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(source,
                            self.makeSimpleFunction("f", getStringType(), [[
                                unit(),
-                               callg(BUILTIN_UNIT_TO_STRING_ID.index),
+                               callg(getBuiltinFunctionById(BUILTIN_UNIT_TO_STRING_ID)),
                                ret()]]))
 
     def testCallWithStaticClassTypeArgument(self):
@@ -2694,8 +3302,8 @@ class TestCompiler(TestCaseWithDefinitions):
         f = package.findFunction(name="f")
         expected = self.makeSimpleFunction("f", Cty, [[
                        ldlocal(0),
-                       tycs(C.id.index),
-                       callg(id.id.index),
+                       tycs(C),
+                       callg(id),
                        ret()]],
                      variables=[self.makeVariable("f.o", type=Cty,
                                                   kind=PARAMETER, flags=frozenset([LET]))],
@@ -2712,8 +3320,8 @@ class TestCompiler(TestCaseWithDefinitions):
         outer = package.findFunction(name="id-outer")
         expected = self.makeSimpleFunction("id-outer", Tty, [[
             ldlocal(0),
-            tyvs(T.id.index),
-            callg(inner.id.index),
+            tyvs(T),
+            callg(inner),
             ret()]],
           variables=[self.makeVariable("id-outer.x", type=Tty,
                                        kind=PARAMETER, flags=frozenset([LET]))],
@@ -2732,8 +3340,8 @@ class TestCompiler(TestCaseWithDefinitions):
         idInner = package.findFunction(name="id-outer.id-inner")
         expected = self.makeSimpleFunction("id-outer", Tty, [[
             ldlocal(0),
-            tyvs(T.id.index),
-            callg(idInner.id.index),
+            tyvs(T),
+            callg(idInner),
             ret()]],
           variables=[self.makeVariable("id-outer.x", type=Tty,
                                        kind=PARAMETER, flags=frozenset([LET]))],
@@ -2754,26 +3362,26 @@ class TestCompiler(TestCaseWithDefinitions):
         idInner = package.findFunction(name="id-outer.id-inner")
         idInnerMethodIndex = closureClass.getMethodIndex(idInner)
         expected = self.makeSimpleFunction("id-outer", Tty, [[
-            tyvs(T.id.index),
-            allocobj(contextClass.id.index),
+            tyvs(T),
+            allocobj(contextClass),
             dup(),
-            tyvs(T.id.index),
-            callg(contextClass.constructors[0].id.index),
+            tyvs(T),
+            callg(contextClass.constructors[0]),
             drop(),
             stlocal(-1),
             ldlocal(0),
             ldlocal(-1),
             stp(0),
-            tyvs(T.id.index),
-            allocobj(closureClass.id.index),
+            tyvs(T),
+            allocobj(closureClass),
             dup(),
             ldlocal(-1),
-            tyvs(T.id.index),
-            callg(closureClass.constructors[0].id.index),
+            tyvs(T),
+            callg(closureClass.constructors[0]),
             drop(),
             stlocal(-2),
             ldlocal(-2),
-            tyvs(T.id.index),
+            tyvs(T),
             callv(1, idInnerMethodIndex),
             ret()]],
           variables=[self.makeVariable(Name(["id-outer", CONTEXT_SUFFIX]),
@@ -2819,7 +3427,7 @@ class TestCompiler(TestCaseWithDefinitions):
         toStringIndex = Foo.getMethodIndex(toString)
         expected = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
-            tycs(BUILTIN_ROOT_CLASS_ID.index),
+            tycs(getRootClass()),
             callv(1, toStringIndex),
             drop(),
             unit(),
@@ -2837,11 +3445,11 @@ class TestCompiler(TestCaseWithDefinitions):
         Ctype = ClassType(C, (VariableType(T),))
         expectedCtor = self.makeSimpleFunction(Name(["C", CONSTRUCTOR_SUFFIX]), UnitType, [[
             ldlocal(0),
-            callg(BUILTIN_ROOT_CLASS_CTOR_ID.index),
+            callg(getBuiltinFunctionById(BUILTIN_ROOT_CLASS_CTOR_ID)),
             drop(),
             ldlocal(0),
-            tyvs(T.id.index),
-            callg(C.initializer.id.index),
+            tyvs(T),
+            callg(C.initializer),
             drop(),
             unit(),
             ret()]],
@@ -2871,9 +3479,9 @@ class TestCompiler(TestCaseWithDefinitions):
         expectedF = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
             ldlocal(0),
-            tycs(C.id.index),
+            tycs(C),
             callv(1, Box.getMethodIndex(get)),
-            tycs(C.id.index),
+            tycs(C),
             callv(2, Box.getMethodIndex(set)),
             ret()]],
           variables=[self.makeVariable("f.box", type=boxType,
@@ -2897,7 +3505,7 @@ class TestCompiler(TestCaseWithDefinitions):
                              flags=frozenset([STATIC])))
         self.checkFunction(package,
                            self.makeSimpleFunction("Foo.g", I64Type, [[
-                               callg(f.id.index),
+                               callg(f),
                                ret(),
                              ]],
                              variables=[self.makeVariable(Name(["Foo", "g", RECEIVER_SUFFIX]),
@@ -2959,11 +3567,11 @@ class TestCompiler(TestCaseWithDefinitions):
                                                    UnitType,
                                                    [[
                                                        ldlocal(0),
-                                                       tycs(BUILTIN_NOTHING_CLASS_ID.index),
-                                                       callg(foo.constructors[0].id.index),
+                                                       tycs(getNothingClass()),
+                                                       callg(foo.constructors[0]),
                                                        drop(),
                                                        ldlocal(0),
-                                                       callg(bar.initializer.id.index),
+                                                       callg(bar.initializer),
                                                        drop(),
                                                        unit(),
                                                        ret(),

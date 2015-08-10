@@ -302,6 +302,27 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
+        case LABEL: {
+          readVbn(bytecode, &pcOffset);
+          currentMap.push(handle(roots->labelType()));
+          break;
+        }
+
+        case BRANCHL: {
+          currentMap.pop();
+          auto count = toLength(readVbn(bytecode, &pcOffset));
+          for (length_t i = 0; i < count - 1; i++) {
+            auto succBlockIndex = toLength(readVbn(bytecode, &pcOffset));
+            currentMap.pcOffset = function->blockOffset(succBlockIndex);
+            blocksToVisit.push_back(currentMap);
+          }
+          auto succBlockIndex = toLength(readVbn(bytecode, &pcOffset));
+          currentMap.pcOffset = function->blockOffset(succBlockIndex);
+          blocksToVisit.emplace_back(move(currentMap));
+          blockDone = true;
+          break;
+        }
+
         case PUSHTRY: {
           i64 tryBlockIndex = readVbn(bytecode, &pcOffset);
           currentMap.pcOffset = function->blockOffset(tryBlockIndex);
@@ -330,6 +351,14 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         case DROP:
           currentMap.pop();
           break;
+
+        case DROPI: {
+          i64 count = readVbn(bytecode, &pcOffset);
+          for (i64 i = 0; i < count; i++) {
+            currentMap.pop();
+          }
+          break;
+        }
 
         case DUP:
           currentMap.push(currentMap.top());
