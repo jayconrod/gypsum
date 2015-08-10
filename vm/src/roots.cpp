@@ -137,6 +137,9 @@ void Roots::initialize(Heap* heap) {
 
   initializeBuiltins(heap);
 
+  auto labelType = new(heap, 0) Type(Type::LABEL_TYPE);
+  basicRoots_[LABEL_TYPE_ROOT_INDEX] = labelType;
+
   auto nullType = new(heap, 1) Type(getBuiltinClass(BUILTIN_NOTHING_CLASS_ID),
                                     Type::NULLABLE_FLAG);
   basicRoots_[NULL_TYPE_ROOT_INDEX] = nullType;

@@ -195,6 +195,19 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
+      case LABEL: {
+        auto blockIndex = toLength(readVbn());
+        auto blockOffset = function_->blockOffset(blockIndex);
+        push(blockOffset);
+        break;
+      }
+
+      case BRANCHL: {
+        // No need to read operands, since we're setting pcOffset_.
+        pcOffset_ = pop<length_t>();
+        break;
+      }
+
       case PUSHTRY: {
         auto tryBlockIndex = toLength(readVbn());
         auto catchBlockIndex = toLength(readVbn());
@@ -222,6 +235,12 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       case DROP:
         pop<i64>();
         break;
+
+      case DROPI: {
+        auto count = toLength(readVbn());
+        stack_->setSp(stack_->sp() + count * kSlotSize);
+        break;
+      }
 
       case DUP: {
         i64 value = mem<i64>(stack_->sp());

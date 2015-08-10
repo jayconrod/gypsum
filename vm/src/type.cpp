@@ -207,6 +207,11 @@ Type* Type::wordType(Roots* roots) {
 }
 
 
+Type* Type::labelType(Roots* roots) {
+  return roots->labelType();
+}
+
+
 Type* Type::rootClassType(Roots* roots) {
   return roots->getBuiltinType(BUILTIN_ROOT_CLASS_ID);
 }

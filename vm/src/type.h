@@ -52,12 +52,15 @@ class Type: public Object {
     EXTERN_CLASS_TYPE,
     EXTERN_VARIABLE_TYPE,
 
+    // Special forms
+    LABEL_TYPE,
+
     // Other symbols
     FIRST_PRIMITIVE_TYPE = UNIT_TYPE,
     LAST_PRIMITIVE_TYPE = F64_TYPE,
     FIRST_OBJECT_TYPE = CLASS_TYPE,
     LAST_OBJECT_TYPE = EXTERN_VARIABLE_TYPE,
-    LAST_TYPE = EXTERN_VARIABLE_TYPE
+    LAST_TYPE = LABEL_TYPE
   };
 
   enum Flags {
@@ -101,6 +104,7 @@ class Type: public Object {
   static Type* f32Type(Roots* roots);
   static Type* f64Type(Roots* roots);
   static Type* wordType(Roots* roots);
+  static Type* labelType(Roots* roots);
   static Type* rootClassType(Roots* roots);
   static Type* nothingType(Roots* roots);
   static Type* nullType(Roots* roots);
@@ -114,6 +118,7 @@ class Type: public Object {
   Flags flags() const { return flags_; }
   bool isPrimitive() const;
   Form asPrimitive() const;
+  bool isLabel() const;
   bool isClass() const;
   Class* asClass() const;
   bool isVariable() const;
