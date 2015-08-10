@@ -40,7 +40,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource("var a = 12")
         ast = info.ast
         astDefn = ast.modules[0].definitions[0].pattern
-        self.assertEquals(DefnInfo(self.makeGlobal("a"), GLOBAL_SCOPE_ID),
+        self.assertEquals(DefnInfo(self.makeGlobal("a"), GLOBAL_SCOPE_ID, True),
                           info.getDefnInfo(astDefn))
 
     def testDefineGlobalConst(self):
@@ -48,7 +48,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         ast = info.ast
         astDefn = ast.modules[0].definitions[0].pattern
         self.assertEquals(DefnInfo(self.makeGlobal("a", flags=frozenset([LET])),
-                                   GLOBAL_SCOPE_ID),
+                                   GLOBAL_SCOPE_ID, True),
                           info.getDefnInfo(astDefn))
 
     def testDefineGlobalFunction(self):
@@ -58,7 +58,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         defnInfo = info.getDefnInfo(astDefn)
         expected = self.makeFunction("f")
 
-        self.assertEquals(DefnInfo(expected, GLOBAL_SCOPE_ID), info.getDefnInfo(astDefn))
+        self.assertEquals(DefnInfo(expected, GLOBAL_SCOPE_ID, True), info.getDefnInfo(astDefn))
         self.assertTrue(info.getScope(GLOBAL_SCOPE_ID).isDefined("f"))
 
     def testDefineGlobalClass(self):
@@ -127,7 +127,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         scopeId = info.getScope(ast.modules[0].definitions[0]).scopeId
         self.assertEquals(DefnInfo(self.makeVariable("f.x", kind=PARAMETER,
                                                      flags=frozenset([LET])),
-                                   scopeId),
+                                   scopeId, True),
                           info.getDefnInfo(astDefn))
 
     def testDefineFunctionParameterVar(self):
@@ -135,7 +135,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         ast = info.ast
         astDefn = ast.modules[0].definitions[0].parameters[0].pattern
         scopeId = info.getScope(ast.modules[0].definitions[0]).scopeId
-        self.assertEquals(DefnInfo(self.makeVariable("f.x", kind=PARAMETER), scopeId),
+        self.assertEquals(DefnInfo(self.makeVariable("f.x", kind=PARAMETER), scopeId, True),
                           info.getDefnInfo(astDefn))
 
     def testDefineFunctionVar(self):
@@ -143,7 +143,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         ast = info.ast
         astDefn = ast.modules[0].definitions[0].body.statements[0].pattern
         scopeId = info.getScope(ast.modules[0].definitions[0]).scopeId
-        self.assertEquals(DefnInfo(self.makeVariable("f.x", kind=LOCAL), scopeId),
+        self.assertEquals(DefnInfo(self.makeVariable("f.x", kind=LOCAL), scopeId, True),
                           info.getDefnInfo(astDefn))
 
     def testDefineFunctionConst(self):
@@ -152,7 +152,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         astDefn = ast.modules[0].definitions[0].body.statements[0].pattern
         scopeId = info.getScope(ast.modules[0].definitions[0]).scopeId
         self.assertEquals(DefnInfo(self.makeVariable("f.x", kind=LOCAL, flags=frozenset([LET])),
-                                   scopeId),
+                                   scopeId, True),
                           info.getDefnInfo(astDefn))
 
     def testDefineFunctionFunction(self):
@@ -161,7 +161,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         astDefn = ast.modules[0].definitions[0].body.statements[0]
         scopeId = info.getScope(ast.modules[0].definitions[0]).scopeId
         expected = self.makeFunction("f.g")
-        self.assertEquals(DefnInfo(expected, scopeId), info.getDefnInfo(astDefn))
+        self.assertEquals(DefnInfo(expected, scopeId, True), info.getDefnInfo(astDefn))
 
     def testDefineFunctionClass(self):
         info = self.analyzeFromSource("def f = { class C {}; };")
@@ -177,7 +177,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         ast = info.ast
         astDefn = ast.modules[0].definitions[0].members[0].pattern
         scopeId = info.getScope(ast.modules[0].definitions[0]).scopeId
-        self.assertEquals(DefnInfo(self.makeField("C.x"), scopeId),
+        self.assertEquals(DefnInfo(self.makeField("C.x"), scopeId, True),
                           info.getDefnInfo(astDefn))
 
     def testDefineClassConst(self):
@@ -185,7 +185,8 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         ast = info.ast
         astDefn = ast.modules[0].definitions[0].members[0].pattern
         scopeId = info.getScope(ast.modules[0].definitions[0]).scopeId
-        self.assertEquals(DefnInfo(self.makeField("C.x", flags=frozenset([LET])), scopeId),
+        self.assertEquals(DefnInfo(self.makeField("C.x", flags=frozenset([LET])),
+                                   scopeId, True),
                           info.getDefnInfo(astDefn))
 
 
@@ -206,7 +207,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         this = self.makeVariable(Name(["C", "f", RECEIVER_SUFFIX]),
                                  kind=PARAMETER, flags=frozenset([LET]))
         expectedFunction = self.makeFunction("C.f", variables=[this], flags=frozenset([METHOD]))
-        expectedDefnInfo = DefnInfo(expectedFunction, scopeId)
+        expectedDefnInfo = DefnInfo(expectedFunction, scopeId, True)
         self.assertEquals(expectedDefnInfo, info.getDefnInfo(astDefn))
         expectedClosureInfo = ClosureInfo(info.package.findClass(name="C"),
                                           {scopeId: self.makeVariable(Name(["C", CLASS_INIT_SUFFIX, RECEIVER_SUFFIX]),
@@ -219,7 +220,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         astDefn = info.ast.modules[0].definitions[0].members[0]
         scopeId = info.getScope(info.ast.modules[0].definitions[0]).scopeId
         expectedFunction = self.makeFunction("C.f", flags=frozenset([STATIC]))
-        expectedDefnInfo = DefnInfo(expectedFunction, scopeId)
+        expectedDefnInfo = DefnInfo(expectedFunction, scopeId, True)
         self.assertEquals(expectedDefnInfo, info.getDefnInfo(astDefn))
 
     @unittest.skip("inner classes not supported yet")

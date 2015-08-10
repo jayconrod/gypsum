@@ -70,8 +70,6 @@
 # Bugs
 
 ## Compiler
-- scope bindings should be flagged, depending on whether they can be looked up from other
-  scopes. Right now, we can look up local variables from function scopes with prefixes.
 - the pattern '_: type' matches anything without type checking
 - flag bindings depending on whether they can be looked up from outside of the scope. right now,
   we can look up local variables from inside functions with a scope prefix.

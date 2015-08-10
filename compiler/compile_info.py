@@ -233,6 +233,10 @@ class DefnInfo(data.Data):
         # inherited, this is the scope id of the inheriting class (the subclass).
         "scopeId",
 
+        # bool: whether this definition can be accessed from an unrelated scope using a prefix.
+        # For example, in a class, members are visible, but type parameters are not.
+        "isVisible",
+
         # ScopeId: the id of the scope which contains this definition in source. If this definition
         # is inherited, this will be the id of the superclass containing the original
         # definition. If this definition is not inherited, this will be the same as `scopeId`.
@@ -244,25 +248,28 @@ class DefnInfo(data.Data):
         "inheritanceDepth",
     ]
 
-    def __init__(self, irDefn, scopeId, inheritedScopeId=None, inheritanceDepth=0):
+    def __init__(self, irDefn, scopeId, isVisible, inheritedScopeId=None, inheritanceDepth=0):
         if inheritedScopeId is None:
             inheritedScopeId = scopeId
         self.irDefn = irDefn
         self.scopeId = scopeId
+        self.isVisible = isVisible
         self.inheritedScopeId = inheritedScopeId
         self.inheritanceDepth = inheritanceDepth
 
     def __repr__(self):
         irDefnStr = repr(self.irDefn)
-        return "DefnInfo(%s, %s, %s, %d)" % \
-            (irDefnStr, self.scopeId, self.inheritedScopeId, self.inheritanceDepth)
+        return "DefnInfo(%s, %s, %s, %s, %d)" % \
+            (irDefnStr, self.scopeId, self.isVisible,
+             self.inheritedScopeId, self.inheritanceDepth)
 
     def isMethod(self):
         return isinstance(self.irDefn, Function) and self.irDefn.isMethod()
 
     def inherit(self, scopeId):
-        assert self.inheritanceDepth != NOT_HERITABLE
-        return DefnInfo(self.irDefn, scopeId, self.inheritedScopeId, self.inheritanceDepth + 1)
+        assert self.inheritanceDepth != NOT_HERITABLE and self.isVisible
+        return DefnInfo(self.irDefn, scopeId, self.isVisible,
+                        self.inheritedScopeId, self.inheritanceDepth + 1)
 
 
 USE_AS_VALUE = "USE_AS_VALUE"

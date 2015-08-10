@@ -495,7 +495,7 @@ class Scope(ast.AstNodeVisitor):
         """Creates an IR definition to the package, adds it to the package, and
         adds DefinitionInfo."""
         # Create the definition, and add it to the package.
-        irDefn, shouldBind = self.createIrDefn(astDefn, astVarDefn)
+        irDefn, shouldBind, isVisible = self.createIrDefn(astDefn, astVarDefn)
         if irDefn is None:
             return
 
@@ -503,7 +503,7 @@ class Scope(ast.AstNodeVisitor):
         if astVarDefn is not None:
             irDefn.astVarDefn = astVarDefn
         inheritanceDepth = 0 if isHeritable(irDefn) else NOT_HERITABLE
-        defnInfo = DefnInfo(irDefn, self.scopeId, self.scopeId, inheritanceDepth)
+        defnInfo = DefnInfo(irDefn, self.scopeId, isVisible, self.scopeId, inheritanceDepth)
         self.info.setDefnInfo(astDefn, defnInfo)
 
         # Associate the definition with this scope. Type/use analysis doesn't traverse the
@@ -548,8 +548,9 @@ class Scope(ast.AstNodeVisitor):
                 yield (name, defnInfo)
 
     def createIrDefn(self, astDefn, astVarDefn):
-        """Creates an IR definition and adds it to the package. Returns a pair containing
-        the IrDefinition and a boolean indicating it should be bound to its short name."""
+        """Creates an IR definition and adds it to the package. Returns a tuple containing
+        the IrDefinition, a bool indicating whether it should be bound to its short name, and
+        a bool indicating whether it should be visible to unrelated scopes."""
         raise NotImplementedError
 
     def getImplicitTypeParameters(self):
@@ -627,10 +628,12 @@ class Scope(ast.AstNodeVisitor):
            self.isLocalWithin(defnScope):
             raise ScopeException(loc, "%s: used before being defined" % name)
         nameInfo = defnScope.getDefinition(name)
-        if localOnly and \
-           not nameInfo.isOverloaded() and \
-           isinstance(nameInfo.getDefnInfo().irDefn, ir.TypeParameter):
-            raise ScopeException(loc, "%s: cannot access type parameter by projection" % name)
+        if localOnly:
+            if nameInfo.isOverloaded():
+                assert all(o.isVisible for o in nameInfo.overloads)
+            elif not nameInfo.getDefnInfo().isVisible:
+                raise ScopeException(loc, "%s: cannot access definition outside of its scope" %
+                                     name)
         return nameInfo
 
     def isBound(self, name):
@@ -916,7 +919,7 @@ class GlobalScope(Scope):
             irDefn, shouldBind = self.createIrClassDefn(astDefn)
         else:
             raise NotImplementedError
-        return irDefn, shouldBind
+        return irDefn, shouldBind, True
 
     def isDefinedAutomatically(self, astDefn):
         return True
@@ -961,7 +964,7 @@ class FunctionScope(Scope):
         irMethod = self.getIrDefn()
         assert irMethod.isMethod()
         this = irMethod.variables[0]
-        self.bind("this", DefnInfo(this, self.scopeId))
+        self.bind("this", DefnInfo(this, self.scopeId, isVisible=False))
         self.define("this")
         closureInfo = self.info.getClosureInfo(self.scopeId)
         closureInfo.irClosureClass = irClassDefn
@@ -979,6 +982,7 @@ class FunctionScope(Scope):
 
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         shouldBind = True
+        isVisible = True
         if isinstance(astDefn, ast.AstTypeParameter):
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([STATIC]), astDefn.location)
@@ -988,6 +992,7 @@ class FunctionScope(Scope):
             irDefn = self.info.package.addTypeParameter(name, astDefn,
                                                         None, None, flags)
             irScopeDefn.typeParameters.append(irDefn)
+            isVisible = False
         elif isinstance(astDefn, ast.AstParameter):
             checkFlags(flags, frozenset(), astDefn.location)
             if isinstance(astDefn.pattern, ast.AstVariablePattern):
@@ -1020,7 +1025,7 @@ class FunctionScope(Scope):
             irDefn, shouldBind = self.createIrClassDefn(astDefn)
         else:
             raise NotImplementedError
-        return irDefn, shouldBind
+        return irDefn, shouldBind, isVisible
 
     def isDefinedAutomatically(self, astDefn):
         return isinstance(astDefn, ast.AstClassDefinition) or \
@@ -1170,7 +1175,7 @@ class ClassScope(Scope):
         contextInfo.irContextClass = irDefn
         this = irDefn.initializer.variables[0]
         assert this.name.short() == ir.RECEIVER_SUFFIX
-        self.bind("this", DefnInfo(this, self.scopeId, self.scopeId, NOT_HERITABLE))
+        self.bind("this", DefnInfo(this, self.scopeId, False, self.scopeId, NOT_HERITABLE))
         self.define("this")
         closureInfo = self.info.getClosureInfo(self.scopeId)
         closureInfo.irClosureClass = irDefn
@@ -1178,7 +1183,7 @@ class ClassScope(Scope):
 
         # Bind default constructors.
         for ctor in irDefn.constructors:
-            defnInfo = DefnInfo(ctor, self.scopeId, self.scopeId, NOT_HERITABLE)
+            defnInfo = DefnInfo(ctor, self.scopeId, True, self.scopeId, NOT_HERITABLE)
             self.bind(ctor.name.short(), defnInfo)
             self.define(ctor.name.short())
 
@@ -1186,6 +1191,7 @@ class ClassScope(Scope):
         irScopeDefn = self.getIrDefn()
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         shouldBind = True
+        isVisible = True
         if isinstance(astDefn, ast.AstVariablePattern):
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([LET, PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
@@ -1256,6 +1262,7 @@ class ClassScope(Scope):
             irScopeDefn.initializer.typeParameters.append(irDefn)
             for ctor in irScopeDefn.constructors:
                 ctor.typeParameters.append(irDefn)
+            isVisible = False
         elif isinstance(astDefn, ast.AstParameter):
             # Parameters in a class scope can only belong to a primary constructor. They are
             # never treated as local variables. Note that these parameters usually result in
@@ -1271,7 +1278,7 @@ class ClassScope(Scope):
         else:
             assert isinstance(astDefn, ast.AstClassDefinition)
             irDefn, shouldBind = self.createIrClassDefn(astDefn)
-        return irDefn, shouldBind
+        return irDefn, shouldBind, isVisible
 
     def isDefinedAutomatically(self, astDefn):
         return isinstance(astDefn, ast.AstPrimaryConstructorDefinition) or \
@@ -1314,7 +1321,7 @@ class BuiltinGlobalScope(Scope):
         super(BuiltinGlobalScope, self).__init__([], None, BUILTIN_SCOPE_ID,
                                                  parent, parent.info)
         def bind(name, irDefn):
-            defnInfo = DefnInfo(irDefn, self.scopeId)
+            defnInfo = DefnInfo(irDefn, self.scopeId, isVisible=True)
             if isinstance(irDefn, ir.Class):
                 # This scope will automatically be registered.
                 BuiltinClassScope(defnInfo, self)
@@ -1336,18 +1343,18 @@ class BuiltinClassScope(Scope):
         if not hasattr(irClass, "isPrimitive"):
             parent.info.setClassInfo(irClass, ClassInfo(irClass))
             for ctor in irClass.constructors:
-                defnInfo = DefnInfo(ctor, self.scopeId, self.scopeId, NOT_HERITABLE)
+                defnInfo = DefnInfo(ctor, self.scopeId, True, self.scopeId, NOT_HERITABLE)
                 self.bind(ir.CONSTRUCTOR_SUFFIX, defnInfo)
                 self.define(ir.CONSTRUCTOR_SUFFIX)
         for method in irClass.methods:
             methodClass = method.getReceiverClass()
             inheritedScopeId = self.info.getScope(methodClass.id).scopeId
             inheritanceDepth = irClass.findDistanceToBaseClass(methodClass)
-            defnInfo = DefnInfo(method, self.scopeId, inheritedScopeId, inheritanceDepth)
+            defnInfo = DefnInfo(method, self.scopeId, True, inheritedScopeId, inheritanceDepth)
             self.bind(method.name.short(), defnInfo)
             self.define(method.name.short())
         for field in irClass.fields:
-            defnInfo = DefnInfo(field, self.scopeId)
+            defnInfo = DefnInfo(field, self.scopeId, True)
             self.bind(field.name.short(), defnInfo)
             self.define(field.name.short())
 
@@ -1378,7 +1385,7 @@ class PackageScope(Scope):
             exportedClasses = [c for c in package.classes if PUBLIC in c.flags]
             exportedDefns.extend(exportedClasses)
             for defn in exportedDefns:
-                defnInfo = DefnInfo(defn, scopeId)
+                defnInfo = DefnInfo(defn, scopeId, True)
                 self.bind(defn.name.short(), defnInfo)
                 self.define(defn.name.short())
             for clas in exportedClasses:
@@ -1401,7 +1408,7 @@ class PackageScope(Scope):
                     packageBindings[nextComponent] = package
 
         for component, prefix in packageBindings.iteritems():
-            defnInfo = DefnInfo(prefix, self.scopeId)
+            defnInfo = DefnInfo(prefix, self.scopeId, True)
             self.bind(component, defnInfo)
             self.define(component)
 
@@ -1445,12 +1452,12 @@ class ExternClassScope(Scope):
                                                scopeId, parent, info)
         for ctor in clas.constructors:
             if PUBLIC in ctor.flags:
-                defnInfo = DefnInfo(ctor, self.scopeId)
+                defnInfo = DefnInfo(ctor, self.scopeId, isVisible=True)
                 self.bind(ir.CONSTRUCTOR_SUFFIX, defnInfo)
                 self.define(ir.CONSTRUCTOR_SUFFIX)
         for member in clas.methods + clas.fields:
             if PUBLIC in member.flags:
-                defnInfo = DefnInfo(member, self.scopeId)
+                defnInfo = DefnInfo(member, self.scopeId, isVisible=True)
                 self.bind(member.name.short(), defnInfo)
                 self.define(member.name.short())
 

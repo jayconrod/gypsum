@@ -91,7 +91,8 @@ class TestUseAnalysis(TestCaseWithDefinitions):
         thisNameInfo = classScope.lookup("this", NoLoc)
         self.assertEquals(DefnInfo(self.makeVariable(Name(["Foo", CLASS_INIT_SUFFIX, RECEIVER_SUFFIX]),
                                                      kind=PARAMETER, flags=frozenset([LET])),
-                                   classScope.scopeId, classScope.scopeId, NOT_HERITABLE),
+                                   classScope.scopeId, False,
+                                   classScope.scopeId, NOT_HERITABLE),
                           thisNameInfo.getDefnInfo())
 
     def testUsePrivateOuter(self):
