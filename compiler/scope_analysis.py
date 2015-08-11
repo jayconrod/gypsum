@@ -982,7 +982,6 @@ class FunctionScope(Scope):
 
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         shouldBind = True
-        isVisible = True
         if isinstance(astDefn, ast.AstTypeParameter):
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([STATIC]), astDefn.location)
@@ -992,7 +991,6 @@ class FunctionScope(Scope):
             irDefn = self.info.package.addTypeParameter(name, astDefn,
                                                         None, None, flags)
             irScopeDefn.typeParameters.append(irDefn)
-            isVisible = False
         elif isinstance(astDefn, ast.AstParameter):
             checkFlags(flags, frozenset(), astDefn.location)
             if isinstance(astDefn.pattern, ast.AstVariablePattern):
@@ -1025,6 +1023,7 @@ class FunctionScope(Scope):
             irDefn, shouldBind = self.createIrClassDefn(astDefn)
         else:
             raise NotImplementedError
+        isVisible = False
         return irDefn, shouldBind, isVisible
 
     def isDefinedAutomatically(self, astDefn):

@@ -127,7 +127,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         scopeId = info.getScope(ast.modules[0].definitions[0]).scopeId
         self.assertEquals(DefnInfo(self.makeVariable("f.x", kind=PARAMETER,
                                                      flags=frozenset([LET])),
-                                   scopeId, True),
+                                   scopeId, False),
                           info.getDefnInfo(astDefn))
 
     def testDefineFunctionParameterVar(self):
@@ -135,7 +135,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         ast = info.ast
         astDefn = ast.modules[0].definitions[0].parameters[0].pattern
         scopeId = info.getScope(ast.modules[0].definitions[0]).scopeId
-        self.assertEquals(DefnInfo(self.makeVariable("f.x", kind=PARAMETER), scopeId, True),
+        self.assertEquals(DefnInfo(self.makeVariable("f.x", kind=PARAMETER), scopeId, False),
                           info.getDefnInfo(astDefn))
 
     def testDefineFunctionVar(self):
@@ -143,7 +143,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         ast = info.ast
         astDefn = ast.modules[0].definitions[0].body.statements[0].pattern
         scopeId = info.getScope(ast.modules[0].definitions[0]).scopeId
-        self.assertEquals(DefnInfo(self.makeVariable("f.x", kind=LOCAL), scopeId, True),
+        self.assertEquals(DefnInfo(self.makeVariable("f.x", kind=LOCAL), scopeId, False),
                           info.getDefnInfo(astDefn))
 
     def testDefineFunctionConst(self):
@@ -152,7 +152,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         astDefn = ast.modules[0].definitions[0].body.statements[0].pattern
         scopeId = info.getScope(ast.modules[0].definitions[0]).scopeId
         self.assertEquals(DefnInfo(self.makeVariable("f.x", kind=LOCAL, flags=frozenset([LET])),
-                                   scopeId, True),
+                                   scopeId, False),
                           info.getDefnInfo(astDefn))
 
     def testDefineFunctionFunction(self):
@@ -161,7 +161,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         astDefn = ast.modules[0].definitions[0].body.statements[0]
         scopeId = info.getScope(ast.modules[0].definitions[0]).scopeId
         expected = self.makeFunction("f.g")
-        self.assertEquals(DefnInfo(expected, scopeId, True), info.getDefnInfo(astDefn))
+        self.assertEquals(DefnInfo(expected, scopeId, False), info.getDefnInfo(astDefn))
 
     def testDefineFunctionClass(self):
         info = self.analyzeFromSource("def f = { class C {}; };")

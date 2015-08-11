@@ -70,8 +70,6 @@
 # Bugs
 
 ## Compiler
-- flag bindings depending on whether they can be looked up from outside of the scope. right now,
-  we can look up local variables from inside functions with a scope prefix.
 - in type analysis, we check whether to do a local lookup based on whether the scope is same
   as current. we might have a prefix for the same scope though, so a local lookup would
   be unsafe.
@@ -80,10 +78,10 @@
 
 ## VM
 - `read()` breaks when EOF is given. Exception is thrown in non-GC-safe place.
-- pattern matching performs an implicit downcast without telling the interpreter.
-  We probably need a type-check-and-branch pattern.
 - assertion when trying to instantiate Nothing. This should be a special case.
 - ldp, ldpc, and other instructions which may throw exceptions should be GC-safe.
   No pointer map is recorded for these, even though we might allocate an exception.
+- ldpc should be consolidated with ldp. We can determine whether the check is needed by
+  looking at the type of the field.
 
 # TODO: file issues for everything and delete this section.
