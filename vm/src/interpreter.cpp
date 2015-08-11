@@ -348,16 +348,40 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         auto index = toLength(readVbn());
         auto global = function_->package()->getGlobal(index);
         auto value = global->getRaw();
-        push(value);
+        if (global->type()->isObject() && !global->type()->isNullable() && value == 0) {
+          // Global is uninitialized. We need to throw an exception.
+          Object* exn = nullptr;
+          {
+            GCSafeScope gcSafe(this);
+            HandleScope handleScope(vm_);
+            auto exnMeta = handle(
+                vm_->roots()->getBuiltinMeta(BUILTIN_UNINITIALIZED_EXCEPTION_CLASS_ID));
+            exn = *Object::create(vm_->heap(), exnMeta);
+          }
+          doThrow(exn);
+        } else {
+          push(value);
+        }
         break;
       }
 
       case LDGF: {
         auto depIndex = toLength(readVbn());
         auto externIndex = toLength(readVbn());
-        auto value = function_->package()->dependencies()->get(depIndex)
-            ->linkedGlobals()->get(externIndex)->getRaw();
-        push(value);
+        auto global = function_->package()->dependencies()->get(depIndex)
+            ->linkedGlobals()->get(externIndex);
+        auto value = global->getRaw();
+        if (global->type()->isObject() && !global->type()->isNullable() && value == 0) {
+          // Global is uninitialized. We need to throw an exception.
+          GCSafeScope gcSafe(this);
+          HandleScope handleScope(vm_);
+          auto exnMeta = handle(
+              vm_->roots()->getBuiltinMeta(BUILTIN_UNINITIALIZED_EXCEPTION_CLASS_ID));
+          auto exn = Object::create(vm_->heap(), exnMeta);
+          doThrow(*exn);
+        } else {
+          push(value);
+        }
         break;
       }
 

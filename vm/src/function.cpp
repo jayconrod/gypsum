@@ -467,6 +467,11 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         case LDG: {
           auto index = readVbn(bytecode, &pcOffset);
           auto type = handle(package->getGlobal(index)->type());
+          if (type->isObject() && !type->isNullable()) {
+            // May need to allocate and throw an exception.
+            currentMap.pcOffset = pcOffset;
+            maps.push_back(currentMap);
+          }
           currentMap.push(type);
           break;
         }
@@ -476,6 +481,11 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           auto externIndex = readVbn(bytecode, &pcOffset);
           auto type = handle(package->dependencies()->get(depIndex)
               ->linkedGlobals()->get(externIndex)->type());
+          if (type->isObject() && !type->isNullable()) {
+            // May need to allocate and throw an exception.
+            currentMap.pcOffset = pcOffset;
+            maps.push_back(currentMap);
+          }
           currentMap.push(type);
           break;
         }
