@@ -1061,6 +1061,47 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret(),
                              ]]))
 
+    def testMatchExprWithBlankPatternSubtype(self):
+        source = "def f(o: Object) =\n" + \
+                 "  match (o)\n" + \
+                 "    case _: String => 1\n" + \
+                 "    case _ => 2"
+        self.checkFunction(source,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               ldlocal(0),
+                               tycd(getStringClass()),
+                               castcbr(1, 2),
+                             ], [
+                               drop(),
+                               i64(1),
+                               branch(3),
+                             ], [
+                               drop(),
+                               i64(2),
+                               branch(3)
+                             ], [
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.o", type=getRootClassType(),
+                                                          kind=PARAMETER,
+                                                          flags=frozenset([LET]))]))
+
+    def testMatchExprWithBlankPatternSupertype(self):
+        source = "def f(s: String) =\n" + \
+                 "  match (s)\n" + \
+                 "    case _: Object => 1"
+        self.checkFunction(source,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               ldlocal(0),
+                               drop(),
+                               i64(1),
+                               branch(1),
+                             ], [
+                               ret()
+                             ]],
+                             variables=[self.makeVariable("f.s", type=getStringType(),
+                                                          kind=PARAMETER,
+                                                          flags=frozenset([LET]))]))
     def testMatchExprWithIntLiteral(self):
         self.checkFunction("def f = match (12) { case 34 => 56; case _ => 78; }",
                            self.makeSimpleFunction("f", I64Type, [[

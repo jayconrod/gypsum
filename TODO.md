@@ -70,7 +70,6 @@
 # Bugs
 
 ## Compiler
-- the pattern '_: type' matches anything without type checking
 - flag bindings depending on whether they can be looked up from outside of the scope. right now,
   we can look up local variables from inside functions with a scope prefix.
 - in type analysis, we check whether to do a local lookup based on whether the scope is same

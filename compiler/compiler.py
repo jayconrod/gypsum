@@ -314,7 +314,18 @@ class CompileVisitor(ast.AstNodeVisitor):
     def visitAstBlankPattern(self, pat, mode, ty=None, failBlock=None):
         if mode is COMPILE_FOR_UNINITIALIZED:
             return
-        self.drop()
+        assert ty is not None
+
+        patTy = None if pat.ty is None else self.info.getType(pat.ty)
+        if patTy is None or ty.isSubtypeOf(patTy):
+            self.drop()
+        else:
+            assert patTy.isSubtypeOf(ty)
+            self.buildType(patTy, pat.ty.location)
+            castBlock = self.newBlock()
+            self.castcbr(castBlock.id, failBlock.id)
+            self.setCurrentBlock(castBlock)
+            self.drop()
 
     def visitAstLiteralPattern(self, pat, mode, ty=None, failBlock=None):
         if mode is COMPILE_FOR_UNINITIALIZED:

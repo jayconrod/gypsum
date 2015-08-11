@@ -68,7 +68,8 @@ def patternMustMatch(pat, ty, info):
         else:
             return False
     elif isinstance(pat, ast.AstBlankPattern):
-        return True
+        patTy = None if pat.ty is None else info.getType(pat.ty)
+        return patTy is None or ty.isSubtypeOf(patTy)
     else:
         return False
 
