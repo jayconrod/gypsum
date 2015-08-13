@@ -407,46 +407,46 @@ class TestPackageScope(unittest.TestCase):
 
     def testNotFoundWhenEmpty(self):
         info, scope = self.infoAndScopeWithPackageNames([])
-        self.assertRaises(ScopeException, scope.lookup, "foo", NoLoc)
+        self.assertRaises(ScopeException, scope.lookupFromSelf, "foo", NoLoc)
 
     def testFoundSimple(self):
         info, scope = self.infoAndScopeWithPackageNames(["foo", "bar"])
-        nameInfo = scope.lookup("foo", NoLoc)
+        nameInfo = scope.lookupFromSelf("foo", NoLoc)
         self.assertTrue(nameInfo.isPackage())
 
     def testFoundSimplePrefix(self):
         info, scope = self.infoAndScopeWithPackageNames(["foo.bar"])
-        nameInfo = scope.lookup("foo", NoLoc)
+        nameInfo = scope.lookupFromSelf("foo", NoLoc)
         self.assertFalse(nameInfo.isPackage())
         self.assertTrue(nameInfo.isPackagePrefix())
 
     def testFoundSimpleWithPrefix(self):
         info, scope = self.infoAndScopeWithPackageNames(["foo", "foo.bar"])
-        nameInfo = scope.lookup("foo", NoLoc)
+        nameInfo = scope.lookupFromSelf("foo", NoLoc)
         self.assertTrue(nameInfo.isPackage())
 
     def testNotFoundCompound(self):
         info, scope = self.infoAndScopeWithPackageNames(["foo.bar"])
         scope = scope.scopeForPrefix("foo", NoLoc)
-        self.assertRaises(ScopeException, scope.lookup, "baz", NoLoc)
+        self.assertRaises(ScopeException, scope.lookupFromSelf, "baz", NoLoc)
 
     def testFoundCompound(self):
         info, scope = self.infoAndScopeWithPackageNames(["foo.bar"])
         scope = scope.scopeForPrefix("foo", NoLoc)
-        nameInfo = scope.lookup("bar", NoLoc)
+        nameInfo = scope.lookupFromSelf("bar", NoLoc)
         self.assertTrue(nameInfo.isPackage())
 
     def testFoundCompoundPrefix(self):
         info, scope = self.infoAndScopeWithPackageNames(["foo.bar.baz"])
         scope = scope.scopeForPrefix("foo", NoLoc)
-        nameInfo = scope.lookup("bar", NoLoc)
+        nameInfo = scope.lookupFromSelf("bar", NoLoc)
         self.assertFalse(nameInfo.isPackage())
         self.assertTrue(nameInfo.isPackagePrefix())
 
     def testFoundCompoundWithPrefix(self):
         info, scope = self.infoAndScopeWithPackageNames(["foo.bar", "foo.bar.baz"])
         scope = scope.scopeForPrefix("foo", NoLoc)
-        nameInfo = scope.lookup("bar", NoLoc)
+        nameInfo = scope.lookupFromSelf("bar", NoLoc)
         self.assertTrue(nameInfo.isPackage())
 
     def testPackageClassHasScope(self):
@@ -480,16 +480,16 @@ class TestPackageScope(unittest.TestCase):
                                        packageLoader.getPackageNames(), [], None)
         fooPackageScope = topPackageScope.scopeForPrefix("foo", NoLoc)
 
-        defnInfo = fooPackageScope.lookup("C", NoLoc).getDefnInfo()
+        defnInfo = fooPackageScope.lookupFromSelf("C", NoLoc).getDefnInfo()
         self.assertIs(clas, defnInfo.irDefn)
         self.assertIs(fooPackageScope.scopeId, defnInfo.scopeId)
         classScope = info.getScope(clas.id)
-        defnInfo = classScope.lookup(CONSTRUCTOR_SUFFIX, NoLoc).getDefnInfo()
+        defnInfo = classScope.lookupFromSelf(CONSTRUCTOR_SUFFIX, NoLoc).getDefnInfo()
         self.assertIs(publicCtor, defnInfo.irDefn)
         self.assertIs(classScope.scopeId, defnInfo.scopeId)
-        defnInfo = classScope.lookup("m1", NoLoc).getDefnInfo()
+        defnInfo = classScope.lookupFromSelf("m1", NoLoc).getDefnInfo()
         self.assertIs(publicMethod, defnInfo.irDefn)
-        self.assertRaises(ScopeException, classScope.lookup, "m2", NoLoc)
-        defnInfo = classScope.lookup("x", NoLoc).getDefnInfo()
+        self.assertRaises(ScopeException, classScope.lookupFromSelf, "m2", NoLoc)
+        defnInfo = classScope.lookupFromSelf("x", NoLoc).getDefnInfo()
         self.assertIs(publicField, defnInfo.irDefn)
-        self.assertRaises(ScopeException, classScope.lookup, "y", NoLoc)
+        self.assertRaises(ScopeException, classScope.lookupFromSelf, "y", NoLoc)

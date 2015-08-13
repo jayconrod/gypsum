@@ -157,8 +157,10 @@ class TypeVisitorBase(ast.AstNodeVisitor):
 
     def visitAstClassType(self, node):
         scope, prefixTypeArgs = self.handleScopePrefix(node.prefix)
+        # BUG: this doesn't actually tell us whether there is a prefix. Could be looking up
+        # from the same scope with a prefix.
         hasPrefix = scope is not self.scope()
-        nameInfo = scope.lookup(node.name, node.location, localOnly=hasPrefix)
+        nameInfo = scope.lookup(node.name, node.location, fromExternal=hasPrefix)
         if nameInfo.isOverloaded():
             raise TypeException(node.location, "%s: not a type definition" % node.name)
         defnInfo = nameInfo.getDefnInfo()
@@ -253,7 +255,7 @@ class TypeVisitorBase(ast.AstNodeVisitor):
         hasPrefix = False
         for component in prefix:
             # Look up the next component.
-            nameInfo = scope.lookup(component.name, component.location, localOnly=hasPrefix)
+            nameInfo = scope.lookup(component.name, component.location, fromExternal=hasPrefix)
             if not nameInfo.isScope():
                 raise TypeException(component.location,
                                     "%s: does not refer to a scope" % component.name)
@@ -698,7 +700,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         hasPrefix = scope is not self.scope()
         last = node.prefix[-1]
         typeArgs = map(self.visit, last.typeArguments)
-        nameInfo = scope.lookup(last.name, last.location, localOnly=hasPrefix)
+        nameInfo = scope.lookup(last.name, last.location, fromExternal=hasPrefix)
         if nameInfo.isOverloaded() or isinstance(nameInfo.getDefnInfo().irDefn, ir.Function):
             # Call to possibly overloaded matcher function.
             receiverIsExplicit = receiverType is not None
@@ -792,7 +794,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def visitAstThisExpression(self, node):
         scope = self.scope()
-        nameInfo = scope.lookup("this", node.location, localOnly=False, mayBeAssignment=False)
+        nameInfo = scope.lookupFromSelf("this", node.location, mayBeAssignment=False)
         defnInfo = nameInfo.getDefnInfo()
         scope.use(defnInfo, node.id, USE_AS_VALUE, node.location)
         ty = defnInfo.irDefn.type
@@ -800,7 +802,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def visitAstSuperExpression(self, node):
         scope = self.scope()
-        nameInfo = scope.lookup("this", node.location, localOnly=False, mayBeAssignment=False)
+        nameInfo = scope.lookupFromSelf("this", node.location, mayBeAssignment=False)
         defnInfo = nameInfo.getDefnInfo()
         scope.use(defnInfo, node.id, USE_AS_VALUE, node.location)
         thisType = defnInfo.irDefn.type
@@ -1148,7 +1150,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             useKind = USE_AS_VALUE
 
         nameInfo = scope.lookup(name, loc,
-                                localOnly=receiverIsExplicit, mayBeAssignment=mayAssign)
+                                fromExternal=receiverIsExplicit, mayBeAssignment=mayAssign)
         if nameInfo.isScope():
             isPrefix = mayBePrefix
             if isPrefix:

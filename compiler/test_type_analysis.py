@@ -649,7 +649,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  static def f = 34"
         info = self.analyzeFromSource(source)
         barScope = info.getScope(info.ast.modules[0].definitions[1])
-        fNameInfo = barScope.lookup("f", NoLoc, localOnly=True)
+        fNameInfo = barScope.lookupFromExternal("f", NoLoc)
         fNameInfo.resolveOverrides()
         self.assertEquals({}, fNameInfo.overrides)
 
@@ -660,7 +660,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  static def f = 12"
         info = self.analyzeFromSource(source)
         barScope = info.getScope(info.ast.modules[0].definitions[1])
-        fNameInfo = barScope.lookup("f", NoLoc, localOnly=True)
+        fNameInfo = barScope.lookupFromExternal("f", NoLoc)
         fNameInfo.resolveOverrides()
         self.assertEquals({}, fNameInfo.overrides)
 
@@ -671,7 +671,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  def f = 12"
         info = self.analyzeFromSource(source)
         barScope = info.getScope(info.ast.modules[0].definitions[1])
-        fNameInfo = barScope.lookup("f", NoLoc, localOnly=True)
+        fNameInfo = barScope.lookupFromExternal("f", NoLoc)
         fNameInfo.resolveOverrides()
         self.assertEquals({}, fNameInfo.overrides)
 

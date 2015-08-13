@@ -608,32 +608,56 @@ class Scope(ast.AstNodeVisitor):
         This is only false for local variables in function scopes."""
         raise NotImplementedError
 
-    def lookup(self, name, loc, localOnly=False, mayBeAssignment=False, ignoreDefnOrder=False):
-        """Resolves a reference to a symbol, possibly in a parent scope.
+    def lookup(self, name, loc, fromExternal, mayBeAssignment=False, ignoreDefnOrder=None):
+        if fromExternal:
+            assert ignoreDefnOrder is not False
+            return self.lookupFromExternal(name, loc, mayBeAssignment)
+        else:
+            if ignoreDefnOrder is None:
+                ignoreDefnOrder = False
+            return self.lookupFromSelf(name, loc, mayBeAssignment, ignoreDefnOrder)
 
-        Returns NameInfo. For overloaded symbols, there may be several functions in there."""
+    def lookupFromSelf(self, name, loc, mayBeAssignment=False, ignoreDefnOrder=False):
+        """Resolves a reference in this scope to a symbol.
+
+        The symbol may be defined in a parent scope. Returns NameInfo if the symbol is found.
+        For overloaded symbols, there may be several functions in there. If the symbol is not
+        found, a ScopeException is raised. Callers should call `use` if they actually use
+        the symbol."""
         defnScope = self
-        while defnScope is not None and \
-              not defnScope.isBound(name) and \
-              (not localOnly or self.isLocalWithin(defnScope)):
+        while defnScope is not None and not defnScope.isBound(name):
             defnScope = defnScope.parent
-        if defnScope is None or (localOnly and not self.isLocalWithin(defnScope)):
+        if defnScope is None:
             if mayBeAssignment and name.endswith("=") and name != "==":
-                return self.lookup(name[:-1], loc, localOnly=localOnly,
-                                   mayBeAssignment=False, ignoreDefnOrder=ignoreDefnOrder)
+                return self.lookupFromSelf(name[:-1], loc, mayBeAssignment=False,
+                                           ignoreDefnOrder=ignoreDefnOrder)
             else:
                 raise ScopeException(loc, "%s: not found" % name)
         if not ignoreDefnOrder and \
            not defnScope.isDefined(name) and \
            self.isLocalWithin(defnScope):
             raise ScopeException(loc, "%s: used before being defined" % name)
-        nameInfo = defnScope.getDefinition(name)
-        if localOnly:
-            if nameInfo.isOverloaded():
-                assert all(o.isVisible for o in nameInfo.overloads)
-            elif not nameInfo.getDefnInfo().isVisible:
-                raise ScopeException(loc, "%s: cannot access definition outside of its scope" %
-                                     name)
+        return defnScope.getDefinition(name)
+
+    def lookupFromExternal(self, name, loc, mayBeAssignment=False):
+        """Resolves a reference in another scope to a symbol.
+
+        Unlike `lookupFromLocal`, the symbol must be defined in this scope. Returns NameInfo
+        if the symbol is found. For overloaded symbols, there may be several functions in there.
+        If the symbol is not found, a ScopeException is raised. Callers should call `use` if
+        they actually use the symbol."""
+        if not self.isBound(name):
+            if mayBeAssignment and name.endswith("=") and name != "==":
+                return self.lookupFromExternal(name[:-1], loc, mayBeAssignment=False)
+            else:
+                raise ScopeException(loc, "%s: not found" % name)
+
+        nameInfo = self.getDefinition(name)
+        if nameInfo.isOverloaded():
+            assert all(o.isVisible for o in nameInfo.overloads)
+        elif not nameInfo.getDefnInfo().isVisible:
+            raise ScopeException(loc, "%s: cannot access definition outside of its scope" %
+                                 name)
         return nameInfo
 
     def isBound(self, name):
@@ -1622,7 +1646,7 @@ class InheritanceVisitor(ScopeVisitor):
         hasPrefix = False
         for component in astType.prefix:
             nameInfo = scope.lookup(component.name, component.location,
-                                    localOnly=hasPrefix, ignoreDefnOrder=True)
+                                    fromExternal=hasPrefix, ignoreDefnOrder=True)
             if not nameInfo.isScope():
                 raise ScopeException(component.location,
                                      "%s: not a scope name" % component.name)
@@ -1635,7 +1659,7 @@ class InheritanceVisitor(ScopeVisitor):
             hasPrefix = True
 
         nameInfo = scope.lookup(astType.name, astType.location,
-                                localOnly=hasPrefix, ignoreDefnOrder=True)
+                                fromExternal=hasPrefix, ignoreDefnOrder=True)
         if nameInfo.isOverloaded():
             raise ScopeException(astType.location, "%s: not a type name" % astType.name)
         irDefn = nameInfo.getDefnInfo().irDefn
