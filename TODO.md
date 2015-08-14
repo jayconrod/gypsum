@@ -70,11 +70,6 @@
 # Bugs
 
 ## Compiler
-- in type analysis, we check whether to do a local lookup based on whether the scope is same
-  as current. we might have a prefix for the same scope though, so a local lookup would
-  be unsafe.
-- in type analysis handlePossibleCall, receiver may only be implicit if there is no prefix before,
-  and we have no way to know that. same in visitAstDestructurePattern.
 
 ## VM
 - `read()` breaks when EOF is given. Exception is thrown in non-GC-safe place.

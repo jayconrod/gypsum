@@ -157,9 +157,7 @@ class TypeVisitorBase(ast.AstNodeVisitor):
 
     def visitAstClassType(self, node):
         scope, prefixTypeArgs = self.handleScopePrefix(node.prefix)
-        # BUG: this doesn't actually tell us whether there is a prefix. Could be looking up
-        # from the same scope with a prefix.
-        hasPrefix = scope is not self.scope()
+        hasPrefix = len(node.prefix) > 0
         nameInfo = scope.lookup(node.name, node.location, fromExternal=hasPrefix)
         if nameInfo.isOverloaded():
             raise TypeException(node.location, "%s: not a type definition" % node.name)
@@ -650,7 +648,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 # declaration analysis without making an extra pass.
                 scope.deleteVar(node.name)
                 varTy = self.handlePossibleCall(scope, node.name, node.id, None,
-                                                [], [], False, False, False, False,
+                                                [], [], False, False, False, False, False,
                                                 node.location)
             else:
                 varTy = None
@@ -692,12 +690,12 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         patTy = self.handlePossibleCall(scope, node.name, node.id, receiverType, [], [],
                                         hasReceiver=(receiverType is not None),
                                         hasArgs=False, mayAssign=False, mayBePrefix=False,
-                                        loc=node.location)
+                                        hasPrefix=(len(node.prefix) > 0), loc=node.location)
         return patTy
 
     def visitAstDestructurePattern(self, node, exprTy, mode):
         scope, receiverType = self.handlePatternScopePrefix(node.prefix[:-1])
-        hasPrefix = scope is not self.scope()
+        hasPrefix = len(node.prefix) > 1
         last = node.prefix[-1]
         typeArgs = map(self.visit, last.typeArguments)
         nameInfo = scope.lookup(last.name, last.location, fromExternal=hasPrefix)
@@ -752,7 +750,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                                      matcherReceiverType, [], [exprTy],
                                                      hasReceiver=matcherHasReceiver,
                                                      hasArgs=True, mayAssign=False,
-                                                     mayBePrefix=False, loc=node.location)
+                                                     mayBePrefix=False, hasPrefix=True,
+                                                     loc=node.location)
             except ScopeException:
                 raise TypeException(node.location, "cannot match without `try-match` method")
 
@@ -789,7 +788,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def visitAstVariableExpression(self, node, mayBePrefix=False):
         ty = self.handlePossibleCall(self.scope(), node.name, node.id, None,
-                                     [], [], False, False, False, mayBePrefix, node.location)
+                                     [], [], False, False, False, mayBePrefix, False,
+                                     node.location)
         return ty
 
     def visitAstThisExpression(self, node):
@@ -841,7 +841,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                      typeArgs=[], argTypes=[],
                                      hasReceiver=hasReceiver, hasArgs=False,
                                      mayAssign=False, mayBePrefix=mayBePrefix,
-                                     loc=node.location)
+                                     hasPrefix=True, loc=node.location)
         return ty
 
     def visitAstCallExpression(self, node, mayBePrefix=False):
@@ -857,7 +857,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                          None, typeArgs, argTypes,
                                          hasArgs=hasArgs, hasReceiver=False,
                                          mayAssign=False, mayBePrefix=mayBePrefix,
-                                         loc=node.location)
+                                         hasPrefix=False, loc=node.location)
         elif isinstance(node.callee, ast.AstPropertyExpression):
             receiverType = self.visitPossiblePrefix(node.callee.receiver)
             if self.info.hasScopePrefixInfo(node.callee.receiver):
@@ -871,7 +871,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                          receiverType, typeArgs, argTypes,
                                          hasReceiver=hasReceiver, hasArgs=hasArgs,
                                          mayAssign=False, mayBePrefix=mayBePrefix,
-                                         loc=node.location)
+                                         hasPrefix=True, loc=node.location)
         elif isinstance(node.callee, ast.AstThisExpression) or \
              isinstance(node.callee, ast.AstSuperExpression):
             receiverType = self.visit(node.callee)
@@ -1132,13 +1132,14 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                        receiverType, typeArgs, argTypes,
                                        hasReceiver=True, hasArgs=hasArgs,
                                        mayAssign=mayAssign, mayBePrefix=False,
-                                       loc=loc)
+                                       hasPrefix=True, loc=loc)
 
     def handlePossibleCall(self, scope, name, useAstId,
                            receiverType, typeArgs, argTypes,
-                           hasReceiver, hasArgs, mayAssign, mayBePrefix, loc):
+                           hasReceiver, hasArgs, mayAssign,
+                           mayBePrefix, hasPrefix, loc):
         receiverIsExplicit = receiverType is not None
-        if not receiverIsExplicit and scope is self.scope() and self.hasReceiverType():
+        if not receiverIsExplicit and not hasPrefix and self.hasReceiverType():
             receiverType = self.getReceiverType()
 
         assert not mayBePrefix or not hasArgs
@@ -1150,7 +1151,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             useKind = USE_AS_VALUE
 
         nameInfo = scope.lookup(name, loc,
-                                fromExternal=receiverIsExplicit, mayBeAssignment=mayAssign)
+                                fromExternal=hasPrefix, mayBeAssignment=mayAssign)
         if nameInfo.isScope():
             isPrefix = mayBePrefix
             if isPrefix:
@@ -1244,6 +1245,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                          typeArgs, [], hasReceiver=(receiverType is not None),
                                          hasArgs=False, mayAssign=False,
                                          mayBePrefix=(receiverType is None),
+                                         hasPrefix=hasPrefix,
                                          loc=component.location)
 
             # Determine the next scope and the receiver type. If this is just a prefix, there
