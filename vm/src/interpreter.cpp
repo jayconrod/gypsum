@@ -349,16 +349,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         auto global = function_->package()->getGlobal(index);
         auto value = global->getRaw();
         if (global->type()->isObject() && !global->type()->isNullable() && value == 0) {
-          // Global is uninitialized. We need to throw an exception.
-          Object* exn = nullptr;
-          {
-            GCSafeScope gcSafe(this);
-            HandleScope handleScope(vm_);
-            auto exnMeta = handle(
-                vm_->roots()->getBuiltinMeta(BUILTIN_UNINITIALIZED_EXCEPTION_CLASS_ID));
-            exn = *Object::create(vm_->heap(), exnMeta);
-          }
-          doThrow(exn);
+          throwBuiltinException(BUILTIN_UNINITIALIZED_EXCEPTION_CLASS_ID);
         } else {
           push(value);
         }
@@ -372,13 +363,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
             ->linkedGlobals()->get(externIndex);
         auto value = global->getRaw();
         if (global->type()->isObject() && !global->type()->isNullable() && value == 0) {
-          // Global is uninitialized. We need to throw an exception.
-          GCSafeScope gcSafe(this);
-          HandleScope handleScope(vm_);
-          auto exnMeta = handle(
-              vm_->roots()->getBuiltinMeta(BUILTIN_UNINITIALIZED_EXCEPTION_CLASS_ID));
-          auto exn = Object::create(vm_->heap(), exnMeta);
-          doThrow(*exn);
+          throwBuiltinException(BUILTIN_UNINITIALIZED_EXCEPTION_CLASS_ID);
         } else {
           push(value);
         }
@@ -626,10 +611,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
             isSubtype = Type::isSubtypeOf(objectType, type);
           }
           if (!isSubtype) {
-            // TODO: use throwBuiltinException when fixed.
-            auto meta = handle(vm_->roots()->getBuiltinMeta(BUILTIN_CAST_EXCEPTION_CLASS_ID));
-            auto exn = Object::create(vm_->heap(), meta);
-            doThrow(*exn);
+            throwBuiltinException(BUILTIN_CAST_EXCEPTION_CLASS_ID);
             break;
           }
         }
@@ -1100,9 +1082,13 @@ void Interpreter::unprepareForGC() {
 
 
 void Interpreter::throwBuiltinException(BuiltinId id) {
-  // TODO: ensure this allocation succeeds because we don't have a pointer map here.
-  auto exnMeta = vm_->roots()->getBuiltinMeta(id);
-  auto exn = new(vm_->heap(), exnMeta) Object;
+  Object* exn = nullptr;
+  {
+    GCSafeScope gcSafe(this);
+    HandleScope handleScope(vm_);
+    auto exnMeta = handle(vm_->roots()->getBuiltinMeta(id));
+    exn = *Object::create(vm_->heap(), exnMeta);
+  }
   doThrow(exn);
 }
 
@@ -1135,7 +1121,7 @@ void Interpreter::storeObject() {
 }
 
 
-#define DEFINE_BINOP(name, op)                                    \
+#define DEFINE_BINOP(name, op)                                        \
 template <typename T>                                                 \
 void Interpreter::name() {                                            \
   auto right = pop<T>();                                              \

@@ -492,6 +492,8 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
 
         case STG: {
           readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
           currentMap.pop();
           break;
         }
@@ -499,6 +501,8 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         case STGF: {
           readVbn(bytecode, &pcOffset);
           readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
           currentMap.pop();
         }
 
@@ -507,6 +511,8 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         case LD32:
         case LD64: {
           auto index = readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
           Local<Class> clas(currentMap.pop()->asClass());
           Local<Type> type(block_cast<Field>(clas->fields()->get(index))->type());
           currentMap.push(type);
@@ -516,6 +522,8 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         case LDP:
         case LDPC: {
           auto index = readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
           Local<Type> receiverType(currentMap.pop());
           Local<Class> receiverClass(receiverType->asClass());
           Local<Class> fieldClass(receiverClass->findFieldClass(index));
@@ -532,6 +540,8 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         case ST64:
         case STP:
           readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
           currentMap.pop();
           currentMap.pop();
           break;
