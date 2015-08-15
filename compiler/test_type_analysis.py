@@ -1870,3 +1870,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "public class Bar\n" + \
                  "  protected let x: Foo"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testInstantiateNothing(self):
+        source = "let g = Nothing()"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)

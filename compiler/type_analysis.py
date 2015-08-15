@@ -1188,6 +1188,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 allTypeArgs = classTypeArgs
                 allArgTypes = []
             else:
+                if irClass is getNothingClass():
+                    raise TypeException(loc, "cannot instantiate Nothing")
                 nameInfo = nameInfo.getInfoForConstructors(self.info)
                 useKind = USE_AS_CONSTRUCTOR
                 defnInfo, allTypeArgs, allArgTypes = \

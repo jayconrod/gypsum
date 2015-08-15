@@ -72,8 +72,6 @@
 ## Compiler
 
 ## VM
-- `read()` breaks when EOF is given. Exception is thrown in non-GC-safe place.
-- assertion when trying to instantiate Nothing. This should be a special case.
 - ldp, ldpc, and other instructions which may throw exceptions should be GC-safe.
   No pointer map is recorded for these, even though we might allocate an exception.
 - ldpc should be consolidated with ldp. We can determine whether the check is needed by
