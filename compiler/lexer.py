@@ -38,6 +38,8 @@ __expressions = [
   (r"def", RESERVED),
   (r"class", RESERVED),
   (r"trait", RESERVED),
+  (r"import", RESERVED),
+  (r"as", RESERVED),
   (r"if", RESERVED),
   (r"else", RESERVED),
   (r"while", RESERVED),

@@ -191,6 +191,38 @@ class AstPrimaryConstructorDefinition(AstDefinition):
         return self.attribs + self.parameters
 
 
+class AstImportStatement(AstNode):
+    def __init__(self, prefix, bindings, location):
+        super(AstImportStatement, self).__init__(location)
+        self.prefix = prefix
+        self.bindings = bindings
+
+    def __repr__(self):
+        return "AstImportStatement(%s, %s)" % (self.prefix, self.bindings)
+
+    def tag(self):
+        return "ImportStatement"
+
+    def children(self):
+        return self.prefix + ([] if self.bindings is None else self.bindings)
+
+
+class AstImportBinding(AstNode):
+    def __init__(self, name, asName, location):
+        super(AstImportBinding, self).__init__(location)
+        self.name = name
+        self.asName = asName
+
+    def __repr__(self):
+        return "AstImportBinding(%s, %s)" % (self.name, self.asName)
+
+    def tag(self):
+        return "ImportBinding"
+
+    def data(self):
+        return self.name + (" as %s" % self.asName if self.asName is not None else "")
+
+
 class AstScopePrefixComponent(AstNode):
     def __init__(self, name, typeArguments, location):
         super(AstScopePrefixComponent, self).__init__(location)
