@@ -495,9 +495,9 @@ class CompileVisitor(ast.AstNodeVisitor):
             dropFieldBlock = self.newBlock()
             for i in xrange(n - 1):
                 self.dup()
-                self.ldpc(i)
+                self.ldp(i)
                 self.visit(pat.patterns[i], mode, getRootClassType(), dropFieldBlock)
-            self.ldpc(n - 1)
+            self.ldp(n - 1)
             self.visit(pat.patterns[-1], mode, getRootClassType(), dropSomeBlock)
             successState = self.saveCurrentBlock()
 
@@ -1356,10 +1356,7 @@ class CompileVisitor(ast.AstNodeVisitor):
     def loadField(self, field):
         ty = field.type
         if ty.isObject():
-            if ty.isNullable():
-                inst = ir_instructions.ldp
-            else:
-                inst = ir_instructions.ldpc
+            inst = ir_instructions.ldp
         elif ty.width == W8:
             inst = ir_instructions.ld8
         elif ty.width == W16:

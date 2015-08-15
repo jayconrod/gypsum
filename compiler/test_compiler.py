@@ -504,7 +504,7 @@ class TestCompiler(TestCaseWithDefinitions):
         clasTy = ClassType(package.classes[0], ())
         expected = self.makeSimpleFunction("f", clasTy, [[
                        ldlocal(0),
-                       ldpc(0),
+                       ldp(0),
                        ret()]],
                      parameterTypes=[clasTy],
                      variables=[self.makeVariable("f.foo", type=clasTy,
@@ -527,7 +527,7 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(package,
                            self.makeSimpleFunction("f", getRootClassType(), [[
                                ldlocal(0),
-                               ldpc(0),
+                               ldp(0),
                                ret()]],
                              parameterTypes=[ty],
                              variables=[self.makeVariable("f.o", type=ty,
@@ -590,7 +590,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                dup(),
                                callg(Foo.constructors[0]),
                                drop(),
-                               ldpc(0),
+                               ldp(0),
                                ret()]]))
 
     def testLoadNullableObject(self):
@@ -786,7 +786,7 @@ class TestCompiler(TestCaseWithDefinitions):
                        tycs(getStringClass()),
                        callg(tupleClass.constructors[0]),
                        drop(),
-                       ldpc(0),
+                       ldp(0),
                        ret()]])
         self.assertEquals(expected, package.findFunction(name="f"))
 
@@ -1346,13 +1346,13 @@ class TestCompiler(TestCaseWithDefinitions):
                                tycd(Tuple2),
                                castc(),
                                dup(),
-                               ldpc(0),
+                               ldp(0),
                                tycd(getStringClass()),
                                castcbr(2, 4),
                              ], [
                                # block 2
                                stlocal(-1),
-                               ldpc(1),
+                               ldp(1),
                                tycd(getStringClass()),
                                castcbr(3, 5),
                              ], [
@@ -3163,8 +3163,8 @@ class TestCompiler(TestCaseWithDefinitions):
         self.checkFunction(package,
                            self.makeSimpleFunction("Foo.f.g", I64Type, [[
                                ldlocal(0),
-                               ldpc(0),
-                               ldpc(0),
+                               ldp(0),
+                               ldp(0),
                                ld64(0),
                                ret()
                              ]],

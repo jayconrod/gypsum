@@ -36,7 +36,6 @@
 - {name: "ld32", iops: 1, push: 1, pop: 1, term: false}
 - {name: "ld64", iops: 1, push: 1, pop: 1, term: false}
 - {name: "ldp", iops: 1, push: 1, pop: 1, term: false}
-- {name: "ldpc", iops: 1, push: 1, pop: 1, term: false}
 - {name: "st8", iops: 1, push: 0, pop: 2, term: false}
 - {name: "st16", iops: 1, push: 0, pop: 2, term: false}
 - {name: "st32", iops: 1, push: 0, pop: 2, term: false}

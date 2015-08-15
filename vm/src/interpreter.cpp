@@ -16,6 +16,7 @@
 #include "block.h"
 #include "builtins.h"
 #include "bytecode.h"
+#include "field.h"
 #include "flags.h"
 #include "function.h"
 #include "global.h"
@@ -140,13 +141,6 @@ class Interpreter::GCSafeScope {
 #define CHECK_NON_NULL(block)                                         \
   if ((block) == nullptr) {                                           \
     throwBuiltinException(BUILTIN_NULL_POINTER_EXCEPTION_CLASS_ID);   \
-    break;                                                            \
-  }                                                                   \
-
-
-#define CHECK_INITIALIZED(block)                                      \
-  if ((block) == nullptr) {                                           \
-    throwBuiltinException(BUILTIN_UNINITIALIZED_EXCEPTION_CLASS_ID);  \
     break;                                                            \
   }                                                                   \
 
@@ -392,15 +386,19 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       case LD16: loadObject<i16>(); break;
       case LD32: loadObject<i32>(); break;
       case LD64: loadObject<i64>(); break;
-      case LDP: loadObject<i64>(); break;
 
-      case LDPC: {
+      case LDP: {
         auto index = readVbn();
         auto block = pop<Block*>();
         CHECK_NON_NULL(block);
-        auto offset = block->meta()->clas()->findFieldOffset(index);
+        auto clas = block->meta()->clas();
+        auto fieldType = clas->fields()->get(index)->type();
+        auto offset = clas->findFieldOffset(index);
         auto value = mem<Block*>(block, offset);
-        CHECK_INITIALIZED(value);
+        if (fieldType->isObject() && !fieldType->isNullable() && value == nullptr) {
+          throwBuiltinException(BUILTIN_UNINITIALIZED_EXCEPTION_CLASS_ID);
+          break;
+        }
         push(value);
         break;
       }
