@@ -1874,3 +1874,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testInstantiateNothing(self):
         source = "let g = Nothing()"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testSubclassNothing(self):
+        source = "class Foo <: Nothing"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)

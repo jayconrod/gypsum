@@ -383,6 +383,9 @@ class DeclarationTypeVisitor(TypeVisitorBase):
             if supertype.isNullable():
                 raise TypeException(node.location,
                                     "%s: supertype may not be nullable" % node.name)
+            if supertype == ir_t.getNothingClassType():
+                raise TypeException(node.location,
+                                    "%s: Nothing cannot be a supertype" % node.name)
             irClass.supertypes = [supertype]
         if node.superArgs is not None:
             for arg in node.superArgs:
