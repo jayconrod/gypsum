@@ -29,7 +29,7 @@ def parse(filename, tokens):
 def module():
     def process(parsed, loc):
         return ast.AstModule(parsed, loc)
-    return ct.Phrase(ct.Rep(definition())) ^ process
+    return ct.Phrase(ct.Rep(definition() | importStmt())) ^ process
 
 
 # Definitions

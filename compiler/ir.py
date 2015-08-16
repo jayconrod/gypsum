@@ -792,25 +792,31 @@ def getImplicitTypeParameters(irDefn):
     return irDefn.typeParameters[:firstExplicit]
 
 
-def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes):
+def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes, importedTypeArgs):
     """Checks compatibility of arguments with the given function.
 
-    In Gypsum, some type arguments and argument types may be implied. Currently, this is
-    limited to arguments for parameters that were implied by the enclosing scope of the
-    function. This function checks compatibility with the given (explicit) type arguments and
-    argument types, including the receiver type (which may be None for regular function calls).
-    If the function is compatible, this function returns a (list(Type), list(Type)) tuple
-    containing the full list of type arguments and argument types (including the receiver).
-    If the function is not compatible, returns None."""
+    Some type arguments may be implied. If the function was imported, these type arguments
+    were specified in the import statement. If the function is defined inside a class with
+    type parameters, type arguments are implied by the receiver (the enclosing scope
+    in general). If the function is compatible, this function returns a
+    ([Type], [Type]) tuple containing the full list of type arguments and argument types
+    (including the receiver). If the function is not compatible, None is returned."""
     if receiverType is not None and \
+       importedTypeArgs is None and \
        (flags.STATIC in irFunction.flags or flags.METHOD in irFunction.flags):
+        # Method call: type args are implied by receiver.
         if isinstance(receiverType, ir_types.ObjectType):
             receiverType = receiverType.substituteForBaseClass(irFunction.getReceiverClass())
         implicitTypeArgs = list(receiverType.getTypeArguments())
         allArgTypes = argTypes \
                       if flags.STATIC in irFunction.flags \
                       else [receiverType] + argTypes
+    elif importedTypeArgs is not None:
+        # Imported function call: type args are implied by import statement.
+        implicitTypeArgs = importedTypeArgs
+        allArgTypes = argTypes
     else:
+        # Other function call: type args are implied by parent scope.
         implicitTypeParams = getImplicitTypeParameters(irFunction)
         implicitTypeArgs = [ir_types.VariableType(t) for t in implicitTypeParams]
         allArgTypes = argTypes

@@ -20,12 +20,12 @@
 # - flattenClasses
 
 import ast
-from compile_info import ContextInfo, ClosureInfo, DefnInfo, ClassInfo, UseInfo, USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, NORMAL_MODE, STD_MODE, NOSTD_MODE, CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, NOT_HERITABLE
+from compile_info import ContextInfo, ClosureInfo, DefnInfo, ClassInfo, UseInfo, ImportInfo, USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, NORMAL_MODE, STD_MODE, NOSTD_MODE, CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, NOT_HERITABLE
 from data import Data
 from errors import TypeException, ScopeException
 from flags import *
 from graph import Graph
-from ids import DefnId, PackageId, ScopeId, BUILTIN_SCOPE_ID, GLOBAL_SCOPE_ID, PACKAGE_SCOPE_ID
+from ids import AstId, DefnId, PackageId, ScopeId, BUILTIN_SCOPE_ID, GLOBAL_SCOPE_ID, PACKAGE_SCOPE_ID
 import ir
 from ir_types import getRootClassType, ClassType, UnitType
 from location import Location, NoLoc
@@ -44,7 +44,13 @@ def analyzeDeclarations(info):
       IR definitions are added to the package. DefnInfo can be accessed later using
       info.{get,set,has}DefnInfo.
     - Create a ClassInfo object for each node which defines a class. These can be accessed later
-      using info.{get,set,has}ClassInfo."""
+      using info.{get,set,has}ClassInfo.
+
+    Import statements are processed after the AST has been fully traversed. This is necessary
+    since we can't import symbols from a scope that hasn't been visited yet. Symbols are
+    imported by adding additional DefnInfo records in the importing scope. The actual
+    definitions are not duplicated though."""
+
     packageScope = PackageScope(PACKAGE_SCOPE_ID, None, info, info.packageNames, [], None)
     if info.languageMode() is NORMAL_MODE:
         # Load the std library so we can access class members even if there aren't any
@@ -56,6 +62,12 @@ def analyzeDeclarations(info):
 
     visitor = DeclarationVisitor(globalScope)
     visitor.visitChildren(info.ast)
+
+    def processImportsForScope(scope):
+        scope.processImports()
+        for child in scope.childScopes.itervalues():
+            processImportsForScope(child)
+    processImportsForScope(globalScope)
 
 
 def analyzeInheritance(info):
@@ -336,6 +348,15 @@ class NameInfo(object):
     def isScope(self):
         return self.isClass() or self.isPackagePrefix() or self.isPackage()
 
+    def getScope(self, info, loc):
+        assert self.isScope()
+        defnInfo = self.overloads[0]
+        if isinstance(defnInfo.irDefn, ir.PackagePrefix):
+            scope = info.getScope(defnInfo.scopeId).scopeForPrefix(self.name, loc)
+        else:
+            scope = info.getScope(defnInfo.irDefn)
+        return scope
+
     def getInfoForConstructors(self, info):
         assert self.isClass()
         irClass = self.getDefnInfo().irDefn
@@ -436,7 +457,8 @@ class NameInfo(object):
                 match = True
             elif isinstance(irDefn, ir.Function):
                 # Function, method, static method, or constructor.
-                typesAndArgs = ir.getAllArgumentTypes(irDefn, receiverType, typeArgs, argTypes)
+                typesAndArgs = ir.getAllArgumentTypes(irDefn, receiverType, typeArgs, argTypes,
+                                                      defnInfo.importedTypeArguments)
                 match = typesAndArgs is not None
             else:
                 match = False
@@ -463,6 +485,7 @@ class Scope(ast.AstNodeVisitor):
         self.bindings = {}
         self.defined = set()
         self.childScopes = {}
+        self.imports = []
         info.setScope(self.scopeId, self)
         if self.ast is not None:
             info.setScope(ast.id, self)
@@ -524,6 +547,78 @@ class Scope(ast.AstNodeVisitor):
         self.bind(name, defnInfo)
         if self.isDefinedAutomatically(astDefn):
             self.define(name)
+
+    def addImport(self, node):
+        """Adds an import statement to this scope's import list.
+
+        This is called by DeclarationVisitor. Import statements can't be processed until the
+        declaration analysis has visited the entire AST. processImports should be called for
+        every scope after that."""
+        self.imports.append(node)
+
+    def processImports(self):
+        """Processes import statements recorded with addImport.
+
+        For each import statement, this method looks up the scope the prefix refers to, then
+        copies DefnInfo records into this scope. The imported DefnInfo records are not visible
+        outside this scope and are not heritable. They are bound to either the original
+        symbols or the alternate symbols specified in the import statement. This method should
+        be called for each AST scope at the end of declaration analysis."""
+        for importStmt in self.imports:
+            scope = self
+            hasPrefix = False
+            for component in importStmt.prefix:
+                nameInfo = scope.lookup(component.name, component.location,
+                                        fromExternal=hasPrefix)
+                if not nameInfo.isScope():
+                    raise ScopeException(component.location,
+                                         "%s: import prefix does not refer to a scope" %
+                                         component.name)
+                scope = nameInfo.getScope(self.info, component.location)
+                hasPrefix = True
+
+            if importStmt.bindings is None:
+                importedNames = [(name, name, importStmt.location)
+                                 for name in scope.bindings.keys()]
+                allowEmpty = True
+            else:
+                def getAsName(binding):
+                    return binding.asName if binding.asName is not None else binding.name
+                importedNames = [(binding.name, getAsName(binding), binding.location)
+                                 for binding in importStmt.bindings]
+                allowEmpty = False
+
+            allImportedDefnInfos = []
+            for name, asName, loc in importedNames:
+                if name not in scope.bindings:
+                    raise ScopeException(loc, "%s: undefined imported symbol" % name)
+                nameInfo = scope.bindings[name]
+                importedDefnInfos = []
+                for defnInfo in nameInfo.overloads:
+                    if defnInfo.isVisible and \
+                       (not hasattr(defnInfo.irDefn, "flags") or
+                        frozenset([PRIVATE, PROTECTED]).isdisjoint(defnInfo.irDefn.flags)):
+                        importedDefnInfos.append(defnInfo.importt(self.scopeId))
+                if not allowEmpty and len(importedDefnInfos) == 0:
+                    raise ScopeException(loc,
+                                         "%s: could not import private, protected, or inherited definition" %
+                                         name)
+                for importedDefnInfo in importedDefnInfos:
+                    if self.isBound(asName) and \
+                       not self.bindings[asName].isOverloadable(importedDefnInfo):
+                        raise ScopeException(loc, "%s: already declared" % asName)
+                    self.bind(asName, importedDefnInfo)
+                    self.define(asName)
+                allImportedDefnInfos.extend(importedDefnInfos)
+            self.info.setImportInfo(importStmt, ImportInfo(allImportedDefnInfos))
+
+    def canImport(self, defnInfo):
+        """Returns whether a given definition can be imported from this class.
+
+        Inherited and invisible definitions cannot be imported. In general, definitions that
+        require context (such as non-static methods and fields) cannot be imported. Subclasses
+        may override this."""
+        return defnInfo.isVisible
 
     def bind(self, name, defnInfo):
         """Binds a name in this scope.
@@ -1303,6 +1398,12 @@ class ClassScope(Scope):
             irDefn, shouldBind = self.createIrClassDefn(astDefn)
         return irDefn, shouldBind, isVisible
 
+    def canImport(self, defnInfo):
+        if not super(ClassScope, self).canImport(defnInfo):
+            return False
+        flags = defnInfo.irDefn.flags
+        return PRIVATE not in flags and PROTECTED not in flags and STATIC in flags
+
     def isDefinedAutomatically(self, astDefn):
         return isinstance(astDefn, ast.AstPrimaryConstructorDefinition) or \
                isinstance(astDefn, ast.AstFunctionDefinition) or \
@@ -1571,6 +1672,9 @@ class DeclarationVisitor(ScopeVisitor):
     def visitAstPrimaryConstructorDefinition(self, node):
         self.scope.declare(node)
         super(DeclarationVisitor, self).visitChildren(node)
+
+    def visitAstImportStatement(self, node):
+        self.scope.addImport(node)
 
     def visitAstTypeParameter(self, node):
         self.scope.declare(node)

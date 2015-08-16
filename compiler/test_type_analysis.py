@@ -1800,6 +1800,40 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertIs(info.getDefnInfo(info.ast.modules[0].definitions[0].members[0]),
                       info.getUseInfo(info.ast.modules[0].definitions[1].members[0].expression).defnInfo)
 
+    def testImportStaticMethodFromClass(self):
+        source = "class Foo\n" + \
+                 "  static def f = 12\n" + \
+                 "import Foo.f as g\n" + \
+                 "let x = g"
+        info = self.analyzeFromSource(source)
+        x = info.package.findGlobal(name="x")
+        self.assertEquals(I64Type, x.type)
+
+    def testImportStaticMethodFromClassWithTypeParams(self):
+        source = "class Foo[static T]\n" + \
+                 "  static def id(x: T) = x\n" + \
+                 "import Foo[String].id\n" + \
+                 "let x = id(\"blarg\")"
+        info = self.analyzeFromSource(source)
+        x = info.package.findGlobal(name="x")
+        self.assertEquals(getStringType(), x.type)
+
+    def testImportStaticMethodFromClassWithTypeParamsOutOfBounds(self):
+        source = "class Foo[static T <: String]\n" + \
+                 "  static def id(x: T) = x\n" + \
+                 "import Foo[Object].id\n" + \
+                 "let x = id(\"blarg\")"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testImportGlobalFromPackage(self):
+        foo = Package(name=Name(["foo"]))
+        bar = foo.addGlobal(Name(["bar"]), None, I64Type, frozenset([PUBLIC]))
+        source = "import foo.bar as baz\n" + \
+                 "let x = baz"
+        info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
+        x = info.package.findGlobal(name="x")
+        self.assertEquals(I64Type, x.type)
+
     # Regression tests
     def testPrimaryCtorHasCorrectScope(self):
         source = "class Foo\n" + \

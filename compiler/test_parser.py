@@ -285,6 +285,12 @@ class TestParser(unittest.TestCase):
                         expression(),
                         "{ import foo._; }")
 
+    def testImportInModule(self):
+        self.checkParse(astModule([astImportStatement([astScopePrefixComponent("foo", [])],
+                                                      None)]),
+                        module(),
+                        "import foo._;")
+
     # Patterns
     def testVarPatternNoType(self):
         self.checkParse(astVariablePattern("x", None), pattern(), "x")

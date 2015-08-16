@@ -311,7 +311,7 @@ class TypeVisitorBase(ast.AstNodeVisitor):
 
 class DeclarationTypeVisitor(TypeVisitorBase):
     """Analyzes functions, classes, and type parameters and saves supertypes, upper bounds,
-    lower bounds, and parameter types. The analysis proceeds in lexical order over the ASt.
+    lower bounds, and parameter types. The analysis proceeds in lexical order over the AST.
     This must be done before we can start typing expressions, because we need a fully
     functional Type.isSubtypeOf method, which relies on this information. We use isSubtypeOf
     here, too, but only on definitions we've already processed. This is guaranteed to
@@ -398,6 +398,12 @@ class DeclarationTypeVisitor(TypeVisitorBase):
             defaultCtor.parameterTypes = [self.getReceiverType()]
         self.setMethodReceiverType(irClass.initializer)
         irClass.initializer.parameterTypes = [self.getReceiverType()]
+
+    def visitAstImportStatement(self, node):
+        scope, typeArgs = self.handleScopePrefix(node.prefix)
+        importedDefnInfos = self.info.getImportInfo(node).importedDefnInfos
+        for defnInfo in importedDefnInfos:
+            defnInfo.importedTypeArguments = typeArgs
 
     def visitAstTypeParameter(self, node):
         irParam = self.info.getDefnInfo(node).irDefn
@@ -616,8 +622,12 @@ class DefinitionTypeVisitor(TypeVisitorBase):
     def visitAstPrimaryConstructorDefinition(self, node):
         self.handleFunctionCommon(node, None, None)
 
+    def visitAstImportStatement(self, node):
+        # TypeDeclarationVisitor does all the work.
+        pass
+
     def visitAstTypeParameter(self, node):
-        # SubtypeVisitor does all the work, including finding the types of the bounds.
+        # TypeDeclarationVisitor does all the work, including finding the types of the bounds.
         # We don't need to do anything here.
         pass
 
