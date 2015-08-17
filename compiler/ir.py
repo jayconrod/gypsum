@@ -441,13 +441,16 @@ class Function(ParameterizedDefn):
                      "variables", "blocks", "flags")
 
     def getReceiverClass(self):
-        if self.isMethod():
+        assert flags.METHOD in self.flags
+        if flags.STATIC in self.flags:
+            # Static methods don't have a receiver argument and can't obtain the defining
+            # class that way. For now, we walk the class tree. This will become much more
+            # expensive when traits are introduced.
+            # TODO: support annotations which can point to classes and traits.
+            return self.clas
+        else:
             ty = self.parameterTypes[0]
             return builtins.getBuiltinClassFromType(ty) if ty.isPrimitive() else ty.clas
-        else:
-            # TODO: this is a hack. Find a cleaner way to do this that doesn't require
-            # this hidden property.
-            return self.clas
 
     def canCallWith(self, typeArgs, argTypes):
         if not self.canApplyTypeArgs(typeArgs):
@@ -463,7 +466,7 @@ class Function(ParameterizedDefn):
         return all(at.isSubtypeOf(pt) for at, pt in zip(argTypes, paramTypes))
 
     def isMethod(self):
-        return flags.METHOD in self.flags
+        return flags.METHOD in self.flags and flags.STATIC not in self.flags
 
     def isConstructor(self):
         # TODO: come up with a better way to indicate this, maybe a flag.
@@ -658,7 +661,7 @@ class Class(ParameterizedDefn):
         return self.getField(name)
 
     def getMethodIndex(self, method):
-        for i, m in enumerate(self.methods):
+        for i, m in enumerate(m for m in self.methods if flags.STATIC not in m.flags):
             if m is method:
                 return i
         raise KeyError("method does not belong to this class")

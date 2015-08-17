@@ -1340,6 +1340,7 @@ class ClassScope(Scope):
                 if STATIC in flags:
                     checkFlags(flags, frozenset([STATIC, PUBLIC, PROTECTED, PRIVATE]),
                                astDefn.location)
+                    flags |= frozenset([METHOD])
                     irDefn = self.info.package.addFunction(name, astDefn,
                                                            None, implicitTypeParams,
                                                            None, [], None, flags)
@@ -1353,9 +1354,7 @@ class ClassScope(Scope):
                                                            None, implicitTypeParams,
                                                            None, [], None, flags)
                     self.makeMethod(irDefn, irScopeDefn)
-                    irScopeDefn.methods.append(irDefn)
-                    # We don't need to call makeMethod here because the inner FunctionScope
-                    # will do it.
+                irScopeDefn.methods.append(irDefn)
         elif isinstance(astDefn, ast.AstPrimaryConstructorDefinition):
             name = self.makeName(ir.CONSTRUCTOR_SUFFIX)
             checkFlags(flags, frozenset([PUBLIC, PROTECTED, PRIVATE]), astDefn.location)

@@ -220,7 +220,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource("class C { static def f = 12; };")
         astDefn = info.ast.modules[0].definitions[0].members[0]
         scopeId = info.getScope(info.ast.modules[0].definitions[0]).scopeId
-        expectedFunction = self.makeFunction("C.f", flags=frozenset([STATIC]))
+        expectedFunction = self.makeFunction("C.f", flags=frozenset([STATIC, METHOD]))
         expectedDefnInfo = DefnInfo(expectedFunction, scopeId, True)
         self.assertEquals(expectedDefnInfo, info.getDefnInfo(astDefn))
 

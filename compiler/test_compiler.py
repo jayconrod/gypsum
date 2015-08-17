@@ -3543,7 +3543,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                i64(12),
                                ret(),
                              ]],
-                             flags=frozenset([STATIC])))
+                             flags=frozenset([STATIC, METHOD])))
         self.checkFunction(package,
                            self.makeSimpleFunction("Foo.g", I64Type, [[
                                callg(f),
