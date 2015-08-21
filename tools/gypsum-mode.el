@@ -66,6 +66,7 @@
     "false"
     "finally"
     "if"
+    "import"
     "lambda"
     "let"
     "match"
