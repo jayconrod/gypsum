@@ -15,13 +15,12 @@
 - native functions
 - standard library
 - downcasting and type testing
-- pattern matching
 - default parameters
 - positional, keyword arguments
 - proper closures (with type from standard lib)
 - class closures
 - inner classes
-- `static` attribute for inner classes, functions
+- `static` attribute for inner classes
 - other expressions (lambdas, pattern matching, etc)
 - traits and multiple inheritance
 - tail recursion
@@ -58,11 +57,11 @@
 - no optional parameters: prevent objects from being extended
 - AST classes should always be referenced through module and should not start with Ast
 - Does NameInfo.findDefnInfoWithArgTypes need to return allArgTypes? Seems unused.
+- Function.isMethod should exclude constructor results.
 
 ## VM
 - use variadic arguments for API call
 - Implement optional ASLR
-- Prune includes
-- Remaining TODOs
+- Prune includes (automatically)
 - Coding convention
 - Switch enums to enum class, especially flags
