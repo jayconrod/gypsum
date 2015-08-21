@@ -29,7 +29,7 @@ def parse(filename, tokens):
 def module():
     def process(parsed, loc):
         return ast.AstModule(parsed, loc)
-    return ct.Phrase(ct.Rep(definition())) ^ process
+    return ct.Phrase(ct.Rep(definition() | importStmt())) ^ process
 
 
 # Definitions
@@ -68,7 +68,7 @@ def classDefn():
     def process(parsed, loc):
         [ats, _, name, tps, ctor, sty, sargs, ms, _] = ct.untangle(parsed)
         return ast.AstClassDefinition(ats, name, tps, ctor, sty, sargs, ms, loc)
-    classBodyOpt = ct.Opt(layoutBlock(ct.Rep(ct.Lazy(definition)))) ^ \
+    classBodyOpt = ct.Opt(layoutBlock(ct.Rep(ct.Lazy(classMember)))) ^ \
                    (lambda p, _: p if p is not None else [])
     return attribs() + keyword("class") + ct.Commit(symbol + typeParameters() +
            constructor() + superclass() + classBodyOpt + semi) ^ process
@@ -99,6 +99,48 @@ def supertypes():
     def process(parsed, _):
         return ct.untangle(parsed)[1] if parsed else []
     return ct.Opt(keyword("<:") + ct.Rep1Sep(classType(), keyword(","))) ^ process
+
+
+def classMember():
+    return definition() | importStmt()
+
+
+def importStmt():
+    def processBinding(parsed, loc):
+        name = parsed[0]
+        asName = parsed[1][1] if parsed[1] is not None else None
+        return ast.AstImportBinding(name, asName, loc)
+    importBinding = symbol + ct.Opt(keyword("as") + symbol) ^ processBinding
+
+    def processSuffixEmpty(parsed, loc):
+        return lambda prefix: None
+    importSuffixEmpty = keyword(".") + keyword("_") ^ processSuffixEmpty
+
+    def processSuffixAs(parsed, loc):
+        firstAsName = parsed[0][1] if parsed[0] is not None else None
+        laterBindings = [p[1] for p in parsed[1]]
+        def processFn(prefix):
+            if len(prefix) == 1:
+                raise ParseException(prefix[0].location,
+                                     "import statement requires a prefix before symbol to import")
+            lastComponent = prefix.pop()
+            if len(lastComponent.typeArguments) > 0:
+                raise ParseException(lastComponent.location,
+                                     "type arguments can't be at the end of an import statement")
+            firstBinding = ast.AstImportBinding(lastComponent.name, firstAsName,
+                                                lastComponent.location)
+            return [firstBinding] + laterBindings
+        return processFn
+    importSuffixAs = ct.Opt(keyword("as") + symbol) + ct.Rep(keyword(",") + importBinding) ^ \
+      processSuffixAs
+
+    importSuffix = (importSuffixEmpty | importSuffixAs) + semi
+
+    def process(parsed, loc):
+        _, prefix, suffixFn, _ = ct.untangle(parsed)
+        bindings = suffixFn(prefix)
+        return ast.AstImportStatement(prefix, bindings, loc)
+    return keyword("import") + ct.Commit(scopePrefix() + importSuffix) ^ process
 
 
 def typeParameters():
@@ -535,7 +577,7 @@ def returnExpr():
 
 
 def statement():
-    return definition() | ((expression() + semi) ^ (lambda p, _: p[0]))
+    return definition() | importStmt() | ((expression() + semi) ^ (lambda p, _: p[0]))
 
 
 # Literals

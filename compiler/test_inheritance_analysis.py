@@ -232,3 +232,16 @@ class TestInheritanceAnalysis(unittest.TestCase):
         info = self.analyzeFromSource(source)
         scope = info.getScope(info.ast.modules[0].definitions[1])
         self.assertEquals(2, len(scope.getDefinition("f").overloads))
+
+    def testInheritFromImportedClass(self):
+        foo = Package(name=Name(["foo"]))
+        Bar = foo.addClass(Name(["Bar"]), None, [], [getRootClassType()],
+                           None, [], [], [], frozenset([PUBLIC]))
+        x = foo.newField(Name(["x"]), None, None, frozenset([PUBLIC, LET]))
+        Bar.fields.append(x)
+
+        source = "import foo.Bar\n" + \
+                 "class Baz <: Bar"
+        info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
+        bazScope = info.getScope(info.ast.modules[0].definitions[1])
+        self.assertTrue(bazScope.isBound("x"))

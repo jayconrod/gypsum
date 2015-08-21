@@ -90,6 +90,13 @@ class Type: public Object {
   static Local<Type> create(Heap* heap,
                             const Handle<TypeParameter>& param,
                             Flags flags = NO_FLAGS);
+  static Local<Type> createExtern(Heap* heap,
+                                  const Handle<Class>& clas,
+                                  const std::vector<Local<Type>>& typeArgs,
+                                  Flags flags = NO_FLAGS);
+  static Local<Type> createExtern(Heap* heap,
+                                  const Handle<TypeParameter>& param,
+                                  Flags flags = NO_FLAGS);
   static Local<Type> createWithFlags(Heap* heap, const Handle<Type>& type, Flags flags);
 
   static Type* primitiveTypeFromForm(Roots* roots, Form form);

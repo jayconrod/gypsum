@@ -44,6 +44,9 @@ class TestParser(unittest.TestCase):
         value = self.parseFromSource(parser, text)
         self.assertEqual(expected, value)
 
+    def checkParseError(self, parser, text):
+        self.assertRaises(ParseException, self.parseFromSource, parser, text)
+
     # Module
     def testModuleEmpty(self):
         self.checkParse(astModule([]), module(), "")
@@ -229,6 +232,64 @@ class TestParser(unittest.TestCase):
         self.checkParse(astParameter([], "var", astVariablePattern("x", None)),
                         parameter(),
                         "var x")
+
+    def testImportBlank(self):
+        self.checkParse(astImportStatement([astScopePrefixComponent("foo", []),
+                                            astScopePrefixComponent("bar", [astErasedType()])],
+                                           None),
+                        importStmt(),
+                        "import foo.bar[_]._;")
+
+    def testImportSingle(self):
+        self.checkParse(astImportStatement([astScopePrefixComponent("foo", [])],
+                                           [astImportBinding("x", None)]),
+                        importStmt(),
+                        "import foo.x;")
+
+    def testImportSingleAs(self):
+        self.checkParse(astImportStatement([astScopePrefixComponent("foo", [])],
+                                           [astImportBinding("x", "y")]),
+                        importStmt(),
+                        "import foo.x as y;")
+
+    def testImportMultiple(self):
+        self.checkParse(astImportStatement([astScopePrefixComponent("foo", [])],
+                                           [astImportBinding("x", None),
+                                            astImportBinding("y", None)]),
+                        importStmt(),
+                        "import foo.x, y;")
+
+    def testImportMultipleAs(self):
+        self.checkParse(astImportStatement([astScopePrefixComponent("foo", [])],
+                                           [astImportBinding("a", "b"),
+                                            astImportBinding("c", "d")]),
+                        importStmt(),
+                        "import foo.a as b, c as d;")
+
+    def testImportNoPrefix(self):
+        self.checkParseError(importStmt(), "import foo;")
+
+    def testImportWithTypeArgs(self):
+        self.checkParseError(importStmt(), "import foo.bar[_];")
+
+    def testImportInClass(self):
+        self.checkParse(astClassDefinition([], "C", [], None, None, None,
+                                           [astImportStatement([astScopePrefixComponent("foo", [])],
+                                                               None)]),
+                        classDefn(),
+                        "class C { import foo._; };")
+
+    def testImportInBlockExpr(self):
+        self.checkParse(astBlockExpression([astImportStatement([astScopePrefixComponent("foo", [])],
+                                                               None)]),
+                        expression(),
+                        "{ import foo._; }")
+
+    def testImportInModule(self):
+        self.checkParse(astModule([astImportStatement([astScopePrefixComponent("foo", [])],
+                                                      None)]),
+                        module(),
+                        "import foo._;")
 
     # Patterns
     def testVarPatternNoType(self):

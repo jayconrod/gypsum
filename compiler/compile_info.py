@@ -51,6 +51,7 @@ class CompileInfo(object):
         self.callInfo = {}  # keyed by AstId
         self.scopePrefixInfo = {}  # keyed by AstId
         self.stdExternInfo = {} # keyed by DefnId
+        self.importInfo = {}  # keyed by AstId
 
     def languageMode(self):
         if self.isUsingStd:
@@ -73,7 +74,7 @@ class CompileInfo(object):
         clas = package.findClass(name=name)
 
         if langMode is NORMAL_MODE:
-            self.setStdExternInfo(someClass.id, someClass)
+            self.setStdExternInfo(clas.id, clas)
             for ctor in clas.constructors:
                 self.setStdExternInfo(ctor.id, ctor)
 
@@ -93,7 +94,8 @@ _dictNames = [("Scope", "scopes", (ids.ScopeId, ids.AstId, ids.DefnId, ids.Packa
               ("Type", "typeInfo", (ids.AstId,)),
               ("CallInfo", "callInfo", (ids.AstId,)),
               ("ScopePrefixInfo", "scopePrefixInfo", (ids.AstId,)),
-              ("StdExternInfo", "stdExternInfo", (ids.DefnId,))]
+              ("StdExternInfo", "stdExternInfo", (ids.DefnId,)),
+              ("ImportInfo", "importInfo", (ids.AstId,)),]
 
 def _addDictMethods(elemName, dictName, types):
     def cleanKey(self, key):
@@ -246,9 +248,14 @@ class DefnInfo(data.Data):
         # original definition. NOT_HERITABLE (-1) indicates this is the original definition and
         # it is not heritable.
         "inheritanceDepth",
+
+        # [Type]: a list of type arguments from the import statement. None for definitions
+        # that weren't imported.
+        "importedTypeArguments",
     ]
 
-    def __init__(self, irDefn, scopeId, isVisible, inheritedScopeId=None, inheritanceDepth=0):
+    def __init__(self, irDefn, scopeId, isVisible,
+                 inheritedScopeId=None, inheritanceDepth=0, importedTypeArguments=None):
         if inheritedScopeId is None:
             inheritedScopeId = scopeId
         self.irDefn = irDefn
@@ -256,12 +263,13 @@ class DefnInfo(data.Data):
         self.isVisible = isVisible
         self.inheritedScopeId = inheritedScopeId
         self.inheritanceDepth = inheritanceDepth
+        self.importedTypeArguments = importedTypeArguments
 
     def __repr__(self):
         irDefnStr = repr(self.irDefn)
-        return "DefnInfo(%s, %s, %s, %s, %d)" % \
+        return "DefnInfo(%s, %s, %s, %s, %d, %s)" % \
             (irDefnStr, self.scopeId, self.isVisible,
-             self.inheritedScopeId, self.inheritanceDepth)
+             self.inheritedScopeId, self.inheritanceDepth, self.importedTypeArguments)
 
     def isMethod(self):
         return isinstance(self.irDefn, Function) and self.irDefn.isMethod()
@@ -270,6 +278,11 @@ class DefnInfo(data.Data):
         assert self.inheritanceDepth != NOT_HERITABLE and self.isVisible
         return DefnInfo(self.irDefn, scopeId, self.isVisible,
                         self.inheritedScopeId, self.inheritanceDepth + 1)
+
+    def importt(self, scopeId):
+        assert self.isVisible and \
+            (self.inheritanceDepth == NOT_HERITABLE or self.inheritanceDepth == 0)
+        return DefnInfo(self.irDefn, scopeId, False, None, NOT_HERITABLE, None)
 
 
 USE_AS_VALUE = "USE_AS_VALUE"
@@ -326,12 +339,12 @@ class CallInfo(data.Data):
     compiler to generate the call."""
 
     propertyNames = [
-        # A list of type arguments to be passed to the callee.
+        # [Type]: A list of type arguments to be passed to the callee.
         "typeArguments",
 
-        # For property expressions, this is true if the receiver needs to be compiled. This is
-        # false when the receiver expression is a package or namespace or when there is no
-        # explicit receiver expression.
+        # bool: For property expressions, this is true if the receiver needs to be compiled.
+        # This is false when the receiver expression is a package or namespace or when there
+        # is no explicit receiver expression.
         "receiverExprNeeded",
     ]
 
@@ -349,8 +362,18 @@ class ScopePrefixInfo(data.Data):
     ]
 
 
+class ImportInfo(data.Data):
+    """Defined for each import statement. Points to definitions that were imported."""
+
+    propertyNames = [
+        # [DefnInfo]: the definitions that were imported by this statement.
+        "importedDefnInfos",
+    ]
+
+
+
 __all__ = [ "CompileInfo", "ContextInfo", "ClosureInfo", "DefnInfo",
-            "ClassInfo", "UseInfo",
+            "ClassInfo", "UseInfo", "ImportInfo",
             "USE_AS_VALUE", "USE_AS_TYPE", "USE_AS_PROPERTY", "USE_AS_CONSTRUCTOR",
             "CONTEXT_CONSTRUCTOR_HINT", "CLOSURE_CONSTRUCTOR_HINT",
             "NORMAL_MODE", "STD_MODE", "NOSTD_MODE", "STD_NAME", "MAX_TUPLE_LENGTH",

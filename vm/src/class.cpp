@@ -148,6 +148,7 @@ Class* Class::findFieldClass(length_t index) {
 
 
 Meta* Class::buildInstanceMeta() {
+  // Compute size of instances of this class.
   u32 objectSize = kWordSize, elementSize = 0;
   u8 lengthOffset = 0;
   bool hasObjectPointers = false, hasElementPointers = false;
@@ -159,15 +160,27 @@ Meta* Class::buildInstanceMeta() {
     lengthOffset = findFieldOffset(lengthFieldIndex_);
   }
 
-  auto methodCount = methods()->length();
+  // Count non-static methods.
+  length_t methodCount = 0;
+  for (length_t i = 0; i < methods()->length(); i++) {
+    if ((methods()->get(i)->flags() & STATIC_FLAG) == 0) {
+      methodCount++;
+    }
+  }
+
+  // Allocate the meta and set the data elements to point to the non-static methods.
   auto meta = new(getHeap(), methodCount, objectSize, elementSize) Meta(OBJECT_BLOCK_TYPE);
   meta->setClass(this);
   meta->hasPointers_ = hasObjectPointers;
   meta->hasElementPointers_ = hasElementPointers;
   meta->lengthOffset_ = lengthOffset;
-  for (length_t i = 0; i < methodCount; i++) {
-    auto method = methods()->get(i);
-    meta->setData(i, method);
+  for (length_t methodIndex = 0, dataIndex = 0;
+       methodIndex < methods()->length();
+       methodIndex++) {
+    auto method = methods()->get(methodIndex);
+    if ((method->flags() & STATIC_FLAG) == 0) {
+      meta->setData(dataIndex++, method);
+    }
   }
   meta->objectPointerMap().copyFrom(objectPointerMap.bitmap());
   if (elementSize > 0)

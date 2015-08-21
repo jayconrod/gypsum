@@ -115,7 +115,9 @@ class Package(object):
             if flags.PUBLIC in g.flags:
                 addExport(g)
         for f in self.functions:
-            if flags.PUBLIC in f.flags and flags.METHOD not in f.flags:
+            if flags.PUBLIC in f.flags and \
+               (flags.METHOD not in f.flags or \
+                len(frozenset([flags.STATIC, flags.CONSTRUCTOR]) & f.flags) > 0):
                 addExport(f)
         for c in self.classes:
             if flags.PUBLIC in c.flags:
@@ -441,13 +443,40 @@ class Function(ParameterizedDefn):
                      "variables", "blocks", "flags")
 
     def getReceiverClass(self):
-        if self.isMethod():
-            ty = self.parameterTypes[0]
-            return builtins.getBuiltinClassFromType(ty) if ty.isPrimitive() else ty.clas
-        else:
-            # TODO: this is a hack. Find a cleaner way to do this that doesn't require
-            # this hidden property.
-            return self.clas
+        """Returns the class of the receiver.
+
+        This is obtained from the type of the first parameter, so it can only be called on
+        non-static methods."""
+        assert flags.METHOD in self.flags and flags.STATIC not in self.flags
+        ty = self.parameterTypes[0]
+        return builtins.getBuiltinClassFromType(ty) if ty.isPrimitive() else ty.clas
+
+    def getDefiningClass(self, receiverClass):
+        """Returns the class that defined this function.
+
+        This is used for static methods since `getReceiverClass` can't be used. `receiverType`
+        is the type of the receiver used to access this method."""
+
+        assert flags.METHOD in self.flags
+        if flags.STATIC not in self.flags:
+            return self.getReceiverClass()
+
+        # TODO: for now, we walk the class tree to find the higher class that defines this
+        # method. This is expensive, and it will become a lot more expensive when traits are
+        # introduced. When annotations are introduced, we can define an internal annotation
+        # to point to the defining class.
+
+        # This method may be called before class flattening, which means the method might only
+        # be found in the defining class and not the derived classes. So we walk up the tree
+        # and find the first class that has the method, then find the first class that doesn't.
+        clas = receiverClass
+        while not any(m is self for m in clas.methods):
+            clas = clas.supertypes[0].clas
+        nextClass = clas.supertypes[0].clas
+        while any(m is self for m in nextClass.methods):
+            clas = nextClass
+            nextClass = nextClass.supertypes[0].clas
+        return clas
 
     def canCallWith(self, typeArgs, argTypes):
         if not self.canApplyTypeArgs(typeArgs):
@@ -463,11 +492,10 @@ class Function(ParameterizedDefn):
         return all(at.isSubtypeOf(pt) for at, pt in zip(argTypes, paramTypes))
 
     def isMethod(self):
-        return flags.METHOD in self.flags
+        return flags.METHOD in self.flags and flags.STATIC not in self.flags
 
     def isConstructor(self):
-        # TODO: come up with a better way to indicate this, maybe a flag.
-        return self.name.short() == CONSTRUCTOR_SUFFIX
+        return flags.CONSTRUCTOR in self.flags
 
     def isFinal(self):
         if not self.isMethod() or self.isConstructor():
@@ -658,7 +686,7 @@ class Class(ParameterizedDefn):
         return self.getField(name)
 
     def getMethodIndex(self, method):
-        for i, m in enumerate(self.methods):
+        for i, m in enumerate(m for m in self.methods if flags.STATIC not in m.flags):
             if m is method:
                 return i
         raise KeyError("method does not belong to this class")
@@ -685,7 +713,7 @@ class Class(ParameterizedDefn):
         for field in self.fields:
             buf.write("  %s\n" % str(field))
         if self.initializer is not None:
-            buf.write("  %s\n" % str(self.initializer))
+            buf.write("  initializer %s\n" % self.initializer.id)
         for ctor in self.constructors:
             buf.write("  constructor %s\n" % ctor.id)
         for method in self.methods:
@@ -772,6 +800,9 @@ class Variable(IrDefinition):
 class Field(IrDefinition):
     propertyNames = IrDefinition.propertyNames + ("type", "flags")
 
+    def __str__(self):
+        return "%s field %s: %s" % (" ".join(self.flags), self.name, self.type)
+
 
 # Miscellaneous functions for dealing with arguments and parameters.
 def getExplicitTypeParameterCount(irDefn):
@@ -792,25 +823,32 @@ def getImplicitTypeParameters(irDefn):
     return irDefn.typeParameters[:firstExplicit]
 
 
-def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes):
+def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes, importedTypeArgs):
     """Checks compatibility of arguments with the given function.
 
-    In Gypsum, some type arguments and argument types may be implied. Currently, this is
-    limited to arguments for parameters that were implied by the enclosing scope of the
-    function. This function checks compatibility with the given (explicit) type arguments and
-    argument types, including the receiver type (which may be None for regular function calls).
-    If the function is compatible, this function returns a (list(Type), list(Type)) tuple
-    containing the full list of type arguments and argument types (including the receiver).
-    If the function is not compatible, returns None."""
+    Some type arguments may be implied. If the function was imported, these type arguments
+    were specified in the import statement. If the function is defined inside a class with
+    type parameters, type arguments are implied by the receiver (the enclosing scope
+    in general). If the function is compatible, this function returns a
+    ([Type], [Type]) tuple containing the full list of type arguments and argument types
+    (including the receiver). If the function is not compatible, None is returned."""
     if receiverType is not None and \
+       importedTypeArgs is None and \
        (flags.STATIC in irFunction.flags or flags.METHOD in irFunction.flags):
+        # Method call: type args are implied by receiver.
         if isinstance(receiverType, ir_types.ObjectType):
-            receiverType = receiverType.substituteForBaseClass(irFunction.getReceiverClass())
+            definingClass = irFunction.getDefiningClass(ir_types.getClassFromType(receiverType))
+            receiverType = receiverType.substituteForBaseClass(definingClass)
         implicitTypeArgs = list(receiverType.getTypeArguments())
         allArgTypes = argTypes \
                       if flags.STATIC in irFunction.flags \
                       else [receiverType] + argTypes
+    elif importedTypeArgs is not None:
+        # Imported function call: type args are implied by import statement.
+        implicitTypeArgs = importedTypeArgs
+        allArgTypes = argTypes
     else:
+        # Other function call: type args are implied by parent scope.
         implicitTypeParams = getImplicitTypeParameters(irFunction)
         implicitTypeArgs = [ir_types.VariableType(t) for t in implicitTypeParams]
         allArgTypes = argTypes

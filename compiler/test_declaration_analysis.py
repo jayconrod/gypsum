@@ -28,10 +28,11 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         ast = parse(filename, layoutTokens)
         return ast
 
-    def analyzeFromSource(self, source):
+    def analyzeFromSource(self, source, packageLoader=None):
         ast = self.parseFromSource(source)
         package = Package(id=TARGET_PACKAGE_ID)
-        packageLoader = FakePackageLoader([])
+        if packageLoader is None:
+            packageLoader = FakePackageLoader([])
         info = CompileInfo(ast, package, packageLoader, isUsingStd=False)
         analyzeDeclarations(info)
         return info
@@ -219,7 +220,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource("class C { static def f = 12; };")
         astDefn = info.ast.modules[0].definitions[0].members[0]
         scopeId = info.getScope(info.ast.modules[0].definitions[0]).scopeId
-        expectedFunction = self.makeFunction("C.f", flags=frozenset([STATIC]))
+        expectedFunction = self.makeFunction("C.f", flags=frozenset([STATIC, METHOD]))
         expectedDefnInfo = DefnInfo(expectedFunction, scopeId, True)
         self.assertEquals(expectedDefnInfo, info.getDefnInfo(astDefn))
 
@@ -393,6 +394,75 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
     def testBuiltinConflict(self):
         self.analyzeFromSource("let String = 42")
         # pass if no error
+
+    def testImportStaticMethod(self):
+        source = "class Foo\n" + \
+                 "  static def m = 12\n" + \
+                 "import Foo.m as x\n" + \
+                 "def x(y: i64) = y"
+        info = self.analyzeFromSource(source)
+        m = info.package.findFunction(name="Foo.m")
+        scope = info.getScope(GLOBAL_SCOPE_ID)
+        nameInfo = scope.lookupFromSelf("x", NoLoc)
+        self.assertTrue(nameInfo.isOverloaded())
+        importedDefnInfo = next(di for di in nameInfo.iterOverloads() if di.irDefn is m)
+        self.assertEquals(GLOBAL_SCOPE_ID, importedDefnInfo.scopeId)
+        self.assertFalse(importedDefnInfo.isVisible)
+        self.assertIsNone(importedDefnInfo.importedTypeArguments)
+
+    def testImportGlobalFromPackage(self):
+        foo = Package(name=Name(["foo"]))
+        foo.addGlobal(Name(["bar"]), None, None, frozenset([PUBLIC, LET]))
+        foo.addGlobal(Name(["baz"]), None, None, frozenset([LET]))
+        source = "import foo._"
+        info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
+        scope = info.getScope(GLOBAL_SCOPE_ID)
+        self.assertFalse(scope.isBound("baz"))
+        scope.define("bar")
+        nameInfo = scope.lookupFromSelf("bar", NoLoc)
+        importedDefnInfo = nameInfo.getDefnInfo()
+        self.assertEquals(GLOBAL_SCOPE_ID, importedDefnInfo.scopeId)
+        self.assertFalse(importedDefnInfo.isVisible)
+        self.assertIsNone(importedDefnInfo.importedTypeArguments)
+
+    def testImportFromGlobal(self):
+        source = "let x = 12\n" + \
+                 "import x.y"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
+    def testImportNonPublicFromPackage(self):
+        foo = Package(name=Name(["foo"]))
+        foo.addGlobal(Name(["baz"]), None, None, frozenset([LET]))
+        source = "import foo.baz"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source,
+                          packageLoader=FakePackageLoader([foo]))
+
+    def testImportPrivateFromClass(self):
+        source = "class Foo\n" + \
+                 "  private static def f = 12\n" + \
+                 "import Foo.f"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
+    def testImportMissingFromPackage(self):
+        foo = Package(name=Name(["foo"]))
+        source = "import foo.baz"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source,
+                          packageLoader=FakePackageLoader([foo]))
+
+    def testImportRedeclare(self):
+        foo = Package(name=Name(["foo"]))
+        foo.addGlobal(Name(["bar"]), None, None, frozenset([PUBLIC, LET]))
+        source = "let bar = 12\n" + \
+                 "import foo.bar"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source,
+                          packageLoader=FakePackageLoader([foo]))
+
+    def testImportInherited(self):
+        source = "class Foo\n" + \
+                 "  static def f = 12\n" + \
+                 "class Bar <: Foo\n" + \
+                 "import Bar.f"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
 
 class TestPackageScope(unittest.TestCase):
