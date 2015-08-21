@@ -276,7 +276,9 @@ void Package::ensureExports(Heap* heap, const Handle<Package>& package) {
   auto functions = handle(package->functions());
   for (length_t i = 0; i < functions->length(); i++) {
     auto function = handle(functions->get(i));
-    if ((function->flags() & (PUBLIC_FLAG | METHOD_FLAG)) == PUBLIC_FLAG) {
+    if ((function->flags() & PUBLIC_FLAG) != 0 &&
+        ((function->flags() & METHOD_FLAG) == 0 ||
+         (function->flags() & (STATIC_FLAG | METHOD_FLAG)) != 0)) {
       auto name = handle(function->name());
       ASSERT(!exports->contains(*name));
       ExportMap::add(heap, exports, name, function);
@@ -894,10 +896,13 @@ Local<Type> Loader::readType() {
       typeArgs.push_back(typeArg);
     }
 
-    auto ty = Type::create(heap(), clas, typeArgs, flags);
+    Local<Type> ty;
     if (isExtern) {
+      ty = Type::createExtern(heap(), clas, typeArgs, flags);
       auto info = ExternTypeInfo::create(heap(), ty, package_, depIndex, defnIndex);
       externTypes_.push_back(info);
+    } else {
+      ty = Type::create(heap(), clas, typeArgs, flags);
     }
 
     return ty;
@@ -925,10 +930,13 @@ Local<Type> Loader::readType() {
       isExtern = true;
     }
 
-    auto ty = Type::create(heap(), param, flags);
+    Local<Type> ty;
     if (isExtern) {
+      ty = Type::createExtern(heap(), param, flags);
       auto info = ExternTypeInfo::create(heap(), ty, package_, depIndex, defnIndex);
       externTypes_.push_back(info);
+    } else {
+      ty = Type::create(heap(), param, flags);
     }
 
     return ty;

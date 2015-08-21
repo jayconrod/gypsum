@@ -150,6 +150,11 @@ def _initialize():
         function.flags |= frozenset([flags.METHOD])
         return function
 
+    def buildConstructor(functionData, classShortName):
+        function = buildMethod(functionData, classShortName)
+        function.flags |= frozenset([flags.CONSTRUCTOR])
+        return function
+
     def buildField(fieldData, classShortName):
         name = ir.Name([classShortName, fieldData["name"]])
         ty = buildType(fieldData["type"])
@@ -175,7 +180,7 @@ def _initialize():
                 clas.supertypes = []
                 clas.fields = []
                 clas.methods = []
-            clas.constructors = [buildMethod(ctorData, classData["name"])
+            clas.constructors = [buildConstructor(ctorData, classData["name"])
                                  for ctorData in classData["constructors"]]
             clas.fields += [buildField(fieldData, classData["name"])
                             for fieldData in classData["fields"]]

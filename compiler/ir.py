@@ -115,7 +115,9 @@ class Package(object):
             if flags.PUBLIC in g.flags:
                 addExport(g)
         for f in self.functions:
-            if flags.PUBLIC in f.flags and flags.METHOD not in f.flags:
+            if flags.PUBLIC in f.flags and \
+               (flags.METHOD not in f.flags or \
+                len(frozenset([flags.STATIC, flags.CONSTRUCTOR]) & f.flags) > 0):
                 addExport(f)
         for c in self.classes:
             if flags.PUBLIC in c.flags:
@@ -493,8 +495,7 @@ class Function(ParameterizedDefn):
         return flags.METHOD in self.flags and flags.STATIC not in self.flags
 
     def isConstructor(self):
-        # TODO: come up with a better way to indicate this, maybe a flag.
-        return self.name.short() == CONSTRUCTOR_SUFFIX
+        return flags.CONSTRUCTOR in self.flags
 
     def isFinal(self):
         if not self.isMethod() or self.isConstructor():
@@ -712,7 +713,7 @@ class Class(ParameterizedDefn):
         for field in self.fields:
             buf.write("  %s\n" % str(field))
         if self.initializer is not None:
-            buf.write("  %s\n" % str(self.initializer))
+            buf.write("  initializer %s\n" % self.initializer.id)
         for ctor in self.constructors:
             buf.write("  constructor %s\n" % ctor.id)
         for method in self.methods:
@@ -798,6 +799,9 @@ class Variable(IrDefinition):
 
 class Field(IrDefinition):
     propertyNames = IrDefinition.propertyNames + ("type", "flags")
+
+    def __str__(self):
+        return "%s field %s: %s" % (" ".join(self.flags), self.name, self.type)
 
 
 # Miscellaneous functions for dealing with arguments and parameters.

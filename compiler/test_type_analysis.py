@@ -425,7 +425,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         barType = ClassType(bar)
         ctor = foo.addFunction(Name(["Bar", CONSTRUCTOR_SUFFIX]),
                                None, UnitType, [], [barType], None, None,
-                               frozenset([PUBLIC, METHOD]))
+                               frozenset([PUBLIC, METHOD, CONSTRUCTOR]))
         bar.constructors.append(ctor)
         packageLoader = FakePackageLoader([foo])
 

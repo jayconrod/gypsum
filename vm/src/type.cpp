@@ -116,6 +116,23 @@ Local<Type> Type::create(Heap* heap, const Handle<TypeParameter>& param, Flags f
 }
 
 
+Local<Type> Type::createExtern(Heap* heap,
+                               const Handle<Class>& clas,
+                               const vector<Local<Type>>& typeArgs,
+                               Flags flags) {
+  auto type = create(heap, clas, typeArgs, flags);
+  type->form_ = EXTERN_CLASS_TYPE;
+  return type;
+}
+
+
+Local<Type> Type::createExtern(Heap* heap, const Handle<TypeParameter>& param, Flags flags) {
+  auto type = create(heap, param, flags);
+  type->form_ = EXTERN_VARIABLE_TYPE;
+  return type;
+}
+
+
 Local<Type> Type::createWithFlags(Heap* heap, const Handle<Type>& type, Flags flags) {
   RETRY_WITH_GC(heap, return Local<Type>(new(heap, type->length()) Type(*type, flags)));
 }
@@ -586,7 +603,7 @@ Local<ExternTypeInfo> ExternTypeInfo::create(Heap* heap,
 
 void ExternTypeInfo::linkType() {
   auto type = type_.get();
-  ASSERT(type->length() >= 1 && type->elements_[0].get() == this);
+  ASSERT(type->length() >= 1);
   auto dep = package_.get()->dependencies()->get(dependencyIndex_);
   if (type->form() == Type::EXTERN_CLASS_TYPE) {
     auto linkedClass = dep->linkedClasses()->get(externIndex_);

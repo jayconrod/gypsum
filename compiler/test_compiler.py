@@ -476,7 +476,7 @@ class TestCompiler(TestCaseWithDefinitions):
                      variables=[self.makeVariable(Name(["Foo", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
                                                   type=clasTy,
                                                   kind=PARAMETER, flags=frozenset([LET]))],
-                     flags=frozenset([METHOD]))
+                     flags=frozenset([METHOD, CONSTRUCTOR]))
         self.assertEquals(expected, clas.constructors[0])
 
     def testAssignConstField(self):
@@ -2966,7 +2966,7 @@ class TestCompiler(TestCaseWithDefinitions):
                             variables=[self.makeVariable(Name(["Foo", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
                                                          type=thisType,
                                                          kind=PARAMETER, flags=frozenset([LET]))],
-                            flags=frozenset([METHOD])),
+                            flags=frozenset([METHOD, CONSTRUCTOR])),
                           ctor)
 
     def testPrimaryCtorCallsInitializer(self):
@@ -2995,7 +2995,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                        kind=PARAMETER, flags=frozenset([LET])),
                      self.makeVariable(Name(["Foo", "x"]), type=I32Type,
                                        kind=PARAMETER, flags=frozenset([LET]))],
-          flags=frozenset([METHOD]))
+          flags=frozenset([METHOD, CONSTRUCTOR]))
         self.assertEquals(expected, ctor)
 
     def testSecondaryCtorCallsInitializer(self):
@@ -3028,7 +3028,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                        kind=PARAMETER, flags=frozenset([LET])),
                      self.makeVariable(Name(["Foo", CONSTRUCTOR_SUFFIX, "x"]), type=I32Type,
                                        kind=PARAMETER, flags=frozenset([LET]))],
-          flags=frozenset([METHOD]))
+          flags=frozenset([METHOD, CONSTRUCTOR]))
         self.assertEquals(expected, ctor)
 
     def testNullaryCtor(self):
@@ -3089,7 +3089,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                                          kind=PARAMETER, flags=frozenset([LET])),
                                        self.makeVariable(Name(["Foo", "x"]), type=I32Type,
                                                          kind=PARAMETER, flags=frozenset([LET]))],
-                            flags=frozenset([METHOD])),
+                            flags=frozenset([METHOD, CONSTRUCTOR])),
                           ctor)
 
     def testCtorWithArgs(self):
@@ -3117,7 +3117,7 @@ class TestCompiler(TestCaseWithDefinitions):
         barTy = ClassType(barClass)
         ctor = fooPackage.addFunction(Name(["Bar", CONSTRUCTOR_SUFFIX]), None, UnitType,
                                       [], [barTy], None, None,
-                                      frozenset([PUBLIC, METHOD]))
+                                      frozenset([PUBLIC, METHOD, CONSTRUCTOR]))
         barClass.constructors.append(ctor)
         loader = FakePackageLoader([fooPackage])
 
@@ -3221,7 +3221,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                                                           kind=PARAMETER,
                                                                           flags=frozenset([LET]))],
                                              parameterTypes=[ty],
-                                             flags=frozenset([METHOD]))
+                                             flags=frozenset([METHOD, CONSTRUCTOR]))
         self.assertEquals(expected, clas.constructors[1])
 
     def testCallAlternateCtorLater(self):
@@ -3263,7 +3263,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                           self.makeVariable(Name(["Bar", "y"]),
                                                             type=I64Type, kind=PARAMETER,
                                                             flags=frozenset([LET]))],
-                               flags=frozenset([METHOD])))
+                               flags=frozenset([METHOD, CONSTRUCTOR])))
 
     def testCallSuperCtorFromSecondary(self):
         source = "class Foo(a: i64)\n" + \
@@ -3286,7 +3286,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                              variables=[self.makeVariable(Name(["Bar", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]), type=barTy,
                                                                           kind=PARAMETER, flags=frozenset([LET]))],
                                              parameterTypes=[barTy],
-                                             flags=frozenset([METHOD]))
+                                             flags=frozenset([METHOD, CONSTRUCTOR]))
         self.assertEquals(expected, bar.constructors[0])
 
     def testCallDefaultSuperCtor(self):
@@ -3496,7 +3496,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                        kind=PARAMETER, flags=frozenset([LET]))],
           typeParameters=[T],
           parameterTypes=[Ctype],
-          flags=frozenset([METHOD]))
+          flags=frozenset([METHOD, CONSTRUCTOR]))
         self.assertEquals(expectedCtor, C.constructors[0])
 
     def testCallClassMethodsWithStaticTypeArgs(self):
@@ -3618,4 +3618,4 @@ class TestCompiler(TestCaseWithDefinitions):
                                                                                 type=ClassType(bar),
                                                                                 kind=PARAMETER,
                                                                                 flags=frozenset([LET]))],
-                                                   flags=frozenset([METHOD])))
+                                                   flags=frozenset([METHOD, CONSTRUCTOR])))

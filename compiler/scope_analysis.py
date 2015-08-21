@@ -682,7 +682,7 @@ class Scope(ast.AstNodeVisitor):
             irDefaultCtor = self.info.package.addFunction(irDefaultCtorName, astDefn,
                                                           None, list(implicitTypeParams),
                                                           None, [], None, ctorFlags)
-            self.makeMethod(irDefaultCtor, irDefn)
+            self.makeConstructor(irDefaultCtor, irDefn)
             irDefn.constructors.append(irDefaultCtor)
         classInfo = ClassInfo(irDefn)
         self.info.setClassInfo(irDefn, classInfo)
@@ -699,6 +699,13 @@ class Scope(ast.AstNodeVisitor):
         thisName = function.name.withSuffix(ir.RECEIVER_SUFFIX)
         this = ir.Variable(thisName, function.astDefn, None, ir.PARAMETER, frozenset([LET]))
         function.variables.insert(0, this)
+
+    def makeConstructor(self, function, clas):
+        """Convenience method which turns a function into a constructor.
+
+        Same as `makeMethod` but also adds the `CONSTRUCTOR` flag."""
+        self.makeMethod(function, clas)
+        function.flags |= frozenset([CONSTRUCTOR])
 
     def isDefinedAutomatically(self, astDefn):
         """Returns true if a definition is available as soon as the scope is entered.
@@ -1339,7 +1346,7 @@ class ClassScope(Scope):
                 irDefn = self.info.package.addFunction(name, astDefn,
                                                        None, implicitTypeParams,
                                                        None, [], None, flags)
-                self.makeMethod(irDefn, irScopeDefn)
+                self.makeConstructor(irDefn, irScopeDefn)
                 irScopeDefn.constructors.append(irDefn)
             else:
                 name = self.makeName(astDefn.name)
@@ -1367,7 +1374,7 @@ class ClassScope(Scope):
             irDefn = self.info.package.addFunction(name, astDefn,
                                                    None, implicitTypeParams,
                                                    None, [], None, flags)
-            self.makeMethod(irDefn, irScopeDefn)
+            self.makeConstructor(irDefn, irScopeDefn)
             irScopeDefn.constructors.append(irDefn)
         elif isinstance(astDefn, ast.AstTypeParameter):
             name = self.makeName(astDefn.name)
