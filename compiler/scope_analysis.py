@@ -503,6 +503,9 @@ class Scope(ast.AstNodeVisitor):
         scope = self.topLocalScope()
         return self.info.getDefnInfo(scope.ast)
 
+    def getClass(self):
+        return None
+
     def getAstDefn(self):
         scope = self.topLocalScope()
         assert isinstance(scope.ast, ast.AstDefinition)
@@ -1305,6 +1308,9 @@ class ClassScope(Scope):
             self.bind(ctor.name.short(), defnInfo)
             self.define(ctor.name.short())
 
+    def getClass(self):
+        return getIrDefn()
+
     def createIrDefn(self, astDefn, astVarDefn):
         irScopeDefn = self.getIrDefn()
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
@@ -1344,9 +1350,6 @@ class ClassScope(Scope):
                     irDefn = self.info.package.addFunction(name, astDefn,
                                                            None, implicitTypeParams,
                                                            None, [], None, flags)
-                    # TODO: this is a hack. Find a cleaner way to link the function to the
-                    # enclosing class. This is needed to get implied type arguments.
-                    irDefn.clas = irScopeDefn
                 else:
                     checkFlags(flags, frozenset([ABSTRACT, PUBLIC, PROTECTED, PRIVATE]),
                                astDefn.location)
@@ -1470,7 +1473,7 @@ class BuiltinClassScope(Scope):
                 self.bind(ir.CONSTRUCTOR_SUFFIX, defnInfo)
                 self.define(ir.CONSTRUCTOR_SUFFIX)
         for method in irClass.methods:
-            methodClass = method.getReceiverClass()
+            methodClass = method.getDefiningClass(irClass)
             inheritedScopeId = self.info.getScope(methodClass.id).scopeId
             inheritanceDepth = irClass.findDistanceToBaseClass(methodClass)
             defnInfo = DefnInfo(method, self.scopeId, True, inheritedScopeId, inheritanceDepth)
@@ -1483,6 +1486,9 @@ class BuiltinClassScope(Scope):
 
     def getDefnInfo(self):
         return self.defnInfo
+
+    def getClass(self):
+        return self.getIrDefn()
 
     def requiresCapture(self):
         return False

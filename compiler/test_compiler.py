@@ -1020,9 +1020,6 @@ class TestCompiler(TestCaseWithDefinitions):
                  "    case z => z"
         package = self.compileFromSource(source)
         fooIndex = package.findString("foo")
-        stringClass = getStringClass()
-        eqMethod = stringClass.getMethod("==")
-        eqIndex = stringClass.getMethodIndex(eqMethod)
         self.checkFunction(package,
                            self.makeSimpleFunction("f", getRootClassType(), [[
                                string(fooIndex),
@@ -1030,7 +1027,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                ldlocal(0),
                                ldlocal(-1),
                                dupi(1),
-                               callv(2, eqIndex),
+                               eqp(),
                                branchif(1, 2),
                              ], [
                                drop(),

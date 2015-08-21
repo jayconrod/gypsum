@@ -441,16 +441,40 @@ class Function(ParameterizedDefn):
                      "variables", "blocks", "flags")
 
     def getReceiverClass(self):
+        """Returns the class of the receiver.
+
+        This is obtained from the type of the first parameter, so it can only be called on
+        non-static methods."""
+        assert flags.METHOD in self.flags and flags.STATIC not in self.flags
+        ty = self.parameterTypes[0]
+        return builtins.getBuiltinClassFromType(ty) if ty.isPrimitive() else ty.clas
+
+    def getDefiningClass(self, receiverClass):
+        """Returns the class that defined this function.
+
+        This is used for static methods since `getReceiverClass` can't be used. `receiverType`
+        is the type of the receiver used to access this method."""
+
         assert flags.METHOD in self.flags
-        if flags.STATIC in self.flags:
-            # Static methods don't have a receiver argument and can't obtain the defining
-            # class that way. For now, we walk the class tree. This will become much more
-            # expensive when traits are introduced.
-            # TODO: support annotations which can point to classes and traits.
-            return self.clas
-        else:
-            ty = self.parameterTypes[0]
-            return builtins.getBuiltinClassFromType(ty) if ty.isPrimitive() else ty.clas
+        if flags.STATIC not in self.flags:
+            return self.getReceiverClass()
+
+        # TODO: for now, we walk the class tree to find the higher class that defines this
+        # method. This is expensive, and it will become a lot more expensive when traits are
+        # introduced. When annotations are introduced, we can define an internal annotation
+        # to point to the defining class.
+
+        # This method may be called before class flattening, which means the method might only
+        # be found in the defining class and not the derived classes. So we walk up the tree
+        # and find the first class that has the method, then find the first class that doesn't.
+        clas = receiverClass
+        while not any(m is self for m in clas.methods):
+            clas = clas.supertypes[0].clas
+        nextClass = clas.supertypes[0].clas
+        while any(m is self for m in nextClass.methods):
+            clas = nextClass
+            nextClass = nextClass.supertypes[0].clas
+        return clas
 
     def canCallWith(self, typeArgs, argTypes):
         if not self.canApplyTypeArgs(typeArgs):
@@ -809,7 +833,8 @@ def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes, importedTy
        (flags.STATIC in irFunction.flags or flags.METHOD in irFunction.flags):
         # Method call: type args are implied by receiver.
         if isinstance(receiverType, ir_types.ObjectType):
-            receiverType = receiverType.substituteForBaseClass(irFunction.getReceiverClass())
+            definingClass = irFunction.getDefiningClass(ir_types.getClassFromType(receiverType))
+            receiverType = receiverType.substituteForBaseClass(definingClass)
         implicitTypeArgs = list(receiverType.getTypeArguments())
         allArgTypes = argTypes \
                       if flags.STATIC in irFunction.flags \

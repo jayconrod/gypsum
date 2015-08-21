@@ -276,7 +276,7 @@ void Package::ensureExports(Heap* heap, const Handle<Package>& package) {
   auto functions = handle(package->functions());
   for (length_t i = 0; i < functions->length(); i++) {
     auto function = handle(functions->get(i));
-    if ((function->flags() & PUBLIC_FLAG) != 0) {
+    if ((function->flags() & (PUBLIC_FLAG | METHOD_FLAG)) == PUBLIC_FLAG) {
       auto name = handle(function->name());
       ASSERT(!exports->contains(*name));
       ExportMap::add(heap, exports, name, function);

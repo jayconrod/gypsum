@@ -293,7 +293,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                 self.buildLoadOrNullaryCall(pat, mode)
                 self.dupi(1)  # value
                 patTy = self.info.getType(pat)
-                self.buildCallNamedMethod(patTy, "==", COMPILE_FOR_VALUE)
+                self.buildEquals(patTy)
                 successBlock = self.newBlock()
                 self.branchif(successBlock.id, failBlock.id)
                 self.setCurrentBlock(successBlock)
@@ -1625,6 +1625,12 @@ class CompileVisitor(ast.AstNodeVisitor):
             if lvalue.onStack():
                 self.swap()
         lvalue.assign()
+
+    def buildEquals(self, ty):
+        """Compares the two values on top of the stack for equality. For objects, reference
+        equality is used."""
+        methodName = "==" if ty.isPrimitive() else "==="
+        self.buildCallNamedMethod(ty, methodName, COMPILE_FOR_VALUE)
 
     def buildType(self, ty, loc):
         """Builds a type on the static type argument stack and simultaneously builds an

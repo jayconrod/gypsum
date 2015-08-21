@@ -12,7 +12,7 @@ public class Some[static +T](value: T) <: Option[T]
   public def is-defined = true
   public def get = value
   public def to-string = "Some(" + value.to-string + ")"
-  public static def try-match(obj: Object): Option[Object] =
+  public static def try-match(obj: Object): Option[T] =
     match (obj)
       case some: Some[_] => some
       case _ => None
