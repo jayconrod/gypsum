@@ -58,7 +58,7 @@ def functionDefn():
     def process(parsed, loc):
         [ats, _, name, tps, ps, rty, body, _] = ct.untangle(parsed)
         return ast.AstFunctionDefinition(ats, name, tps, ps, rty, body, loc)
-    functionName = keyword("this") | symbol
+    functionName = keyword("this") | identifier
     bodyOpt = ct.Opt(keyword("=") + expression() ^ (lambda p, _: p[1]))
     return attribs() + keyword("def") + ct.Commit(functionName + typeParameters() + parameters() +
         tyOpt() + bodyOpt + semi) ^ process
@@ -70,7 +70,7 @@ def classDefn():
         return ast.AstClassDefinition(ats, name, tps, ctor, sty, sargs, ms, loc)
     classBodyOpt = ct.Opt(layoutBlock(ct.Rep(ct.Lazy(classMember)))) ^ \
                    (lambda p, _: p if p is not None else [])
-    return attribs() + keyword("class") + ct.Commit(symbol + typeParameters() +
+    return attribs() + keyword("class") + ct.Commit(identifier + typeParameters() +
            constructor() + superclass() + classBodyOpt + semi) ^ process
 
 
@@ -652,6 +652,7 @@ def layoutBlock(contents):
 
 symbol = ct.Tag(SYMBOL)
 operator = ct.Tag(OPERATOR)
+identifier = symbol | operator
 
 semi = keyword(";") | ct.Reserved(INTERNAL, ";")
 

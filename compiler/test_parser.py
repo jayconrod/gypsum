@@ -112,6 +112,11 @@ class TestParser(unittest.TestCase):
                         functionDefn(),
                         "public def f;")
 
+    def testOperatorFunctionDefn(self):
+        self.checkParse(astFunctionDefinition([], "+", [], [], None, None),
+                        functionDefn(),
+                        "def +;")
+
     def testClassDefnSimple(self):
         self.checkParse(astClassDefinition([], "C", [], None, None, None, []),
                         classDefn(),
@@ -180,6 +185,11 @@ class TestParser(unittest.TestCase):
                                            None, None, []),
                         classDefn(),
                         "class C public ();")
+
+    def testOperatorClassDefn(self):
+        self.checkParse(astClassDefinition([], "::", [], None, None, None, []),
+                        classDefn(),
+                        "class ::;")
 
     def testTypeParametersEmpty(self):
         self.checkParse([], typeParameters(), "")
