@@ -25,15 +25,13 @@ def analyzeTypes(info):
     declarationVisitor.visit(info.ast)
     declarationVisitor.checkTypes()
 
+    # Resolve all function overrides. This simplifies lookups later.
+    resolveAllOverrides(info)
+
     # Add type annotations for AST nodes which need them, and add type information to
     # the package.
     analysis = DefinitionTypeVisitor(info)
     analysis.visit(info.ast)
-
-    # Overloads and overrides are resolved lazily when something calls them. If nothing calls
-    # an overloaded / overriden method, we need to resolve that here.
-    for scope in info.scopes.values():
-        scope.resolveOverrides()
 
     # Check that each overriding function has a return type which is a subtype of the
     # overriden function. The return type is not used to make override decisions, so this needs
@@ -88,6 +86,13 @@ def partialFunctionMustMatch(expr, ty, info):
     it may account for disjoint cases matching everything."""
     assert isinstance(expr, ast.AstPartialFunctionExpression)
     return any(partialFunctionCaseMustMatch(case, ty, info) for case in expr.cases)
+
+
+def resolveAllOverrides(info):
+    """Iterates over each `NameInfo` in each scope and resolves overrides. This determines
+    whether methods with the same name as inherited methods overload or override."""
+    for scope in info.scopes.values():
+        scope.resolveOverrides()
 
 
 class TypeVisitorBase(ast.AstNodeVisitor):

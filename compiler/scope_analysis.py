@@ -145,7 +145,7 @@ def analyzeInheritance(info):
         classInfo = info.getClassInfo(clas)
 
         superclassScope = info.getScope(classInfo.superclassInfo.irDefn.id)
-        for name, defnInfo in superclassScope.getBindings():
+        for name, defnInfo in superclassScope.iterBindings():
             if defnInfo.inheritanceDepth == NOT_HERITABLE:
                 continue
             inheritedDefnInfo = defnInfo.inherit(scope.scopeId)
@@ -635,7 +635,7 @@ class Scope(ast.AstNodeVisitor):
             self.bindings[name] = NameInfo(name)
         self.bindings[name].addOverload(defnInfo)
 
-    def getBindings(self):
+    def iterBindings(self):
         """Returns a iterator, which returns (str, DefnInfo, int) pairs for each binding.
 
         The str is the name, and the int indicates how many classes the definition was inherited
@@ -644,6 +644,10 @@ class Scope(ast.AstNodeVisitor):
         for name, nameInfo in self.bindings.iteritems():
             for defnInfo in nameInfo.overloads:
                 yield (name, defnInfo)
+
+    def iterNameInfo(self):
+        """Returns an iterator which returns `NameInfo` for each binding."""
+        return self.bindings.itervalues()
 
     def createIrDefn(self, astDefn, astVarDefn):
         """Creates an IR definition and adds it to the package. Returns a tuple containing
