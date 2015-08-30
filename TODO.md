@@ -4,7 +4,8 @@
 
 - allow calling overridden methods via "super"
 - `final` attribute for classes, methods
-- `static` attribute for methods, fields
+- `override` attribute for methods
+- `static` attribute for fields
 - annotations
 - require "get", "set" for implicit calls
 - define getters, setters for fields automatically
@@ -17,16 +18,22 @@
 - downcasting and type testing
 - default parameters
 - positional, keyword arguments
-- proper closures (with type from standard lib)
+- function type and trait for standard lib
+- lambda expressions
+- type inference for type arguments
+- type inference for lambda parameters
+- infer types for numeric literals
 - class closures
 - inner classes
+- `static` attribute for closures
 - `static` attribute for inner classes
-- other expressions (lambdas, pattern matching, etc)
 - traits and multiple inheritance
 - tail recursion
 - awesome for loops
 - dynamic features
 - doc annotations
+- list literal
+- map literal
 
 ## VM features
 - native object access (depends on dynamic features)
