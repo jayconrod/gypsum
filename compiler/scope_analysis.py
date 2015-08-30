@@ -309,7 +309,7 @@ class NameInfo(object):
         # A str for the name being tracked.
         self.name = name
 
-        # A list of DefnInfo pairs that may be referenced by this symbol. In most cases, this
+        # A list of DefnInfo that may be referenced by this symbol. In most cases, this
         # list will contain just one element.
         self.overloads = []
 
@@ -434,45 +434,9 @@ class NameInfo(object):
                                             "may override multiple definitions: %s" %
                                             self.name)
 
-    def findDefnInfoWithArgTypes(self, receiverType, receiverIsExplicit,
-                                 typeArgs, argTypes, loc):
-        """Determines which overloaded or overriding function should be called, based on
-        argument types.
-
-        This is safe to call on any NameInfo, even if it doesn't refer to a function. If there
-        is exactly one match, returns (DefnInfo, list(Type), list(Type)) containing the matched
-        definition, the full list of type arguments, and the full list of argument types. If
-        there are zero or multiple matches, raises ScopeException."""
-        self.resolveOverrides()
-        candidate = None
-        for defnInfo in self.overloads:
-            irDefn = defnInfo.irDefn
-            if isinstance(irDefn, ir.Function) and irDefn.id in self.overrides:
-                continue
-
-            if not isinstance(irDefn, ir.Function) and \
-               len(typeArgs) == 0 and len(argTypes) == 0:
-                # Non-function
-                typesAndArgs = (None, None)
-                match = True
-            elif isinstance(irDefn, ir.Function):
-                # Function, method, static method, or constructor.
-                typesAndArgs = ir.getAllArgumentTypes(irDefn, receiverType, typeArgs, argTypes,
-                                                      defnInfo.importedTypeArguments)
-                match = typesAndArgs is not None
-            else:
-                match = False
-
-            if match:
-                if candidate is not None:
-                    raise TypeException(loc, "ambiguous call to overloaded function: %s" % \
-                                        self.name)
-                allTypeArgs, allArgTypes = typesAndArgs
-                candidate = (defnInfo, allTypeArgs, allArgTypes)
-
-        if candidate is None:
-            raise TypeException(loc, "could not find compatible definition: %s" % self.name)
-        return candidate
+        # Delete overriden functions from the overloads list. They will not be visible anymore
+        # in lookups.
+        self.overloads = filter(lambda o: o.irDefn.id not in self.overrides, self.overloads)
 
 
 class Scope(ast.AstNodeVisitor):
@@ -718,6 +682,7 @@ class Scope(ast.AstNodeVisitor):
         raise NotImplementedError
 
     def lookup(self, name, loc, fromExternal, mayBeAssignment=False, ignoreDefnOrder=None):
+        """Resolves a reference to a symbol, either from this scope or an external scope."""
         if fromExternal:
             assert ignoreDefnOrder is not False
             return self.lookupFromExternal(name, loc, mayBeAssignment)
@@ -727,7 +692,7 @@ class Scope(ast.AstNodeVisitor):
             return self.lookupFromSelf(name, loc, mayBeAssignment, ignoreDefnOrder)
 
     def lookupFromSelf(self, name, loc, mayBeAssignment=False, ignoreDefnOrder=False):
-        """Resolves a reference in this scope to a symbol.
+        """Resolves a reference to a symbol from this scope.
 
         The symbol may be defined in a parent scope. Returns NameInfo if the symbol is found.
         For overloaded symbols, there may be several functions in there. If the symbol is not
@@ -749,7 +714,7 @@ class Scope(ast.AstNodeVisitor):
         return defnScope.getDefinition(name)
 
     def lookupFromExternal(self, name, loc, mayBeAssignment=False):
-        """Resolves a reference in another scope to a symbol.
+        """Resolves a reference to a symbol from another scope.
 
         Unlike `lookupFromLocal`, the symbol must be defined in this scope. Returns NameInfo
         if the symbol is found. For overloaded symbols, there may be several functions in there.
@@ -767,6 +732,57 @@ class Scope(ast.AstNodeVisitor):
         elif not nameInfo.getDefnInfo().isVisible:
             raise ScopeException(loc, "%s: cannot access definition outside of its scope" %
                                  name)
+        return nameInfo
+
+    def tryLookup(self, name, fromExternal, mayBeAssignment=False, ignoreDefnOrder=None):
+        """Attempts to resolve a reference to a symbol from this scope or from another.
+
+        Returns `NameInfo` if the symbol is found and can be accessed. Returns `None`
+        otherwise."""
+        if fromExternal:
+            assert ignoreDefnOrder is None
+            return self.tryLookupFromExternal(name, mayBeAssignment)
+        else:
+            if ignoreDefnOrder is None:
+                ignoreDefnOrder = False
+            return self.tryLookupFromSelf(name, mayBeAssignment, ignoreDefnOrder)
+
+    def tryLookupFromSelf(self, name, mayBeAssignment=False, ignoreDefnOrder=False):
+        """Attempts to resolve a reference to a symbol from this scope.
+
+        This is like `lookupFromSelf` but returns `None` if the symbol is not found or
+        can't be accessed."""
+        defnScope = self
+        while defnScope is not None and defnScope.isBound(name):
+            defnScope = defnScope.parent
+        if defnScope is None:
+            if mayBeAssignment and name != "==":
+                return self.tryLookupFromSelf(name[:-1], mayBeAssignment=False,
+                                              ignoreDefnOrder=ignoreDefnOrder)
+            else:
+                return None
+        if not ignoreDefnOrder and \
+           not defnScope.isDefined(name) and \
+           self.isLocalWithin(defnScope):
+            return None
+        return defnScope.getDefinition(name)
+
+    def tryLookupFromExternal(self, name, mayBeAssignment=False):
+        """Attempts to resolve a reference to a symbol from another scope.
+
+        This is similar to `lookupFromExternal` but returns `None` if the symbol is not found
+        or can't be accessed."""
+        if not self.isBound(name):
+            if mayBeAssignment and name.endswith("=") and name != "==":
+                return self.tryLookupFromExternal(name[:-1], mayBeAssignment=False)
+            else:
+                return None
+
+        nameInfo = self.getDefinition(name)
+        if nameInfo.isOverloaded():
+            assert all(o.isVisible for o in nameInfo.overloads)
+        elif not nameInfo.getDefnInfo().isVisible:
+            return None
         return nameInfo
 
     def isBound(self, name):

@@ -95,6 +95,62 @@ def resolveAllOverrides(info):
         scope.resolveOverrides()
 
 
+def findDefnInfoWithArgTypes(candidates, receiverType, receiverIsExplicit,
+                             typeArgs, argTypes, name, loc):
+    """Determines which definition should be used, from a set of candidates.
+
+    This is used to resolve overloaded functions, but it can be use on any list of `DefnInfo`.
+
+    Args:
+        candidates: a list of `DefnInfo`.
+        receiverType: the type of the receiver in a method call or `None`. If the receiver
+            might be implied, this is the type of the class containing the call.
+        receiverIsExplicit: `True` if the receiver was part of the call expression; `False` if
+            the receiver was not present and might be implied.
+        typeArgs: a list of type arguments in the call.
+        argTypes: a list of types of arguments in the call.
+        name: the symbol all the candidates were bound to (used for errors).
+        loc: the location of the call (used for errors).
+
+    Returns:
+        A tuple of `(DefnInfo, [Type], [Type])` containing the single matching definition, the
+        full list of type arguments, and the full list of argument types (including the
+        receiver, if it was needed).
+
+    Raises:
+        TypeException: if there were zero or multiple matches.
+    """
+    candidate = None
+    for defnInfo in candidates:
+        irDefn = defnInfo.irDefn
+
+        if not isinstance(irDefn, ir.Function) and \
+           len(typeArgs) == 0 and len(argTypes) == 0:
+            # Non-function
+            typesAndArgs = (None, None)
+            match = True
+        elif isinstance(irDefn, ir.Function):
+            # Function, method, static method, or constructor.
+            typesAndArgs = ir.getAllArgumentTypes(irDefn, receiverType, typeArgs, argTypes,
+                                                  defnInfo.importedTypeArguments)
+            match = typesAndArgs is not None
+        else:
+            match = False
+
+        if match:
+            if candidate is not None:
+                raise TypeException(loc, "ambiguous call to overloaded function: %s" % \
+                                    name)
+            allTypeArgs, allArgTypes = typesAndArgs
+            candidate = (defnInfo, allTypeArgs, allArgTypes)
+
+    if candidate is None:
+        raise TypeException(loc, "could not find compatible definition: %s" % name)
+    return candidate
+
+
+
+
 class TypeVisitorBase(ast.AstNodeVisitor):
     """Provides common functionality for type visitors, namely the visitor functions for the
     various AstType subclasses."""
@@ -722,9 +778,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             receiverIsExplicit = receiverType is not None
             if not receiverIsExplicit and not hasPrefix and self.hasReceiverType():
                 receiverType = self.getReceiverType()
-            defnInfo, allTypeArgs, allArgTypes = \
-                nameInfo.findDefnInfoWithArgTypes(receiverType, receiverIsExplicit,
-                                                  typeArgs, [exprTy], last.location)
+            defnInfo, allTypeArgs, allArgTypes = findDefnInfoWithArgTypes(
+                nameInfo.overloads, receiverType, receiverIsExplicit,
+                typeArgs, [exprTy], nameInfo.name, last.location)
             callInfo = CallInfo(allTypeArgs, receiverIsExplicit)
             self.info.setCallInfo(node.id, callInfo)
             scope.use(defnInfo, node.id,
@@ -918,7 +974,12 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 raise TypeException(node.location,
                                     "expected condition types for logic operands")
             ty = ir_t.BooleanType
+        elif node.operator[-1] == ":":
+            # Right associative operator; the receiver is on the right.
+            ty = self.handleMethodCall(node.operator, node.id, rightTy,
+                                       [], [leftTy], True, True, node.location)
         else:
+            # Left associative operator; the receiver is on the left.
             ty = self.handleMethodCall(node.operator, node.id, leftTy,
                                        [], [rightTy], True, True, node.location)
         return ty
@@ -1210,12 +1271,14 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                     raise TypeException(loc, "cannot instantiate Nothing")
                 nameInfo = nameInfo.getInfoForConstructors(self.info)
                 useKind = USE_AS_CONSTRUCTOR
-                defnInfo, allTypeArgs, allArgTypes = \
-                    nameInfo.findDefnInfoWithArgTypes(receiverType, True, [], argTypes, loc)
+                defnInfo, allTypeArgs, allArgTypes = findDefnInfoWithArgTypes(
+                    nameInfo.overloads, receiverType,
+                    True,  # receiverIsExplicit
+                    [], argTypes, nameInfo.name, loc)
         else:
-            defnInfo, allTypeArgs, allArgTypes = \
-                nameInfo.findDefnInfoWithArgTypes(receiverType, receiverIsExplicit,
-                                                  typeArgs, argTypes, loc)
+            defnInfo, allTypeArgs, allArgTypes = findDefnInfoWithArgTypes(
+                nameInfo.overloads, receiverType, receiverIsExplicit,
+                typeArgs, argTypes, nameInfo.name, loc)
 
         irDefn = defnInfo.irDefn
         receiverExprNeeded = receiverIsExplicit and \
