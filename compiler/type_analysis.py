@@ -721,9 +721,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 # which means that we treat this as a variable use. We can't detect this in
                 # declaration analysis without making an extra pass.
                 scope.deleteVar(node.name)
-                varTy = self.handlePossibleCall(scope, node.name, node.id, None,
-                                                [], [], False, False, False, False, False,
-                                                node.location)
+                varTy = self.handleSimpleVariable(node.name, node.id, node.location)
             else:
                 varTy = None
 
@@ -781,8 +779,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             defnInfo, allTypeArgs, allArgTypes = findDefnInfoWithArgTypes(
                 nameInfo.overloads, receiverType, receiverIsExplicit,
                 typeArgs, [exprTy], nameInfo.name, last.location)
-            callInfo = CallInfo(allTypeArgs, receiverIsExplicit)
-            self.info.setCallInfo(node.id, callInfo)
+            self.info.setCallInfo(node.id, CallInfo(allTypeArgs))
             scope.use(defnInfo, node.id,
                       USE_AS_PROPERTY if receiverIsExplicit else USE_AS_VALUE, node.location)
             irDefn = defnInfo.irDefn
@@ -861,9 +858,12 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         return ty
 
     def visitAstVariableExpression(self, node, mayBePrefix=False):
-        ty = self.handlePossibleCall(self.scope(), node.name, node.id, None,
-                                     [], [], False, False, False, mayBePrefix, False,
-                                     node.location)
+        if mayBePrefix:
+            ty = self.handlePossibleCall(self.scope(), node.name, node.id, None,
+                                         [], [], False, False, False, mayBePrefix, False,
+                                         node.location)
+        else:
+            ty = self.handleSimpleVariable(node.name, node.id, node.location)
         return ty
 
     def visitAstThisExpression(self, node):
@@ -1216,7 +1216,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
     def handlePossibleCall(self, scope, name, useAstId,
                            receiverType, typeArgs, argTypes,
                            hasReceiver, hasArgs, mayAssign,
-                           mayBePrefix, hasPrefix, isOperator, loc):
+                           mayBePrefix, hasPrefix, loc):
         """Analyzes types for any pattern or expression that might be a call.
 
         This includes pretty much pattern or expression that involves a symbol. This method
@@ -1337,34 +1337,12 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                not irDefn.isConstructor()))
         if receiverExprNeeded and not hasReceiver:
             raise TypeException(loc, "%s: cannot access without receiver" % name)
-        callInfo = CallInfo(allTypeArgs, receiverExprNeeded)
+        callInfo = CallInfo(allTypeArgs)
         self.info.setCallInfo(useAstId, callInfo)
 
         self.scope().use(defnInfo, useAstId, useKind, loc)
-        self.ensureTypeInfoForDefn(irDefn)
-        if isinstance(irDefn, ir.Function):
-            if irDefn.isConstructor():
-                return receiverType
-            else:
-                assert len(allTypeArgs) == len(irDefn.typeParameters)
-                ty = irDefn.returnType.substitute(irDefn.typeParameters, allTypeArgs)
-                return ty
-        elif isinstance(irDefn, ir.Field):
-            ty = irDefn.type
-            if receiverIsExplicit and isinstance(receiverType, ir_t.ClassType):
-                fieldClass = self.findBaseClassForField(receiverType.clas, irDefn)
-                ty = ty.substituteForInheritance(receiverType.clas, fieldClass)
-                ty = ty.substitute(receiverType.clas.typeParameters, receiverType.typeArguments)
-            return ty
-        elif isinstance(irDefn, ir.Variable) or \
-             isinstance(irDefn, ir.Global):
-            return irDefn.type
-        elif isinstance(irDefn, ir.Package) or \
-             isinstance(irDefn, ir.PackagePrefix):
-            return ir_t.getPackageType()
-        else:
-            assert isinstance(irDefn, ir.Class)
-            return receiverType
+
+        return self.getDefnType(receiverType, receiverIsExplicit, irDefn, allTypeArgs)
 
     def handlePatternScopePrefix(self, prefix):
         scope = self.scope()
@@ -1390,6 +1368,57 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 receiverType = ty
 
         return scope, receiverType
+
+    def handleSimpleVariable(self, name, useAstId, loc):
+        """Handles a simple variable reference, not part of a call (explicitly) or prefix.
+
+        Args:
+            name: the name of the variable.
+            useAstId: the AST id of the reference (used to save info).
+            loc: the location of the reference (used in errors).
+
+        Returns:
+            The type of the definition that was referenced (with type substitution performed).
+        """
+        scope = self.scope()
+        receiverType = self.getReceiverType() if self.hasReceiverType() else None
+        nameInfo = scope.lookupFromSelf(name, loc)
+        if nameInfo.isClass():
+            raise TypeException(loc, "%s: class name can't be used as a value" % name)
+        if nameInfo.isPackagePrefix():
+            raise TypeException(loc, "package prefix can't be used as a value")
+        defnInfo, allTypeArgs, allArgTypes = findDefnInfoWithArgTypes(
+            nameInfo.overloads, receiverType, False,
+            [], [], nameInfo.name, loc)
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
+        scope.use(defnInfo, useAstId, USE_AS_VALUE, loc)
+        return self.getDefnType(receiverType, False, defnInfo.irDefn, allTypeArgs)
+
+    def getDefnType(self, receiverType, receiverIsExplicit, irDefn, typeArgs):
+        self.ensureTypeInfoForDefn(irDefn)
+        if isinstance(irDefn, ir.Function):
+            if irDefn.isConstructor():
+                return receiverType
+            else:
+                assert len(typeArgs) == len(irDefn.typeParameters)
+                ty = irDefn.returnType.substitute(irDefn.typeParameters, typeArgs)
+                return ty
+        elif isinstance(irDefn, ir.Field):
+            ty = irDefn.type
+            if receiverIsExplicit and isinstance(receiverType, ir_t.ClassType):
+                fieldClass = self.findBaseClassForField(receiverType.clas, irDefn)
+                ty = ty.substituteForInheritance(receiverType.clas, fieldClass)
+                ty = ty.substitute(receiverType.clas.typeParameters, receiverType.typeArguments)
+            return ty
+        elif isinstance(irDefn, ir.Variable) or \
+             isinstance(irDefn, ir.Global):
+            return irDefn.type
+        elif isinstance(irDefn, ir.Package) or \
+             isinstance(irDefn, ir.PackagePrefix):
+            return ir_t.getPackageType()
+        else:
+            assert isinstance(irDefn, ir.Class)
+            return receiverType
 
     def findBaseClassForField(self, receiverClass, field):
         # At this point, classes haven't been flattened yet, so we have to search up the

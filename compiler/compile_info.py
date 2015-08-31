@@ -341,11 +341,6 @@ class CallInfo(data.Data):
     propertyNames = [
         # [Type]: A list of type arguments to be passed to the callee.
         "typeArguments",
-
-        # bool: For property expressions, this is true if the receiver needs to be compiled.
-        # This is false when the receiver expression is a package or namespace or when there
-        # is no explicit receiver expression.
-        "receiverExprNeeded",
     ]
 
 

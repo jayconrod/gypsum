@@ -434,7 +434,6 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         x = info.package.findGlobal(name="x")
         self.assertEquals(barType, x.type)
         callInfo = info.getCallInfo(info.ast.modules[0].definitions[0].expression)
-        self.assertFalse(callInfo.receiverExprNeeded)
 
     def testCallForeignFunctionWithArg(self):
         source = "var x = foo.bar(12)"
