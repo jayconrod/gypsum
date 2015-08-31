@@ -1216,7 +1216,55 @@ class DefinitionTypeVisitor(TypeVisitorBase):
     def handlePossibleCall(self, scope, name, useAstId,
                            receiverType, typeArgs, argTypes,
                            hasReceiver, hasArgs, mayAssign,
-                           mayBePrefix, hasPrefix, loc):
+                           mayBePrefix, hasPrefix, isOperator, loc):
+        """Analyzes types for any pattern or expression that might be a call.
+
+        This includes pretty much pattern or expression that involves a symbol. This method
+        does the following:
+
+        - Looks up the definition being referenced, possibly using an implied receiver type,
+          resolving overloads if needed.
+        - Saves `ScopePrefixInfo` for the location if it turns out this is a prefix.
+        - Saves `CallInfo` with all type arguments (including those implied by the scope).
+        - Saves `UseInfo` with the definition and the use kind. If the definition is being used
+          as a value, this affects capturing later. Foreign definitions will be
+          externalized later.
+        - Analyzes type info for the referenced definition (e.g., to determine the implied
+          return type in a function call).
+
+        Args:
+            scope: the scope containing the pattern or expression being processed.
+            name: the symbol possibly being called.
+            useAstId: the AST id of the calling expression. Used as a key to save various
+                information and in errors.
+            receiverType: the type of the receiver expression or `None` if there wasn't one.
+                This may also be a prefix type (e.g., for a static method call).
+            typeArgs: a list of type arguments passed as part of the call.
+            argTypes: a list of types of arguments passed as part of the call, not including
+                the receiver if there was one.
+            hasReceiver: `True` if the receiver expression actually produces an object (as
+                opposed to being a prefix).
+            hasArgs: `True` if arguments were passed explicitly (including if there was an
+                empty argument list). This affects whether a class is treated as a prefix
+                or a constructor call.
+            mayAssign: `True` if this may be a compound assignment. For example, a "+=" operator
+                may be converted to an assignment with a "+" operator.
+            mayBePrefix: `True` if this expression may be part of a scope prefix.
+            hasPrefix: `True` if there was a prefix before this expression. This determines
+                whether a lookup should be done in the current scope or the receiver scope.
+            isOperator: `True` if this is a unary or binary operator expression or pattern.
+                This enables lookups in this scope and in the receiver scope.
+            loc: the location of the expression (used in errors).
+
+        Returns:
+            The type of the definition being referenced. For functions, the return type is
+            returned. For classes, the receiver type is returned. For packages and package
+            prefixes, the package type is returned.
+
+        Raises:
+            ScopeException: if a definition with this name can't be found or used.
+            TypeException: if the definition can't be used because of a type mismatch.
+        """
         receiverIsExplicit = receiverType is not None
         if not receiverIsExplicit and not hasPrefix and self.hasReceiverType():
             receiverType = self.getReceiverType()
@@ -1231,6 +1279,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
         nameInfo = scope.lookup(name, loc,
                                 fromExternal=hasPrefix, mayBeAssignment=mayAssign)
+
         if nameInfo.isScope():
             isPrefix = mayBePrefix
             if isPrefix:
