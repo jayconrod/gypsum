@@ -859,9 +859,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def visitAstVariableExpression(self, node, mayBePrefix=False):
         if mayBePrefix:
-            ty = self.handlePossibleCall(self.scope(), node.name, node.id, None,
-                                         [], [], False, False, False, mayBePrefix, False,
-                                         node.location)
+            ty = self.handlePossiblePrefixSymbol(node.name, [], node.id,
+                                                 None, None, node.location)
         else:
             ty = self.handleSimpleVariable(node.name, node.id, node.location)
         return ty
@@ -911,11 +910,17 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         else:
             receiverScope = self.info.getScope(ir_t.getClassFromType(receiverType))
             hasReceiver = True
-        ty = self.handlePossibleCall(receiverScope, node.propertyName, node.id, receiverType,
-                                     typeArgs=[], argTypes=[],
-                                     hasReceiver=hasReceiver, hasArgs=False,
-                                     mayAssign=False, mayBePrefix=mayBePrefix,
-                                     hasPrefix=True, loc=node.location)
+
+        if mayBePrefix and not hasReceiver:
+            receiverType = self.info.getType(node.receiver)
+            ty = self.handlePossiblePrefixSymbol(node.propertyName, [], node.id,
+                                                 receiverScope, receiverType, node.location)
+        else:
+            ty = self.handlePossibleCall(receiverScope, node.propertyName, node.id,
+                                         receiverType, typeArgs=[], argTypes=[],
+                                         hasReceiver=hasReceiver, hasArgs=False,
+                                         mayAssign=False, mayBePrefix=mayBePrefix,
+                                         hasPrefix=True, loc=node.location)
         return ty
 
     def visitAstCallExpression(self, node, mayBePrefix=False):
@@ -941,11 +946,17 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             else:
                 receiverScope = self.info.getScope(ir_t.getClassFromType(receiverType))
                 hasReceiver = True
-            ty = self.handlePossibleCall(receiverScope, node.callee.propertyName, node.id,
-                                         receiverType, typeArgs, argTypes,
-                                         hasReceiver=hasReceiver, hasArgs=hasArgs,
-                                         mayAssign=False, mayBePrefix=mayBePrefix,
-                                         hasPrefix=True, loc=node.location)
+                mayBePrefix = False
+            if mayBePrefix:
+                ty = self.handlePossiblePrefixSymbol(node.callee.propertyName,
+                                                     typeArgs, node.id,
+                                                     receiverScope, receiverType, node.location)
+            else:
+                ty = self.handlePossibleCall(receiverScope, node.callee.propertyName, node.id,
+                                             receiverType, typeArgs, argTypes,
+                                             hasReceiver=hasReceiver, hasArgs=hasArgs,
+                                             mayAssign=False, mayBePrefix=mayBePrefix,
+                                             hasPrefix=True, loc=node.location)
         elif isinstance(node.callee, ast.AstThisExpression) or \
              isinstance(node.callee, ast.AstSuperExpression):
             receiverType = self.visit(node.callee)
@@ -1345,29 +1356,61 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         return self.getDefnType(receiverType, receiverIsExplicit, irDefn, allTypeArgs)
 
     def handlePatternScopePrefix(self, prefix):
+        """Processes the components of a pattern prefix.
+
+        Components can either be scope prefixes (for example, package names, class names) or
+        regular loads or calls (field loads, nullary function calls). Scope lookups come first,
+        if they are present. This method determines how many components are scope prefixes and
+        saves `ScopePrefixInfo` for each of them. The regular set of `UseInfo` and `CallInfo`
+        is saved for all components.
+
+        Args:
+            prefix: a list of `AstScopePrefixComponent`s to process. It may be empty.
+
+        Returns:
+            A tuple of `(Scope, Type|None)`. The scope is the last scope looked up from the
+            component list. It can be used for further lookups. The type is the receiver type
+            of the last component. It will be `None` if the component list is empty.
+
+        Raises:
+            ScopeException: if a definition with this name can't be found or used.
+            TypeException: if the definition can't be used because of a type mismatch.
+        """
+        if len(prefix) == 0:
+            return self.scope(), None
+
         scope = self.scope()
         hasPrefix = False
-        receiverType = None
-        for component in prefix:
-            # Look up the type of the next component.
-            typeArgs = map(self.visit, component.typeArguments)
-            ty = self.handlePossibleCall(scope, component.name, component.id, receiverType,
-                                         typeArgs, [], hasReceiver=(receiverType is not None),
+        firstTypeArgs = map(self.visit, prefix[0].typeArguments)
+        ty = self.handlePossiblePrefixSymbol(prefix[0].name, firstTypeArgs, prefix[0].id,
+                                             None, None, prefix[0].location)
+        self.info.setType(prefix[0], ty)
+
+        i = 1
+        while i < len(prefix) and self.info.hasScopePrefixInfo(prefix[i - 1]):
+            hasPrefix = True
+            scope = self.info.getScope(self.info.getScopePrefixInfo(prefix[i - 1]).scopeId)
+            typeArgs = map(self.visit, prefix[i].typeArguments)
+            ty = self.handlePossiblePrefixSymbol(prefix[0].name, typeArgs, prefix[0].id,
+                                                 scope, ty, prefix[0].location)
+            self.info.setType(prefix[i], ty)
+            i += 1
+        while i < len(prefix):
+            scope = self.info.getScope(ir_t.getClassFromType(ty))
+            typeArgs = map(self.visit, prefix[i].typeArguments)
+            ty = self.handlePossibleCall(scope, prefix[i].name, prefix[i].id, receiverType,
+                                         typeArgs, [], hasReceiver=True,
                                          hasArgs=False, mayAssign=False,
-                                         mayBePrefix=(receiverType is None),
-                                         hasPrefix=hasPrefix,
-                                         loc=component.location)
+                                         mayBePrefix=False, hasPrefix=hasPrefix,
+                                         loc=prefix[i].location)
+            self.info.setType(prefix[i], ty)
+            i += 1
 
-            # Determine the next scope and the receiver type. If this is just a prefix, there
-            # is no receiver type yet.
-            if self.info.hasScopePrefixInfo(component.id):
-                scope = self.info.getScope(self.info.getScopePrefixInfo(component.id).scopeId)
-                assert receiverType is None
-            else:
-                scope = self.info.getScope(ir_t.getClassFromType(ty))
-                receiverType = ty
-
-        return scope, receiverType
+        if self.info.hasScopePrefixInfo(prefix[-1]):
+            scope = self.info.getScope(self.info.getScopePrefixInfo(prefix[i - 1]).scopeId)
+        else:
+            scope = self.info.getScope(ir_t.getClassFromType(ty))
+        return scope, ty
 
     def handleSimpleVariable(self, name, useAstId, loc):
         """Handles a simple variable reference, not part of a call (explicitly) or prefix.
@@ -1387,12 +1430,84 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             raise TypeException(loc, "%s: class name can't be used as a value" % name)
         if nameInfo.isPackagePrefix():
             raise TypeException(loc, "package prefix can't be used as a value")
-        defnInfo, allTypeArgs, allArgTypes = findDefnInfoWithArgTypes(
+        defnInfo, allTypeArgs, _ = findDefnInfoWithArgTypes(
             nameInfo.overloads, receiverType, False,
             [], [], nameInfo.name, loc)
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
         scope.use(defnInfo, useAstId, USE_AS_VALUE, loc)
         return self.getDefnType(receiverType, False, defnInfo.irDefn, allTypeArgs)
+
+    def handlePossiblePrefixSymbol(self, name, typeArgs, useAstId, scope, scopeType, loc):
+        """Processes a symbol reference which may be part of a scope prefix.
+
+        If the symbol does turn out to be part of a prefix, `ScopePrefixInfo` will be saved
+        at `useAstId`. The normal `UseInfo` and `CallInfo` will be saved in any case.
+
+        Args:
+            name: the symbol being referenced.
+            typeArgs: a list of type arguments that are part of the reference. Pass the empty
+                list if there are none.
+            useAstId: the AST id of the reference. This will be used to save info.
+            scope: the `Scope` where the reference occurs (optional). If `None`, the reference
+                is assumed to be made in the current scope, and a self-lookup will be performed.
+                Otherwise, an external lookup will be performed.
+            scopeType: the `Type` of the scope where the reference occurs (optional). This
+                should be `None` iff `scope` is `None`. The receiver type will be taken from
+                the current scope, if it has one.
+            loc: the location of the reference (used in errors).
+
+        Returns:
+            The `Type` of the definition being reference. If a package is being referenced,
+            the package type will be returned.
+
+        Raises:
+            ScopeException: if a definition with this name can't be found or used.
+            TypeException: if the definition can't be used because of a type mismatch.
+        """
+        if scope is None:
+            assert scopeType is None
+            receiverIsExplicit = False
+            scopeType = self.getReceiverType() if self.hasReceiverType() else None
+            nameInfo = self.scope().lookupFromSelf(name, loc)
+        else:
+            receiverIsExplicit = True
+            nameInfo = scope.lookupFromExternal(name, loc)
+
+        if nameInfo.isScope():
+            defnInfo = nameInfo.getDefnInfo()
+            if isinstance(defnInfo.irDefn, ir.Class):
+                defnScopeId = self.info.getScope(defnInfo.irDefn).scopeId
+            else:
+                parentScope = self.info.getScope(defnInfo.scopeId)
+                defnScopeId = parentScope.scopeForPrefix(name, loc).scopeId
+            scopePrefixInfo = ScopePrefixInfo(defnInfo.irDefn, defnScopeId)
+            self.info.setScopePrefixInfo(useAstId, scopePrefixInfo)
+
+        if nameInfo.isClass():
+            defnInfo = nameInfo.getDefnInfo()
+            irClass = defnInfo.irDefn
+            explicitTypeParams = ir.getExplicitTypeParameters(irClass)
+            if len(typeArgs) != len(explicitTypeParams):
+                raise TypeException(loc,
+                                    "wrong number of type arguments: expected %d but have %d" %
+                                    (len(explicitTypeParams), len(typeArgs)))
+            if not all(tp.contains(ta) for tp, ta in zip(explicitTypeParams, typeArgs)):
+                raise TypeException(loc, "type error in type arguments for constructor")
+            implicitTypeParams = ir.getImplicitTypeParameters(irClass)
+            implicitTypeArgs = [ir_t.VariableType(tp) for tp in implicitTypeParams]
+            allTypeArgs = tuple(implicitTypeArgs + typeArgs)
+            receiverType = ir_t.ClassType(irClass, allTypeArgs, None)
+        else:
+            receiverType = scopeType
+            defnInfo, allTypeArgs, _ = findDefnInfoWithArgTypes(
+                nameInfo.overloads, receiverType, receiverIsExplicit,
+                typeArgs, [], nameInfo.name, loc)
+
+        callInfo = CallInfo(allTypeArgs)
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
+
+        self.scope().use(defnInfo, useAstId, USE_AS_PROPERTY, loc)
+        return self.getDefnType(receiverType, True, defnInfo.irDefn, allTypeArgs)
 
     def getDefnType(self, receiverType, receiverIsExplicit, irDefn, typeArgs):
         self.ensureTypeInfoForDefn(irDefn)
