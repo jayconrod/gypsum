@@ -654,7 +654,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             superArgTypes = map(self.visit, node.superArgs) \
                             if node.superArgs is not None \
                             else []
-            self.handleMethodCall(ir.CONSTRUCTOR_SUFFIX, node.id, supertype,
+            self.handleMethodCallOld(ir.CONSTRUCTOR_SUFFIX, node.id, supertype,
                                   [], superArgTypes, True, False, node.location)
 
         irInitializer = irClass.initializer
@@ -759,10 +759,20 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def visitAstValuePattern(self, node, exprTy, mode):
         scope, receiverType = self.handlePatternScopePrefix(node.prefix)
-        patTy = self.handlePossibleCall(scope, node.name, node.id, receiverType, [], [],
-                                        hasReceiver=(receiverType is not None),
-                                        hasArgs=False, mayAssign=False, mayBePrefix=False,
-                                        hasPrefix=(len(node.prefix) > 0), loc=node.location)
+        if len(node.prefix) > 0:
+            if self.info.hasScopePrefixInfo(node.prefix[-1]):
+                patTy = self.handlePossibleCall(scope, node.name, node.id, receiverType, [], [],
+                                                hasReceiver=(receiverType is not None),
+                                                hasArgs=False, mayAssign=False, mayBePrefix=False,
+                                                hasPrefix=(len(node.prefix) > 0), loc=node.location)
+            else:
+                patTy = self.handleMethodCall(node.name, receiverType,
+                                              [], [], node.id, node.location)
+        else:
+            patTy = self.handlePossibleCall(scope, node.name, node.id, receiverType, [], [],
+                                            hasReceiver=(receiverType is not None),
+                                            hasArgs=False, mayAssign=False, mayBePrefix=False,
+                                            hasPrefix=(len(node.prefix) > 0), loc=node.location)
         return patTy
 
     def visitAstDestructurePattern(self, node, exprTy, mode):
@@ -817,12 +827,16 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             # Look up the try-match method.
             matcherScope = self.info.getScope(matcherClass)
             try:
-                returnType = self.handlePossibleCall(matcherScope, "try-match", node.id,
-                                                     matcherReceiverType, [], [exprTy],
-                                                     hasReceiver=matcherHasReceiver,
-                                                     hasArgs=True, mayAssign=False,
-                                                     mayBePrefix=False, hasPrefix=True,
-                                                     loc=node.location)
+                if matcherHasReceiver:
+                    returnType = self.handleMethodCall("try-match", matcherReceiverType, [],
+                                                       [exprTy], node.id, node.location)
+                else:
+                    returnType = self.handlePossibleCall(matcherScope, "try-match", node.id,
+                                                         matcherReceiverType, [], [exprTy],
+                                                         hasReceiver=matcherHasReceiver,
+                                                         hasArgs=True, mayAssign=False,
+                                                         mayBePrefix=False, hasPrefix=True,
+                                                         loc=node.location)
             except ScopeException:
                 raise TypeException(node.location, "cannot match without `try-match` method")
 
@@ -915,11 +929,13 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             receiverType = self.info.getType(node.receiver)
             ty = self.handlePossiblePrefixSymbol(node.propertyName, [], node.id,
                                                  receiverScope, receiverType, node.location)
+        elif hasReceiver:
+            ty = self.handleMethodCall(node.propertyName, receiverType,
+                                       [], [], node.id, node.location)
         else:
             ty = self.handlePossibleCall(receiverScope, node.propertyName, node.id,
-                                         receiverType, typeArgs=[], argTypes=[],
-                                         hasReceiver=hasReceiver, hasArgs=False,
-                                         mayAssign=False, mayBePrefix=mayBePrefix,
+                                         receiverType, [], [], hasReceiver=False,
+                                         hasArgs=False, mayAssign=False, mayBePrefix=False,
                                          hasPrefix=True, loc=node.location)
         return ty
 
@@ -942,25 +958,25 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             if self.info.hasScopePrefixInfo(node.callee.receiver):
                 receiverScope = self.info.getScope(
                     self.info.getScopePrefixInfo(node.callee.receiver).scopeId)
-                hasReceiver = False
+                if mayBePrefix:
+                    ty = self.handlePossiblePrefixSymbol(node.callee.propertyName,
+                                                         typeArgs, node.id,
+                                                         receiverScope, receiverType,
+                                                         node.location)
+                else:
+                    ty = self.handlePossibleCall(receiverScope, node.callee.propertyName, node.id,
+                                                 receiverType, typeArgs, argTypes,
+                                                 hasReceiver=False, hasArgs=hasArgs,
+                                                 mayAssign=False, mayBePrefix=mayBePrefix,
+                                                 hasPrefix=True, loc=node.location)
             else:
                 receiverScope = self.info.getScope(ir_t.getClassFromType(receiverType))
-                hasReceiver = True
-                mayBePrefix = False
-            if mayBePrefix:
-                ty = self.handlePossiblePrefixSymbol(node.callee.propertyName,
-                                                     typeArgs, node.id,
-                                                     receiverScope, receiverType, node.location)
-            else:
-                ty = self.handlePossibleCall(receiverScope, node.callee.propertyName, node.id,
-                                             receiverType, typeArgs, argTypes,
-                                             hasReceiver=hasReceiver, hasArgs=hasArgs,
-                                             mayAssign=False, mayBePrefix=mayBePrefix,
-                                             hasPrefix=True, loc=node.location)
+                ty = self.handleMethodCall(node.callee.propertyName, receiverType,
+                                           typeArgs, argTypes, node.id, node.location)
         elif isinstance(node.callee, ast.AstThisExpression) or \
              isinstance(node.callee, ast.AstSuperExpression):
             receiverType = self.visit(node.callee)
-            self.handleMethodCall(ir.CONSTRUCTOR_SUFFIX, node.id,
+            self.handleMethodCallOld(ir.CONSTRUCTOR_SUFFIX, node.id,
                                   receiverType, typeArgs, argTypes,
                                   hasArgs, False, node.location)
             ty = ir_t.UnitType
@@ -971,7 +987,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def visitAstUnaryExpression(self, node):
         receiverType = self.visit(node.expr)
-        ty = self.handleMethodCall(node.operator, node.id, receiverType,
+        ty = self.handleMethodCallOld(node.operator, node.id, receiverType,
                                    [], [], True, False, node.location)
         return ty
 
@@ -987,11 +1003,11 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             ty = ir_t.BooleanType
         elif node.operator[-1] == ":":
             # Right associative operator; the receiver is on the right.
-            ty = self.handleMethodCall(node.operator, node.id, rightTy,
+            ty = self.handleMethodCallOld(node.operator, node.id, rightTy,
                                        [], [leftTy], True, True, node.location)
         else:
             # Left associative operator; the receiver is on the left.
-            ty = self.handleMethodCall(node.operator, node.id, leftTy,
+            ty = self.handleMethodCallOld(node.operator, node.id, leftTy,
                                        [], [rightTy], True, True, node.location)
         return ty
 
@@ -1214,8 +1230,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         else:
             raise NotImplementedError
 
-    def handleMethodCall(self, name, useAstId, receiverType,
-                         typeArgs, argTypes, hasArgs, mayAssign, loc):
+    def handleMethodCallOld(self, name, useAstId, receiverType,
+                            typeArgs, argTypes, hasArgs, mayAssign, loc):
         irClass = ir_t.getClassFromType(receiverType)
         scope = self.info.getScope(irClass)
         return self.handlePossibleCall(scope, name, useAstId,
@@ -1398,11 +1414,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         while i < len(prefix):
             scope = self.info.getScope(ir_t.getClassFromType(ty))
             typeArgs = map(self.visit, prefix[i].typeArguments)
-            ty = self.handlePossibleCall(scope, prefix[i].name, prefix[i].id, receiverType,
-                                         typeArgs, [], hasReceiver=True,
-                                         hasArgs=False, mayAssign=False,
-                                         mayBePrefix=False, hasPrefix=hasPrefix,
-                                         loc=prefix[i].location)
+            ty = self.handleMethodCall(prefix[i].name, receiverType, typeArgs, [],
+                                       prefix[i].id, prefix[i].location)
             self.info.setType(prefix[i], ty)
             i += 1
 
@@ -1485,18 +1498,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
         if nameInfo.isClass():
             defnInfo = nameInfo.getDefnInfo()
-            irClass = defnInfo.irDefn
-            explicitTypeParams = ir.getExplicitTypeParameters(irClass)
-            if len(typeArgs) != len(explicitTypeParams):
-                raise TypeException(loc,
-                                    "wrong number of type arguments: expected %d but have %d" %
-                                    (len(explicitTypeParams), len(typeArgs)))
-            if not all(tp.contains(ta) for tp, ta in zip(explicitTypeParams, typeArgs)):
-                raise TypeException(loc, "type error in type arguments for constructor")
-            implicitTypeParams = ir.getImplicitTypeParameters(irClass)
-            implicitTypeArgs = [ir_t.VariableType(tp) for tp in implicitTypeParams]
-            allTypeArgs = tuple(implicitTypeArgs + typeArgs)
-            receiverType = ir_t.ClassType(irClass, allTypeArgs, None)
+            receiverType = self.getReceiverTypeForClass(defnInfo.irDefn, typeArgs, loc)
+            allTypeArgs = receiverType.typeArguments
         else:
             receiverType = scopeType
             defnInfo, allTypeArgs, _ = findDefnInfoWithArgTypes(
@@ -1508,6 +1511,71 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
         self.scope().use(defnInfo, useAstId, USE_AS_PROPERTY, loc)
         return self.getDefnType(receiverType, True, defnInfo.irDefn, allTypeArgs)
+
+    def handleMethodCall(self, name, receiverType, typeArgs, argTypes, useAstId, loc):
+        """Handles a reference to a symbol inside an object.
+
+        This can be used for methods, fields, and inner-class constructors. The call must
+        be prefixed with an expression that produces an object (scope prefix is not sufficient).
+        `UseInfo` and `CallInfo` will be saved.
+
+        Args:
+            name: the name of the symbol being referenced.
+            receiverType: the `Type` of the object containing the symbol.
+            typeArgs: a list of `Type` arguments passed as part of the call. May be empty.
+            argTypes: a list of `Type`s of regular arguments passed as part of the call. May
+                be empty.
+            useAstId: the AST id where the symbol is referenced. Used to save info.
+            loc: the location of the reference in source code. Used in errors.
+
+        Returns:
+            The `Type` of the definition that was referenced (with type substitution performed).
+
+        Raises:
+            ScopeException: if a definition with this name can't be found or used.
+            TypeException: if the definition can't be used because of a type mismatch.
+        """
+        irClass = ir_t.getClassFromType(receiverType)
+        scope = self.info.getScope(irClass)
+        nameInfo = scope.lookupFromExternal(name, loc)
+        useKind = USE_AS_PROPERTY
+
+        if nameInfo.isClass():
+            defnInfo = nameInfo.getDefnInfo()
+            irClass = defnInfo.irClass
+            receiverType = self.getReceiverTypeForClass(irClass, typeArgs, loc)
+            allTypeArgs = receiverType.typeArgs
+            if irClass is getNothingClass():
+                raise TypeException(loc, "cannot instantiate Nothing")
+            nameInfo = nameInfo.getInfoForConstructors(self.info)
+            useKind = USE_AS_CONSTRUCTOR
+            defnInfo, allTypeargs, _ = findDefnInfoWithArgTypes(
+                nameInfo.overloads, receiverType,
+                True,  # receiverIsExplicit
+                [],  # typeArgs
+                argTypes, nameInfo.name, loc)
+        else:
+            defnInfo, allTypeArgs, _ = findDefnInfoWithArgTypes(
+                nameInfo.overloads, receiverType,
+                True,  # receiverIsExplicit
+                typeArgs, argTypes, nameInfo.name, loc)
+
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
+        self.scope().use(defnInfo, useAstId, useKind, loc)
+        return self.getDefnType(receiverType, True, defnInfo.irDefn, allTypeArgs)
+
+    def getReceiverTypeForClass(self, irClass, typeArgs, loc):
+        explicitTypeParams = ir.getExplicitTypeParameters(irClass)
+        if len(typeArgs) != len(explicitTypeParams):
+            raise TypeException(loc,
+                                "wrong number of type arguments: expected %d but have %d" %
+                                (len(explicitTypeParams), len(typeArgs)))
+        if not all(tp.contains(ta) for tp, ta in zip(explicitTypeParams, typeArgs)):
+            raise TypeException(loc, "type error in type arguments for class")
+        implicitTypeParams = ir.getImplicitTypeParameters(irClass)
+        implicitTypeArgs = [ir.VariableType(tp) for tp in implicitTypeParams]
+        allTypeArgs = tuple(implicitTypeArgs + typeArgs)
+        return ir_t.ClassType(irClass, allTypeArgs, None)
 
     def getDefnType(self, receiverType, receiverIsExplicit, irDefn, typeArgs):
         self.ensureTypeInfoForDefn(irDefn)
