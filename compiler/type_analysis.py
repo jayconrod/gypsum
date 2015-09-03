@@ -760,14 +760,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
     def visitAstValuePattern(self, node, exprTy, mode):
         scope, receiverType = self.handlePatternScopePrefix(node.prefix)
         if len(node.prefix) > 0:
-            if self.info.hasScopePrefixInfo(node.prefix[-1]):
-                patTy = self.handlePossibleCall(scope, node.name, node.id, receiverType, [], [],
-                                                hasReceiver=(receiverType is not None),
-                                                hasArgs=False, mayAssign=False, mayBePrefix=False,
-                                                hasPrefix=(len(node.prefix) > 0), loc=node.location)
-            else:
-                patTy = self.handleMethodCall(node.name, receiverType,
-                                              [], [], node.id, node.location)
+            hasReceiver = not self.info.hasScopePrefixInfo(node.prefix[-1])
+            patTy = self.handlePropertyCall(node.name, scope, receiverType, [], [],
+                                            hasReceiver, node.id, node.location)
         else:
             patTy = self.handlePossibleCall(scope, node.name, node.id, receiverType, [], [],
                                             hasReceiver=(receiverType is not None),
@@ -827,16 +822,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             # Look up the try-match method.
             matcherScope = self.info.getScope(matcherClass)
             try:
-                if matcherHasReceiver:
-                    returnType = self.handleMethodCall("try-match", matcherReceiverType, [],
-                                                       [exprTy], node.id, node.location)
-                else:
-                    returnType = self.handlePossibleCall(matcherScope, "try-match", node.id,
-                                                         matcherReceiverType, [], [exprTy],
-                                                         hasReceiver=matcherHasReceiver,
-                                                         hasArgs=True, mayAssign=False,
-                                                         mayBePrefix=False, hasPrefix=True,
-                                                         loc=node.location)
+                returnType = self.handlePropertyCall("try-match", matcherScope,
+                                                     matcherReceiverType, [], [exprTy],
+                                                     matcherHasReceiver, node.id, node.location)
             except ScopeException:
                 raise TypeException(node.location, "cannot match without `try-match` method")
 
@@ -929,14 +917,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             receiverType = self.info.getType(node.receiver)
             ty = self.handlePossiblePrefixSymbol(node.propertyName, [], node.id,
                                                  receiverScope, receiverType, node.location)
-        elif hasReceiver:
-            ty = self.handleMethodCall(node.propertyName, receiverType,
-                                       [], [], node.id, node.location)
         else:
-            ty = self.handlePossibleCall(receiverScope, node.propertyName, node.id,
-                                         receiverType, [], [], hasReceiver=False,
-                                         hasArgs=False, mayAssign=False, mayBePrefix=False,
-                                         hasPrefix=True, loc=node.location)
+            ty = self.handlePropertyCall(node.propertyName, receiverScope, receiverType,
+                                         [], [], hasReceiver, node.id, node.location)
         return ty
 
     def visitAstCallExpression(self, node, mayBePrefix=False):
@@ -958,21 +941,19 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             if self.info.hasScopePrefixInfo(node.callee.receiver):
                 receiverScope = self.info.getScope(
                     self.info.getScopePrefixInfo(node.callee.receiver).scopeId)
-                if mayBePrefix:
-                    ty = self.handlePossiblePrefixSymbol(node.callee.propertyName,
-                                                         typeArgs, node.id,
-                                                         receiverScope, receiverType,
-                                                         node.location)
-                else:
-                    ty = self.handlePossibleCall(receiverScope, node.callee.propertyName, node.id,
-                                                 receiverType, typeArgs, argTypes,
-                                                 hasReceiver=False, hasArgs=hasArgs,
-                                                 mayAssign=False, mayBePrefix=mayBePrefix,
-                                                 hasPrefix=True, loc=node.location)
+                hasReceiver = False
             else:
                 receiverScope = self.info.getScope(ir_t.getClassFromType(receiverType))
-                ty = self.handleMethodCall(node.callee.propertyName, receiverType,
-                                           typeArgs, argTypes, node.id, node.location)
+                hasReceiver = True
+            if mayBePrefix and not hasReceiver:
+                ty = self.handlePossiblePrefixSymbol(node.callee.propertyName,
+                                                     typeArgs, node.id,
+                                                     receiverScope, receiverType,
+                                                     node.location)
+            else:
+                ty = self.handlePropertyCall(node.callee.propertyName, receiverScope,
+                                             receiverType, typeArgs, argTypes,
+                                             hasReceiver, node.id, node.location)
         elif isinstance(node.callee, ast.AstThisExpression) or \
              isinstance(node.callee, ast.AstSuperExpression):
             receiverType = self.visit(node.callee)
@@ -1414,8 +1395,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         while i < len(prefix):
             scope = self.info.getScope(ir_t.getClassFromType(ty))
             typeArgs = map(self.visit, prefix[i].typeArguments)
-            ty = self.handleMethodCall(prefix[i].name, receiverType, typeArgs, [],
-                                       prefix[i].id, prefix[i].location)
+            ty = self.handlePropertyCall(prefix[i].name, scope, receiverType, typeArgs, [],
+                                         True, prefix[i].id, prefix[i].location)
             self.info.setType(prefix[i], ty)
             i += 1
 
@@ -1512,18 +1493,21 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.scope().use(defnInfo, useAstId, USE_AS_PROPERTY, loc)
         return self.getDefnType(receiverType, True, defnInfo.irDefn, allTypeArgs)
 
-    def handleMethodCall(self, name, receiverType, typeArgs, argTypes, useAstId, loc):
-        """Handles a reference to a symbol inside an object.
+    def handlePropertyCall(self, name, receiverScope, receiverType,
+                           typeArgs, argTypes, hasReceiver, useAstId, loc):
+        """Handles a reference to a property inside an object or a scope.
 
-        This can be used for methods, fields, and inner-class constructors. The call must
-        be prefixed with an expression that produces an object (scope prefix is not sufficient).
-        `UseInfo` and `CallInfo` will be saved.
+        This can be used for methods, fields, and inner-class constructors with an explicit
+        receiver or scope prefix. It cannot be used to process additional scope prefixes
+        (use `handlePossibleScopePrefix` instead). `UseInfo` and `CallInfo` will be saved.
 
         Args:
             name: the name of the symbol being referenced.
-            receiverType: the `Type` of the object containing the symbol.
-            typeArgs: a list of `Type` arguments passed as part of the call. May be empty.
-            argTypes: a list of `Type`s of regular arguments passed as part of the call. May
+            receiverScope: the `Scope` of the receiver or prefix.
+            receiverType: the `Type` of the receiver or the prefix. This is used to obtain
+                type arguments which may be implied in this call.
+            typeArgs: a list of `Type` arguments passes as part of the call. May be empty.
+            argTypes: a list of `Type`s of argument arguments passed as part of the call. May
                 be empty.
             useAstId: the AST id where the symbol is referenced. Used to save info.
             loc: the location of the reference in source code. Used in errors.
@@ -1535,16 +1519,17 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             ScopeException: if a definition with this name can't be found or used.
             TypeException: if the definition can't be used because of a type mismatch.
         """
-        irClass = ir_t.getClassFromType(receiverType)
-        scope = self.info.getScope(irClass)
-        nameInfo = scope.lookupFromExternal(name, loc)
+        nameInfo = receiverScope.lookupFromExternal(name, loc)
         useKind = USE_AS_PROPERTY
+
+        if nameInfo.isPackagePrefix():
+            raise TypeException(loc, "package prefix can't be used as a value")
 
         if nameInfo.isClass():
             defnInfo = nameInfo.getDefnInfo()
-            irClass = defnInfo.irClass
+            irClass = defnInfo.irDefn
             receiverType = self.getReceiverTypeForClass(irClass, typeArgs, loc)
-            allTypeArgs = receiverType.typeArgs
+            allTypeArgs = receiverType.typeArguments
             if irClass is getNothingClass():
                 raise TypeException(loc, "cannot instantiate Nothing")
             nameInfo = nameInfo.getInfoForConstructors(self.info)
@@ -1559,6 +1544,14 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 nameInfo.overloads, receiverType,
                 True,  # receiverIsExplicit
                 typeArgs, argTypes, nameInfo.name, loc)
+
+        irDefn = defnInfo.irDefn
+        receiverNeeded = (isinstance(irDefn, ir.Field) or
+                          (isinstance(irDefn, ir.Function) and
+                           irDefn.isMethod() and
+                           not irDefn.isConstructor()))
+        if receiverNeeded and not hasReceiver:
+            raise TypeException(loc, "%s: cannot access without receiver" % name)
 
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
         self.scope().use(defnInfo, useAstId, useKind, loc)
