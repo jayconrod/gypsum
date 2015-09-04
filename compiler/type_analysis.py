@@ -858,8 +858,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def visitAstVariableExpression(self, node, mayBePrefix=False):
         if mayBePrefix:
-            ty = self.handlePossiblePrefixSymbol(node.name, [], node.id,
-                                                 None, None, node.location)
+            ty = self.handlePossiblePrefixSymbol(node.name, None, None, [],
+                                                 node.id, node.location)
         else:
             ty = self.handleSimpleVariable(node.name, node.id, node.location)
         return ty
@@ -912,8 +912,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
         if mayBePrefix and not hasReceiver:
             receiverType = self.info.getType(node.receiver)
-            ty = self.handlePossiblePrefixSymbol(node.propertyName, [], node.id,
-                                                 receiverScope, receiverType, node.location)
+            ty = self.handlePossiblePrefixSymbol(node.propertyName, receiverScope, receiverType,
+                                                 [], node.id, node.location)
         else:
             ty = self.handlePropertyCall(node.propertyName, receiverScope, receiverType,
                                          [], [], hasReceiver, node.id, node.location)
@@ -941,8 +941,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 hasReceiver = True
             if mayBePrefix and not hasReceiver:
                 ty = self.handlePossiblePrefixSymbol(node.callee.propertyName,
-                                                     typeArgs, node.id,
                                                      receiverScope, receiverType,
+                                                     typeArgs, node.id,
                                                      node.location)
             else:
                 ty = self.handlePropertyCall(node.callee.propertyName, receiverScope,
@@ -1373,8 +1373,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         scope = self.scope()
         hasPrefix = False
         firstTypeArgs = map(self.visit, prefix[0].typeArguments)
-        ty = self.handlePossiblePrefixSymbol(prefix[0].name, firstTypeArgs, prefix[0].id,
-                                             None, None, prefix[0].location)
+        ty = self.handlePossiblePrefixSymbol(prefix[0].name, None, None, firstTypeArgs,
+                                              prefix[0].id, prefix[0].location)
         self.info.setType(prefix[0], ty)
 
         i = 1
@@ -1382,8 +1382,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             hasPrefix = True
             scope = self.info.getScope(self.info.getScopePrefixInfo(prefix[i - 1]).scopeId)
             typeArgs = map(self.visit, prefix[i].typeArguments)
-            ty = self.handlePossiblePrefixSymbol(prefix[0].name, typeArgs, prefix[0].id,
-                                                 scope, ty, prefix[0].location)
+            ty = self.handlePossiblePrefixSymbol(prefix[0].name, scope, ty, typeArgs,
+                                                 prefix[0].id, prefix[0].location)
             self.info.setType(prefix[i], ty)
             i += 1
         while i < len(prefix):
@@ -1425,7 +1425,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         scope.use(defnInfo, useAstId, USE_AS_VALUE, loc)
         return self.getDefnType(receiverType, False, defnInfo.irDefn, allTypeArgs)
 
-    def handlePossiblePrefixSymbol(self, name, typeArgs, useAstId, scope, scopeType, loc):
+    def handlePossiblePrefixSymbol(self, name, scope, scopeType, typeArgs, useAstId,loc):
         """Processes a symbol reference which may be part of a scope prefix.
 
         If the symbol does turn out to be part of a prefix, `ScopePrefixInfo` will be saved
@@ -1433,15 +1433,15 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
         Args:
             name: the symbol being referenced.
-            typeArgs: a list of type arguments that are part of the reference. Pass the empty
-                list if there are none.
-            useAstId: the AST id of the reference. This will be used to save info.
             scope: the `Scope` where the reference occurs (optional). If `None`, the reference
                 is assumed to be made in the current scope, and a self-lookup will be performed.
                 Otherwise, an external lookup will be performed.
             scopeType: the `Type` of the scope where the reference occurs (optional). This
                 should be `None` iff `scope` is `None`. The receiver type will be taken from
                 the current scope, if it has one.
+            typeArgs: a list of type arguments that are part of the reference. Pass the empty
+                list if there are none.
+            useAstId: the AST id of the reference. This will be used to save info.
             loc: the location of the reference (used in errors).
 
         Returns:
