@@ -764,10 +764,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             patTy = self.handlePropertyCall(node.name, scope, receiverType, [], [],
                                             hasReceiver, node.id, node.location)
         else:
-            patTy = self.handlePossibleCall(scope, node.name, node.id, receiverType, [], [],
-                                            hasReceiver=(receiverType is not None),
-                                            hasArgs=False, mayAssign=False, mayBePrefix=False,
-                                            hasPrefix=(len(node.prefix) > 0), loc=node.location)
+            patTy = self.handleUnprefixedCall(node.name, [], [], node.id, node.location)
         return patTy
 
     def visitAstDestructurePattern(self, node, exprTy, mode):
@@ -931,11 +928,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             mayBePrefix = False
 
         if isinstance(node.callee, ast.AstVariableExpression):
-            ty = self.handlePossibleCall(self.scope(), node.callee.name, node.id,
-                                         None, typeArgs, argTypes,
-                                         hasArgs=hasArgs, hasReceiver=False,
-                                         mayAssign=False, mayBePrefix=mayBePrefix,
-                                         hasPrefix=False, loc=node.location)
+            ty = self.handleUnprefixedCall(node.callee.name, typeArgs, argTypes,
+                                           node.id, node.location)
         elif isinstance(node.callee, ast.AstPropertyExpression):
             receiverType = self.visitPossiblePrefix(node.callee.receiver)
             if self.info.hasScopePrefixInfo(node.callee.receiver):
@@ -1534,7 +1528,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 raise TypeException(loc, "cannot instantiate Nothing")
             nameInfo = nameInfo.getInfoForConstructors(self.info)
             useKind = USE_AS_CONSTRUCTOR
-            defnInfo, allTypeargs, _ = findDefnInfoWithArgTypes(
+            defnInfo, allTypeArgs, _ = findDefnInfoWithArgTypes(
                 nameInfo.overloads, receiverType,
                 True,  # receiverIsExplicit
                 [],  # typeArgs
@@ -1556,6 +1550,39 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
         self.scope().use(defnInfo, useAstId, useKind, loc)
         return self.getDefnType(receiverType, True, defnInfo.irDefn, allTypeArgs)
+
+    def handleUnprefixedCall(self, name, typeArgs, argTypes, useAstId, loc):
+        receiverType = self.getReceiverType() if self.hasReceiverType() else None
+        useKind = USE_AS_VALUE
+        nameInfo = self.scope().lookupFromSelf(name, loc)
+
+        if nameInfo.isPackagePrefix():
+            raise TypeException(loc, "package prefix can't be used as a value")
+
+        if nameInfo.isClass():
+            defnInfo = nameInfo.getDefnInfo()
+            irClass = defnInfo.irDefn
+            receiverType = self.getReceiverTypeForClass(irClass, typeArgs, loc)
+            allTypeArgs = receiverType.typeArguments
+            if irClass is getNothingClass():
+                raise TypeException(loc, "cannot instantiate Nothing")
+            nameInfo = nameInfo.getInfoForConstructors(self.info)
+            useKind = USE_AS_CONSTRUCTOR
+            defnInfo, allTypeArgs, _ = findDefnInfoWithArgTypes(
+                nameInfo.overloads, receiverType,
+                True,  # receiverIsExplicit
+                [],  # typeArgs
+                argTypes, nameInfo.name, loc)
+        else:
+            defnInfo, allTypeArgs, _ = findDefnInfoWithArgTypes(
+                nameInfo.overloads, receiverType,
+                False,  # receiverIsExplicit
+                typeArgs, argTypes, nameInfo.name, loc)
+
+        irDefn = defnInfo.irDefn
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
+        self.scope().use(defnInfo, useAstId, useKind, loc)
+        return self.getDefnType(receiverType, False, irDefn, allTypeArgs)
 
     def getReceiverTypeForClass(self, irClass, typeArgs, loc):
         explicitTypeParams = ir.getExplicitTypeParameters(irClass)
