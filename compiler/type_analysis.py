@@ -1458,14 +1458,22 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         if selfDefnInfo is not None:
             defnInfo, allTypeArgs, receiverType, useKind = \
                 selfDefnInfo, selfAllTypeArgs, selfReceiverType, selfUseKind
+            isAssignment = name != selfNameInfo.name
         else:
             defnInfo, allTypeArgs, receiverType, useKind = \
                 operandDefnInfo, operandAllTypeArgs, operandReceiverType, operandUseKind
+            isAssignment = name != operandNameInfo.name
 
         # Record information and return the resulting type.
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
         self.scope().use(defnInfo, useAstId, useKind, loc)
-        return self.getDefnType(receiverType, False, defnInfo.irDefn, allTypeArgs)
+        ty = self.getDefnType(receiverType, False, defnInfo.irDefn, allTypeArgs)
+
+        if isAssignment and not ty.isSubtypeOf(firstType):
+            raise TypeException(loc,
+                                "%s: operator returns an incompatible type for assignment" %
+                                name)
+        return ty
 
     def getReceiverTypeForClass(self, irClass, typeArgs, loc):
         """Returns a type with the given explicit type arguments applied.

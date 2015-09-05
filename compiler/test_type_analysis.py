@@ -754,6 +754,61 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource("def f = true || false")
         self.assertEquals(BooleanType, info.getType(info.ast.modules[0].definitions[0].body))
 
+    def testOperatorFunctionExpr(self):
+        source = "def @ (x: i64, y: i64) = x + y + 2\n" + \
+                 "def f = 12 @ 34"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(I64Type, info.getType(info.ast.modules[0].definitions[1].body))
+
+    def testOperatorStaticMethodExpr(self):
+        source = "class Foo\n" + \
+                 "  static def @ (x: i64, y: i64) = x + y + 2\n" + \
+                 "  def f = 12 @ 34"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="Foo.f")
+        self.assertEquals(I64Type, f.returnType)
+
+    def testOperatorNonStaticMethodExpr(self):
+        source = "class Foo\n" + \
+                 "  def @ (x: i64, y: i64) = x + y + 2\n" + \
+                 "  def f = 12 @ 34"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="Foo.f")
+        self.assertEquals(I64Type, f.returnType)
+
+    def testOperatorClassExpr(self):
+        source = "class @ (x: i64, y: i64)\n" + \
+                 "def f = 12 @ 34"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        At = info.package.findClass(name="@")
+        self.assertEquals(ClassType(At), f.returnType)
+
+    def testOperatorReversedExpr(self):
+        source = "def :: (x: String, y: i64) = 0\n" + \
+                 "def f = 12 :: \"34\""
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(I64Type, f.returnType)
+
+    def testOperatorSubtypeAssignment(self):
+        source = "def @ (x: Object, y: String): String = \"foo\"\n" + \
+                 "def f =\n" + \
+                 "  var x = Object()\n" + \
+                 "  x @= \"bar\""
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        x = f.variables[0]
+        self.assertEquals(getRootClassType(), x.type)
+        self.assertEquals(getStringType(), info.getType(f.astDefn.body.statements[1]))
+
+    def testOperatorOtherTypeAssignment(self):
+        source = "def @ (x: i64, y: i64): String = \"foo\"\n" + \
+                 "def f =\n" + \
+                 "  var x = 12\n" + \
+                 "  x @= 34"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     @unittest.skip("need std integration or mocking")
     def testTupleExprNormal(self):
         # make sure primitive values are not allowed
