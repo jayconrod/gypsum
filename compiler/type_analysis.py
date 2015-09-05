@@ -95,65 +95,6 @@ def resolveAllOverrides(info):
         scope.resolveOverrides()
 
 
-def findDefnInfoWithArgTypes(candidates, receiverType, receiverIsExplicit,
-                             typeArgs, argTypes, name, loc):
-    """Determines which definition should be used, from a set of candidates.
-
-    This is used to resolve overloaded functions, but it can be use on any list of `DefnInfo`.
-
-    Args:
-        candidates: a list of `DefnInfo`.
-        receiverType: the type of the receiver in a method call or `None`. If the receiver
-            might be implied, this is the type of the class containing the call.
-        receiverIsExplicit: `True` if the receiver was part of the call expression; `False` if
-            the receiver was not present and might be implied.
-        typeArgs: a list of type arguments in the call.
-        argTypes: a list of types of arguments in the call.
-        name: the symbol all the candidates were bound to (used for errors).
-        loc: the location of the call (used for errors).
-
-    Returns:
-        A tuple of `(DefnInfo, [Type], [Type])` containing the single matching definition, the
-        full list of type arguments, and the full list of argument types (including the
-        receiver, if it was needed).
-
-    Raises:
-        TypeException: if there were zero or multiple matches.
-    """
-    candidate = None
-    for defnInfo in candidates:
-        irDefn = defnInfo.irDefn
-
-        if not isinstance(irDefn, ir.Function) and \
-           len(typeArgs) == 0 and len(argTypes) == 0:
-            # Non-function
-            typesAndArgs = (None, None)
-            match = True
-        elif isinstance(irDefn, ir.Function):
-            # Function, method, static method, or constructor.
-            callTypeArgs = typeArgs if typeArgs is not None else []
-            callArgTypes = argTypes if argTypes is not None else []
-            typesAndArgs = ir.getAllArgumentTypes(irDefn, receiverType,
-                                                  callTypeArgs, callArgTypes,
-                                                  defnInfo.importedTypeArguments)
-            match = typesAndArgs is not None
-        else:
-            match = False
-
-        if match:
-            if candidate is not None:
-                raise TypeException(loc, "ambiguous call to overloaded function: %s" % \
-                                    name)
-            allTypeArgs, allArgTypes = typesAndArgs
-            candidate = (defnInfo, allTypeArgs, allArgTypes)
-
-    if candidate is None:
-        raise TypeException(loc, "could not find compatible definition: %s" % name)
-    return candidate
-
-
-
-
 class TypeVisitorBase(ast.AstNodeVisitor):
     """Provides common functionality for type visitors, namely the visitor functions for the
     various AstType subclasses."""
@@ -660,8 +601,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             superArgTypes = map(self.visit, node.superArgs) \
                             if node.superArgs is not None \
                             else []
-            self.handleMethodCallOld(ir.CONSTRUCTOR_SUFFIX, node.id, supertype,
-                                  [], superArgTypes, True, False, node.location)
+            superScope = self.info.getScope(ir_t.getClassFromType(supertype))
+            self.handlePropertyCall(ir.CONSTRUCTOR_SUFFIX, superScope, supertype,
+                                    None, superArgTypes, True, node.id, node.location)
 
         irInitializer = irClass.initializer
         irInitializer.parameterTypes = [thisType]
@@ -964,9 +906,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         elif isinstance(node.callee, ast.AstThisExpression) or \
              isinstance(node.callee, ast.AstSuperExpression):
             receiverType = self.visit(node.callee)
-            self.handleMethodCallOld(ir.CONSTRUCTOR_SUFFIX, node.id,
-                                  receiverType, typeArgs, argTypes,
-                                  hasArgs, False, node.location)
+            receiverScope = self.info.getScope(ir_t.getClassFromType(receiverType))
+            self.handlePropertyCall(ir.CONSTRUCTOR_SUFFIX, receiverScope, receiverType,
+                                    typeArgs, argTypes, True, node.id, node.location)
             ty = ir_t.UnitType
         else:
             # TODO: callable expression
@@ -1214,147 +1156,6 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             pass   # already done in previous pass.
         else:
             raise NotImplementedError
-
-    def handleMethodCallOld(self, name, useAstId, receiverType,
-                            typeArgs, argTypes, hasArgs, mayAssign, loc):
-        irClass = ir_t.getClassFromType(receiverType)
-        scope = self.info.getScope(irClass)
-        return self.handlePossibleCall(scope, name, useAstId,
-                                       receiverType, typeArgs, argTypes,
-                                       hasReceiver=True, hasArgs=hasArgs,
-                                       mayAssign=mayAssign, mayBePrefix=False,
-                                       hasPrefix=True, loc=loc)
-
-    def handlePossibleCall(self, scope, name, useAstId,
-                           receiverType, typeArgs, argTypes,
-                           hasReceiver, hasArgs, mayAssign,
-                           mayBePrefix, hasPrefix, loc):
-        """Analyzes types for any pattern or expression that might be a call.
-
-        This includes pretty much pattern or expression that involves a symbol. This method
-        does the following:
-
-        - Looks up the definition being referenced, possibly using an implied receiver type,
-          resolving overloads if needed.
-        - Saves `ScopePrefixInfo` for the location if it turns out this is a prefix.
-        - Saves `CallInfo` with all type arguments (including those implied by the scope).
-        - Saves `UseInfo` with the definition and the use kind. If the definition is being used
-          as a value, this affects capturing later. Foreign definitions will be
-          externalized later.
-        - Analyzes type info for the referenced definition (e.g., to determine the implied
-          return type in a function call).
-
-        Args:
-            scope: the scope containing the pattern or expression being processed.
-            name: the symbol possibly being called.
-            useAstId: the AST id of the calling expression. Used as a key to save various
-                information and in errors.
-            receiverType: the type of the receiver expression or `None` if there wasn't one.
-                This may also be a prefix type (e.g., for a static method call).
-            typeArgs: a list of type arguments passed as part of the call.
-            argTypes: a list of types of arguments passed as part of the call, not including
-                the receiver if there was one.
-            hasReceiver: `True` if the receiver expression actually produces an object (as
-                opposed to being a prefix).
-            hasArgs: `True` if arguments were passed explicitly (including if there was an
-                empty argument list). This affects whether a class is treated as a prefix
-                or a constructor call.
-            mayAssign: `True` if this may be a compound assignment. For example, a "+=" operator
-                may be converted to an assignment with a "+" operator.
-            mayBePrefix: `True` if this expression may be part of a scope prefix.
-            hasPrefix: `True` if there was a prefix before this expression. This determines
-                whether a lookup should be done in the current scope or the receiver scope.
-            isOperator: `True` if this is a unary or binary operator expression or pattern.
-                This enables lookups in this scope and in the receiver scope.
-            loc: the location of the expression (used in errors).
-
-        Returns:
-            The type of the definition being referenced. For functions, the return type is
-            returned. For classes, the receiver type is returned. For packages and package
-            prefixes, the package type is returned.
-
-        Raises:
-            ScopeException: if a definition with this name can't be found or used.
-            TypeException: if the definition can't be used because of a type mismatch.
-        """
-        receiverIsExplicit = receiverType is not None
-        if not receiverIsExplicit and not hasPrefix and self.hasReceiverType():
-            receiverType = self.getReceiverType()
-
-        assert not mayBePrefix or not hasArgs
-
-        assert name != ir.CONSTRUCTOR_SUFFIX or receiverIsExplicit
-        if name == ir.CONSTRUCTOR_SUFFIX or receiverIsExplicit:
-            useKind = USE_AS_PROPERTY
-        else:
-            useKind = USE_AS_VALUE
-
-        nameInfo = scope.lookup(name, loc,
-                                fromExternal=hasPrefix, mayBeAssignment=mayAssign)
-
-        if nameInfo.isScope():
-            isPrefix = mayBePrefix
-            if isPrefix:
-                defnInfo = nameInfo.getDefnInfo()
-                if isinstance(defnInfo.irDefn, ir.Class):
-                    defnScopeId = self.info.getScope(defnInfo.irDefn).scopeId
-                else:
-                    parentScope = self.info.getScope(defnInfo.scopeId)
-                    defnScopeId = parentScope.scopeForPrefix(name, loc).scopeId
-                scopePrefixInfo = ScopePrefixInfo(defnInfo.irDefn, defnScopeId)
-                self.info.setScopePrefixInfo(useAstId, scopePrefixInfo)
-            else:
-                if nameInfo.isClass() and not hasArgs:
-                    raise TypeException(loc, "class name can't be used as a value")
-                elif nameInfo.isPackagePrefix():
-                    raise TypeException(loc, "package prefix can't be used as a value")
-        else:
-            isPrefix = False
-
-        if nameInfo.isClass():
-            irClass = nameInfo.getDefnInfo().irDefn
-            explicitTypeParams = ir.getExplicitTypeParameters(irClass)
-            if len(typeArgs) != len(explicitTypeParams):
-                raise TypeException(loc,
-                                    "wrong number of type arguments: expected %d but have %d" %
-                                    (len(typeArgs), len(explicitTypeParams)))
-            if not all(tp.contains(ta) for tp, ta in zip(explicitTypeParams, typeArgs)):
-                raise TypeException(loc, "type error in type arguments for constructor")
-            implicitTypeParams = ir.getImplicitTypeParameters(irClass)
-            classTypeArgs = tuple([ir_t.VariableType(tp) for tp in implicitTypeParams] + typeArgs)
-            receiverType = ir_t.ClassType(irClass, classTypeArgs, None)
-            if isPrefix:
-                defnInfo = nameInfo.getDefnInfo()
-                allTypeArgs = classTypeArgs
-                allArgTypes = []
-            else:
-                if irClass is getNothingClass():
-                    raise TypeException(loc, "cannot instantiate Nothing")
-                nameInfo = nameInfo.getInfoForConstructors(self.info)
-                useKind = USE_AS_CONSTRUCTOR
-                defnInfo, allTypeArgs, allArgTypes = findDefnInfoWithArgTypes(
-                    nameInfo.overloads, receiverType,
-                    True,  # receiverIsExplicit
-                    [], argTypes, nameInfo.name, loc)
-        else:
-            defnInfo, allTypeArgs, allArgTypes = findDefnInfoWithArgTypes(
-                nameInfo.overloads, receiverType, receiverIsExplicit,
-                typeArgs, argTypes, nameInfo.name, loc)
-
-        irDefn = defnInfo.irDefn
-        receiverExprNeeded = receiverIsExplicit and \
-                             (isinstance(irDefn, ir.Field) or \
-                              (isinstance(irDefn, ir.Function) and \
-                               irDefn.isMethod() and \
-                               not irDefn.isConstructor()))
-        if receiverExprNeeded and not hasReceiver:
-            raise TypeException(loc, "%s: cannot access without receiver" % name)
-        callInfo = CallInfo(allTypeArgs)
-        self.info.setCallInfo(useAstId, callInfo)
-
-        self.scope().use(defnInfo, useAstId, useKind, loc)
-
-        return self.getDefnType(receiverType, receiverIsExplicit, irDefn, allTypeArgs)
 
     def handlePatternScopePrefix(self, prefix):
         """Processes the components of a pattern prefix.
@@ -1747,35 +1548,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         Raises:
             TypeException: if there were zero or multiple matches.
         """
-        receiverTypes = [receiverType] * len(nameInfo.overloads)
-        return self.chooseDefnFromOverloads(nameInfo.overloads, receiverTypes,
-                                            typeArgs, argTypes, nameInfo.name, loc)
-
-    def chooseDefnFromOverloads(self, overloads, receiverTypes, typeArgs, argTypes, name, loc):
-        """Determines which definition should be used, from a set of overloaded candidates.
-
-        This is used to resolve overloaded functions, but it can be use on any list
-        of `DefnInfo`.
-
-        Args:
-            overloads: a list of `DefnInfo`.
-            receiverType: the type of the receiver in a method call or `None`. If the receiver
-                might be implied, this is the type of the class containing the call.
-            typeArgs: an optional list of `Type` arguments in the call.
-            argTypes: an optional list of `Type`s of arguments in the call.
-            name: the symbol all the overloads were bound to (used for errors).
-            loc: the location of the call (used for errors).
-
-        Returns:
-            A tuple of `(DefnInfo, [Type])` containing the single matching definition and the
-            full list of type arguments.
-
-        Raises:
-            TypeException: if there were zero or multiple matches.
-        """
-        assert len(overloads) == len(receiverTypes)
+        name = nameInfo.name
         candidate = None
-        for defnInfo, receiverType in zip(overloads, receiverTypes):
+        for defnInfo in nameInfo.overloads:
             irDefn = defnInfo.irDefn
 
             if not isinstance(irDefn, ir.Function) and \
