@@ -124,7 +124,7 @@ def importStmt():
                 raise ParseException(prefix[0].location,
                                      "import statement requires a prefix before symbol to import")
             lastComponent = prefix.pop()
-            if len(lastComponent.typeArguments) > 0:
+            if lastComponent.typeArguments is not None:
                 raise ParseException(lastComponent.location,
                                      "type arguments can't be at the end of an import statement")
             firstBinding = ast.AstImportBinding(lastComponent.name, firstAsName,
@@ -200,7 +200,7 @@ def prefixedPattern():
             result = ast.AstDestructurePattern(prefix, suffix, loc)
         else:
             return ct.FailValue("invalid variable, value, or destructure pattern")
-        if not mayHaveTypeArgs and len(prefix[-1].typeArguments) > 0:
+        if not mayHaveTypeArgs and prefix[-1].typeArguments is not None:
             return ct.FailValue("can't have type arguments at end of variable or value pattern")
         return result
 
@@ -241,8 +241,6 @@ def scopePrefix():
 def scopePrefixComponent():
     def process(parsed, loc):
         name, args = parsed
-        if args is None:
-            args = []
         return ast.AstScopePrefixComponent(name, args, loc)
     return symbol + typeArguments() ^ process
 
@@ -409,7 +407,6 @@ def processCall(receiver, parsed, loc):
          typeArguments is not None or \
          arguments is not None:
         hasArguments = typeArguments is not None or arguments is not None
-        typeArguments = [] if typeArguments is None else typeArguments
         if methodName is not None:
             method = ast.AstPropertyExpression(receiver, methodName, loc)
         else:

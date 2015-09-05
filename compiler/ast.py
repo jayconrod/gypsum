@@ -620,7 +620,9 @@ class AstCallExpression(AstExpression):
         return "CallExpression"
 
     def children(self):
-        result = [self.callee] + self.typeArguments
+        result = [self.callee]
+        if self.typeArguments is not None:
+            result.extend(self.typeArguments)
         if self.arguments is not None:
             result.extend(self.arguments)
         return result

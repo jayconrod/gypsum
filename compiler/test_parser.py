@@ -244,33 +244,33 @@ class TestParser(unittest.TestCase):
                         "var x")
 
     def testImportBlank(self):
-        self.checkParse(astImportStatement([astScopePrefixComponent("foo", []),
+        self.checkParse(astImportStatement([astScopePrefixComponent("foo", None),
                                             astScopePrefixComponent("bar", [astErasedType()])],
                                            None),
                         importStmt(),
                         "import foo.bar[_]._;")
 
     def testImportSingle(self):
-        self.checkParse(astImportStatement([astScopePrefixComponent("foo", [])],
+        self.checkParse(astImportStatement([astScopePrefixComponent("foo", None)],
                                            [astImportBinding("x", None)]),
                         importStmt(),
                         "import foo.x;")
 
     def testImportSingleAs(self):
-        self.checkParse(astImportStatement([astScopePrefixComponent("foo", [])],
+        self.checkParse(astImportStatement([astScopePrefixComponent("foo", None)],
                                            [astImportBinding("x", "y")]),
                         importStmt(),
                         "import foo.x as y;")
 
     def testImportMultiple(self):
-        self.checkParse(astImportStatement([astScopePrefixComponent("foo", [])],
+        self.checkParse(astImportStatement([astScopePrefixComponent("foo", None)],
                                            [astImportBinding("x", None),
                                             astImportBinding("y", None)]),
                         importStmt(),
                         "import foo.x, y;")
 
     def testImportMultipleAs(self):
-        self.checkParse(astImportStatement([astScopePrefixComponent("foo", [])],
+        self.checkParse(astImportStatement([astScopePrefixComponent("foo", None)],
                                            [astImportBinding("a", "b"),
                                             astImportBinding("c", "d")]),
                         importStmt(),
@@ -284,19 +284,19 @@ class TestParser(unittest.TestCase):
 
     def testImportInClass(self):
         self.checkParse(astClassDefinition([], "C", [], None, None, None,
-                                           [astImportStatement([astScopePrefixComponent("foo", [])],
+                                           [astImportStatement([astScopePrefixComponent("foo", None)],
                                                                None)]),
                         classDefn(),
                         "class C { import foo._; };")
 
     def testImportInBlockExpr(self):
-        self.checkParse(astBlockExpression([astImportStatement([astScopePrefixComponent("foo", [])],
+        self.checkParse(astBlockExpression([astImportStatement([astScopePrefixComponent("foo", None)],
                                                                None)]),
                         expression(),
                         "{ import foo._; }")
 
     def testImportInModule(self):
-        self.checkParse(astModule([astImportStatement([astScopePrefixComponent("foo", [])],
+        self.checkParse(astModule([astImportStatement([astScopePrefixComponent("foo", None)],
                                                       None)]),
                         module(),
                         "import foo._;")
@@ -332,16 +332,16 @@ class TestParser(unittest.TestCase):
                         pattern(), "_, _")
 
     def testValuePattern(self):
-        self.checkParse(astValuePattern([astScopePrefixComponent("foo", [])], "bar"),
+        self.checkParse(astValuePattern([astScopePrefixComponent("foo", None)], "bar"),
                         pattern(), "foo.bar")
 
     def testDestructurePatternSimple(self):
-        self.checkParse(astDestructurePattern([astScopePrefixComponent("Foo", [])],
+        self.checkParse(astDestructurePattern([astScopePrefixComponent("Foo", None)],
                                               [astVariablePattern("x", None)]),
                         pattern(), "Foo(x)")
 
     def testDestructurePatternAdvanced(self):
-        self.checkParse(astDestructurePattern([astScopePrefixComponent("foo", []),
+        self.checkParse(astDestructurePattern([astScopePrefixComponent("foo", None),
                                                astScopePrefixComponent("Bar", [astErasedType()])],
                                               [astVariablePattern("x", None),
                                                astVariablePattern("y", None)]),
@@ -349,12 +349,12 @@ class TestParser(unittest.TestCase):
 
     # Scope prefix
     def testScopePrefixSimple(self):
-        self.checkParse([astScopePrefixComponent("A", [])],
+        self.checkParse([astScopePrefixComponent("A", None)],
                         scopePrefix(), "A")
 
     def testScopePrefixCompound(self):
-        self.checkParse([astScopePrefixComponent("A", []),
-                         astScopePrefixComponent("B", [])],
+        self.checkParse([astScopePrefixComponent("A", None),
+                         astScopePrefixComponent("B", None)],
                         scopePrefix(), "A.B")
 
     def testScopePrefixCompoundWithTypeArgs(self):
@@ -363,7 +363,7 @@ class TestParser(unittest.TestCase):
                         scopePrefix(), "A[i8].B[i32]")
 
     def testScopePrefixComponent(self):
-        self.checkParse(astScopePrefixComponent("A", []),
+        self.checkParse(astScopePrefixComponent("A", None),
                         scopePrefixComponent(), "A")
 
     def testScopePrefixComponentWithTypeArgs(self):
@@ -394,14 +394,14 @@ class TestParser(unittest.TestCase):
         self.checkParse(astClassType([], "C", [], set(["?"])), classType(), "C?")
 
     def testSimpleScopedType(self):
-        self.checkParse(astClassType([astScopePrefixComponent("A", [])],
+        self.checkParse(astClassType([astScopePrefixComponent("A", None)],
                                      "B", [], set()),
                         ty(),
                         "A.B")
 
     def testCompoundScopedType(self):
-        self.checkParse(astClassType([astScopePrefixComponent("A", []),
-                                      astScopePrefixComponent("B", [])],
+        self.checkParse(astClassType([astScopePrefixComponent("A", None),
+                                      astScopePrefixComponent("B", None)],
                                      "C", [], set()),
                         ty(),
                         "A.B.C")
@@ -503,13 +503,13 @@ class TestParser(unittest.TestCase):
 
     def testCallExpr1(self):
         self.checkParse(astCallExpression(astVariableExpression("f"),
-                                          [],
+                                          None,
                                           []),
                         expression(), "f()")
 
     def testCallExpr2(self):
         self.checkParse(astCallExpression(astVariableExpression("f"),
-                                          [],
+                                          None,
                                           [astVariableExpression("a"),
                                            astVariableExpression("b")]),
                         expression(), "f(a, b)")
@@ -536,7 +536,7 @@ class TestParser(unittest.TestCase):
     def testCallMethod2(self):
         self.checkParse(astCallExpression(astPropertyExpression(astVariableExpression("o"),
                                                                 "f"),
-                                          [],
+                                          None,
                                           [astVariableExpression("a")]),
                         expression(), "o.f(a)")
 
@@ -550,7 +550,7 @@ class TestParser(unittest.TestCase):
     def testCallMethod4(self):
         self.checkParse(astCallExpression(astPropertyExpression(astVariableExpression("o"),
                                                                 "f"),
-                                          [],
+                                          None,
                                           []),
                         expression(), "o.f()")
 
@@ -569,7 +569,7 @@ class TestParser(unittest.TestCase):
                                             astVariableExpression("d")]),
                         expression(), "a, (b, c), d")
         self.checkParse(astCallExpression(astVariableExpression("a"),
-                                          [],
+                                          None,
                                           [astTupleExpression([astVariableExpression("b"),
                                                                astVariableExpression("c")])]),
                         expression(), "a((b, c))")
@@ -815,7 +815,7 @@ class TestParser(unittest.TestCase):
                                             [astTypeParameter([], None, "T", None, None)],
                                             [astVariablePattern("x", astClassType([], "T", [], set()))],
                                             astCallExpression(astVariableExpression("f"),
-                                                              [],
+                                                              None,
                                                               [astVariableExpression("x")])),
                         expression(),
                         "lambda f[T](x: T) f(x)")
