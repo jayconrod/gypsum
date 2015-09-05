@@ -1591,6 +1591,11 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         return self.getDefnType(receiverType, False, irDefn, allTypeArgs)
 
     def getReceiverTypeForClass(self, irClass, typeArgs, loc):
+        """Returns a type with the given explicit type arguments applied.
+
+        This also loads implicit type arguments implied by the class's scope. All type arguments
+        arechecked to be in range of their parameters' bounds.
+        """
         explicitTypeParams = ir.getExplicitTypeParameters(irClass)
         if typeArgs is None:
             typeArgs = []
@@ -1606,6 +1611,11 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         return ir_t.ClassType(irClass, allTypeArgs, None)
 
     def checkNameInfoIsValue(self, nameInfo, loc):
+        """Checks that the named definition can be used as a value.
+
+        Classes and package prefixes cannot be used as values. If the `NameInfo` references
+        one of those, a `TypeException` will be raised.
+        """
         if nameInfo.isClass():
             raise TypeException(loc, "%s: class can't be used as value" % nameInfo.name)
         if nameInfo.isPackagePrefix():
@@ -1613,6 +1623,16 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                 nameInfo.name)
 
     def chooseConstructorFromNameInfo(self, nameInfo, typeArgs, argTypes, loc):
+        """Determines which constructor should be used from a `NameInfo` that refers to a class.
+
+        Loads a separate `NameInfo` for constructors within the class, generates an appropriate
+        receiver type, then calls `chooseDefnFromNameInfo` on the constructors.
+
+        Returns:
+            A tuple of `(DefnInfo, [Type], ClassType)` containing the constructor definition,
+            the full list of type arguments applied to the constructor, and the receiver type.
+            The type arguments are always the same as the ones on the receiver type.
+        """
         assert nameInfo.isClass() and argTypes is not None
         defnInfo = nameInfo.getDefnInfo()
         irClass = defnInfo.irDefn
@@ -1704,6 +1724,27 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         return candidate
 
     def getDefnType(self, receiverType, receiverIsExplicit, irDefn, typeArgs):
+        """Gets the type of a definition that was referenced by name.
+
+        For variables and globals, this just returns the type. For fields, this returns the
+        type with type substitution performed with the type arguments and class type parameters.
+        For functions, this returns the return type with type substitution performed with the
+        type arguments and function type parameters. For classes, `receiverType` is returned.
+        For packages and package prefixes, this returns the package type.
+
+        Note that type information may not be available yet for the definition. If this is the
+        case, the definition will be analyzed immediately. This means the AST is not traversed
+        in order.
+
+        Args:
+            receiverType: an optional `Type` which is the receiver of a function or field.
+            receiverIsExplicit: whether a receiver was specified explicitly. If the definition
+                is a field, type substitution is only performed if this is `True`. Type
+                arguments are meaningless if `False`.
+            irDefn: the definition that we want to know the type of.
+            typeArgs: an optional list of `Type` arguments applied to a function or class. Used
+                for type substitution in functions and fields.
+        """
         self.ensureTypeInfoForDefn(irDefn)
         if isinstance(irDefn, ir.Function):
             if irDefn.isConstructor():
