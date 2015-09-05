@@ -975,8 +975,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def visitAstUnaryExpression(self, node):
         receiverType = self.visit(node.expr)
-        ty = self.handleMethodCallOld(node.operator, node.id, receiverType,
-                                   [], [], True, False, node.location)
+        ty = self.handleOperatorCall(node.operator, receiverType, None, node.id, node.location)
         return ty
 
     def visitAstBinaryExpression(self, node):
@@ -991,12 +990,10 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             ty = ir_t.BooleanType
         elif node.operator[-1] == ":":
             # Right associative operator; the receiver is on the right.
-            ty = self.handleMethodCallOld(node.operator, node.id, rightTy,
-                                       [], [leftTy], True, True, node.location)
+            ty = self.handleOperatorCall(node.operator, rightTy, leftTy, node.id, node.location)
         else:
             # Left associative operator; the receiver is on the left.
-            ty = self.handleMethodCallOld(node.operator, node.id, leftTy,
-                                       [], [rightTy], True, True, node.location)
+            ty = self.handleOperatorCall(node.operator, leftTy, rightTy, node.id, node.location)
         return ty
 
     def visitAstTupleExpression(self, node):
@@ -1590,6 +1587,85 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.scope().use(defnInfo, useAstId, useKind, loc)
         return self.getDefnType(receiverType, False, irDefn, allTypeArgs)
 
+    def handleOperatorCall(self, name, firstType, secondType, useAstId, loc):
+        """Handles a call to an operator.
+
+        This can be used to call operators in the current scope or in the scope of the first
+        operand. Operators in the current scope may be functions, methods (static or not) or
+        classes (with unary or binary constructors). Operators in the first operands scope
+        may only be methods. If the operator names ends with '=' and the whole name isn't "==",
+        the operator may be considered an assignment. `UseInfo` and `CallInfo` will be saved.
+
+        Args:
+            name: the name of the operator.
+            firstType: the `Type` of the first operand. For unary operators, this is the only
+                operand. For binary operators, this is the operand on the left unless the
+                name ends with ':', in which case, this is the operand on the right.
+            secondType: the `Type` of the second operand or `None` for unary operators.
+            useAstId: the AST id where the operator is referenced. Used to save info.
+            loc: the location of the operator in source code. Used in errors.
+
+        Returns:
+            The `Type` of the definition that was referenced (with type substitution performed).
+
+        Raises:
+            ScopeException: if a definition with this name can't be found or used.
+            TypeException: if the definition can't be used because of a type mismatch.
+        """
+        mayBeAssignment = secondType is not None and name.endswith("=") and name != "=="
+
+        # Try to find a compatible operator in the current scope.
+        selfDefnInfo, selfAllTypeArgs, selfReceiverType, selfUseKind = None, None, None, None
+        try:
+            selfNameInfo = self.scope().lookupFromSelf(name, loc,
+                                                       mayBeAssignment=mayBeAssignment)
+            argTypes = [firstType] if secondType is None else [firstType, secondType]
+            if selfNameInfo.isClass():
+                selfDefnInfo, selfAllTypeArgs, selfReceiverType = \
+                    self.chooseConstructorFromNameInfo(selfNameInfo, None, argTypes, loc)
+                selfUseKind = USE_AS_CONSTRUCTOR
+            else:
+                self.checkNameInfoIsValue(selfNameInfo, loc)
+                selfReceiverType = self.getReceiverType() if self.hasReceiverType() else None
+                selfDefnInfo, selfAllTypeArgs = self.chooseDefnFromNameInfo(
+                    selfNameInfo, selfReceiverType, None, argTypes, loc)
+                selfUseKind = USE_AS_VALUE
+        except (ScopeException, TypeException):
+            pass
+
+        # Try to find a compatible operator in the first operand's scope.
+        operandDefnInfo, operandAllTypeArgs, operandUseKind = None, None, None
+        operandReceiverType = firstType
+        try:
+            operandScope = self.info.getScope(ir_t.getClassFromType(firstType))
+            operandNameInfo = operandScope.lookupFromExternal(name, loc,
+                                                              mayBeAssignment=mayBeAssignment)
+            argTypes = [secondType] if secondType is not None else []
+            self.checkNameInfoIsValue(operandNameInfo, loc)
+            operandDefnInfo, operandAllTypeArgs = self.chooseDefnFromNameInfo(
+                operandNameInfo, operandReceiverType, None, argTypes, loc)
+            operandUseKind = USE_AS_PROPERTY
+        except (ScopeException, TypeException):
+            pass
+
+        # We should have found a match in exactly one of the scopes.
+        if selfDefnInfo is None and operandDefnInfo is None:
+            raise TypeException(loc, "%s: could not find compatible operator" % name)
+        if selfDefnInfo is not None and operandDefnInfo is not None:
+            raise TypeException(loc, "%s: ambiguous call to overloaded operator" % name)
+
+        if selfDefnInfo is not None:
+            defnInfo, allTypeArgs, receiverType, useKind = \
+                selfDefnInfo, selfAllTypeArgs, selfReceiverType, selfUseKind
+        else:
+            defnInfo, allTypeArgs, receiverType, useKind = \
+                operandDefnInfo, operandAllTypeArgs, operandReceiverType, operandUseKind
+
+        # Record information and return the resulting type.
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
+        self.scope().use(defnInfo, useAstId, useKind, loc)
+        return self.getDefnType(receiverType, False, defnInfo.irDefn, allTypeArgs)
+
     def getReceiverTypeForClass(self, irClass, typeArgs, loc):
         """Returns a type with the given explicit type arguments applied.
 
@@ -1634,16 +1710,20 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             The type arguments are always the same as the ones on the receiver type.
         """
         assert nameInfo.isClass() and argTypes is not None
-        defnInfo = nameInfo.getDefnInfo()
-        irClass = defnInfo.irDefn
+        ctorNameInfo, receiverType = self.extractConstructorNameInfo(nameInfo, typeArgs, loc)
+        ctorDefnInfo, ctorAllTypeArgs = self.chooseDefnFromNameInfo(ctorNameInfo, receiverType,
+                                                                    None, argTypes, loc)
+        return ctorDefnInfo, ctorAllTypeArgs, receiverType
+
+    def extractConstructorNameInfo(self, nameInfo, typeArgs, loc):
+        assert nameInfo.isClass()
+        irClass = nameInfo.getDefnInfo().irDefn
         receiverType = self.getReceiverTypeForClass(irClass, typeArgs, loc)
         allTypeArgs = receiverType.typeArguments
         if irClass is getNothingClass():
             raise TypeException(loc, "cannot instantiate Nothing")
         nameInfo = nameInfo.getInfoForConstructors(self.info)
-        ctorDefnInfo, ctorAllTypeArgs = self.chooseDefnFromNameInfo(nameInfo, receiverType,
-                                                                    None, argTypes, loc)
-        return ctorDefnInfo, ctorAllTypeArgs, receiverType
+        return nameInfo, receiverType
 
     def chooseDefnFromNameInfo(self, nameInfo, receiverType, typeArgs, argTypes, loc):
         """Determines which definition should be used from a `NameInfo`.
@@ -1667,10 +1747,11 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         Raises:
             TypeException: if there were zero or multiple matches.
         """
-        return self.chooseDefnFromOverloads(nameInfo.overloads, receiverType,
+        receiverTypes = [receiverType] * len(nameInfo.overloads)
+        return self.chooseDefnFromOverloads(nameInfo.overloads, receiverTypes,
                                             typeArgs, argTypes, nameInfo.name, loc)
 
-    def chooseDefnFromOverloads(self, overloads, receiverType, typeArgs, argTypes, name, loc):
+    def chooseDefnFromOverloads(self, overloads, receiverTypes, typeArgs, argTypes, name, loc):
         """Determines which definition should be used, from a set of overloaded candidates.
 
         This is used to resolve overloaded functions, but it can be use on any list
@@ -1692,8 +1773,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         Raises:
             TypeException: if there were zero or multiple matches.
         """
+        assert len(overloads) == len(receiverTypes)
         candidate = None
-        for defnInfo in overloads:
+        for defnInfo, receiverType in zip(overloads, receiverTypes):
             irDefn = defnInfo.irDefn
 
             if not isinstance(irDefn, ir.Function) and \
@@ -1714,13 +1796,13 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
             if match:
                 if candidate is not None:
-                    raise TypeException(loc, "ambiguous call to overloaded function: %s" % \
+                    raise TypeException(loc, "%s: ambiguous call to overloaded function" % \
                                         name)
                 allTypeArgs, _ = typesAndArgs
                 candidate = (defnInfo, allTypeArgs)
 
         if candidate is None:
-            raise TypeException(loc, "could not find compatible definition: %s" % name)
+            raise TypeException(loc, "%s: could not find compatible definition" % name)
         return candidate
 
     def getDefnType(self, receiverType, receiverIsExplicit, irDefn, typeArgs):
