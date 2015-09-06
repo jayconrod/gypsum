@@ -345,6 +345,9 @@ class NameInfo(object):
         return not self.isOverloaded() and \
                isinstance(self.getDefnInfo().irDefn, ir.Package)
 
+    def isFunction(self):
+        return self.isOverloaded() or isinstance(self.getDefnInfo().irDefn, ir.Function)
+
     def isScope(self):
         return self.isClass() or self.isPackagePrefix() or self.isPackage()
 

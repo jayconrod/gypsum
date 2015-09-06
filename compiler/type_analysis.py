@@ -482,6 +482,20 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         # is returned.
         raise TypeException(node.location, "destructure pattern can't be used in a parameter")
 
+    def visitAstUnaryPattern(self, node, isParam=False):
+        if not isParam:
+            return None
+        # Need to raise this early, since patternMustMatch is only called after a type
+        # is returned.
+        raise TypeException(node.location, "unary pattern can't be used in a parameter")
+
+    def visitAstBinaryPattern(self, node, isParam=False):
+        if not isParam:
+            return None
+        # Need to raise this early, since patternMustMatch is only called after a type
+        # is returned.
+        raise TypeException(node.location, "binary pattern can't be used in a parameter")
+
     def visitDefault(self, node):
         self.visitChildren(node)
 
@@ -716,92 +730,38 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         return patTy
 
     def visitAstDestructurePattern(self, node, exprTy, mode):
-        scope, receiverType = self.handlePatternScopePrefix(node.prefix[:-1])
-        hasPrefix = len(node.prefix) > 1
         last = node.prefix[-1]
+        if len(node.prefix) == 1:
+            receiverType = self.getReceiverType() if self.hasReceiverType() else None
+            nameInfo = self.scope().lookupFromSelf(last.name, last.location)
+            receiverIsExplicit = False
+        else:
+            scope, receiverType = self.handlePatternScopePrefix(node.prefix[:-1])
+            nameInfo = scope.lookupFromExternal(last.name, last.location)
+            receiverIsExplicit = receiverType is not None
         typeArgs = map(self.visit, last.typeArguments) \
                    if last.typeArguments is not None \
                    else None
-        nameInfo = scope.lookup(last.name, last.location, fromExternal=hasPrefix)
-        if nameInfo.isOverloaded() or isinstance(nameInfo.getDefnInfo().irDefn, ir.Function):
-            # Call to possibly overloaded matcher function.
-            receiverIsExplicit = receiverType is not None
-            if not receiverIsExplicit and not hasPrefix and self.hasReceiverType():
-                receiverType = self.getReceiverType()
-            defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, receiverType,
-                                                                typeArgs, [exprTy],
-                                                                last.location)
-            self.info.setCallInfo(node.id, CallInfo(allTypeArgs))
-            scope.use(defnInfo, node.id,
-                      USE_AS_PROPERTY if receiverIsExplicit else USE_AS_VALUE, node.location)
-            irDefn = defnInfo.irDefn
-            returnType = irDefn.returnType.substitute(irDefn.typeParameters, allTypeArgs)
+        return self.handleDestructure(nameInfo, receiverType, receiverIsExplicit, typeArgs,
+                                      exprTy, node.patterns, mode, node.id, node.location)
+
+    def visitAstUnaryPattern(self, node, exprTy, mode):
+        receiverType = self.getReceiverType() if self.hasReceiverType() else None
+        nameInfo = self.scope().lookupFromSelf(node.operator, node.location)
+        return self.handleDestructure(nameInfo, receiverType, False, None,
+                                      exprTy, [node.pattern], mode, node.id, node.location)
+
+    def visitAstBinaryPattern(self, node, exprTy, mode):
+        receiverType = self.getReceiverType() if self.hasReceiverType() else None
+        nameInfo = self.scope().lookupFromSelf(node.operator, node.location)
+        if node.operator[-1] == ":":
+            # Right-associative operator; the first operand is on the right.
+            subPatterns = [node.right, node.left]
         else:
-            # This was just another prefix. Finish up the bookkeeping.
-            matcherDefnInfo = nameInfo.getDefnInfo()
-            scope.use(matcherDefnInfo, last.id,
-                      USE_AS_PROPERTY if receiverType is not None else USE_AS_VALUE,
-                      node.location)
-            matcherIrDefn = matcherDefnInfo.irDefn
-            self.ensureTypeInfoForDefn(matcherIrDefn)
-            if isinstance(matcherIrDefn, ir.Global) or \
-               isinstance(matcherIrDefn, ir.Field) or \
-               isinstance(matcherIrDefn, ir.Variable):
-                if typeArgs is not None:
-                    raise TypeException(last.location,
-                                        "cannot apply type arguments to value in destructure pattern")
-                matcherReceiverType = matcherIrDefn.type
-                matcherHasReceiver = True
-                matcherClass = ir_t.getClassFromType(matcherReceiverType)
-            elif isinstance(matcherIrDefn, ir.Class):
-                callTypeArgs = typeArgs if typeArgs is not None else ()
-                if not matcherIrDefn.canApplyTypeArgs(callTypeArgs):
-                    raise TypeException(last.location,
-                                        "type arguments could not be applied for this class")
-                matcherScopeId = self.info.getScope(matcherIrDefn).scopeId
-                matcherScopePrefixInfo = ScopePrefixInfo(matcherIrDefn, matcherScopeId)
-                self.info.setScopePrefixInfo(last.id, matcherScopePrefixInfo)
-                matcherReceiverType = ir_t.ClassType(matcherIrDefn, callTypeArgs)
-                matcherHasReceiver = False
-                matcherClass = matcherIrDefn
-            else:
-                raise TypeException(last.location, "cannot use this definition for matching")
-
-            # Look up the try-match method.
-            matcherScope = self.info.getScope(matcherClass)
-            try:
-                returnType = self.handlePropertyCall("try-match", matcherScope,
-                                                     matcherReceiverType, None, [exprTy],
-                                                     matcherHasReceiver, node.id, node.location)
-            except ScopeException:
-                raise TypeException(node.location, "cannot match without `try-match` method")
-
-        # Determine the expression types of the sub-patterns, based on what the matcher returns.
-        # If there is one pattern, it should return Option[T1], and T1 is the expression type
-        # (T1 may be a tuple). If there are more, it should return Option[(T1, ..., Tn)], and
-        # T1, ..., Tn are the expression types.
-        optionClass = self.info.getStdClass("Option", node.location)
-        if not returnType.isObject() or \
-           not ir_t.getClassFromType(returnType).isSubclassOf(optionClass):
-            raise TypeException(node.location, "matcher must return std.Option")
-        returnType = returnType.substituteForBaseClass(optionClass)
-        returnTypeArg = returnType.typeArguments[0]
-        n = len(node.patterns)
-        if n == 1:
-            patternTypes = [returnTypeArg]
-        else:
-            tupleClass = self.info.getTupleClass(len(node.patterns), node.location)
-            if not returnTypeArg.isObject() or \
-               not ir_t.getClassFromType(returnTypeArg).isSubclassOf(tupleClass):
-                raise TypeException(node.location,
-                                    "matcher must return std.Option[std.Tuple%d]" % n)
-            returnTypeArg = returnTypeArg.substituteForBaseClass(tupleClass)
-            patternTypes = returnTypeArg.typeArguments
-        for subPat, subExprTy in zip(node.patterns, patternTypes):
-            self.visit(subPat, subExprTy, mode)
-
-        # We return the Some type argument as the pattern type. This isn't really used though.
-        return returnTypeArg
+            # Left-associative operator; the first operand is on the left.
+            subPatterns = [node.left, node.right]
+        return self.handleDestructure(nameInfo, receiverType, False, None,
+                                      exprTy, subPatterns, mode, node.id, node.location)
 
     def visitAstLiteralExpression(self, node):
         ty = self.visit(node.literal)
@@ -931,10 +891,10 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                     "expected condition types for logic operands")
             ty = ir_t.BooleanType
         elif node.operator[-1] == ":":
-            # Right associative operator; the receiver is on the right.
+            # Right-associative operator; the receiver is on the right.
             ty = self.handleOperatorCall(node.operator, rightTy, leftTy, node.id, node.location)
         else:
-            # Left associative operator; the receiver is on the left.
+            # Left-associative operator; the receiver is on the left.
             ty = self.handleOperatorCall(node.operator, leftTy, rightTy, node.id, node.location)
         return ty
 
@@ -1474,6 +1434,88 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                 "%s: operator returns an incompatible type for assignment" %
                                 name)
         return ty
+
+    def handleDestructure(self, nameInfo, receiverType, receiverIsExplicit,
+                          typeArgs, exprType, subPatterns, mode, useAstId, loc):
+        useKind = USE_AS_PROPERTY if receiverIsExplicit else USE_AS_VALUE
+        if nameInfo.isFunction():
+            # Call to possibly overloaded matcher function.
+            defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, receiverType,
+                                                                typeArgs, [exprType], loc)
+            self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
+            self.scope().use(defnInfo, useAstId, useKind, loc)
+            irDefn = defnInfo.irDefn
+            self.ensureTypeInfoForDefn(irDefn)
+            returnType = self.getDefnType(receiverType, receiverIsExplicit,
+                                          irDefn, allTypeArgs)
+        else:
+            # The name refers to a matcher scope or definition.
+            matcherDefnInfo = nameInfo.getDefnInfo()
+            self.scope().use(matcherDefnInfo, useAstId, useKind, loc)
+            matcherIrDefn = matcherDefnInfo.irDefn
+            self.ensureTypeInfoForDefn(matcherIrDefn)
+            if isinstance(matcherIrDefn, ir.Global) or \
+               isinstance(matcherIrDefn, ir.Field) or \
+               isinstance(matcherIrDefn, ir.Variable):
+                # The name refers to a matcher object stored in a global, field, or variable.
+                if typeArgs is not None:
+                    raise TypeException(loc,
+                                        "cannot apply type arguments to value in destructure pattern")
+                matcherReceiverType = matcherIrDefn.type
+                matcherHasReceiver = True
+                matcherClass = ir_t.getClassFromType(matcherReceiverType)
+            elif isinstance(matcherIrDefn, ir.Class):
+                # The name refers to a class with a static matcher method.
+                callTypeArgs = typeArgs if typeArgs is not None else ()
+                if not matcherIrDefn.canApplyTypeArgs(callTypeArgs):
+                    raise TypeException(loc,
+                                        "%s: type arguments could not be applied for this class" %
+                                        nameInfo.name)
+                matcherScopeId = self.info.getScope(matcherIrDefn).scopeId
+                matcherScopePrefixInfo = ScopePrefixInfo(matcherIrDefn, matcherScopeId)
+                self.info.setScopePrefixInfo(useAstId, matcherScopePrefixInfo)
+                matcherReceiverType = ir_t.ClassType(matcherIrDefn, callTypeArgs)
+                matcherHasReceiver = False
+                matcherClass = matcherIrDefn
+            else:
+                raise TypeException(loc, "%s: cannot use this definition for matching" %
+                                    nameInfo.name)
+
+            # Lookup the try-match method.
+            matcherScope = self.info.getScope(matcherClass)
+            try:
+                returnType = self.handlePropertyCall("try-match", matcherScope,
+                                                     matcherReceiverType, None, [exprType],
+                                                     matcherHasReceiver, useAstId, loc)
+            except ScopeException:
+                raise TypeException(loc, "cannot match without `try-match` method")
+
+        # Determine the expression types of the sub-patterns, based on what the matcher returns.
+        # If there is one pattern, it should return Option[T1], and T1 is the expression type
+        # (T1 may be a tuple). If there are more, it should return Option[(T1, ..., Tn)], and
+        # T1, ..., Tn are the expression types.
+        optionClass = self.info.getStdClass("Option", loc)
+        if not returnType.isObject() or \
+           not ir_t.getClassFromType(returnType).isSubclassOf(optionClass):
+            raise TypeException(loc, "matcher must return std.Option")
+        returnType = returnType.substituteForBaseClass(optionClass)
+        returnTypeArg = returnType.typeArguments[0]
+        n = len(subPatterns)
+        if n == 1:
+            patternTypes = [returnTypeArg]
+        else:
+            tupleClass = self.info.getTupleClass(n, loc)
+            if not returnTypeArg.isObject() or \
+               not ir_t.getClassFromType(returnTypeArg).isSubclassOf(tupleClass):
+                raise TypeException(loc, "matcher must return `std.Option[std.Tuple%d]`" % n)
+            returnTypeArg = returnTypeArg.substituteForBaseClass(tupleClass)
+            patternTypes = returnTypeArg.typeArguments
+        for subPat, subExprType in zip(subPatterns, patternTypes):
+            self.visit(subPat, subExprType, mode)
+
+        # We return the expression type as the pattern type. Destructures are never guaranteed,
+        # so we cannot be any more specific.
+        return exprType
 
     def getReceiverTypeForClass(self, irClass, typeArgs, loc):
         """Returns a type with the given explicit type arguments applied.
