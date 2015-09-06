@@ -1441,6 +1441,58 @@ class TestCompiler(TestCaseWithDefinitions):
                                                           kind=LOCAL, flags=frozenset([LET]))],
                              flags=frozenset([METHOD])))
 
+    def testMatchExprUnaryWithFunction(self):
+        source = OPTION_SOURCE + \
+                 "def ~ (obj: Object) = Some[String](\"foo\")\n" + \
+                 "def f(obj: Object) =\n" + \
+                 "  match (obj)\n" + \
+                 "    case ~s => 12\n" + \
+                 "    case _ => 34"
+        package = self.compileFromSource(source, name=STD_NAME)
+        matcher = package.findFunction(name="~")
+        Some = package.findClass(name="Some")
+        get = Some.findMethodByShortName("get")
+        getIndex = Some.getMethodIndex(get)
+        objectType = getRootClassType()
+        stringType = getStringType()
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0
+                               ldlocal(0),
+                               dup(),
+                               callg(matcher),
+                               tyvd(Some.typeParameters[0]),
+                               tycd(Some),
+                               castcbr(1, 3),
+                             ], [
+                               # block 1
+                               tycs(getRootClass()),
+                               callv(1, getIndex),
+                               tycd(getStringClass()),
+                               castcbr(2, 3),
+                             ], [
+                               # block 2
+                               stlocal(-1),
+                               drop(),
+                               i64(12),
+                               branch(5),
+                             ], [
+                               # block 3
+                               drop(),
+                               branch(4),
+                             ], [
+                               # block 4
+                               drop(),
+                               i64(34),
+                               branch(5),
+                             ], [
+                               # block 5
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable(Name(["f", "obj"]), type=objectType,
+                                                          kind=PARAMETER, flags=frozenset([LET])),
+                                        self.makeVariable(Name(["f", "s"]), type=stringType,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
 
     def testMatchAllCasesTerminate(self):
         source = "def f =\n" + \
@@ -1478,6 +1530,81 @@ class TestCompiler(TestCaseWithDefinitions):
                              variables=[self.makeVariable("f.x", type=I64Type,
                                                           kind=LOCAL, flags=frozenset([LET])),
                                         self.makeVariable("f.y", type=I64Type,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testMatchExprBinaryWithStaticMethod(self):
+        source = OPTION_SOURCE + \
+                 TUPLE_SOURCE + \
+                 "class ::\n" + \
+                 "  static def try-match(obj: Object) =\n" + \
+                 "    Some[(String, String)]((\"foo\", \"bar\"))\n" + \
+                 "def f(obj: Object) =\n" + \
+                 "  match (obj)\n" + \
+                 "    case a :: b => 12\n" + \
+                 "    case _ => 34"
+        package = self.compileFromSource(source, name=STD_NAME)
+        matcher = package.findFunction(name="::.try-match")
+        Some = package.findClass(name="Some")
+        get = Some.findMethodByShortName("get")
+        getIndex = Some.getMethodIndex(get)
+        Tuple = package.findClass(name="Tuple2")
+        objectType = getRootClassType()
+        stringType = getStringType()
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               # block 0 []
+                               ldlocal(0),
+                               dup(),
+                               callg(matcher),
+                               tyvd(Some.typeParameters[0]),
+                               tycd(Some),
+                               castcbr(1, 5),
+                             ], [
+                               # block 1 [some value]
+                               tycs(getRootClass()),
+                               callv(1, getIndex),
+                               tyvd(Tuple.typeParameters[0]),
+                               tyvd(Tuple.typeParameters[1]),
+                               tycd(Tuple),
+                               castc(),
+                               dup(),
+                               ldp(0),
+                               tycd(getStringClass()),
+                               castcbr(2, 4),
+                             ], [
+                               # block 2 [field tuple value]
+                               stlocal(-2),
+                               ldp(1),
+                               tycd(getStringClass()),
+                               castcbr(3, 5),
+                             ], [
+                               # block 3 [field value]
+                               stlocal(-1),
+                               drop(),
+                               i64(12),
+                               branch(7),
+                             ], [
+                               # block 4 [junk junk value]
+                               drop(),
+                               branch(5),
+                             ], [
+                               # block 5 [junk value]
+                               drop(),
+                               branch(6),
+                             ], [
+                               # block 6 [value]
+                               drop(),
+                               i64(34),
+                               branch(7),
+                             ], [
+                               # block 7 [result]
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable(Name(["f", "obj"]), type=objectType,
+                                                          kind=PARAMETER, flags=frozenset([LET])),
+                                        self.makeVariable(Name(["f", "a"]), type=stringType,
+                                                          kind=LOCAL, flags=frozenset([LET])),
+                                        self.makeVariable(Name(["f", "b"]), type=stringType,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testMatchUnreachableAfterMustMatchCase(self):

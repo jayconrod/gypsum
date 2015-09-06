@@ -743,13 +743,15 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                    if last.typeArguments is not None \
                    else None
         return self.handleDestructure(nameInfo, receiverType, receiverIsExplicit, typeArgs,
-                                      exprTy, node.patterns, mode, node.id, node.location)
+                                      exprTy, node.patterns, mode,
+                                      last.id, node.id, node.location)
 
     def visitAstUnaryPattern(self, node, exprTy, mode):
         receiverType = self.getReceiverType() if self.hasReceiverType() else None
         nameInfo = self.scope().lookupFromSelf(node.operator, node.location)
         return self.handleDestructure(nameInfo, receiverType, False, None,
-                                      exprTy, [node.pattern], mode, node.id, node.location)
+                                      exprTy, [node.pattern], mode,
+                                      node.id, node.matcherId, node.location)
 
     def visitAstBinaryPattern(self, node, exprTy, mode):
         receiverType = self.getReceiverType() if self.hasReceiverType() else None
@@ -761,7 +763,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             # Left-associative operator; the first operand is on the left.
             subPatterns = [node.left, node.right]
         return self.handleDestructure(nameInfo, receiverType, False, None,
-                                      exprTy, subPatterns, mode, node.id, node.location)
+                                      exprTy, subPatterns, mode,
+                                      node.id, node.matcherId, node.location)
 
     def visitAstLiteralExpression(self, node):
         ty = self.visit(node.literal)
@@ -1436,14 +1439,14 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         return ty
 
     def handleDestructure(self, nameInfo, receiverType, receiverIsExplicit,
-                          typeArgs, exprType, subPatterns, mode, useAstId, loc):
+                          typeArgs, exprType, subPatterns, mode, useAstId, matcherAstId, loc):
         useKind = USE_AS_PROPERTY if receiverIsExplicit else USE_AS_VALUE
         if nameInfo.isFunction():
             # Call to possibly overloaded matcher function.
             defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, receiverType,
                                                                 typeArgs, [exprType], loc)
-            self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
-            self.scope().use(defnInfo, useAstId, useKind, loc)
+            self.info.setCallInfo(matcherAstId, CallInfo(allTypeArgs))
+            self.scope().use(defnInfo, matcherAstId, useKind, loc)
             irDefn = defnInfo.irDefn
             self.ensureTypeInfoForDefn(irDefn)
             returnType = self.getDefnType(receiverType, receiverIsExplicit,
@@ -1486,7 +1489,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             try:
                 returnType = self.handlePropertyCall("try-match", matcherScope,
                                                      matcherReceiverType, None, [exprType],
-                                                     matcherHasReceiver, useAstId, loc)
+                                                     matcherHasReceiver, matcherAstId, loc)
             except ScopeException:
                 raise TypeException(loc, "cannot match without `try-match` method")
 

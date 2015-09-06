@@ -390,6 +390,7 @@ class AstUnaryPattern(AstPattern):
         super(AstUnaryPattern, self).__init__(location)
         self.operator = operator
         self.pattern = pattern
+        self.matcherId = None
 
     def __repr__(self):
         return "AstUnaryPattern(%s, %s)" % (repr(self.operator), repr(self.pattern))
@@ -410,6 +411,7 @@ class AstBinaryPattern(AstPattern):
         self.operator = operator
         self.left = left
         self.right = right
+        self.matcherId = None
 
     def __repr__(self):
         return "AstBinaryPattern(%s, %s, %s)" % \
@@ -1010,6 +1012,14 @@ class AstPrinter(AstNodeVisitor):
 class AstEnumerator(AstNodeVisitor):
     def __init__(self):
         self.counter = utils.Counter()
+
+    def visitAstUnaryPattern(self, node):
+        self.visitDefault(node)
+        node.matcherId = AstId(self.counter())
+
+    def visitAstBinaryPattern(self, node):
+        self.visitDefault(node)
+        node.matcherId = AstId(self.counter())
 
     def visitDefault(self, node):
         node.id = AstId(self.counter())
