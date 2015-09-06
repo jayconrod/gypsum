@@ -368,7 +368,7 @@ class AstValuePattern(AstNode):
         return self.prefix
 
 
-class AstDestructurePattern(AstNode):
+class AstDestructurePattern(AstPattern):
     def __init__(self, prefix, patterns, location):
         super(AstDestructurePattern, self).__init__(location)
         self.prefix = prefix
@@ -383,6 +383,46 @@ class AstDestructurePattern(AstNode):
 
     def children(self):
         return self.prefix + self.patterns
+
+
+class AstUnaryPattern(AstPattern):
+    def __init__(self, operator, pattern, location):
+        super(AstUnaryPattern, self).__init__(location)
+        self.operator = operator
+        self.pattern = pattern
+
+    def __repr__(self):
+        return "AstUnaryPattern(%s, %s)" % (repr(self.operator), repr(self.pattern))
+
+    def tag(self):
+        return "UnaryPattern"
+
+    def data(self):
+        return self.operator
+
+    def children(self):
+        return [self.pattern]
+
+
+class AstBinaryPattern(AstPattern):
+    def __init__(self, operator, left, right, location):
+        super(AstBinaryPattern, self).__init__(location)
+        self.operator = operator
+        self.left = left
+        self.right = right
+
+    def __repr__(self):
+        return "AstBinaryPattern(%s, %s, %s)" % \
+            (repr(self.operator), repr(self.left), repr(self.right))
+
+    def tag(self):
+        return "BinaryPattern"
+
+    def data(self):
+        return self.operator
+
+    def children(self):
+        return [self.left, self.right]
 
 
 class AstType(AstNode):

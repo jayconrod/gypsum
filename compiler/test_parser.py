@@ -347,6 +347,39 @@ class TestParser(unittest.TestCase):
                                                astVariablePattern("y", None)]),
                         pattern(), "foo.Bar[_](x, y)")
 
+    def testUnaryPattern(self):
+        self.checkParse(astUnaryPattern("~", astBlankPattern(None)),
+                        pattern(), "~_")
+
+    def testBinaryPatternSimple(self):
+        self.checkParse(astBinaryPattern("+", astBlankPattern(None), astBlankPattern(None)),
+                        pattern(), "_ + _")
+
+    def testBinaryPatternPrecedence(self):
+        self.checkParse(astBinaryPattern("+", astBlankPattern(None),
+                                         astBinaryPattern("*", astBlankPattern(None),
+                                                          astBlankPattern(None))),
+                        pattern(), "_ + _ * _")
+
+    def testBinaryPatternAssociativityLeft(self):
+        self.checkParse(astBinaryPattern("+",
+                                         astBinaryPattern("+",
+                                                          astBlankPattern(None),
+                                                          astBlankPattern(None)),
+                                         astBlankPattern(None)),
+                        pattern(), "_ + _ + _")
+
+    def testBinaryPatternAssociativityRight(self):
+        self.checkParse(astBinaryPattern("::",
+                                         astBlankPattern(None),
+                                         astBinaryPattern("::",
+                                                          astBlankPattern(None),
+                                                          astBlankPattern(None))),
+                        pattern(), "_ :: _ :: _")
+
+    def testBinaryPatternAssociativityMixed(self):
+        self.checkParseError(pattern(), "_ +: _ + _")
+
     # Scope prefix
     def testScopePrefixSimple(self):
         self.checkParse([astScopePrefixComponent("A", None)],
