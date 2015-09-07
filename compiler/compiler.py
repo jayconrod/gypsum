@@ -565,7 +565,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.setCurrentBlock(joinBlock)
             self.dropForEffect(mode)
         else:
-            # regular operators (handled like methods)
+            # regular operators
             useInfo = self.info.getUseInfo(expr)
             callInfo = self.info.getCallInfo(expr)
             isCompoundAssignment = opName == useInfo.defnInfo.irDefn.name.short() + "="
@@ -1493,7 +1493,19 @@ class CompileVisitor(ast.AstNodeVisitor):
             closureInfo = self.info.getClosureInfo(irDefn)
         else:
             closureInfo = None
-        argCount = len(argExprs)
+
+        def compileReceiver():
+            assert receiver is not None
+            if isinstance(receiver, LValue):
+                if receiver.onStack():
+                    self.dup()
+                receiver.evaluate()
+            elif isinstance(receiver, ast.AstSuperExpression):
+                # Special case: load `super` as `this`
+                self.visitAstThisExpression(receiver, COMPILE_FOR_VALUE)
+            else:
+                assert isinstance(receiver, ast.AstExpression)
+                self.visit(receiver, COMPILE_FOR_VALUE)
 
         def compileArgs():
             for arg in argExprs:
@@ -1504,26 +1516,27 @@ class CompileVisitor(ast.AstNodeVisitor):
 
         if not irDefn.isConstructor() and not irDefn.isMethod():
             # Global or static function.
-            assert receiver is None
+            if receiver is not None:
+                compileReceiver()
             compileArgs()
             compileTypeArgs()
             self.callFunction(irDefn)
 
-        elif receiver is None and irDefn.isConstructor():
+        elif irDefn.isConstructor():
             # Constructor.
-            assert receiver is None
             if allowAllocation:
                 compileTypeArgs()
                 if irDefn.getReceiverClass().isForeign():
                     self.allocobjf(irDefn.getReceiverClass())
                 else:
                     self.allocobj(irDefn.getReceiverClass())
-            else:
-                # This is a constructor called from another constructor. Load receiver instead
-                # of allocating a new object.
+            elif receiver is None:
+                # This is a constructor called from another constructor. We'll load `this`.
                 self.loadThis()
             if mode is COMPILE_FOR_VALUE:
                 self.dup()
+            if receiver is not None:
+                compileReceiver()
             compileArgs()
             compileTypeArgs()
             self.callFunction(irDefn)
@@ -1551,16 +1564,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                     self.loadContext(defnInfo.scopeId)
             else:
                 # Compile explicit receiver
-                if isinstance(receiver, LValue):
-                    if receiver.onStack():
-                        self.dup()
-                    receiver.evaluate()
-                elif isinstance(receiver, ast.AstSuperExpression):
-                    # Special case: load `super` as `this`
-                    self.visitAstThisExpression(receiver, COMPILE_FOR_VALUE)
-                else:
-                    assert isinstance(receiver, ast.AstExpression)
-                    self.visit(receiver, COMPILE_FOR_VALUE)
+                compileReceiver()
 
             # Compile the arguments and call the method.
             compileArgs()
@@ -1573,6 +1577,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                 self.callFunction(irDefn)
             else:
                 index = irDefn.getReceiverClass().getMethodIndex(irDefn)
+                argCount = len(argExprs)
                 self.callv(argCount + 1, index)
 
             if isinstance(receiver, LValue):

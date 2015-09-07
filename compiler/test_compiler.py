@@ -770,6 +770,66 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret(),
                              ]]))
 
+    def testOverloadedUnaryOperatorFunction(self):
+        source = "def ~ (x: String) = \"foo\"\n" + \
+                 "def f = ~\"bar\""
+        package = self.compileFromSource(source)
+        Tilde = package.findFunction(name="~")
+        barIndex = package.findString("bar")
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", getStringType(), [[
+                               string(barIndex),
+                               callg(Tilde),
+                               ret(),
+                             ]]))
+
+    def testOverloadedUnaryOperatorConstructor(self):
+        source = "class ~ (x: String)\n" + \
+                 "def f = ~\"foo\""
+        package = self.compileFromSource(source)
+        Tilde = package.findClass(name="~")
+        fooIndex = package.findString("foo")
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", ClassType(Tilde), [[
+                               allocobj(Tilde),
+                               dup(),
+                               string(fooIndex),
+                               callg(Tilde.constructors[0]),
+                               drop(),
+                               ret(),
+                             ]]))
+
+    def testOverloadedBinaryOperatorFunction(self):
+        source = "def @ (x: i64, y: String) = x.to-string + \"@\" + y\n" + \
+                 "def f = 12 @ \"foo\""
+        package = self.compileFromSource(source)
+        At = package.findFunction(name="@")
+        fooIndex = package.findString("foo")
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", getStringType(), [[
+                               i64(12),
+                               string(fooIndex),
+                               callg(At),
+                               ret(),
+                           ]]))
+
+    def testOverloadedBinaryOperatorConstructor(self):
+        source = "class @ (x: i64, y: String)\n" + \
+                 "def f = 12 @ \"foo\""
+        package = self.compileFromSource(source)
+        At = package.findClass(name="@")
+        fooIndex = package.findString("foo")
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", ClassType(At), [[
+                               allocobj(At),
+                               dup(),
+                               i64(12),
+                               string(fooIndex),
+                               callg(At.constructors[0]),
+                               drop(),
+                               ret(),
+                             ]]))
+
     def testTupleExpr(self):
         source = "public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n" + \
                  "def f = (\"foo\", \"bar\")._1"
