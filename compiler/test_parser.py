@@ -875,3 +875,7 @@ class TestParser(unittest.TestCase):
 
     def testNullLit(self):
         self.checkParse(astNullLiteral(), literal(), "null")
+
+    # Symbols
+    def testQuotedSymbol(self):
+        self.checkParse("fo`o", symbol, r"`fo\`o`")

@@ -583,7 +583,14 @@ def layoutBlock(contents):
     return ((keyword("{") + contents + keyword("}")) |
             (ct.Reserved(INTERNAL, "{") + contents + ct.Reserved(INTERNAL, "}"))) ^ process
 
-symbol = ct.Tag(SYMBOL)
+def processSymbol(sym, loc):
+    if sym.startswith("`"):
+        sym = tryDecodeString(sym)
+        if sym is None:
+            return ct.FailValue("invalid symbol")
+    return sym
+
+symbol = ct.Tag(SYMBOL) ^ processSymbol
 operator = ct.Tag(OPERATOR)
 unaryOperator = ct.If(operator, lambda op: op in ["!", "-", "+", "~"])
 identifier = symbol | operator

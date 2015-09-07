@@ -66,7 +66,7 @@ _decodeEscapeChars = {'n': '\n',
 _encodeEscapeChars = {v: k for k, v in _decodeEscapeChars.iteritems()}
 
 def tryDecodeString(inStr):
-    assert len(inStr) >= 2 and inStr[0] == '"' and inStr[-1] == '"'
+    assert len(inStr) >= 2 and inStr[0] in '"`' and inStr[-1] in '"`' and inStr[0] == inStr[-1]
     outBuf = StringIO()
     NORMAL = "normal"
     ESCAPE = "escape"
