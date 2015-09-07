@@ -481,10 +481,7 @@ class CompileVisitor(ast.AstNodeVisitor):
 
         irDefn = self.info.getUseInfo(pat.matcherId).defnInfo.irDefn
         typeArgs = self.info.getCallInfo(pat.matcherId).typeArguments
-        if pat.operator.endswith(":"):
-            subPatterns = [pat.right, pat.left]
-        else:
-            subPatterns = [pat.left, pat.right]
+        subPatterns = [pat.left, pat.right]
         self.buildDestructure(irDefn, False, typeArgs, subPatterns, failBlock, pat.location)
 
     def visitAstLiteralExpression(self, expr, mode):

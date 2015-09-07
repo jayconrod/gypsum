@@ -756,14 +756,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
     def visitAstBinaryPattern(self, node, exprTy, mode):
         receiverType = self.getReceiverType() if self.hasReceiverType() else None
         nameInfo = self.scope().lookupFromSelf(node.operator, node.location)
-        if node.operator[-1] == ":":
-            # Right-associative operator; the first operand is on the right.
-            subPatterns = [node.right, node.left]
-        else:
-            # Left-associative operator; the first operand is on the left.
-            subPatterns = [node.left, node.right]
         return self.handleDestructure(nameInfo, receiverType, False, None,
-                                      exprTy, subPatterns, mode,
+                                      exprTy, [node.left, node.right], mode,
                                       node.id, node.matcherId, node.location)
 
     def visitAstLiteralExpression(self, node):
@@ -893,11 +887,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 raise TypeException(node.location,
                                     "expected condition types for logic operands")
             ty = ir_t.BooleanType
-        elif node.operator[-1] == ":":
-            # Right-associative operator; the receiver is on the right.
-            ty = self.handleOperatorCall(node.operator, rightTy, leftTy, node.id, node.location)
         else:
-            # Left-associative operator; the receiver is on the left.
             ty = self.handleOperatorCall(node.operator, leftTy, rightTy, node.id, node.location)
         return ty
 

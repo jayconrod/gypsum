@@ -760,7 +760,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source)
         self.assertEquals(I64Type, info.getType(info.ast.modules[0].definitions[1].body))
 
-    def testOperatorStaticMethodExpr(self):
+    def testBinaryOperatorStaticMethodExpr(self):
         source = "class Foo\n" + \
                  "  static def @ (x: i64, y: i64) = x + y + 2\n" + \
                  "  def f = 12 @ 34"
@@ -768,7 +768,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         f = info.package.findFunction(name="Foo.f")
         self.assertEquals(I64Type, f.returnType)
 
-    def testOperatorNonStaticMethodExpr(self):
+    def testBinaryOperatorNonStaticMethodExpr(self):
         source = "class Foo\n" + \
                  "  def @ (x: i64, y: i64) = x + y + 2\n" + \
                  "  def f = 12 @ 34"
@@ -776,7 +776,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         f = info.package.findFunction(name="Foo.f")
         self.assertEquals(I64Type, f.returnType)
 
-    def testOperatorClassExpr(self):
+    def testBinaryOperatorClassExpr(self):
         source = "class @ (x: i64, y: i64)\n" + \
                  "def f = 12 @ 34"
         info = self.analyzeFromSource(source)
@@ -784,8 +784,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         At = info.package.findClass(name="@")
         self.assertEquals(ClassType(At), f.returnType)
 
-    def testOperatorReversedExpr(self):
-        source = "def :: (x: String, y: i64) = 0\n" + \
+    def testBinaryOperatorRightExpr(self):
+        source = "def :: (x: i64, y: String) = 0\n" + \
                  "def f = 12 :: \"34\""
         info = self.analyzeFromSource(source)
         f = info.package.findFunction(name="f")
@@ -1047,18 +1047,39 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(getRootClassType(), info.getType(matchCase.pattern))
         self.assertEquals(getStringType(), info.getType(matchCase.pattern.pattern))
 
-    def testMatchExprBinaryDestructure(self):
+    def testMatchExprBinaryLeftDestructure(self):
         source = OPTION_SOURCE + \
                  TUPLE_SOURCE + \
-                 "def @ (obj: Object) = Some[(String, String)]((\"foo\", \"bar\"))\n" + \
+                 "class Foo\n" + \
+                 "class Bar\n" + \
+                 "def @ (obj: Object) = Some[(Foo, Bar)]((Foo(), Bar()))\n" + \
                  "def f(obj: Object) =\n" + \
                  "  match (obj)\n" + \
-                 "    case a @ _ => a"
+                 "    case a @ b => {}"
         info = self.analyzeFromSource(source, name=STD_NAME)
+        Foo = info.package.findClass(name="Foo")
+        Bar = info.package.findClass(name="Bar")
         matchCase = info.ast.modules[0].definitions[-1].body.statements[0].matcher.cases[0]
         self.assertEquals(getRootClassType(), info.getType(matchCase.pattern))
-        self.assertEquals(getStringType(), info.getType(matchCase.pattern.left))
-        self.assertEquals(getStringType(), info.getType(matchCase.pattern.right))
+        self.assertEquals(ClassType(Foo), info.getType(matchCase.pattern.left))
+        self.assertEquals(ClassType(Bar), info.getType(matchCase.pattern.right))
+
+    def testMatchExprBinaryRightDestructure(self):
+        source = OPTION_SOURCE + \
+                 TUPLE_SOURCE + \
+                 "class Foo\n" + \
+                 "class Bar\n" + \
+                 "def :: (obj: Object) = Some[(Foo, Bar)]((Foo(), Bar()))\n" + \
+                 "def f(obj: Object) =\n" + \
+                 "  match (obj)\n" + \
+                 "    case a :: b => {}"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        Foo = info.package.findClass(name="Foo")
+        Bar = info.package.findClass(name="Bar")
+        matchCase = info.ast.modules[0].definitions[-1].body.statements[0].matcher.cases[0]
+        self.assertEquals(getRootClassType(), info.getType(matchCase.pattern))
+        self.assertEquals(ClassType(Foo), info.getType(matchCase.pattern.left))
+        self.assertEquals(ClassType(Bar), info.getType(matchCase.pattern.right))
 
     def testMatchExprWithDisjointType(self):
         source = "def f(x: String) =\n" + \
