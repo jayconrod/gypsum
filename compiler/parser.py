@@ -235,7 +235,7 @@ def unopPattern():
     def process(parsed, loc):
         op, pat = parsed
         return ast.AstUnaryPattern(op, pat, loc)
-    return unaryOperator + ct.Lazy(pattern) ^ process
+    return unaryOperator + ct.Lazy(simplePattern) ^ process
 
 
 def groupPattern():
@@ -409,7 +409,7 @@ def unaryExpr():
     def process(parsed, loc):
         (op, e) = parsed
         return ast.AstUnaryExpression(op, e, loc)
-    return unaryOperator + ct.Commit(ct.Lazy(expression)) ^ process
+    return unaryOperator + ct.Commit(ct.Lazy(receiverExpr)) ^ process
 
 
 def ifExpr():

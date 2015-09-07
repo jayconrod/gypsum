@@ -351,6 +351,17 @@ class TestParser(unittest.TestCase):
         self.checkParse(astUnaryPattern("~", astBlankPattern(None)),
                         pattern(), "~_")
 
+    def testUnaryTuplePattern(self):
+        self.checkParse(astTuplePattern([astUnaryPattern("-", astVariablePattern("x", None)),
+                                         astUnaryPattern("-", astVariablePattern("y", None))]),
+                        pattern(), "-x, -y")
+
+    def testDestructureUnaryPatterns(self):
+        self.checkParse(astDestructurePattern([astScopePrefixComponent("Foo", None)],
+                                              [astUnaryPattern("-", astVariablePattern("x", None)),
+                                               astUnaryPattern("-", astVariablePattern("y", None))]),
+                        pattern(), "Foo(-x, -y)")
+
     def testBinaryPatternSimple(self):
         self.checkParse(astBinaryPattern("+", astBlankPattern(None), astBlankPattern(None)),
                         pattern(), "_ + _")
@@ -616,6 +627,18 @@ class TestParser(unittest.TestCase):
                                            astUnaryExpression("-",
                                                               astVariableExpression("x"))),
                         expression(), "! -x")
+
+    def testUnaryArgsExpr(self):
+        self.checkParse(astCallExpression(astVariableExpression("Vector"),
+                                          None,
+                                          [astUnaryExpression("-", astVariableExpression("x")),
+                                           astUnaryExpression("-", astVariableExpression("y"))]),
+                        expression(), "Vector(-x, -y)")
+
+    def testUnaryTupleExpr(self):
+        self.checkParse(astTupleExpression([astUnaryExpression("-", astVariableExpression("x")),
+                                            astUnaryExpression("-", astVariableExpression("y"))]),
+                        expression(), "-x, -y")
 
     def testBinaryExpr(self):
         self.checkParse(astBinaryExpression("+",
