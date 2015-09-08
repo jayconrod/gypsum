@@ -1,0 +1,76 @@
+// This is a simple Gypsum program.
+// You can compile it with this command:
+//   ../compiler/compiler vector.gy -o vector.csp
+// You can run it with this command:
+//   ../vm/out/debug/driver vector.csp
+// (If you haven't built the VM yet, run this first):
+//   (cd ../vm; make -j)
+
+// This program shows how operators can be overloaded. Operators can be defined just like
+// functions using the `def` keyword. They can be defined as functions, methods (static
+// or not), and even as classes. You also aren't limited to the standard set of operators.
+// Gypsum lets you define binary operators using the characters "!#%&*+\-/:<=>?@^|~",
+// as long as they don't conflict with a built-in keyword, like =>. Unary operators are
+// limited to the standard set ! ~ - +.
+
+// The precedence of a binary operator is determined by its first character. Standard
+// operator precedences are listed below.
+
+//   * / %
+//   + -
+//   :
+//   = !
+//   < >
+//   &
+//   ^
+//   |
+
+// The "&&" and "||" operators have lower precedence than these levels. They cannot be
+// overloaded. If an operator does not start with any of these characters, it has the higher
+// precedence (binds more tightly) than any of these levels. If an operator ends with '=',
+// does not start with '=', and is not one of "<=", ">=", "!=", "!==", the operator is
+// considered an assignment, and has lower precedence than any of these levels.
+
+// Associativity of a binary operator is determined by the last character. If the operator
+// ends with ':', the operator is right-associative. Otherwise, it is left-associative.
+
+
+// This class defines a 3-dimensional vector. It overloads operators for common
+// vector operations.
+class Vector(x: f64, y: f64, z: f64)
+  def to-string = "<" + x.to-string + ", " + y.to-string + ", " + z.to-string + ">"
+
+  // This defines a binary operator. `this` is the left operand, and the parameter `v` is
+  // the right operand.
+  def + (v: Vector) = Vector(x + v.x, y + v.y, z + v.z)
+
+  def - (v: Vector) = Vector(x - v.x, y - v.y, z - v.z)
+
+  // We can also define unary operators. No parameter is needed. `this` is the only operand.
+  def - = Vector(-x, -y, -z)
+
+  // Operators may be overloaded. Here, we define the `*` operator for scalar multiplication
+  // and the dot product.
+  def * (s: f64) = Vector(x * s, y * s, z * s)
+  def * (v: Vector) = x * v.x + y * v.y + z * v.z
+
+  // We aren't limited to the standard set of numeric operators. Here, we define a new
+  // operator for the cross product.
+  def ** (v: Vector) = Vector(y * v.z - z * v.y,
+                              z * v.x - x * v.z,
+                              x * v.y - y * v.x)
+
+// We can define operators outside of classes. Our scalar multiplication operator above
+// can only handle a scalar on the right side. This operator expects it on the left.
+def * (s: f64, v: Vector) = Vector(s * v.x, s * v.y, s * v.z)
+
+
+def main =
+  let a = Vector(1., 0., 0.)
+  let b = Vector(0., 2., 0.)
+  print((a + b).to-string + "\n")
+  print((a - b).to-string + "\n")
+  print((-a).to-string + "\n")
+  print((a * 4.).to-string + "\n")
+  print((4. * a).to-string + "\n")
+  print((a ** b).to-string + "\n")
