@@ -50,6 +50,9 @@ class TestLexer(unittest.TestCase):
             self.checkTags([SYMBOL], sym)
         self.checkTags([RESERVED], "_")
 
+    def testQuotedSymbol(self):
+        self.checkTags([SYMBOL], r"`fo\`o`")
+
     def testIntegers(self):
         for i in ["0", "1", "123", "-1", "-123", "-0"]:
             self.checkTags([INTEGER], i)

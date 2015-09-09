@@ -58,7 +58,7 @@ def functionDefn():
     def process(parsed, loc):
         [ats, _, name, tps, ps, rty, body, _] = ct.untangle(parsed)
         return ast.AstFunctionDefinition(ats, name, tps, ps, rty, body, loc)
-    functionName = keyword("this") | symbol
+    functionName = keyword("this") | identifier
     bodyOpt = ct.Opt(keyword("=") + expression() ^ (lambda p, _: p[1]))
     return attribs() + keyword("def") + ct.Commit(functionName + typeParameters() + parameters() +
         tyOpt() + bodyOpt + semi) ^ process
@@ -70,7 +70,7 @@ def classDefn():
         return ast.AstClassDefinition(ats, name, tps, ctor, sty, sargs, ms, loc)
     classBodyOpt = ct.Opt(layoutBlock(ct.Rep(ct.Lazy(classMember)))) ^ \
                    (lambda p, _: p if p is not None else [])
-    return attribs() + keyword("class") + ct.Commit(symbol + typeParameters() +
+    return attribs() + keyword("class") + ct.Commit(identifier + typeParameters() +
            constructor() + superclass() + classBodyOpt + semi) ^ process
 
 
@@ -124,7 +124,7 @@ def importStmt():
                 raise ParseException(prefix[0].location,
                                      "import statement requires a prefix before symbol to import")
             lastComponent = prefix.pop()
-            if len(lastComponent.typeArguments) > 0:
+            if lastComponent.typeArguments is not None:
                 raise ParseException(lastComponent.location,
                                      "type arguments can't be at the end of an import statement")
             firstBinding = ast.AstImportBinding(lastComponent.name, firstAsName,
@@ -176,13 +176,18 @@ def parameter():
 def pattern():
     def process(parsed, loc):
         return parsed[0] if len(parsed) == 1 else ast.AstTuplePattern(parsed, loc)
-    return ct.Rep1Sep(simplePattern(), keyword(",")) ^ process
+    return ct.Rep1Sep(maybeBinopPattern(), keyword(",")) ^ process
+
+
+def maybeBinopPattern():
+    return buildBinaryParser(simplePattern(), ast.AstBinaryPattern)
 
 
 def simplePattern():
     return prefixedPattern() | \
            blankPattern() | \
            litPattern() | \
+           unopPattern() | \
            groupPattern()
 
 
@@ -200,7 +205,7 @@ def prefixedPattern():
             result = ast.AstDestructurePattern(prefix, suffix, loc)
         else:
             return ct.FailValue("invalid variable, value, or destructure pattern")
-        if not mayHaveTypeArgs and len(prefix[-1].typeArguments) > 0:
+        if not mayHaveTypeArgs and prefix[-1].typeArguments is not None:
             return ct.FailValue("can't have type arguments at end of variable or value pattern")
         return result
 
@@ -226,6 +231,13 @@ def litPattern():
     return literal() ^ ast.AstLiteralPattern
 
 
+def unopPattern():
+    def process(parsed, loc):
+        op, pat = parsed
+        return ast.AstUnaryPattern(op, pat, loc)
+    return unaryOperator + ct.Lazy(simplePattern) ^ process
+
+
 def groupPattern():
     def process(parsed, loc):
         _, p, _ = ct.untangle(parsed)
@@ -241,8 +253,6 @@ def scopePrefix():
 def scopePrefixComponent():
     def process(parsed, loc):
         name, args = parsed
-        if args is None:
-            args = []
         return ast.AstScopePrefixComponent(name, args, loc)
     return symbol + typeArguments() ^ process
 
@@ -309,82 +319,7 @@ def maybeTupleExpr():
 
 
 def maybeBinopExpr():
-    binopLevels = [[],   # other
-                   ["*", "/", "%"],
-                   ["+", "-"],
-                   [":"],
-                   ["=", "!"],
-                   ["<", ">"],
-                   ["&"],
-                   ["^"],
-                   ["|"]]
-    BINOP_OTHER_LEVEL = 0
-    BINOP_LOGIC_AND_LEVEL = len(binopLevels)
-    BINOP_LOGIC_OR_LEVEL = BINOP_LOGIC_AND_LEVEL + 1
-    BINOP_ASSIGN_LEVEL = BINOP_LOGIC_OR_LEVEL + 1
-    NUM_BINOP_LEVELS = BINOP_ASSIGN_LEVEL + 1
-    def precedenceOf(op):
-        if op[-1] == "=" and \
-           not (len(op) > 1 and op[0] == "=") and \
-           op not in ["<=", ">=", "!=", "!=="]:
-            return BINOP_ASSIGN_LEVEL
-        elif op == "&&":
-            return BINOP_LOGIC_AND_LEVEL
-        elif op == "||":
-            return BINOP_LOGIC_OR_LEVEL
-        else:
-            for i in range(0, len(binopLevels)):
-                if op[0] in binopLevels[i]:
-                    return i
-            return BINOP_OTHER_LEVEL
-
-    LEFT = "left"
-    RIGHT = "right"
-    def associativityOf(op):
-        return RIGHT if op[-1] == ":" else LEFT
-
-    def buildBinaryParser(term, level):
-        return ct.LeftRec(term, binarySuffix(term, level), processBinary) ^ postProcessBinary
-
-    def binarySuffix(term, level):
-        return ct.If(operator, lambda op: precedenceOf(op) == level) + ct.Commit(term)
-
-    def processBinary(left, parsed, _):
-        (op, right) = parsed
-        if not isinstance(left, list):
-            left = [(None, left)]
-        return left + [(op, right)]
-
-    def postProcessBinary(expr, loc):
-        if not isinstance(expr, list):
-            return expr
-        else:
-            assert len(expr) > 1
-            associativity = associativityOf(expr[1][0])
-            if associativity is LEFT:
-                result = expr[0][1]
-                for i in range(1, len(expr)):
-                    (op, subexpr) = expr[i]
-                    if associativityOf(op) is not LEFT:
-                        return ct.FailValue("left and right associativie operators are mixed together")
-                    loc = result.location.combine(subexpr.location)
-                    result = ast.AstBinaryExpression(op, result, subexpr, loc)
-                return result
-            else:
-                result = expr[-1][1]
-                for i in range(-1, -len(expr), -1):
-                    op = expr[i][0]
-                    subexpr = expr[i-1][1]
-                    if associativityOf(op) is not RIGHT:
-                        return ct.FailValue("left and right associativie operators are mixed together")
-                    loc = result.location.combine(subexpr.location)
-                    result = ast.AstBinaryExpression(op, subexpr, result, loc)
-                return result
-
-    parser = maybeCallExpr()
-    for i in xrange(0, NUM_BINOP_LEVELS):
-        parser = buildBinaryParser(parser, i)
-    return parser
+    return buildBinaryParser(maybeCallExpr(), ast.AstBinaryExpression)
 
 
 def maybeCallExpr():
@@ -409,7 +344,6 @@ def processCall(receiver, parsed, loc):
          typeArguments is not None or \
          arguments is not None:
         hasArguments = typeArguments is not None or arguments is not None
-        typeArguments = [] if typeArguments is None else typeArguments
         if methodName is not None:
             method = ast.AstPropertyExpression(receiver, methodName, loc)
         else:
@@ -475,8 +409,7 @@ def unaryExpr():
     def process(parsed, loc):
         (op, e) = parsed
         return ast.AstUnaryExpression(op, e, loc)
-    op = ct.If(operator, lambda op: op in ["!", "-", "+", "~"])
-    return op + ct.Commit(ct.Lazy(expression)) ^ process
+    return unaryOperator + ct.Commit(ct.Lazy(maybeCallExpr)) ^ process
 
 
 def ifExpr():
@@ -650,10 +583,136 @@ def layoutBlock(contents):
     return ((keyword("{") + contents + keyword("}")) |
             (ct.Reserved(INTERNAL, "{") + contents + ct.Reserved(INTERNAL, "}"))) ^ process
 
-symbol = ct.Tag(SYMBOL)
+def processSymbol(sym, loc):
+    if sym.startswith("`"):
+        sym = tryDecodeString(sym)
+        if sym is None:
+            return ct.FailValue("invalid symbol")
+    return sym
+
+symbol = ct.Tag(SYMBOL) ^ processSymbol
 operator = ct.Tag(OPERATOR)
+unaryOperator = ct.If(operator, lambda op: op in ["!", "-", "+", "~"])
+identifier = symbol | operator
 
 semi = keyword(";") | ct.Reserved(INTERNAL, ";")
 
-#expression is exported solely for unittest functionality
+# Utilities for building binary expressions and patterns.
+BINOP_LEVELS = [
+    [],   # other
+    ["*", "/", "%"],
+    ["+", "-"],
+    [":"],
+    ["=", "!"],
+    ["<", ">"],
+    ["&"],
+    ["^"],
+    ["|"],
+]
+BINOP_OTHER_LEVEL = 0
+BINOP_LOGIC_AND_LEVEL = len(BINOP_LEVELS)
+BINOP_LOGIC_OR_LEVEL = BINOP_LOGIC_AND_LEVEL + 1
+BINOP_ASSIGN_LEVEL = BINOP_LOGIC_OR_LEVEL + 1
+NUM_BINOP_LEVELS = BINOP_ASSIGN_LEVEL + 1
+
+def precedenceOf(op):
+    """Returns the precedence level of an operator.
+
+    Precedence is mostly determined by the first character in the operator name, with a few
+    exceptions. See BINOP_LEVELS for a list of precedence levels. If the operator name ends
+    with '=', and does not start with '=', and the operator is not one of "<=", ">=", "!=",
+    or "!==", the operator is considered an assignment and has a low precedence. The operators
+    "&&" and "||" have their own special precedence levels, just above assignment.
+
+    Args:
+        op: the name of an operator (str).
+
+    Returns:
+        An integer indicating the precedence of the operator. Lower numbers indicate higher
+        precedence.
+    """
+    if op[-1] == "=" and \
+       not (len(op) > 1 and op[0] == "=") and \
+       op not in ["<=", ">=", "!=", "!=="]:
+        return BINOP_ASSIGN_LEVEL
+    elif op == "&&":
+        return BINOP_LOGIC_AND_LEVEL
+    elif op == "||":
+        return BINOP_LOGIC_OR_LEVEL
+    else:
+        for i in range(0, len(BINOP_LEVELS)):
+            if op[0] in BINOP_LEVELS[i]:
+                return i
+        return BINOP_OTHER_LEVEL
+
+LEFT_ASSOC = "left"
+RIGHT_ASSOC = "right"
+def associativityOf(op):
+    """Returns the associativity of an operator.
+
+    All operators have right associativity, except those that end with ':', which have left
+    associativity.
+
+    Returns:
+        LEFT_ASSOC or RIGHT_ASSOC.
+    """
+    return RIGHT_ASSOC if op[-1] == ":" else LEFT_ASSOC
+
+def buildBinaryParser(term, combine):
+    """Builds a parser for binary operators at the same level of precedence.
+
+    Used to build binary expressions and patterns.
+
+    Args:
+        term: a parser for the sub-expressions that make up a binary expression. Usually this
+            is a parser for simple expressions like literals or variables.
+        level: an integer indicating the precedence level to build for.
+        combine: a function `(str, AstNode, AstNode, Location => AstNode)` which combines
+            two nodes produced by `term` with an operator and a location into a new node.
+
+    Returns:
+        A parser for binary operator expressions at this level of precedence.
+    """
+    postprocess = lambda ast, loc: postProcessBinary(combine, ast, loc)
+    parser = term
+    for level in xrange(0, NUM_BINOP_LEVELS):
+        parser = ct.LeftRec(parser, binarySuffix(parser, level), processBinary) ^ postprocess
+    return parser
+
+def binarySuffix(term, level):
+    return ct.If(operator, lambda op: precedenceOf(op) == level) + ct.Commit(term)
+
+def processBinary(left, parsed, _):
+    (op, right) = parsed
+    if not isinstance(left, list):
+        left = [(None, left)]
+    return left + [(op, right)]
+
+def postProcessBinary(combine, ast, loc):
+    if not isinstance(ast, list):
+        return ast
+    else:
+        assert len(ast) > 1
+        associativity = associativityOf(ast[1][0])
+        if associativity is LEFT_ASSOC:
+            result = ast[0][1]
+            for i in range(1, len(ast)):
+                (op, subast) = ast[i]
+                if associativityOf(op) is not LEFT_ASSOC:
+                    return ct.FailValue("left and right associativie operators are mixed together")
+                loc = result.location.combine(subast.location)
+                result = combine(op, result, subast, loc)
+            return result
+        else:
+            result = ast[-1][1]
+            for i in range(-1, -len(ast), -1):
+                op = ast[i][0]
+                subast = ast[i-1][1]
+                if associativityOf(op) is not RIGHT_ASSOC:
+                    return ct.FailValue("left and right associativie operators are mixed together")
+                loc = result.location.combine(subast.location)
+                result = combine(op, subast, result, loc)
+            return result
+
+
 __all__ = ["parse", "symbol", "operator", "semi"]

@@ -13,7 +13,7 @@ import os.path
 import re
 import sys
 
-from ast import AstPackage
+from ast import AstPackage, AstPrinter
 from location import NoLoc
 from ids import AstId, TARGET_PACKAGE_ID
 from ir import Package, PackageVersion, PackageDependency, Name

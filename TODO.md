@@ -18,6 +18,7 @@
 - downcasting and type testing
 - default parameters
 - positional, keyword arguments
+- variadic function parameters
 - function type and trait for standard lib
 - lambda expressions
 - type inference for type arguments
@@ -34,6 +35,7 @@
 - doc annotations
 - list literal
 - map literal
+- number classes and autoboxing
 
 ## VM features
 - native object access (depends on dynamic features)

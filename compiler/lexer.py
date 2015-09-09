@@ -86,6 +86,7 @@ __expressions = [
 
   (r"[!#%&*+\-/:<=>?@\\^|~]+", OPERATOR),
   (r"[A-Za-z_][A-Za-z0-9_-]*", SYMBOL),
+  (r"`(?:\\`|[^`])*`", SYMBOL),
 ]
 __expressions = [(re.compile(expr[0]), expr[1]) for expr in __expressions]
 

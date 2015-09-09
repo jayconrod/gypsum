@@ -112,6 +112,11 @@ class TestParser(unittest.TestCase):
                         functionDefn(),
                         "public def f;")
 
+    def testOperatorFunctionDefn(self):
+        self.checkParse(astFunctionDefinition([], "+", [], [], None, None),
+                        functionDefn(),
+                        "def +;")
+
     def testClassDefnSimple(self):
         self.checkParse(astClassDefinition([], "C", [], None, None, None, []),
                         classDefn(),
@@ -181,6 +186,11 @@ class TestParser(unittest.TestCase):
                         classDefn(),
                         "class C public ();")
 
+    def testOperatorClassDefn(self):
+        self.checkParse(astClassDefinition([], "::", [], None, None, None, []),
+                        classDefn(),
+                        "class ::;")
+
     def testTypeParametersEmpty(self):
         self.checkParse([], typeParameters(), "")
 
@@ -234,33 +244,33 @@ class TestParser(unittest.TestCase):
                         "var x")
 
     def testImportBlank(self):
-        self.checkParse(astImportStatement([astScopePrefixComponent("foo", []),
+        self.checkParse(astImportStatement([astScopePrefixComponent("foo", None),
                                             astScopePrefixComponent("bar", [astErasedType()])],
                                            None),
                         importStmt(),
                         "import foo.bar[_]._;")
 
     def testImportSingle(self):
-        self.checkParse(astImportStatement([astScopePrefixComponent("foo", [])],
+        self.checkParse(astImportStatement([astScopePrefixComponent("foo", None)],
                                            [astImportBinding("x", None)]),
                         importStmt(),
                         "import foo.x;")
 
     def testImportSingleAs(self):
-        self.checkParse(astImportStatement([astScopePrefixComponent("foo", [])],
+        self.checkParse(astImportStatement([astScopePrefixComponent("foo", None)],
                                            [astImportBinding("x", "y")]),
                         importStmt(),
                         "import foo.x as y;")
 
     def testImportMultiple(self):
-        self.checkParse(astImportStatement([astScopePrefixComponent("foo", [])],
+        self.checkParse(astImportStatement([astScopePrefixComponent("foo", None)],
                                            [astImportBinding("x", None),
                                             astImportBinding("y", None)]),
                         importStmt(),
                         "import foo.x, y;")
 
     def testImportMultipleAs(self):
-        self.checkParse(astImportStatement([astScopePrefixComponent("foo", [])],
+        self.checkParse(astImportStatement([astScopePrefixComponent("foo", None)],
                                            [astImportBinding("a", "b"),
                                             astImportBinding("c", "d")]),
                         importStmt(),
@@ -274,19 +284,19 @@ class TestParser(unittest.TestCase):
 
     def testImportInClass(self):
         self.checkParse(astClassDefinition([], "C", [], None, None, None,
-                                           [astImportStatement([astScopePrefixComponent("foo", [])],
+                                           [astImportStatement([astScopePrefixComponent("foo", None)],
                                                                None)]),
                         classDefn(),
                         "class C { import foo._; };")
 
     def testImportInBlockExpr(self):
-        self.checkParse(astBlockExpression([astImportStatement([astScopePrefixComponent("foo", [])],
+        self.checkParse(astBlockExpression([astImportStatement([astScopePrefixComponent("foo", None)],
                                                                None)]),
                         expression(),
                         "{ import foo._; }")
 
     def testImportInModule(self):
-        self.checkParse(astModule([astImportStatement([astScopePrefixComponent("foo", [])],
+        self.checkParse(astModule([astImportStatement([astScopePrefixComponent("foo", None)],
                                                       None)]),
                         module(),
                         "import foo._;")
@@ -322,29 +332,79 @@ class TestParser(unittest.TestCase):
                         pattern(), "_, _")
 
     def testValuePattern(self):
-        self.checkParse(astValuePattern([astScopePrefixComponent("foo", [])], "bar"),
+        self.checkParse(astValuePattern([astScopePrefixComponent("foo", None)], "bar"),
                         pattern(), "foo.bar")
 
     def testDestructurePatternSimple(self):
-        self.checkParse(astDestructurePattern([astScopePrefixComponent("Foo", [])],
+        self.checkParse(astDestructurePattern([astScopePrefixComponent("Foo", None)],
                                               [astVariablePattern("x", None)]),
                         pattern(), "Foo(x)")
 
     def testDestructurePatternAdvanced(self):
-        self.checkParse(astDestructurePattern([astScopePrefixComponent("foo", []),
+        self.checkParse(astDestructurePattern([astScopePrefixComponent("foo", None),
                                                astScopePrefixComponent("Bar", [astErasedType()])],
                                               [astVariablePattern("x", None),
                                                astVariablePattern("y", None)]),
                         pattern(), "foo.Bar[_](x, y)")
 
+    def testUnaryPattern(self):
+        self.checkParse(astUnaryPattern("~", astBlankPattern(None)),
+                        pattern(), "~_")
+
+    def testUnaryTuplePattern(self):
+        self.checkParse(astTuplePattern([astUnaryPattern("-", astVariablePattern("x", None)),
+                                         astUnaryPattern("-", astVariablePattern("y", None))]),
+                        pattern(), "-x, -y")
+
+    def testDestructureUnaryPatterns(self):
+        self.checkParse(astDestructurePattern([astScopePrefixComponent("Foo", None)],
+                                              [astUnaryPattern("-", astVariablePattern("x", None)),
+                                               astUnaryPattern("-", astVariablePattern("y", None))]),
+                        pattern(), "Foo(-x, -y)")
+
+    def testUnaryDestructurePattern(self):
+        self.checkParse(astUnaryPattern("~",
+                                        astDestructurePattern([astScopePrefixComponent("Foo", None)],
+                                                              [astVariablePattern("x", None)])),
+                        pattern(), "~Foo(x)")
+
+    def testBinaryPatternSimple(self):
+        self.checkParse(astBinaryPattern("+", astBlankPattern(None), astBlankPattern(None)),
+                        pattern(), "_ + _")
+
+    def testBinaryPatternPrecedence(self):
+        self.checkParse(astBinaryPattern("+", astBlankPattern(None),
+                                         astBinaryPattern("*", astBlankPattern(None),
+                                                          astBlankPattern(None))),
+                        pattern(), "_ + _ * _")
+
+    def testBinaryPatternAssociativityLeft(self):
+        self.checkParse(astBinaryPattern("+",
+                                         astBinaryPattern("+",
+                                                          astBlankPattern(None),
+                                                          astBlankPattern(None)),
+                                         astBlankPattern(None)),
+                        pattern(), "_ + _ + _")
+
+    def testBinaryPatternAssociativityRight(self):
+        self.checkParse(astBinaryPattern("::",
+                                         astBlankPattern(None),
+                                         astBinaryPattern("::",
+                                                          astBlankPattern(None),
+                                                          astBlankPattern(None))),
+                        pattern(), "_ :: _ :: _")
+
+    def testBinaryPatternAssociativityMixed(self):
+        self.checkParseError(pattern(), "_ +: _ + _")
+
     # Scope prefix
     def testScopePrefixSimple(self):
-        self.checkParse([astScopePrefixComponent("A", [])],
+        self.checkParse([astScopePrefixComponent("A", None)],
                         scopePrefix(), "A")
 
     def testScopePrefixCompound(self):
-        self.checkParse([astScopePrefixComponent("A", []),
-                         astScopePrefixComponent("B", [])],
+        self.checkParse([astScopePrefixComponent("A", None),
+                         astScopePrefixComponent("B", None)],
                         scopePrefix(), "A.B")
 
     def testScopePrefixCompoundWithTypeArgs(self):
@@ -353,7 +413,7 @@ class TestParser(unittest.TestCase):
                         scopePrefix(), "A[i8].B[i32]")
 
     def testScopePrefixComponent(self):
-        self.checkParse(astScopePrefixComponent("A", []),
+        self.checkParse(astScopePrefixComponent("A", None),
                         scopePrefixComponent(), "A")
 
     def testScopePrefixComponentWithTypeArgs(self):
@@ -384,14 +444,14 @@ class TestParser(unittest.TestCase):
         self.checkParse(astClassType([], "C", [], set(["?"])), classType(), "C?")
 
     def testSimpleScopedType(self):
-        self.checkParse(astClassType([astScopePrefixComponent("A", [])],
+        self.checkParse(astClassType([astScopePrefixComponent("A", None)],
                                      "B", [], set()),
                         ty(),
                         "A.B")
 
     def testCompoundScopedType(self):
-        self.checkParse(astClassType([astScopePrefixComponent("A", []),
-                                      astScopePrefixComponent("B", [])],
+        self.checkParse(astClassType([astScopePrefixComponent("A", None),
+                                      astScopePrefixComponent("B", None)],
                                      "C", [], set()),
                         ty(),
                         "A.B.C")
@@ -493,13 +553,13 @@ class TestParser(unittest.TestCase):
 
     def testCallExpr1(self):
         self.checkParse(astCallExpression(astVariableExpression("f"),
-                                          [],
+                                          None,
                                           []),
                         expression(), "f()")
 
     def testCallExpr2(self):
         self.checkParse(astCallExpression(astVariableExpression("f"),
-                                          [],
+                                          None,
                                           [astVariableExpression("a"),
                                            astVariableExpression("b")]),
                         expression(), "f(a, b)")
@@ -526,7 +586,7 @@ class TestParser(unittest.TestCase):
     def testCallMethod2(self):
         self.checkParse(astCallExpression(astPropertyExpression(astVariableExpression("o"),
                                                                 "f"),
-                                          [],
+                                          None,
                                           [astVariableExpression("a")]),
                         expression(), "o.f(a)")
 
@@ -540,7 +600,7 @@ class TestParser(unittest.TestCase):
     def testCallMethod4(self):
         self.checkParse(astCallExpression(astPropertyExpression(astVariableExpression("o"),
                                                                 "f"),
-                                          [],
+                                          None,
                                           []),
                         expression(), "o.f()")
 
@@ -559,7 +619,7 @@ class TestParser(unittest.TestCase):
                                             astVariableExpression("d")]),
                         expression(), "a, (b, c), d")
         self.checkParse(astCallExpression(astVariableExpression("a"),
-                                          [],
+                                          None,
                                           [astTupleExpression([astVariableExpression("b"),
                                                                astVariableExpression("c")])]),
                         expression(), "a((b, c))")
@@ -573,6 +633,24 @@ class TestParser(unittest.TestCase):
                                            astUnaryExpression("-",
                                                               astVariableExpression("x"))),
                         expression(), "! -x")
+
+    def testUnaryArgsExpr(self):
+        self.checkParse(astCallExpression(astVariableExpression("Vector"),
+                                          None,
+                                          [astUnaryExpression("-", astVariableExpression("x")),
+                                           astUnaryExpression("-", astVariableExpression("y"))]),
+                        expression(), "Vector(-x, -y)")
+
+    def testUnaryTupleExpr(self):
+        self.checkParse(astTupleExpression([astUnaryExpression("-", astVariableExpression("x")),
+                                            astUnaryExpression("-", astVariableExpression("y"))]),
+                        expression(), "-x, -y")
+
+    def testUnaryPropertyExpr(self):
+        self.checkParse(astUnaryExpression("~",
+                                           astPropertyExpression(astVariableExpression("x"),
+                                                                 "y")),
+                        expression(), "~x.y")
 
     def testBinaryExpr(self):
         self.checkParse(astBinaryExpression("+",
@@ -805,7 +883,7 @@ class TestParser(unittest.TestCase):
                                             [astTypeParameter([], None, "T", None, None)],
                                             [astVariablePattern("x", astClassType([], "T", [], set()))],
                                             astCallExpression(astVariableExpression("f"),
-                                                              [],
+                                                              None,
                                                               [astVariableExpression("x")])),
                         expression(),
                         "lambda f[T](x: T) f(x)")
@@ -832,3 +910,7 @@ class TestParser(unittest.TestCase):
 
     def testNullLit(self):
         self.checkParse(astNullLiteral(), literal(), "null")
+
+    # Symbols
+    def testQuotedSymbol(self):
+        self.checkParse("fo`o", symbol, r"`fo\`o`")

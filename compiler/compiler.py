@@ -439,7 +439,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         assert mode is COMPILE_FOR_MATCH
 
         irDefn = self.info.getUseInfo(pat).defnInfo.irDefn
-        callInfo = self.info.getCallInfo(pat)
+        typeArgs = self.info.getCallInfo(pat).typeArguments
 
         # Compile the prefix. Note that the matcher may be explicitly referenced in the last
         # prefix component, so we don't compile that here.
@@ -450,70 +450,39 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.buildPrefix(pat.prefix)
             hasPrefix = len(pat.prefix) > 0
 
-        # Call the matcher function.
-        if irDefn.isMethod():
-            if not hasPrefix:
-                self.loadImplicitReceiver(irDefn)
-            self.dupi(1)
-            self.buildStaticTypeArguments(callInfo.typeArguments)
-            self.callMethod(irDefn)
-        else:
-            self.dup()
-            self.buildStaticTypeArguments(callInfo.typeArguments)
-            self.callFunction(irDefn)
+        # The rest is the same as other destructures.
+        self.buildDestructure(irDefn, hasPrefix, typeArgs, pat.patterns,
+                              failBlock, pat.location)
 
-        # Check if it returned Some.
-        someClass = self.info.getStdClass("Some", pat.location)
-        someType = ClassType.forReceiver(someClass)
-        self.buildType(someType, pat.location)
-        matcherSuccessBlock = self.newBlock()
-        dropSomeBlock = self.newBlock()
-        self.castcbr(matcherSuccessBlock.id, dropSomeBlock.id)
+    def visitAstUnaryPattern(self, pat, mode, ty=None, failBlock=None):
+        if mode is COMPILE_FOR_UNINITIALIZED:
+            self.visit(pat.pattern, COMPILE_FOR_UNINITIALIZED)
+            return
+        assert mode is COMPILE_FOR_MATCH
 
-        # Get the value out of the Some. Cast it to a tuple if we need to.
-        self.setCurrentBlock(matcherSuccessBlock)
-        self.buildStaticTypeArgument(getRootClassType())
-        self.buildCallNamedMethod(someType, "get", COMPILE_FOR_VALUE)
-        n = len(pat.patterns)
-        if n > 1:
-            tupleClass = self.info.getTupleClass(n, pat.location)
-            tupleTypeArgs = tuple(VariableType(p) for p in tupleClass.typeParameters)
-            tupleType = ClassType(tupleClass, tupleTypeArgs)
-            self.buildType(tupleType, pat.location)
-            self.castc()
+        if self.info.hasUseInfo(pat) and \
+           not isinstance(self.info.getUseInfo(pat).defnInfo.irDefn, Class):
+            self.buildLoadOrNullaryCall(pat, COMPILE_FOR_VALUE)
 
-        # If there is just one pattern inside, pass the value to that pattern. Otherwise,
-        # load each value out of the tuple and pass those to the patterns. Note that we pass
-        # Object as the expression type for each tuple. We haven't properly type checked the
-        # value we pulled out of the Some[_]. We need to type check these values at runtime,
-        # but the type checks should never fail.
-        successState = None
-        if n == 1:
-            self.visit(pat.patterns[0], mode, getRootClassType(), dropSomeBlock)
-            successState = self.saveCurrentBlock()
-        else:
-            dropFieldBlock = self.newBlock()
-            for i in xrange(n - 1):
-                self.dup()
-                self.ldp(i)
-                self.visit(pat.patterns[i], mode, getRootClassType(), dropFieldBlock)
-            self.ldp(n - 1)
-            self.visit(pat.patterns[-1], mode, getRootClassType(), dropSomeBlock)
-            successState = self.saveCurrentBlock()
+        irDefn = self.info.getUseInfo(pat.matcherId).defnInfo.irDefn
+        typeArgs = self.info.getCallInfo(pat.matcherId).typeArguments
+        self.buildDestructure(irDefn, False, typeArgs, [pat.pattern], failBlock, pat.location)
 
-            # If one of the sub-patterns failed to match, we need to drop the field.
-            self.setCurrentBlock(dropFieldBlock)
-            self.drop()
-            self.branch(dropSomeBlock.id)
+    def visitAstBinaryPattern(self, pat, mode, ty=None, failBlock=None):
+        if mode is COMPILE_FOR_UNINITIALIZED:
+            self.visit(pat.left, COMPILE_FOR_UNINITIALIZED)
+            self.visit(pat.right, COMPILE_FOR_UNINITIALIZED)
+            return
+        assert mode is COMPILE_FOR_MATCH
 
-        # If the matcher did not return Some, drop the return value.
-        self.setCurrentBlock(dropSomeBlock)
-        self.drop()
-        self.branch(failBlock.id)
+        if self.info.hasUseInfo(pat) and \
+           not isinstance(self.info.getUseInfo(pat).defnInfo.irDefn, Class):
+            self.buildLoadOrNullaryCall(pat, COMPILE_FOR_VALUE)
 
-        # Go back to the success block and drop the last field.
-        self.restoreCurrentBlock(successState)
-        self.drop()
+        irDefn = self.info.getUseInfo(pat.matcherId).defnInfo.irDefn
+        typeArgs = self.info.getCallInfo(pat.matcherId).typeArguments
+        subPatterns = [pat.left, pat.right]
+        self.buildDestructure(irDefn, False, typeArgs, subPatterns, failBlock, pat.location)
 
     def visitAstLiteralExpression(self, expr, mode):
         self.buildLiteral(expr.literal)
@@ -593,7 +562,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.setCurrentBlock(joinBlock)
             self.dropForEffect(mode)
         else:
-            # regular operators (handled like methods)
+            # regular operators
             useInfo = self.info.getUseInfo(expr)
             callInfo = self.info.getCallInfo(expr)
             isCompoundAssignment = opName == useInfo.defnInfo.irDefn.name.short() + "="
@@ -1521,7 +1490,19 @@ class CompileVisitor(ast.AstNodeVisitor):
             closureInfo = self.info.getClosureInfo(irDefn)
         else:
             closureInfo = None
-        argCount = len(argExprs)
+
+        def compileReceiver():
+            assert receiver is not None
+            if isinstance(receiver, LValue):
+                if receiver.onStack():
+                    self.dup()
+                receiver.evaluate()
+            elif isinstance(receiver, ast.AstSuperExpression):
+                # Special case: load `super` as `this`
+                self.visitAstThisExpression(receiver, COMPILE_FOR_VALUE)
+            else:
+                assert isinstance(receiver, ast.AstExpression)
+                self.visit(receiver, COMPILE_FOR_VALUE)
 
         def compileArgs():
             for arg in argExprs:
@@ -1532,26 +1513,27 @@ class CompileVisitor(ast.AstNodeVisitor):
 
         if not irDefn.isConstructor() and not irDefn.isMethod():
             # Global or static function.
-            assert receiver is None
+            if receiver is not None:
+                compileReceiver()
             compileArgs()
             compileTypeArgs()
             self.callFunction(irDefn)
 
-        elif receiver is None and irDefn.isConstructor():
+        elif irDefn.isConstructor():
             # Constructor.
-            assert receiver is None
             if allowAllocation:
                 compileTypeArgs()
                 if irDefn.getReceiverClass().isForeign():
                     self.allocobjf(irDefn.getReceiverClass())
                 else:
                     self.allocobj(irDefn.getReceiverClass())
-            else:
-                # This is a constructor called from another constructor. Load receiver instead
-                # of allocating a new object.
+            elif receiver is None:
+                # This is a constructor called from another constructor. We'll load `this`.
                 self.loadThis()
             if mode is COMPILE_FOR_VALUE:
                 self.dup()
+            if receiver is not None:
+                compileReceiver()
             compileArgs()
             compileTypeArgs()
             self.callFunction(irDefn)
@@ -1579,16 +1561,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                     self.loadContext(defnInfo.scopeId)
             else:
                 # Compile explicit receiver
-                if isinstance(receiver, LValue):
-                    if receiver.onStack():
-                        self.dup()
-                    receiver.evaluate()
-                elif isinstance(receiver, ast.AstSuperExpression):
-                    # Special case: load `super` as `this`
-                    self.visitAstThisExpression(receiver, COMPILE_FOR_VALUE)
-                else:
-                    assert isinstance(receiver, ast.AstExpression)
-                    self.visit(receiver, COMPILE_FOR_VALUE)
+                compileReceiver()
 
             # Compile the arguments and call the method.
             compileArgs()
@@ -1601,6 +1574,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                 self.callFunction(irDefn)
             else:
                 index = irDefn.getReceiverClass().getMethodIndex(irDefn)
+                argCount = len(argExprs)
                 self.callv(argCount + 1, index)
 
             if isinstance(receiver, LValue):
@@ -1615,6 +1589,91 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.callgf(function)
         else:
             self.callg(function)
+
+    def buildDestructure(self, irDefn, hasPrefix, typeArgs, subPatterns, failBlock, loc):
+        """Generates code to destructure a value into sub-patterns with a matcher function.
+
+        The value to be destructured should already be on the stack. If the matcher has an
+        explicit receiver, that should also be on the stack (on top). If the matcher has
+        an implicit receiver, code will be generated to load it. Code will be generated to
+        call the matcher method. If the return value is a `Some`, its value will be extracted,
+        split up, and used to match `subPatterns`.
+
+        Args:
+            irDefn: the matcher function or method. If `hasPrefix` is true, and a receiver is
+                required, it should be loaded on the stack.
+            hasPrefix: `True` if there was an explicit prefix before the matcher. This is
+                used to determine if an implicit receiver needs to be loaded.
+            typeArgs: a list of `Type` arguments passed to the matcher.
+            subPatterns: a list of `AstPattern`s which will be compiled for matching.
+            failBlock: code will branch here if the match fails. The matching value will be
+                left on the stack.
+            loc: the location of the matching pattern. Used for errors.
+        """
+        # Call the matcher function.
+        if irDefn.isMethod():
+            if not hasPrefix:
+                self.loadImplicitReceiver(irDefn)
+            self.dupi(1)
+            self.buildStaticTypeArguments(typeArgs)
+            self.callMethod(irDefn)
+        else:
+            self.dup()
+            self.buildStaticTypeArguments(typeArgs)
+            self.callFunction(irDefn)
+
+        # Check if it returned Some.
+        someClass = self.info.getStdClass("Some", loc)
+        someType = ClassType.forReceiver(someClass)
+        self.buildType(someType, loc)
+        matcherSuccessBlock = self.newBlock()
+        dropSomeBlock = self.newBlock()
+        self.castcbr(matcherSuccessBlock.id, dropSomeBlock.id)
+
+        # Get the value out of the Some. Cast it to a tuple if we need to.
+        self.setCurrentBlock(matcherSuccessBlock)
+        self.buildStaticTypeArgument(getRootClassType())
+        self.buildCallNamedMethod(someType, "get", COMPILE_FOR_VALUE)
+        n = len(subPatterns)
+        if n > 1:
+            tupleClass = self.info.getTupleClass(n, loc)
+            tupleType = ClassType.forReceiver(tupleClass)
+            self.buildType(tupleType, loc)
+            self.castc()
+
+        # If there is just one pattern inside, pass the value to that pattern. Otherwise,
+        # load each value out of the tuple and pass those to the patterns. Note that we pass
+        # Object as the expression type for each tuple. We haven't properly type checked the
+        # value we pulled out of the Some[_]. We need to type check these values at runtime,
+        # but the type checks should never fail.
+        successState = None
+        if n == 1:
+            self.visit(subPatterns[0], COMPILE_FOR_MATCH, getRootClassType(), dropSomeBlock)
+            successState = self.saveCurrentBlock()
+        else:
+            dropFieldBlock = self.newBlock()
+            for i in xrange(n - 1):
+                self.dup()
+                self.ldp(i)
+                self.visit(subPatterns[i], COMPILE_FOR_MATCH,
+                           getRootClassType(), dropFieldBlock)
+            self.ldp(n - 1)
+            self.visit(subPatterns[-1], COMPILE_FOR_MATCH, getRootClassType(), dropSomeBlock)
+            successState = self.saveCurrentBlock()
+
+            # If one of the sub-patterns failed to match, we need to drop the field.
+            self.setCurrentBlock(dropFieldBlock)
+            self.drop()
+            self.branch(dropSomeBlock.id)
+
+        # If the matcher did not return Some, drop the return value.
+        self.setCurrentBlock(dropSomeBlock)
+        self.drop()
+        self.branch(failBlock.id)
+
+        # Go back to the success block and drop the last field.
+        self.restoreCurrentBlock(successState)
+        self.drop()
 
     def buildAssignment(self, lvalue, mode):
         if mode is COMPILE_FOR_VALUE:
