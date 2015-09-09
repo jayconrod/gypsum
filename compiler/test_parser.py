@@ -362,6 +362,12 @@ class TestParser(unittest.TestCase):
                                                astUnaryPattern("-", astVariablePattern("y", None))]),
                         pattern(), "Foo(-x, -y)")
 
+    def testUnaryDestructurePattern(self):
+        self.checkParse(astUnaryPattern("~",
+                                        astDestructurePattern([astScopePrefixComponent("Foo", None)],
+                                                              [astVariablePattern("x", None)])),
+                        pattern(), "~Foo(x)")
+
     def testBinaryPatternSimple(self):
         self.checkParse(astBinaryPattern("+", astBlankPattern(None), astBlankPattern(None)),
                         pattern(), "_ + _")
@@ -639,6 +645,12 @@ class TestParser(unittest.TestCase):
         self.checkParse(astTupleExpression([astUnaryExpression("-", astVariableExpression("x")),
                                             astUnaryExpression("-", astVariableExpression("y"))]),
                         expression(), "-x, -y")
+
+    def testUnaryPropertyExpr(self):
+        self.checkParse(astUnaryExpression("~",
+                                           astPropertyExpression(astVariableExpression("x"),
+                                                                 "y")),
+                        expression(), "~x.y")
 
     def testBinaryExpr(self):
         self.checkParse(astBinaryExpression("+",

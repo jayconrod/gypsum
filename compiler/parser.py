@@ -409,7 +409,7 @@ def unaryExpr():
     def process(parsed, loc):
         (op, e) = parsed
         return ast.AstUnaryExpression(op, e, loc)
-    return unaryOperator + ct.Commit(ct.Lazy(receiverExpr)) ^ process
+    return unaryOperator + ct.Commit(ct.Lazy(maybeCallExpr)) ^ process
 
 
 def ifExpr():
