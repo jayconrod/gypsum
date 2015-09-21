@@ -196,8 +196,8 @@ class TestSerialize(unittest.TestCase):
 
     def testRewriteField(self):
         package = ir.Package()
-        field = package.newField(ir.Name(["foo"]), None, ir_types.I64Type,
-                                 frozenset([flags.PUBLIC, flags.LET]))
+        field = package.newField(ir.Name(["foo"]), type=ir_types.I64Type,
+                                 flags=frozenset([flags.PUBLIC, flags.LET]))
         self.ser.package = package
         self.ser.writeField(field)
 
@@ -243,8 +243,8 @@ class TestSerialize(unittest.TestCase):
                                              ir_types.getNothingClassType(),
                                              frozenset([flags.STATIC]))
         supertype = ir_types.getRootClassType()
-        field = package.newField(ir.Name(["Foo", "x"]), None,
-                                 ir_types.I64Type, frozenset([flags.PRIVATE]))
+        field = package.newField(ir.Name(["Foo", "x"]),
+                                 type=ir_types.I64Type, flags=frozenset([flags.PRIVATE]))
         clas = package.addClass(ir.Name(["Foo"]), None, [typeParam], [supertype], None, None,
                                 [field], None, frozenset([flags.PUBLIC]))
         ty = ir_types.ClassType(clas)

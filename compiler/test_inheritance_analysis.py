@@ -66,7 +66,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
         package = Package(name=Name(["foo"]))
         foreignClass = package.addClass(Name(["Bar"]), None, [], [getRootClassType()],
                                         None, [], [], [], frozenset([PUBLIC]))
-        field = package.newField(Name(["x"]), None, None, frozenset([PUBLIC]))
+        field = package.newField(Name(["x"]), flags=frozenset([PUBLIC]))
         foreignClass.fields = [field]
         loader = FakePackageLoader([package])
         source = "class Baz <: foo.Bar"
@@ -237,7 +237,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
         foo = Package(name=Name(["foo"]))
         Bar = foo.addClass(Name(["Bar"]), None, [], [getRootClassType()],
                            None, [], [], [], frozenset([PUBLIC]))
-        x = foo.newField(Name(["x"]), None, None, frozenset([PUBLIC, LET]))
+        x = foo.newField(Name(["x"]), flags=frozenset([PUBLIC, LET]))
         Bar.fields.append(x)
 
         source = "import foo.Bar\n" + \

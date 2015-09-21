@@ -158,7 +158,7 @@ def _initialize():
     def buildField(fieldData, classShortName):
         name = ir.Name([classShortName, fieldData["name"]])
         ty = buildType(fieldData["type"])
-        return ir.Field(name, None, ty, frozenset([flags.PUBLIC]))
+        return ir.Field(name, type=ty, flags=frozenset([flags.PUBLIC]))
 
     def declareClass(classData):
         name = ir.Name([classData["name"]])

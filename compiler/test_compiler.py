@@ -515,8 +515,8 @@ class TestCompiler(TestCaseWithDefinitions):
         fooPackage = Package(name=Name(["foo"]))
         clas = fooPackage.addClass(Name(["Bar"]), None, [], [getRootClassType()], None,
                                    [], [], [], frozenset([PUBLIC]))
-        field = fooPackage.newField(Name(["Bar", "x"]), None,
-                                    getRootClassType(), frozenset([LET, PUBLIC]))
+        field = fooPackage.newField(Name(["Bar", "x"]),
+                                    type=getRootClassType(), flags=frozenset([LET, PUBLIC]))
         field.index = 0
         clas.fields.append(field)
         ty = ClassType(clas)

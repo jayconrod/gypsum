@@ -25,8 +25,8 @@ class TestExternalization(unittest.TestCase):
         self.packageLoader = utils_test.FakePackageLoader([self.otherPackage])
         self.externalizer = externalization.Externalizer(self.package, self.packageLoader)
 
-        field = self.otherPackage.newField(ir.Name(["x"]), None, ir_types.I64Type,
-                                           frozenset([flags.PUBLIC]))
+        field = self.otherPackage.newField(ir.Name(["x"]), type=ir_types.I64Type,
+                                           flags=frozenset([flags.PUBLIC]))
         self.clas = self.otherPackage.addClass(ir.Name(["Foo"]), None, [], [self.rootClassType],
                                                None, None, [field], None,
                                                frozenset([flags.PUBLIC]))
@@ -100,8 +100,8 @@ class TestExternalization(unittest.TestCase):
                                              [clasTy], None, None,
                                              frozenset([flags.PUBLIC, flags.METHOD]))
         clas.constructors = [ctor]
-        field = self.otherPackage.newField(ir.Name(["C", "x"]), None,
-                                           clasTy, frozenset([flags.PUBLIC]))
+        field = self.otherPackage.newField(ir.Name(["C", "x"]),
+                                           type=clasTy, flags=frozenset([flags.PUBLIC]))
         clas.fields = [field]
         method = self.otherPackage.addFunction(ir.Name(["C", "f"]), None,
                                                ir_types.UnitType, [self.param], [clasTy],
@@ -119,7 +119,8 @@ class TestExternalization(unittest.TestCase):
                                    [clasTy], None, None,
                                    frozenset([flags.PUBLIC, flags.METHOD, flags.EXTERN]))
         expected.constructors = [expectedCtor]
-        expectedField = ir.Field(ir.Name(["C", "x"]), None, clasTy, frozenset([flags.PUBLIC]))
+        expectedField = ir.Field(ir.Name(["C", "x"]), type=clasTy,
+                                 flags=frozenset([flags.PUBLIC]))
         expected.fields = [expectedField]
         expectedMethod = ir.Function(ir.Name(["C", "f"]),
                                      None, method.id, ir_types.UnitType, [self.externParam],

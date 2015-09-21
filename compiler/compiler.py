@@ -31,7 +31,7 @@ def compile(info):
 
 def assignFieldIndices(clas, info):
     for index, field in enumerate(clas.fields):
-        assert not hasattr(field, "index") or field.index == index
+        assert field.index is None or field.index == index
         field.index = index
 
 

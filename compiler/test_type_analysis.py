@@ -475,8 +475,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         fooPackage = Package(name=Name(["foo"]))
         clas = fooPackage.addClass(Name(["Bar"]), None, [], [getRootClassType()], None,
                                    [], [], [], frozenset([PUBLIC]))
-        clas.fields.append(fooPackage.newField(Name(["Bar", "x"]), None, I64Type,
-                                               frozenset([PUBLIC])))
+        clas.fields.append(fooPackage.newField(Name(["Bar", "x"]), type=I64Type,
+                                               flags=frozenset([PUBLIC])))
         loader = FakePackageLoader([fooPackage])
 
         source = "def f(o: foo.Bar) = o.x"
@@ -488,8 +488,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         fooPackage = Package(name=Name(["foo"]))
         clas = fooPackage.addClass(Name(["Bar"]), None, [], [getRootClassType()], None,
                                    [], [], [], frozenset([PUBLIC]))
-        clas.fields.append(fooPackage.newField(Name(["Bar", "x"]), None, I64Type,
-                                               frozenset([PUBLIC])))
+        clas.fields.append(fooPackage.newField(Name(["Bar", "x"]), type=I64Type,
+                                               flags=frozenset([PUBLIC])))
         loader = FakePackageLoader([fooPackage])
 
         source = "def f(o: foo.Bar) = o.x = 12"
@@ -520,7 +520,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                       None, UnitType, [], [ty], None, None,
                                       frozenset([PUBLIC, METHOD]))
         clas.constructors = [ctor]
-        field = fooPackage.newField(Name(["Bar", "x"]), None, I64Type, frozenset([PUBLIC]))
+        field = fooPackage.newField(Name(["Bar", "x"]), type=I64Type, flags=frozenset([PUBLIC]))
         clas.fields = [field]
         packageLoader = FakePackageLoader([fooPackage])
 

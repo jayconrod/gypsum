@@ -466,8 +466,7 @@ class Deserializer(object):
         name = self.readName()
         flags = self.readFlags()
         ty = self.readType()
-        field = ir.Field(name, None, ty, flags)
-        field.index = index
+        field = ir.Field(name, type=ty, flags=flags, index=index)
         return field
 
     def readTypeParameter(self, param):

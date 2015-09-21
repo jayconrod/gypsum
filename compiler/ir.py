@@ -11,7 +11,7 @@ import flags
 import ids
 import ir_types
 import bytecode
-from utils import each, hashList
+from utils import each, hashList, reprFormat
 
 import re
 import StringIO
@@ -88,9 +88,9 @@ class Package(object):
         self.typeParameters.append(p)
         return p
 
-    def newField(self, name, *args):
+    def newField(self, name, **kwargs):
         self.addName(name)
-        return Field(name, *args)
+        return Field(name, **kwargs)
 
     def ensureDependency(self, package):
         if package.id.index is not None:
@@ -798,10 +798,35 @@ class Variable(IrDefinition):
 
 
 class Field(IrDefinition):
-    propertyNames = IrDefinition.propertyNames + ("type", "flags")
+    """Represents a data member of a class.
+
+    Attributes:
+        name (Name): the name of the field.
+        astDefn (AstNode?): the location in source code where the field is defined.
+        type (Type?): the type of the field. May be `None` before type analysis.
+        flags (frozenset[flag]): flags indicating how this field is used. Valid flags are
+            `LET`, `PUBLIC`, `PROTECTED`, `PRIVATE`, `STATIC`.
+        index (int?): an integer indicating where this field is located with an instance of
+            its class. 0 is the first field, 1 is the second, etc. Used to generate load / store
+            instructions. This will usually be `None` before semantic analysis.
+    """
+
+    def __init__(self, name, astDefn=None, type=None, flags=frozenset(), index=None):
+        # TODO: pass name and astDefn to super when we no longer subclass data.Data
+        self.name = name
+        self.astDefn = astDefn
+        self.type = type
+        self.flags = flags
+        self.index = index
+
+    def __repr__(self):
+        return reprFormat(self, "name", "type", "flags")
 
     def __str__(self):
         return "%s field %s: %s" % (" ".join(self.flags), self.name, self.type)
+
+    # TODO: remove definitions below when we no longer subclass data.Data
+    propertyNames = IrDefinition.propertyNames + ("type", "flags")
 
 
 # Miscellaneous functions for dealing with arguments and parameters.

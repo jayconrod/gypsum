@@ -9,7 +9,7 @@ import unittest
 from ir import Global, Function, Class, Package, Name, PackagePrefix, TypeParameter, Variable, Field, LOCAL
 from ir_types import getNothingClassType, getRootClassType
 from package_loader import BasePackageLoader
-from utils import Counter
+from utils import Counter, reprFormat
 
 
 OPTION_SOURCE = "public class Option[static +T]\n" + \
@@ -94,11 +94,7 @@ class TestCaseWithDefinitions(unittest.TestCase):
 
     def makeField(self, name, **args):
         name = self.makeName(name)
-        defaultValues = {"astDefn": None,
-                         "type": None,
-                         "flags": frozenset()}
-        self.fillDefaultValues(args, defaultValues)
-        return Field(name, **args)
+        return TestDefn(self, Field, name, **args)
 
     def fillDefaultValues(self, args, values):
         for k, v in values.iteritems():
@@ -151,3 +147,46 @@ class FakePackageLoader(BasePackageLoader):
 
     def getPackageById(self, id):
         return next(package for package in self.packages.itervalues() if package.id is id)
+
+
+class TestDefn(object):
+    """A stand-in for definitions in comparisons.
+
+    Very frequently in unit tests, we need to compare an expected definition to an actual
+    definition. Instances of this class can take the place of expected definitions. Objects
+    are constructed with a name and a list of key-value pairs. These pairs are compared with
+    attributes of the "actual" object. Other attributes are ignored.
+
+    Attributes:
+        test (unittest.TestCase): the test that uses this definition. Used to call
+            `assertEqual` and `assertNotEqual`.
+        clas (class): the expected class.
+        name (Name): the expected name
+        properties (dict[str, *]): the properties to check during comparisons.
+    """
+
+    def __init__(self, test, clas, name, **kwargs):
+        self.test = test
+        self.clas = clas
+        self.properties = kwargs
+        self.properties["name"] = name
+
+    def __repr__(self):
+        return "Test%s(%s)" % (self.clas.__name__, repr(self.properties))
+
+    def __eq__(self, other):
+        if self.clas is not other.__class__:
+            # This assertion should throw.
+            self.test.assertEquals(self.clas, other.__class__)
+            return False
+        for key, value in self.properties.iteritems():
+            otherValue = getattr(other, key)
+            if value != otherValue:
+                # This assertion should throw.
+                self.test.assertEqual(value, otherValue,
+                                      "for key %s, %s != %s" % (key, value, otherValue))
+                return False
+        return True
+
+    def __ne__(self, other):
+        return any(v != getattr(other, k) for k, v in self.properties.iteritems())
