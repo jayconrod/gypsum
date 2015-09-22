@@ -60,10 +60,10 @@ class Package(object):
         buf.write("init function: %s\n" % self.initFunction)
         return buf.getvalue()
 
-    def addGlobal(self, name, astDefn, *args):
+    def addGlobal(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.GLOBAL, len(self.globals))
         self.addName(name)
-        g = Global(name, astDefn, id, *args)
+        g = Global(name, id, *args, **kwargs)
         self.globals.append(g)
         return g
 
@@ -427,7 +427,27 @@ class ParameterizedDefn(IrTopDefn):
 
 
 class Global(IrTopDefn):
-    propertyNames = IrTopDefn.propertyNames + ("type", "flags")
+    """Represents a global variable or constant.
+
+    Attributes:
+        name (Name): the name of the global
+        id (DefnId): unique identifier for the global.
+        astDefn (AstNode?): the location in source code where the global is defined.
+        type (Type?): the type of the global. May be `None` before type analysis.
+        flags (frozenset[flag]): flags indicating how this global may be used. Valid flags are
+            `EXTERN`, `LET`, `PUBLIC`.
+    """
+
+    def __init__(self, name, id, astDefn, type=None, flags=frozenset()):
+        # TODO: pass name and astDefn to super when we no longer subclass data.Data
+        self.name = name
+        self.id = id
+        self.astDefn = astDefn
+        self.type = type
+        self.flags = flags
+
+    def __repr__(self):
+        return reprFormat(self, "name", "type", "flags")
 
     def __str__(self):
         buf = StringIO.StringIO()
@@ -435,6 +455,9 @@ class Global(IrTopDefn):
             buf.write(" ".join(self.flags) + " ")
         buf.write("var %s%s: %s" % (self.name, self.id, str(self.type)))
         return buf.getvalue()
+
+    # TODO: remove below when we no longer subclass data.Data
+    propertyNames = IrTopDefn.propertyNames + ("type", "flags")
 
 
 class Function(ParameterizedDefn):

@@ -16,7 +16,7 @@ import ir_types
 import utils_test
 
 
-class TestExternalization(unittest.TestCase):
+class TestExternalization(utils_test.TestCaseWithDefinitions):
     def setUp(self):
         self.package = ir.Package(ids.TARGET_PACKAGE_ID)
         self.rootClassType = ir_types.getRootClassType()
@@ -75,8 +75,8 @@ class TestExternalization(unittest.TestCase):
         globl = self.otherPackage.addGlobal(ir.Name(["g"]), None, self.classTy,
                                             frozenset([flags.PUBLIC]))
         externGlobal = self.externalizer.externalizeDefn(globl)
-        expected = ir.Global(ir.Name(["g"]), None, globl.id, self.classTy,
-                             frozenset([flags.PUBLIC, flags.EXTERN]))
+        expected = self.makeGlobal(ir.Name(["g"]), id=globl.id, type=self.classTy,
+                                   flags=frozenset([flags.PUBLIC, flags.EXTERN]))
         self.assertEquals(expected, externGlobal)
         self.checkExternPosition(externGlobal)
 

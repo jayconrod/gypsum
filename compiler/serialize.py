@@ -386,7 +386,7 @@ class Deserializer(object):
 
     def createEmptyGlobalList(self, count, packageId):
         gids = (ids.DefnId(packageId, ids.DefnId.GLOBAL, i) for i in xrange(count))
-        globals = list(ir.Global(None, None, id, None, None) for id in gids)
+        globals = list(ir.Global(None, id, None, None, None) for id in gids)
         return globals
 
     def createEmptyFunctionList(self, count, packageId):

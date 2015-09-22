@@ -39,12 +39,7 @@ class TestCaseWithDefinitions(unittest.TestCase):
 
     def makeGlobal(self, name, **args):
         name = self.makeName(name)
-        defaultValues = {"astDefn": None,
-                         "type": None,
-                         "flags": frozenset()}
-        self.fillDefaultValues(args, defaultValues)
-        args["id"] = self.globalCounter()
-        return Global(name, **args)
+        return TestDefn(self, Global, name, **args)
 
     def makeFunction(self, name, **args):
         name = self.makeName(name)

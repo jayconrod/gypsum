@@ -66,7 +66,7 @@ class Externalizer(object):
         id.externIndex = len(externDefns)
 
         if isinstance(defn, ir.Global):
-            externDefn = ir.Global(defn.name, defn.astDefn, id, defn.type, externFlags)
+            externDefn = ir.Global(defn.name, id, defn.astDefn, defn.type, externFlags)
             externDefns.append(externDefn)
             self.externalizeType(defn.type)
         elif isinstance(defn, ir.Function):
