@@ -817,6 +817,22 @@ LOCAL = "local"
 PARAMETER = "parameter"
 
 class Variable(IrDefinition):
+    def __init__(self, name, astDefn=None, type=None, kind=LOCAL, flags=frozenset()):
+        # TODO: pass name and astDefn to super when we no longer subclass data.Data
+        self.name = name
+        self.astDefn = astDefn
+        self.type = type
+        self.kind = kind
+        self.flags = flags
+
+    def __repr__(self):
+        return reprFormat(self, "name", "type", "kind", "flags")
+
+    def __str__(self):
+        flagsStr = " ".join(self.flags)
+        return "%s %s %s: %s" % (flagsStr, self.kind, self.name, self.type)
+
+    # TODO: remove definitions below when we no longer subclass data.Data
     propertyNames = IrDefinition.propertyNames + ("type", "kind", "flags")
 
 

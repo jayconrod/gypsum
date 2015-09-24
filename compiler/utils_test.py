@@ -80,12 +80,7 @@ class TestCaseWithDefinitions(unittest.TestCase):
 
     def makeVariable(self, name, **args):
         name = self.makeName(name)
-        defaultValues = {"astDefn": None,
-                         "type": None,
-                         "kind": LOCAL,
-                         "flags": frozenset()}
-        self.fillDefaultValues(args, defaultValues)
-        return Variable(name, **args)
+        return TestDefn(self, Variable, name, **args)
 
     def makeField(self, name, **args):
         name = self.makeName(name)

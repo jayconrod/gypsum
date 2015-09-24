@@ -668,7 +668,8 @@ class Scope(ast.AstNodeVisitor):
         """
         function.flags |= frozenset([METHOD])
         thisName = function.name.withSuffix(ir.RECEIVER_SUFFIX)
-        this = ir.Variable(thisName, function.astDefn, None, ir.PARAMETER, frozenset([LET]))
+        this = ir.Variable(thisName, astDefn=function.astDefn,
+                           kind=ir.PARAMETER, flags=frozenset([LET]))
         function.variables.insert(0, this)
 
     def makeConstructor(self, function, clas):
@@ -1150,7 +1151,7 @@ class FunctionScope(Scope):
                 irDefn = None
             else:
                 name = self.makeName(ir.ANON_PARAMETER_SUFFIX)
-                irDefn = ir.Variable(name, astDefn, None, ir.PARAMETER, flags)
+                irDefn = ir.Variable(name, astDefn=astDefn, kind=ir.PARAMETER, flags=flags)
                 irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, ast.AstVariablePattern):
             name = self.makeName(astDefn.name)
@@ -1158,7 +1159,7 @@ class FunctionScope(Scope):
             isParameter = isinstance(astVarDefn, ast.AstParameter) and \
                           astVarDefn.pattern is astDefn
             kind = ir.PARAMETER if isParameter else ir.LOCAL
-            irDefn = ir.Variable(name, astDefn, None, kind, flags)
+            irDefn = ir.Variable(name, astDefn=astDefn, kind=kind, flags=flags)
             irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, ast.AstFunctionDefinition):
             name = self.makeName(astDefn.name)
@@ -1206,15 +1207,16 @@ class FunctionScope(Scope):
         ctor = self.info.package.addFunction(ctorName, None,
                                              UnitType, list(implicitTypeParams),
                                              [irContextType],
-                                             [ir.Variable(receiverName, None, irContextType,
-                                                          ir.PARAMETER, frozenset([LET]))],
+                                             [ir.Variable(receiverName, type=irContextType,
+                                                          kind=ir.PARAMETER,
+                                                          flags=frozenset([LET]))],
                                              [], frozenset([METHOD]))
         ctor.compileHint = CONTEXT_CONSTRUCTOR_HINT
         irContextClass.constructors.append(ctor)
         contextInfo.irContextClass = irContextClass
 
         # Create a variable to hold an instance of it.
-        irContextVar = ir.Variable(contextClassName, None, irContextType, ir.LOCAL, frozenset())
+        irContextVar = ir.Variable(contextClassName, type=irContextType, kind=ir.LOCAL)
         irDefn.variables.append(irContextVar)
         closureInfo = self.info.getClosureInfo(self.scopeId)
         closureInfo.irClosureContexts[self.scopeId] = irContextVar
@@ -1266,10 +1268,10 @@ class FunctionScope(Scope):
         irClosureCtor = self.info.package.addFunction(ctorName, None,
                                                       UnitType, list(implicitTypeParams),
                                                       [irClosureType],
-                                                      [ir.Variable(ctorReceiverName, None,
-                                                                   irClosureType,
-                                                                   ir.PARAMETER,
-                                                                   frozenset([LET]))],
+                                                      [ir.Variable(ctorReceiverName,
+                                                                   type=irClosureType,
+                                                                   kind=ir.PARAMETER,
+                                                                   flags=frozenset([LET]))],
                                                       None, frozenset([METHOD]))
         irClosureCtor.compileHint = CLOSURE_CONSTRUCTOR_HINT
         irClosureClass.constructors.append(irClosureCtor)
@@ -1281,15 +1283,16 @@ class FunctionScope(Scope):
         irDefn.flags |= frozenset([METHOD])
         thisType = ClassType.forReceiver(irClosureClass)
         thisName = irDefn.name.withSuffix(ir.RECEIVER_SUFFIX)
-        this = ir.Variable(thisName, irDefn.astDefn, thisType, ir.PARAMETER, frozenset([LET]))
+        this = ir.Variable(thisName, astDefn=irDefn.astDefn, type=thisType,
+                           kind=ir.PARAMETER, flags=frozenset([LET]))
         irDefn.variables.insert(0, this)
         irDefn.parameterTypes.insert(0, thisType)
         irClosureClass.methods.append(irDefn)
 
         # If the parent is a function scope, define a local variable to hold the closure.
         if isinstance(self.parent, FunctionScope):
-            irClosureVar = ir.Variable(irDefn.name, irDefn.astDefn,
-                                       irClosureType, ir.LOCAL, frozenset())
+            irClosureVar = ir.Variable(irDefn.name, astDefn=irDefn.astDefn,
+                                       type=irClosureType, kind=ir.LOCAL)
             self.parent.getIrDefn().variables.append(irClosureVar)
             closureInfo.irClosureVar = irClosureVar
 
@@ -1420,7 +1423,8 @@ class ClassScope(Scope):
             name = self.makeName(astDefn.pattern.name) \
                    if isinstance(astDefn.pattern, ast.AstVariablePattern) \
                    else self.makeName(ir.ANON_PARAMETER_SUFFIX)
-            irDefn = ir.Variable(name, astDefn, None, ir.PARAMETER, frozenset([LET]))
+            irDefn = ir.Variable(name, astDefn=astDefn,
+                                 kind=ir.PARAMETER, flags=frozenset([LET]))
             irCtor = self.info.getDefnInfo(self.ast.constructor).irDefn
             irCtor.variables.append(irDefn)
             shouldBind = False

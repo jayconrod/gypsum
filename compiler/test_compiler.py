@@ -76,7 +76,12 @@ class TestCompiler(TestCaseWithDefinitions):
         if typeParameters is None:
             typeParameters = []
         if parameterTypes is None:
-            parameterTypes = [v.type for v in variables if v.kind is PARAMETER]
+            def isParameter(v):
+                return (isinstance(v, Variable) and v.kind is PARAMETER) or \
+                       (v.properties.get("kind") is PARAMETER)
+            def getType(v):
+                return v.type if isinstance(v, Variable) else v.properties["type"]
+            parameterTypes = map(getType, filter(isParameter, variables))
         if isinstance(name, str):
             name = Name.fromString(name)
         blockList = [BasicBlock(i, insts) for i, insts in enumerate(blocks)]
