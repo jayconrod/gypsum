@@ -1140,8 +1140,7 @@ class FunctionScope(Scope):
             if STATIC not in flags:
                 raise NotImplementedError
             flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
-            irDefn = self.info.package.addTypeParameter(name, astDefn,
-                                                        None, None, flags)
+            irDefn = self.info.package.addTypeParameter(name, astDefn=astDefn, flags=flags)
             irScopeDefn.typeParameters.append(irDefn)
         elif isinstance(astDefn, ast.AstParameter):
             checkFlags(flags, frozenset(), astDefn.location)
@@ -1407,8 +1406,7 @@ class ClassScope(Scope):
             if STATIC not in flags:
                 raise NotImplementedError
             flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
-            irDefn = self.info.package.addTypeParameter(name, astDefn,
-                                                        None, None, flags)
+            irDefn = self.info.package.addTypeParameter(name, astDefn=astDefn, flags=flags)
             irDefn.clas = irScopeDefn
             irScopeDefn.typeParameters.append(irDefn)
             irScopeDefn.initializer.typeParameters.append(irDefn)

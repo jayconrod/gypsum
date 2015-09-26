@@ -41,10 +41,10 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
                                                [], [], None, None,
                                                frozenset([flags.PUBLIC, flags.METHOD]))
         self.clas.methods = [method]
-        self.param = self.otherPackage.addTypeParameter(ir.Name(["T"]), None,
-                                                        self.rootClassType,
-                                                        self.nothingClassType,
-                                                        frozenset([flags.STATIC]))
+        self.param = self.otherPackage.addTypeParameter(ir.Name(["T"]),
+                                                        upperBound=self.rootClassType,
+                                                        lowerBound=self.nothingClassType,
+                                                        flags=frozenset([flags.STATIC]))
         self.dep = self.package.ensureDependency(self.otherPackage)
         self.externParam = self.externalizer.externalizeDefn(self.param)
         self.varTy = ir_types.VariableType(self.param)
@@ -140,12 +140,14 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
         self.assertIn(method.name.short(), self.package.strings)
 
     def testExternalizeTypeParameter(self):
-        param = self.otherPackage.addTypeParameter(ir.Name(["S"]), None,
-                                                   self.classTy, self.classTy,
-                                                   frozenset([flags.STATIC]))
+        param = self.otherPackage.addTypeParameter(ir.Name(["S"]),
+                                                   upperBound=self.classTy,
+                                                   lowerBound=self.classTy,
+                                                   flags=frozenset([flags.STATIC]))
         externParam = self.externalizer.externalizeDefn(param)
-        expected = ir.TypeParameter(ir.Name(["S"]), None, param.id, self.classTy, self.classTy,
-                                    frozenset([flags.STATIC, flags.EXTERN]))
+        expected = ir.TypeParameter(ir.Name(["S"]), param.id,
+                                    upperBound=self.classTy, lowerBound=self.classTy,
+                                    flags=frozenset([flags.STATIC, flags.EXTERN]))
         self.assertEquals(expected, externParam)
 
     def testExternalizeBuiltinDefn(self):

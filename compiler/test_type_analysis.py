@@ -447,8 +447,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testCallForeignFunctionWithTypeArg(self):
         source = "var x = foo.bar[String](\"baz\")"
         foo = Package(name=Name(["foo"]))
-        T = foo.addTypeParameter(Name(["T"]), None, getRootClassType(), getNothingClassType(),
-                                 frozenset([STATIC]))
+        T = foo.addTypeParameter(Name(["T"]), upperBound=getRootClassType(),
+                                 lowerBound=getNothingClassType(), flags=frozenset([STATIC]))
         Tty = VariableType(T)
         bar = foo.addFunction(Name(["bar"]), None, Tty, [T], [Tty], None, None,
                               frozenset([PUBLIC]))
@@ -1224,8 +1224,9 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testForeignProjectedClassTypeWithTypeArgs(self):
         package = Package(name=Name(["foo"]))
-        param = package.addTypeParameter(Name(["Bar", "T"]), None, getRootClassType(),
-                                         getNothingClassType(), frozenset([STATIC]))
+        param = package.addTypeParameter(Name(["Bar", "T"]), upperBound=getRootClassType(),
+                                         lowerBound=getNothingClassType(),
+                                         flags=frozenset([STATIC]))
         clas = package.addClass(Name(["Bar"]), None, [param], [getRootClassType()],
                                 None, [], [], [], frozenset([PUBLIC]))
         loader = FakePackageLoader([package])
@@ -1237,8 +1238,9 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testForeignProjectedClassTypeWithTypeArgsOutOfBounds(self):
         package = Package(name=Name(["foo"]))
-        param = package.addTypeParameter(Name(["Bar", "T"]), None, getStringType(),
-                                         getNothingClassType(), frozenset([STATIC]))
+        param = package.addTypeParameter(Name(["Bar", "T"]), upperBound=getStringType(),
+                                         lowerBound=getNothingClassType(),
+                                         flags=frozenset([STATIC]))
         clas = package.addClass(Name(["Bar"]), None, [param], [getRootClassType()],
                                 None, [], [], [], frozenset([PUBLIC]))
         loader = FakePackageLoader([package])

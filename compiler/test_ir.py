@@ -8,7 +8,7 @@ import unittest
 
 import builtins
 import bytecode
-import flags
+from flags import METHOD, STATIC
 import ids
 import ir
 from ir_types import *
@@ -24,7 +24,9 @@ class TestIr(utils_test.TestCaseWithDefinitions):
         baseTy = ClassType(self.base)
         self.A = self.makeClass("A", supertypes=[baseTy])
         self.B = self.makeClass("B", supertypes=[baseTy])
-        self.T = self.makeTypeParameter("T")
+        self.T = self.makeTypeParameter("T", upperBound=getRootClassType(),
+                                        lowerBound=getNothingClassType(),
+                                        flags=frozenset([STATIC]))
 
     def tearDown(self):
         super(TestIr, self).tearDown()
@@ -61,7 +63,8 @@ class TestIr(utils_test.TestCaseWithDefinitions):
         self.assertFalse(f.canCallWith([], []))
 
     def testFunctionCanCallWithTypeArgOutOfBounds(self):
-        S = self.makeTypeParameter("S", upperBound=ClassType(self.A))
+        S = self.makeTypeParameter("S", upperBound=ClassType(self.A),
+                                   lowerBound=getNothingClassType(), flags=frozenset([STATIC]))
         f = self.makeFunction("f", returnType=UnitType, typeParameters=[S])
         self.assertFalse(f.canCallWith([getRootClassType()], []))
 
@@ -73,10 +76,10 @@ class TestIr(utils_test.TestCaseWithDefinitions):
     def testMayOverrideParamSub(self):
         rt = ClassType(self.base)
         f1 = self.makeFunction("f", returnType=UnitType, parameterTypes=[rt, ClassType(self.A)],
-                               flags=frozenset([flags.METHOD]))
+                               flags=frozenset([METHOD]))
         f2 = self.makeFunction("f", returnType=UnitType,
                                parameterTypes=[rt, ClassType(self.base)],
-                               flags=frozenset([flags.METHOD]))
+                               flags=frozenset([METHOD]))
         self.assertTrue(f2.mayOverride(f1))
         self.assertFalse(f1.mayOverride(f2))
 
@@ -84,12 +87,12 @@ class TestIr(utils_test.TestCaseWithDefinitions):
         rt = ClassType(self.base)
         f1 = self.makeFunction("f", returnType=UnitType,
                                typeParameters=[self.T], parameterTypes=[rt],
-                               flags=frozenset([flags.METHOD]))
+                               flags=frozenset([METHOD]))
         S = self.makeTypeParameter("S", upperBound=ClassType(self.base),
                                    lowerBound=ClassType(self.A))
         f2 = self.makeFunction("f", returnType=UnitType,
                                typeParameters=[S], parameterTypes=[rt],
-                               flags=frozenset([flags.METHOD]))
+                               flags=frozenset([METHOD]))
         self.assertFalse(f2.mayOverride(f1))
         self.assertFalse(f1.mayOverride(f2))
 

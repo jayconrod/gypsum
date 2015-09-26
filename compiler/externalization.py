@@ -92,8 +92,10 @@ class Externalizer(object):
             each(self.externalizeType, (f.type for f in defn.fields))
             externDefn.methods = [self.externalizeMethod(m, dep) for m in defn.methods]
         elif isinstance(defn, ir.TypeParameter):
-            externDefn = ir.TypeParameter(defn.name, defn.astDefn, id,
-                                          defn.upperBound, defn.lowerBound, externFlags)
+            externDefn = ir.TypeParameter(defn.name, id, astDefn=defn.astDefn,
+                                          upperBound=defn.upperBound,
+                                          lowerBound=defn.lowerBound,
+                                          flags=externFlags)
             externDefns.append(externDefn)
             self.externalizeType(externDefn.upperBound)
             self.externalizeType(externDefn.lowerBound)

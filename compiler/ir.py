@@ -81,10 +81,10 @@ class Package(object):
         self.classes.append(c)
         return c
 
-    def addTypeParameter(self, name, astDefn, *args):
+    def addTypeParameter(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.TYPE_PARAMETER, len(self.typeParameters))
         self.addName(name)
-        p = TypeParameter(name, astDefn, id, *args)
+        p = TypeParameter(name, id, *args, **kwargs)
         self.typeParameters.append(p)
         return p
 
@@ -438,7 +438,7 @@ class Global(IrTopDefn):
             `EXTERN`, `LET`, `PUBLIC`.
     """
 
-    def __init__(self, name, id, astDefn, type=None, flags=frozenset()):
+    def __init__(self, name, id, astDefn=None, type=None, flags=frozenset()):
         # TODO: pass name and astDefn to super when we no longer subclass data.Data
         self.name = name
         self.id = id
@@ -745,11 +745,45 @@ class Class(ParameterizedDefn):
 
 
 class TypeParameter(IrTopDefn):
-    propertyNames = IrTopDefn.propertyNames + ("upperBound", "lowerBound", "flags")
+    """Represents a range of possible types between an upper and lower bound.
 
-    def __init__(self, name, astDefn, id, upperBound, lowerBound, flags):
-        super(TypeParameter, self).__init__(name, astDefn, id, upperBound, lowerBound, flags)
+    In source, type parameters are always defined as part of a class or function definition.
+    In IR though, they are global and can be used by multiple definitions (especially
+    definitions which were nested in source).
+
+    Type parameters are referenced through `VariableType`, which represents some type within
+    bounds. Type parameters may have variance, which determines how the subtype relation works
+    for parameterized types.
+
+    Attributes:
+        name (Name): the name of the type parameter.
+        id (DefnId): unique identifier of the type parameter.
+        astDefn (AstNode?): the location in source code where the type parameter is defined.
+        upperBound (Type?): type arguments must be a subtype of this. May be `None` before
+            type analysis.
+        lowerBound (Type?): type arguments must be a supertype of this. May be `None` before
+            type analysis.
+        flags (frozenset[flag]): flags indicating how this type parameter may be used. Valid
+            flags are `EXTERN`, `CONTRAVARIANT`, `COVARIANT`, `STATIC`.
+    """
+
+    def __init__(self, name, id, astDefn=None,
+                 upperBound=None, lowerBound=None, flags=frozenset(), clas=None):
+        # TODO: pass name, id, and astDefn to super when we no longer subclass data.Data
+        self.name = name
+        self.id = id
+        self.astDefn = astDefn
+        self.upperBound = upperBound
+        self.lowerBound = lowerBound
+        self.flags = flags
         self.clas = None
+
+    def __repr__(self):
+        return reprFormat(self, "name", "upperBound", "lowerBound", "flags")
+
+    def __str__(self):
+        return "%s type %s%s <: %s >: %s" % \
+            (" ".join(self.flags), self.name, self.id, self.upperBound, self.lowerBound)
 
     def isEquivalent(self, other):
         return self.upperBound == other.upperBound and \
@@ -760,14 +794,6 @@ class TypeParameter(IrTopDefn):
 
     def contains(self, ty):
         return ty.isSubtypeOf(self.upperBound) and self.lowerBound.isSubtypeOf(ty)
-
-    def __repr__(self):
-        return "TypeParameter(%s, %s, %s, %s)" % \
-            (self.name, self.upperBound, self.lowerBound, self.flags)
-
-    def __str__(self):
-        return "%s type %s%s <: %s >: %s" % \
-            (" ".join(self.flags), self.name, self.id, self.upperBound, self.lowerBound)
 
     def variance(self):
         if flags.COVARIANT in self.flags:
@@ -802,14 +828,17 @@ class TypeParameter(IrTopDefn):
             selfBounds.append(bound.typeParameter)
             bound = bound.typeParameter.upperBound
 
-        if other in selfBounds:
+        if any(tp is other for tp in selfBounds):
             return other
         bound = other.upperBound
         while isinstance(bound, ir_types.VariableType):
-            if bound.typeParameter in selfBounds:
+            if any(tp is bound.typeParameter for tp in selfBounds):
                 return bound.typeParameter
             bound = bound.typeParameter.upperBound
         return None
+
+    # TODO: remove definitions below when we no longer subclass data.Data
+    propertyNames = IrTopDefn.propertyNames + ("upperBound", "lowerBound", "flags")
 
 
 # List of variable kinds

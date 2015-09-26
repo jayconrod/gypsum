@@ -386,7 +386,7 @@ class Deserializer(object):
 
     def createEmptyGlobalList(self, count, packageId):
         gids = (ids.DefnId(packageId, ids.DefnId.GLOBAL, i) for i in xrange(count))
-        globals = list(ir.Global(None, id, None, None, None) for id in gids)
+        globals = list(ir.Global(None, id) for id in gids)
         return globals
 
     def createEmptyFunctionList(self, count, packageId):
@@ -403,7 +403,7 @@ class Deserializer(object):
 
     def createEmptyTypeParameterList(self, count, packageId):
         tids = (ids.DefnId(packageId, ids.DefnId.TYPE_PARAMETER, i) for i in xrange(count))
-        params = list(ir.TypeParameter(None, None, id, None, None, None) for id in tids)
+        params = list(ir.TypeParameter(None, id) for id in tids)
         return params
 
     def readString(self):

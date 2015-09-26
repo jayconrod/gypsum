@@ -6,7 +6,7 @@
 
 import unittest
 
-from ir import Global, Function, Class, Package, Name, PackagePrefix, TypeParameter, Variable, Field, LOCAL
+from ir import Class, Global, Field, Function, IrTopDefn, LOCAL, Name, Package, PackagePrefix, TypeParameter, Variable
 from ir_types import getNothingClassType, getRootClassType
 from package_loader import BasePackageLoader
 from utils import Counter, reprFormat
@@ -70,13 +70,7 @@ class TestCaseWithDefinitions(unittest.TestCase):
 
     def makeTypeParameter(self, name, **args):
         name = self.makeName(name)
-        defaultValues = {"astDefn": None,
-                         "upperBound": getRootClassType(),
-                         "lowerBound": getNothingClassType(),
-                         "flags": frozenset()}
-        self.fillDefaultValues(args, defaultValues)
-        args["id"] = self.typeParameterCounter()
-        return TypeParameter(name, **args)
+        return TestDefn(self, TypeParameter, name, **args)
 
     def makeVariable(self, name, **args):
         name = self.makeName(name)
@@ -158,25 +152,34 @@ class TestDefn(object):
     def __init__(self, test, clas, name, **kwargs):
         self.test = test
         self.clas = clas
-        self.properties = kwargs
-        self.properties["name"] = name
+        if issubclass(clas, IrTopDefn) and "id" not in kwargs:
+            id = None
+            self.fake = clas(name, id, **kwargs)
+        else:
+            self.fake = clas(name, **kwargs)
+        self.propNames = frozenset(kwargs.keys()) | frozenset(["name"])
 
     def __repr__(self):
-        return "Test%s(%s)" % (self.clas.__name__, repr(self.properties))
+        pairStrs = ("%s=%s" % (key, getattr(self.fake, key)) for key in self.propNames)
+        return "Test%s(%s)" % (self.clas.__name__, ", ".join(pairStrs))
 
     def __eq__(self, other):
         if self.clas is not other.__class__:
             # This assertion should throw.
             self.test.assertEquals(self.clas, other.__class__)
             return False
-        for key, value in self.properties.iteritems():
+        for key in self.propNames:
+            value = getattr(self.fake, key)
             otherValue = getattr(other, key)
             if value != otherValue:
                 # This assertion should throw.
                 self.test.assertEqual(value, otherValue,
-                                      "for key %s, %s != %s" % (key, value, otherValue))
+                                      "for key '%s': %s != %s" % (key, value, otherValue))
                 return False
         return True
 
     def __ne__(self, other):
-        return any(v != getattr(other, k) for k, v in self.properties.iteritems())
+        return any(getattr(self.fake, k) != getattr(other, k) for k in self.propNames)
+
+    def __getattr__(self, name):
+        return getattr(self.fake, name)
