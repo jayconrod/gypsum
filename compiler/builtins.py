@@ -135,13 +135,11 @@ def _initialize():
         nameComponents.append(functionData.get("name", ir.CONSTRUCTOR_SUFFIX))
         name = ir.Name(nameComponents)
         id = getattr(bytecode, functionData["id"])
-        function = ir.Function(name, None, id,
-                               buildType(functionData["returnType"]),
-                               [],
-                               map(buildType, functionData["parameterTypes"]),
-                               [], [], frozenset([flags.PUBLIC]))
-        if "insts" in functionData:
-            function.insts = functionData["insts"]
+        function = ir.Function(name, id,
+                               returnType=buildType(functionData["returnType"]),
+                               typeParameters=[],
+                               parameterTypes=map(buildType, functionData["parameterTypes"]),
+                               flags=frozenset([flags.PUBLIC]), insts=functionData.get("insts"))
         _builtinFunctionIdMap[id] = function
         return function
 

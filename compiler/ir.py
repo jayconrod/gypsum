@@ -67,10 +67,10 @@ class Package(object):
         self.globals.append(g)
         return g
 
-    def addFunction(self, name, astDefn, *args):
+    def addFunction(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.FUNCTION, len(self.functions))
         self.addName(name)
-        f = Function(name, astDefn, id, *args)
+        f = Function(name, id, *args, **kwargs)
         self.functions.append(f)
         return f
 
@@ -461,9 +461,78 @@ class Global(IrTopDefn):
 
 
 class Function(ParameterizedDefn):
-    propertyNames = IrTopDefn.propertyNames + \
-                    ("returnType", "typeParameters", "parameterTypes",
-                     "variables", "blocks", "flags")
+    """Represents a function or method.
+
+    Attributes:
+        name (Name): the name of the function.
+        id (DefnId): unique identifier for the function.
+        astDefn (AstNode?): the location in source code where the function is defined.
+        returnType (Type?): the return type of the function. May be `None` before type analysis.
+        typeParameters (list[TypeParameter]?): a list of type parameters used in this
+            definition. When this function is called, type arguments need to be passed which
+            match these parameters. Parameters defined in an outer scope should appear here,
+            too, at the beginning of the list. These are "implicit" parameters. This may be
+            `None` before declaration analysis is complete.
+        parameterTypes (list[Type]?): a list of types of parameters. When this function is
+            called, values of these types are passed on the stack. This may be `None` before
+            type analysis.
+        variables (list[Variable]?): a list of local variables and parameters used in the
+            function. The compiler uses indices in the list when emitting ldlocal / stlocal
+            instruction. This may be `None` before semantic analysis and for `EXTERN` or
+            `ABSTRACT` or builtin functions.
+        blocks (list[BasicBlock]?): a list of basic blocks containing instructions for the
+            function. The first block is the only entry point. This may be `None` before
+            semantic analysis and for `EXTERN` or `ABSTRACT` or builtin functions.
+        flags (frozenset[flag]): a flags indicating how this function is used. Valid flags are
+            `ABSTRACT`, `EXTERN`, `PUBLIC`, `PROTECTED`, `PRIVATE`, `STATIC`, `CONSTRUCTOR`,
+            `METHOD`.
+        insts (list[Instruction]?): a list of instructions to insert instead of calling this
+            function. This is set for some (not all) builtin functions. For instance, the `+`
+            method of `i64` has a list containing an `addi64` instruction.
+    """
+
+    def __init__(self, name, id, astDefn=None, returnType=None, typeParameters=None,
+                 parameterTypes=None, variables=None, blocks=None, flags=frozenset(),
+                 insts=None):
+        # TODO: pass name, id, and astDefn to super when we no longer subclass data.Data.
+        self.name = name
+        self.id = id
+        self.astDefn = astDefn
+        self.returnType = returnType
+        self.typeParameters = typeParameters
+        self.parameterTypes = parameterTypes
+        self.variables = variables
+        self.blocks = blocks
+        self.flags = flags
+        self.insts = insts
+
+    def __repr__(self):
+        return reprFormat(self, "name", "returnType", "typeParameters", "parameterTypes",
+                          "variables", "blocks", "flags")
+
+    def __str__(self):
+        buf = StringIO.StringIO()
+        if len(self.flags) > 0:
+            buf.write(" ".join(self.flags) + " ")
+        buf.write("def %s%s" % (self.name, str(self.id)))
+        if self.typeParameters is not None and len(self.typeParameters) > 0:
+            buf.write("[%s]" % ", ".join([str(tp) for tp in self.typeParameters]))
+        if self.parameterTypes is not None and len(self.parameterTypes) > 0:
+            buf.write("(%s)" % ", ".join([str(pt) for pt in self.parameterTypes]))
+        if self.returnType is not None:
+            buf.write(": " + str(self.returnType))
+        if self.variables is not None and len(self.variables) > 0 or \
+           self.blocks is not None and len(self.blocks) > 0:
+            buf.write(" =\n")
+        if self.variables is not None:
+            for v in self.variables:
+                buf.write("  var %s: %s (%s)\n" % (v.name, v.type, v.kind))
+        if self.blocks is not None:
+            for block in self.blocks:
+                buf.write("%d:\n" % block.id)
+                for inst in block.instructions:
+                    buf.write("  %s\n" % inst)
+        return buf.getvalue()
 
     def getReceiverClass(self):
         """Returns the class of the receiver.
@@ -546,35 +615,10 @@ class Function(ParameterizedDefn):
         return typeParametersAreCompatible and \
                parameterTypesAreCompatible
 
-    def __repr__(self):
-        return "Function(%s, %s, %s, %s, %s, %s, %s)" % \
-            (self.name, repr(self.returnType), repr(self.typeParameters),
-             repr(self.parameterTypes), repr(self.variables), repr(self.blocks),
-             repr(self.flags))
-
-    def __str__(self):
-        buf = StringIO.StringIO()
-        if len(self.flags) > 0:
-            buf.write(" ".join(self.flags) + " ")
-        buf.write("def %s%s" % (self.name, str(self.id)))
-        if self.typeParameters is not None and len(self.typeParameters) > 0:
-            buf.write("[%s]" % ", ".join([str(tp) for tp in self.typeParameters]))
-        if self.parameterTypes is not None and len(self.parameterTypes) > 0:
-            buf.write("(%s)" % ", ".join([str(pt) for pt in self.parameterTypes]))
-        if self.returnType is not None:
-            buf.write(": " + str(self.returnType))
-        if self.variables is not None and len(self.variables) > 0 or \
-           self.blocks is not None and len(self.blocks) > 0:
-            buf.write(" =\n")
-        if self.variables is not None:
-            for v in self.variables:
-                buf.write("  var %s: %s (%s)\n" % (v.name, v.type, v.kind))
-        if self.blocks is not None:
-            for block in self.blocks:
-                buf.write("%d:\n" % block.id)
-                for inst in block.instructions:
-                    buf.write("  %s\n" % inst)
-        return buf.getvalue()
+    # TODO: remove below when we no longer subclass data.Data
+    propertyNames = IrTopDefn.propertyNames + \
+                    ("returnType", "typeParameters", "parameterTypes",
+                     "variables", "blocks", "flags")
 
 
 class Class(ParameterizedDefn):

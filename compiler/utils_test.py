@@ -43,16 +43,7 @@ class TestCaseWithDefinitions(unittest.TestCase):
 
     def makeFunction(self, name, **args):
         name = self.makeName(name)
-        defaultValues = {"astDefn": None,
-                         "returnType": None,
-                         "typeParameters": [],
-                         "parameterTypes": None,
-                         "variables": [],
-                         "blocks": None,
-                         "flags": frozenset()}
-        self.fillDefaultValues(args, defaultValues)
-        args["id"] = self.functionCounter()
-        return Function(name, **args)
+        return TestDefn(self, Function, name, **args)
 
     def makeClass(self, name, **args):
         name = self.makeName(name)

@@ -85,9 +85,10 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
                                                  [self.param], [self.varTy], None, None,
                                                  frozenset([flags.PUBLIC]))
         externFunction = self.externalizer.externalizeDefn(function)
-        expected = ir.Function(ir.Name(["f"]), None, function.id, self.classTy,
-                               [self.externParam], [self.varTy], None, None,
-                               frozenset([flags.PUBLIC, flags.EXTERN]))
+        expected = ir.Function(ir.Name(["f"]), function.id, returnType=self.classTy,
+                               typeParameters=[self.externParam],
+                               parameterTypes=[self.varTy],
+                               flags=frozenset([flags.PUBLIC, flags.EXTERN]))
         self.assertEquals(expected, externFunction)
 
     def testExternalizeClass(self):
@@ -114,23 +115,25 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
         expected = ir.Class(ir.Name(["C"]), None, clas.id, [self.externParam],
                             [self.rootClassType], None, None, None, None,
                             frozenset([flags.PUBLIC, flags.EXTERN]))
-        expectedCtor = ir.Function(ir.Name(["C", ir.CONSTRUCTOR_SUFFIX]),
-                                   None, ctor.id, ir_types.UnitType, [self.externParam],
-                                   [clasTy], None, None,
-                                   frozenset([flags.PUBLIC, flags.METHOD, flags.EXTERN]))
+        expectedCtor = ir.Function(ir.Name(["C", ir.CONSTRUCTOR_SUFFIX]), ctor.id,
+                                   returnType=ir_types.UnitType,
+                                   typeParameters=[self.externParam],
+                                   parameterTypes=[clasTy],
+                                   flags=frozenset([flags.PUBLIC, flags.METHOD, flags.EXTERN]))
         expected.constructors = [expectedCtor]
         expectedField = ir.Field(ir.Name(["C", "x"]), type=clasTy,
                                  flags=frozenset([flags.PUBLIC]))
         expected.fields = [expectedField]
-        expectedMethod = ir.Function(ir.Name(["C", "f"]),
-                                     None, method.id, ir_types.UnitType, [self.externParam],
-                                     [clasTy], None, None,
-                                     frozenset([flags.PUBLIC, flags.METHOD, flags.EXTERN]))
-        externBuiltinMethod = ir.Function(ir.Name(["Object", "to-string"]), None,
-                                          builtinMethod.id, ir_types.getStringType(), [],
-                                          [ir_types.getRootClassType()],
-                                          None, None,
-                                          frozenset([flags.EXTERN, flags.PUBLIC, flags.METHOD]))
+        expectedMethod = ir.Function(ir.Name(["C", "f"]), method.id,
+                                     returnType=ir_types.UnitType,
+                                     typeParameters=[self.externParam],
+                                     parameterTypes=[clasTy],
+                                     flags=frozenset([flags.PUBLIC, flags.METHOD, flags.EXTERN]))
+        externBuiltinMethod = ir.Function(ir.Name(["Object", "to-string"]), builtinMethod.id,
+                                          returnType=ir_types.getStringType(),
+                                          typeParameters=[],
+                                          parameterTypes=[ir_types.getRootClassType()],
+                                          flags=frozenset([flags.EXTERN, flags.PUBLIC, flags.METHOD]))
         expected.methods = [expectedMethod, externBuiltinMethod]
         self.assertEquals(expected, externClass)
 

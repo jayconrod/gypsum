@@ -391,8 +391,7 @@ class Deserializer(object):
 
     def createEmptyFunctionList(self, count, packageId):
         fids = (ids.DefnId(packageId, ids.DefnId.FUNCTION, i) for i in xrange(count))
-        functions = list(ir.Function(None, None, id, None, None, None, None, None, None)
-                         for id in fids)
+        functions = list(ir.Function(None, id) for id in fids)
         return functions
 
     def createEmptyClassList(self, count, packageId):

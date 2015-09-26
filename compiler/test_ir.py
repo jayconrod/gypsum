@@ -51,11 +51,13 @@ class TestIr(utils_test.TestCaseWithDefinitions):
         self.assertIsNone(A.findCommonBaseClass(B))
 
     def testFunctionCanCallWithWrongArgCount(self):
-        f = self.makeFunction("f", returnType=UnitType, parameterTypes=[UnitType])
+        f = self.makeFunction("f", returnType=UnitType,
+                              parameterTypes=[UnitType], typeParameters=[])
         self.assertFalse(f.canCallWith([], []))
 
     def testFunctionCanCallWithWrongArgTypes(self):
-        f = self.makeFunction("f", returnType=UnitType, parameterTypes=[I64Type])
+        f = self.makeFunction("f", returnType=UnitType,
+                              parameterTypes=[I64Type], typeParameters=[])
         self.assertFalse(f.canCallWith([], [UnitType]))
 
     def testFunctionCanCallWithWrongTypeArgCount(self):
@@ -75,9 +77,12 @@ class TestIr(utils_test.TestCaseWithDefinitions):
 
     def testMayOverrideParamSub(self):
         rt = ClassType(self.base)
-        f1 = self.makeFunction("f", returnType=UnitType, parameterTypes=[rt, ClassType(self.A)],
+        f1 = self.makeFunction("f", returnType=UnitType,
+                               typeParameters=[],
+                               parameterTypes=[rt, ClassType(self.A)],
                                flags=frozenset([METHOD]))
         f2 = self.makeFunction("f", returnType=UnitType,
+                               typeParameters=[],
                                parameterTypes=[rt, ClassType(self.base)],
                                flags=frozenset([METHOD]))
         self.assertTrue(f2.mayOverride(f1))
