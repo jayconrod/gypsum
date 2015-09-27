@@ -513,8 +513,10 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testLoadForeignPtrField(self):
         fooPackage = Package(name=Name(["foo"]))
-        clas = fooPackage.addClass(Name(["Bar"]), None, [], [getRootClassType()], None,
-                                   [], [], [], frozenset([PUBLIC]))
+        clas = fooPackage.addClass(Name(["Bar"]), typeParameters=[],
+                                   supertypes=[getRootClassType()],
+                                   constructors=[], fields=[],
+                                   methods=[], flags=frozenset([PUBLIC]))
         field = fooPackage.newField(Name(["Bar", "x"]),
                                     type=getRootClassType(), flags=frozenset([LET, PUBLIC]))
         field.index = 0
@@ -992,8 +994,9 @@ class TestCompiler(TestCaseWithDefinitions):
         foo = Package(name=Name(["foo"]))
         T = foo.addTypeParameter(Name(["Foo", "T"]), upperBound=getRootClassType(),
                                  lowerBound=getNothingClassType(), flags=frozenset([PUBLIC]))
-        Foo = foo.addClass(Name(["Foo"]), None, [T], [getRootClassType()], None,
-                           [], [], [], frozenset([PUBLIC]))
+        Foo = foo.addClass(Name(["Foo"]), typeParameters=[T], supertypes=[getRootClassType()],
+                           constructors=[], fields=[],
+                           methods=[], flags=frozenset([PUBLIC]))
         loader = FakePackageLoader([foo])
 
         source = "def f(x: Object) =\n" + \
@@ -3058,8 +3061,10 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testFunctionCallWithForeignTypeArg(self):
         fooPackage = Package(name=Name(["foo"]))
-        barClass = fooPackage.addClass(Name(["Bar"]), None, [], [getRootClassType()],
-                                       None, [], [], [], frozenset([PUBLIC]))
+        barClass = fooPackage.addClass(Name(["Bar"]), typeParameters=[],
+                                       supertypes=[getRootClassType()],
+                                       constructors=[], fields=[],
+                                       methods=[], flags=frozenset([PUBLIC]))
         barType = ClassType(barClass)
         loader = FakePackageLoader([fooPackage])
 

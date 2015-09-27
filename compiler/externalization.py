@@ -80,9 +80,10 @@ class Externalizer(object):
                                          for param in defn.typeParameters]
             each(self.externalizeType, defn.parameterTypes)
         elif isinstance(defn, ir.Class):
-            externDefn = ir.Class(defn.name, defn.astDefn, id,
-                                  None, defn.supertypes, None,
-                                  None, defn.fields, None, externFlags)
+            externDefn = ir.Class(defn.name, id, astDefn=defn.astDefn,
+                                  supertypes=defn.supertypes,
+                                  fields=defn.fields,
+                                  flags=externFlags)
             externDefns.append(externDefn)
             externDefn.typeParameters = [self.externalizeDefn(param)
                                          for param in defn.typeParameters]

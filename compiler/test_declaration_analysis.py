@@ -520,8 +520,8 @@ class TestPackageScope(unittest.TestCase):
 
     def testPackageClassHasScope(self):
         package = Package(name=Name(["foo"]))
-        clas = package.addClass(Name(["C"]), None, [], [getRootClassType()],
-                                None, None, None, None, frozenset([PUBLIC]))
+        clas = package.addClass(Name(["C"]), None, typeParameters=[],
+                                supertypes=[getRootClassType()], flags=frozenset([PUBLIC]))
         classType = ClassType(clas)
         publicCtor = package.addFunction(Name(["C", CONSTRUCTOR_SUFFIX]), None, UnitType, [],
                                          [classType], None, None,

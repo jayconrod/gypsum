@@ -637,8 +637,9 @@ class Scope(ast.AstNodeVisitor):
         flags = getFlagsFromAstDefn(astDefn, None)
         checkFlags(flags, frozenset([ABSTRACT, PUBLIC, PROTECTED]), astDefn.location)
         name = self.makeName(astDefn.name)
-        irDefn = self.info.package.addClass(name, astDefn, implicitTypeParams,
-                                            None, None, [], [], [], flags)
+        irDefn = self.info.package.addClass(name, astDefn=astDefn,
+                                            typeParameters=implicitTypeParams,
+                                            constructors=[], fields=[], methods=[], flags=flags)
 
         irInitializerName = name.withSuffix(ir.CLASS_INIT_SUFFIX)
         irInitializer = self.info.package.addFunction(irInitializerName, astDefn,
@@ -1197,9 +1198,10 @@ class FunctionScope(Scope):
         implicitTypeParams = self.getImplicitTypeParameters()
         contextClassName = irDefn.name.withSuffix(ir.CONTEXT_SUFFIX)
         irContextClass = self.info.package.addClass(contextClassName,
-                                                    None, list(implicitTypeParams),
-                                                    [getRootClassType()], None,
-                                                    [], [], [], frozenset())
+                                                    typeParameters=list(implicitTypeParams),
+                                                    supertypes=[getRootClassType()],
+                                                    constructors=[], fields=[],
+                                                    methods=[], flags=frozenset())
         irContextType = ClassType(irContextClass, ())
         ctorName = contextClassName.withSuffix(ir.CONSTRUCTOR_SUFFIX)
         receiverName = ctorName.withSuffix(ir.RECEIVER_SUFFIX)
@@ -1256,10 +1258,11 @@ class FunctionScope(Scope):
         # Create a closure class to hold this method and its contexts.
         implicitTypeParams = self.getImplicitTypeParameters()
         closureName = irDefn.name.withSuffix(ir.CLOSURE_SUFFIX)
-        irClosureClass = self.info.package.addClass(closureName, None,
-                                                    list(implicitTypeParams),
-                                                    [getRootClassType()], None,
-                                                    [], [], [], frozenset())
+        irClosureClass = self.info.package.addClass(closureName,
+                                                    typeParameters=list(implicitTypeParams),
+                                                    supertypes=[getRootClassType()],
+                                                    constructors=[], fields=[],
+                                                    methods=[], flags=frozenset())
         closureInfo.irClosureClass = irClosureClass
         irClosureType = ClassType(irClosureClass)
         ctorName = closureName.withSuffix(ir.CONSTRUCTOR_SUFFIX)

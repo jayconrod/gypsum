@@ -396,7 +396,7 @@ class Deserializer(object):
 
     def createEmptyClassList(self, count, packageId):
         cids = (ids.DefnId(packageId, ids.DefnId.CLASS, i) for i in xrange(count))
-        classes = list(ir.Class(None, None, id, None, None, None, None, None, None, None)
+        classes = list(ir.Class(None, id)
                        for id in cids)
         return classes
 

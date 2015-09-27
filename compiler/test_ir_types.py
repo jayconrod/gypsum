@@ -22,9 +22,9 @@ class TestIrTypes(TestCaseWithDefinitions):
 
     def setUp(self):
         super(TestIrTypes, self).setUp()
-        self.A = self.makeClass("A", supertypes=[getRootClassType()])
-        self.B = self.makeClass("B", supertypes=[ClassType(self.A)])
-        self.C = self.makeClass("C", supertypes=[ClassType(self.B)])
+        self.A = self.makeClass("A", typeParameters=[], supertypes=[getRootClassType()])
+        self.B = self.makeClass("B", typeParameters=[], supertypes=[ClassType(self.A)])
+        self.C = self.makeClass("C", typeParameters=[], supertypes=[ClassType(self.B)])
         self.X = self.makeTypeParameter("X")
         self.Y = self.makeTypeParameter("Y")
         self.P = self.makeClass("P", typeParameters=[self.X, self.Y],
@@ -94,8 +94,8 @@ class TestIrTypes(TestCaseWithDefinitions):
         T = self.makeTypeParameter("T")
         S = self.makeTypeParameter("S")
         A = self.makeClass("A", typeParameters=[T], supertypes=[getRootClassType()])
-        X = self.makeClass("X", supertypes=[getRootClassType()])
-        Y = self.makeClass("Y", supertypes=[getRootClassType()])
+        X = self.makeClass("X", typeParameters=[], supertypes=[getRootClassType()])
+        Y = self.makeClass("Y", typeParameters=[], supertypes=[getRootClassType()])
         ATty = ClassType(A, (VariableType(T),))
         ASty = ClassType(A, (VariableType(S),))
         AXty = ClassType(A, (ClassType(X),))
@@ -119,19 +119,19 @@ class TestIrTypes(TestCaseWithDefinitions):
 
     def testSubtypeClassWithParametersSuperclass(self):
         T = self.makeTypeParameter("T")
-        A = self.makeClass("A", supertypes=[getRootClassType()])
+        A = self.makeClass("A", typeParameters=[], supertypes=[getRootClassType()])
         Aty = ClassType(A)
         B = self.makeClass("B", typeParameters=[T], supertypes=[Aty])
-        X = self.makeClass("X", supertypes=[getRootClassType()])
+        X = self.makeClass("X", typeParameters=[], supertypes=[getRootClassType()])
         BXty = ClassType(B, (ClassType(X),))
         self.assertTrue(BXty.isSubtypeOf(Aty))
 
     def testSubtypeWithCovariantParameter(self):
         # Source[A] <: Source[B] with class Source[+T] and A <: B
         T = self.makeTypeParameter("T", flags=frozenset([COVARIANT]))
-        B = self.makeClass("B", supertypes=[getRootClassType()])
+        B = self.makeClass("B", typeParameters=[], supertypes=[getRootClassType()])
         Bty = ClassType(B)
-        A = self.makeClass("A", supertypes=[Bty])
+        A = self.makeClass("A", typeParameters=[], supertypes=[Bty])
         Aty = ClassType(A)
         Source = self.makeClass("Source", typeParameters=[T], supertypes=[getRootClassType()])
         SourceAty = ClassType(Source, (Aty,))
@@ -142,9 +142,9 @@ class TestIrTypes(TestCaseWithDefinitions):
     def testSubtypeWithContravariantParameter(self):
         # Sink[A] <: Sink[B] with class Sink[-T] and B <: A
         T = self.makeTypeParameter("T", flags=frozenset([CONTRAVARIANT]))
-        A = self.makeClass("A", supertypes=[getRootClassType()])
+        A = self.makeClass("A", typeParameters=[], supertypes=[getRootClassType()])
         Aty = ClassType(A)
-        B = self.makeClass("B", supertypes=[Aty])
+        B = self.makeClass("B", typeParameters=[], supertypes=[Aty])
         Bty = ClassType(B)
         Sink = self.makeClass("Sink", typeParameters=[T], supertypes=[getRootClassType()])
         SinkAty = ClassType(Sink, (Aty,))

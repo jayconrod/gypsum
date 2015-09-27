@@ -6,6 +6,7 @@
 
 import unittest
 
+from ids import DefnId, TARGET_PACKAGE_ID
 from ir import Class, Global, Field, Function, IrTopDefn, LOCAL, Name, Package, PackagePrefix, TypeParameter, Variable
 from ir_types import getNothingClassType, getRootClassType
 from package_loader import BasePackageLoader
@@ -39,37 +40,31 @@ class TestCaseWithDefinitions(unittest.TestCase):
 
     def makeGlobal(self, name, **args):
         name = self.makeName(name)
-        return TestDefn(self, Global, name, **args)
+        id = DefnId(TARGET_PACKAGE_ID, DefnId.GLOBAL, self.globalCounter())
+        return TestGlobal(self, name, id, **args)
 
     def makeFunction(self, name, **args):
         name = self.makeName(name)
-        return TestDefn(self, Function, name, **args)
+        id = DefnId(TARGET_PACKAGE_ID, DefnId.FUNCTION, self.functionCounter())
+        return TestFunction(self, name, id, **args)
 
     def makeClass(self, name, **args):
         name = self.makeName(name)
-        defaultValues = {"astDefn": None,
-                         "typeParameters": [],
-                         "supertypes": None,
-                         "initializer": None,
-                         "constructors": [],
-                         "fields": [],
-                         "methods": [],
-                         "flags": frozenset()}
-        self.fillDefaultValues(args, defaultValues)
-        args["id"] = self.classCounter()
-        return Class(name, **args)
+        id = DefnId(TARGET_PACKAGE_ID, DefnId.CLASS, self.classCounter())
+        return TestClass(self, name, id, **args)
 
     def makeTypeParameter(self, name, **args):
         name = self.makeName(name)
-        return TestDefn(self, TypeParameter, name, **args)
+        id = DefnId(TARGET_PACKAGE_ID, DefnId.TYPE_PARAMETER, self.typeParameterCounter())
+        return TestTypeParameter(self, name, id, **args)
 
     def makeVariable(self, name, **args):
         name = self.makeName(name)
-        return TestDefn(self, Variable, name, **args)
+        return TestVariable(self, name, **args)
 
     def makeField(self, name, **args):
         name = self.makeName(name)
-        return TestDefn(self, Field, name, **args)
+        return TestField(self, name, **args)
 
     def fillDefaultValues(self, args, values):
         for k, v in values.iteritems():
@@ -125,7 +120,7 @@ class FakePackageLoader(BasePackageLoader):
 
 
 class TestDefn(object):
-    """A stand-in for definitions in comparisons.
+    """A mix-in for fake definitions in comparisons.
 
     Very frequently in unit tests, we need to compare an expected definition to an actual
     definition. Instances of this class can take the place of expected definitions. Objects
@@ -135,32 +130,35 @@ class TestDefn(object):
     Attributes:
         test (unittest.TestCase): the test that uses this definition. Used to call
             `assertEqual` and `assertNotEqual`.
-        clas (class): the expected class.
+        propNames (frozenset[str]): a set of property names specified when creating this
+            definition. Only these properties are checked for equality.
+
         name (Name): the expected name
         properties (dict[str, *]): the properties to check during comparisons.
     """
 
-    def __init__(self, test, clas, name, **kwargs):
-        self.test = test
-        self.clas = clas
-        if issubclass(clas, IrTopDefn) and "id" not in kwargs:
-            id = None
-            self.fake = clas(name, id, **kwargs)
+    def __init__(self, test, name, _id=None, **kwargs):
+        """The actual init function intended to be called when a test definition is constructed.
+
+        This will call the real init function, and will also set some internal properties."""
+        if isinstance(self, IrTopDefn) and "id" not in kwargs:
+            super(TestDefn, self).__init__(name, _id, **kwargs)
         else:
-            self.fake = clas(name, **kwargs)
-        self.propNames = frozenset(kwargs.keys()) | frozenset(["name"])
+            super(TestDefn, self).__init__(name, **kwargs)
+        self.test = test
+        self.propNames = frozenset(kwargs.keys())
 
     def __repr__(self):
-        pairStrs = ("%s=%s" % (key, getattr(self.fake, key)) for key in self.propNames)
-        return "Test%s(%s)" % (self.clas.__name__, ", ".join(pairStrs))
+        pairStrs = ("%s=%s" % (key, getattr(self, key)) for key in self.propNames)
+        return "%s(%s)" % (self.__class__.__name__, ", ".join(pairStrs))
 
     def __eq__(self, other):
-        if self.clas is not other.__class__:
+        if self.__class__.__bases__[1] is not other.__class__:
             # This assertion should throw.
-            self.test.assertEquals(self.clas, other.__class__)
+            self.test.assertEquals(self.__class__.__bases__[1], other.__class__)
             return False
         for key in self.propNames:
-            value = getattr(self.fake, key)
+            value = getattr(self, key)
             otherValue = getattr(other, key)
             if value != otherValue:
                 # This assertion should throw.
@@ -170,7 +168,26 @@ class TestDefn(object):
         return True
 
     def __ne__(self, other):
-        return any(getattr(self.fake, k) != getattr(other, k) for k in self.propNames)
+        return any(getattr(self, k) != getattr(other, k) for k in self.propNames)
 
-    def __getattr__(self, name):
-        return getattr(self.fake, name)
+
+# The classes below are test definitions. They inherit from `TestDefn` first, so methods from
+# that class will override methods in the real definition class.
+
+class TestGlobal(TestDefn, Global):
+    pass
+
+class TestFunction(TestDefn, Function):
+    pass
+
+class TestClass(TestDefn, Class):
+    pass
+
+class TestTypeParameter(TestDefn, TypeParameter):
+    pass
+
+class TestVariable(TestDefn, Variable):
+    pass
+
+class TestField(TestDefn, Field):
+    pass

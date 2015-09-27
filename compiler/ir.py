@@ -74,10 +74,10 @@ class Package(object):
         self.functions.append(f)
         return f
 
-    def addClass(self, name, astDefn, *args):
+    def addClass(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.CLASS, len(self.classes))
         self.addName(name)
-        c = Class(name, astDefn, id, *args)
+        c = Class(name, id, *args, **kwargs)
         self.classes.append(c)
         return c
 
@@ -622,8 +622,70 @@ class Function(ParameterizedDefn):
 
 
 class Class(ParameterizedDefn):
-    propertyNames = IrTopDefn.propertyNames + ("typeParameters", "supertypes",
-                     "initializer", "constructors", "fields", "methods", "flags")
+    """Represents a class definition.
+
+    Attributes:
+        name (Name): the name of the class.
+        id (DefnId): unique identifier for the class.
+        astDefn (AstNode?): the location in source code where the class is defined.
+        typeParameters (list[TypeParameter]?): a list of type parameters used in this
+            definition. Values with a `ClassType` for this class must have type arguments that
+            correspond to these parameters. Note that this list should include not only the
+            parameters from the class definition, but also any parameters defined in outer
+            scopes (which are "implicit" and should come first). This may be `None` before
+            declaration analysis is complete.
+        supertypes (list[ClassType]?): a list of types from which this class is derived,
+            including type arguments. The subtype relation uses this. This may be `None`
+            before type declaration analysis is complete.
+        initializer (Function?): a function which initializes new instances of this class.
+            Constructors call this after calling a superconstructor if they don't call another
+            constructor. May be `None` before declaration analysis is complete or if there
+            is no initializer.
+        constructors (list[Function]?): a list of functions which initialize new instances of
+            this class. These functions are called directly after creating a new instance. This
+            may be `None` before declaration analysis is complete.
+        fields (list[Field]?): a list of fields found in instances of this class. This may be
+            `None` before declaration analysis is complete. Inherited fields are added to
+            this list during class flattening.
+        methods (list[Function]?): a list of functions that operate on instances of this class.
+            This may be `None` before declaration analysis is complete. Inherited methods may
+            be added to this list during class flattening
+        flags (frozenset[flag]): flags indicating how this class is used. Valid flags are
+            `ABSTRACT`, `EXTERN`, `PUBLIC`, `PROTECTED`, `PRIVATE`.
+    """
+
+    def __init__(self, name, id, astDefn=None, typeParameters=None, supertypes=None,
+                 initializer=None, constructors=None, fields=None, methods=None,
+                 flags=frozenset()):
+        # TODO: pass name, id, and astDefn to super when we no longer subclass data.Data
+        self.name = name
+        self.id = id
+        self.astDefn = astDefn
+        self.typeParameters = typeParameters
+        self.supertypes = supertypes
+        self.initializer = initializer
+        self.constructors = constructors
+        self.fields = fields
+        self.methods = methods
+        self.flags = flags
+
+    def __repr__(self):
+        return reprFormat(self, "name", "typeParameters", "supertypes", "initializer",
+                          "constructors", "fields", "methods", "flags")
+
+    def __str__(self):
+        buf = StringIO.StringIO()
+        buf.write("%s class %s%s" % (" ".join(self.flags), self.name, self.id))
+        buf.write("\n")
+        for field in self.fields:
+            buf.write("  %s\n" % str(field))
+        if self.initializer is not None:
+            buf.write("  initializer %s\n" % self.initializer.id)
+        for ctor in self.constructors:
+            buf.write("  constructor %s\n" % ctor.id)
+        for method in self.methods:
+            buf.write("  method %s\n" % method.id)
+        return buf.getvalue()
 
     def superclass(self):
         assert self is not builtins.getNothingClass()
@@ -767,25 +829,9 @@ class Class(ParameterizedDefn):
     def isTypeDefn(self):
         return True
 
-    def __repr__(self):
-        return "Class(%s, %s, %s, %s, %s, %s, %s, %s)" % \
-            (repr(self.name), repr(self.typeParameters), repr(self.supertypes),
-             repr(self.initializer), repr(self.constructors),
-             repr(self.fields), repr(self.methods), repr(self.flags))
-
-    def __str__(self):
-        buf = StringIO.StringIO()
-        buf.write("%s class %s%s" % (" ".join(self.flags), self.name, self.id))
-        buf.write("\n")
-        for field in self.fields:
-            buf.write("  %s\n" % str(field))
-        if self.initializer is not None:
-            buf.write("  initializer %s\n" % self.initializer.id)
-        for ctor in self.constructors:
-            buf.write("  constructor %s\n" % ctor.id)
-        for method in self.methods:
-            buf.write("  method %s\n" % method.id)
-        return buf.getvalue()
+    # TODO: remove below when we no longer subclass data.Data
+    propertyNames = IrTopDefn.propertyNames + ("typeParameters", "supertypes",
+                     "initializer", "constructors", "fields", "methods", "flags")
 
 
 class TypeParameter(IrTopDefn):

@@ -161,8 +161,10 @@ class TestSerialize(unittest.TestCase):
         package = ir.Package(id=ids.TARGET_PACKAGE_ID)
         depPackage = ir.Package()
         loader = utils_test.FakePackageLoader([depPackage])
-        depClass = depPackage.addClass(ir.Name(["C"]), None, [], [ir_types.getRootClassType()],
-                                       None, [], [], [], frozenset([flags.PUBLIC]))
+        depClass = depPackage.addClass(ir.Name(["C"]), typeParameters=[],
+                                       supertypes=[ir_types.getRootClassType()],
+                                       constructors=[], fields=[],
+                                       methods=[], flags=frozenset([flags.PUBLIC]))
         externalizer = externalization.Externalizer(package, loader)
         externClass = externalizer.externalizeDefn(depClass)
         self.assertIn(flags.EXTERN, externClass.flags)
@@ -245,8 +247,10 @@ class TestSerialize(unittest.TestCase):
         supertype = ir_types.getRootClassType()
         field = package.newField(ir.Name(["Foo", "x"]),
                                  type=ir_types.I64Type, flags=frozenset([flags.PRIVATE]))
-        clas = package.addClass(ir.Name(["Foo"]), None, [typeParam], [supertype], None, None,
-                                [field], None, frozenset([flags.PUBLIC]))
+        clas = package.addClass(ir.Name(["Foo"]), typeParameters=[typeParam],
+                                supertypes=[supertype],
+                                constructors=[], fields=[field],
+                                methods=[], flags=frozenset([flags.PUBLIC]))
         ty = ir_types.ClassType(clas)
         constructor = package.addFunction(ir.Name(["Foo", ir.CONSTRUCTOR_SUFFIX]),
                                           None, ir_types.UnitType, [],
@@ -269,6 +273,6 @@ class TestSerialize(unittest.TestCase):
         self.ser.package = package
         self.ser.writeClass(clas)
         self.des.package = package
-        outClass = ir.Class(None, None, clas.id, None, None, None, None, None, None, None)
+        outClass = ir.Class(None, clas.id)
         self.des.readClass(outClass)
         self.assertEquals(clas, outClass)

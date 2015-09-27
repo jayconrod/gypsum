@@ -160,8 +160,7 @@ def _initialize():
 
     def declareClass(classData):
         name = ir.Name([classData["name"]])
-        clas = ir.Class(name, None, None, [],
-                        None, None, None, None, None, frozenset([flags.PUBLIC]))
+        clas = ir.Class(name, None, typeParameters=[], flags=frozenset([flags.PUBLIC]))
         _builtinClasses.append(clas)
         _builtinClassNameMap[classData["name"]] = clas
 

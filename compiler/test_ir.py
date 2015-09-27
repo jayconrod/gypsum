@@ -20,7 +20,7 @@ class TestIr(utils_test.TestCaseWithDefinitions):
 
     def setUp(self):
         super(TestIr, self).setUp()
-        self.base = self.makeClass("Base", supertypes=[getRootClassType()])
+        self.base = self.makeClass("Base", typeParameters=[], supertypes=[getRootClassType()])
         baseTy = ClassType(self.base)
         self.A = self.makeClass("A", supertypes=[baseTy])
         self.B = self.makeClass("B", supertypes=[baseTy])
