@@ -69,20 +69,18 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def makeSimpleFunction(self, name, retTy, blocks,
                            typeParameters=None, parameterTypes=None,
-                           variables=None, flags=frozenset()):
-        dummyPackage = Package()
-        if variables is None:
-            variables = []
-        if typeParameters is None:
-            typeParameters = []
-        if parameterTypes is None:
-            parameterTypes = [v.type for v in variables if v.kind is PARAMETER]
-        if isinstance(name, str):
-            name = Name.fromString(name)
-        blockList = [BasicBlock(i, insts) for i, insts in enumerate(blocks)]
-        function = dummyPackage.addFunction(name, None, retTy, typeParameters, parameterTypes,
-                                            variables, blockList, flags)
-        return function
+                           variables=None, flags=None):
+        blocks = [BasicBlock(i, insts) for i, insts in enumerate(blocks)]
+        params = {"returnType": retTy, "blocks": blocks}
+        if typeParameters is not None:
+            params["typeParameters"] = typeParameters
+        if parameterTypes is not None:
+            params["parameterTypes"] = parameterTypes
+        if variables is not None:
+            params["variables"] = variables
+        if flags is not None:
+            params["flags"] = flags
+        return self.makeFunction(name, **params)
 
     def checkFunction(self, input, expected):
         package = self.makePackage(input)

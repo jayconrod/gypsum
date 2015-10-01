@@ -66,11 +66,6 @@ class TestCaseWithDefinitions(unittest.TestCase):
         name = self.makeName(name)
         return TestField(self, name, **args)
 
-    def fillDefaultValues(self, args, values):
-        for k, v in values.iteritems():
-            if k not in args:
-                args[k] = v
-
     def makeName(self, name):
         if isinstance(name, str):
             name = Name.fromString(name)

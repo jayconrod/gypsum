@@ -380,16 +380,18 @@ class PackageDependency(object):
             (repr(self.name), repr(self.minVersion), repr(self.maxVersion))
 
 
-class IrDefinition(data.Data):
-    propertyNames = ("name", "astDefn")
-    skipCompareNames = ("astDefn",)
-
-    def __init__(self, *args, **extra):
-        name = args[0] if len(args) > 0 else extra["name"]
+class IrDefinition(object):
+    def __init__(self, name, astDefn):
         assert name is None or isinstance(name, Name)
-        astDefn = args[1] if len(args) > 1 else extra["astDefn"]
         assert astDefn is None or isinstance(astDefn, ast.AstNode)
-        super(IrDefinition, self).__init__(*args, **extra)
+        self.name = name
+        self.astDefn = astDefn
+
+    def __eq__(self, other):
+        raise NotImplementedError()
+
+    def __ne__(self, other):
+        return not (self == other)
 
     def isTypeDefn(self):
         return False
@@ -399,8 +401,9 @@ class IrDefinition(data.Data):
 
 
 class IrTopDefn(IrDefinition):
-    propertyNames = IrDefinition.propertyNames + ("id",)
-    skipCompareNames = IrDefinition.skipCompareNames + ("id",)
+    def __init__(self, name, id, astDefn):
+        super(IrTopDefn, self).__init__(name, astDefn)
+        self.id = id
 
     def isBuiltin(self):
         return self.id.isBuiltin()
@@ -439,10 +442,7 @@ class Global(IrTopDefn):
     """
 
     def __init__(self, name, id, astDefn=None, type=None, flags=frozenset()):
-        # TODO: pass name and astDefn to super when we no longer subclass data.Data
-        self.name = name
-        self.id = id
-        self.astDefn = astDefn
+        super(Global, self).__init__(name, id, astDefn)
         self.type = type
         self.flags = flags
 
@@ -456,8 +456,10 @@ class Global(IrTopDefn):
         buf.write("var %s%s: %s" % (self.name, self.id, str(self.type)))
         return buf.getvalue()
 
-    # TODO: remove below when we no longer subclass data.Data
-    propertyNames = IrTopDefn.propertyNames + ("type", "flags")
+    def __eq__(self, other):
+        return self.name == other.name and \
+               self.type == other.type and \
+               self.flags == other.flags
 
 
 class Function(ParameterizedDefn):
@@ -494,10 +496,7 @@ class Function(ParameterizedDefn):
     def __init__(self, name, id, astDefn=None, returnType=None, typeParameters=None,
                  parameterTypes=None, variables=None, blocks=None, flags=frozenset(),
                  insts=None):
-        # TODO: pass name, id, and astDefn to super when we no longer subclass data.Data.
-        self.name = name
-        self.id = id
-        self.astDefn = astDefn
+        super(Function, self).__init__(name, id, astDefn)
         self.returnType = returnType
         self.typeParameters = typeParameters
         self.parameterTypes = parameterTypes
@@ -533,6 +532,15 @@ class Function(ParameterizedDefn):
                 for inst in block.instructions:
                     buf.write("  %s\n" % inst)
         return buf.getvalue()
+
+    def __eq__(self, other):
+        return self.name == other.name and \
+               self.returnType == other.returnType and \
+               self.typeParameters == other.typeParameters and \
+               self.parameterTypes == other.parameterTypes and \
+               self.variables == other.variables and \
+               self.blocks == other.blocks and \
+               self.flags == other.flags
 
     def getReceiverClass(self):
         """Returns the class of the receiver.
@@ -615,11 +623,6 @@ class Function(ParameterizedDefn):
         return typeParametersAreCompatible and \
                parameterTypesAreCompatible
 
-    # TODO: remove below when we no longer subclass data.Data
-    propertyNames = IrTopDefn.propertyNames + \
-                    ("returnType", "typeParameters", "parameterTypes",
-                     "variables", "blocks", "flags")
-
 
 class Class(ParameterizedDefn):
     """Represents a class definition.
@@ -657,10 +660,7 @@ class Class(ParameterizedDefn):
     def __init__(self, name, id, astDefn=None, typeParameters=None, supertypes=None,
                  initializer=None, constructors=None, fields=None, methods=None,
                  flags=frozenset()):
-        # TODO: pass name, id, and astDefn to super when we no longer subclass data.Data
-        self.name = name
-        self.id = id
-        self.astDefn = astDefn
+        super(Class, self).__init__(name, id, astDefn)
         self.typeParameters = typeParameters
         self.supertypes = supertypes
         self.initializer = initializer
@@ -686,6 +686,16 @@ class Class(ParameterizedDefn):
         for method in self.methods:
             buf.write("  method %s\n" % method.id)
         return buf.getvalue()
+
+    def __eq__(self, other):
+        return self.name == other.name and \
+               self.typeParameters == other.typeParameters and \
+               self.supertypes == other.supertypes and \
+               self.initializer == other.initializer and \
+               self.constructors == other.constructors and \
+               self.fields == other.fields and \
+               self.methods == other.methods and \
+               self.flags == other.flags
 
     def superclass(self):
         assert self is not builtins.getNothingClass()
@@ -829,10 +839,6 @@ class Class(ParameterizedDefn):
     def isTypeDefn(self):
         return True
 
-    # TODO: remove below when we no longer subclass data.Data
-    propertyNames = IrTopDefn.propertyNames + ("typeParameters", "supertypes",
-                     "initializer", "constructors", "fields", "methods", "flags")
-
 
 class TypeParameter(IrTopDefn):
     """Represents a range of possible types between an upper and lower bound.
@@ -859,10 +865,7 @@ class TypeParameter(IrTopDefn):
 
     def __init__(self, name, id, astDefn=None,
                  upperBound=None, lowerBound=None, flags=frozenset(), clas=None):
-        # TODO: pass name, id, and astDefn to super when we no longer subclass data.Data
-        self.name = name
-        self.id = id
-        self.astDefn = astDefn
+        super(TypeParameter, self).__init__(name, id, astDefn)
         self.upperBound = upperBound
         self.lowerBound = lowerBound
         self.flags = flags
@@ -874,6 +877,12 @@ class TypeParameter(IrTopDefn):
     def __str__(self):
         return "%s type %s%s <: %s >: %s" % \
             (" ".join(self.flags), self.name, self.id, self.upperBound, self.lowerBound)
+
+    def __eq__(self, other):
+        return self.name == other.name and \
+               self.upperBound == other.upperBound and \
+               self.lowerBound == other.lowerBound and \
+               self.flags == other.flags
 
     def isEquivalent(self, other):
         return self.upperBound == other.upperBound and \
@@ -927,9 +936,6 @@ class TypeParameter(IrTopDefn):
             bound = bound.typeParameter.upperBound
         return None
 
-    # TODO: remove definitions below when we no longer subclass data.Data
-    propertyNames = IrTopDefn.propertyNames + ("upperBound", "lowerBound", "flags")
-
 
 # List of variable kinds
 LOCAL = "local"
@@ -937,9 +943,7 @@ PARAMETER = "parameter"
 
 class Variable(IrDefinition):
     def __init__(self, name, astDefn=None, type=None, kind=LOCAL, flags=frozenset()):
-        # TODO: pass name and astDefn to super when we no longer subclass data.Data
-        self.name = name
-        self.astDefn = astDefn
+        super(Variable, self).__init__(name, astDefn)
         self.type = type
         self.kind = kind
         self.flags = flags
@@ -951,8 +955,11 @@ class Variable(IrDefinition):
         flagsStr = " ".join(self.flags)
         return "%s %s %s: %s" % (flagsStr, self.kind, self.name, self.type)
 
-    # TODO: remove definitions below when we no longer subclass data.Data
-    propertyNames = IrDefinition.propertyNames + ("type", "kind", "flags")
+    def __eq__(self, other):
+        return self.name == other.name and \
+               self.type == other.type and \
+               self.kind is other.kind and \
+               self.flags == other.flags
 
 
 class Field(IrDefinition):
@@ -970,9 +977,7 @@ class Field(IrDefinition):
     """
 
     def __init__(self, name, astDefn=None, type=None, flags=frozenset(), index=None):
-        # TODO: pass name and astDefn to super when we no longer subclass data.Data
-        self.name = name
-        self.astDefn = astDefn
+        super(Field, self).__init__(name, astDefn)
         self.type = type
         self.flags = flags
         self.index = index
@@ -983,8 +988,10 @@ class Field(IrDefinition):
     def __str__(self):
         return "%s field %s: %s" % (" ".join(self.flags), self.name, self.type)
 
-    # TODO: remove definitions below when we no longer subclass data.Data
-    propertyNames = IrDefinition.propertyNames + ("type", "flags")
+    def __eq__(self, other):
+        return self.name == other.name and \
+               self.type == other.type and \
+               self.flags == other.flags
 
 
 # Miscellaneous functions for dealing with arguments and parameters.
