@@ -416,8 +416,11 @@ class NameInfo(object):
                     # Check that nothing else is already overriding this function.
                     if bIrDefn.id in self.overrides:
                         raise TypeException(aIrDefn.getLocation(),
-                                            "multiple definitions may override: %s" %
+                                            "%s: multiple definitions may override" %
                                             self.name)
+                    if bIrDefn.isFinal():
+                        raise TypeException(aIrDefn.getLocation(),
+                                            "%s: can't override final method" % self.name)
 
                     aIrDefn.override = bIrDefn
                     self.overrides[bIrDefn.id] = aIrDefn.id
@@ -1385,7 +1388,7 @@ class ClassScope(Scope):
                                                            None, implicitTypeParams,
                                                            None, [], None, flags)
                 else:
-                    checkFlags(flags, frozenset([ABSTRACT, PUBLIC, PROTECTED, PRIVATE]),
+                    checkFlags(flags, frozenset([ABSTRACT, FINAL, PUBLIC, PROTECTED, PRIVATE]),
                                astDefn.location)
                     irDefn = self.info.package.addFunction(name, astDefn,
                                                            None, implicitTypeParams,

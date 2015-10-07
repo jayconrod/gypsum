@@ -598,7 +598,7 @@ class Function(ParameterizedDefn):
         return flags.CONSTRUCTOR in self.flags
 
     def isFinal(self):
-        if not self.isMethod() or self.isConstructor():
+        if not self.isMethod() or self.isConstructor() or flags.FINAL in self.flags:
             return True
         receiverClass = self.getReceiverClass()
         return hasattr(receiverClass, "isPrimitive") and receiverClass.isPrimitive

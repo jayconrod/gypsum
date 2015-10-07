@@ -1475,6 +1475,13 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertIs(ObjectToString, AToString.override)
         self.assertIs(AToString, BToString.override)
 
+    def testOverrideFinal(self):
+        source = "class A\n" + \
+                 "  final def f = 12\n" + \
+                 "class B <: A\n" + \
+                 "  def f = 34"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     def testAmbiguousOverloadWithoutCall(self):
         source = "def f = 12\n" + \
                  "def f = 34\n"
