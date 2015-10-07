@@ -11,7 +11,7 @@ import flags
 import ids
 import ir_types
 import bytecode
-from utils import each, hashList
+from utils import each, hashList, reprFormat
 
 import re
 import StringIO
@@ -60,37 +60,37 @@ class Package(object):
         buf.write("init function: %s\n" % self.initFunction)
         return buf.getvalue()
 
-    def addGlobal(self, name, astDefn, *args):
+    def addGlobal(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.GLOBAL, len(self.globals))
         self.addName(name)
-        g = Global(name, astDefn, id, *args)
+        g = Global(name, id, *args, **kwargs)
         self.globals.append(g)
         return g
 
-    def addFunction(self, name, astDefn, *args):
+    def addFunction(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.FUNCTION, len(self.functions))
         self.addName(name)
-        f = Function(name, astDefn, id, *args)
+        f = Function(name, id, *args, **kwargs)
         self.functions.append(f)
         return f
 
-    def addClass(self, name, astDefn, *args):
+    def addClass(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.CLASS, len(self.classes))
         self.addName(name)
-        c = Class(name, astDefn, id, *args)
+        c = Class(name, id, *args, **kwargs)
         self.classes.append(c)
         return c
 
-    def addTypeParameter(self, name, astDefn, *args):
+    def addTypeParameter(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.TYPE_PARAMETER, len(self.typeParameters))
         self.addName(name)
-        p = TypeParameter(name, astDefn, id, *args)
+        p = TypeParameter(name, id, *args, **kwargs)
         self.typeParameters.append(p)
         return p
 
-    def newField(self, name, *args):
+    def newField(self, name, **kwargs):
         self.addName(name)
-        return Field(name, *args)
+        return Field(name, **kwargs)
 
     def ensureDependency(self, package):
         if package.id.index is not None:
@@ -380,16 +380,18 @@ class PackageDependency(object):
             (repr(self.name), repr(self.minVersion), repr(self.maxVersion))
 
 
-class IrDefinition(data.Data):
-    propertyNames = ("name", "astDefn")
-    skipCompareNames = ("astDefn",)
-
-    def __init__(self, *args, **extra):
-        name = args[0] if len(args) > 0 else extra["name"]
+class IrDefinition(object):
+    def __init__(self, name, astDefn):
         assert name is None or isinstance(name, Name)
-        astDefn = args[1] if len(args) > 1 else extra["astDefn"]
         assert astDefn is None or isinstance(astDefn, ast.AstNode)
-        super(IrDefinition, self).__init__(*args, **extra)
+        self.name = name
+        self.astDefn = astDefn
+
+    def __eq__(self, other):
+        raise NotImplementedError()
+
+    def __ne__(self, other):
+        return not (self == other)
 
     def isTypeDefn(self):
         return False
@@ -399,8 +401,9 @@ class IrDefinition(data.Data):
 
 
 class IrTopDefn(IrDefinition):
-    propertyNames = IrDefinition.propertyNames + ("id",)
-    skipCompareNames = IrDefinition.skipCompareNames + ("id",)
+    def __init__(self, name, id, astDefn):
+        super(IrTopDefn, self).__init__(name, astDefn)
+        self.id = id
 
     def isBuiltin(self):
         return self.id.isBuiltin()
@@ -427,7 +430,24 @@ class ParameterizedDefn(IrTopDefn):
 
 
 class Global(IrTopDefn):
-    propertyNames = IrTopDefn.propertyNames + ("type", "flags")
+    """Represents a global variable or constant.
+
+    Attributes:
+        name (Name): the name of the global
+        id (DefnId): unique identifier for the global.
+        astDefn (AstNode?): the location in source code where the global is defined.
+        type (Type?): the type of the global. May be `None` before type analysis.
+        flags (frozenset[flag]): flags indicating how this global may be used. Valid flags are
+            `EXTERN`, `LET`, `PUBLIC`.
+    """
+
+    def __init__(self, name, id, astDefn=None, type=None, flags=frozenset()):
+        super(Global, self).__init__(name, id, astDefn)
+        self.type = type
+        self.flags = flags
+
+    def __repr__(self):
+        return reprFormat(self, "name", "type", "flags")
 
     def __str__(self):
         buf = StringIO.StringIO()
@@ -436,11 +456,91 @@ class Global(IrTopDefn):
         buf.write("var %s%s: %s" % (self.name, self.id, str(self.type)))
         return buf.getvalue()
 
+    def __eq__(self, other):
+        return self.name == other.name and \
+               self.type == other.type and \
+               self.flags == other.flags
+
 
 class Function(ParameterizedDefn):
-    propertyNames = IrTopDefn.propertyNames + \
-                    ("returnType", "typeParameters", "parameterTypes",
-                     "variables", "blocks", "flags")
+    """Represents a function or method.
+
+    Attributes:
+        name (Name): the name of the function.
+        id (DefnId): unique identifier for the function.
+        astDefn (AstNode?): the location in source code where the function is defined.
+        returnType (Type?): the return type of the function. May be `None` before type analysis.
+        typeParameters (list[TypeParameter]?): a list of type parameters used in this
+            definition. When this function is called, type arguments need to be passed which
+            match these parameters. Parameters defined in an outer scope should appear here,
+            too, at the beginning of the list. These are "implicit" parameters. This may be
+            `None` before declaration analysis is complete.
+        parameterTypes (list[Type]?): a list of types of parameters. When this function is
+            called, values of these types are passed on the stack. This may be `None` before
+            type analysis.
+        variables (list[Variable]?): a list of local variables and parameters used in the
+            function. The compiler uses indices in the list when emitting ldlocal / stlocal
+            instruction. This may be `None` before semantic analysis and for `EXTERN` or
+            `ABSTRACT` or builtin functions.
+        blocks (list[BasicBlock]?): a list of basic blocks containing instructions for the
+            function. The first block is the only entry point. This may be `None` before
+            semantic analysis and for `EXTERN` or `ABSTRACT` or builtin functions.
+        flags (frozenset[flag]): a flags indicating how this function is used. Valid flags are
+            `ABSTRACT`, `EXTERN`, `PUBLIC`, `PROTECTED`, `PRIVATE`, `STATIC`, `CONSTRUCTOR`,
+            `METHOD`.
+        insts (list[Instruction]?): a list of instructions to insert instead of calling this
+            function. This is set for some (not all) builtin functions. For instance, the `+`
+            method of `i64` has a list containing an `addi64` instruction.
+    """
+
+    def __init__(self, name, id, astDefn=None, returnType=None, typeParameters=None,
+                 parameterTypes=None, variables=None, blocks=None, flags=frozenset(),
+                 insts=None):
+        super(Function, self).__init__(name, id, astDefn)
+        self.returnType = returnType
+        self.typeParameters = typeParameters
+        self.parameterTypes = parameterTypes
+        self.variables = variables
+        self.blocks = blocks
+        self.flags = flags
+        self.insts = insts
+
+    def __repr__(self):
+        return reprFormat(self, "name", "returnType", "typeParameters", "parameterTypes",
+                          "variables", "blocks", "flags")
+
+    def __str__(self):
+        buf = StringIO.StringIO()
+        if len(self.flags) > 0:
+            buf.write(" ".join(self.flags) + " ")
+        buf.write("def %s%s" % (self.name, str(self.id)))
+        if self.typeParameters is not None and len(self.typeParameters) > 0:
+            buf.write("[%s]" % ", ".join([str(tp) for tp in self.typeParameters]))
+        if self.parameterTypes is not None and len(self.parameterTypes) > 0:
+            buf.write("(%s)" % ", ".join([str(pt) for pt in self.parameterTypes]))
+        if self.returnType is not None:
+            buf.write(": " + str(self.returnType))
+        if self.variables is not None and len(self.variables) > 0 or \
+           self.blocks is not None and len(self.blocks) > 0:
+            buf.write(" =\n")
+        if self.variables is not None:
+            for v in self.variables:
+                buf.write("  var %s: %s (%s)\n" % (v.name, v.type, v.kind))
+        if self.blocks is not None:
+            for block in self.blocks:
+                buf.write("%d:\n" % block.id)
+                for inst in block.instructions:
+                    buf.write("  %s\n" % inst)
+        return buf.getvalue()
+
+    def __eq__(self, other):
+        return self.name == other.name and \
+               self.returnType == other.returnType and \
+               self.typeParameters == other.typeParameters and \
+               self.parameterTypes == other.parameterTypes and \
+               self.variables == other.variables and \
+               self.blocks == other.blocks and \
+               self.flags == other.flags
 
     def getReceiverClass(self):
         """Returns the class of the receiver.
@@ -523,40 +623,79 @@ class Function(ParameterizedDefn):
         return typeParametersAreCompatible and \
                parameterTypesAreCompatible
 
+
+class Class(ParameterizedDefn):
+    """Represents a class definition.
+
+    Attributes:
+        name (Name): the name of the class.
+        id (DefnId): unique identifier for the class.
+        astDefn (AstNode?): the location in source code where the class is defined.
+        typeParameters (list[TypeParameter]?): a list of type parameters used in this
+            definition. Values with a `ClassType` for this class must have type arguments that
+            correspond to these parameters. Note that this list should include not only the
+            parameters from the class definition, but also any parameters defined in outer
+            scopes (which are "implicit" and should come first). This may be `None` before
+            declaration analysis is complete.
+        supertypes (list[ClassType]?): a list of types from which this class is derived,
+            including type arguments. The subtype relation uses this. This may be `None`
+            before type declaration analysis is complete.
+        initializer (Function?): a function which initializes new instances of this class.
+            Constructors call this after calling a superconstructor if they don't call another
+            constructor. May be `None` before declaration analysis is complete or if there
+            is no initializer.
+        constructors (list[Function]?): a list of functions which initialize new instances of
+            this class. These functions are called directly after creating a new instance. This
+            may be `None` before declaration analysis is complete.
+        fields (list[Field]?): a list of fields found in instances of this class. This may be
+            `None` before declaration analysis is complete. Inherited fields are added to
+            this list during class flattening.
+        methods (list[Function]?): a list of functions that operate on instances of this class.
+            This may be `None` before declaration analysis is complete. Inherited methods may
+            be added to this list during class flattening
+        flags (frozenset[flag]): flags indicating how this class is used. Valid flags are
+            `ABSTRACT`, `EXTERN`, `PUBLIC`, `PROTECTED`, `PRIVATE`.
+    """
+
+    def __init__(self, name, id, astDefn=None, typeParameters=None, supertypes=None,
+                 initializer=None, constructors=None, fields=None, methods=None,
+                 flags=frozenset()):
+        super(Class, self).__init__(name, id, astDefn)
+        self.typeParameters = typeParameters
+        self.supertypes = supertypes
+        self.initializer = initializer
+        self.constructors = constructors
+        self.fields = fields
+        self.methods = methods
+        self.flags = flags
+
     def __repr__(self):
-        return "Function(%s, %s, %s, %s, %s, %s, %s)" % \
-            (self.name, repr(self.returnType), repr(self.typeParameters),
-             repr(self.parameterTypes), repr(self.variables), repr(self.blocks),
-             repr(self.flags))
+        return reprFormat(self, "name", "typeParameters", "supertypes", "initializer",
+                          "constructors", "fields", "methods", "flags")
 
     def __str__(self):
         buf = StringIO.StringIO()
-        if len(self.flags) > 0:
-            buf.write(" ".join(self.flags) + " ")
-        buf.write("def %s%s" % (self.name, str(self.id)))
-        if self.typeParameters is not None and len(self.typeParameters) > 0:
-            buf.write("[%s]" % ", ".join([str(tp) for tp in self.typeParameters]))
-        if self.parameterTypes is not None and len(self.parameterTypes) > 0:
-            buf.write("(%s)" % ", ".join([str(pt) for pt in self.parameterTypes]))
-        if self.returnType is not None:
-            buf.write(": " + str(self.returnType))
-        if self.variables is not None and len(self.variables) > 0 or \
-           self.blocks is not None and len(self.blocks) > 0:
-            buf.write(" =\n")
-        if self.variables is not None:
-            for v in self.variables:
-                buf.write("  var %s: %s (%s)\n" % (v.name, v.type, v.kind))
-        if self.blocks is not None:
-            for block in self.blocks:
-                buf.write("%d:\n" % block.id)
-                for inst in block.instructions:
-                    buf.write("  %s\n" % inst)
+        buf.write("%s class %s%s" % (" ".join(self.flags), self.name, self.id))
+        buf.write("\n")
+        for field in self.fields:
+            buf.write("  %s\n" % str(field))
+        if self.initializer is not None:
+            buf.write("  initializer %s\n" % self.initializer.id)
+        for ctor in self.constructors:
+            buf.write("  constructor %s\n" % ctor.id)
+        for method in self.methods:
+            buf.write("  method %s\n" % method.id)
         return buf.getvalue()
 
-
-class Class(ParameterizedDefn):
-    propertyNames = IrTopDefn.propertyNames + ("typeParameters", "supertypes",
-                     "initializer", "constructors", "fields", "methods", "flags")
+    def __eq__(self, other):
+        return self.name == other.name and \
+               self.typeParameters == other.typeParameters and \
+               self.supertypes == other.supertypes and \
+               self.initializer == other.initializer and \
+               self.constructors == other.constructors and \
+               self.fields == other.fields and \
+               self.methods == other.methods and \
+               self.flags == other.flags
 
     def superclass(self):
         assert self is not builtins.getNothingClass()
@@ -700,33 +839,50 @@ class Class(ParameterizedDefn):
     def isTypeDefn(self):
         return True
 
-    def __repr__(self):
-        return "Class(%s, %s, %s, %s, %s, %s, %s, %s)" % \
-            (repr(self.name), repr(self.typeParameters), repr(self.supertypes),
-             repr(self.initializer), repr(self.constructors),
-             repr(self.fields), repr(self.methods), repr(self.flags))
-
-    def __str__(self):
-        buf = StringIO.StringIO()
-        buf.write("%s class %s%s" % (" ".join(self.flags), self.name, self.id))
-        buf.write("\n")
-        for field in self.fields:
-            buf.write("  %s\n" % str(field))
-        if self.initializer is not None:
-            buf.write("  initializer %s\n" % self.initializer.id)
-        for ctor in self.constructors:
-            buf.write("  constructor %s\n" % ctor.id)
-        for method in self.methods:
-            buf.write("  method %s\n" % method.id)
-        return buf.getvalue()
-
 
 class TypeParameter(IrTopDefn):
-    propertyNames = IrTopDefn.propertyNames + ("upperBound", "lowerBound", "flags")
+    """Represents a range of possible types between an upper and lower bound.
 
-    def __init__(self, name, astDefn, id, upperBound, lowerBound, flags):
-        super(TypeParameter, self).__init__(name, astDefn, id, upperBound, lowerBound, flags)
+    In source, type parameters are always defined as part of a class or function definition.
+    In IR though, they are global and can be used by multiple definitions (especially
+    definitions which were nested in source).
+
+    Type parameters are referenced through `VariableType`, which represents some type within
+    bounds. Type parameters may have variance, which determines how the subtype relation works
+    for parameterized types.
+
+    Attributes:
+        name (Name): the name of the type parameter.
+        id (DefnId): unique identifier of the type parameter.
+        astDefn (AstNode?): the location in source code where the type parameter is defined.
+        upperBound (Type?): type arguments must be a subtype of this. May be `None` before
+            type analysis.
+        lowerBound (Type?): type arguments must be a supertype of this. May be `None` before
+            type analysis.
+        flags (frozenset[flag]): flags indicating how this type parameter may be used. Valid
+            flags are `EXTERN`, `CONTRAVARIANT`, `COVARIANT`, `STATIC`.
+    """
+
+    def __init__(self, name, id, astDefn=None,
+                 upperBound=None, lowerBound=None, flags=frozenset(), clas=None):
+        super(TypeParameter, self).__init__(name, id, astDefn)
+        self.upperBound = upperBound
+        self.lowerBound = lowerBound
+        self.flags = flags
         self.clas = None
+
+    def __repr__(self):
+        return reprFormat(self, "name", "upperBound", "lowerBound", "flags")
+
+    def __str__(self):
+        return "%s type %s%s <: %s >: %s" % \
+            (" ".join(self.flags), self.name, self.id, self.upperBound, self.lowerBound)
+
+    def __eq__(self, other):
+        return self.name == other.name and \
+               self.upperBound == other.upperBound and \
+               self.lowerBound == other.lowerBound and \
+               self.flags == other.flags
 
     def isEquivalent(self, other):
         return self.upperBound == other.upperBound and \
@@ -737,14 +893,6 @@ class TypeParameter(IrTopDefn):
 
     def contains(self, ty):
         return ty.isSubtypeOf(self.upperBound) and self.lowerBound.isSubtypeOf(ty)
-
-    def __repr__(self):
-        return "TypeParameter(%s, %s, %s, %s)" % \
-            (self.name, self.upperBound, self.lowerBound, self.flags)
-
-    def __str__(self):
-        return "%s type %s%s <: %s >: %s" % \
-            (" ".join(self.flags), self.name, self.id, self.upperBound, self.lowerBound)
 
     def variance(self):
         if flags.COVARIANT in self.flags:
@@ -779,11 +927,11 @@ class TypeParameter(IrTopDefn):
             selfBounds.append(bound.typeParameter)
             bound = bound.typeParameter.upperBound
 
-        if other in selfBounds:
+        if any(tp is other for tp in selfBounds):
             return other
         bound = other.upperBound
         while isinstance(bound, ir_types.VariableType):
-            if bound.typeParameter in selfBounds:
+            if any(tp is bound.typeParameter for tp in selfBounds):
                 return bound.typeParameter
             bound = bound.typeParameter.upperBound
         return None
@@ -794,14 +942,56 @@ LOCAL = "local"
 PARAMETER = "parameter"
 
 class Variable(IrDefinition):
-    propertyNames = IrDefinition.propertyNames + ("type", "kind", "flags")
+    def __init__(self, name, astDefn=None, type=None, kind=LOCAL, flags=frozenset()):
+        super(Variable, self).__init__(name, astDefn)
+        self.type = type
+        self.kind = kind
+        self.flags = flags
+
+    def __repr__(self):
+        return reprFormat(self, "name", "type", "kind", "flags")
+
+    def __str__(self):
+        flagsStr = " ".join(self.flags)
+        return "%s %s %s: %s" % (flagsStr, self.kind, self.name, self.type)
+
+    def __eq__(self, other):
+        return self.name == other.name and \
+               self.type == other.type and \
+               self.kind is other.kind and \
+               self.flags == other.flags
 
 
 class Field(IrDefinition):
-    propertyNames = IrDefinition.propertyNames + ("type", "flags")
+    """Represents a data member of a class.
+
+    Attributes:
+        name (Name): the name of the field.
+        astDefn (AstNode?): the location in source code where the field is defined.
+        type (Type?): the type of the field. May be `None` before type analysis.
+        flags (frozenset[flag]): flags indicating how this field is used. Valid flags are
+            `LET`, `PUBLIC`, `PROTECTED`, `PRIVATE`, `STATIC`.
+        index (int?): an integer indicating where this field is located with an instance of
+            its class. 0 is the first field, 1 is the second, etc. Used to generate load / store
+            instructions. This will usually be `None` before semantic analysis.
+    """
+
+    def __init__(self, name, astDefn=None, type=None, flags=frozenset(), index=None):
+        super(Field, self).__init__(name, astDefn)
+        self.type = type
+        self.flags = flags
+        self.index = index
+
+    def __repr__(self):
+        return reprFormat(self, "name", "type", "flags")
 
     def __str__(self):
         return "%s field %s: %s" % (" ".join(self.flags), self.name, self.type)
+
+    def __eq__(self, other):
+        return self.name == other.name and \
+               self.type == other.type and \
+               self.flags == other.flags
 
 
 # Miscellaneous functions for dealing with arguments and parameters.

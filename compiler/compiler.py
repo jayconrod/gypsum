@@ -31,7 +31,7 @@ def compile(info):
 
 def assignFieldIndices(clas, info):
     for index, field in enumerate(clas.fields):
-        assert not hasattr(field, "index") or field.index == index
+        assert field.index is None or field.index == index
         field.index = index
 
 
@@ -1473,7 +1473,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.dropForEffect(mode)
 
     def callMethod(self, method):
-        if hasattr(method, "insts"):
+        if method.insts is not None:
             self.addBuiltinInstructions(method.insts)
         elif method.isFinal():
             self.callFunction(method)
@@ -1566,7 +1566,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             # Compile the arguments and call the method.
             compileArgs()
             compileTypeArgs()
-            if hasattr(irDefn, "insts"):
+            if irDefn.insts is not None:
                 self.addBuiltinInstructions(irDefn.insts)
             elif irDefn.isFinal():
                 # Calls to final methods can be made directly. This includes constructors and

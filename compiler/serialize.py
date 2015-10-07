@@ -386,24 +386,23 @@ class Deserializer(object):
 
     def createEmptyGlobalList(self, count, packageId):
         gids = (ids.DefnId(packageId, ids.DefnId.GLOBAL, i) for i in xrange(count))
-        globals = list(ir.Global(None, None, id, None, None) for id in gids)
+        globals = list(ir.Global(None, id) for id in gids)
         return globals
 
     def createEmptyFunctionList(self, count, packageId):
         fids = (ids.DefnId(packageId, ids.DefnId.FUNCTION, i) for i in xrange(count))
-        functions = list(ir.Function(None, None, id, None, None, None, None, None, None)
-                         for id in fids)
+        functions = list(ir.Function(None, id) for id in fids)
         return functions
 
     def createEmptyClassList(self, count, packageId):
         cids = (ids.DefnId(packageId, ids.DefnId.CLASS, i) for i in xrange(count))
-        classes = list(ir.Class(None, None, id, None, None, None, None, None, None, None)
+        classes = list(ir.Class(None, id)
                        for id in cids)
         return classes
 
     def createEmptyTypeParameterList(self, count, packageId):
         tids = (ids.DefnId(packageId, ids.DefnId.TYPE_PARAMETER, i) for i in xrange(count))
-        params = list(ir.TypeParameter(None, None, id, None, None, None) for id in tids)
+        params = list(ir.TypeParameter(None, id) for id in tids)
         return params
 
     def readString(self):
@@ -466,8 +465,7 @@ class Deserializer(object):
         name = self.readName()
         flags = self.readFlags()
         ty = self.readType()
-        field = ir.Field(name, None, ty, flags)
-        field.index = index
+        field = ir.Field(name, type=ty, flags=flags, index=index)
         return field
 
     def readTypeParameter(self, param):

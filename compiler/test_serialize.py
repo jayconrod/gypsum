@@ -32,7 +32,7 @@ class MockFile(object):
         self.bytes.extend(s)
 
 
-class TestSerialize(unittest.TestCase):
+class TestSerialize(utils_test.TestCaseWithDefinitions):
     def setUp(self):
         self.file = MockFile()
         self.ser = serialize.Serializer(None, self.file)
@@ -161,8 +161,10 @@ class TestSerialize(unittest.TestCase):
         package = ir.Package(id=ids.TARGET_PACKAGE_ID)
         depPackage = ir.Package()
         loader = utils_test.FakePackageLoader([depPackage])
-        depClass = depPackage.addClass(ir.Name(["C"]), None, [], [ir_types.getRootClassType()],
-                                       None, [], [], [], frozenset([flags.PUBLIC]))
+        depClass = depPackage.addClass(ir.Name(["C"]), typeParameters=[],
+                                       supertypes=[ir_types.getRootClassType()],
+                                       constructors=[], fields=[],
+                                       methods=[], flags=frozenset([flags.PUBLIC]))
         externalizer = externalization.Externalizer(package, loader)
         externClass = externalizer.externalizeDefn(depClass)
         self.assertIn(flags.EXTERN, externClass.flags)
@@ -196,8 +198,8 @@ class TestSerialize(unittest.TestCase):
 
     def testRewriteField(self):
         package = ir.Package()
-        field = package.newField(ir.Name(["foo"]), None, ir_types.I64Type,
-                                 frozenset([flags.PUBLIC, flags.LET]))
+        field = package.newField(ir.Name(["foo"]), type=ir_types.I64Type,
+                                 flags=frozenset([flags.PUBLIC, flags.LET]))
         self.ser.package = package
         self.ser.writeField(field)
 
@@ -208,13 +210,13 @@ class TestSerialize(unittest.TestCase):
 
     def testRewriteTypeParameter(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
-        typeParam = package.addTypeParameter(ir.Name(["T"]), None,
-                                             ir_types.getRootClassType(),
-                                             ir_types.getNothingClassType(),
-                                             frozenset([flags.STATIC]))
+        typeParam = package.addTypeParameter(ir.Name(["T"]),
+                                             upperBound=ir_types.getRootClassType(),
+                                             lowerBound=ir_types.getNothingClassType(),
+                                             flags=frozenset([flags.STATIC]))
         self.ser.package = package
         self.ser.writeTypeParameter(typeParam)
-        outTypeParam = ir.TypeParameter(None, None, typeParam.id, None, None, None)
+        outTypeParam = ir.TypeParameter(None, typeParam.id)
         self.des.package = package
         self.des.readTypeParameter(outTypeParam)
         self.assertEquals(typeParam, outTypeParam)
@@ -222,31 +224,33 @@ class TestSerialize(unittest.TestCase):
     def testRewriteForeignTypeParameter(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
         otherPackage = ir.Package()
-        typeParam = otherPackage.addTypeParameter(ir.Name(["T"]), None,
-                                                  ir_types.getRootClassType(),
-                                                  ir_types.getNothingClassType(),
-                                                  frozenset([flags.STATIC]))
+        typeParam = otherPackage.addTypeParameter(ir.Name(["T"]),
+                                                  upperBound=ir_types.getRootClassType(),
+                                                  lowerBound=ir_types.getNothingClassType(),
+                                                  flags=frozenset([flags.STATIC]))
         loader = utils_test.FakePackageLoader([otherPackage])
         externalizer = externalization.Externalizer(package, loader)
         foreignTypeParam = externalizer.externalizeDefn(typeParam)
         self.ser.package = package
         self.ser.writeTypeParameter(foreignTypeParam)
-        outTypeParam = ir.TypeParameter(None, None, foreignTypeParam.id, None, None, None)
+        outTypeParam = ir.TypeParameter(None, foreignTypeParam.id)
         self.des.package = package
         self.des.readTypeParameter(outTypeParam)
         self.assertEquals(foreignTypeParam, outTypeParam)
 
     def testRewriteClass(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
-        typeParam = package.addTypeParameter(ir.Name(["Foo", "T"]), None,
-                                             ir_types.getRootClassType(),
-                                             ir_types.getNothingClassType(),
-                                             frozenset([flags.STATIC]))
+        typeParam = package.addTypeParameter(ir.Name(["Foo", "T"]),
+                                             upperBound=ir_types.getRootClassType(),
+                                             lowerBound=ir_types.getNothingClassType(),
+                                             flags=frozenset([flags.STATIC]))
         supertype = ir_types.getRootClassType()
-        field = package.newField(ir.Name(["Foo", "x"]), None,
-                                 ir_types.I64Type, frozenset([flags.PRIVATE]))
-        clas = package.addClass(ir.Name(["Foo"]), None, [typeParam], [supertype], None, None,
-                                [field], None, frozenset([flags.PUBLIC]))
+        field = package.newField(ir.Name(["Foo", "x"]),
+                                 type=ir_types.I64Type, flags=frozenset([flags.PRIVATE]))
+        clas = package.addClass(ir.Name(["Foo"]), typeParameters=[typeParam],
+                                supertypes=[supertype],
+                                constructors=[], fields=[field],
+                                methods=[], flags=frozenset([flags.PUBLIC]))
         ty = ir_types.ClassType(clas)
         constructor = package.addFunction(ir.Name(["Foo", ir.CONSTRUCTOR_SUFFIX]),
                                           None, ir_types.UnitType, [],
@@ -269,6 +273,6 @@ class TestSerialize(unittest.TestCase):
         self.ser.package = package
         self.ser.writeClass(clas)
         self.des.package = package
-        outClass = ir.Class(None, None, clas.id, None, None, None, None, None, None, None)
+        outClass = ir.Class(None, clas.id)
         self.des.readClass(outClass)
         self.assertEquals(clas, outClass)

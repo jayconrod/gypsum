@@ -135,13 +135,11 @@ def _initialize():
         nameComponents.append(functionData.get("name", ir.CONSTRUCTOR_SUFFIX))
         name = ir.Name(nameComponents)
         id = getattr(bytecode, functionData["id"])
-        function = ir.Function(name, None, id,
-                               buildType(functionData["returnType"]),
-                               [],
-                               map(buildType, functionData["parameterTypes"]),
-                               [], [], frozenset([flags.PUBLIC]))
-        if "insts" in functionData:
-            function.insts = functionData["insts"]
+        function = ir.Function(name, id,
+                               returnType=buildType(functionData["returnType"]),
+                               typeParameters=[],
+                               parameterTypes=map(buildType, functionData["parameterTypes"]),
+                               flags=frozenset([flags.PUBLIC]), insts=functionData.get("insts"))
         _builtinFunctionIdMap[id] = function
         return function
 
@@ -158,12 +156,11 @@ def _initialize():
     def buildField(fieldData, classShortName):
         name = ir.Name([classShortName, fieldData["name"]])
         ty = buildType(fieldData["type"])
-        return ir.Field(name, None, ty, frozenset([flags.PUBLIC]))
+        return ir.Field(name, type=ty, flags=frozenset([flags.PUBLIC]))
 
     def declareClass(classData):
         name = ir.Name([classData["name"]])
-        clas = ir.Class(name, None, None, [],
-                        None, None, None, None, None, frozenset([flags.PUBLIC]))
+        clas = ir.Class(name, None, typeParameters=[], flags=frozenset([flags.PUBLIC]))
         _builtinClasses.append(clas)
         _builtinClassNameMap[classData["name"]] = clas
 

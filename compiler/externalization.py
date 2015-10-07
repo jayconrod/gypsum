@@ -66,22 +66,24 @@ class Externalizer(object):
         id.externIndex = len(externDefns)
 
         if isinstance(defn, ir.Global):
-            externDefn = ir.Global(defn.name, defn.astDefn, id, defn.type, externFlags)
+            externDefn = ir.Global(defn.name, id, defn.astDefn, defn.type, externFlags)
             externDefns.append(externDefn)
             self.externalizeType(defn.type)
         elif isinstance(defn, ir.Function):
-            externDefn = ir.Function(defn.name, defn.astDefn, id,
-                                     defn.returnType, None, defn.parameterTypes,
-                                     None, None, externFlags)
+            externDefn = ir.Function(defn.name, id, astDefn=defn.astDefn,
+                                     returnType=defn.returnType,
+                                     parameterTypes=defn.parameterTypes,
+                                     flags=externFlags)
             externDefns.append(externDefn)
             self.externalizeType(defn.returnType)
             externDefn.typeParameters = [self.externalizeDefn(param)
                                          for param in defn.typeParameters]
             each(self.externalizeType, defn.parameterTypes)
         elif isinstance(defn, ir.Class):
-            externDefn = ir.Class(defn.name, defn.astDefn, id,
-                                  None, defn.supertypes, None,
-                                  None, defn.fields, None, externFlags)
+            externDefn = ir.Class(defn.name, id, astDefn=defn.astDefn,
+                                  supertypes=defn.supertypes,
+                                  fields=defn.fields,
+                                  flags=externFlags)
             externDefns.append(externDefn)
             externDefn.typeParameters = [self.externalizeDefn(param)
                                          for param in defn.typeParameters]
@@ -92,8 +94,10 @@ class Externalizer(object):
             each(self.externalizeType, (f.type for f in defn.fields))
             externDefn.methods = [self.externalizeMethod(m, dep) for m in defn.methods]
         elif isinstance(defn, ir.TypeParameter):
-            externDefn = ir.TypeParameter(defn.name, defn.astDefn, id,
-                                          defn.upperBound, defn.lowerBound, externFlags)
+            externDefn = ir.TypeParameter(defn.name, id, astDefn=defn.astDefn,
+                                          upperBound=defn.upperBound,
+                                          lowerBound=defn.lowerBound,
+                                          flags=externFlags)
             externDefns.append(externDefn)
             self.externalizeType(externDefn.upperBound)
             self.externalizeType(externDefn.lowerBound)
@@ -113,9 +117,10 @@ class Externalizer(object):
         self.package.addName(method.name)
         id = ids.DefnId(ids.TARGET_PACKAGE_ID, ids.DefnId.FUNCTION, len(dep.externMethods))
         externFlags = method.flags | frozenset([flags.EXTERN])
-        externMethod = ir.Function(method.name, method.astDefn, id,
-                                   method.returnType, None, method.parameterTypes,
-                                   None, None, externFlags)
+        externMethod = ir.Function(method.name, id, astDefn=method.astDefn,
+                                   returnType=method.returnType,
+                                   parameterTypes=method.parameterTypes,
+                                   flags=externFlags)
         dep.externMethods.append(externMethod)
         self.externalizeType(method.returnType)
         externMethod.typeParameters = map(self.externalizeDefn, method.typeParameters)

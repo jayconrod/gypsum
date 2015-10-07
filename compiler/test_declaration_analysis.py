@@ -190,7 +190,6 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                                    scopeId, True),
                           info.getDefnInfo(astDefn))
 
-
     def testDefineClassVarWithLocals(self):
         source = "class C() { var x = { var y = 12; y; }; };"
         info = self.analyzeFromSource(source)
@@ -521,8 +520,8 @@ class TestPackageScope(unittest.TestCase):
 
     def testPackageClassHasScope(self):
         package = Package(name=Name(["foo"]))
-        clas = package.addClass(Name(["C"]), None, [], [getRootClassType()],
-                                None, None, None, None, frozenset([PUBLIC]))
+        clas = package.addClass(Name(["C"]), None, typeParameters=[],
+                                supertypes=[getRootClassType()], flags=frozenset([PUBLIC]))
         classType = ClassType(clas)
         publicCtor = package.addFunction(Name(["C", CONSTRUCTOR_SUFFIX]), None, UnitType, [],
                                          [classType], None, None,
@@ -538,10 +537,10 @@ class TestPackageScope(unittest.TestCase):
                                             [classType], None, None,
                                             frozenset([PRIVATE, METHOD, EXTERN]))
         clas.methods = [publicMethod, privateMethod]
-        publicField = package.newField(Name(["C", "x"]), None, UnitType,
-                                       frozenset([PUBLIC, EXTERN]))
-        privateField = package.newField(Name(["C", "y"]), None, UnitType,
-                                        frozenset([PRIVATE, EXTERN]))
+        publicField = package.newField(Name(["C", "x"]), type=UnitType,
+                                       flags=frozenset([PUBLIC, EXTERN]))
+        privateField = package.newField(Name(["C", "y"]), type=UnitType,
+                                        flags=frozenset([PRIVATE, EXTERN]))
         clas.fields = [publicField, privateField]
 
         packageLoader = FakePackageLoader([package])

@@ -55,6 +55,18 @@ def hashList(elems):
     return reduce(lambda a, b: hashMix(a ^ b), map(hash, elems), 0)
 
 
+def reprFormat(obj, *keys):
+    """Used to implement __repr__ in some classes.
+
+    Args:
+        obj: the object to generate a repr string for.
+        keys ([str]): names of attributes that should be looked up and included in the string.
+    """
+    nameStr = obj.__class__.__name__
+    itemsStr = ", ".join(repr(getattr(obj, key)) for key in keys)
+    return "%s(%s)" % (nameStr, itemsStr)
+
+
 _decodeEscapeChars = {'n': '\n',
                       'a': '\a',
                       'b': '\b',
