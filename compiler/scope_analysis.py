@@ -635,7 +635,7 @@ class Scope(ast.AstNodeVisitor):
         """Convenience method for creating a class definition."""
         implicitTypeParams = self.getImplicitTypeParameters()
         flags = getFlagsFromAstDefn(astDefn, None)
-        checkFlags(flags, frozenset([ABSTRACT, PUBLIC, PROTECTED]), astDefn.location)
+        checkFlags(flags, frozenset([ABSTRACT, FINAL, PUBLIC, PROTECTED]), astDefn.location)
         name = self.makeName(astDefn.name)
         irDefn = self.info.package.addClass(name, astDefn=astDefn,
                                             typeParameters=implicitTypeParams,
@@ -1749,6 +1749,8 @@ class InheritanceVisitor(ScopeVisitor):
             supertypeIrDefn = self.addTypeToSubtypeGraph(irClass.id, scope, node.supertype)
             if not isinstance(supertypeIrDefn, ir.Class):
                 raise ScopeException(node.location, "inheritance from non-class type")
+            if supertypeIrDefn.isFinal():
+                raise ScopeException(node.location, "inheritance from final class")
             superclassInfo = self.info.getClassInfo(supertypeIrDefn)
             classInfo.superclassInfo = superclassInfo
 

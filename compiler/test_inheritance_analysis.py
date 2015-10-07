@@ -141,6 +141,11 @@ class TestInheritanceAnalysis(unittest.TestCase):
         # when we support other packages depeneding on the one being compiled.
         self.fail()
 
+    def testInheritFromFinalClass(self):
+        source = "final class Foo\n" + \
+                 "class Bar <: Foo"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
     def testTypeParameterCycle(self):
         source = "class Foo\n" + \
                  "class Bar <: Foo\n" + \

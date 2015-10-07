@@ -299,6 +299,9 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         C = info.package.findClass(name="C")
         self.assertIn(PRIVATE, C.constructors[0].flags & frozenset([PUBLIC, PROTECTED, PRIVATE]))
 
+    def testAbstractFinalClass(self):
+        self.assertRaises(ScopeException, self.analyzeFromSource, "abstract final class C")
+
     @unittest.skip("private classes not supported yet")
     def testPrivateClassPrimaryConstructor(self):
         info = self.analyzeFromSource("private class C(x: i64)")

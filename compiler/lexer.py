@@ -68,6 +68,7 @@ __expressions = [
   (r"null", RESERVED),
 
   (r"abstract", ATTRIB),
+  (r"final", ATTRIB),
   (r"public", ATTRIB),
   (r"protected", ATTRIB),
   (r"private", ATTRIB),

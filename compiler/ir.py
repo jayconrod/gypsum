@@ -839,6 +839,9 @@ class Class(ParameterizedDefn):
     def isTypeDefn(self):
         return True
 
+    def isFinal(self):
+        return flags.FINAL in self.flags
+
 
 class TypeParameter(IrTopDefn):
     """Represents a range of possible types between an upper and lower bound.
