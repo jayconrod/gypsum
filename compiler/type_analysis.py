@@ -416,16 +416,19 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         getMethod = self.info.getDefnInfo(node.getDefn).irDefn
         getMethod.returnType = elementType
         getMethod.parameterTypes = [receiverType, ir_t.I32Type]
+        getMethod.variables[0].type = receiverType
         getMethod.compileHint = compile_info.ARRAY_ELEMENT_GET_HINT
 
         setMethod = self.info.getDefnInfo(node.setDefn).irDefn
         setMethod.returnType = ir_t.UnitType
         setMethod.parameterTypes = [receiverType, ir_t.I32Type, elementType]
+        setMethod.variables[0].type = receiverType
         setMethod.compileHint = compile_info.ARRAY_ELEMENT_SET_HINT
 
         lengthMethod = self.info.getDefnInfo(node.lengthDefn).irDefn
         lengthMethod.returnType = ir_t.I32Type
         lengthMethod.parameterTypes = [receiverType]
+        lengthMethod.variables[0].type = receiverType
         lengthMethod.compileHint = compile_info.ARRAY_ELEMENT_LENGTH_HINT
 
     def visitAstImportStatement(self, node):

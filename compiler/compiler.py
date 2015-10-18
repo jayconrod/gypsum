@@ -11,8 +11,8 @@ from bytecode import W8, W16, W32, W64, BUILTIN_TYPE_CLASS_ID, BUILTIN_TYPE_CTOR
 from ir import IrTopDefn, Class, Field, Function, Global, LOCAL, Package, PACKAGE_INIT_NAME, RECEIVER_SUFFIX, Variable
 from ir_types import NoType, UnitType, BooleanType, I8Type, I16Type, I32Type, I64Type, F32Type, F64Type, ClassType, VariableType, NULLABLE_TYPE_FLAG, getExceptionClassType, getClassFromType, getStringType, getRootClassType
 import ir_instructions
-from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PACKAGE_INITIALIZER_HINT, DefnInfo, NORMAL_MODE, STD_MODE, NOSTD_MODE
-from flags import ABSTRACT, STATIC, LET
+from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PACKAGE_INITIALIZER_HINT, ARRAY_ELEMENT_GET_HINT, ARRAY_ELEMENT_SET_HINT, ARRAY_ELEMENT_LENGTH_HINT, DefnInfo, NORMAL_MODE, STD_MODE, NOSTD_MODE
+from flags import ABSTRACT, STATIC, LET, ARRAY
 from errors import SemanticException
 from builtins import getTypeClass, getExceptionClass, getRootClass, getStringClass, getBuiltinFunctionById, getBuiltinClassById
 import type_analysis
@@ -164,6 +164,25 @@ class CompileVisitor(ast.AstNodeVisitor):
                         self.visit(defn, COMPILE_FOR_EFFECT)
             self.unit()
             self.ret()
+        elif self.compileHint is ARRAY_ELEMENT_GET_HINT:
+            self.ldlocal(1)  # index
+            self.loadThis()
+            self.lde()
+            self.ret()
+        elif self.compileHint is ARRAY_ELEMENT_SET_HINT:
+            self.ldlocal(2)  # value
+            self.ldlocal(1)  # index
+            self.loadThis()
+            self.ste()
+            self.unit()
+            self.ret()
+        else:
+            assert self.compileHint is ARRAY_ELEMENT_LENGTH_HINT
+            self.loadThis()
+            clas = self.function.getReceiverClass()
+            length = next(f for f in clas.fields if ARRAY in f.flags)
+            self.ldf(length.index)
+            self.ret()
 
         self.function.blocks = self.blocks
 
@@ -267,6 +286,10 @@ class CompileVisitor(ast.AstNodeVisitor):
         pass
 
     def visitAstClassDefinition(self, defn, mode):
+        assert mode is COMPILE_FOR_EFFECT
+        pass
+
+    def visitAstArrayElementsStatement(self, defn, mode):
         assert mode is COMPILE_FOR_EFFECT
         pass
 

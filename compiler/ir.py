@@ -280,6 +280,7 @@ PACKAGE_INIT_NAME = Name(["$pkginit"])
 CLASS_INIT_SUFFIX = "$init"
 ANON_PARAMETER_SUFFIX = "$parameter"
 RECEIVER_SUFFIX = "$this"
+ARRAY_LENGTH_SUFFIX = "$length"
 
 
 class PackagePrefix(object):
@@ -1069,6 +1070,7 @@ __all__ = [
     "CLASS_INIT_SUFFIX",
     "ANON_PARAMETER_SUFFIX",
     "RECEIVER_SUFFIX",
+    "ARRAY_LENGTH_SUFFIX",
     "PackagePrefix",
     "PackageDependency",
     "Global",

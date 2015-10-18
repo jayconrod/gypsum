@@ -3744,6 +3744,48 @@ class TestCompiler(TestCaseWithDefinitions):
                                                           flags=frozenset([LET]))],
                              flags=frozenset([METHOD])))
 
+    def testClassWithArrayElements(self):
+        source = "final class Foo\n" + \
+                 "  arrayelements String, get, set, length"
+        package = self.compileFromSource(source)
+        Foo = package.findClass(name="Foo")
+        FooType = ClassType(Foo)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("Foo.get", getStringType(), [[
+                               ldlocal(1),
+                               ldlocal(0),
+                               lde(),
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable(Name(["Foo", "get", RECEIVER_SUFFIX]),
+                                                          type=FooType, kind=PARAMETER,
+                                                          flags=frozenset([LET]))],
+                             flags=frozenset([METHOD, ARRAY])))
+        self.checkFunction(package,
+                           self.makeSimpleFunction("Foo.set", UnitType, [[
+                               ldlocal(2),
+                               ldlocal(1),
+                               ldlocal(0),
+                               ste(),
+                               unit(),
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable(Name(["Foo", "set", RECEIVER_SUFFIX]),
+                                                          type=FooType, kind=PARAMETER,
+                                                          flags=frozenset([LET]))],
+                             flags=frozenset([METHOD, ARRAY])))
+        length = next(f for f in Foo.fields if ARRAY in f.flags)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("Foo.length", I32Type, [[
+                               ldlocal(0),
+                               ldf(length.index),
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable(Name(["Foo", "set", RECEIVER_SUFFIX]),
+                                                          type=FooType, kind=PARAMETER,
+                                                          flags=frozenset([LET]))],
+                             flags=frozenset([METHOD, ARRAY])))
+
     def testBlockOrdering(self):
         sys.setrecursionlimit(2000)
         source = "def f =\n" + \

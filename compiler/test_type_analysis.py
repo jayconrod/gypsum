@@ -1930,7 +1930,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                       info.getUseInfo(info.ast.modules[0].definitions[1].members[0].expression).defnInfo)
 
     def testClassWithArrayElements(self):
-        source = "class Foo[static T]\n" + \
+        source = "final class Foo[static T]\n" + \
                  "  arrayelements T, get, set, length"
         info = self.analyzeFromSource(source)
         T = info.package.findTypeParameter(name="Foo.T")
