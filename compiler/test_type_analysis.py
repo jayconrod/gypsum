@@ -1929,6 +1929,33 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertIs(info.getDefnInfo(info.ast.modules[0].definitions[0].members[0]),
                       info.getUseInfo(info.ast.modules[0].definitions[1].members[0].expression).defnInfo)
 
+    def testClassWithArrayElements(self):
+        source = "class Foo[static T]\n" + \
+                 "  arrayelements T, get, set, length"
+        info = self.analyzeFromSource(source)
+        T = info.package.findTypeParameter(name="Foo.T")
+        TType = VariableType(T)
+        Foo = info.package.findClass(name="Foo")
+        FooType = ClassType(Foo, (TType,))
+
+        getMethod = info.package.findFunction(name="Foo.get")
+        self.assertEquals(self.makeFunction("Foo.get", typeParameters=[T], returnType=TType,
+                                            parameterTypes=[FooType, I32Type],
+                                            compileHint=ARRAY_ELEMENT_GET_HINT),
+                          getMethod)
+
+        setMethod = info.package.findFunction(name="Foo.set")
+        self.assertEquals(self.makeFunction("Foo.set", typeParameters=[T], returnType=UnitType,
+                                            parameterTypes=[FooType, I32Type, TType],
+                                            compileHint=ARRAY_ELEMENT_SET_HINT),
+                          setMethod)
+
+        lengthMethod = info.package.findFunction(name="Foo.length")
+        self.assertEquals(self.makeFunction("Foo.length", typeParameters=[T],
+                                            returnType=I32Type, parameterTypes=[FooType],
+                                            compileHint=ARRAY_ELEMENT_LENGTH_HINT),
+                          lengthMethod)
+
     def testImportStaticMethodFromClass(self):
         source = "class Foo\n" + \
                  "  static def f = 12\n" + \

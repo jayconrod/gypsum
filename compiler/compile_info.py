@@ -18,6 +18,9 @@ CONTEXT_CONSTRUCTOR_HINT = "context-constructor-hint"
 CLOSURE_CONSTRUCTOR_HINT = "closure-constructor-hint"
 CLOSURE_CLASS_HINT = "closure-class-hint"
 PACKAGE_INITIALIZER_HINT = "package-initializer-hint"
+ARRAY_ELEMENT_GET_HINT = "array-element-get-hint"
+ARRAY_ELEMENT_SET_HINT = "array-element-set-hint"
+ARRAY_ELEMENT_LENGTH_HINT = "array-element-length-hint"
 
 NORMAL_MODE = "normal-mode"
 STD_MODE = "std-mode"
@@ -370,6 +373,7 @@ class ImportInfo(data.Data):
 __all__ = [ "CompileInfo", "ContextInfo", "ClosureInfo", "DefnInfo",
             "ClassInfo", "UseInfo", "ImportInfo",
             "USE_AS_VALUE", "USE_AS_TYPE", "USE_AS_PROPERTY", "USE_AS_CONSTRUCTOR",
-            "CONTEXT_CONSTRUCTOR_HINT", "CLOSURE_CONSTRUCTOR_HINT",
+            "CONTEXT_CONSTRUCTOR_HINT", "CLOSURE_CONSTRUCTOR_HINT", "ARRAY_ELEMENT_GET_HINT",
+            "ARRAY_ELEMENT_SET_HINT", "ARRAY_ELEMENT_LENGTH_HINT",
             "NORMAL_MODE", "STD_MODE", "NOSTD_MODE", "STD_NAME", "MAX_TUPLE_LENGTH",
             "NOT_HERITABLE"]

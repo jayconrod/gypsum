@@ -146,7 +146,7 @@ def importStmt():
 def arrayElementsStmt():
     def process(parsed, loc):
         [_, elementType, _, getName, _, setName, _, lengthName, _] = ct.untangle(parsed)
-        return ast.AstArrayElements(elementType, getName, setName, lengthName, loc)
+        return ast.AstArrayElementsStatement(elementType, getName, setName, lengthName, loc)
     return keyword("arrayelements") + ct.Commit(ty() + keyword(",") +
         arrayAccessorDefn() + keyword(",") + arrayAccessorDefn() + keyword(",") +
         arrayAccessorDefn() + semi) ^ process

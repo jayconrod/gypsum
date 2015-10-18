@@ -191,21 +191,21 @@ class AstPrimaryConstructorDefinition(AstDefinition):
         return self.attribs + self.parameters
 
 
-class AstArrayElements(AstNode):
+class AstArrayElementsStatement(AstNode):
     def __init__(self, elementType, getDefn, setDefn, lengthDefn, location):
-        super(AstArrayElements, self).__init__(location)
+        super(AstArrayElementsStatement, self).__init__(location)
         self.elementType = elementType
         self.getDefn = getDefn
         self.setDefn = setDefn
         self.lengthDefn = lengthDefn
 
     def __repr__(self):
-        return "AstArrayElements(%s, %s, %s, %s)" % \
+        return "AstArrayElementsStatement(%s, %s, %s, %s)" % \
             (repr(self.elementType), repr(self.getDefn),
              repr(self.setDefn), repr(self.lengthDefn))
 
     def tag(self):
-        return "ArrayElements"
+        return "ArrayElementsStatement"
 
     def children(self):
         return [self.elementType, self.getDefn, self.setDefn, self.lengthDefn]

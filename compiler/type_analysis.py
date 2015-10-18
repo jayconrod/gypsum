@@ -407,6 +407,27 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         self.setMethodReceiverType(irClass.initializer)
         irClass.initializer.parameterTypes = [self.getReceiverType()]
 
+    def visitAstArrayElementsStatement(self, node):
+        elementType = self.visit(node.elementType)
+        receiverType = self.getReceiverType()
+        irClass = self.scope().getIrDefn()
+        assert isinstance(irClass, ir.Class)
+
+        getMethod = self.info.getDefnInfo(node.getDefn).irDefn
+        getMethod.returnType = elementType
+        getMethod.parameterTypes = [receiverType, ir_t.I32Type]
+        getMethod.compileHint = compile_info.ARRAY_ELEMENT_GET_HINT
+
+        setMethod = self.info.getDefnInfo(node.setDefn).irDefn
+        setMethod.returnType = ir_t.UnitType
+        setMethod.parameterTypes = [receiverType, ir_t.I32Type, elementType]
+        setMethod.compileHint = compile_info.ARRAY_ELEMENT_SET_HINT
+
+        lengthMethod = self.info.getDefnInfo(node.lengthDefn).irDefn
+        lengthMethod.returnType = ir_t.I32Type
+        lengthMethod.parameterTypes = [receiverType]
+        lengthMethod.compileHint = compile_info.ARRAY_ELEMENT_LENGTH_HINT
+
     def visitAstImportStatement(self, node):
         scope, typeArgs = self.handleScopePrefix(node.prefix)
         importedDefnInfos = self.info.getImportInfo(node).importedDefnInfos
@@ -644,6 +665,10 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def visitAstPrimaryConstructorDefinition(self, node):
         self.handleFunctionCommon(node, None, None)
+
+    def visitAstArrayElementsStatement(self, node):
+        # TypeDeclarationVisitor does all the work. These functions don't have bodies.
+        pass
 
     def visitAstImportStatement(self, node):
         # TypeDeclarationVisitor does all the work.

@@ -491,11 +491,14 @@ class Function(ParameterizedDefn):
         insts (list[Instruction]?): a list of instructions to insert instead of calling this
             function. This is set for some (not all) builtin functions. For instance, the `+`
             method of `i64` has a list containing an `addi64` instruction.
+        compileHint (symbol?): if set, the compiler will generate instructions for a specific
+            kind of function (for example, an array getter) instead of generating instructions
+            from a function body (which may not be present).
     """
 
     def __init__(self, name, id, astDefn=None, returnType=None, typeParameters=None,
                  parameterTypes=None, variables=None, blocks=None, flags=frozenset(),
-                 insts=None):
+                 insts=None, compileHint=None):
         super(Function, self).__init__(name, id, astDefn)
         self.returnType = returnType
         self.typeParameters = typeParameters
@@ -504,6 +507,7 @@ class Function(ParameterizedDefn):
         self.blocks = blocks
         self.flags = flags
         self.insts = insts
+        self.compileHint = compileHint
 
     def __repr__(self):
         return reprFormat(self, "name", "returnType", "typeParameters", "parameterTypes",
@@ -540,7 +544,9 @@ class Function(ParameterizedDefn):
                self.parameterTypes == other.parameterTypes and \
                self.variables == other.variables and \
                self.blocks == other.blocks and \
-               self.flags == other.flags
+               self.flags == other.flags and \
+               self.insts == other.insts and \
+               self.compileHint is other.compileHint
 
     def getReceiverClass(self):
         """Returns the class of the receiver.
