@@ -99,6 +99,17 @@
         - CastException
   fields: []
   methods: []
+- name: ArrayIndexOutOfBoundsException
+  id: BUILTIN_ARRAY_INDEX_OUT_OF_BOUNDS_EXCEPTION_CLASS_ID
+  isPrimitive: false
+  supertype: Exception
+  constructors:
+    - id: ARRAY_INDEX_OUT_OF_BOUNDS_EXCEPTION_CTOR_ID
+      returnType: unit
+      parameterTypes:
+        - ArrayIndexOutOfBoundsException
+  fields: []
+  methods: []
 - name: Type
   id: BUILTIN_TYPE_CLASS_ID
   isPrimitive: false

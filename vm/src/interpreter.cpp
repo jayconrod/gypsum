@@ -145,6 +145,13 @@ class Interpreter::GCSafeScope {
   }                                                                   \
 
 
+#define CHECK_ARRAY_INDEX_BOUNDS(block, index)                                     \
+  if ((index) < 0 || static_cast<word_t>(index) >= (block)->elementsLength()) {    \
+    throwBuiltinException(BUILTIN_ARRAY_INDEX_OUT_OF_BOUNDS_EXCEPTION_CLASS_ID);   \
+    break;                                                                         \
+  }                                                                                \
+
+
 i64 Interpreter::call(const Handle<Function>& callee) {
   // TODO: figure out a reasonable way to manage locals here.
   SealHandleScope disallowHandles(vm_);
@@ -382,41 +389,47 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
-      case LD8: loadObject<i8>(); break;
-      case LD16: loadObject<i16>(); break;
-      case LD32: loadObject<i32>(); break;
-      case LD64: loadObject<i64>(); break;
-
-      case LDP: {
+      case LDF: {
         auto index = readVbn();
         auto block = pop<Block*>();
         CHECK_NON_NULL(block);
         auto clas = block->meta()->clas();
         auto fieldType = clas->fields()->get(index)->type();
         auto offset = clas->findFieldOffset(index);
-        auto value = mem<Block*>(block, offset);
-        if (fieldType->isObject() && !fieldType->isNullable() && value == nullptr) {
-          throwBuiltinException(BUILTIN_UNINITIALIZED_EXCEPTION_CLASS_ID);
-          break;
-        }
-        push(value);
+        load(block, offset, fieldType);
         break;
       }
 
-      case ST8: storeObject<i8>(); break;
-      case ST16: storeObject<i16>(); break;
-      case ST32: storeObject<i32>(); break;
-      case ST64: storeObject<i64>(); break;
-
-      case STP: {
+      case STF: {
         auto index = readVbn();
         auto block = pop<Block*>();
-        auto value = pop<Block*>();
         CHECK_NON_NULL(block);
-        auto offset = block->meta()->clas()->findFieldOffset(index);
-        auto addr = &mem<Block*>(block, offset);
-        *addr = value;
-        vm_->heap()->recordWrite(addr, value);
+        auto clas = block->meta()->clas();
+        auto fieldType = clas->fields()->get(index)->type();
+        auto offset = clas->findFieldOffset(index);
+        store(block, offset, fieldType);
+        break;
+      }
+
+      case LDE: {
+        auto block = pop<Block*>();
+        CHECK_NON_NULL(block);
+        auto index = pop<i32>();
+        CHECK_ARRAY_INDEX_BOUNDS(block, index);
+        auto offset = block->elementsOffset() + index * block->meta()->elementSize();
+        auto elementType = block->meta()->clas()->elementType();
+        load(block, offset, elementType);
+        break;
+      }
+
+      case STE: {
+        auto block = pop<Block*>();
+        CHECK_NON_NULL(block);
+        auto index = pop<i32>();
+        CHECK_ARRAY_INDEX_BOUNDS(block, index);
+        auto offset = block->elementsOffset() + index * block->meta()->elementSize();
+        auto elementType = block->meta()->clas()->elementType();
+        store(block, offset, elementType);
         break;
       }
 
@@ -1091,31 +1104,42 @@ void Interpreter::throwBuiltinException(BuiltinId id) {
 }
 
 
-template <typename T>
-void Interpreter::loadObject() {
-  auto index = readVbn();
-  auto block = pop<Block*>();
-  if (block == nullptr) {
-    throwBuiltinException(BUILTIN_NULL_POINTER_EXCEPTION_CLASS_ID);
-    return;
+void Interpreter::load(Block* block, word_t offset, Type* type) {
+  if (type->isObject()) {
+    push(mem<Block*>(block, offset));
+  } else {
+    auto size = type->typeSize();
+    if (size == 1) {
+      push(mem<i8>(block, offset));
+    } else if (size == 2) {
+      push(mem<i16>(block, offset));
+    } else if (size == 4) {
+      push(mem<i32>(block, offset));
+    } else {
+      push(mem<i64>(block, offset));
+    }
   }
-  auto offset = block->meta()->clas()->findFieldOffset(index);
-  auto value = mem<T>(block, offset);
-  push(value);
 }
 
 
-template <typename T>
-void Interpreter::storeObject() {
-  auto index = readVbn();
-  auto block = pop<Block*>();
-  auto value = pop<T>();
-  if (block == nullptr) {
-    throwBuiltinException(BUILTIN_NULL_POINTER_EXCEPTION_CLASS_ID);
-    return;
+void Interpreter::store(Block* block, word_t offset, Type* type) {
+  if (type->isObject()) {
+    auto addr = &mem<Block*>(block, offset);
+    auto value = pop<Block*>();
+    *addr = value;
+    vm_->heap()->recordWrite(addr, value);
+  } else {
+    auto size = type->typeSize();
+    if (size == 1) {
+      mem<Block*>(block, offset, pop<i8>());
+    } else if (size == 2) {
+      mem<Block*>(block, offset, pop<i16>());
+    } else if (size == 4) {
+      mem<Block*>(block, offset, pop<i32>());
+    } else {
+      mem<Block*>(block, offset, pop<i64>());
+    }
   }
-  auto offset = block->meta()->clas()->findFieldOffset(index);
-  mem<T>(block, offset) = value;
 }
 
 

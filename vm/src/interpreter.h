@@ -61,8 +61,8 @@ class Interpreter {
   class GCSafeScope;
   friend GCSafeScope;
 
-  template <typename T> void loadObject();
-  template <typename T> void storeObject();
+  void load(Block* block, word_t offset, Type* type);
+  void store(Block* block, word_t offset, Type* type);
 
   template <typename T> void add();
   template <typename T> void sub();
