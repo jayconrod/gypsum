@@ -397,6 +397,20 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.analyzeFromSource("let String = 42")
         # pass if no error
 
+    def testClassWithArrayElements(self):
+        source = "class Foo[static T]\n" + \
+                 "  arrayelements T, public get, public set, public length"
+        info = self.analyzeFromSource(source)
+        Foo = info.package.findClass(name="Foo")
+        T = info.package.findTypeParameter(name="Foo.T")
+        getter = info.package.findFunction(name="Foo.get")
+        setter = info.package.findFunction(name="Foo.set")
+        length = info.package.findFunction(name="Foo.length")
+        for accessor in [getter, setter, length]:
+            self.assertEquals([T], accessor.typeParameters)
+            self.assertEquals(frozenset([PUBLIC, METHOD]), accessor.flags)
+            self.assertIn(accessor, Foo.methods)
+
     def testImportStaticMethod(self):
         source = "class Foo\n" + \
                  "  static def m = 12\n" + \

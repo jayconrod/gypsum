@@ -1432,9 +1432,19 @@ class ClassScope(Scope):
             irCtor = self.info.getDefnInfo(self.ast.constructor).irDefn
             irCtor.variables.append(irDefn)
             shouldBind = False
-        else:
-            assert isinstance(astDefn, ast.AstClassDefinition)
+        elif isinstance(astDefn, ast.AstClassDefinition):
             irDefn, shouldBind = self.createIrClassDefn(astDefn)
+        else:
+            assert isinstance(astDefn, ast.AstArrayAccessorDefinition)
+            name = self.makeName(astDefn.name)
+            checkFlags(flags, frozenset([FINAL, PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
+            implicitTypeParams = self.getImplicitTypeParameters()
+            irDefn = self.info.package.addFunction(name, astDefn,
+                                                   typeParameters=implicitTypeParams,
+                                                   variables=[],
+                                                   flags=flags)
+            self.makeMethod(irDefn, irScopeDefn)
+            irScopeDefn.methods.append(irDefn)
         return irDefn, shouldBind, isVisible
 
     def canImport(self, defnInfo):
@@ -1714,6 +1724,9 @@ class DeclarationVisitor(ScopeVisitor):
     def visitAstPrimaryConstructorDefinition(self, node):
         self.scope.declare(node)
         super(DeclarationVisitor, self).visitChildren(node)
+
+    def visitAstArrayAccessorDefinition(self, node):
+        self.scope.declare(node)
 
     def visitAstImportStatement(self, node):
         self.scope.addImport(node)
