@@ -85,5 +85,5 @@ To install, use `M-x package-install-file`, then add this to your `.emacs`:
 * GNU Make 3.81 is needed to build CodeSwitch.
 
 Gypsum and CodeSwitch were developed and tested on Ubuntu 14.04 and
-MacOS X 10.10. They will may work on other platforms with some
+MacOS X 10.10. They may work on other platforms with some
 modification, but nothing else is supported right now.
