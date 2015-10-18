@@ -191,6 +191,38 @@ class AstPrimaryConstructorDefinition(AstDefinition):
         return self.attribs + self.parameters
 
 
+class AstArrayElements(AstNode):
+    def __init__(self, elementType, getDefn, setDefn, lengthDefn, location):
+        super(AstArrayElements, self).__init__(location)
+        self.elementType = elementType
+        self.getDefn = getDefn
+        self.setDefn = setDefn
+        self.lengthDefn = lengthDefn
+
+    def __repr__(self):
+        return "AstArrayElements(%s, %s, %s, %s)" % \
+            (repr(self.elementType), repr(self.getDefn),
+             repr(self.setDefn), repr(self.lengthDefn))
+
+    def tag(self):
+        return "ArrayElements"
+
+    def children(self):
+        return [self.elementType, self.getDefn, self.setDefn, self.lengthDefn]
+
+
+class AstArrayAccessorDefinition(AstDefinition):
+    def __init__(self, attribs, name, location):
+        super(AstArrayAccessorDefinition, self).__init__(attribs, location)
+        self.name = name
+
+    def __repr__(self):
+        return "AstArrayAccessorDefinition(%s)" % repr(self.name)
+
+    def tag(self):
+        return "ArrayAccessorDefinition"
+
+
 class AstImportStatement(AstNode):
     def __init__(self, prefix, bindings, location):
         super(AstImportStatement, self).__init__(location)

@@ -243,6 +243,39 @@ class TestParser(unittest.TestCase):
                         parameter(),
                         "var x")
 
+    def testArrayElements(self):
+        self.checkParse(astArrayElements(astUnitType(),
+                                         astArrayAccessorDefinition([], "get"),
+                                         astArrayAccessorDefinition([], "set"),
+                                         astArrayAccessorDefinition([], "length")),
+                        arrayElementsStmt(),
+                        "arrayelements unit, get, set, length;")
+
+    def testArrayElementsOperators(self):
+        self.checkParse(astArrayElements(astUnitType(),
+                                         astArrayAccessorDefinition([], "!"),
+                                         astArrayAccessorDefinition([], "!!"),
+                                         astArrayAccessorDefinition([], "!!!")),
+                        arrayElementsStmt(),
+                        "arrayelements unit, !, !!, !!!;")
+
+    def testArrayElementsAttribs(self):
+        self.checkParse(astArrayElements(astUnitType(),
+                                         astArrayAccessorDefinition([astAttribute("public")], "get"),
+                                         astArrayAccessorDefinition([astAttribute("protected")], "set"),
+                                         astArrayAccessorDefinition([astAttribute("private")], "length")),
+                        arrayElementsStmt(),
+                        "arrayelements unit, public get, protected set, private length;")
+
+    def testClassWithArrayElements(self):
+        self.checkParse(astClassDefinition([], "Foo", [], None, None, None,
+                                           [astArrayElements(astUnitType(),
+                                                             astArrayAccessorDefinition([], "get"),
+                                                             astArrayAccessorDefinition([], "set"),
+                                                             astArrayAccessorDefinition([], "length"))]),
+                        classDefn(),
+                        "class Foo { arrayelements unit, get, set, length; };")
+
     def testImportBlank(self):
         self.checkParse(astImportStatement([astScopePrefixComponent("foo", None),
                                             astScopePrefixComponent("bar", [astErasedType()])],

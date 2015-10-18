@@ -102,7 +102,7 @@ def supertypes():
 
 
 def classMember():
-    return definition() | importStmt()
+    return definition() | importStmt() | arrayElementsStmt()
 
 
 def importStmt():
@@ -141,6 +141,22 @@ def importStmt():
         bindings = suffixFn(prefix)
         return ast.AstImportStatement(prefix, bindings, loc)
     return keyword("import") + ct.Commit(scopePrefix() + importSuffix) ^ process
+
+
+def arrayElementsStmt():
+    def process(parsed, loc):
+        [_, elementType, _, getName, _, setName, _, lengthName, _] = ct.untangle(parsed)
+        return ast.AstArrayElements(elementType, getName, setName, lengthName, loc)
+    return keyword("arrayelements") + ct.Commit(ty() + keyword(",") +
+        arrayAccessorDefn() + keyword(",") + arrayAccessorDefn() + keyword(",") +
+        arrayAccessorDefn() + semi) ^ process
+
+
+def arrayAccessorDefn():
+    def process(parsed, loc):
+        attribs, name = parsed
+        return ast.AstArrayAccessorDefinition(attribs, name, loc)
+    return attribs() + identifier ^ process
 
 
 def typeParameters():
