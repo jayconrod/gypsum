@@ -702,6 +702,27 @@ class AstCallExpression(AstExpression):
         return result
 
 
+class AstNewArrayExpression(AstExpression):
+    def __init__(self, length, ty, arguments, location):
+        super(AstNewArrayExpression, self).__init__(location)
+        self.length = length
+        self.ty = ty
+        self.arguments = arguments
+
+    def __repr__(self):
+        return "AstNewArrayExpression(%s, %s, %s)" % \
+            (repr(self.length), repr(self.ty), repr(self.arguments))
+
+    def tag(self):
+        return "NewArrayExpression"
+
+    def children(self):
+        children = [self.length, self.ty]
+        if self.arguments is not None:
+            children += self.arguments
+        return children
+
+
 class AstUnaryExpression(AstExpression):
     def __init__(self, operator, expr, location):
         super(AstUnaryExpression, self).__init__(location)

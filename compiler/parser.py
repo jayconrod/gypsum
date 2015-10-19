@@ -343,10 +343,14 @@ def maybeCallExpr():
 
 def callSuffix():
     methodNameOpt = ct.Opt(keyword(".") + symbol ^ (lambda p, _: p[1]))
-    argumentsOpt = ct.Opt(keyword("(") + ct.RepSep(ct.Lazy(maybeBinopExpr), keyword(",")) + keyword(")")) ^ \
-        (lambda p, _: ct.untangle(p)[1] if p else None)
     getMethodOpt = ct.Opt(keyword("_")) ^ (lambda p, _: bool(p))
-    return methodNameOpt + typeArguments() + argumentsOpt + getMethodOpt
+    return methodNameOpt + typeArguments() + argumentsOpt() + getMethodOpt
+
+def argumentsOpt():
+    def process(parsed, _):
+        return ct.untangle(parsed)[1] if parsed else None
+    return ct.Opt(keyword("(") + ct.RepSep(ct.Lazy(maybeBinopExpr), keyword(",")) +
+                      keyword(")")) ^ process
 
 def processCall(receiver, parsed, loc):
     [methodName, typeArguments, arguments, isGetMethod] = ct.untangle(parsed)
@@ -379,6 +383,7 @@ def receiverExpr():
            thisExpr() | \
            superExpr() | \
            groupExpr() | \
+           newArrayExpr() | \
            ifExpr() | \
            whileExpr() | \
            breakExpr() | \
@@ -413,6 +418,14 @@ def groupExpr():
         [_, e, _] = ct.untangle(parsed)
         return e
     return keyword("(") + ct.Lazy(expression) + keyword(")") ^ process
+
+
+def newArrayExpr():
+    def process(parsed, loc):
+        [_, _, length, _, ty, args] = ct.untangle(parsed)
+        return ast.AstNewArrayExpression(length, ty, args, loc)
+    return keyword("new") + ct.Commit(keyword("(") + ct.Lazy(expression) + keyword(")") +
+        classType() + argumentsOpt()) ^ process
 
 
 def blockExpr():

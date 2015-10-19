@@ -52,6 +52,7 @@ __expressions = [
   (r"try", RESERVED),
   (r"catch", RESERVED),
   (r"finally", RESERVED),
+  (r"new", RESERVED),
   (r"lambda", RESERVED),
   (r"return", RESERVED),
   (r"unit", RESERVED),
