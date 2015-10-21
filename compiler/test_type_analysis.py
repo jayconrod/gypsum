@@ -1956,6 +1956,31 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                             compileHint=ARRAY_ELEMENT_LENGTH_HINT),
                           lengthMethod)
 
+    def testNewArray(self):
+        source = "final class Array[static T]\n" + \
+                 "  arrayelements T, get, set, length\n" + \
+                 "def f = new(12i32) Array[String]"
+        info = self.analyzeFromSource(source)
+        Array = info.package.findClass(name="Array")
+        ast = info.ast.modules[0].definitions[-1].body
+        self.assertEquals(I32Type, info.getType(ast.length))
+        self.assertEquals(ClassType(Array, (getStringType(),)), info.getType(ast.ty))
+
+    def testNewArrayBadLength(self):
+        source = "final class Array[static T]\n" + \
+                 "  arrayelements T, get, set, length\n" + \
+                 "def f = new({}) Array[String]"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testNewArrayPrimitive(self):
+        source = "def f = new(12i32) i32"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testNewArrayNonArray(self):
+        source = "class NonArray\n" + \
+                 "def f = new(12i32) NonArray"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     def testImportStaticMethodFromClass(self):
         source = "class Foo\n" + \
                  "  static def f = 12\n" + \

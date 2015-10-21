@@ -12,7 +12,7 @@ import ir_types as ir_t
 from builtins import getExceptionClass, getPackageClass, getNothingClass
 from utils import COMPILE_FOR_VALUE, COMPILE_FOR_MATCH, COMPILE_FOR_UNINITIALIZED, COMPILE_FOR_EFFECT, each
 from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, NORMAL_MODE, STD_MODE, NOSTD_MODE, CallInfo, ScopePrefixInfo
-from flags import COVARIANT, CONTRAVARIANT, PROTECTED, PUBLIC, STATIC
+from flags import COVARIANT, CONTRAVARIANT, PROTECTED, PUBLIC, STATIC, ARRAY
 import scope_analysis
 
 
@@ -900,6 +900,17 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             raise NotImplementedError
         return ty
 
+    def visitAstNewArrayExpression(self, node):
+        indexType = self.visit(node.length)
+        if indexType != ir_t.I32Type:
+            raise TypeException(node.location, "array length must be i32")
+        objectType = self.visit(node.ty)
+        if not isinstance(objectType, ir_t.ClassType) or ARRAY not in objectType.clas.flags:
+            raise TypeException(node.location, "not an array")
+        argTypes = map(self.visit, node.arguments) if node.arguments is not None else None
+        self.handleNewCall(objectType, argTypes, node.id, node.location)
+        return objectType
+
     def visitAstUnaryExpression(self, node):
         receiverType = self.visit(node.expr)
         ty = self.handleOperatorCall(node.operator, receiverType, None, node.id, node.location)
@@ -1455,6 +1466,39 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                 "%s: operator returns an incompatible type for assignment" %
                                 name)
         return ty
+
+    def handleNewCall(self, objectType, argTypes, useAstId, loc):
+        """Handles a call which creates a new object.
+
+        This is only used for new array expressions, currently. The receiver type is specified
+        with a type (as opposed to a variable or property expression). This will check whether
+        the type is a class type and whether it's `Nothing` and throw an exception in
+        those cases.
+
+        Args:
+            objectType: the `Type` of the object being allocated. This implies the type args.
+            argTypes: a list of `Type`s of arguments to pass to the constructor.
+            useAstId: the AST id of the call. Used to save info.
+            loc: the location of the call in source code. Used in errors.
+
+        Returns:
+            `None`. The type of the expression is already known to be `objectType`.
+
+        Raises:
+            ScopeException: if an appropriate constructor can't be found or used.
+            TypeException: if `objectType` is not a class type or is `Nothing`.
+        """
+        if not isinstance(objectType, ir_t.ClassType):
+            raise TypeException(loc, "can only allocate instances of class types")
+        irClass = objectType.clas
+        if irClass is getNothingClass():
+            raise TypeException(loc, "cannot instantiate Nothing")
+        classScope = self.info.getScope(irClass)
+        nameInfo = classScope.lookupFromExternal(ir.CONSTRUCTOR_SUFFIX, loc)
+        defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, objectType,
+                                                            None, argTypes, loc)
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
+        self.scope().use(defnInfo, useAstId, USE_AS_CONSTRUCTOR, loc)
 
     def handleDestructure(self, nameInfo, receiverType, receiverIsExplicit,
                           typeArgs, exprType, subPatterns, mode, useAstId, matcherAstId, loc):

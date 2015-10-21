@@ -425,7 +425,7 @@ def newArrayExpr():
         [_, _, length, _, ty, args] = ct.untangle(parsed)
         return ast.AstNewArrayExpression(length, ty, args, loc)
     return keyword("new") + ct.Commit(keyword("(") + ct.Lazy(expression) + keyword(")") +
-        classType() + argumentsOpt()) ^ process
+        ty() + argumentsOpt()) ^ process
 
 
 def blockExpr():

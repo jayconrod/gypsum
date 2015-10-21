@@ -959,9 +959,6 @@ class TestParser(unittest.TestCase):
                                                astVariableExpression("y")]),
                         expression(), "new(123) Foo(x, y)")
 
-    def testNewArrayExprWithPrimitive(self):
-        self.checkParseError(expression(), "new(123) i32")
-
     # Literals
     def testBooleanLits(self):
         self.checkParse(astBooleanLiteral(True), literal(), "true")
