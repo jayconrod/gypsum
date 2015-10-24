@@ -412,7 +412,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             if not isBlank(p, pty):
                 if i != lastMatchingIndex:
                     self.dup()
-                self.ldp(i)
+                self.ldf(i)
                 self.visit(p, mode, pty, elementFailBlock)
 
         # Clean up.
@@ -1346,31 +1346,10 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.loadThis()
 
     def loadField(self, field):
-        ty = field.type
-        if ty.isObject():
-            inst = ir_instructions.ldp
-        elif ty.width == W8:
-            inst = ir_instructions.ld8
-        elif ty.width == W16:
-            inst = ir_instructions.ld16
-        elif ty.width == W32:
-            inst = ir_instructions.ld32
-        elif ty.width == W64:
-            inst = ir_instructions.ld64
-        self.add(inst(field.index))
+        self.ldf(field.index)
 
     def storeField(self, field):
-        if field.type.isObject():
-            inst = ir_instructions.stp
-        elif field.type.width == W8:
-            inst = ir_instructions.st8
-        elif field.type.width == W16:
-            inst = ir_instructions.st16
-        elif field.type.width == W32:
-            inst = ir_instructions.st32
-        elif field.type.width == W64:
-            inst = ir_instructions.st64
-        self.add(inst(field.index))
+        self.stf(field.index)
 
     def loadThis(self):
         assert self.function.isMethod()
@@ -1677,10 +1656,10 @@ class CompileVisitor(ast.AstNodeVisitor):
             dropFieldBlock = self.newBlock()
             for i in xrange(n - 1):
                 self.dup()
-                self.ldp(i)
+                self.ldf(i)
                 self.visit(subPatterns[i], COMPILE_FOR_MATCH,
                            getRootClassType(), dropFieldBlock)
-            self.ldp(n - 1)
+            self.ldf(n - 1)
             self.visit(subPatterns[-1], COMPILE_FOR_MATCH, getRootClassType(), dropSomeBlock)
             successState = self.saveCurrentBlock()
 
