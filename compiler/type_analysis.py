@@ -671,8 +671,12 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.handleFunctionCommon(node, None, None)
 
     def visitAstArrayElementsStatement(self, node):
-        # TypeDeclarationVisitor does all the work. These functions don't have bodies.
-        pass
+        # Check that the element type is invariant.
+        # TODO: if a covariant parameter is used, mark the set method as an initializer, and
+        # forbid it from being called except by a constructor or another initializer.
+        irClass = self.scope().getIrDefn()
+        with VarianceScope(self, ir_t.INVARIANT, irClass):
+            self.visit(node.elementType)
 
     def visitAstImportStatement(self, node):
         # TypeDeclarationVisitor does all the work.

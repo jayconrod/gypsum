@@ -1890,6 +1890,11 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                             compileHint=ARRAY_ELEMENT_LENGTH_HINT),
                           lengthMethod)
 
+    def testClassWithCovariantArrayElements(self):
+        source = "final class Array[static +T]\n" + \
+                 "  arrayelements T, get, set, length"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     def testNewArray(self):
         source = "final class Array[static T]\n" + \
                  "  arrayelements T, get, set, length\n" + \
