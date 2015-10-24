@@ -37,8 +37,8 @@
 - {name: "ste", iops: 0, push: 0, pop: 3, term: false}
 - {name: "allocobj", iops: 1, push: 1, pop: 0, term: false}
 - {name: "allocobjf", iops: 2, push: 1, pop: 0, term: false}
-- {name: "allocarri", iops: 2, push: 1, pop: 0, term: false}
-- {name: "allocarrif", iops: 3, push: 1, pop: 0, term: false}
+- {name: "allocarr", iops: 1, push: 1, pop: 1, term: false}
+- {name: "allocarrf", iops: 2, push: 1, pop: 1, term: false}
 - {name: "pkg", iops: 1, push: 1, pop: 0, term: false}
 - {name: "tycs", iops: 1, push: 0, pop: 0, term: false}
 - {name: "tycsf", iops: 2, push: 0, pop: 0, term: false}

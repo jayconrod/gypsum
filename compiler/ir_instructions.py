@@ -137,6 +137,18 @@ class allocobjf(Instruction):
         super(allocobjf, self).__init__(clas.id.packageId.index, clas.id.externIndex)
 
 
+class allocarr(Instruction):
+    def __init__(self, clas):
+        assert isinstance(clas, ir.Class) and (clas.isLocal() or clas.isBuiltin())
+        super(allocarr, self).__init__(clas.id.index)
+
+
+class allocarrf(Instruction):
+    def __init__(self, clas):
+        assert isinstance(clas, ir.Class) and clas.isForeign()
+        super(allocarrf, self).__init__(clas.id.packageId.index, clas.id.externIndex)
+
+
 class pkg(Instruction):
     def __init__(self, package):
         assert isinstance(package, ir.Package)

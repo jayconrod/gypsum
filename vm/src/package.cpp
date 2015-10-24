@@ -809,6 +809,14 @@ void Loader::readClass(const Local<Class>& clas) {
     methods->set(i, *method);
   }
 
+  auto elementTypeOpt = readLengthVbn();
+  Local<Type> elementType;
+  if (elementTypeOpt == 1) {
+    elementType = readType();
+  } else if (elementTypeOpt != 0) {
+    throw Error("invalid option");
+  }
+
   clas->setName(*name);
   clas->setFlags(flags);
   clas->setTypeParameters(*typeParameters);
@@ -816,6 +824,7 @@ void Loader::readClass(const Local<Class>& clas) {
   clas->setFields(*fields);
   clas->setConstructors(*constructors);
   clas->setMethods(*methods);
+  clas->setElementType(elementType.getOrNull());
   clas->setPackage(*package_);
 }
 

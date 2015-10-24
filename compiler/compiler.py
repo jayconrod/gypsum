@@ -561,6 +561,23 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.buildCall(useInfo, callInfo, expr.callee, expr.arguments,
                        mode, allowAllocation=False)
 
+    def visitAstNewArrayExpression(self, expr, mode):
+        useInfo = self.info.getUseInfo(expr)
+        callInfo = self.info.getCallInfo(expr)
+
+        # Allocate the array.
+        self.visit(expr.length, COMPILE_FOR_VALUE)
+        self.buildStaticTypeArguments(callInfo.typeArguments)
+        irClass = self.info.getType(expr).clas
+        if irClass.isForeign():
+            self.allocarrf(irClass)
+        else:
+            self.allocarr(irClass)
+
+        # Call the constructor normally without allowing allocation. This works similarly to
+        # how constructors can call other constructors.
+        self.buildCall(useInfo, callInfo, self.HAVE_RECEIVER, expr.arguments, mode, False)
+
     def visitAstUnaryExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)
         callInfo = self.info.getCallInfo(expr)
@@ -1483,6 +1500,8 @@ class CompileVisitor(ast.AstNodeVisitor):
             index = method.getReceiverClass().getMethodIndex(method)
             self.callv(len(method.parameterTypes), index)
 
+    HAVE_RECEIVER = "HAVE_RECEIVER"
+
     def buildCall(self, useInfo, callInfo, receiver, argExprs, mode, allowAllocation=True):
         shouldDropForEffect = mode is COMPILE_FOR_EFFECT
         defnInfo = useInfo.defnInfo
@@ -1494,7 +1513,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             closureInfo = None
 
         def compileReceiver():
-            assert receiver is not None
+            assert receiver is not None and receiver is not self.HAVE_RECEIVER
             if isinstance(receiver, LValue):
                 if receiver.onStack():
                     self.dup()
@@ -1516,6 +1535,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         if not irDefn.isConstructor() and not irDefn.isMethod():
             # Global or static function.
             if receiver is not None:
+                assert receiver is not self.HAVE_RECEIVER
                 compileReceiver()
             compileArgs()
             compileTypeArgs()
@@ -1534,7 +1554,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                 self.loadThis()
             if mode is COMPILE_FOR_VALUE:
                 self.dup()
-            if receiver is not None:
+            if receiver is not None and receiver is not self.HAVE_RECEIVER:
                 compileReceiver()
             compileArgs()
             compileTypeArgs()
@@ -1561,7 +1581,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                 else:
                     # This is a regular method. Load "this".
                     self.loadContext(defnInfo.scopeId)
-            else:
+            elif receiver is not self.HAVE_RECEIVER:
                 # Compile explicit receiver
                 compileReceiver()
 

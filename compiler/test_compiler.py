@@ -3790,6 +3790,51 @@ class TestCompiler(TestCaseWithDefinitions):
                                                           flags=frozenset([LET]))],
                              flags=frozenset([METHOD, ARRAY])))
 
+    def testAllocateLocalArrayForEffect(self):
+        source = "final class Foo[static T](x: i64)\n" + \
+                 "  arrayelements T, get, set, length\n" + \
+                 "def f = { new(3i32) Foo[String](12); {}; }"
+        package = self.compileFromSource(source)
+        Foo = package.findClass(name="Foo")
+        ctor = Foo.constructors[0]
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", UnitType, [[
+                               i32(3),
+                               tycs(getStringClass()),
+                               allocarr(Foo),
+                               i64(12),
+                               tycs(getStringClass()),
+                               callg(ctor),
+                               drop(),
+                               unit(),
+                               ret(),
+                             ]]))
+
+    def testAllocateForeignArrayForValue(self):
+        fooPackage = Package(name=Name(["foo"]))
+        arrayClass = fooPackage.addClass(Name(["Array"]), typeParameters=[],
+                                         supertypes=[getRootClassType()],
+                                         fields=[], methods=[],
+                                         flags=frozenset([PUBLIC, FINAL, ARRAY]),
+                                         elementType=I32Type)
+        arrayType = ClassType(arrayClass)
+        ctor = fooPackage.addFunction(Name(["Array", CONSTRUCTOR_SUFFIX]), returnType=UnitType,
+                                      typeParameters=[], parameterTypes=[arrayType],
+                                      flags=frozenset([PUBLIC, METHOD, CONSTRUCTOR]))
+        arrayClass.constructors = [ctor]
+        loader = FakePackageLoader([fooPackage])
+
+        source = "def f = new(3i32) foo.Array()"
+        package = self.compileFromSource(source, packageLoader=loader)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", arrayType, [[
+                               i32(3),
+                               allocarrf(arrayClass),
+                               dup(),
+                               callgf(ctor),
+                               drop(),
+                               ret()]]))
+
     def testBlockOrdering(self):
         sys.setrecursionlimit(2000)
         source = "def f =\n" + \

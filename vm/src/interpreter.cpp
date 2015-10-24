@@ -1131,13 +1131,13 @@ void Interpreter::store(Block* block, word_t offset, Type* type) {
   } else {
     auto size = type->typeSize();
     if (size == 1) {
-      mem<Block*>(block, offset, pop<i8>());
+      mem<i8>(block, offset) = pop<i8>();
     } else if (size == 2) {
-      mem<Block*>(block, offset, pop<i16>());
+      mem<i16>(block, offset) = pop<i16>();
     } else if (size == 4) {
-      mem<Block*>(block, offset, pop<i32>());
+      mem<i32>(block, offset) = pop<i32>();
     } else {
-      mem<Block*>(block, offset, pop<i64>());
+      mem<i64>(block, offset) = pop<i64>();
     }
   }
 }
