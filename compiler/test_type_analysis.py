@@ -1868,6 +1868,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         T = info.package.findTypeParameter(name="Foo.T")
         TType = VariableType(T)
         Foo = info.package.findClass(name="Foo")
+        self.assertEquals(TType, Foo.elementType)
+        self.assertIn(ARRAY, Foo.flags)
         FooType = ClassType(Foo, (TType,))
 
         getMethod = info.package.findFunction(name="Foo.get")

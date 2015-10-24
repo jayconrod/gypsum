@@ -3085,8 +3085,10 @@ class TestCompiler(TestCaseWithDefinitions):
         # try-catch is used for now, since full pattern matching hasn't been implemented yet.
         fooPackage = Package(name=Name(["foo"]))
         exceptionClass = getExceptionClass()
-        clas = fooPackage.addClass(Name(["Bar"]), None, [], [ClassType(exceptionClass)],
-                                None, [], [], [], frozenset([PUBLIC]))
+        clas = fooPackage.addClass(Name(["Bar"]), typeParameters=[],
+                                   supertypes=[ClassType(exceptionClass)],
+                                   constructors=[], fields=[], methods=[],
+                                   flags=frozenset([PUBLIC]))
         loader = FakePackageLoader([fooPackage])
 
         source = "def f =\n" + \
@@ -3305,8 +3307,10 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testForeignCtor(self):
         fooPackage = Package(name=Name(["foo"]))
-        barClass = fooPackage.addClass(Name(["Bar"]), None, [], [getRootClassType()],
-                                       None, [], [], [], frozenset([PUBLIC]))
+        barClass = fooPackage.addClass(Name(["Bar"]), typeParameters=[],
+                                       supertypes=[getRootClassType()],
+                                       constructors=[], fields=[], methods=[],
+                                       flags=frozenset([PUBLIC]))
         barTy = ClassType(barClass)
         ctor = fooPackage.addFunction(Name(["Bar", CONSTRUCTOR_SUFFIX]), None, UnitType,
                                       [], [barTy], None, None,

@@ -660,13 +660,15 @@ class Class(ParameterizedDefn):
         methods (list[Function]?): a list of functions that operate on instances of this class.
             This may be `None` before declaration analysis is complete. Inherited methods may
             be added to this list during class flattening
+        elementType (Type?): if this is an array class, this is the type of the elements. `None`
+            for non-array classes. The `ARRAY` flag must be set if this is not `None`.
         flags (frozenset[flag]): flags indicating how this class is used. Valid flags are
-            `ABSTRACT`, `EXTERN`, `PUBLIC`, `PROTECTED`, `PRIVATE`.
+            `ABSTRACT`, `ARRAY`, `EXTERN`, `PUBLIC`, `PROTECTED`, `PRIVATE`.
     """
 
     def __init__(self, name, id, astDefn=None, typeParameters=None, supertypes=None,
                  initializer=None, constructors=None, fields=None, methods=None,
-                 flags=frozenset()):
+                 elementType=None, flags=frozenset()):
         super(Class, self).__init__(name, id, astDefn)
         self.typeParameters = typeParameters
         self.supertypes = supertypes
@@ -674,11 +676,12 @@ class Class(ParameterizedDefn):
         self.constructors = constructors
         self.fields = fields
         self.methods = methods
+        self.elementType = elementType
         self.flags = flags
 
     def __repr__(self):
         return reprFormat(self, "name", "typeParameters", "supertypes", "initializer",
-                          "constructors", "fields", "methods", "flags")
+                          "constructors", "fields", "methods", "elementType", "flags")
 
     def __str__(self):
         buf = StringIO.StringIO()
@@ -692,6 +695,8 @@ class Class(ParameterizedDefn):
             buf.write("  constructor %s\n" % ctor.id)
         for method in self.methods:
             buf.write("  method %s\n" % method.id)
+        if self.elementType is not None:
+            buf.write("  arrayelements %s\n" % str(self.elementType))
         return buf.getvalue()
 
     def __eq__(self, other):
@@ -702,6 +707,7 @@ class Class(ParameterizedDefn):
                self.constructors == other.constructors and \
                self.fields == other.fields and \
                self.methods == other.methods and \
+               self.elementType == other.elementType and \
                self.flags == other.flags
 
     def superclass(self):

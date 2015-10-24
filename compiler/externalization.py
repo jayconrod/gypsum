@@ -83,6 +83,7 @@ class Externalizer(object):
             externDefn = ir.Class(defn.name, id, astDefn=defn.astDefn,
                                   supertypes=defn.supertypes,
                                   fields=defn.fields,
+                                  elementType=defn.elementType,
                                   flags=externFlags)
             externDefns.append(externDefn)
             externDefn.typeParameters = [self.externalizeDefn(param)
@@ -93,6 +94,8 @@ class Externalizer(object):
             each(self.package.addName, (f.name for f in defn.fields))
             each(self.externalizeType, (f.type for f in defn.fields))
             externDefn.methods = [self.externalizeMethod(m, dep) for m in defn.methods]
+            if externDefn.elementType is not None:
+                self.externalizeType(externDefn.elementType)
         elif isinstance(defn, ir.TypeParameter):
             externDefn = ir.TypeParameter(defn.name, id, astDefn=defn.astDefn,
                                           upperBound=defn.upperBound,

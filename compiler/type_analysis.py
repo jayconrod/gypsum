@@ -411,7 +411,8 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         elementType = self.visit(node.elementType)
         receiverType = self.getReceiverType()
         irClass = self.scope().getIrDefn()
-        assert isinstance(irClass, ir.Class)
+        assert isinstance(irClass, ir.Class) and ARRAY in irClass.flags
+        irClass.elementType = elementType
 
         getMethod = self.info.getDefnInfo(node.getDefn).irDefn
         getMethod.returnType = elementType
