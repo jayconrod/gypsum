@@ -56,6 +56,8 @@
 
 (setq gypsum-keywords-regexp (regexp-opt
   '("abstract"
+    "arrayelements"
+    "as"
     "break"
     "case"
     "catch"
@@ -63,14 +65,14 @@
     "continue"
     "def"
     "else"
-    "false"
+    "final"
     "finally"
     "if"
     "import"
     "lambda"
     "let"
     "match"
-    "null"
+    "new"
     "private"
     "protected"
     "public"
@@ -80,7 +82,6 @@
     "this"
     "throw"
     "trait"
-    "true"
     "try"
     "var"
     "while")))
