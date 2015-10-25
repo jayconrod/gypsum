@@ -49,11 +49,13 @@ TEST({testName}) {{
 
   Local<Stack> stack(vm.stack());
   Interpreter interpreter(&vm, stack);
-  Local<Function> init(package->initFunction());
-  Local<Function> entry(package->entryFunction());
+  Local<Function> init(&vm, package->initFunction());
+  Local<Function> entry(&vm, package->entryFunction());
   try {{
-    if (*init)
+    if (init)
       interpreter.call(init);
+    if (!entry)
+      throw TestException("main function not found");
     interpreter.call(entry);
   }} catch (Error exn) {{
     // Test will throw an exception on failure.

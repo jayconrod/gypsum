@@ -533,8 +533,8 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         case LDE: {
           currentMap.pcOffset = pcOffset;
           maps.push_back(currentMap);
-          currentMap.pop();
           auto receiverType = currentMap.pop();
+          currentMap.pop();  // index (i32)
           auto elementType = handle(receiverType->effectiveClass()->elementType());
           currentMap.push(elementType);
           break;
@@ -548,6 +548,10 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           currentMap.pop();
           break;
         }
+
+        case ALLOCARR:
+          currentMap.pop();
+          // fall through.
 
         case ALLOCOBJ: {
           i64 classId = readVbn(bytecode, &pcOffset);
@@ -566,42 +570,13 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
+        case ALLOCARRF:
+          currentMap.pop();
+          // fall through.
+
         case ALLOCOBJF: {
           auto depIndex = readVbn(bytecode, &pcOffset);
           auto externIndex = readVbn(bytecode, &pcOffset);
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
-          auto clas = handle(package->dependencies()->get(depIndex)
-              ->linkedClasses()->get(externIndex));
-          vector<Local<Type>> typeArgs;
-          currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
-          auto type = Type::create(heap, clas, typeArgs);
-          currentMap.push(type);
-          break;
-        }
-
-        case ALLOCARRI: {
-          i64 classId = readVbn(bytecode, &pcOffset);
-          readVbn(bytecode, &pcOffset);  // length is unused
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
-          Local<Type> type;
-          if (isBuiltinId(classId)) {
-            type = handle(roots->getBuiltinType(classId));
-          } else {
-            Local<Class> clas(package->getClass(classId));
-            vector<Local<Type>> typeArgs;
-            currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
-            type = Type::create(heap, clas, typeArgs);
-          }
-          currentMap.push(type);
-          break;
-        }
-
-        case ALLOCARRIF: {
-          auto depIndex = readVbn(bytecode, &pcOffset);
-          auto externIndex = readVbn(bytecode, &pcOffset);
-          readVbn(bytecode, &pcOffset);  // length is unused
           currentMap.pcOffset = pcOffset;
           maps.push_back(currentMap);
           auto clas = handle(package->dependencies()->get(depIndex)

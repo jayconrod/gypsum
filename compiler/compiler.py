@@ -1526,8 +1526,9 @@ class CompileVisitor(ast.AstNodeVisitor):
                 self.visit(receiver, COMPILE_FOR_VALUE)
 
         def compileArgs():
-            for arg in argExprs:
-                self.visit(arg, COMPILE_FOR_VALUE)
+            if argExprs is not None:
+                for arg in argExprs:
+                    self.visit(arg, COMPILE_FOR_VALUE)
 
         def compileTypeArgs():
             self.buildStaticTypeArguments(callInfo.typeArguments)

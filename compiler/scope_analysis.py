@@ -27,7 +27,7 @@ from flags import *
 from graph import Graph
 from ids import AstId, DefnId, PackageId, ScopeId, BUILTIN_SCOPE_ID, GLOBAL_SCOPE_ID, PACKAGE_SCOPE_ID
 import ir
-from ir_types import getRootClassType, ClassType, UnitType
+from ir_types import getRootClassType, ClassType, UnitType, I32Type
 from location import Location, NoLoc
 from builtins import registerBuiltins, getBuiltinClasses
 from utils import Counter
@@ -1439,7 +1439,7 @@ class ClassScope(Scope):
                 raise ScopeException(astDefn.location, "non-final class may not have elements")
             irScopeDefn.flags |= frozenset([ARRAY])
             name = self.makeName(ir.ARRAY_LENGTH_SUFFIX)
-            irDefn = self.info.package.newField(name, astDefn=astDefn,
+            irDefn = self.info.package.newField(name, astDefn=astDefn, type=I32Type,
                                                 flags=frozenset([PRIVATE, LET, ARRAY]))
             irScopeDefn.fields.append(irDefn)
             shouldBind = False

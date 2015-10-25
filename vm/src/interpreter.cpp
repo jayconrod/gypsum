@@ -462,34 +462,34 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
-      case ALLOCARRI: {
+      case ALLOCARR: {
         auto classId = readVbn();
-        auto length = readVbn();
-        Object* obj = nullptr;
+        length_t length = pop<i32>();
+        Object* array = nullptr;
         {
           GCSafeScope gcSafe(this);
           HandleScope handleScope(vm_);
           auto meta = getMetaForClassId(classId);
-          obj = *Object::create(vm_->heap(), meta, length);
+          array = *Object::create(vm_->heap(), meta, length);
         }
-        push<Block*>(obj);
+        push<Block*>(array);
         break;
       }
 
-      case ALLOCARRIF: {
+      case ALLOCARRF: {
         auto depIndex = toLength(readVbn());
         auto externIndex = toLength(readVbn());
-        auto length = toLength(readVbn());
-        Object* obj = nullptr;
+        length_t length = pop<i32>();
+        Object* array = nullptr;
         {
           GCSafeScope gcSafe(this);
           HandleScope handleScope(vm_);
           auto clas = handle(function_->package()->dependencies()->get(depIndex)
               ->linkedClasses()->get(externIndex));
           auto meta = Class::ensureAndGetInstanceMeta(clas);
-          obj = *Object::create(vm_->heap(), meta, length);
+          array = *Object::create(vm_->heap(), meta, length);
         }
-        push<Block*>(obj);
+        push<Block*>(array);
         break;
       }
 

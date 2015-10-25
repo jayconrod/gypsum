@@ -102,6 +102,7 @@ class Class: public Block {
   void setElementType(Type* newElementType) { elementType_.set(this, newElementType); }
 
   length_t lengthFieldIndex() const { return lengthFieldIndex_; }
+  void setLengthFieldIndex(length_t newIndex) { lengthFieldIndex_ = newIndex; }
 
   /** Constructs a new instance Meta whether one already exists or not. Does not use handles
    *  or invoke the garbage collector. This is used by Roots, since GC is not available there.
