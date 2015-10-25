@@ -41,7 +41,7 @@ class PackageLoader(BasePackageLoader):
         if paths is not None:
             self.paths = paths
         elif os.environ.get("CS_PACKAGE_PATH") is not None:
-            self.paths = os.environ["CS_PACKAGE_PATH"]
+            self.paths = os.environ["CS_PACKAGE_PATH"].split(":")
         else:
             self.paths = []
 
