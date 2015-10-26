@@ -1920,6 +1920,12 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "def f = new(12i32) NonArray"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
+    def testArrayWithoutNew(self):
+        source = "final class Array[static T]\n" + \
+                 "  arrayelements T, get, set, length\n" + \
+                 "def f = Array[String]()"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     # Tests for usage
     def testUseClassBeforeDefinition(self):
         source = "def f = C()\n" + \

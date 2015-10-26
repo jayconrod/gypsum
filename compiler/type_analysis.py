@@ -1629,8 +1629,16 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             A tuple of `(DefnInfo, [Type], ClassType)` containing the constructor definition,
             the full list of type arguments applied to the constructor, and the receiver type.
             The type arguments are always the same as the ones on the receiver type.
+
+        Raises:
+            ScopeException: if a definition with this name can't be found or used.
+            TypeException: if the definition can't be used because of a type mismatch or if
+                the class has array elements (and should not be constructed outside of a
+                `new` expression).
         """
         assert nameInfo.isClass() and argTypes is not None
+        if ARRAY in nameInfo.getDefnInfo().irDefn.flags:
+            raise TypeException(loc, "cannot construct instance without `new` expression")
         ctorNameInfo, receiverType = self.extractConstructorNameInfo(nameInfo, typeArgs, loc)
         ctorDefnInfo, ctorAllTypeArgs = self.chooseDefnFromNameInfo(ctorNameInfo, receiverType,
                                                                     None, argTypes, loc)
