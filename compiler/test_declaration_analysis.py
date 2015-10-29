@@ -397,6 +397,35 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.analyzeFromSource("let String = 42")
         # pass if no error
 
+    def testClassWithArrayElements(self):
+        source = "final class Foo[static T]\n" + \
+                 "  final arrayelements T, public get, public set, public length"
+        info = self.analyzeFromSource(source)
+        Foo = info.package.findClass(name="Foo")
+        self.assertIn(ARRAY, Foo.flags)
+        T = info.package.findTypeParameter(name="Foo.T")
+        getter = info.package.findFunction(name="Foo.get")
+        setter = info.package.findFunction(name="Foo.set")
+        length = info.package.findFunction(name="Foo.length")
+        for accessor in [getter, setter, length]:
+            self.assertEquals([T], accessor.typeParameters)
+            self.assertEquals(frozenset([PUBLIC, METHOD, ARRAY]), accessor.flags)
+            self.assertIn(accessor, Foo.methods)
+        lengthField = Foo.fields[-1]
+        self.assertEquals(self.makeField(Name(["Foo", ARRAY_LENGTH_SUFFIX]),
+                                         flags=frozenset([PRIVATE, LET, ARRAY])),
+                          lengthField)
+
+    def testNonFinalClassWithArrayElements(self):
+        source = "class Foo\n" + \
+                 "  arrayelements i32, get, set, length"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
+    def testClassWithArrayElementsWithBadFlag(self):
+        source = "final class Foo[static T]\n" + \
+                 "  private arrayelements T, get, set, length"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
     def testImportStaticMethod(self):
         source = "class Foo\n" + \
                  "  static def m = 12\n" + \

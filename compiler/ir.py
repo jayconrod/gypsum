@@ -280,6 +280,7 @@ PACKAGE_INIT_NAME = Name(["$pkginit"])
 CLASS_INIT_SUFFIX = "$init"
 ANON_PARAMETER_SUFFIX = "$parameter"
 RECEIVER_SUFFIX = "$this"
+ARRAY_LENGTH_SUFFIX = "$length"
 
 
 class PackagePrefix(object):
@@ -491,11 +492,14 @@ class Function(ParameterizedDefn):
         insts (list[Instruction]?): a list of instructions to insert instead of calling this
             function. This is set for some (not all) builtin functions. For instance, the `+`
             method of `i64` has a list containing an `addi64` instruction.
+        compileHint (symbol?): if set, the compiler will generate instructions for a specific
+            kind of function (for example, an array getter) instead of generating instructions
+            from a function body (which may not be present).
     """
 
     def __init__(self, name, id, astDefn=None, returnType=None, typeParameters=None,
                  parameterTypes=None, variables=None, blocks=None, flags=frozenset(),
-                 insts=None):
+                 insts=None, compileHint=None):
         super(Function, self).__init__(name, id, astDefn)
         self.returnType = returnType
         self.typeParameters = typeParameters
@@ -504,6 +508,7 @@ class Function(ParameterizedDefn):
         self.blocks = blocks
         self.flags = flags
         self.insts = insts
+        self.compileHint = compileHint
 
     def __repr__(self):
         return reprFormat(self, "name", "returnType", "typeParameters", "parameterTypes",
@@ -540,7 +545,9 @@ class Function(ParameterizedDefn):
                self.parameterTypes == other.parameterTypes and \
                self.variables == other.variables and \
                self.blocks == other.blocks and \
-               self.flags == other.flags
+               self.flags == other.flags and \
+               self.insts == other.insts and \
+               self.compileHint is other.compileHint
 
     def getReceiverClass(self):
         """Returns the class of the receiver.
@@ -653,13 +660,15 @@ class Class(ParameterizedDefn):
         methods (list[Function]?): a list of functions that operate on instances of this class.
             This may be `None` before declaration analysis is complete. Inherited methods may
             be added to this list during class flattening
+        elementType (Type?): if this is an array class, this is the type of the elements. `None`
+            for non-array classes. The `ARRAY` flag must be set if this is not `None`.
         flags (frozenset[flag]): flags indicating how this class is used. Valid flags are
-            `ABSTRACT`, `EXTERN`, `PUBLIC`, `PROTECTED`, `PRIVATE`.
+            `ABSTRACT`, `ARRAY`, `EXTERN`, `PUBLIC`, `PROTECTED`, `PRIVATE`.
     """
 
     def __init__(self, name, id, astDefn=None, typeParameters=None, supertypes=None,
                  initializer=None, constructors=None, fields=None, methods=None,
-                 flags=frozenset()):
+                 elementType=None, flags=frozenset()):
         super(Class, self).__init__(name, id, astDefn)
         self.typeParameters = typeParameters
         self.supertypes = supertypes
@@ -667,11 +676,12 @@ class Class(ParameterizedDefn):
         self.constructors = constructors
         self.fields = fields
         self.methods = methods
+        self.elementType = elementType
         self.flags = flags
 
     def __repr__(self):
         return reprFormat(self, "name", "typeParameters", "supertypes", "initializer",
-                          "constructors", "fields", "methods", "flags")
+                          "constructors", "fields", "methods", "elementType", "flags")
 
     def __str__(self):
         buf = StringIO.StringIO()
@@ -685,6 +695,8 @@ class Class(ParameterizedDefn):
             buf.write("  constructor %s\n" % ctor.id)
         for method in self.methods:
             buf.write("  method %s\n" % method.id)
+        if self.elementType is not None:
+            buf.write("  arrayelements %s\n" % str(self.elementType))
         return buf.getvalue()
 
     def __eq__(self, other):
@@ -695,6 +707,7 @@ class Class(ParameterizedDefn):
                self.constructors == other.constructors and \
                self.fields == other.fields and \
                self.methods == other.methods and \
+               self.elementType == other.elementType and \
                self.flags == other.flags
 
     def superclass(self):
@@ -1063,6 +1076,7 @@ __all__ = [
     "CLASS_INIT_SUFFIX",
     "ANON_PARAMETER_SUFFIX",
     "RECEIVER_SUFFIX",
+    "ARRAY_LENGTH_SUFFIX",
     "PackagePrefix",
     "PackageDependency",
     "Global",

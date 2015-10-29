@@ -191,6 +191,38 @@ class AstPrimaryConstructorDefinition(AstDefinition):
         return self.attribs + self.parameters
 
 
+class AstArrayElementsStatement(AstDefinition):
+    def __init__(self, attribs, elementType, getDefn, setDefn, lengthDefn, location):
+        super(AstArrayElementsStatement, self).__init__(attribs, location)
+        self.elementType = elementType
+        self.getDefn = getDefn
+        self.setDefn = setDefn
+        self.lengthDefn = lengthDefn
+
+    def __repr__(self):
+        return "AstArrayElementsStatement(%s, %s, %s, %s)" % \
+            (repr(self.elementType), repr(self.getDefn),
+             repr(self.setDefn), repr(self.lengthDefn))
+
+    def tag(self):
+        return "ArrayElementsStatement"
+
+    def children(self):
+        return self.attribs + [self.elementType, self.getDefn, self.setDefn, self.lengthDefn]
+
+
+class AstArrayAccessorDefinition(AstDefinition):
+    def __init__(self, attribs, name, location):
+        super(AstArrayAccessorDefinition, self).__init__(attribs, location)
+        self.name = name
+
+    def __repr__(self):
+        return "AstArrayAccessorDefinition(%s)" % repr(self.name)
+
+    def tag(self):
+        return "ArrayAccessorDefinition"
+
+
 class AstImportStatement(AstNode):
     def __init__(self, prefix, bindings, location):
         super(AstImportStatement, self).__init__(location)
@@ -668,6 +700,27 @@ class AstCallExpression(AstExpression):
         if self.arguments is not None:
             result.extend(self.arguments)
         return result
+
+
+class AstNewArrayExpression(AstExpression):
+    def __init__(self, length, ty, arguments, location):
+        super(AstNewArrayExpression, self).__init__(location)
+        self.length = length
+        self.ty = ty
+        self.arguments = arguments
+
+    def __repr__(self):
+        return "AstNewArrayExpression(%s, %s, %s)" % \
+            (repr(self.length), repr(self.ty), repr(self.arguments))
+
+    def tag(self):
+        return "NewArrayExpression"
+
+    def children(self):
+        children = [self.length, self.ty]
+        if self.arguments is not None:
+            children += self.arguments
+        return children
 
 
 class AstUnaryExpression(AstExpression):

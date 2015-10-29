@@ -171,6 +171,7 @@ class Serializer(object):
         else:
             self.writeMethodList(clas.constructors)
             self.writeMethodList(clas.methods)
+        self.writeOption(self.writeType, clas.elementType)
 
     def writeField(self, field):
         self.writeName(field.name)
@@ -282,6 +283,13 @@ class Serializer(object):
         self.writeVbn(len(list))
         for elem in list:
             writer(elem)
+
+    def writeOption(self, writer, opt):
+        if opt is None:
+            self.writeVbn(0)
+        else:
+            self.writeVbn(1)
+            writer(opt)
 
     def writeVbn(self, value):
         buf = bytearray()
@@ -442,6 +450,7 @@ class Deserializer(object):
         clas.fields = self.readFields()
         clas.constructors = self.readList(self.readMethodId)
         clas.methods = self.readList(self.readMethodId)
+        clas.elementType = self.readOption(self.readType)
 
     def readForeignClass(self, clas, dep):
         clas.name = self.readName()
@@ -585,6 +594,16 @@ class Deserializer(object):
             elem = reader(*args)
             elems.append(elem)
         return elems
+
+    def readOption(self, reader, *args):
+        n = self.readVbn()
+        if n == 0:
+            return None
+        elif n == 1:
+            opt = reader(*args)
+            return opt
+        else:
+            raise IOError("invalid option")
 
     def readMethodId(self):
         packageIndex = self.readVbn()

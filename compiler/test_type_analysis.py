@@ -1861,6 +1861,77 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         ctor = Foo.constructors[0]
         self.assertEquals([ClassType(Foo)], ctor.parameterTypes)
 
+    def testClassWithArrayElements(self):
+        source = "final class Foo[static T]\n" + \
+                 "  arrayelements T, get, set, length"
+        info = self.analyzeFromSource(source)
+        T = info.package.findTypeParameter(name="Foo.T")
+        TType = VariableType(T)
+        Foo = info.package.findClass(name="Foo")
+        self.assertEquals(TType, Foo.elementType)
+        self.assertIn(ARRAY, Foo.flags)
+        FooType = ClassType(Foo, (TType,))
+
+        getMethod = info.package.findFunction(name="Foo.get")
+        self.assertEquals(self.makeFunction("Foo.get", typeParameters=[T], returnType=TType,
+                                            parameterTypes=[FooType, I32Type],
+                                            compileHint=ARRAY_ELEMENT_GET_HINT),
+                          getMethod)
+
+        setMethod = info.package.findFunction(name="Foo.set")
+        self.assertEquals(self.makeFunction("Foo.set", typeParameters=[T], returnType=UnitType,
+                                            parameterTypes=[FooType, I32Type, TType],
+                                            compileHint=ARRAY_ELEMENT_SET_HINT),
+                          setMethod)
+
+        lengthMethod = info.package.findFunction(name="Foo.length")
+        self.assertEquals(self.makeFunction("Foo.length", typeParameters=[T],
+                                            returnType=I32Type, parameterTypes=[FooType],
+                                            compileHint=ARRAY_ELEMENT_LENGTH_HINT),
+                          lengthMethod)
+
+    def testClassWithMutableCovariantArrayElements(self):
+        source = "final class Array[static +T]\n" + \
+                 "  arrayelements T, get, set, length"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testClassWithImmutableCovariantArrayElements(self):
+        source = "final class Array[static +T]\n" + \
+                 "  final arrayelements T, get, set, length"
+        self.analyzeFromSource(source)
+        # pass if no exception is raised
+
+    def testNewArray(self):
+        source = "final class Array[static T]\n" + \
+                 "  arrayelements T, get, set, length\n" + \
+                 "def f = new(12i32) Array[String]"
+        info = self.analyzeFromSource(source)
+        Array = info.package.findClass(name="Array")
+        ast = info.ast.modules[0].definitions[-1].body
+        self.assertEquals(I32Type, info.getType(ast.length))
+        self.assertEquals(ClassType(Array, (getStringType(),)), info.getType(ast.ty))
+
+    def testNewArrayBadLength(self):
+        source = "final class Array[static T]\n" + \
+                 "  arrayelements T, get, set, length\n" + \
+                 "def f = new({}) Array[String]"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testNewArrayPrimitive(self):
+        source = "def f = new(12i32) i32"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testNewArrayNonArray(self):
+        source = "class NonArray\n" + \
+                 "def f = new(12i32) NonArray"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testArrayWithoutNew(self):
+        source = "final class Array[static T]\n" + \
+                 "  arrayelements T, get, set, length\n" + \
+                 "def f = Array[String]()"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     # Tests for usage
     def testUseClassBeforeDefinition(self):
         source = "def f = C()\n" + \

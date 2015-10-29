@@ -27,7 +27,7 @@ from flags import *
 from graph import Graph
 from ids import AstId, DefnId, PackageId, ScopeId, BUILTIN_SCOPE_ID, GLOBAL_SCOPE_ID, PACKAGE_SCOPE_ID
 import ir
-from ir_types import getRootClassType, ClassType, UnitType
+from ir_types import getRootClassType, ClassType, UnitType, I32Type
 from location import Location, NoLoc
 from builtins import registerBuiltins, getBuiltinClasses
 from utils import Counter
@@ -647,7 +647,7 @@ class Scope(ast.AstNodeVisitor):
         irInitializerName = name.withSuffix(ir.CLASS_INIT_SUFFIX)
         irInitializer = self.info.package.addFunction(irInitializerName, astDefn,
                                                       None, list(implicitTypeParams),
-                                                      None, [], None, frozenset())
+                                                      None, [], None, frozenset([INITIALIZER]))
         self.makeMethod(irInitializer, irDefn)
         irDefn.initializer = irInitializer
 
@@ -1432,9 +1432,30 @@ class ClassScope(Scope):
             irCtor = self.info.getDefnInfo(self.ast.constructor).irDefn
             irCtor.variables.append(irDefn)
             shouldBind = False
-        else:
-            assert isinstance(astDefn, ast.AstClassDefinition)
+        elif isinstance(astDefn, ast.AstClassDefinition):
             irDefn, shouldBind = self.createIrClassDefn(astDefn)
+        elif isinstance(astDefn, ast.AstArrayElementsStatement):
+            checkFlags(flags, frozenset([FINAL]), astDefn.location)
+            if FINAL not in irScopeDefn.flags:
+                raise ScopeException(astDefn.location, "non-final class may not have elements")
+            irScopeDefn.flags |= frozenset([ARRAY])
+            name = self.makeName(ir.ARRAY_LENGTH_SUFFIX)
+            irDefn = self.info.package.newField(name, astDefn=astDefn, type=I32Type,
+                                                flags=frozenset([PRIVATE, LET, ARRAY]))
+            irScopeDefn.fields.append(irDefn)
+            shouldBind = False
+        else:
+            assert isinstance(astDefn, ast.AstArrayAccessorDefinition)
+            name = self.makeName(astDefn.name)
+            checkFlags(flags, frozenset([FINAL, PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
+            flags |= frozenset([ARRAY])
+            implicitTypeParams = self.getImplicitTypeParameters()
+            irDefn = self.info.package.addFunction(name, astDefn,
+                                                   typeParameters=implicitTypeParams,
+                                                   variables=[],
+                                                   flags=flags)
+            self.makeMethod(irDefn, irScopeDefn)
+            irScopeDefn.methods.append(irDefn)
         return irDefn, shouldBind, isVisible
 
     def canImport(self, defnInfo):
@@ -1713,7 +1734,14 @@ class DeclarationVisitor(ScopeVisitor):
 
     def visitAstPrimaryConstructorDefinition(self, node):
         self.scope.declare(node)
-        super(DeclarationVisitor, self).visitChildren(node)
+        self.visitChildren(node)
+
+    def visitAstArrayElementsStatement(self, node):
+        self.scope.declare(node)
+        self.visitChildren(node)
+
+    def visitAstArrayAccessorDefinition(self, node):
+        self.scope.declare(node)
 
     def visitAstImportStatement(self, node):
         self.scope.addImport(node)

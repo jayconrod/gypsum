@@ -243,6 +243,52 @@ class TestParser(unittest.TestCase):
                         parameter(),
                         "var x")
 
+    def testArrayElements(self):
+        self.checkParse(astArrayElementsStatement([],
+                                                  astUnitType(),
+                                                  astArrayAccessorDefinition([], "get"),
+                                                  astArrayAccessorDefinition([], "set"),
+                                                  astArrayAccessorDefinition([], "length")),
+                        arrayElementsStmt(),
+                        "arrayelements unit, get, set, length;")
+
+    def testArrayElementsAttribs(self):
+        self.checkParse(astArrayElementsStatement([astAttribute("final")],
+                                                  astUnitType(),
+                                                  astArrayAccessorDefinition([], "get"),
+                                                  astArrayAccessorDefinition([], "set"),
+                                                  astArrayAccessorDefinition([], "length")),
+                        arrayElementsStmt(),
+                        "final arrayelements unit, get, set, length;")
+
+    def testArrayElementsOperators(self):
+        self.checkParse(astArrayElementsStatement([],
+                                                  astUnitType(),
+                                                  astArrayAccessorDefinition([], "!"),
+                                                  astArrayAccessorDefinition([], "!!"),
+                                                  astArrayAccessorDefinition([], "!!!")),
+                        arrayElementsStmt(),
+                        "arrayelements unit, !, !!, !!!;")
+
+    def testArrayElementsAttribs(self):
+        self.checkParse(astArrayElementsStatement([],
+                                                  astUnitType(),
+                                                  astArrayAccessorDefinition([astAttribute("public")], "get"),
+                                                  astArrayAccessorDefinition([astAttribute("protected")], "set"),
+                                                  astArrayAccessorDefinition([astAttribute("private")], "length")),
+                        arrayElementsStmt(),
+                        "arrayelements unit, public get, protected set, private length;")
+
+    def testClassWithArrayElements(self):
+        self.checkParse(astClassDefinition([], "Foo", [], None, None, None,
+                                           [astArrayElementsStatement([],
+                                                                      astUnitType(),
+                                                                      astArrayAccessorDefinition([], "get"),
+                                                                      astArrayAccessorDefinition([], "set"),
+                                                                      astArrayAccessorDefinition([], "length"))]),
+                        classDefn(),
+                        "class Foo { arrayelements unit, get, set, length; };")
+
     def testImportBlank(self):
         self.checkParse(astImportStatement([astScopePrefixComponent("foo", None),
                                             astScopePrefixComponent("bar", [astErasedType()])],
@@ -899,6 +945,32 @@ class TestParser(unittest.TestCase):
                                                                 astVariableExpression("y")),
                                             astVariableExpression("z")),
                         expression(), "(x + y) * z")
+
+    def testNewArrayExpr(self):
+        self.checkParse(astNewArrayExpression(astLiteralExpression(astIntegerLiteral(123, 64)),
+                                              astClassType([], "Foo", [], set()),
+                                              None),
+                        expression(), "new(123) Foo")
+
+    def testNewArrayExprWithTypeArgs(self):
+        self.checkParse(astNewArrayExpression(astLiteralExpression(astIntegerLiteral(123, 64)),
+                                              astClassType([], "Foo", [astClassType([], "Bar", [], set())], set()),
+                                              None),
+                        expression(), "new(123) Foo[Bar]")
+
+    def testNewArrayExprWithPrefix(self):
+        self.checkParse(astNewArrayExpression(astLiteralExpression(astIntegerLiteral(123, 64)),
+                                              astClassType([astScopePrefixComponent("Foo", [astClassType([], "Bar", [], set())])],
+                                                           "Baz", [], set()),
+                                              None),
+                        expression(), "new(123) Foo[Bar].Baz")
+
+    def testNewArrayExprWithArgs(self):
+        self.checkParse(astNewArrayExpression(astLiteralExpression(astIntegerLiteral(123, 64)),
+                                              astClassType([], "Foo", [], set()),
+                                              [astVariableExpression("x"),
+                                               astVariableExpression("y")]),
+                        expression(), "new(123) Foo(x, y)")
 
     # Literals
     def testBooleanLits(self):

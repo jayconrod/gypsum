@@ -278,7 +278,9 @@ Local<T>::Local(S* block)
 template <class T>
 template <class S>
 Local<T>::Local(VM* vm, S* block)
-    : Handle<T>(reinterpret_cast<T**>(HandleStorage::fromVM(vm)->createLocal(block))) {
+    : Handle<T>(block != nullptr
+        ? reinterpret_cast<T**>(HandleStorage::fromVM(vm)->createLocal(block))
+        : nullptr) {
   CHECK_SUBTYPE_VALUE(T*, block);
 }
 

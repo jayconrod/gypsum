@@ -11,8 +11,8 @@ from bytecode import W8, W16, W32, W64, BUILTIN_TYPE_CLASS_ID, BUILTIN_TYPE_CTOR
 from ir import IrTopDefn, Class, Field, Function, Global, LOCAL, Package, PACKAGE_INIT_NAME, RECEIVER_SUFFIX, Variable
 from ir_types import NoType, UnitType, BooleanType, I8Type, I16Type, I32Type, I64Type, F32Type, F64Type, ClassType, VariableType, NULLABLE_TYPE_FLAG, getExceptionClassType, getClassFromType, getStringType, getRootClassType
 import ir_instructions
-from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PACKAGE_INITIALIZER_HINT, DefnInfo, NORMAL_MODE, STD_MODE, NOSTD_MODE
-from flags import ABSTRACT, STATIC, LET
+from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PACKAGE_INITIALIZER_HINT, ARRAY_ELEMENT_GET_HINT, ARRAY_ELEMENT_SET_HINT, ARRAY_ELEMENT_LENGTH_HINT, DefnInfo, NORMAL_MODE, STD_MODE, NOSTD_MODE
+from flags import ABSTRACT, STATIC, LET, ARRAY
 from errors import SemanticException
 from builtins import getTypeClass, getExceptionClass, getRootClass, getStringClass, getBuiltinFunctionById, getBuiltinClassById
 import type_analysis
@@ -164,6 +164,25 @@ class CompileVisitor(ast.AstNodeVisitor):
                         self.visit(defn, COMPILE_FOR_EFFECT)
             self.unit()
             self.ret()
+        elif self.compileHint is ARRAY_ELEMENT_GET_HINT:
+            self.ldlocal(1)  # index
+            self.loadThis()
+            self.lde()
+            self.ret()
+        elif self.compileHint is ARRAY_ELEMENT_SET_HINT:
+            self.ldlocal(2)  # value
+            self.ldlocal(1)  # index
+            self.loadThis()
+            self.ste()
+            self.unit()
+            self.ret()
+        else:
+            assert self.compileHint is ARRAY_ELEMENT_LENGTH_HINT
+            self.loadThis()
+            clas = self.function.getReceiverClass()
+            length = next(f for f in clas.fields if ARRAY in f.flags)
+            self.ldf(length.index)
+            self.ret()
 
         self.function.blocks = self.blocks
 
@@ -267,6 +286,10 @@ class CompileVisitor(ast.AstNodeVisitor):
         pass
 
     def visitAstClassDefinition(self, defn, mode):
+        assert mode is COMPILE_FOR_EFFECT
+        pass
+
+    def visitAstArrayElementsStatement(self, defn, mode):
         assert mode is COMPILE_FOR_EFFECT
         pass
 
@@ -389,7 +412,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             if not isBlank(p, pty):
                 if i != lastMatchingIndex:
                     self.dup()
-                self.ldp(i)
+                self.ldf(i)
                 self.visit(p, mode, pty, elementFailBlock)
 
         # Clean up.
@@ -537,6 +560,23 @@ class CompileVisitor(ast.AstNodeVisitor):
         callInfo = self.info.getCallInfo(expr)
         self.buildCall(useInfo, callInfo, expr.callee, expr.arguments,
                        mode, allowAllocation=False)
+
+    def visitAstNewArrayExpression(self, expr, mode):
+        useInfo = self.info.getUseInfo(expr)
+        callInfo = self.info.getCallInfo(expr)
+
+        # Allocate the array.
+        self.visit(expr.length, COMPILE_FOR_VALUE)
+        self.buildStaticTypeArguments(callInfo.typeArguments)
+        irClass = self.info.getType(expr).clas
+        if irClass.isForeign():
+            self.allocarrf(irClass)
+        else:
+            self.allocarr(irClass)
+
+        # Call the constructor normally without allowing allocation. This works similarly to
+        # how constructors can call other constructors.
+        self.buildCall(useInfo, callInfo, self.HAVE_RECEIVER, expr.arguments, mode, False)
 
     def visitAstUnaryExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)
@@ -1323,31 +1363,10 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.loadThis()
 
     def loadField(self, field):
-        ty = field.type
-        if ty.isObject():
-            inst = ir_instructions.ldp
-        elif ty.width == W8:
-            inst = ir_instructions.ld8
-        elif ty.width == W16:
-            inst = ir_instructions.ld16
-        elif ty.width == W32:
-            inst = ir_instructions.ld32
-        elif ty.width == W64:
-            inst = ir_instructions.ld64
-        self.add(inst(field.index))
+        self.ldf(field.index)
 
     def storeField(self, field):
-        if field.type.isObject():
-            inst = ir_instructions.stp
-        elif field.type.width == W8:
-            inst = ir_instructions.st8
-        elif field.type.width == W16:
-            inst = ir_instructions.st16
-        elif field.type.width == W32:
-            inst = ir_instructions.st32
-        elif field.type.width == W64:
-            inst = ir_instructions.st64
-        self.add(inst(field.index))
+        self.stf(field.index)
 
     def loadThis(self):
         assert self.function.isMethod()
@@ -1481,6 +1500,8 @@ class CompileVisitor(ast.AstNodeVisitor):
             index = method.getReceiverClass().getMethodIndex(method)
             self.callv(len(method.parameterTypes), index)
 
+    HAVE_RECEIVER = "HAVE_RECEIVER"
+
     def buildCall(self, useInfo, callInfo, receiver, argExprs, mode, allowAllocation=True):
         shouldDropForEffect = mode is COMPILE_FOR_EFFECT
         defnInfo = useInfo.defnInfo
@@ -1492,7 +1513,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             closureInfo = None
 
         def compileReceiver():
-            assert receiver is not None
+            assert receiver is not None and receiver is not self.HAVE_RECEIVER
             if isinstance(receiver, LValue):
                 if receiver.onStack():
                     self.dup()
@@ -1505,8 +1526,9 @@ class CompileVisitor(ast.AstNodeVisitor):
                 self.visit(receiver, COMPILE_FOR_VALUE)
 
         def compileArgs():
-            for arg in argExprs:
-                self.visit(arg, COMPILE_FOR_VALUE)
+            if argExprs is not None:
+                for arg in argExprs:
+                    self.visit(arg, COMPILE_FOR_VALUE)
 
         def compileTypeArgs():
             self.buildStaticTypeArguments(callInfo.typeArguments)
@@ -1514,6 +1536,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         if not irDefn.isConstructor() and not irDefn.isMethod():
             # Global or static function.
             if receiver is not None:
+                assert receiver is not self.HAVE_RECEIVER
                 compileReceiver()
             compileArgs()
             compileTypeArgs()
@@ -1532,7 +1555,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                 self.loadThis()
             if mode is COMPILE_FOR_VALUE:
                 self.dup()
-            if receiver is not None:
+            if receiver is not None and receiver is not self.HAVE_RECEIVER:
                 compileReceiver()
             compileArgs()
             compileTypeArgs()
@@ -1559,7 +1582,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                 else:
                     # This is a regular method. Load "this".
                     self.loadContext(defnInfo.scopeId)
-            else:
+            elif receiver is not self.HAVE_RECEIVER:
                 # Compile explicit receiver
                 compileReceiver()
 
@@ -1654,10 +1677,10 @@ class CompileVisitor(ast.AstNodeVisitor):
             dropFieldBlock = self.newBlock()
             for i in xrange(n - 1):
                 self.dup()
-                self.ldp(i)
+                self.ldf(i)
                 self.visit(subPatterns[i], COMPILE_FOR_MATCH,
                            getRootClassType(), dropFieldBlock)
-            self.ldp(n - 1)
+            self.ldf(n - 1)
             self.visit(subPatterns[-1], COMPILE_FOR_MATCH, getRootClassType(), dropSomeBlock)
             successState = self.saveCurrentBlock()
 

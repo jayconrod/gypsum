@@ -809,6 +809,24 @@ void Loader::readClass(const Local<Class>& clas) {
     methods->set(i, *method);
   }
 
+  auto elementTypeOpt = readLengthVbn();
+  Local<Type> elementType;
+  length_t lengthFieldIndex = kIndexNotSet;
+  if (elementTypeOpt == 1) {
+    elementType = readType();
+    for (length_t i = 0; i < fields->length(); i++) {
+      if ((fields->get(i)->flags() & ARRAY_FLAG) != 0) {
+        lengthFieldIndex = i;
+        break;
+      }
+    }
+    if (lengthFieldIndex == kIndexNotSet) {
+      throw Error("no length field found in array");
+    }
+  } else if (elementTypeOpt != 0) {
+    throw Error("invalid option");
+  }
+
   clas->setName(*name);
   clas->setFlags(flags);
   clas->setTypeParameters(*typeParameters);
@@ -816,6 +834,8 @@ void Loader::readClass(const Local<Class>& clas) {
   clas->setFields(*fields);
   clas->setConstructors(*constructors);
   clas->setMethods(*methods);
+  clas->setElementType(elementType.getOrNull());
+  clas->setLengthFieldIndex(lengthFieldIndex);
   clas->setPackage(*package_);
 }
 

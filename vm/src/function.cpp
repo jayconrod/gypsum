@@ -506,44 +506,52 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           currentMap.pop();
         }
 
-        case LD8:
-        case LD16:
-        case LD32:
-        case LD64: {
+        case LDF: {
           auto index = readVbn(bytecode, &pcOffset);
           currentMap.pcOffset = pcOffset;
           maps.push_back(currentMap);
-          Local<Class> clas(currentMap.pop()->asClass());
-          Local<Type> type(block_cast<Field>(clas->fields()->get(index))->type());
-          currentMap.push(type);
-          break;
-        }
-
-        case LDP: {
-          auto index = readVbn(bytecode, &pcOffset);
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
-          Local<Type> receiverType(currentMap.pop());
-          Local<Class> receiverClass(receiverType->asClass());
-          Local<Class> fieldClass(receiverClass->findFieldClass(index));
-          Local<Type> fieldType(receiverClass->fields()->get(index)->type());
-          fieldType = Type::substituteForInheritance(fieldType, receiverClass, fieldClass);
-          fieldType = Type::substitute(fieldType, receiverType->getTypeArgumentBindings());
+          auto receiverType = currentMap.pop();
+          auto receiverClass = handle(receiverType->effectiveClass());
+          auto fieldType = handle(receiverClass->fields()->get(index)->type());
+          if (fieldType->isObject()) {
+            auto fieldClass = handle(receiverClass->findFieldClass(index));
+            fieldType = Type::substituteForInheritance(fieldType, receiverClass, fieldClass);
+            fieldType = Type::substitute(fieldType, receiverType->getTypeArgumentBindings());
+          }
           currentMap.push(fieldType);
           break;
         }
 
-        case ST8:
-        case ST16:
-        case ST32:
-        case ST64:
-        case STP:
+        case STF:
           readVbn(bytecode, &pcOffset);
           currentMap.pcOffset = pcOffset;
           maps.push_back(currentMap);
           currentMap.pop();
           currentMap.pop();
           break;
+
+        case LDE: {
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          auto receiverType = currentMap.pop();
+          currentMap.pop();  // index (i32)
+          auto elementType = handle(receiverType->effectiveClass()->elementType());
+          currentMap.push(elementType);
+          break;
+        }
+
+        case STE: {
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          currentMap.pop();
+          currentMap.pop();
+          currentMap.pop();
+          break;
+        }
+
+        case ALLOCARR:
+          currentMap.pop();
+          // fall through.
 
         case ALLOCOBJ: {
           i64 classId = readVbn(bytecode, &pcOffset);
@@ -562,42 +570,13 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
+        case ALLOCARRF:
+          currentMap.pop();
+          // fall through.
+
         case ALLOCOBJF: {
           auto depIndex = readVbn(bytecode, &pcOffset);
           auto externIndex = readVbn(bytecode, &pcOffset);
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
-          auto clas = handle(package->dependencies()->get(depIndex)
-              ->linkedClasses()->get(externIndex));
-          vector<Local<Type>> typeArgs;
-          currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
-          auto type = Type::create(heap, clas, typeArgs);
-          currentMap.push(type);
-          break;
-        }
-
-        case ALLOCARRI: {
-          i64 classId = readVbn(bytecode, &pcOffset);
-          readVbn(bytecode, &pcOffset);  // length is unused
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
-          Local<Type> type;
-          if (isBuiltinId(classId)) {
-            type = handle(roots->getBuiltinType(classId));
-          } else {
-            Local<Class> clas(package->getClass(classId));
-            vector<Local<Type>> typeArgs;
-            currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
-            type = Type::create(heap, clas, typeArgs);
-          }
-          currentMap.push(type);
-          break;
-        }
-
-        case ALLOCARRIF: {
-          auto depIndex = readVbn(bytecode, &pcOffset);
-          auto externIndex = readVbn(bytecode, &pcOffset);
-          readVbn(bytecode, &pcOffset);  // length is unused
           currentMap.pcOffset = pcOffset;
           maps.push_back(currentMap);
           auto clas = handle(package->dependencies()->get(depIndex)

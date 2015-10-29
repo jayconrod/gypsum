@@ -250,7 +250,8 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         clas = package.addClass(ir.Name(["Foo"]), typeParameters=[typeParam],
                                 supertypes=[supertype],
                                 constructors=[], fields=[field],
-                                methods=[], flags=frozenset([flags.PUBLIC]))
+                                methods=[], elementType=ir_types.VariableType(typeParam),
+                                flags=frozenset([flags.PUBLIC, flags.FINAL, flags.ARRAY]))
         ty = ir_types.ClassType(clas)
         constructor = package.addFunction(ir.Name(["Foo", ir.CONSTRUCTOR_SUFFIX]),
                                           None, ir_types.UnitType, [],
