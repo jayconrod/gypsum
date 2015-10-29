@@ -12,7 +12,6 @@
 - variadic type parameterization
 - dynamic type parameterization
 - template type parameterization
-- arrays
 - native functions
 - standard library
 - downcasting and type testing
@@ -60,13 +59,9 @@
 ## Compiler
 - Coding convention
 - improved debug output for scope, types, etc.
-- fewer classes should inherit from Data
-  - compile info classes
-  - ir classes
-- no optional parameters: prevent objects from being extended
 - AST classes should always be referenced through module and should not start with Ast
 - Does NameInfo.findDefnInfoWithArgTypes need to return allArgTypes? Seems unused.
-- Function.isMethod should exclude constructor results.
+- Speed up and parallelize tests
 
 ## VM
 - use variadic arguments for API call
