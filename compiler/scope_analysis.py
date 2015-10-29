@@ -647,7 +647,7 @@ class Scope(ast.AstNodeVisitor):
         irInitializerName = name.withSuffix(ir.CLASS_INIT_SUFFIX)
         irInitializer = self.info.package.addFunction(irInitializerName, astDefn,
                                                       None, list(implicitTypeParams),
-                                                      None, [], None, frozenset())
+                                                      None, [], None, frozenset([INITIALIZER]))
         self.makeMethod(irInitializer, irDefn)
         irDefn.initializer = irInitializer
 
@@ -1435,6 +1435,7 @@ class ClassScope(Scope):
         elif isinstance(astDefn, ast.AstClassDefinition):
             irDefn, shouldBind = self.createIrClassDefn(astDefn)
         elif isinstance(astDefn, ast.AstArrayElementsStatement):
+            checkFlags(flags, frozenset([FINAL]), astDefn.location)
             if FINAL not in irScopeDefn.flags:
                 raise ScopeException(astDefn.location, "non-final class may not have elements")
             irScopeDefn.flags |= frozenset([ARRAY])

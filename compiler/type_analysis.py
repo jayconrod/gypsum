@@ -7,12 +7,13 @@
 import ast
 import compile_info
 from errors import ScopeException, TypeException
+from ids import GLOBAL_SCOPE_ID
 import ir
 import ir_types as ir_t
 from builtins import getExceptionClass, getPackageClass, getNothingClass
 from utils import COMPILE_FOR_VALUE, COMPILE_FOR_MATCH, COMPILE_FOR_UNINITIALIZED, COMPILE_FOR_EFFECT, each
 from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, NORMAL_MODE, STD_MODE, NOSTD_MODE, CallInfo, ScopePrefixInfo
-from flags import COVARIANT, CONTRAVARIANT, PROTECTED, PUBLIC, STATIC, ARRAY
+from flags import COVARIANT, CONTRAVARIANT, CONSTRUCTOR, INITIALIZER, PROTECTED, PUBLIC, STATIC, ARRAY
 import scope_analysis
 
 
@@ -425,6 +426,8 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         setMethod.parameterTypes = [receiverType, ir_t.I32Type, elementType]
         setMethod.variables[0].type = receiverType
         setMethod.compileHint = compile_info.ARRAY_ELEMENT_SET_HINT
+        if any(a.name == "final" for a in node.attribs):
+            setMethod.flags |= frozenset([INITIALIZER])
 
         lengthMethod = self.info.getDefnInfo(node.lengthDefn).irDefn
         lengthMethod.returnType = ir_t.I32Type
@@ -642,7 +645,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                             else []
             superScope = self.info.getScope(ir_t.getClassFromType(supertype))
             self.handlePropertyCall(ir.CONSTRUCTOR_SUFFIX, superScope, supertype,
-                                    None, superArgTypes, True, node.id, node.location)
+                                    None, superArgTypes, True, True, node.id, node.location)
 
         irInitializer = irClass.initializer
         irInitializer.parameterTypes = [thisType]
@@ -671,11 +674,12 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.handleFunctionCommon(node, None, None)
 
     def visitAstArrayElementsStatement(self, node):
-        # Check that the element type is invariant.
-        # TODO: if a covariant parameter is used, mark the set method as an initializer, and
-        # forbid it from being called except by a constructor or another initializer.
-        irClass = self.scope().getIrDefn()
-        with VarianceScope(self, ir_t.INVARIANT, irClass):
+        # The array element type is either covariant or invariant, depending on whether the
+        # elements are immutable.
+        variance = COVARIANT \
+                   if any(a.name == "final" for a in node.attribs) \
+                   else ir_t.INVARIANT
+        with VarianceScope(self, variance, self.scope().getIrDefn()):
             self.visit(node.elementType)
 
     def visitAstImportStatement(self, node):
@@ -757,7 +761,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         if len(node.prefix) > 0:
             hasReceiver = not self.info.hasScopePrefixInfo(node.prefix[-1])
             patTy = self.handlePropertyCall(node.name, scope, receiverType, None, None,
-                                            hasReceiver, node.id, node.location)
+                                            hasReceiver, False, node.id, node.location)
         else:
             patTy = self.handleUnprefixedCall(node.name, None, None, node.id, node.location)
         return patTy
@@ -856,8 +860,11 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             ty = self.handlePossiblePrefixSymbol(node.propertyName, receiverScope, receiverType,
                                                  None, node.id, node.location)
         else:
+            receiverIsReceiver = isinstance(node.receiver, ast.AstThisExpression) or \
+                                 isinstance(node.receiver, ast.AstSuperExpression)
             ty = self.handlePropertyCall(node.propertyName, receiverScope, receiverType,
-                                         None, None, hasReceiver, node.id, node.location)
+                                         None, None, hasReceiver, receiverIsReceiver,
+                                         node.id, node.location)
         return ty
 
     def visitAstCallExpression(self, node, mayBePrefix=False):
@@ -892,13 +899,13 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             else:
                 ty = self.handlePropertyCall(node.callee.propertyName, receiverScope,
                                              receiverType, typeArgs, argTypes,
-                                             hasReceiver, node.id, node.location)
+                                             hasReceiver, False, node.id, node.location)
         elif isinstance(node.callee, ast.AstThisExpression) or \
              isinstance(node.callee, ast.AstSuperExpression):
             receiverType = self.visit(node.callee)
             receiverScope = self.info.getScope(ir_t.getClassFromType(receiverType))
             self.handlePropertyCall(ir.CONSTRUCTOR_SUFFIX, receiverScope, receiverType,
-                                    typeArgs, argTypes, True, node.id, node.location)
+                                    typeArgs, argTypes, True, True, node.id, node.location)
             ty = ir_t.UnitType
         else:
             # TODO: callable expression
@@ -1204,7 +1211,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                        if prefix[i].typeArguments is not None \
                        else None
             ty = self.handlePropertyCall(prefix[i].name, scope, receiverType, typeArgs, None,
-                                         True, prefix[i].id, prefix[i].location)
+                                         True, False, prefix[i].id, prefix[i].location)
             self.info.setType(prefix[i], ty)
             i += 1
 
@@ -1231,6 +1238,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.checkNameInfoIsValue(nameInfo, loc)
         defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, receiverType,
                                                             None, None, loc)
+        self.checkCallAllowed(defnInfo.irDefn, True, USE_AS_VALUE, loc)
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
         scope.use(defnInfo, useAstId, USE_AS_VALUE, loc)
         return self.getDefnType(receiverType, False, defnInfo.irDefn, allTypeArgs)
@@ -1290,14 +1298,13 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, receiverType,
                                                                 typeArgs, None, loc)
 
-        callInfo = CallInfo(allTypeArgs)
+        self.checkCallAllowed(defnInfo.irDefn, False, USE_AS_PROPERTY, loc)
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
-
         self.scope().use(defnInfo, useAstId, USE_AS_PROPERTY, loc)
         return self.getDefnType(receiverType, True, defnInfo.irDefn, allTypeArgs)
 
     def handlePropertyCall(self, name, receiverScope, receiverType,
-                           typeArgs, argTypes, hasReceiver, useAstId, loc):
+                           typeArgs, argTypes, hasReceiver, receiverIsReceiver, useAstId, loc):
         """Handles a reference to a property inside an object or a scope.
 
         This can be used for methods, fields, and inner-class constructors with an explicit
@@ -1311,6 +1318,10 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 type arguments which may be implied in this call.
             typeArgs: a list of `Type` arguments passes as part of the call. May be `None`.
             argTypes: a list of `Type`s of arguments passed as part of the call. May be `None`.
+            hasReceiver: whether the expression has a receiver. If the beginning of the
+                expression is a scope prefix, there might be no receiver.
+            receiverIsReceiver: whether the receiver used in the call is the same as the
+                caller's receiver. This is required for some calls.
             useAstId: the AST id where the symbol is referenced. Used to save info.
             loc: the location of the reference in source code. Used in errors.
 
@@ -1341,6 +1352,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         if receiverNeeded and not hasReceiver:
             raise TypeException(loc, "%s: cannot access without receiver" % name)
 
+        self.checkCallAllowed(defnInfo.irDefn, receiverIsReceiver, useKind, loc)
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
         self.scope().use(defnInfo, useAstId, useKind, loc)
         return self.getDefnType(receiverType, True, defnInfo.irDefn, allTypeArgs)
@@ -1381,6 +1393,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, receiverType,
                                                                 typeArgs, argTypes, loc)
         irDefn = defnInfo.irDefn
+        self.checkCallAllowed(irDefn, True, useKind, loc)
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
         self.scope().use(defnInfo, useAstId, useKind, loc)
         return self.getDefnType(receiverType, False, irDefn, allTypeArgs)
@@ -1462,6 +1475,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             isAssignment = name != operandNameInfo.name
 
         # Record information and return the resulting type.
+        self.checkCallAllowed(defnInfo.irDefn, False, useKind, loc)
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
         self.scope().use(defnInfo, useAstId, useKind, loc)
         ty = self.getDefnType(receiverType, False, defnInfo.irDefn, allTypeArgs)
@@ -1502,6 +1516,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         nameInfo = classScope.lookupFromExternal(ir.CONSTRUCTOR_SUFFIX, loc)
         defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, objectType,
                                                             None, argTypes, loc)
+        self.checkCallAllowed(defnInfo.irDefn, False, USE_AS_CONSTRUCTOR, loc)
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
         self.scope().use(defnInfo, useAstId, USE_AS_CONSTRUCTOR, loc)
 
@@ -1512,6 +1527,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             # Call to possibly overloaded matcher function.
             defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, receiverType,
                                                                 typeArgs, [exprType], loc)
+            self.checkCallAllowed(defnInfo.irDefn, False, useKind, loc)
             self.info.setCallInfo(matcherAstId, CallInfo(allTypeArgs))
             self.scope().use(defnInfo, matcherAstId, useKind, loc)
             irDefn = defnInfo.irDefn
@@ -1556,7 +1572,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             try:
                 returnType = self.handlePropertyCall("try-match", matcherScope,
                                                      matcherReceiverType, None, [exprType],
-                                                     matcherHasReceiver, matcherAstId, loc)
+                                                     matcherHasReceiver, False,
+                                                     matcherAstId, loc)
             except ScopeException:
                 raise TypeException(loc, "cannot match without `try-match` method")
 
@@ -1708,6 +1725,35 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             raise TypeException(loc, "%s: could not find compatible definition" % name)
         return candidate
 
+    def checkCallAllowed(self, irCallee, receiverIsReceiver, useKind, loc):
+        """Checks whether a call to a function is valid.
+
+        This may be called on any reference to a definition. For references to non-functions,
+        it will do nothing. If the call is not allowed (for example, because the method is
+        marked as an initializer and the caller is not also an initializer), an exception will
+        be raised.
+
+        Args:
+            irCallee (IrDefinition): the definition being referenced.
+            receiverIsReceiver (bool): True if the callee's receiver is also the caller's
+                receiver. False otherwise. This is required for initializers.
+            useKind (symbol): how the definition is being used.
+            loc (Location): the location of the reference in source, used in errors.
+
+        Raises:
+            TypeException: if the call is not allowed.
+        """
+        if not isinstance(irCallee, ir.Function):
+            return
+        irCaller = self.getCallingFunction()
+        assert irCaller is None or isinstance(irCaller, ir.Function)
+        if len(frozenset([CONSTRUCTOR, INITIALIZER]) & irCallee.flags) > 0 and \
+           useKind is not USE_AS_CONSTRUCTOR and \
+           (irCaller is None or \
+            len(frozenset([CONSTRUCTOR, INITIALIZER]) & irCaller.flags) == 0 or \
+            not receiverIsReceiver):
+            raise TypeException(loc, "cannot call initializer function here")
+
     def getDefnType(self, receiverType, receiverIsExplicit, irDefn, typeArgs):
         """Gets the type of a definition that was referenced by name.
 
@@ -1827,6 +1873,15 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def isAnalyzingFunction(self):
         return len(self.functionStack) > 0 and self.functionStack[-1] is not None
+
+    def getCallingFunction(self):
+        if self.scope().scopeId is GLOBAL_SCOPE_ID:
+            return None
+        irCaller = self.scope().getIrDefn()
+        if isinstance(irCaller, ir.Class):
+            # Could actually be primary constructor, might not matter.
+            irCaller = irCaller.initializer
+        return irCaller
 
 
 def astTypeFlagToIrTypeFlag(flag):

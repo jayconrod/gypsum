@@ -399,7 +399,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
 
     def testClassWithArrayElements(self):
         source = "final class Foo[static T]\n" + \
-                 "  arrayelements T, public get, public set, public length"
+                 "  final arrayelements T, public get, public set, public length"
         info = self.analyzeFromSource(source)
         Foo = info.package.findClass(name="Foo")
         self.assertIn(ARRAY, Foo.flags)
@@ -419,6 +419,11 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
     def testNonFinalClassWithArrayElements(self):
         source = "class Foo\n" + \
                  "  arrayelements i32, get, set, length"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
+    def testClassWithArrayElementsWithBadFlag(self):
+        source = "final class Foo[static T]\n" + \
+                 "  private arrayelements T, get, set, length"
         self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
     def testImportStaticMethod(self):

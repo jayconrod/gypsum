@@ -3139,7 +3139,7 @@ class TestCompiler(TestCaseWithDefinitions):
                              variables=[self.makeVariable(Name(["Foo", CLASS_INIT_SUFFIX, RECEIVER_SUFFIX]),
                                                           type=thisType,
                                                           kind=PARAMETER, flags=frozenset([LET]))],
-                             flags=frozenset([METHOD])))
+                             flags=frozenset([METHOD, INITIALIZER])))
 
     def testDefaultCtorCallsInitializer(self):
         source = "class Foo"
