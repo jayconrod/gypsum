@@ -13,4 +13,4 @@ $(OUT_DIR)/compiler: $(COMPILER_DIR)/compiler.spec $(COMPILER_SOURCES) $(COMMON_
 check: check-compiler
 
 check-compiler:
-	(cd $(COMPILER_DIR); python -m unittest discover)
+	$(COMPILER_DIR)/run-tests
