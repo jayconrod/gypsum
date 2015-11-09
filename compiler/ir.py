@@ -384,7 +384,7 @@ class PackageDependency(object):
 class IrDefinition(object):
     def __init__(self, name, astDefn):
         assert name is None or isinstance(name, Name)
-        assert astDefn is None or isinstance(astDefn, ast.AstNode)
+        assert astDefn is None or isinstance(astDefn, ast.Node)
         self.name = name
         self.astDefn = astDefn
 
@@ -436,7 +436,7 @@ class Global(IrTopDefn):
     Attributes:
         name (Name): the name of the global
         id (DefnId): unique identifier for the global.
-        astDefn (AstNode?): the location in source code where the global is defined.
+        astDefn (ast.Node?): the location in source code where the global is defined.
         type (Type?): the type of the global. May be `None` before type analysis.
         flags (frozenset[flag]): flags indicating how this global may be used. Valid flags are
             `EXTERN`, `LET`, `PUBLIC`.
@@ -469,7 +469,7 @@ class Function(ParameterizedDefn):
     Attributes:
         name (Name): the name of the function.
         id (DefnId): unique identifier for the function.
-        astDefn (AstNode?): the location in source code where the function is defined.
+        astDefn (ast.Node?): the location in source code where the function is defined.
         returnType (Type?): the return type of the function. May be `None` before type analysis.
         typeParameters (list[TypeParameter]?): a list of type parameters used in this
             definition. When this function is called, type arguments need to be passed which
@@ -637,7 +637,7 @@ class Class(ParameterizedDefn):
     Attributes:
         name (Name): the name of the class.
         id (DefnId): unique identifier for the class.
-        astDefn (AstNode?): the location in source code where the class is defined.
+        astDefn (ast.Node?): the location in source code where the class is defined.
         typeParameters (list[TypeParameter]?): a list of type parameters used in this
             definition. Values with a `ClassType` for this class must have type arguments that
             correspond to these parameters. Note that this list should include not only the
@@ -870,7 +870,7 @@ class TypeParameter(IrTopDefn):
     Attributes:
         name (Name): the name of the type parameter.
         id (DefnId): unique identifier of the type parameter.
-        astDefn (AstNode?): the location in source code where the type parameter is defined.
+        astDefn (ast.Node?): the location in source code where the type parameter is defined.
         upperBound (Type?): type arguments must be a subtype of this. May be `None` before
             type analysis.
         lowerBound (Type?): type arguments must be a supertype of this. May be `None` before
@@ -983,7 +983,7 @@ class Field(IrDefinition):
 
     Attributes:
         name (Name): the name of the field.
-        astDefn (AstNode?): the location in source code where the field is defined.
+        astDefn (ast.Node?): the location in source code where the field is defined.
         type (Type?): the type of the field. May be `None` before type analysis.
         flags (frozenset[flag]): flags indicating how this field is used. Valid flags are
             `LET`, `PUBLIC`, `PROTECTED`, `PRIVATE`, `STATIC`.

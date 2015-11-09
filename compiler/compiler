@@ -13,7 +13,7 @@ import os.path
 import re
 import sys
 
-from ast import AstPackage, AstPrinter
+import ast
 from location import NoLoc
 from ids import AstId, TARGET_PACKAGE_ID
 from ir import Package, PackageVersion, PackageDependency, Name
@@ -87,12 +87,12 @@ try:
         if args.print_layout:
             for tok in layoutTokens:
                 sys.stdout.write(str(tok) + "\n")
-        ast = parse(sourceFileName, layoutTokens)
+        astModule = parse(sourceFileName, layoutTokens)
         if args.print_ast:
-            printer = AstPrinter(sys.stdout)
-            printer.visit(ast)
-        astModules.append(ast)
-    astPackage = AstPackage(astModules, NoLoc)
+            printer = ast.Printer(sys.stdout)
+            printer.visit(astModule)
+        astModules.append(astModule)
+    astPackage = ast.Package(astModules, NoLoc)
     astPackage.id = AstId(-1)
 
     package = Package(TARGET_PACKAGE_ID, args.package_name, args.package_version)

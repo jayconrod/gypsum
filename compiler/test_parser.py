@@ -23,8 +23,8 @@ from combinators import *
 nloc = Location("<test>", 1, 1, 1, 1)
 
 for k, v in ast.__dict__.iteritems():
-    if k.startswith("Ast") and type(v) is type:
-        altName = "ast" + k[3:]
+    if type(v) is type and issubclass(v, ast.Node):
+        altName = "ast" + k
         altCtor = (lambda ctor: (lambda *args: ctor(*(args + (nloc,)))))(v)
         globals()[altName] = altCtor
 

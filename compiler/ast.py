@@ -11,14 +11,14 @@ import utils
 import visitor
 
 
-class AstNode(object):
+class Node(object):
     def __init__(self, location):
         self.id = None
         self.location = location
 
     def __str__(self):
         buf = StringIO.StringIO()
-        printer = AstPrinter(buf)
+        printer = Printer(buf)
         printer.visit(self)
         return buf.getvalue()
 
@@ -36,70 +36,58 @@ class AstNode(object):
         return []
 
 
-class AstPackage(AstNode):
+class Package(Node):
     def __init__(self, modules, location):
-        super(AstPackage, self).__init__(location)
+        super(Package, self).__init__(location)
         self.modules = modules
 
     def __repr__(self):
-        return "AstPackage(%s)" % repr(self.modules)
-
-    def tag(self):
-        return "AstPackage"
+        return "Package(%s)" % repr(self.modules)
 
     def children(self):
         return self.modules
 
 
-class AstModule(AstNode):
+class Module(Node):
     def __init__(self, definitions, location):
-        super(AstModule, self).__init__(location)
+        super(Module, self).__init__(location)
         self.definitions = definitions
 
     def __repr__(self):
-        return "AstModule(%s)" % repr(self.definitions)
-
-    def tag(self):
-        return "AstModule"
+        return "Module(%s)" % repr(self.definitions)
 
     def children(self):
         return self.definitions
 
 
-class AstAttribute(AstNode):
+class Attribute(Node):
     def __init__(self, name, location):
-        super(AstAttribute, self).__init__(location)
+        super(Attribute, self).__init__(location)
         self.name = name
 
     def __repr__(self):
-        return "AstAttribute(%s)" % self.name
-
-    def tag(self):
-        return "Attribute"
+        return "Attribute(%s)" % self.name
 
     def data(self):
         return self.name
 
 
-class AstDefinition(AstNode):
+class Definition(Node):
     def __init__(self, attribs, location):
-        super(AstDefinition, self).__init__(location)
+        super(Definition, self).__init__(location)
         self.attribs = attribs
 
 
-class AstVariableDefinition(AstDefinition):
+class VariableDefinition(Definition):
     def __init__(self, attribs, keyword, pattern, expression, location):
-        super(AstVariableDefinition, self).__init__(attribs, location)
+        super(VariableDefinition, self).__init__(attribs, location)
         self.keyword = keyword
         self.pattern = pattern
         self.expression = expression
 
     def __repr__(self):
-        return "AstVariableDefinition(%s, %s, %s)" % \
+        return "VariableDefinition(%s, %s, %s)" % \
             (self.keyword, repr(self.pattern), repr(self.expression))
-
-    def tag(self):
-        return "VariableDefinition"
 
     def data(self):
         return self.keyword
@@ -108,9 +96,9 @@ class AstVariableDefinition(AstDefinition):
         return self.attribs + [self.pattern, self.expression]
 
 
-class AstFunctionDefinition(AstDefinition):
+class FunctionDefinition(Definition):
     def __init__(self, attribs, name, typeParameters, parameters, returnType, body, location):
-        super(AstFunctionDefinition, self).__init__(attribs, location)
+        super(FunctionDefinition, self).__init__(attribs, location)
         self.name = name
         self.typeParameters = typeParameters
         self.parameters = parameters
@@ -118,12 +106,9 @@ class AstFunctionDefinition(AstDefinition):
         self.body = body
 
     def __repr__(self):
-        return "AstFunctionDefinition(%s, %s, %s, %s, %s)" % \
+        return "FunctionDefinition(%s, %s, %s, %s, %s)" % \
             (repr(self.name), repr(self.typeParameters), repr(self.parameters),
              repr(self.returnType), repr(self.body))
-
-    def tag(self):
-        return "FunctionDefinition"
 
     def data(self):
         return self.name
@@ -136,10 +121,10 @@ class AstFunctionDefinition(AstDefinition):
         return self.name == "this"
 
 
-class AstClassDefinition(AstDefinition):
+class ClassDefinition(Definition):
     def __init__(self, attribs, name, typeParameters, constructor,
                  supertype, superArgs, members, location):
-        super(AstClassDefinition, self).__init__(attribs, location)
+        super(ClassDefinition, self).__init__(attribs, location)
         self.name = name
         self.typeParameters = typeParameters
         self.constructor = constructor
@@ -148,13 +133,10 @@ class AstClassDefinition(AstDefinition):
         self.members = members
 
     def __repr__(self):
-        return "AstClassDefinition(%s, %s, %s, %s, %s, %s)" % \
+        return "ClassDefinition(%s, %s, %s, %s, %s, %s)" % \
             (repr(self.name), repr(self.typeParameters), repr(self.constructor),
              repr(self.supertype), repr(self.superArgs),
              repr(self.members))
-
-    def tag(self):
-        return "ClassDefinition"
 
     def data(self):
         return self.name
@@ -172,100 +154,82 @@ class AstClassDefinition(AstDefinition):
 
     def hasConstructors(self):
         return self.constructor is not None or \
-               any(isinstance(member, AstFunctionDefinition) and member.isConstructor()
+               any(isinstance(member, FunctionDefinition) and member.isConstructor()
                    for member in self.members)
 
 
-class AstPrimaryConstructorDefinition(AstDefinition):
+class PrimaryConstructorDefinition(Definition):
     def __init__(self, attribs, parameters, location):
-        super(AstPrimaryConstructorDefinition, self).__init__(attribs, location)
+        super(PrimaryConstructorDefinition, self).__init__(attribs, location)
         self.parameters = parameters
 
     def __repr__(self):
-        return "AstPrimaryConstructorDefinition(%s)" % self.parameters
-
-    def tag(self):
-        return "PrimaryConstructorDefinition"
+        return "PrimaryConstructorDefinition(%s)" % self.parameters
 
     def children(self):
         return self.attribs + self.parameters
 
 
-class AstArrayElementsStatement(AstDefinition):
+class ArrayElementsStatement(Definition):
     def __init__(self, attribs, elementType, getDefn, setDefn, lengthDefn, location):
-        super(AstArrayElementsStatement, self).__init__(attribs, location)
+        super(ArrayElementsStatement, self).__init__(attribs, location)
         self.elementType = elementType
         self.getDefn = getDefn
         self.setDefn = setDefn
         self.lengthDefn = lengthDefn
 
     def __repr__(self):
-        return "AstArrayElementsStatement(%s, %s, %s, %s)" % \
+        return "ArrayElementsStatement(%s, %s, %s, %s)" % \
             (repr(self.elementType), repr(self.getDefn),
              repr(self.setDefn), repr(self.lengthDefn))
-
-    def tag(self):
-        return "ArrayElementsStatement"
 
     def children(self):
         return self.attribs + [self.elementType, self.getDefn, self.setDefn, self.lengthDefn]
 
 
-class AstArrayAccessorDefinition(AstDefinition):
+class ArrayAccessorDefinition(Definition):
     def __init__(self, attribs, name, location):
-        super(AstArrayAccessorDefinition, self).__init__(attribs, location)
+        super(ArrayAccessorDefinition, self).__init__(attribs, location)
         self.name = name
 
     def __repr__(self):
-        return "AstArrayAccessorDefinition(%s)" % repr(self.name)
-
-    def tag(self):
-        return "ArrayAccessorDefinition"
+        return "ArrayAccessorDefinition(%s)" % repr(self.name)
 
 
-class AstImportStatement(AstNode):
+class ImportStatement(Node):
     def __init__(self, prefix, bindings, location):
-        super(AstImportStatement, self).__init__(location)
+        super(ImportStatement, self).__init__(location)
         self.prefix = prefix
         self.bindings = bindings
 
     def __repr__(self):
-        return "AstImportStatement(%s, %s)" % (self.prefix, self.bindings)
-
-    def tag(self):
-        return "ImportStatement"
+        return "ImportStatement(%s, %s)" % (self.prefix, self.bindings)
 
     def children(self):
         return self.prefix + ([] if self.bindings is None else self.bindings)
 
 
-class AstImportBinding(AstNode):
+class ImportBinding(Node):
     def __init__(self, name, asName, location):
-        super(AstImportBinding, self).__init__(location)
+        super(ImportBinding, self).__init__(location)
         self.name = name
         self.asName = asName
 
     def __repr__(self):
-        return "AstImportBinding(%s, %s)" % (self.name, self.asName)
-
-    def tag(self):
-        return "ImportBinding"
+        return "ImportBinding(%s, %s)" % (self.name, self.asName)
 
     def data(self):
         return self.name + (" as %s" % self.asName if self.asName is not None else "")
 
 
-class AstScopePrefixComponent(AstNode):
+class ScopePrefixComponent(Node):
     def __init__(self, name, typeArguments, location):
-        super(AstScopePrefixComponent, self).__init__(location)
+        super(ScopePrefixComponent, self).__init__(location)
         self.name = name
         self.typeArguments = typeArguments
 
     def __repr__(self):
-        return "AstScopePrefixComponent(%s, %s)" % (self.name, self.typeArguments)
-
-    def tag(self):
-        return "ScopePrefixComponent"
+        return "ScopePrefixComponent(%s, %s)" % (self.name, self.typeArguments)
 
     def data(self):
         return self.name
@@ -274,20 +238,17 @@ class AstScopePrefixComponent(AstNode):
         return self.typeArguments if self.typeArguments is not None else []
 
 
-class AstTypeParameter(AstDefinition):
+class TypeParameter(Definition):
     def __init__(self, attribs, variance, name, upperBound, lowerBound, location):
-        super(AstTypeParameter, self).__init__(attribs, location)
+        super(TypeParameter, self).__init__(attribs, location)
         self.name = name
         self.variance = variance
         self.upperBound = upperBound
         self.lowerBound = lowerBound
 
     def __repr__(self):
-        return "AstTypeParameter(%s, %s, %s, %s)" % \
+        return "TypeParameter(%s, %s, %s, %s)" % \
             (repr(self.variance), repr(self.name), repr(self.upperBound), repr(self.lowerBound))
-
-    def tag(self):
-        return "TypeParameter"
 
     def data(self):
         varianceStr = self.variance if self.variance else ""
@@ -297,17 +258,14 @@ class AstTypeParameter(AstDefinition):
         return self.attribs + [self.upperBound, self.lowerBound]
 
 
-class AstParameter(AstDefinition):
+class Parameter(Definition):
     def __init__(self, attribs, var, pattern, location):
-        super(AstParameter, self).__init__(attribs, location)
+        super(Parameter, self).__init__(attribs, location)
         self.var = var
         self.pattern = pattern
 
     def __repr__(self):
-        return "AstParameter(%s, %s)" % (self.var if self.var else "let", repr(self.pattern))
-
-    def tag(self):
-        return "Parameter"
+        return "Parameter(%s, %s)" % (self.var if self.var else "let", repr(self.pattern))
 
     def data(self):
         return self.var
@@ -316,21 +274,18 @@ class AstParameter(AstDefinition):
         return self.attribs + [self.pattern]
 
 
-class AstPattern(AstNode):
+class Pattern(Node):
     pass
 
 
-class AstVariablePattern(AstNode):
+class VariablePattern(Node):
     def __init__(self, name, ty, location):
-        super(AstVariablePattern, self).__init__(location)
+        super(VariablePattern, self).__init__(location)
         self.name = name
         self.ty = ty
 
     def __repr__(self):
-        return "AstVariablePattern(%s, %s)" % (repr(self.name), repr(self.ty))
-
-    def tag(self):
-        return "VariablePattern"
+        return "VariablePattern(%s, %s)" % (repr(self.name), repr(self.ty))
 
     def data(self):
         return self.name
@@ -339,96 +294,78 @@ class AstVariablePattern(AstNode):
         return [self.ty] if self.ty else []
 
 
-class AstBlankPattern(AstNode):
+class BlankPattern(Node):
     def __init__(self, ty, location):
-        super(AstBlankPattern, self).__init__(location)
+        super(BlankPattern, self).__init__(location)
         self.ty = ty
 
     def __repr__(self):
-        return "AstBlankPattern(%s)" % (repr(self.ty))
-
-    def tag(self):
-        return "BlankPattern"
+        return "BlankPattern(%s)" % (repr(self.ty))
 
     def children(self):
         return [self.ty] if self.ty else []
 
 
-class AstLiteralPattern(AstNode):
+class LiteralPattern(Node):
     def __init__(self, literal, location):
-        super(AstLiteralPattern, self).__init__(location)
+        super(LiteralPattern, self).__init__(location)
         self.literal = literal
 
     def __repr__(self):
-        return "AstLiteralPattern(%s)" % repr(self.literal)
-
-    def tag(self):
-        return "LiteralPattern"
+        return "LiteralPattern(%s)" % repr(self.literal)
 
     def children(self):
         return [self.literal]
 
 
-class AstTuplePattern(AstNode):
+class TuplePattern(Node):
     def __init__(self, patterns, location):
-        super(AstTuplePattern, self).__init__(location)
+        super(TuplePattern, self).__init__(location)
         self.patterns = patterns
 
     def __repr__(self):
-        return "AstTuplePattern(%s)" % repr(self.patterns)
-
-    def tag(self):
-        return "TuplePattern"
+        return "TuplePattern(%s)" % repr(self.patterns)
 
     def children(self):
         return self.patterns
 
 
-class AstValuePattern(AstNode):
+class ValuePattern(Node):
     def __init__(self, prefix, name, location):
-        super(AstValuePattern, self).__init__(location)
+        super(ValuePattern, self).__init__(location)
         self.prefix = prefix
         self.name = name
 
     def __repr__(self):
-        return "AstValuePattern(%s, %s)" % (repr(self.prefix), self.name)
-
-    def tag(self):
-        return "ValuePattern"
+        return "ValuePattern(%s, %s)" % (repr(self.prefix), self.name)
 
     def children(self):
         return self.prefix
 
 
-class AstDestructurePattern(AstPattern):
+class DestructurePattern(Pattern):
     def __init__(self, prefix, patterns, location):
-        super(AstDestructurePattern, self).__init__(location)
+        super(DestructurePattern, self).__init__(location)
         self.prefix = prefix
         self.patterns = patterns
 
     def __repr__(self):
-        return "AstDestructurePattern(%s, %s)" % \
+        return "DestructurePattern(%s, %s)" % \
             (repr(self.prefix), self.patterns)
-
-    def tag(self):
-        return "DestructurePattern"
 
     def children(self):
         return self.prefix + self.patterns
 
 
-class AstUnaryPattern(AstPattern):
+class UnaryPattern(Pattern):
     def __init__(self, operator, pattern, location):
-        super(AstUnaryPattern, self).__init__(location)
+        super(UnaryPattern, self).__init__(location)
         self.operator = operator
         self.pattern = pattern
         self.matcherId = None
 
     def __repr__(self):
-        return "AstUnaryPattern(%s, %s)" % (repr(self.operator), repr(self.pattern))
-
-    def tag(self):
-        return "UnaryPattern"
+        return "UnaryPattern(%s, %s)" % (repr(self.operator), repr(self.pattern))
 
     def data(self):
         return self.operator
@@ -437,20 +374,17 @@ class AstUnaryPattern(AstPattern):
         return [self.pattern]
 
 
-class AstBinaryPattern(AstPattern):
+class BinaryPattern(Pattern):
     def __init__(self, operator, left, right, location):
-        super(AstBinaryPattern, self).__init__(location)
+        super(BinaryPattern, self).__init__(location)
         self.operator = operator
         self.left = left
         self.right = right
         self.matcherId = None
 
     def __repr__(self):
-        return "AstBinaryPattern(%s, %s, %s)" % \
+        return "BinaryPattern(%s, %s, %s)" % \
             (repr(self.operator), repr(self.left), repr(self.right))
-
-    def tag(self):
-        return "BinaryPattern"
 
     def data(self):
         return self.operator
@@ -459,89 +393,62 @@ class AstBinaryPattern(AstPattern):
         return [self.left, self.right]
 
 
-class AstType(AstNode):
+class Type(Node):
     pass
 
 
-class AstUnitType(AstType):
+class UnitType(Type):
     def __repr__(self):
-        return "AstUnitType"
-
-    def tag(self):
         return "UnitType"
 
 
-class AstI8Type(AstType):
+class I8Type(Type):
     def __repr__(self):
-        return "AstI8Type"
-
-    def tag(self):
         return "I8Type"
 
 
-class AstI16Type(AstType):
+class I16Type(Type):
     def __repr__(self):
-        return "AstI16Type"
-
-    def tag(self):
         return "I16Type"
 
 
-class AstI32Type(AstType):
+class I32Type(Type):
     def __repr__(self):
-        return "AstI32Type"
-
-    def tag(self):
         return "I32Type"
 
 
-class AstI64Type(AstType):
+class I64Type(Type):
     def __repr__(self):
-        return "AstI64Type"
-
-    def tag(self):
         return "I64Type"
 
 
-class AstF32Type(AstType):
+class F32Type(Type):
     def __repr__(self):
-        return "AstF32Type"
-
-    def tag(self):
         return "F32Type"
 
 
-class AstF64Type(AstType):
+class F64Type(Type):
     def __repr__(self):
-        return "AstF64Type"
-
-    def tag(self):
         return "F64Type"
 
 
-class AstBooleanType(AstType):
+class BooleanType(Type):
     def __repr__(self):
-        return "AstBooleanType"
-
-    def tag(self):
         return "BooleanType"
 
 
-class AstClassType(AstType):
+class ClassType(Type):
     def __init__(self, prefix, name, typeArguments, flags, location):
-        super(AstClassType, self).__init__(location)
+        super(ClassType, self).__init__(location)
         self.prefix = prefix
         self.name = name
         self.typeArguments = typeArguments
         self.flags = flags
 
     def __repr__(self):
-        return "AstClassType(%s, %s, %s, %s)" % \
+        return "ClassType(%s, %s, %s, %s)" % \
                (repr(self.prefix), repr(self.name), repr(self.typeArguments),
                 ", ".join(self.flags))
-
-    def tag(self):
-        return "ClassType"
 
     def data(self):
         return self.name + " " + ", ".join(self.flags)
@@ -555,122 +462,95 @@ class AstClassType(AstType):
         return nodes
 
 
-class AstTupleType(AstType):
+class TupleType(Type):
     def __init__(self, types, flags, location):
-        super(AstTupleType, self).__init__(location)
+        super(TupleType, self).__init__(location)
         self.types = types
         self.flags = flags
 
     def __repr__(self):
-        return "AstTupleType(%s, %s)" % (repr(self.types), ", ".join(self.flags))
-
-    def tag(self):
-        return "TupleType"
+        return "TupleType(%s, %s)" % (repr(self.types), ", ".join(self.flags))
 
     def children(self):
         return self.types
 
 
-class AstErasedType(AstType):
+class ErasedType(Type):
     def __repr__(self):
-        return "AstErasedType"
-
-    def tag(self):
         return "ErasedType"
 
 
-class AstExpression(AstNode):
+class Expression(Node):
     pass
 
 
-class AstLiteralExpression(AstExpression):
+class LiteralExpression(Expression):
     def __init__(self, literal, location):
-        super(AstLiteralExpression, self).__init__(location)
+        super(LiteralExpression, self).__init__(location)
         self.literal = literal
 
     def __repr__(self):
-        return "AstLiteralExpression(%s)" % repr(self.literal)
-
-    def tag(self):
-        return "LiteralExpression"
+        return "LiteralExpression(%s)" % repr(self.literal)
 
     def children(self):
         return [self.literal]
 
 
-class AstVariableExpression(AstExpression):
+class VariableExpression(Expression):
     def __init__(self, name, location):
-        super(AstVariableExpression, self).__init__(location)
+        super(VariableExpression, self).__init__(location)
         self.name = name
 
     def __repr__(self):
-        return "AstVariableExpression(%s)" % repr(self.name)
-
-    def tag(self):
-        return "VariableExpression"
+        return "VariableExpression(%s)" % repr(self.name)
 
     def data(self):
         return self.name
 
 
-class AstThisExpression(AstExpression):
+class ThisExpression(Expression):
     def __repr__(self):
-        return "AstThisExpression"
-
-    def tag(self):
         return "ThisExpression"
 
 
-class AstSuperExpression(AstExpression):
+class SuperExpression(Expression):
     def __repr__(self):
-        return "AstSuperExpression"
-
-    def tag(self):
         return "SuperExpression"
 
 
-class AstBlockExpression(AstExpression):
+class BlockExpression(Expression):
     def __init__(self, statements, location):
-        super(AstBlockExpression, self).__init__(location)
+        super(BlockExpression, self).__init__(location)
         self.statements = statements
 
     def __repr__(self):
-        return "AstBlockExpression(%s)" % repr(self.statements)
-
-    def tag(self):
-        return "BlockExpression"
+        return "BlockExpression(%s)" % repr(self.statements)
 
     def children(self):
         return self.statements
 
 
-class AstAssignExpression(AstExpression):
+class AssignExpression(Expression):
     def __init__(self, left, right, location):
-        super(AstAssignExpression, self).__init__(location)
+        super(AssignExpression, self).__init__(location)
         self.left = left
         self.right = right
 
     def __repr__(self):
-        return "AstAssignExpression(%s, %s)" % (repr(self.left), repr(self.right))
-
-    def tag(self):
-        return "AssignExpression"
+        return "AssignExpression(%s, %s)" % (repr(self.left), repr(self.right))
 
     def children(self):
         return [self.left, self.right]
 
 
-class AstPropertyExpression(AstExpression):
+class PropertyExpression(Expression):
     def __init__(self, receiver, propertyName, location):
-        super(AstPropertyExpression, self).__init__(location)
+        super(PropertyExpression, self).__init__(location)
         self.receiver = receiver
         self.propertyName = propertyName
 
     def __repr__(self):
-        return "AstPropertyExpression(%s, %s)" % (repr(self.receiver), self.propertyName)
-
-    def tag(self):
-        return "AstPropertyExpression"
+        return "PropertyExpression(%s, %s)" % (repr(self.receiver), self.propertyName)
 
     def data(self):
         return self.propertyName
@@ -679,19 +559,16 @@ class AstPropertyExpression(AstExpression):
         return [self.receiver]
 
 
-class AstCallExpression(AstExpression):
+class CallExpression(Expression):
     def __init__(self, callee, typeArguments, arguments, location):
-        super(AstCallExpression, self).__init__(location)
+        super(CallExpression, self).__init__(location)
         self.callee = callee
         self.typeArguments = typeArguments
         self.arguments = arguments
 
     def __repr__(self):
-        return "AstCallExpression(%s, %s, %s)" % \
+        return "CallExpression(%s, %s, %s)" % \
             (repr(self.callee), repr(self.typeArguments), repr(self.arguments))
-
-    def tag(self):
-        return "CallExpression"
 
     def children(self):
         result = [self.callee]
@@ -702,19 +579,16 @@ class AstCallExpression(AstExpression):
         return result
 
 
-class AstNewArrayExpression(AstExpression):
+class NewArrayExpression(Expression):
     def __init__(self, length, ty, arguments, location):
-        super(AstNewArrayExpression, self).__init__(location)
+        super(NewArrayExpression, self).__init__(location)
         self.length = length
         self.ty = ty
         self.arguments = arguments
 
     def __repr__(self):
-        return "AstNewArrayExpression(%s, %s, %s)" % \
+        return "NewArrayExpression(%s, %s, %s)" % \
             (repr(self.length), repr(self.ty), repr(self.arguments))
-
-    def tag(self):
-        return "NewArrayExpression"
 
     def children(self):
         children = [self.length, self.ty]
@@ -723,17 +597,14 @@ class AstNewArrayExpression(AstExpression):
         return children
 
 
-class AstUnaryExpression(AstExpression):
+class UnaryExpression(Expression):
     def __init__(self, operator, expr, location):
-        super(AstUnaryExpression, self).__init__(location)
+        super(UnaryExpression, self).__init__(location)
         self.operator = operator
         self.expr = expr
 
     def __repr__(self):
-        return "AstUnaryExpression(%s, %s)" % (repr(self.operator), self.expr)
-
-    def tag(self):
-        return "UnaryExpression"
+        return "UnaryExpression(%s, %s)" % (repr(self.operator), self.expr)
 
     def data(self):
         return self.operator
@@ -742,18 +613,15 @@ class AstUnaryExpression(AstExpression):
         return [self.expr]
 
 
-class AstBinaryExpression(AstExpression):
+class BinaryExpression(Expression):
     def __init__(self, operator, left, right, location):
-        super(AstBinaryExpression, self).__init__(location)
+        super(BinaryExpression, self).__init__(location)
         self.operator = operator
         self.left = left
         self.right = right
 
     def __repr__(self):
-        return "AstBinaryExpression(%s, %s, %s)" % (self.operator, self.left, self.right)
-
-    def tag(self):
-        return "BinaryExpression"
+        return "BinaryExpression(%s, %s, %s)" % (self.operator, self.left, self.right)
 
     def data(self):
         return self.operator
@@ -762,184 +630,148 @@ class AstBinaryExpression(AstExpression):
         return [self.left, self.right]
 
 
-class AstFunctionValueExpression(AstExpression):
+class FunctionValueExpression(Expression):
     def __init__(self, expr, location):
-        super(AstFunctionValueExpression, self).__init__(location)
+        super(FunctionValueExpression, self).__init__(location)
         self.expr = expr
 
     def __repr__(self):
-        return "AstFunctionValueExpression(%s)" % repr(self.expr)
-
-    def tag(self):
-        return "FunctionValueExpression"
+        return "FunctionValueExpression(%s)" % repr(self.expr)
 
     def children(self):
         return [self.expr]
 
 
-class AstTupleExpression(AstExpression):
+class TupleExpression(Expression):
     def __init__(self, expressions, location):
-        super(AstTupleExpression, self).__init__(location)
+        super(TupleExpression, self).__init__(location)
         self.expressions = expressions
 
     def __repr__(self):
-        return "AstTupleExpression(%s)" % repr(self.expressions)
-
-    def tag(self):
-        return "TupleExpression"
+        return "TupleExpression(%s)" % repr(self.expressions)
 
     def children(self):
         return self.expressions
 
 
-class AstIfExpression(AstExpression):
+class IfExpression(Expression):
     def __init__(self, condition, trueExpr, falseExpr, location):
-        super(AstIfExpression, self).__init__(location)
+        super(IfExpression, self).__init__(location)
         self.condition = condition
         self.trueExpr = trueExpr
         self.falseExpr = falseExpr
 
     def __repr__(self):
-        return "AstIfExpression(%s, %s, %s)" % \
+        return "IfExpression(%s, %s, %s)" % \
             (repr(self.condition), repr(self.trueExpr), repr(self.falseExpr))
-
-    def tag(self):
-        return "IfExpression"
 
     def children(self):
         return [self.condition, self.trueExpr, self.falseExpr]
 
 
-class AstWhileExpression(AstExpression):
+class WhileExpression(Expression):
     def __init__(self, condition, body, location):
-        super(AstWhileExpression, self).__init__(location)
+        super(WhileExpression, self).__init__(location)
         self.condition = condition
         self.body = body
 
     def __repr__(self):
-        return "AstWhileExpression(%s, %s)" % \
+        return "WhileExpression(%s, %s)" % \
             (repr(self.condition), repr(self.body))
-
-    def tag(self):
-        return "WhileExpression"
 
     def children(self):
         return [self.condition, self.body]
 
 
-class AstBreakExpression(AstExpression):
+class BreakExpression(Expression):
     def __repr__(self):
-        return "AstBreakExpression"
-
-    def tag(self):
         return "BreakExpression"
 
 
-class AstContinueExpression(AstExpression):
+class ContinueExpression(Expression):
     def __repr__(self):
-        return "AstContinueExpression"
-
-    def tag(self):
         return "ContinueExpression"
 
 
-class AstPartialFunctionExpression(AstExpression):
+class PartialFunctionExpression(Expression):
     def __init__(self, cases, location):
-        super(AstPartialFunctionExpression, self).__init__(location)
+        super(PartialFunctionExpression, self).__init__(location)
         self.cases = cases
 
     def __repr__(self):
-        return "AstPartialFunctionExpression(%s)" % repr(self.cases)
-
-    def tag(self):
-        return "PartialFunctionExpression"
+        return "PartialFunctionExpression(%s)" % repr(self.cases)
 
     def children(self):
         return self.cases
 
 
-class AstPartialFunctionCase(AstNode):
+class PartialFunctionCase(Node):
     def __init__(self, pattern, condition, expression, location):
-        super(AstPartialFunctionCase, self).__init__(location)
+        super(PartialFunctionCase, self).__init__(location)
         self.pattern = pattern
         self.condition = condition
         self.expression = expression
 
     def __repr__(self):
-        return "AstPartialFunctionCase(%s, %s, %s)" % \
+        return "PartialFunctionCase(%s, %s, %s)" % \
             (repr(self.pattern), repr(self.condition), repr(self.expression))
-
-    def tag(self):
-        return "PartialFunctionCase"
 
     def children(self):
         return [self.pattern, self.condition, self.expression]
 
 
-class AstMatchExpression(AstExpression):
+class MatchExpression(Expression):
     def __init__(self, expression, matcher, location):
-        super(AstMatchExpression, self).__init__(location)
+        super(MatchExpression, self).__init__(location)
         self.expression = expression
         self.matcher = matcher
 
     def __repr__(self):
-        return "AstMatchExpression(%s, %s)" % \
+        return "MatchExpression(%s, %s)" % \
             (repr(self.expression), repr(self.matcher))
-
-    def tag(self):
-        return "MatchExpression"
 
     def children(self):
         return [self.expression, self.matcher]
 
 
-class AstThrowExpression(AstExpression):
+class ThrowExpression(Expression):
     def __init__(self, exception, location):
-        super(AstThrowExpression, self).__init__(location)
+        super(ThrowExpression, self).__init__(location)
         self.exception = exception
 
     def __repr__(self):
-        return "AstThrowExpression(%s)" % repr(self.exception)
-
-    def tag(self):
-        return "ThrowExpression"
+        return "ThrowExpression(%s)" % repr(self.exception)
 
     def children(self):
         return [self.exception]
 
 
-class AstTryCatchExpression(AstExpression):
+class TryCatchExpression(Expression):
     def __init__(self, expression, catchHandler, finallyHandler, location):
-        super(AstTryCatchExpression, self).__init__(location)
+        super(TryCatchExpression, self).__init__(location)
         self.expression = expression
         self.catchHandler = catchHandler
         self.finallyHandler = finallyHandler
 
     def __repr__(self):
-        return "AstTryCatchExpression(%s, %s, %s)" % \
+        return "TryCatchExpression(%s, %s, %s)" % \
             (repr(self.expression), repr(self.catchHandler), repr(self.finallyHandler))
-
-    def tag(self):
-        return "TryCatchExpression"
 
     def children(self):
         return [self.expression, self.catchHandler, self.finallyHandler]
 
 
-class AstLambdaExpression(AstExpression):
+class LambdaExpression(Expression):
     def __init__(self, name, typeParameters, parameters, body, location):
-        super(AstLambdaExpression, self).__init__(location)
+        super(LambdaExpression, self).__init__(location)
         self.name = name
         self.typeParameters = typeParameters
         self.parameters = parameters
         self.body = body
 
     def __repr__(self):
-        return "AstLambdaExpression(%s, %s, %s, %s)" % \
+        return "LambdaExpression(%s, %s, %s, %s)" % \
             (repr(self.name), repr(self.typeParameters), repr(self.parameters), repr(self.body))
-
-    def tag(self):
-        return "LambdaExpression"
 
     def data(self):
         return self.name
@@ -948,103 +780,85 @@ class AstLambdaExpression(AstExpression):
         return self.typeParameters + self.parameters + [self.body]
 
 
-class AstReturnExpression(AstExpression):
+class ReturnExpression(Expression):
     def __init__(self, expression, location):
-        super(AstReturnExpression, self).__init__(location)
+        super(ReturnExpression, self).__init__(location)
         self.expression = expression
 
     def __repr__(self):
-        return "AstReturnExpression(%s)" % repr(self.expression)
-
-    def tag(self):
-        return "ReturnExpression"
+        return "ReturnExpression(%s)" % repr(self.expression)
 
     def children(self):
         return [self.expression]
 
 
-class AstLiteral(AstNode):
+class Literal(Node):
     pass
 
 
-class AstIntegerLiteral(AstLiteral):
+class IntegerLiteral(Literal):
     def __init__(self, value, width, location):
-        super(AstIntegerLiteral, self).__init__(location)
+        super(IntegerLiteral, self).__init__(location)
         self.value = value
         self.width = width
 
     def __repr__(self):
-        return "AstIntegerLiteral(%d, %d)" % (self.value, self.width)
-
-    def tag(self):
-        return "IntegerLiteral"
+        return "IntegerLiteral(%d, %d)" % (self.value, self.width)
 
     def data(self):
         return "%d_%d" % (self.value, self.width)
 
 
-class AstFloatLiteral(AstLiteral):
+class FloatLiteral(Literal):
     def __init__(self, value, width, location):
-        super(AstFloatLiteral, self).__init__(location)
+        super(FloatLiteral, self).__init__(location)
         self.value = value
         self.width = width
 
     def __repr__(self):
-        return "AstFloatLiteral(%f, %d)" % (self.value, self.width)
-
-    def tag(self):
-        return "FloatLiteral"
+        return "FloatLiteral(%f, %d)" % (self.value, self.width)
 
     def data(self):
         return "%f_%d" % (self.value, self.width)
 
 
-class AstBooleanLiteral(AstLiteral):
+class BooleanLiteral(Literal):
     def __init__(self, value, location):
-        super(AstBooleanLiteral, self).__init__(location)
+        super(BooleanLiteral, self).__init__(location)
         self.value = value
 
     def __repr__(self):
-        return "AstBooleanLiteral(%s)" % self.value
-
-    def tag(self):
-        return "BooleanLiteral"
+        return "BooleanLiteral(%s)" % self.value
 
     def data(self):
         return str(self.value)
 
 
-class AstNullLiteral(AstLiteral):
+class NullLiteral(Literal):
     def __repr__(self):
-        return "AstNullLiteral"
-
-    def tag(self):
         return "NullLiteral"
 
 
-class AstStringLiteral(AstLiteral):
+class StringLiteral(Literal):
     def __init__(self, value, location):
-        super(AstStringLiteral, self).__init__(location)
+        super(StringLiteral, self).__init__(location)
         self.value = value
 
     def __repr__(self):
-        return "AstStringLiteral(%s)" % utils.encodeString(self.value)
-
-    def tag(self):
-        return "StringLiteral"
+        return "StringLiteral(%s)" % utils.encodeString(self.value)
 
     def data(self):
         return utils.encodeString(self.value)
 
 
-class AstNodeVisitor(visitor.Visitor):
+class NodeVisitor(visitor.Visitor):
     def visitChildren(self, node, *args, **kwargs):
         for child in node.children():
             if child is not None:
                 self.visit(child, *args, **kwargs)
 
 
-class AstPrinter(AstNodeVisitor):
+class Printer(NodeVisitor):
     def __init__(self, out):
         self.indentLevel = 0
         self.out = out
@@ -1062,15 +876,15 @@ class AstPrinter(AstNodeVisitor):
         self.indentLevel -= 1
 
 
-class AstEnumerator(AstNodeVisitor):
+class Enumerator(NodeVisitor):
     def __init__(self):
         self.counter = utils.Counter()
 
-    def visitAstUnaryPattern(self, node):
+    def visitUnaryPattern(self, node):
         self.visitDefault(node)
         node.matcherId = AstId(self.counter())
 
-    def visitAstBinaryPattern(self, node):
+    def visitBinaryPattern(self, node):
         self.visitDefault(node)
         node.matcherId = AstId(self.counter())
 
@@ -1082,5 +896,5 @@ class AstEnumerator(AstNodeVisitor):
 
 
 def addNodeIds(ast):
-    enumerator = AstEnumerator()
+    enumerator = Enumerator()
     enumerator.visit(ast)

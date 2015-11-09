@@ -6,7 +6,6 @@
 
 import unittest
 
-from ast import *
 from compile_info import *
 from errors import *
 from ids import *

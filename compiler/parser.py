@@ -28,7 +28,7 @@ def parse(filename, tokens):
 # Top level
 def module():
     def process(parsed, loc):
-        return ast.AstModule(parsed, loc)
+        return ast.Module(parsed, loc)
     return ct.Phrase(ct.Rep(definition() | importStmt())) ^ process
 
 
@@ -42,13 +42,13 @@ def attribs():
 
 
 def attrib():
-    return ct.Tag(ATTRIB) ^ (lambda name, loc: ast.AstAttribute(name, loc))
+    return ct.Tag(ATTRIB) ^ (lambda name, loc: ast.Attribute(name, loc))
 
 
 def varDefn():
     def process(parsed, loc):
         [ats, kw, pat, expr, _] = ct.untangle(parsed)
-        return ast.AstVariableDefinition(ats, kw, pat, expr, loc)
+        return ast.VariableDefinition(ats, kw, pat, expr, loc)
     exprOpt = ct.Opt(keyword("=") + expression() ^ (lambda p, _: p[1]))
     kw = keyword("var") | keyword("let")
     return attribs() + kw + ct.Commit(pattern() + exprOpt + semi) ^ process
@@ -57,7 +57,7 @@ def varDefn():
 def functionDefn():
     def process(parsed, loc):
         [ats, _, name, tps, ps, rty, body, _] = ct.untangle(parsed)
-        return ast.AstFunctionDefinition(ats, name, tps, ps, rty, body, loc)
+        return ast.FunctionDefinition(ats, name, tps, ps, rty, body, loc)
     functionName = keyword("this") | identifier
     bodyOpt = ct.Opt(keyword("=") + expression() ^ (lambda p, _: p[1]))
     return attribs() + keyword("def") + ct.Commit(functionName + typeParameters() + parameters() +
@@ -67,7 +67,7 @@ def functionDefn():
 def classDefn():
     def process(parsed, loc):
         [ats, _, name, tps, ctor, sty, sargs, ms, _] = ct.untangle(parsed)
-        return ast.AstClassDefinition(ats, name, tps, ctor, sty, sargs, ms, loc)
+        return ast.ClassDefinition(ats, name, tps, ctor, sty, sargs, ms, loc)
     classBodyOpt = ct.Opt(layoutBlock(ct.Rep(ct.Lazy(classMember)))) ^ \
                    (lambda p, _: p if p is not None else [])
     return attribs() + keyword("class") + ct.Commit(identifier + typeParameters() +
@@ -77,7 +77,7 @@ def classDefn():
 def constructor():
     def process(parsed, loc):
         [ats, _, params, _] = ct.untangle(parsed)
-        return ast.AstPrimaryConstructorDefinition(ats, params, loc)
+        return ast.PrimaryConstructorDefinition(ats, params, loc)
     return ct.Opt(attribs() + keyword("(") + \
                ct.Commit(ct.RepSep(parameter(), keyword(",")) + keyword(")")) ^ process)
 
@@ -109,7 +109,7 @@ def importStmt():
     def processBinding(parsed, loc):
         name = parsed[0]
         asName = parsed[1][1] if parsed[1] is not None else None
-        return ast.AstImportBinding(name, asName, loc)
+        return ast.ImportBinding(name, asName, loc)
     importBinding = symbol + ct.Opt(keyword("as") + symbol) ^ processBinding
 
     def processSuffixEmpty(parsed, loc):
@@ -127,7 +127,7 @@ def importStmt():
             if lastComponent.typeArguments is not None:
                 raise ParseException(lastComponent.location,
                                      "type arguments can't be at the end of an import statement")
-            firstBinding = ast.AstImportBinding(lastComponent.name, firstAsName,
+            firstBinding = ast.ImportBinding(lastComponent.name, firstAsName,
                                                 lastComponent.location)
             return [firstBinding] + laterBindings
         return processFn
@@ -139,14 +139,14 @@ def importStmt():
     def process(parsed, loc):
         _, prefix, suffixFn, _ = ct.untangle(parsed)
         bindings = suffixFn(prefix)
-        return ast.AstImportStatement(prefix, bindings, loc)
+        return ast.ImportStatement(prefix, bindings, loc)
     return keyword("import") + ct.Commit(scopePrefix() + importSuffix) ^ process
 
 
 def arrayElementsStmt():
     def process(parsed, loc):
         [attrs, _, elementType, _, getName, _, setName, _, lengthName, _] = ct.untangle(parsed)
-        return ast.AstArrayElementsStatement(attrs, elementType,
+        return ast.ArrayElementsStatement(attrs, elementType,
                                              getName, setName, lengthName, loc)
     return attribs() + keyword("arrayelements") + ct.Commit(ty() + keyword(",") +
         arrayAccessorDefn() + keyword(",") + arrayAccessorDefn() + keyword(",") +
@@ -156,7 +156,7 @@ def arrayElementsStmt():
 def arrayAccessorDefn():
     def process(parsed, loc):
         attribs, name = parsed
-        return ast.AstArrayAccessorDefinition(attribs, name, loc)
+        return ast.ArrayAccessorDefinition(attribs, name, loc)
     return attribs() + identifier ^ process
 
 
@@ -169,7 +169,7 @@ def typeParameters():
 def typeParameter():
     def process(parsed, loc):
         [ats, var, name, upper, lower] = ct.untangle(parsed)
-        return ast.AstTypeParameter(ats, var, name, upper, lower, loc)
+        return ast.TypeParameter(ats, var, name, upper, lower, loc)
     variance = ct.Opt(ct.Reserved(OPERATOR, "+") | ct.Reserved(OPERATOR, "-"))
     upperBound = ct.Opt(keyword("<:") + ty() ^ (lambda p, _: p[1]))
     lowerBound = ct.Opt(keyword(">:") + ty() ^ (lambda p, _: p[1]))
@@ -185,19 +185,19 @@ def parameters():
 def parameter():
     def process(parsed, loc):
         [ats, var, pat] = ct.untangle(parsed)
-        return ast.AstParameter(ats, var, pat, loc)
+        return ast.Parameter(ats, var, pat, loc)
     return attribs() + ct.Opt(keyword("var")) + simplePattern() ^ process
 
 
 # Patterns
 def pattern():
     def process(parsed, loc):
-        return parsed[0] if len(parsed) == 1 else ast.AstTuplePattern(parsed, loc)
+        return parsed[0] if len(parsed) == 1 else ast.TuplePattern(parsed, loc)
     return ct.Rep1Sep(maybeBinopPattern(), keyword(",")) ^ process
 
 
 def maybeBinopPattern():
-    return buildBinaryParser(simplePattern(), ast.AstBinaryPattern)
+    return buildBinaryParser(simplePattern(), ast.BinaryPattern)
 
 
 def simplePattern():
@@ -211,15 +211,15 @@ def simplePattern():
 def prefixedPattern():
     def process(parsed, loc):
         prefix, suffix = parsed
-        if len(prefix) == 1 and (suffix is None or isinstance(suffix, ast.AstType)):
+        if len(prefix) == 1 and (suffix is None or isinstance(suffix, ast.Type)):
             mayHaveTypeArgs = False
-            result = ast.AstVariablePattern(prefix[0].name, suffix, loc)
+            result = ast.VariablePattern(prefix[0].name, suffix, loc)
         elif suffix is None:
             mayHaveTypeArgs = False
-            result = ast.AstValuePattern(prefix[:-1], prefix[-1].name, loc)
+            result = ast.ValuePattern(prefix[:-1], prefix[-1].name, loc)
         elif isinstance(suffix, list):
             mayHaveTypeArgs = True
-            result = ast.AstDestructurePattern(prefix, suffix, loc)
+            result = ast.DestructurePattern(prefix, suffix, loc)
         else:
             return ct.FailValue("invalid variable, value, or destructure pattern")
         if not mayHaveTypeArgs and prefix[-1].typeArguments is not None:
@@ -240,18 +240,18 @@ def blankPattern():
     def process(parsed, loc):
         _, parsedTy = parsed
         ty = parsedTy[1] if parsedTy else None
-        return ast.AstBlankPattern(ty, loc)
+        return ast.BlankPattern(ty, loc)
     return keyword("_") + ct.Opt(keyword(":") + ty()) ^ process
 
 
 def litPattern():
-    return literal() ^ ast.AstLiteralPattern
+    return literal() ^ ast.LiteralPattern
 
 
 def unopPattern():
     def process(parsed, loc):
         op, pat = parsed
-        return ast.AstUnaryPattern(op, pat, loc)
+        return ast.UnaryPattern(op, pat, loc)
     return unaryOperator + ct.Lazy(simplePattern) ^ process
 
 
@@ -270,21 +270,21 @@ def scopePrefix():
 def scopePrefixComponent():
     def process(parsed, loc):
         name, args = parsed
-        return ast.AstScopePrefixComponent(name, args, loc)
+        return ast.ScopePrefixComponent(name, args, loc)
     return symbol + typeArguments() ^ process
 
 
 # Types
 def ty():
-    return (keyword("unit") ^ (lambda _, loc: ast.AstUnitType(loc))) | \
-           (keyword("i8") ^ (lambda _, loc: ast.AstI8Type(loc))) | \
-           (keyword("i16") ^ (lambda _, loc: ast.AstI16Type(loc))) | \
-           (keyword("i32") ^ (lambda _, loc: ast.AstI32Type(loc))) | \
-           (keyword("i64") ^ (lambda _, loc: ast.AstI64Type(loc))) | \
-           (keyword("f32") ^ (lambda _, loc: ast.AstF32Type(loc))) | \
-           (keyword("f64") ^ (lambda _, loc: ast.AstF64Type(loc))) | \
-           (keyword("boolean") ^ (lambda _, loc: ast.AstBooleanType(loc))) | \
-           (keyword("_") ^ (lambda _, loc: ast.AstErasedType(loc))) | \
+    return (keyword("unit") ^ (lambda _, loc: ast.UnitType(loc))) | \
+           (keyword("i8") ^ (lambda _, loc: ast.I8Type(loc))) | \
+           (keyword("i16") ^ (lambda _, loc: ast.I16Type(loc))) | \
+           (keyword("i32") ^ (lambda _, loc: ast.I32Type(loc))) | \
+           (keyword("i64") ^ (lambda _, loc: ast.I64Type(loc))) | \
+           (keyword("f32") ^ (lambda _, loc: ast.F32Type(loc))) | \
+           (keyword("f64") ^ (lambda _, loc: ast.F64Type(loc))) | \
+           (keyword("boolean") ^ (lambda _, loc: ast.BooleanType(loc))) | \
+           (keyword("_") ^ (lambda _, loc: ast.ErasedType(loc))) | \
            tupleType() | \
            classType()
 
@@ -297,7 +297,7 @@ def tupleType():
     def process(parsed, loc):
         _, first, _, rest, _, nullFlag = ct.untangle(parsed)
         flags = set([nullFlag]) if nullFlag else set()
-        return ast.AstTupleType([first] + rest, flags, loc)
+        return ast.TupleType([first] + rest, flags, loc)
     return keyword("(") + ct.Commit(ct.Lazy(ty) + keyword(",") +
         ct.Rep1Sep(ct.Lazy(ty), keyword(",")) + keyword(")") +
         ct.Opt(ct.Reserved(OPERATOR, "?"))) ^ process
@@ -311,7 +311,7 @@ def classType():
         name = last.name
         typeArgs = last.typeArguments if last.typeArguments is not None else []
         flags = set([nullFlag]) if nullFlag is not None else set()
-        return ast.AstClassType(prefix, name, typeArgs, flags, loc)
+        return ast.ClassType(prefix, name, typeArgs, flags, loc)
     return scopePrefix() + ct.Opt(ct.Reserved(OPERATOR, "?")) ^ process
 
 
@@ -324,19 +324,19 @@ def typeArguments():
 # Expressions
 def expression():
     def combine(left, right, loc):
-        return ast.AstAssignExpression(left, right, loc)
+        return ast.AssignExpression(left, right, loc)
     rhs = keyword("=") + ct.Lazy(expression) ^ (lambda p, _: p[1])
     return ct.LeftRec(maybeTupleExpr(), rhs, combine)
 
 
 def maybeTupleExpr():
     def process(parsed, loc):
-        return parsed[0] if len(parsed) == 1 else ast.AstTupleExpression(parsed, loc)
+        return parsed[0] if len(parsed) == 1 else ast.TupleExpression(parsed, loc)
     return ct.Rep1Sep(maybeBinopExpr(), keyword(",")) ^ process
 
 
 def maybeBinopExpr():
-    return buildBinaryParser(maybeCallExpr(), ast.AstBinaryExpression)
+    return buildBinaryParser(maybeCallExpr(), ast.BinaryExpression)
 
 
 def maybeCallExpr():
@@ -360,17 +360,17 @@ def processCall(receiver, parsed, loc):
            typeArguments is not None or \
            arguments is not None:
             return ct.FailValue()
-        return ast.AstFunctionValueExpression(ast.AstPropertyExpression(receiver, methodName, loc), loc)
+        return ast.FunctionValueExpression(ast.PropertyExpression(receiver, methodName, loc), loc)
     elif methodName is not None or \
          typeArguments is not None or \
          arguments is not None:
         hasArguments = typeArguments is not None or arguments is not None
         if methodName is not None:
-            method = ast.AstPropertyExpression(receiver, methodName, loc)
+            method = ast.PropertyExpression(receiver, methodName, loc)
         else:
             method = receiver
         if hasArguments:
-            return ast.AstCallExpression(method, typeArguments, arguments, loc)
+            return ast.CallExpression(method, typeArguments, arguments, loc)
         else:
             return method
     else:
@@ -399,19 +399,19 @@ def receiverExpr():
 
 
 def literalExpr():
-    return literal() ^ (lambda lit, loc: ast.AstLiteralExpression(lit, loc))
+    return literal() ^ (lambda lit, loc: ast.LiteralExpression(lit, loc))
 
 
 def varExpr():
-    return symbol ^ (lambda name, loc: ast.AstVariableExpression(name, loc))
+    return symbol ^ (lambda name, loc: ast.VariableExpression(name, loc))
 
 
 def thisExpr():
-    return keyword("this") ^ (lambda _, loc: ast.AstThisExpression(loc))
+    return keyword("this") ^ (lambda _, loc: ast.ThisExpression(loc))
 
 
 def superExpr():
-    return keyword("super") ^ (lambda _, loc: ast.AstSuperExpression(loc))
+    return keyword("super") ^ (lambda _, loc: ast.SuperExpression(loc))
 
 
 def groupExpr():
@@ -424,28 +424,28 @@ def groupExpr():
 def newArrayExpr():
     def process(parsed, loc):
         [_, _, length, _, ty, args] = ct.untangle(parsed)
-        return ast.AstNewArrayExpression(length, ty, args, loc)
+        return ast.NewArrayExpression(length, ty, args, loc)
     return keyword("new") + ct.Commit(keyword("(") + ct.Lazy(expression) + keyword(")") +
         ty() + argumentsOpt()) ^ process
 
 
 def blockExpr():
     def process(stmts, loc):
-        return ast.AstBlockExpression(stmts, loc)
+        return ast.BlockExpression(stmts, loc)
     return layoutBlock(ct.Rep(ct.Lazy(statement)) ^ process)
 
 
 def unaryExpr():
     def process(parsed, loc):
         (op, e) = parsed
-        return ast.AstUnaryExpression(op, e, loc)
+        return ast.UnaryExpression(op, e, loc)
     return unaryOperator + ct.Commit(ct.Lazy(maybeCallExpr)) ^ process
 
 
 def ifExpr():
     def process(parsed, loc):
         [_, _, c, _, t, f] = ct.untangle(parsed)
-        return ast.AstIfExpression(c, t, f, loc)
+        return ast.IfExpression(c, t, f, loc)
     elseClause = ct.Opt(keyword("else") + ct.Commit(ct.Lazy(expression))) ^ \
         (lambda p, _: p[1] if p else None)
     return keyword("if") + ct.Commit(keyword("(") + ct.Lazy(expression) + keyword(")") + \
@@ -455,29 +455,29 @@ def ifExpr():
 def whileExpr():
     def process(parsed, loc):
         [_, _, c, _, b] = ct.untangle(parsed)
-        return ast.AstWhileExpression(c, b, loc)
+        return ast.WhileExpression(c, b, loc)
     return keyword("while") + ct.Commit(keyword("(") + ct.Lazy(expression) + keyword(")") + \
         ct.Lazy(expression)) ^ process
 
 
 def breakExpr():
-    return keyword("break") ^ (lambda _, loc: ast.AstBreakExpression(loc))
+    return keyword("break") ^ (lambda _, loc: ast.BreakExpression(loc))
 
 
 def continueExpr():
-    return keyword("continue") ^ (lambda _, loc: ast.AstContinueExpression(loc))
+    return keyword("continue") ^ (lambda _, loc: ast.ContinueExpression(loc))
 
 
 def partialFnExpr():
     def process(cases, loc):
-        return ast.AstPartialFunctionExpression(cases, loc)
+        return ast.PartialFunctionExpression(cases, loc)
     return layoutBlock(ct.Rep1(partialFunctionCase()) ^ process)
 
 
 def partialFunctionCase():
     def process(parsed, loc):
         [_, p, c, _, e, _] = ct.untangle(parsed)
-        return ast.AstPartialFunctionCase(p, c, e, loc)
+        return ast.PartialFunctionCase(p, c, e, loc)
     conditionOpt = ct.Opt(keyword("if") + ct.Lazy(expression)) ^ (lambda p, _: p[1] if p else None)
     return keyword("case") + ct.Commit(pattern() + conditionOpt + keyword("=>") + \
         ct.Lazy(expression) + semi) ^ process
@@ -486,7 +486,7 @@ def partialFunctionCase():
 def matchExpr():
     def process(parsed, loc):
         [_, _, e, _, m] = ct.untangle(parsed)
-        return ast.AstMatchExpression(e, m, loc)
+        return ast.MatchExpression(e, m, loc)
     return keyword("match") + ct.Commit(keyword("(") + ct.Lazy(expression) + keyword(")") + \
         partialFnExpr()) ^ process
 
@@ -494,7 +494,7 @@ def matchExpr():
 def throwExpr():
     def process(parsed, loc):
         (_, x) = parsed
-        return ast.AstThrowExpression(x, loc)
+        return ast.ThrowExpression(x, loc)
     return keyword("throw") + ct.Commit(ct.Lazy(expression)) ^ process
 
 
@@ -504,7 +504,7 @@ def tryCatchExpr():
         if c is None and f is None:
             return ct.FailValue("expected 'catch' or 'finally' in 'try'-expression")
         else:
-            return ast.AstTryCatchExpression(e, c, f, loc)
+            return ast.TryCatchExpression(e, c, f, loc)
 
     finallyOpt = ct.Opt(keyword("finally") + ct.Lazy(expression)) ^ (lambda p, _: p[1] if p else None)
     return keyword("try") + ct.Commit(ct.Lazy(expression) + catchHandler() + finallyOpt) ^ process
@@ -513,7 +513,7 @@ def tryCatchExpr():
 def catchHandler():
     def processSimple(parsed, loc):
         [_, p, _, e] = ct.untangle(parsed)
-        return ast.AstPartialFunctionExpression([ast.AstPartialFunctionCase(p, None, e, loc)], loc)
+        return ast.PartialFunctionExpression([ast.PartialFunctionCase(p, None, e, loc)], loc)
     simpleHandler = keyword("(") + ct.Commit(pattern() + keyword(")") + \
                     ct.Lazy(expression)) ^ processSimple
 
@@ -527,7 +527,7 @@ def catchHandler():
 def lambdaExpr():
     def process(parsed, loc):
         [_, n, tps, _, ps, _, b] = ct.untangle(parsed)
-        return ast.AstLambdaExpression(n, tps, ps, b, loc)
+        return ast.LambdaExpression(n, tps, ps, b, loc)
     return keyword("lambda") + ct.Commit(ct.Opt(symbol) + typeParameters() + keyword("(") + \
         ct.RepSep(simplePattern(), keyword(",")) + keyword(")") + ct.Lazy(expression)) ^ process
 
@@ -535,7 +535,7 @@ def lambdaExpr():
 def returnExpr():
     def process(parsed, loc):
         (_, e) = parsed
-        return ast.AstReturnExpression(e, loc)
+        return ast.ReturnExpression(e, loc)
     return keyword("return") + ct.Opt(ct.Lazy(expression)) ^ process
 
 
@@ -569,7 +569,7 @@ def intLiteral():
             width = 64
         else:
             width = int(m.group(4))
-        return ast.AstIntegerLiteral(value, width, loc)
+        return ast.IntegerLiteral(value, width, loc)
 
     return ct.Tag(INTEGER) ^ process
 
@@ -579,18 +579,18 @@ def floatLiteral():
         m = re.match("([^f]*)(?:f([0-9]+))?", text)
         value = float(m.group(1))
         width = int(m.group(2)) if m.group(2) is not None else 64
-        return ast.AstFloatLiteral(value, width, loc)
+        return ast.FloatLiteral(value, width, loc)
 
     return ct.Tag(FLOAT) ^ process
 
 
 def booleanLiteral():
-    return (keyword("true") ^ (lambda _, loc: ast.AstBooleanLiteral(True, loc))) | \
-           (keyword("false") ^ (lambda _, loc: ast.AstBooleanLiteral(False, loc)))
+    return (keyword("true") ^ (lambda _, loc: ast.BooleanLiteral(True, loc))) | \
+           (keyword("false") ^ (lambda _, loc: ast.BooleanLiteral(False, loc)))
 
 
 def nullLiteral():
-    return keyword("null") ^ (lambda _, loc: ast.AstNullLiteral(loc))
+    return keyword("null") ^ (lambda _, loc: ast.NullLiteral(loc))
 
 
 def stringLiteral():
@@ -598,7 +598,7 @@ def stringLiteral():
         value = tryDecodeString(text)
         if value is None:
             return ct.FailValue("invalid string")
-        return ast.AstStringLiteral(value, loc)
+        return ast.StringLiteral(value, loc)
     return ct.Tag(STRING) ^ process
 
 
@@ -697,7 +697,7 @@ def buildBinaryParser(term, combine):
         term: a parser for the sub-expressions that make up a binary expression. Usually this
             is a parser for simple expressions like literals or variables.
         level: an integer indicating the precedence level to build for.
-        combine: a function `(str, AstNode, AstNode, Location => AstNode)` which combines
+        combine: a function `(str, ast.Node, ast.Node, Location => ast.Node)` which combines
             two nodes produced by `term` with an operator and a location into a new node.
 
     Returns:

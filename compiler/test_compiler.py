@@ -7,10 +7,10 @@
 import unittest
 import sys
 
+import ast
 from lexer import *
 from layout import layout
 from parser import *
-from ast import *
 from compile_info import *
 from scope_analysis import *
 from type_analysis import *
@@ -61,7 +61,7 @@ class TestCompiler(TestCaseWithDefinitions):
     def makePackage(self, input):
         if isinstance(input, Package):
             return input
-        elif isinstance(input, AstModule):
+        elif isinstance(input, ast.Module):
             scopeAnalysis(input)
             return compile(input)
         elif type(input) is str:

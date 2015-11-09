@@ -445,7 +445,7 @@ class NameInfo(object):
         self.overloads = filter(lambda o: o.irDefn.id not in self.overrides, self.overloads)
 
 
-class Scope(ast.AstNodeVisitor):
+class Scope(ast.NodeVisitor):
     def __init__(self, prefix, ast, scopeId, parent, info):
         self.prefix = prefix
         self.scopeId = scopeId
@@ -478,7 +478,7 @@ class Scope(ast.AstNodeVisitor):
 
     def getAstDefn(self):
         scope = self.topLocalScope()
-        assert isinstance(scope.ast, ast.AstDefinition)
+        assert isinstance(scope.ast, ast.Definition)
         return scope.ast
 
     def getIrDefn(self):
@@ -880,8 +880,8 @@ class Scope(ast.AstNodeVisitor):
 
     def isLocal(self):
         """Returns true if values defined in the parent scope are accessible in this scope."""
-        return isinstance(self.ast, ast.AstBlockExpression) or \
-               isinstance(self.ast, ast.AstPartialFunctionCase)
+        return isinstance(self.ast, ast.BlockExpression) or \
+               isinstance(self.ast, ast.PartialFunctionCase)
 
     def isLocalWithin(self, defnScope):
         """Returns true if values defined in defnScope may be accessed directly in this scope."""
@@ -1057,10 +1057,10 @@ class GlobalScope(Scope):
         name = self.makeName(astDefn.name)
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         shouldBind = True
-        if isinstance(astDefn, ast.AstVariablePattern):
+        if isinstance(astDefn, ast.VariablePattern):
             checkFlags(flags, frozenset([LET, PUBLIC, PROTECTED]), astDefn.location)
             irDefn = self.info.package.addGlobal(name, astDefn, None, flags)
-        elif isinstance(astDefn, ast.AstFunctionDefinition):
+        elif isinstance(astDefn, ast.FunctionDefinition):
             checkFlags(flags, frozenset([PUBLIC]), astDefn.location)
             if astDefn.body is None:
                 raise ScopeException(astDefn.location,
@@ -1071,7 +1071,7 @@ class GlobalScope(Scope):
             if astDefn.name == "main":
                 assert self.info.package.entryFunction is None
                 self.info.package.entryFunction = irDefn.id
-        elif isinstance(astDefn, ast.AstClassDefinition):
+        elif isinstance(astDefn, ast.ClassDefinition):
             irDefn, shouldBind = self.createIrClassDefn(astDefn)
         else:
             raise NotImplementedError
@@ -1138,7 +1138,7 @@ class FunctionScope(Scope):
 
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         shouldBind = True
-        if isinstance(astDefn, ast.AstTypeParameter):
+        if isinstance(astDefn, ast.TypeParameter):
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([STATIC]), astDefn.location)
             if STATIC not in flags:
@@ -1146,9 +1146,9 @@ class FunctionScope(Scope):
             flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
             irDefn = self.info.package.addTypeParameter(name, astDefn=astDefn, flags=flags)
             irScopeDefn.typeParameters.append(irDefn)
-        elif isinstance(astDefn, ast.AstParameter):
+        elif isinstance(astDefn, ast.Parameter):
             checkFlags(flags, frozenset(), astDefn.location)
-            if isinstance(astDefn.pattern, ast.AstVariablePattern):
+            if isinstance(astDefn.pattern, ast.VariablePattern):
                 # If the parameter is a simple variable which doesn't need unpacking, we don't
                 # need to create a separate definition here.
                 irDefn = None
@@ -1156,15 +1156,15 @@ class FunctionScope(Scope):
                 name = self.makeName(ir.ANON_PARAMETER_SUFFIX)
                 irDefn = ir.Variable(name, astDefn=astDefn, kind=ir.PARAMETER, flags=flags)
                 irScopeDefn.variables.append(irDefn)
-        elif isinstance(astDefn, ast.AstVariablePattern):
+        elif isinstance(astDefn, ast.VariablePattern):
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([LET]), astDefn.location)
-            isParameter = isinstance(astVarDefn, ast.AstParameter) and \
+            isParameter = isinstance(astVarDefn, ast.Parameter) and \
                           astVarDefn.pattern is astDefn
             kind = ir.PARAMETER if isParameter else ir.LOCAL
             irDefn = ir.Variable(name, astDefn=astDefn, kind=kind, flags=flags)
             irScopeDefn.variables.append(irDefn)
-        elif isinstance(astDefn, ast.AstFunctionDefinition):
+        elif isinstance(astDefn, ast.FunctionDefinition):
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset(), astDefn.location)
             if astDefn.body is None:
@@ -1174,7 +1174,7 @@ class FunctionScope(Scope):
             irDefn = self.info.package.addFunction(name, astDefn,
                                                    None, implicitTypeParams,
                                                    None, [], None, flags)
-        elif isinstance(astDefn, ast.AstClassDefinition):
+        elif isinstance(astDefn, ast.ClassDefinition):
             irDefn, shouldBind = self.createIrClassDefn(astDefn)
         else:
             raise NotImplementedError
@@ -1182,8 +1182,8 @@ class FunctionScope(Scope):
         return irDefn, shouldBind, isVisible
 
     def isDefinedAutomatically(self, astDefn):
-        return isinstance(astDefn, ast.AstClassDefinition) or \
-               isinstance(astDefn, ast.AstFunctionDefinition)
+        return isinstance(astDefn, ast.ClassDefinition) or \
+               isinstance(astDefn, ast.FunctionDefinition)
 
     def findEnclosingClass(self):
         return self.parent.findEnclosingClass()
@@ -1353,12 +1353,12 @@ class ClassScope(Scope):
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         shouldBind = True
         isVisible = True
-        if isinstance(astDefn, ast.AstVariablePattern):
+        if isinstance(astDefn, ast.VariablePattern):
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([LET, PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
             irDefn = self.info.package.newField(name, astDefn=astDefn, flags=flags)
             irScopeDefn.fields.append(irDefn)
-        elif isinstance(astDefn, ast.AstFunctionDefinition):
+        elif isinstance(astDefn, ast.FunctionDefinition):
             implicitTypeParams = self.getImplicitTypeParameters()
             if ABSTRACT in flags and astDefn.body is not None:
                 raise ScopeException(astDefn.location,
@@ -1395,7 +1395,7 @@ class ClassScope(Scope):
                                                            None, [], None, flags)
                     self.makeMethod(irDefn, irScopeDefn)
                 irScopeDefn.methods.append(irDefn)
-        elif isinstance(astDefn, ast.AstPrimaryConstructorDefinition):
+        elif isinstance(astDefn, ast.PrimaryConstructorDefinition):
             name = self.makeName(ir.CONSTRUCTOR_SUFFIX)
             checkFlags(flags, frozenset([PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
             if len(flags & frozenset([PUBLIC, PROTECTED, PRIVATE])) == 0:
@@ -1406,7 +1406,7 @@ class ClassScope(Scope):
                                                    None, [], None, flags)
             self.makeConstructor(irDefn, irScopeDefn)
             irScopeDefn.constructors.append(irDefn)
-        elif isinstance(astDefn, ast.AstTypeParameter):
+        elif isinstance(astDefn, ast.TypeParameter):
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([STATIC, COVARIANT, CONTRAVARIANT]), astDefn.location)
             if STATIC not in flags:
@@ -1419,22 +1419,22 @@ class ClassScope(Scope):
             for ctor in irScopeDefn.constructors:
                 ctor.typeParameters.append(irDefn)
             isVisible = False
-        elif isinstance(astDefn, ast.AstParameter):
+        elif isinstance(astDefn, ast.Parameter):
             # Parameters in a class scope can only belong to a primary constructor. They are
             # never treated as local variables. Note that these parameters usually result in
             # some field definitions. Those definitions will be created separately on
             # pattern nodes.
             name = self.makeName(astDefn.pattern.name) \
-                   if isinstance(astDefn.pattern, ast.AstVariablePattern) \
+                   if isinstance(astDefn.pattern, ast.VariablePattern) \
                    else self.makeName(ir.ANON_PARAMETER_SUFFIX)
             irDefn = ir.Variable(name, astDefn=astDefn,
                                  kind=ir.PARAMETER, flags=frozenset([LET]))
             irCtor = self.info.getDefnInfo(self.ast.constructor).irDefn
             irCtor.variables.append(irDefn)
             shouldBind = False
-        elif isinstance(astDefn, ast.AstClassDefinition):
+        elif isinstance(astDefn, ast.ClassDefinition):
             irDefn, shouldBind = self.createIrClassDefn(astDefn)
-        elif isinstance(astDefn, ast.AstArrayElementsStatement):
+        elif isinstance(astDefn, ast.ArrayElementsStatement):
             checkFlags(flags, frozenset([FINAL]), astDefn.location)
             if FINAL not in irScopeDefn.flags:
                 raise ScopeException(astDefn.location, "non-final class may not have elements")
@@ -1445,7 +1445,7 @@ class ClassScope(Scope):
             irScopeDefn.fields.append(irDefn)
             shouldBind = False
         else:
-            assert isinstance(astDefn, ast.AstArrayAccessorDefinition)
+            assert isinstance(astDefn, ast.ArrayAccessorDefinition)
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([FINAL, PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
             flags |= frozenset([ARRAY])
@@ -1465,11 +1465,11 @@ class ClassScope(Scope):
         return PRIVATE not in flags and PROTECTED not in flags and STATIC in flags
 
     def isDefinedAutomatically(self, astDefn):
-        return isinstance(astDefn, ast.AstPrimaryConstructorDefinition) or \
-               isinstance(astDefn, ast.AstFunctionDefinition) or \
-               isinstance(astDefn, ast.AstClassDefinition) or \
-               isinstance(astDefn, ast.AstVariableDefinition) or \
-               isinstance(astDefn, ast.AstVariablePattern)
+        return isinstance(astDefn, ast.PrimaryConstructorDefinition) or \
+               isinstance(astDefn, ast.FunctionDefinition) or \
+               isinstance(astDefn, ast.ClassDefinition) or \
+               isinstance(astDefn, ast.VariableDefinition) or \
+               isinstance(astDefn, ast.VariablePattern)
 
     def findEnclosingClass(self):
         return self.getIrDefn()
@@ -1655,7 +1655,7 @@ class ExternClassScope(Scope):
         return True
 
 
-class ScopeVisitor(ast.AstNodeVisitor):
+class ScopeVisitor(ast.NodeVisitor):
     """Abstract base class for scope analysis related visitor.
 
     This class takes care of the common tasks of entering lexical scopes in the AST. visit
@@ -1669,33 +1669,33 @@ class ScopeVisitor(ast.AstNodeVisitor):
         """Create a new visitor for a descendant scope. Subclasses must override."""
         raise NotImplementedError
 
-    def visitAstVariableDefinition(self, node):
+    def visitVariableDefinition(self, node):
         if node.expression is not None:
             self.visit(node.expression)
         self.visit(node.pattern, node)
 
-    def visitAstFunctionDefinition(self, node):
+    def visitFunctionDefinition(self, node):
         scopeName = ir.CONSTRUCTOR_SUFFIX if node.name == "this" else node.name
         scope = self.scope.scopeForFunction(scopeName, node)
         visitor = self.createChildVisitor(scope)
         visitor.visitChildren(node)
 
-    def visitAstClassDefinition(self, node):
+    def visitClassDefinition(self, node):
         scope = self.scope.scopeForClass(node.name, node)
         visitor = self.createChildVisitor(scope)
         visitor.visitChildren(node)
 
-    def visitAstTypeParameter(self, node):
+    def visitTypeParameter(self, node):
         if node.upperBound is not None:
             self.visit(node.upperBound)
         if node.lowerBound is not None:
             self.visit(node.lowerBound)
 
-    def visitAstParameter(self, node):
+    def visitParameter(self, node):
         self.visit(node.pattern, node)
 
-    def visitAstBlockExpression(self, node):
-        if isinstance(self.scope.ast, ast.AstFunctionDefinition) and \
+    def visitBlockExpression(self, node):
+        if isinstance(self.scope.ast, ast.FunctionDefinition) and \
            self.scope.ast.body is node:
             self.visitChildren(node)
         else:
@@ -1703,7 +1703,7 @@ class ScopeVisitor(ast.AstNodeVisitor):
             visitor = self.createChildVisitor(scope)
             visitor.visitChildren(node)
 
-    def visitAstPartialFunctionCase(self, node):
+    def visitPartialFunctionCase(self, node):
         scope = self.scope.localScope(node)
         visitor = self.createChildVisitor(scope)
         visitor.visit(node.pattern, node)
@@ -1724,37 +1724,37 @@ class DeclarationVisitor(ScopeVisitor):
     def createChildVisitor(self, scope):
         return DeclarationVisitor(scope)
 
-    def visitAstFunctionDefinition(self, node):
+    def visitFunctionDefinition(self, node):
         self.scope.declare(node)
-        super(DeclarationVisitor, self).visitAstFunctionDefinition(node)
+        super(DeclarationVisitor, self).visitFunctionDefinition(node)
 
-    def visitAstClassDefinition(self, node):
+    def visitClassDefinition(self, node):
         self.scope.declare(node)
-        super(DeclarationVisitor, self).visitAstClassDefinition(node)
+        super(DeclarationVisitor, self).visitClassDefinition(node)
 
-    def visitAstPrimaryConstructorDefinition(self, node):
-        self.scope.declare(node)
-        self.visitChildren(node)
-
-    def visitAstArrayElementsStatement(self, node):
+    def visitPrimaryConstructorDefinition(self, node):
         self.scope.declare(node)
         self.visitChildren(node)
 
-    def visitAstArrayAccessorDefinition(self, node):
+    def visitArrayElementsStatement(self, node):
+        self.scope.declare(node)
+        self.visitChildren(node)
+
+    def visitArrayAccessorDefinition(self, node):
         self.scope.declare(node)
 
-    def visitAstImportStatement(self, node):
+    def visitImportStatement(self, node):
         self.scope.addImport(node)
 
-    def visitAstTypeParameter(self, node):
+    def visitTypeParameter(self, node):
         self.scope.declare(node)
-        super(DeclarationVisitor, self).visitAstTypeParameter(node)
+        super(DeclarationVisitor, self).visitTypeParameter(node)
 
-    def visitAstParameter(self, node):
+    def visitParameter(self, node):
         self.scope.declare(node)
-        super(DeclarationVisitor, self).visitAstParameter(node)
+        super(DeclarationVisitor, self).visitParameter(node)
 
-    def visitAstVariablePattern(self, node, astVarDefn):
+    def visitVariablePattern(self, node, astVarDefn):
         self.scope.declare(node, astVarDefn)
 
 
@@ -1767,7 +1767,7 @@ class InheritanceVisitor(ScopeVisitor):
     def createChildVisitor(self, scope):
         return InheritanceVisitor(scope, self.inheritanceGraph, self.subtypeGraph)
 
-    def visitAstClassDefinition(self, node):
+    def visitClassDefinition(self, node):
         scope = self.scope.scopeForClass(node.name, node)
         irClass = scope.getIrDefn()
         classInfo = self.info.getClassInfo(irClass)
@@ -1795,9 +1795,9 @@ class InheritanceVisitor(ScopeVisitor):
         else:
             self.inheritanceGraph.addEdge(scope.scopeId, superclassScopeId)
 
-        super(InheritanceVisitor, self).visitAstClassDefinition(node)
+        super(InheritanceVisitor, self).visitClassDefinition(node)
 
-    def visitAstTypeParameter(self, node):
+    def visitTypeParameter(self, node):
         irParam = self.info.getDefnInfo(node).irDefn
         if node.upperBound is not None:
             self.addTypeToSubtypeGraph(irParam.id, self.scope, node.upperBound)
@@ -1816,7 +1816,7 @@ class InheritanceVisitor(ScopeVisitor):
         return irDefn
 
     def lookupTypeDefn(self, scope, astType):
-        if not isinstance(astType, ast.AstClassType):
+        if not isinstance(astType, ast.ClassType):
             raise ScopeException(astType.location, "inheritance from non-class type")
 
         hasPrefix = False
@@ -1846,19 +1846,19 @@ class InheritanceVisitor(ScopeVisitor):
 
 def getFlagsFromAstDefn(astDefn, astVarDefn):
     flags = set()
-    if isinstance(astDefn, ast.AstDefinition):
+    if isinstance(astDefn, ast.Definition):
         attribs = astDefn.attribs
-    elif isinstance(astVarDefn, ast.AstDefinition):
+    elif isinstance(astVarDefn, ast.Definition):
         attribs = astVarDefn.attribs
     else:
         attribs = []
 
-    if isinstance(astDefn, ast.AstVariablePattern) and \
-       not ((isinstance(astVarDefn, ast.AstVariableDefinition) and astVarDefn.keyword == "var") or \
-            (isinstance(astVarDefn, ast.AstParameter) and astVarDefn.var == "var")):
+    if isinstance(astDefn, ast.VariablePattern) and \
+       not ((isinstance(astVarDefn, ast.VariableDefinition) and astVarDefn.keyword == "var") or \
+            (isinstance(astVarDefn, ast.Parameter) and astVarDefn.var == "var")):
         flags.add(LET)
 
-    if isinstance(astDefn, ast.AstTypeParameter):
+    if isinstance(astDefn, ast.TypeParameter):
         if astDefn.variance == "+":
             flags.add(COVARIANT)
         elif astDefn.variance == "-":

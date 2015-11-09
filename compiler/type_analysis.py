@@ -51,7 +51,7 @@ def patternMustMatch(pat, ty, info):
     """Returns true if a pattern will match any value of the given type. This is required for
     patterns in parameters and variable definitions. Type analysis must have already run on
     the pattern for this to work."""
-    if isinstance(pat, ast.AstVariablePattern):
+    if isinstance(pat, ast.VariablePattern):
         if info.hasUseInfo(pat):
             # This pattern compares the expression to another value, rather than defining
             # a new variable.
@@ -59,14 +59,14 @@ def patternMustMatch(pat, ty, info):
         else:
             patTy = info.getType(pat)
             return ty.isSubtypeOf(patTy)
-    elif isinstance(pat, ast.AstTuplePattern):
+    elif isinstance(pat, ast.TuplePattern):
         tupleClass = info.getTupleClass(len(pat.patterns), pat.location)
         if isinstance(ty, ir_t.ClassType) and ty.clas is tupleClass:
             return all(patternMustMatch(p, ety, info)
                        for p, ety in zip(pat.patterns, ty.typeArguments))
         else:
             return False
-    elif isinstance(pat, ast.AstBlankPattern):
+    elif isinstance(pat, ast.BlankPattern):
         patTy = None if pat.ty is None else info.getType(pat.ty)
         return patTy is None or ty.isSubtypeOf(patTy)
     else:
@@ -77,7 +77,7 @@ def partialFunctionCaseMustMatch(case, ty, info):
     """Returns True if the partial function case must match any value of the given type.
     This is undecidable, so this actually just returns True if the pattern must match and
     there is no condition."""
-    assert isinstance(case, ast.AstPartialFunctionCase)
+    assert isinstance(case, ast.PartialFunctionCase)
     return patternMustMatch(case.pattern, ty, info) and case.condition is None
 
 
@@ -85,7 +85,7 @@ def partialFunctionMustMatch(expr, ty, info):
     """Returns True if the partial function must match any value of the given type. Currently,
     this just returns True if there is any individual case which must match, but in the future
     it may account for disjoint cases matching everything."""
-    assert isinstance(expr, ast.AstPartialFunctionExpression)
+    assert isinstance(expr, ast.PartialFunctionExpression)
     return any(partialFunctionCaseMustMatch(case, ty, info) for case in expr.cases)
 
 
@@ -96,9 +96,9 @@ def resolveAllOverrides(info):
         scope.resolveOverrides()
 
 
-class TypeVisitorBase(ast.AstNodeVisitor):
+class TypeVisitorBase(ast.NodeVisitor):
     """Provides common functionality for type visitors, namely the visitor functions for the
-    various AstType subclasses."""
+    various ast.Type subclasses."""
     def __init__(self, info):
         self.info = info
 
@@ -137,31 +137,31 @@ class TypeVisitorBase(ast.AstNodeVisitor):
             self.scopeStack.pop()
             self.receiverTypeStack.pop()
 
-    def visitAstUnitType(self, node):
+    def visitUnitType(self, node):
         return ir_t.UnitType
 
-    def visitAstBooleanType(self, node):
+    def visitBooleanType(self, node):
         return ir_t.BooleanType
 
-    def visitAstI8Type(self, node):
+    def visitI8Type(self, node):
         return ir_t.I8Type
 
-    def visitAstI16Type(self, node):
+    def visitI16Type(self, node):
         return ir_t.I16Type
 
-    def visitAstI32Type(self, node):
+    def visitI32Type(self, node):
         return ir_t.I32Type
 
-    def visitAstI64Type(self, node):
+    def visitI64Type(self, node):
         return ir_t.I64Type
 
-    def visitAstF32Type(self, node):
+    def visitF32Type(self, node):
         return ir_t.F32Type
 
-    def visitAstF64Type(self, node):
+    def visitF64Type(self, node):
         return ir_t.F64Type
 
-    def visitAstClassType(self, node):
+    def visitClassType(self, node):
         scope, prefixTypeArgs = self.handleScopePrefix(node.prefix)
         hasPrefix = len(node.prefix) > 0
         nameInfo = scope.lookup(node.name, node.location, fromExternal=hasPrefix)
@@ -200,16 +200,16 @@ class TypeVisitorBase(ast.AstNodeVisitor):
                                     node.name)
             return ir_t.VariableType(irDefn)
 
-    def visitAstTupleType(self, node):
+    def visitTupleType(self, node):
         clas = self.info.getTupleClass(len(node.types), node.location)
         types = self.handleClassTypeArgs(clas, node.types)
         flags = frozenset(map(astTypeFlagToIrTypeFlag, node.flags))
         return ir_t.ClassType(clas, types, flags)
 
-    def visitAstErasedType(self, node):
+    def visitErasedType(self, node):
         raise TypeException(node.location, "erased type can only be used as a type argument")
 
-    def visitAstIntegerLiteral(self, node):
+    def visitIntegerLiteral(self, node):
         typeMap = { 8: ir_t.I8Type, 16: ir_t.I16Type, 32: ir_t.I32Type, 64: ir_t.I64Type }
         if node.width not in typeMap:
             raise TypeException(node.location, "invalid integer literal width: %d" % node.width)
@@ -221,25 +221,25 @@ class TypeVisitorBase(ast.AstNodeVisitor):
                                 (node.value, node.width))
         return typeMap[node.width]
 
-    def visitAstFloatLiteral(self, node):
+    def visitFloatLiteral(self, node):
         typeMap = { 32: ir_t.F32Type, 64: ir_t.F64Type }
         if node.width not in typeMap:
             raise TypeException(node.location, "invalid float literal width: %d" % node.width)
         return typeMap[node.width]
 
-    def visitAstStringLiteral(self, node):
+    def visitStringLiteral(self, node):
         return ir_t.getStringType()
 
-    def visitAstBooleanLiteral(self, node):
+    def visitBooleanLiteral(self, node):
         return ir_t.BooleanType
 
-    def visitAstNullLiteral(self, node):
+    def visitNullLiteral(self, node):
         return ir_t.getNullType()
 
     def isPrefixNode(self, node):
-        return isinstance(node, ast.AstVariableExpression) or \
-               isinstance(node, ast.AstPropertyExpression) or \
-               (isinstance(node, ast.AstCallExpression) and \
+        return isinstance(node, ast.VariableExpression) or \
+               isinstance(node, ast.PropertyExpression) or \
+               (isinstance(node, ast.CallExpression) and \
                 node.arguments is None and \
                 self.isPrefixNode(node.callee))
 
@@ -250,7 +250,7 @@ class TypeVisitorBase(ast.AstNodeVisitor):
             return self.visit(node)
 
     def handleScopePrefix(self, prefix):
-        """Processes the components of a scope prefix (a list of AstScopePrefixComponent). This
+        """Processes the components of a scope prefix (a list of ast.ScopePrefixComponent). This
         looks up each component in the list and checks type arguments (using
         handleClassTypeArgs). Returns a scope and a list of Types, which will be implicit
         type arguments for whatever is after the prefix."""
@@ -307,7 +307,7 @@ class TypeVisitorBase(ast.AstNodeVisitor):
         raise NotImplementedError
 
     def buildClassTypeArg(self, irParam, node):
-        if isinstance(node, ast.AstErasedType):
+        if isinstance(node, ast.ErasedType):
             return ir_t.VariableType(irParam)
         else:
             return self.visit(node)
@@ -355,13 +355,13 @@ class DeclarationTypeVisitor(TypeVisitorBase):
                not tp.lowerBound.isSubtypeOf(ta):
                 raise TypeException(loc, "%s: type argument is not in bounds" % tp.name)
 
-    def visitAstPackage(self, node):
+    def visitPackage(self, node):
         self.visitChildren(node)
 
-    def visitAstModule(self, node):
+    def visitModule(self, node):
         self.visitChildren(node)
 
-    def visitAstFunctionDefinition(self, node):
+    def visitFunctionDefinition(self, node):
         irFunction = self.info.getDefnInfo(node).irDefn
         if irFunction.isMethod():
             self.setMethodReceiverType(irFunction)
@@ -374,12 +374,12 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         if node.body is not None:
             self.visit(node.body)
 
-    def visitAstPrimaryConstructorDefinition(self, node):
+    def visitPrimaryConstructorDefinition(self, node):
         irFunction = self.info.getDefnInfo(node).irDefn
         irFunction.parameterTypes = [self.getReceiverType()] + map(self.visit, node.parameters)
         self.setMethodReceiverType(irFunction)
 
-    def visitAstClassDefinition(self, node):
+    def visitClassDefinition(self, node):
         irClass = self.info.getDefnInfo(node).irDefn
         for param in node.typeParameters:
             self.visit(param)
@@ -408,7 +408,7 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         self.setMethodReceiverType(irClass.initializer)
         irClass.initializer.parameterTypes = [self.getReceiverType()]
 
-    def visitAstArrayElementsStatement(self, node):
+    def visitArrayElementsStatement(self, node):
         elementType = self.visit(node.elementType)
         receiverType = self.getReceiverType()
         irClass = self.scope().getIrDefn()
@@ -435,13 +435,13 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         lengthMethod.variables[0].type = receiverType
         lengthMethod.compileHint = compile_info.ARRAY_ELEMENT_LENGTH_HINT
 
-    def visitAstImportStatement(self, node):
+    def visitImportStatement(self, node):
         scope, typeArgs = self.handleScopePrefix(node.prefix)
         importedDefnInfos = self.info.getImportInfo(node).importedDefnInfos
         for defnInfo in importedDefnInfos:
             defnInfo.importedTypeArguments = typeArgs
 
-    def visitAstTypeParameter(self, node):
+    def visitTypeParameter(self, node):
         irParam = self.info.getDefnInfo(node).irDefn
 
         def visitBound(bound, default):
@@ -460,7 +460,7 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         irParam.lowerBound = visitBound(node.lowerBound, ir_t.getNothingClassType())
         self.typeParamsToCheck.append((irParam, node.location))
 
-    def visitAstParameter(self, node):
+    def visitParameter(self, node):
         patTy = self.visit(node.pattern, True)
         if not patternMustMatch(node.pattern, patTy, self.info):
             raise TypeException(node.location,
@@ -471,31 +471,31 @@ class DeclarationTypeVisitor(TypeVisitorBase):
     # directly be part of function parameters, but they may be part of other patterns, so
     # we need to type them all.
 
-    def visitAstVariablePattern(self, node, isParam=False):
+    def visitVariablePattern(self, node, isParam=False):
         if not isParam:
             return None
         if node.ty is None:
             raise TypeException(node.location, "%s: type not specified" % node.name)
         return self.visit(node.ty)
 
-    def visitAstBlankPattern(self, node, isParam=False):
+    def visitBlankPattern(self, node, isParam=False):
         if not isParam:
             return None
         if node.ty is None:
             raise TypeException(node.location, "type not specified")
         return self.visit(node.ty)
 
-    def visitAstLiteralPattern(self, node, isParam=False):
+    def visitLiteralPattern(self, node, isParam=False):
         return self.visit(node.literal)
 
-    def visitAstTuplePattern(self, node, isParam=False):
+    def visitTuplePattern(self, node, isParam=False):
         if not isParam:
             return None
         patternTypes = tuple(self.visit(p, True) for p in node.patterns)
         tupleClass = self.info.getTupleClass(len(node.patterns), node.location)
         return ir_t.ClassType(tupleClass, patternTypes)
 
-    def visitAstValuePattern(self, node, isParam=False):
+    def visitValuePattern(self, node, isParam=False):
         if not isParam:
             return None
         # Need to raise this early, since patternMustMatch is only called after a type is
@@ -503,21 +503,21 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         # involve function calls as part of the scope prefix.
         raise TypeException(node.location, "value pattern can't be used in a parameter")
 
-    def visitAstDestructurePattern(self, node, isParam=False):
+    def visitDestructurePattern(self, node, isParam=False):
         if not isParam:
             return None
         # Need to raise this early, since patternMustMatch is only called after a type
         # is returned.
         raise TypeException(node.location, "destructure pattern can't be used in a parameter")
 
-    def visitAstUnaryPattern(self, node, isParam=False):
+    def visitUnaryPattern(self, node, isParam=False):
         if not isParam:
             return None
         # Need to raise this early, since patternMustMatch is only called after a type
         # is returned.
         raise TypeException(node.location, "unary pattern can't be used in a parameter")
 
-    def visitAstBinaryPattern(self, node, isParam=False):
+    def visitBinaryPattern(self, node, isParam=False):
         if not isParam:
             return None
         # Need to raise this early, since patternMustMatch is only called after a type
@@ -589,13 +589,13 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         if isinstance(irDefn, ir.Class) or isinstance(irDefn, ir.Function):
             self.functionStack.pop()
 
-    def visitAstPackage(self, node):
+    def visitPackage(self, node):
         self.visitChildren(node)
 
-    def visitAstModule(self, node):
+    def visitModule(self, node):
         self.visitChildren(node)
 
-    def visitAstVariableDefinition(self, node):
+    def visitVariableDefinition(self, node):
         if node.expression is not None:
             exprTy = self.visit(node.expression)
             mode = COMPILE_FOR_EFFECT
@@ -605,7 +605,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.visit(node.pattern, exprTy, mode)
         assert exprTy is None or patternMustMatch(node.pattern, exprTy, self.info)
 
-    def visitAstFunctionDefinition(self, node):
+    def visitFunctionDefinition(self, node):
         self.handleFunctionCommon(node, node.returnType, node.body)
         irDefn = self.info.getDefnInfo(node).irDefn
         if self.isExternallyVisible(irDefn):
@@ -615,7 +615,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             each(lambda ty: self.checkPublicType(ty, node.name, node.location),
                  irDefn.parameterTypes)
 
-    def visitAstClassDefinition(self, node):
+    def visitClassDefinition(self, node):
         irClass = self.info.getDefnInfo(node).irDefn
         thisType = ir_t.ClassType.forReceiver(irClass)
 
@@ -653,7 +653,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         irInitializer.returnType = ir_t.UnitType
 
         for member in node.members:
-            if isinstance(member, ast.AstVariableDefinition):
+            if isinstance(member, ast.VariableDefinition):
                 variance = ir_t.INVARIANT if member.keyword == "var" else COVARIANT
                 with VarianceScope(self, variance, irClass):
                     self.visit(member)
@@ -670,10 +670,10 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             each(lambda ty: self.checkPublicType(ty, node.name, node.location),
                  irClass.supertypes)
 
-    def visitAstPrimaryConstructorDefinition(self, node):
+    def visitPrimaryConstructorDefinition(self, node):
         self.handleFunctionCommon(node, None, None)
 
-    def visitAstArrayElementsStatement(self, node):
+    def visitArrayElementsStatement(self, node):
         # The array element type is either covariant or invariant, depending on whether the
         # elements are immutable.
         variance = COVARIANT \
@@ -682,16 +682,16 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         with VarianceScope(self, variance, self.scope().getIrDefn()):
             self.visit(node.elementType)
 
-    def visitAstImportStatement(self, node):
+    def visitImportStatement(self, node):
         # TypeDeclarationVisitor does all the work.
         pass
 
-    def visitAstTypeParameter(self, node):
+    def visitTypeParameter(self, node):
         # TypeDeclarationVisitor does all the work, including finding the types of the bounds.
         # We don't need to do anything here.
         pass
 
-    def visitAstParameter(self, node):
+    def visitParameter(self, node):
         if self.variance is COVARIANT and node.var == "var":
             # A `var` parameter in a primary constructor. Since this defines a mutable field,
             # we have to go invariant.
@@ -704,7 +704,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             self.info.getDefnInfo(node).irDefn.type = ty
         return ty
 
-    def visitAstVariablePattern(self, node, exprTy, mode):
+    def visitVariablePattern(self, node, exprTy, mode):
         scope = self.scope()
         isShadow = mode is COMPILE_FOR_MATCH and scope.isShadow(node.name)
         if node.ty is not None:
@@ -734,17 +734,17 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             scope.define(node.name)
         return patTy
 
-    def visitAstBlankPattern(self, node, exprTy, mode):
+    def visitBlankPattern(self, node, exprTy, mode):
         blankTy = self.visit(node.ty) if node.ty is not None else None
         patTy = self.findPatternType(blankTy, exprTy, mode, None, node.location)
         return patTy
 
-    def visitAstLiteralPattern(self, node, exprTy, mode):
+    def visitLiteralPattern(self, node, exprTy, mode):
         litTy = self.visit(node.literal)
         patTy = self.findPatternType(litTy, exprTy, mode, None, node.location)
         return patTy
 
-    def visitAstTuplePattern(self, node, exprTy, mode):
+    def visitTuplePattern(self, node, exprTy, mode):
         tupleClass = self.info.getTupleClass(len(node.patterns), node.location)
         if isinstance(exprTy, ir_t.ClassType) and exprTy.clas is tupleClass:
             elementTypes = tuple(self.visit(p, ety, mode)
@@ -756,7 +756,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         patTy = self.findPatternType(tupleTy, exprTy, mode, None, node.location)
         return patTy
 
-    def visitAstValuePattern(self, node, exprTy, mode):
+    def visitValuePattern(self, node, exprTy, mode):
         scope, receiverType = self.handlePatternScopePrefix(node.prefix)
         if len(node.prefix) > 0:
             hasReceiver = not self.info.hasScopePrefixInfo(node.prefix[-1])
@@ -766,7 +766,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             patTy = self.handleUnprefixedCall(node.name, None, None, node.id, node.location)
         return patTy
 
-    def visitAstDestructurePattern(self, node, exprTy, mode):
+    def visitDestructurePattern(self, node, exprTy, mode):
         last = node.prefix[-1]
         if len(node.prefix) == 1:
             receiverType = self.getReceiverType() if self.hasReceiverType() else None
@@ -783,25 +783,25 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                       exprTy, node.patterns, mode,
                                       last.id, node.id, node.location)
 
-    def visitAstUnaryPattern(self, node, exprTy, mode):
+    def visitUnaryPattern(self, node, exprTy, mode):
         receiverType = self.getReceiverType() if self.hasReceiverType() else None
         nameInfo = self.scope().lookupFromSelf(node.operator, node.location)
         return self.handleDestructure(nameInfo, receiverType, False, None,
                                       exprTy, [node.pattern], mode,
                                       node.id, node.matcherId, node.location)
 
-    def visitAstBinaryPattern(self, node, exprTy, mode):
+    def visitBinaryPattern(self, node, exprTy, mode):
         receiverType = self.getReceiverType() if self.hasReceiverType() else None
         nameInfo = self.scope().lookupFromSelf(node.operator, node.location)
         return self.handleDestructure(nameInfo, receiverType, False, None,
                                       exprTy, [node.left, node.right], mode,
                                       node.id, node.matcherId, node.location)
 
-    def visitAstLiteralExpression(self, node):
+    def visitLiteralExpression(self, node):
         ty = self.visit(node.literal)
         return ty
 
-    def visitAstVariableExpression(self, node, mayBePrefix=False):
+    def visitVariableExpression(self, node, mayBePrefix=False):
         if mayBePrefix:
             ty = self.handlePossiblePrefixSymbol(node.name, None, None, None,
                                                  node.id, node.location)
@@ -809,7 +809,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             ty = self.handleSimpleVariable(node.name, node.id, node.location)
         return ty
 
-    def visitAstThisExpression(self, node):
+    def visitThisExpression(self, node):
         scope = self.scope()
         nameInfo = scope.lookupFromSelf("this", node.location, mayBeAssignment=False)
         defnInfo = nameInfo.getDefnInfo()
@@ -817,7 +817,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         ty = defnInfo.irDefn.type
         return ty
 
-    def visitAstSuperExpression(self, node):
+    def visitSuperExpression(self, node):
         scope = self.scope()
         nameInfo = scope.lookupFromSelf("this", node.location, mayBeAssignment=False)
         defnInfo = nameInfo.getDefnInfo()
@@ -828,15 +828,15 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         superType = thisType.clas.supertypes[0]
         return superType
 
-    def visitAstBlockExpression(self, node):
+    def visitBlockExpression(self, node):
         lastTy = ir_t.UnitType
         for stmt in node.statements:
             stmtTy = self.visit(stmt)
-            assert stmtTy is not None or isinstance(stmt, ast.AstDefinition)
+            assert stmtTy is not None or isinstance(stmt, ast.Definition)
             lastTy = stmtTy if stmtTy else ir_t.UnitType
         return lastTy
 
-    def visitAstAssignExpression(self, node):
+    def visitAssignExpression(self, node):
         rightTy = self.visit(node.right)
         leftTy = self.visit(node.left)
         if not rightTy.isSubtypeOf(leftTy):
@@ -845,7 +845,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                 (str(leftTy), str(rightTy)))
         return leftTy
 
-    def visitAstPropertyExpression(self, node, mayBePrefix=False):
+    def visitPropertyExpression(self, node, mayBePrefix=False):
         receiverType = self.visitPossiblePrefix(node.receiver)
         if self.info.hasScopePrefixInfo(node.receiver):
             receiverScope = self.info.getScope(
@@ -860,14 +860,14 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             ty = self.handlePossiblePrefixSymbol(node.propertyName, receiverScope, receiverType,
                                                  None, node.id, node.location)
         else:
-            receiverIsReceiver = isinstance(node.receiver, ast.AstThisExpression) or \
-                                 isinstance(node.receiver, ast.AstSuperExpression)
+            receiverIsReceiver = isinstance(node.receiver, ast.ThisExpression) or \
+                                 isinstance(node.receiver, ast.SuperExpression)
             ty = self.handlePropertyCall(node.propertyName, receiverScope, receiverType,
                                          None, None, hasReceiver, receiverIsReceiver,
                                          node.id, node.location)
         return ty
 
-    def visitAstCallExpression(self, node, mayBePrefix=False):
+    def visitCallExpression(self, node, mayBePrefix=False):
         hasTypeArgs = node.typeArguments is not None
         typeArgs = map(self.visit, node.typeArguments) if hasTypeArgs else None
         hasArgs = node.arguments is not None
@@ -875,14 +875,14 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         if hasArgs:
             mayBePrefix = False
 
-        if isinstance(node.callee, ast.AstVariableExpression):
+        if isinstance(node.callee, ast.VariableExpression):
             if mayBePrefix:
                 ty = self.handlePossiblePrefixSymbol(node.callee.name, None, None, typeArgs,
                                                      node.id, node.location)
             else:
                 ty = self.handleUnprefixedCall(node.callee.name, typeArgs, argTypes,
                                                node.id, node.location)
-        elif isinstance(node.callee, ast.AstPropertyExpression):
+        elif isinstance(node.callee, ast.PropertyExpression):
             receiverType = self.visitPossiblePrefix(node.callee.receiver)
             if self.info.hasScopePrefixInfo(node.callee.receiver):
                 receiverScope = self.info.getScope(
@@ -900,8 +900,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 ty = self.handlePropertyCall(node.callee.propertyName, receiverScope,
                                              receiverType, typeArgs, argTypes,
                                              hasReceiver, False, node.id, node.location)
-        elif isinstance(node.callee, ast.AstThisExpression) or \
-             isinstance(node.callee, ast.AstSuperExpression):
+        elif isinstance(node.callee, ast.ThisExpression) or \
+             isinstance(node.callee, ast.SuperExpression):
             receiverType = self.visit(node.callee)
             receiverScope = self.info.getScope(ir_t.getClassFromType(receiverType))
             self.handlePropertyCall(ir.CONSTRUCTOR_SUFFIX, receiverScope, receiverType,
@@ -912,7 +912,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             raise NotImplementedError
         return ty
 
-    def visitAstNewArrayExpression(self, node):
+    def visitNewArrayExpression(self, node):
         indexType = self.visit(node.length)
         if indexType != ir_t.I32Type:
             raise TypeException(node.location, "array length must be i32")
@@ -923,12 +923,12 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.handleNewCall(objectType, argTypes, node.id, node.location)
         return objectType
 
-    def visitAstUnaryExpression(self, node):
+    def visitUnaryExpression(self, node):
         receiverType = self.visit(node.expr)
         ty = self.handleOperatorCall(node.operator, receiverType, None, node.id, node.location)
         return ty
 
-    def visitAstBinaryExpression(self, node):
+    def visitBinaryExpression(self, node):
         leftTy = self.visit(node.left)
         rightTy = self.visit(node.right)
         if node.operator in ["&&", "||"]:
@@ -942,7 +942,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             ty = self.handleOperatorCall(node.operator, leftTy, rightTy, node.id, node.location)
         return ty
 
-    def visitAstTupleExpression(self, node):
+    def visitTupleExpression(self, node):
         types = tuple(map(self.visit, node.expressions))
         if len(types) > compile_info.MAX_TUPLE_LENGTH:
             raise TypeException(node.location,
@@ -956,7 +956,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         clas = self.info.getTupleClass(len(types), node.location)
         return ir_t.ClassType(clas, types)
 
-    def visitAstIfExpression(self, node):
+    def visitIfExpression(self, node):
         condTy = self.visit(node.condition)
         if not self.isConditionType(condTy):
             raise TypeException(node.location, "condition must be boolean")
@@ -968,25 +968,25 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             ifTy = ir_t.UnitType
         return ifTy
 
-    def visitAstWhileExpression(self, node):
+    def visitWhileExpression(self, node):
         condTy = self.visit(node.condition)
         if not self.isConditionType(condTy):
             raise TypeException(node.condition.location, "condition must be boolean")
         self.visit(node.body)
         return ir_t.UnitType
 
-    def visitAstMatchExpression(self, node):
+    def visitMatchExpression(self, node):
         exprTy = self.visit(node.expression)
         resultTy = self.visit(node.matcher, exprTy)
         return resultTy
 
-    def visitAstThrowExpression(self, node):
+    def visitThrowExpression(self, node):
         exnTy = self.visit(node.exception)
         if not exnTy.isSubtypeOf(ir_t.ClassType(getExceptionClass())):
             raise TypeException(node.location, "throw expression must produce an Exception")
         return ir_t.NoType
 
-    def visitAstTryCatchExpression(self, node):
+    def visitTryCatchExpression(self, node):
         tryTy = self.visit(node.expression)
         exnTy = ir_t.ClassType.forReceiver(getExceptionClass())
         if node.catchHandler is None:
@@ -998,14 +998,14 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         ty = tryTy.combine(catchTy, node.location)
         return ty
 
-    def visitAstPartialFunctionExpression(self, node, valueTy):
+    def visitPartialFunctionExpression(self, node, valueTy):
         ty = ir_t.NoType
         for case in node.cases:
             caseTy = self.visit(case, valueTy)
             ty = ty.combine(caseTy, node.location)
         return ty
 
-    def visitAstPartialFunctionCase(self, node, valueTy):
+    def visitPartialFunctionCase(self, node, valueTy):
         self.visit(node.pattern, valueTy, COMPILE_FOR_MATCH)
         if node.condition is not None:
             conditionTy = self.visit(node.condition)
@@ -1014,7 +1014,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         ty = self.visit(node.expression)
         return ty
 
-    def visitAstReturnExpression(self, node):
+    def visitReturnExpression(self, node):
         if not self.isAnalyzingFunction() or \
            (self.functionStack[-1].irDefn.isConstructor() and node.expression is not None):
             raise TypeException(node.location, "return not valid in this position")
@@ -1025,8 +1025,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.checkAndHandleReturnType(retTy, node.location)
         return ir_t.NoType
 
-    def visitAstClassType(self, node):
-        ty = super(DefinitionTypeVisitor, self).visitAstClassType(node)
+    def visitClassType(self, node):
+        ty = super(DefinitionTypeVisitor, self).visitClassType(node)
         if isinstance(ty, ir_t.VariableType):
             param = ty.typeParameter
             if self.variance is not None and param.clas is self.varianceClass:
@@ -1088,7 +1088,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             # Process parameter types first. We already know the types, but we need to ensure
             # that variant type parameters are being used correctly.
             # TODO: should variance checks in general be done in DeclarationTypeVisitor?
-            if isinstance(node, ast.AstPrimaryConstructorDefinition):
+            if isinstance(node, ast.PrimaryConstructorDefinition):
                 vscope = VarianceScope(self, COVARIANT, irFunction.getReceiverClass())
             elif irFunction.isMethod() and not irFunction.isConstructor():
                 vscope = VarianceScope(self, CONTRAVARIANT, irFunction.getReceiverClass())
@@ -1171,7 +1171,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         is saved for all components.
 
         Args:
-            prefix: a list of `AstScopePrefixComponent`s to process. It may be empty.
+            prefix: a list of `ast.ScopePrefixComponent`s to process. It may be empty.
 
         Returns:
             A tuple of `(Scope, Type|None)`. The scope is the last scope looked up from the

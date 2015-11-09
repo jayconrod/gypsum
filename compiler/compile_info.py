@@ -34,8 +34,8 @@ class CompileInfo(object):
     """Contains state created and used by most compiler phases"""
 
     def __init__(self, ast_, package, packageLoader, isUsingStd=True):
-        if isinstance(ast_, ast.AstModule):
-            ast_ = ast.AstPackage([ast_], location.NoLoc)
+        if isinstance(ast_, ast.Module):
+            ast_ = ast.Package([ast_], location.NoLoc)
             ast_.id = ids.AstId(-1)
         assert package.id is ids.TARGET_PACKAGE_ID
         assert packageLoader is not None
@@ -102,7 +102,7 @@ _dictNames = [("Scope", "scopes", (ids.ScopeId, ids.AstId, ids.DefnId, ids.Packa
 
 def _addDictMethods(elemName, dictName, types):
     def cleanKey(self, key):
-        if isinstance(key, ast.AstNode):
+        if isinstance(key, ast.Node):
             astId = key.id
             if ids.AstId in types:
                 return astId

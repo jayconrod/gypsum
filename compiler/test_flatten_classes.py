@@ -9,7 +9,6 @@ import unittest
 from lexer import *
 from layout import layout
 from parser import *
-from ast import *
 from scope_analysis import *
 from type_analysis import *
 from ids import *

@@ -84,7 +84,7 @@ class TryState(object):
             currentState = currentState.parent
 
 
-class CompileVisitor(ast.AstNodeVisitor):
+class CompileVisitor(ast.NodeVisitor):
     def __init__(self, function, info):
         self.function = function
         self.astDefn = function.astDefn if hasattr(function, "astDefn") else None
@@ -160,7 +160,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             # This function initializes all the global variables.
             for module in self.info.ast.modules:
                 for defn in module.definitions:
-                    if isinstance(defn, ast.AstVariableDefinition):
+                    if isinstance(defn, ast.VariableDefinition):
                         self.visit(defn, COMPILE_FOR_EFFECT)
             self.unit()
             self.ret()
@@ -187,20 +187,20 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.function.blocks = self.blocks
 
     def getParametersAndStatements(self):
-        if isinstance(self.astDefn, ast.AstFunctionDefinition):
+        if isinstance(self.astDefn, ast.FunctionDefinition):
             if self.astDefn.body is None:
                 assert ABSTRACT in self.function.flags
                 return None, None
             parameters = self.astDefn.parameters
-            if isinstance(self.astDefn.body, ast.AstBlockExpression):
+            if isinstance(self.astDefn.body, ast.BlockExpression):
                 statements = self.astDefn.body.statements
             else:
                 statements = [self.astDefn.body]
-        elif isinstance(self.astDefn, ast.AstClassDefinition):
+        elif isinstance(self.astDefn, ast.ClassDefinition):
             parameters = []
             statements = self.astDefn.members
         else:
-            assert isinstance(self.astDefn, ast.AstPrimaryConstructorDefinition)
+            assert isinstance(self.astDefn, ast.PrimaryConstructorDefinition)
             parameters = self.astDefn.parameters
             statements = []
         return parameters, statements
@@ -217,24 +217,24 @@ class CompileVisitor(ast.AstNodeVisitor):
         altCtorCalled = False
         superCtorCalled = False
         if len(statements) > 0 and \
-           isinstance(statements[0], ast.AstCallExpression):
-            if isinstance(statements[0].callee, ast.AstThisExpression):
+           isinstance(statements[0], ast.CallExpression):
+            if isinstance(statements[0].callee, ast.ThisExpression):
                 self.visitCallThisExpression(statements[0], COMPILE_FOR_EFFECT)
                 altCtorCalled = True
                 superCtorCalled = True
                 statements = statements[1:]
-            elif isinstance(statements[0].callee, ast.AstSuperExpression):
+            elif isinstance(statements[0].callee, ast.SuperExpression):
                 self.visitCallSuperExpression(statements[0], COMPILE_FOR_EFFECT)
                 superCtorCalled = True
                 statements = statements[1:]
-        elif isinstance(self.astDefn, ast.AstClassDefinition) and \
+        elif isinstance(self.astDefn, ast.ClassDefinition) and \
              self.info.hasUseInfo(self.astDefn):
             superCtorCalled = True
             arguments = self.astDefn.superArgs if self.astDefn.superArgs is not None else []
             self.buildCall(self.info.getUseInfo(self.astDefn),
                            self.info.getCallInfo(self.astDefn),
                            None, arguments, COMPILE_FOR_EFFECT, allowAllocation=False)
-        elif isinstance(self.astDefn, ast.AstPrimaryConstructorDefinition):
+        elif isinstance(self.astDefn, ast.PrimaryConstructorDefinition):
             superCtorCalled = True
             astClassDefn = self.function.getReceiverClass().astDefn
             arguments = astClassDefn.superArgs if astClassDefn.superArgs is not None else []
@@ -270,7 +270,7 @@ class CompileVisitor(ast.AstNodeVisitor):
 
         return parameters, statements
 
-    def visitAstVariableDefinition(self, defn, mode):
+    def visitVariableDefinition(self, defn, mode):
         assert mode is COMPILE_FOR_EFFECT
         if defn.expression is None:
             if defn.keyword == "let":
@@ -281,25 +281,25 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.visit(defn.expression, COMPILE_FOR_VALUE)
             self.visit(defn.pattern, COMPILE_FOR_EFFECT, self.info.getType(defn.expression))
 
-    def visitAstFunctionDefinition(self, defn, mode):
+    def visitFunctionDefinition(self, defn, mode):
         assert mode is COMPILE_FOR_EFFECT
         pass
 
-    def visitAstClassDefinition(self, defn, mode):
+    def visitClassDefinition(self, defn, mode):
         assert mode is COMPILE_FOR_EFFECT
         pass
 
-    def visitAstArrayElementsStatement(self, defn, mode):
+    def visitArrayElementsStatement(self, defn, mode):
         assert mode is COMPILE_FOR_EFFECT
         pass
 
-    def visitAstParameter(self, param, id):
+    def visitParameter(self, param, id):
         self.unpackParameter(param, id)
 
-    def visitAstConstructorParameter(self, param, id):
+    def visitConstructorParameter(self, param, id):
         self.unpackParameter(param, id)
 
-    def visitAstVariablePattern(self, pat, mode, ty=None, failBlock=None):
+    def visitVariablePattern(self, pat, mode, ty=None, failBlock=None):
         assert mode is COMPILE_FOR_UNINITIALIZED or ty is not None
         defnInfo = self.info.getDefnInfo(pat)
         if mode is COMPILE_FOR_UNINITIALIZED and isinstance(defnInfo.irDefn, Global):
@@ -334,7 +334,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.buildUninitialized(self.info.getType(pat))
         self.storeVariable(defnInfo, ty)
 
-    def visitAstBlankPattern(self, pat, mode, ty=None, failBlock=None):
+    def visitBlankPattern(self, pat, mode, ty=None, failBlock=None):
         if mode is COMPILE_FOR_UNINITIALIZED:
             return
         assert ty is not None
@@ -350,17 +350,17 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.setCurrentBlock(castBlock)
             self.drop()
 
-    def visitAstLiteralPattern(self, pat, mode, ty=None, failBlock=None):
+    def visitLiteralPattern(self, pat, mode, ty=None, failBlock=None):
         if mode is COMPILE_FOR_UNINITIALIZED:
             return
         lit = pat.literal
         ty = self.info.getType(pat)
-        if isinstance(lit, ast.AstStringLiteral):
+        if isinstance(lit, ast.StringLiteral):
             # String.== is an actual method, so the literal needs to be the receiver.
             self.buildLiteral(lit)
             self.dupi(1)  # value
             self.callg(getBuiltinFunctionById(BUILTIN_STRING_EQ_OP_ID))
-        elif isinstance(lit, ast.AstNullLiteral):
+        elif isinstance(lit, ast.NullLiteral):
             self.dup()
             self.null(),
             self.eqp()
@@ -373,7 +373,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.setCurrentBlock(successBlock)
         self.drop()
 
-    def visitAstTuplePattern(self, pat, mode, ty=None, failBlock=None):
+    def visitTuplePattern(self, pat, mode, ty=None, failBlock=None):
         if mode is COMPILE_FOR_UNINITIALIZED:
             return
 
@@ -393,7 +393,7 @@ class CompileVisitor(ast.AstNodeVisitor):
 
         # Find the last non-blank pattern. We don't need to duplicate the tuple for it.
         def isBlank(p, pty):
-            return isinstance(p, ast.AstBlankPattern) and \
+            return isinstance(p, ast.BlankPattern) and \
                    type_analysis.patternMustMatch(p, pty, self.info)
 
         lastMatchingIndex = None
@@ -427,7 +427,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         if lastMatchingIndex is None:
             self.drop()
 
-    def visitAstValuePattern(self, pat, mode, ty=None, failBlock=None):
+    def visitValuePattern(self, pat, mode, ty=None, failBlock=None):
         if mode is COMPILE_FOR_UNINITIALIZED:
             return
         assert mode is COMPILE_FOR_MATCH
@@ -454,7 +454,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.setCurrentBlock(successBlock)
         self.drop()
 
-    def visitAstDestructurePattern(self, pat, mode, ty=None, failBlock=None):
+    def visitDestructurePattern(self, pat, mode, ty=None, failBlock=None):
         if mode is COMPILE_FOR_UNINITIALIZED:
             for subPat in pat.patterns:
                 self.visit(subPat, COMPILE_FOR_UNINITIALIZED)
@@ -477,7 +477,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.buildDestructure(irDefn, hasPrefix, typeArgs, pat.patterns,
                               failBlock, pat.location)
 
-    def visitAstUnaryPattern(self, pat, mode, ty=None, failBlock=None):
+    def visitUnaryPattern(self, pat, mode, ty=None, failBlock=None):
         if mode is COMPILE_FOR_UNINITIALIZED:
             self.visit(pat.pattern, COMPILE_FOR_UNINITIALIZED)
             return
@@ -491,7 +491,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         typeArgs = self.info.getCallInfo(pat.matcherId).typeArguments
         self.buildDestructure(irDefn, False, typeArgs, [pat.pattern], failBlock, pat.location)
 
-    def visitAstBinaryPattern(self, pat, mode, ty=None, failBlock=None):
+    def visitBinaryPattern(self, pat, mode, ty=None, failBlock=None):
         if mode is COMPILE_FOR_UNINITIALIZED:
             self.visit(pat.left, COMPILE_FOR_UNINITIALIZED)
             self.visit(pat.right, COMPILE_FOR_UNINITIALIZED)
@@ -507,42 +507,42 @@ class CompileVisitor(ast.AstNodeVisitor):
         subPatterns = [pat.left, pat.right]
         self.buildDestructure(irDefn, False, typeArgs, subPatterns, failBlock, pat.location)
 
-    def visitAstLiteralExpression(self, expr, mode):
+    def visitLiteralExpression(self, expr, mode):
         self.buildLiteral(expr.literal)
         self.dropForEffect(mode)
 
-    def visitAstVariableExpression(self, expr, mode):
+    def visitVariableExpression(self, expr, mode):
         self.buildLoadOrNullaryCall(expr, mode)
 
-    def visitAstThisExpression(self, expr, mode):
+    def visitThisExpression(self, expr, mode):
         self.buildLoadOrNullaryCall(expr, mode)
 
-    def visitAstSuperExpression(self, expr, mode):
+    def visitSuperExpression(self, expr, mode):
         raise SemanticException(expr.location, "`super` is only valid as part of a call")
 
-    def visitAstBlockExpression(self, expr, mode):
+    def visitBlockExpression(self, expr, mode):
         scopeId = self.info.getScope(expr).scopeId
         self.compileStatements(scopeId, None, expr.statements, mode)
 
-    def visitAstAssignExpression(self, expr, mode):
+    def visitAssignExpression(self, expr, mode):
         ty = self.info.getType(expr.right)
         lvalue = self.compileLValue(expr.left, ty)
         self.visit(expr.right, COMPILE_FOR_VALUE)
         self.buildAssignment(lvalue, mode)
 
-    def visitAstPropertyExpression(self, expr, mode):
+    def visitPropertyExpression(self, expr, mode):
         if not self.info.hasScopePrefixInfo(expr.receiver):
             self.visit(expr.receiver, COMPILE_FOR_VALUE)
         self.buildLoadOrNullaryCall(expr, mode, receiverIsExplicit=True)
 
-    def visitAstCallExpression(self, expr, mode):
-        if not isinstance(expr.callee, ast.AstVariableExpression) and \
-           not isinstance(expr.callee, ast.AstPropertyExpression):
+    def visitCallExpression(self, expr, mode):
+        if not isinstance(expr.callee, ast.VariableExpression) and \
+           not isinstance(expr.callee, ast.PropertyExpression):
             raise SemanticException(expr.location, "uncallable expression")
 
         useInfo = self.info.getUseInfo(expr)
         callInfo = self.info.getCallInfo(expr) if self.info.hasCallInfo(expr) else None
-        if isinstance(expr.callee, ast.AstPropertyExpression) and \
+        if isinstance(expr.callee, ast.PropertyExpression) and \
            not self.info.hasScopePrefixInfo(expr.callee.receiver):
             receiver = expr.callee.receiver
         else:
@@ -561,7 +561,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.buildCall(useInfo, callInfo, expr.callee, expr.arguments,
                        mode, allowAllocation=False)
 
-    def visitAstNewArrayExpression(self, expr, mode):
+    def visitNewArrayExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)
         callInfo = self.info.getCallInfo(expr)
 
@@ -578,12 +578,12 @@ class CompileVisitor(ast.AstNodeVisitor):
         # how constructors can call other constructors.
         self.buildCall(useInfo, callInfo, self.HAVE_RECEIVER, expr.arguments, mode, False)
 
-    def visitAstUnaryExpression(self, expr, mode):
+    def visitUnaryExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)
         callInfo = self.info.getCallInfo(expr)
         self.buildCall(useInfo, callInfo, expr.expr, [], mode)
 
-    def visitAstBinaryExpression(self, expr, mode):
+    def visitBinaryExpression(self, expr, mode):
         opName = expr.operator
         if opName in ["&&", "||"]:
             # short-circuit logic operators
@@ -613,7 +613,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                 receiver = expr.left
             self.buildCall(useInfo, callInfo, receiver, [expr.right], mode)
 
-    def visitAstTupleExpression(self, expr, mode):
+    def visitTupleExpression(self, expr, mode):
         ty = self.info.getType(expr)
         tupleClass = ty.clas
         langMode = self.info.languageMode()
@@ -641,7 +641,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.callFunction(ctor)
         self.drop()
 
-    def visitAstIfExpression(self, expr, mode):
+    def visitIfExpression(self, expr, mode):
         self.visit(expr.condition, COMPILE_FOR_VALUE)
         trueBlock = self.newBlock()
         if expr.falseExpr is None:
@@ -672,7 +672,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                 self.setUnreachable()
             self.setCurrentBlock(joinBlock)
 
-    def visitAstWhileExpression(self, expr, mode):
+    def visitWhileExpression(self, expr, mode):
         condBlock = self.newBlock()
         self.branch(condBlock.id)
         self.setCurrentBlock(condBlock)
@@ -688,7 +688,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         if mode is COMPILE_FOR_VALUE:
             self.unit()
 
-    def visitAstMatchExpression(self, expr, mode):
+    def visitMatchExpression(self, expr, mode):
         self.visit(expr.expression, COMPILE_FOR_VALUE)
         exprTy = self.info.getType(expr.expression)
 
@@ -707,15 +707,15 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.restoreCurrentBlock(blockState)
         else:
             failBlock = None
-        self.visitAstPartialFunctionExpression(expr.matcher, mode, exprTy, doneBlock, failBlock)
+        self.visitPartialFunctionExpression(expr.matcher, mode, exprTy, doneBlock, failBlock)
         self.setCurrentBlock(doneBlock)
 
-    def visitAstThrowExpression(self, expr, mode):
+    def visitThrowExpression(self, expr, mode):
         self.visit(expr.exception, COMPILE_FOR_VALUE)
         self.throw()
         self.setUnreachable()
 
-    def visitAstTryCatchExpression(self, expr, mode):
+    def visitTryCatchExpression(self, expr, mode):
         if self.unreachable:
             return
 
@@ -821,7 +821,7 @@ class CompileVisitor(ast.AstNodeVisitor):
                 # We're inside another try, so we can't consume the exception.
                 self.dup()
             with UnreachableScope(self):
-                self.visitAstPartialFunctionExpression(expr.catchHandler, mode,
+                self.visitPartialFunctionExpression(expr.catchHandler, mode,
                                                        exnTy, catchSuccessBlock, catchFailBlock)
                 unreachableAfterCatch = self.unreachable
             assert self.isDetached()
@@ -1038,14 +1038,14 @@ class CompileVisitor(ast.AstNodeVisitor):
             else:
                 self.drop()
 
-    def visitAstPartialFunctionExpression(self, expr, mode, ty, doneBlock, failBlock):
+    def visitPartialFunctionExpression(self, expr, mode, ty, doneBlock, failBlock):
         allCasesTerminate = True
         mustMatchCaseTerminates = False
 
         for case in expr.cases[:-1]:
             nextBlock = self.newBlock()
             with UnreachableScope(self):
-                self.visitAstPartialFunctionCase(case, mode, ty, doneBlock, nextBlock)
+                self.visitPartialFunctionCase(case, mode, ty, doneBlock, nextBlock)
                 caseTerminates = self.unreachable
                 mustMatchCaseTerminates |= \
                     type_analysis.partialFunctionCaseMustMatch(case, ty, self.info)
@@ -1054,13 +1054,13 @@ class CompileVisitor(ast.AstNodeVisitor):
                 self.setUnreachable()
             self.setCurrentBlock(nextBlock)
         with UnreachableScope(self):
-            self.visitAstPartialFunctionCase(expr.cases[-1], mode, ty, doneBlock, failBlock)
+            self.visitPartialFunctionCase(expr.cases[-1], mode, ty, doneBlock, failBlock)
             allCasesTerminate &= self.unreachable
         if allCasesTerminate or mustMatchCaseTerminates:
             self.setUnreachable()
         assert self.isDetached()
 
-    def visitAstPartialFunctionCase(self, expr, mode, ty, doneBlock, failBlock):
+    def visitPartialFunctionCase(self, expr, mode, ty, doneBlock, failBlock):
         if expr.condition is not None:
             assert self.unreachable or failBlock is not None
             failBlockId = failBlock.id if failBlock is not None else -1
@@ -1076,7 +1076,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         self.branch(doneBlock.id)
         self.detach()
 
-    def visitAstReturnExpression(self, expr, mode):
+    def visitReturnExpression(self, expr, mode):
         tryState = self.tryStateStack[-1] if len(self.tryStateStack) > 0 else None
         hasFinally = tryState is not None and tryState.hasFinally()
         if hasFinally:
@@ -1172,14 +1172,14 @@ class CompileVisitor(ast.AstNodeVisitor):
         irDefn = useInfo.defnInfo.irDefn
         if LET in irDefn.flags:
             raise SemanticException(expr.location, "left side of assignment is constant")
-        if (isinstance(expr, ast.AstVariableExpression) and \
+        if (isinstance(expr, ast.VariableExpression) and \
             (isinstance(irDefn, Variable) or \
              isinstance(irDefn, Field) or \
              isinstance(irDefn, Global))) or \
-           (isinstance(expr, ast.AstPropertyExpression) and \
+           (isinstance(expr, ast.PropertyExpression) and \
             isinstance(irDefn, Global) and irDefn.isForeign()):
             return VarLValue(expr, self, ty, useInfo)
-        elif isinstance(expr, ast.AstPropertyExpression) and isinstance(irDefn, Field):
+        elif isinstance(expr, ast.PropertyExpression) and isinstance(irDefn, Field):
             self.visit(expr.receiver, COMPILE_FOR_VALUE)
             return PropertyLValue(expr, self, useInfo)
         else:
@@ -1201,7 +1201,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             implicitParamCount = 0
         if parameters is not None:
             for index, param in enumerate(parameters):
-                if isinstance(param.pattern, ast.AstVariablePattern):
+                if isinstance(param.pattern, ast.VariablePattern):
                     defnInfo = self.info.getDefnInfo(param.pattern)
                     if isinstance(defnInfo.irDefn, Variable):
                        defnInfo.irDefn.index = index + implicitParamCount
@@ -1213,14 +1213,14 @@ class CompileVisitor(ast.AstNodeVisitor):
 
     def unpackParameter(self, param, index):
         paramType = self.info.getType(param)
-        if isinstance(param.pattern, ast.AstVariablePattern):
+        if isinstance(param.pattern, ast.VariablePattern):
             defnInfo = self.info.getDefnInfo(param.pattern)
             if isinstance(defnInfo.irDefn, Variable):
                 defnInfo.irDefn.index = index
             else:
                 self.ldlocal(index)
                 self.storeVariable(defnInfo, paramType)
-        elif isinstance(param.pattern, ast.AstBlankPattern):
+        elif isinstance(param.pattern, ast.BlankPattern):
             pass
         else:
             self.ldlocal(index)
@@ -1248,7 +1248,7 @@ class CompileVisitor(ast.AstNodeVisitor):
         # Compile the last statement. If this is an expression, the result is the result of the
         # whole block. Otherwise, we need to push the unit value.
         if len(statements) > 0:
-            if isinstance(statements[-1], ast.AstExpression):
+            if isinstance(statements[-1], ast.Expression):
                 self.visit(statements[-1], mode)
                 needUnit = False
             else:
@@ -1385,8 +1385,8 @@ class CompileVisitor(ast.AstNodeVisitor):
     def isContextNeeded(self, scopeId):
         return scopeId is not None and \
                not (self.getScopeId() == scopeId and
-                    (isinstance(self.astDefn, ast.AstClassDefinition) or
-                     isinstance(self.astDefn, ast.AstPrimaryConstructorDefinition))) and \
+                    (isinstance(self.astDefn, ast.ClassDefinition) or
+                     isinstance(self.astDefn, ast.PrimaryConstructorDefinition))) and \
                self.info.hasContextInfo(scopeId)
 
     def createContext(self, contextInfo):
@@ -1408,7 +1408,7 @@ class CompileVisitor(ast.AstNodeVisitor):
     def buildDeclarations(self, statements):
         # Handle any non-variable definitions
         for stmt in statements:
-            if isinstance(stmt, ast.AstFunctionDefinition):
+            if isinstance(stmt, ast.FunctionDefinition):
                 closureInfo = self.info.getClosureInfo(stmt)
                 closureClass = closureInfo.irClosureClass
                 if closureClass is None or \
@@ -1428,11 +1428,11 @@ class CompileVisitor(ast.AstNodeVisitor):
                 self.callg(closureCtor)
                 self.drop()
                 self.storeVariable(closureInfo.irClosureVar)
-            elif isinstance(stmt, ast.AstClassDefinition):
+            elif isinstance(stmt, ast.ClassDefinition):
                 raise NotImplementedError
 
     def buildLiteral(self, lit):
-        if isinstance(lit, ast.AstIntegerLiteral):
+        if isinstance(lit, ast.IntegerLiteral):
             if lit.width == 8:
                 self.i8(lit.value)
             elif lit.width == 16:
@@ -1442,21 +1442,21 @@ class CompileVisitor(ast.AstNodeVisitor):
             else:
                 assert lit.width == 64
                 self.i64(lit.value)
-        elif isinstance(lit, ast.AstFloatLiteral):
+        elif isinstance(lit, ast.FloatLiteral):
             if lit.width == 32:
                 self.f32(lit.value)
             else:
                 assert lit.width == 64
                 self.f64(lit.value)
-        elif isinstance(lit, ast.AstStringLiteral):
+        elif isinstance(lit, ast.StringLiteral):
             id = self.info.package.findOrAddString(lit.value)
             self.string(id)
-        elif isinstance(lit, ast.AstBooleanLiteral):
+        elif isinstance(lit, ast.BooleanLiteral):
             if lit.value:
                 self.true()
             else:
                 self.false()
-        elif isinstance(lit, ast.AstNullLiteral):
+        elif isinstance(lit, ast.NullLiteral):
             self.null()
         else:
             raise NotImplementedError
@@ -1518,11 +1518,11 @@ class CompileVisitor(ast.AstNodeVisitor):
                 if receiver.onStack():
                     self.dup()
                 receiver.evaluate()
-            elif isinstance(receiver, ast.AstSuperExpression):
+            elif isinstance(receiver, ast.SuperExpression):
                 # Special case: load `super` as `this`
-                self.visitAstThisExpression(receiver, COMPILE_FOR_VALUE)
+                self.visitThisExpression(receiver, COMPILE_FOR_VALUE)
             else:
-                assert isinstance(receiver, ast.AstExpression)
+                assert isinstance(receiver, ast.Expression)
                 self.visit(receiver, COMPILE_FOR_VALUE)
 
         def compileArgs():
@@ -1628,7 +1628,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             hasPrefix: `True` if there was an explicit prefix before the matcher. This is
                 used to determine if an implicit receiver needs to be loaded.
             typeArgs: a list of `Type` arguments passed to the matcher.
-            subPatterns: a list of `AstPattern`s which will be compiled for matching.
+            subPatterns: a list of `Pattern`s which will be compiled for matching.
             failBlock: code will branch here if the match fails. The matching value will be
                 left on the stack.
             loc: the location of the matching pattern. Used for errors.
@@ -1779,7 +1779,7 @@ class CompileVisitor(ast.AstNodeVisitor):
             self.add(inst())
 
     def getScopeId(self):
-        if isinstance(self.astDefn, ast.AstPrimaryConstructorDefinition):
+        if isinstance(self.astDefn, ast.PrimaryConstructorDefinition):
             astDefn = self.function.getReceiverClass().astDefn
         else:
             astDefn = self.astDefn
