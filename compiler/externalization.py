@@ -79,6 +79,8 @@ class Externalizer(object):
             externDefn.typeParameters = [self.externalizeDefn(param)
                                          for param in defn.typeParameters]
             each(self.externalizeType, defn.parameterTypes)
+            if defn.definingClass is not None:
+                externDefn.definingclass = self.externalizeDefn(defn.definingClass)
         elif isinstance(defn, ir.Class):
             externDefn = ir.Class(defn.name, id, astDefn=defn.astDefn,
                                   supertypes=defn.supertypes,

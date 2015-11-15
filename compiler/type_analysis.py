@@ -40,7 +40,7 @@ def analyzeTypes(info):
     for func in info.package.functions:
         if hasattr(func, "override"):
             overridenReturnType = func.override.returnType.substituteForInheritance(
-                func.getReceiverClass(), func.override.getReceiverClass())
+                func.definingClass, func.override.definingClass)
             if not func.returnType.isSubtypeOf(overridenReturnType):
                 raise TypeException(func.getLocation(),
                                     "%s: return type is not subtype of overriden function" %
@@ -1089,9 +1089,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             # that variant type parameters are being used correctly.
             # TODO: should variance checks in general be done in DeclarationTypeVisitor?
             if isinstance(node, ast.PrimaryConstructorDefinition):
-                vscope = VarianceScope(self, COVARIANT, irFunction.getReceiverClass())
+                vscope = VarianceScope(self, COVARIANT, irFunction.definingClass)
             elif irFunction.isMethod() and not irFunction.isConstructor():
-                vscope = VarianceScope(self, CONTRAVARIANT, irFunction.getReceiverClass())
+                vscope = VarianceScope(self, CONTRAVARIANT, irFunction.definingClass)
             else:
                 vscope = VarianceScope.clear(self)
             with vscope:
@@ -1104,7 +1104,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                     raise TypeException(node.location,
                                         "constructors must not declare return type")
                 if irFunction.isMethod():
-                    vscope = VarianceScope(self, COVARIANT, irFunction.getReceiverClass())
+                    vscope = VarianceScope(self, COVARIANT, irFunction.definingClass)
                 else:
                     vscope = VarianceScope.clear(self)
                 with vscope:
@@ -1124,7 +1124,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 bodyType = self.visit(astBody)
                 if bodyType is not ir_t.NoType:
                     if irFunction.isMethod() and not irFunction.isConstructor():
-                        vscope = VarianceScope(self, COVARIANT, irFunction.getReceiverClass())
+                        vscope = VarianceScope(self, COVARIANT, irFunction.definingClass)
                     else:
                         vscope = VarianceScope.clear(self)
                     with vscope:

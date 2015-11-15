@@ -425,8 +425,9 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                            methods=[], flags=frozenset([PUBLIC]))
         barType = ClassType(bar)
         ctor = foo.addFunction(Name(["Bar", CONSTRUCTOR_SUFFIX]),
-                               None, UnitType, [], [barType], None, None,
-                               frozenset([PUBLIC, METHOD, CONSTRUCTOR]))
+                               returnType=UnitType, typeParameters=[], parameterTypes=[barType],
+                               flags=frozenset([PUBLIC, METHOD, CONSTRUCTOR]),
+                               definingClass=bar)
         bar.constructors.append(ctor)
         packageLoader = FakePackageLoader([foo])
 
@@ -510,8 +511,11 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                    supertypes=[getRootClassType()],
                                    constructors=[], fields=[],
                                    methods=[], flags=frozenset([PUBLIC]))
-        m = fooPackage.addFunction(Name(["Bar", "m"]), None, I64Type, [], [ClassType(clas)],
-                                   None, None, frozenset([PUBLIC, METHOD]))
+        m = fooPackage.addFunction(Name(["Bar", "m"]),
+                                   returnType=I64Type, typeParameters=[],
+                                   parameterTypes=[ClassType(clas)],
+                                   flags=frozenset([PUBLIC, METHOD]),
+                                   definingClass=clas)
         clas.methods.append(m)
         loader = FakePackageLoader([fooPackage])
 
@@ -528,8 +532,10 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                    methods=[], flags=frozenset([PUBLIC]))
         ty = ClassType(clas)
         ctor = fooPackage.addFunction(Name(["Bar", CONSTRUCTOR_SUFFIX]),
-                                      None, UnitType, [], [ty], None, None,
-                                      frozenset([PUBLIC, METHOD]))
+                                      returnType=UnitType, typeParameters=[],
+                                      parameterTypes=[ty],
+                                      flags=frozenset([PUBLIC, METHOD]),
+                                      definingClass=clas)
         clas.constructors = [ctor]
         field = fooPackage.newField(Name(["Bar", "x"]), type=I64Type, flags=frozenset([PUBLIC]))
         clas.fields = [field]
@@ -549,11 +555,15 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                    methods=[], flags=frozenset([PUBLIC]))
         ty = ClassType(clas)
         ctor = fooPackage.addFunction(Name(["Bar", CONSTRUCTOR_SUFFIX]),
-                                      None, UnitType, [], [ty], None, None,
-                                      frozenset([PUBLIC, METHOD]))
+                                      returnType=UnitType, typeParameters=[],
+                                      parameterTypes=[ty],
+                                      flags=frozenset([PUBLIC, METHOD]),
+                                      definingClass=clas)
         clas.constructors.append(ctor)
-        m = fooPackage.addFunction(Name(["Bar", "m"]), None, ty, [], [ty], None, None,
-                                   frozenset([PUBLIC, METHOD]))
+        m = fooPackage.addFunction(Name(["Bar", "m"]),
+                                   returnType=ty, typeParameters=[], parameterTypes=[ty],
+                                   flags=frozenset([PUBLIC, METHOD]),
+                                   definingClass=clas)
         clas.methods.append(m)
         packageLoader = FakePackageLoader([fooPackage])
 
@@ -1400,13 +1410,13 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         fooClass = info.package.findClass(name="Foo")
         barClass = info.package.findClass(name="Bar")
         self.assertEquals(len(fooClass.methods), len(barClass.methods))
-        self.assertIs(barClass, barClass.methods[-1].getReceiverClass())
+        self.assertIs(barClass, barClass.methods[-1].definingClass)
 
     def testBuiltinOverride(self):
         source = "def f = \"foo\".to-string"
         info = self.analyzeFromSource(source)
         useInfo = info.getUseInfo(info.ast.modules[0].definitions[0].body)
-        receiverClass = useInfo.defnInfo.irDefn.getReceiverClass()
+        receiverClass = useInfo.defnInfo.irDefn.definingClass
         self.assertIs(getStringClass(), receiverClass)
 
     def testRecursiveOverrideBuiltinWithoutReturnType(self):
@@ -1420,7 +1430,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source)
         List = info.package.findClass(name="List")
         useInfo = info.getUseInfo(info.ast.modules[0].definitions[0].members[0].body.right.trueExpr)
-        receiverClass = useInfo.defnInfo.irDefn.getReceiverClass()
+        receiverClass = useInfo.defnInfo.irDefn.definingClass
         self.assertIs(List, receiverClass)
 
     def testOverrideWithImplicitTypeParameters(self):
@@ -1429,7 +1439,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source)
         A = info.package.findClass(name="A")
         toString = A.findMethodByShortName("to-string")
-        self.assertIs(A, toString.getReceiverClass())
+        self.assertIs(A, toString.definingClass)
         self.assertIs(toString.override, getRootClass().findMethodByShortName("to-string"))
 
     def testOverrideCovariantParameters(self):

@@ -3312,9 +3312,11 @@ class TestCompiler(TestCaseWithDefinitions):
                                        constructors=[], fields=[], methods=[],
                                        flags=frozenset([PUBLIC]))
         barTy = ClassType(barClass)
-        ctor = fooPackage.addFunction(Name(["Bar", CONSTRUCTOR_SUFFIX]), None, UnitType,
-                                      [], [barTy], None, None,
-                                      frozenset([PUBLIC, METHOD, CONSTRUCTOR]))
+        ctor = fooPackage.addFunction(Name(["Bar", CONSTRUCTOR_SUFFIX]),
+                                      returnType=UnitType, typeParameters=[],
+                                      parameterTypes=[barTy],
+                                      flags=frozenset([PUBLIC, METHOD, CONSTRUCTOR]),
+                                      definingClass=barClass)
         barClass.constructors.append(ctor)
         loader = FakePackageLoader([fooPackage])
 
@@ -3820,7 +3822,8 @@ class TestCompiler(TestCaseWithDefinitions):
         arrayType = ClassType(arrayClass)
         ctor = fooPackage.addFunction(Name(["Array", CONSTRUCTOR_SUFFIX]), returnType=UnitType,
                                       typeParameters=[], parameterTypes=[arrayType],
-                                      flags=frozenset([PUBLIC, METHOD, CONSTRUCTOR]))
+                                      flags=frozenset([PUBLIC, METHOD, CONSTRUCTOR]),
+                                      definingClass=arrayClass)
         arrayClass.constructors = [ctor]
         loader = FakePackageLoader([fooPackage])
 

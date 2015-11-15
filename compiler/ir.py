@@ -202,7 +202,7 @@ class Package(object):
                 return value(defn)
             elif key == "clas":
                  if isinstance(defn, Function):
-                     return defn.getReceiverClass() is value
+                     return defn.definingClass is value
                  else:
                      assert isinstance(defn, TypeParameter)
                      return defn.clas is value
@@ -489,6 +489,10 @@ class Function(ParameterizedDefn):
         flags (frozenset[flag]): a flags indicating how this function is used. Valid flags are
             `ABSTRACT`, `EXTERN`, `PUBLIC`, `PROTECTED`, `PRIVATE`, `STATIC`, `CONSTRUCTOR`,
             `METHOD`.
+        definingClass (Class?): the class this method (static or not) was defined in (as
+            opposed to any other class that inherits the method). For non-static methods, this
+            could be derived from the receiver type, but there's no easy way to get it for
+            static methods.
         insts (list[Instruction]?): a list of instructions to insert instead of calling this
             function. This is set for some (not all) builtin functions. For instance, the `+`
             method of `i64` has a list containing an `addi64` instruction.
@@ -499,7 +503,7 @@ class Function(ParameterizedDefn):
 
     def __init__(self, name, id, astDefn=None, returnType=None, typeParameters=None,
                  parameterTypes=None, variables=None, blocks=None, flags=frozenset(),
-                 insts=None, compileHint=None):
+                 definingClass=None, insts=None, compileHint=None):
         super(Function, self).__init__(name, id, astDefn)
         self.returnType = returnType
         self.typeParameters = typeParameters
@@ -507,12 +511,13 @@ class Function(ParameterizedDefn):
         self.variables = variables
         self.blocks = blocks
         self.flags = flags
+        self.definingClass = definingClass
         self.insts = insts
         self.compileHint = compileHint
 
     def __repr__(self):
         return reprFormat(self, "name", "returnType", "typeParameters", "parameterTypes",
-                          "variables", "blocks", "flags")
+                          "variables", "blocks", "flags", "definingClass")
 
     def __str__(self):
         buf = StringIO.StringIO()
@@ -531,6 +536,8 @@ class Function(ParameterizedDefn):
         if self.variables is not None:
             for v in self.variables:
                 buf.write("  var %s: %s (%s)\n" % (v.name, v.type, v.kind))
+        if self.definingClass is not None:
+            buf.write("  class %s\n" % (self.definingClass.name))
         if self.blocks is not None:
             for block in self.blocks:
                 buf.write("%d:\n" % block.id)
@@ -546,44 +553,9 @@ class Function(ParameterizedDefn):
                self.variables == other.variables and \
                self.blocks == other.blocks and \
                self.flags == other.flags and \
+               self.definingClass is other.definingClass and \
                self.insts == other.insts and \
                self.compileHint is other.compileHint
-
-    def getReceiverClass(self):
-        """Returns the class of the receiver.
-
-        This is obtained from the type of the first parameter, so it can only be called on
-        non-static methods."""
-        assert flags.METHOD in self.flags and flags.STATIC not in self.flags
-        ty = self.parameterTypes[0]
-        return builtins.getBuiltinClassFromType(ty) if ty.isPrimitive() else ty.clas
-
-    def getDefiningClass(self, receiverClass):
-        """Returns the class that defined this function.
-
-        This is used for static methods since `getReceiverClass` can't be used. `receiverType`
-        is the type of the receiver used to access this method."""
-
-        assert flags.METHOD in self.flags
-        if flags.STATIC not in self.flags:
-            return self.getReceiverClass()
-
-        # TODO: for now, we walk the class tree to find the higher class that defines this
-        # method. This is expensive, and it will become a lot more expensive when traits are
-        # introduced. When annotations are introduced, we can define an internal annotation
-        # to point to the defining class.
-
-        # This method may be called before class flattening, which means the method might only
-        # be found in the defining class and not the derived classes. So we walk up the tree
-        # and find the first class that has the method, then find the first class that doesn't.
-        clas = receiverClass
-        while not any(m is self for m in clas.methods):
-            clas = clas.supertypes[0].clas
-        nextClass = clas.supertypes[0].clas
-        while any(m is self for m in nextClass.methods):
-            clas = nextClass
-            nextClass = nextClass.supertypes[0].clas
-        return clas
 
     def canCallWith(self, typeArgs, argTypes):
         if not self.canApplyTypeArgs(typeArgs):
@@ -607,7 +579,7 @@ class Function(ParameterizedDefn):
     def isFinal(self):
         if not self.isMethod() or self.isConstructor() or flags.FINAL in self.flags:
             return True
-        receiverClass = self.getReceiverClass()
+        receiverClass = self.definingClass
         return hasattr(receiverClass, "isPrimitive") and receiverClass.isPrimitive
 
     def mayOverride(self, other):
@@ -620,8 +592,8 @@ class Function(ParameterizedDefn):
             all(atp.isEquivalent(btp) for atp, btp in
                 zip(selfExplicitTypeParameters, otherExplicitTypeParameters))
         selfParameterTypes = self.parameterTypes[1:]
-        selfClass = self.getReceiverClass()
-        otherClass = other.getReceiverClass()
+        selfClass = self.definingClass
+        otherClass = other.definingClass
         otherParameterTypes = [pty.substituteForInheritance(selfClass, otherClass) \
                                for pty in other.parameterTypes[1:]]
         parameterTypesAreCompatible = \
@@ -1043,8 +1015,7 @@ def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes, importedTy
        (flags.STATIC in irFunction.flags or flags.METHOD in irFunction.flags):
         # Method call: type args are implied by receiver.
         if isinstance(receiverType, ir_types.ObjectType):
-            definingClass = irFunction.getDefiningClass(ir_types.getClassFromType(receiverType))
-            receiverType = receiverType.substituteForBaseClass(definingClass)
+            receiverType = receiverType.substituteForBaseClass(irFunction.definingClass)
         implicitTypeArgs = list(receiverType.getTypeArguments())
         allArgTypes = argTypes \
                       if flags.STATIC in irFunction.flags \

@@ -131,7 +131,7 @@ def initFunction(out, functionData):
     for i, name in enumerate(functionData["parameterTypes"]):
         out.write("    parameterTypes->set(%d, %s);\n" % (i, getTypeFromName(name)))
     out.write("    ::new(function) Function(name, PUBLIC_FLAG, emptyTypeParameters, " +
-              "returnType, parameterTypes, 0, emptyInstructions, nullptr, nullptr, nullptr);\n")
+              "returnType, parameterTypes, nullptr, 0, emptyInstructions, nullptr, nullptr, nullptr);\n")
     out.write("    function->setBuiltinId(%s);\n" % functionData["id"])
     out.write("  }")
 

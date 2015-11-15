@@ -143,18 +143,19 @@ def _initialize():
         _builtinFunctionIdMap[id] = function
         return function
 
-    def buildMethod(functionData, classShortName):
-        function = buildFunction(functionData, classShortName)
+    def buildMethod(functionData, clas):
+        function = buildFunction(functionData, clas.name.short())
         function.flags |= frozenset([flags.METHOD])
+        function.definingClass = clas
         return function
 
-    def buildConstructor(functionData, classShortName):
-        function = buildMethod(functionData, classShortName)
+    def buildConstructor(functionData, clas):
+        function = buildMethod(functionData, clas)
         function.flags |= frozenset([flags.CONSTRUCTOR])
         return function
 
-    def buildField(fieldData, classShortName):
-        name = ir.Name([classShortName, fieldData["name"]])
+    def buildField(fieldData, clas):
+        name = ir.Name([clas.name.short(), fieldData["name"]])
         ty = buildType(fieldData["type"])
         return ir.Field(name, type=ty, flags=frozenset([flags.PUBLIC]))
 
@@ -177,9 +178,9 @@ def _initialize():
                 clas.supertypes = []
                 clas.fields = []
                 clas.methods = []
-            clas.constructors = [buildConstructor(ctorData, classData["name"])
+            clas.constructors = [buildConstructor(ctorData, clas)
                                  for ctorData in classData["constructors"]]
-            clas.fields += [buildField(fieldData, classData["name"])
+            clas.fields += [buildField(fieldData, clas)
                             for fieldData in classData["fields"]]
         else:
             clas.supertypes = []
@@ -188,7 +189,7 @@ def _initialize():
             clas.isPrimitive = True
         inheritedMethodCount = len(clas.methods)
         for m in classData["methods"]:
-            addMethod(clas.methods, inheritedMethodCount, buildMethod(m, classData["name"]))
+            addMethod(clas.methods, inheritedMethodCount, buildMethod(m, clas))
 
         _builtinClassTypeMap[classData["name"]] = clas
         _builtinClassIdMap[clas.id] = clas

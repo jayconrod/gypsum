@@ -671,6 +671,7 @@ class Scope(ast.NodeVisitor):
         modifies the function itself.
         """
         function.flags |= frozenset([METHOD])
+        function.definingClass = clas
         thisName = function.name.withSuffix(ir.RECEIVER_SUFFIX)
         this = ir.Variable(thisName, astDefn=function.astDefn,
                            kind=ir.PARAMETER, flags=frozenset([LET]))
@@ -862,9 +863,9 @@ class Scope(ast.NodeVisitor):
                                      irDefn.name)
 
         if useKind is USE_AS_CONSTRUCTOR and \
-           ABSTRACT in irDefn.getReceiverClass().flags:
+           ABSTRACT in irDefn.definingClass.flags:
             raise ScopeException(loc, "%s: cannot instantiate abstract class" %
-                                 irDefn.getReceiverClass().name)
+                                 irDefn.definingClass.name)
 
         useInfo = UseInfo(defnInfo, self.scopeId, useKind)
         self.info.setUseInfo(useAstId, useInfo)
@@ -1270,15 +1271,17 @@ class FunctionScope(Scope):
         irClosureType = ClassType(irClosureClass)
         ctorName = closureName.withSuffix(ir.CONSTRUCTOR_SUFFIX)
         ctorReceiverName = ctorName.withSuffix(ir.RECEIVER_SUFFIX)
-        irClosureCtor = self.info.package.addFunction(ctorName, None,
-                                                      UnitType, list(implicitTypeParams),
-                                                      [irClosureType],
-                                                      [ir.Variable(ctorReceiverName,
-                                                                   type=irClosureType,
-                                                                   kind=ir.PARAMETER,
-                                                                   flags=frozenset([LET]))],
-                                                      None, frozenset([METHOD]))
-        irClosureCtor.compileHint = CLOSURE_CONSTRUCTOR_HINT
+        irClosureCtor = self.info.package.addFunction(ctorName,
+                                                      returnType=UnitType,
+                                                      typeParameters=list(implicitTypeParams),
+                                                      parameterTypes=[irClosureType],
+                                                      variables=[ir.Variable(ctorReceiverName,
+                                                                             type=irClosureType,
+                                                                             kind=ir.PARAMETER,
+                                                                             flags=frozenset([LET]))],
+                                                      flags=frozenset([METHOD]),
+                                                      definingClass=irClosureClass,
+                                                      compileHint=CLOSURE_CONSTRUCTOR_HINT)
         irClosureClass.constructors.append(irClosureCtor)
 
         # Convert the function into a method of the closure class.
@@ -1292,6 +1295,7 @@ class FunctionScope(Scope):
                            kind=ir.PARAMETER, flags=frozenset([LET]))
         irDefn.variables.insert(0, this)
         irDefn.parameterTypes.insert(0, thisType)
+        irDefn.definingClass = irClosureClass
         irClosureClass.methods.append(irDefn)
 
         # If the parent is a function scope, define a local variable to hold the closure.
@@ -1373,9 +1377,9 @@ class ClassScope(Scope):
             if astDefn.name == "this":
                 name = self.makeName(ir.CONSTRUCTOR_SUFFIX)
                 checkFlags(flags, frozenset([PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
-                irDefn = self.info.package.addFunction(name, astDefn,
-                                                       None, implicitTypeParams,
-                                                       None, [], None, flags)
+                irDefn = self.info.package.addFunction(name, astDefn=astDefn,
+                                                       typeParameters=implicitTypeParams,
+                                                       variables=[], flags=flags)
                 self.makeConstructor(irDefn, irScopeDefn)
                 irScopeDefn.constructors.append(irDefn)
             else:
@@ -1384,15 +1388,16 @@ class ClassScope(Scope):
                     checkFlags(flags, frozenset([STATIC, PUBLIC, PROTECTED, PRIVATE]),
                                astDefn.location)
                     flags |= frozenset([METHOD])
-                    irDefn = self.info.package.addFunction(name, astDefn,
-                                                           None, implicitTypeParams,
-                                                           None, [], None, flags)
+                    irDefn = self.info.package.addFunction(name, astDefn=astDefn,
+                                                           typeParameters=implicitTypeParams,
+                                                           variables=[], flags=flags,
+                                                           definingClass=irScopeDefn)
                 else:
                     checkFlags(flags, frozenset([ABSTRACT, FINAL, PUBLIC, PROTECTED, PRIVATE]),
                                astDefn.location)
-                    irDefn = self.info.package.addFunction(name, astDefn,
-                                                           None, implicitTypeParams,
-                                                           None, [], None, flags)
+                    irDefn = self.info.package.addFunction(name, astDefn=astDefn,
+                                                           typeParameters=implicitTypeParams,
+                                                           variables=[], flags=flags)
                     self.makeMethod(irDefn, irScopeDefn)
                 irScopeDefn.methods.append(irDefn)
         elif isinstance(astDefn, ast.PrimaryConstructorDefinition):
@@ -1401,9 +1406,9 @@ class ClassScope(Scope):
             if len(flags & frozenset([PUBLIC, PROTECTED, PRIVATE])) == 0:
                 flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
             implicitTypeParams = self.getImplicitTypeParameters()
-            irDefn = self.info.package.addFunction(name, astDefn,
-                                                   None, implicitTypeParams,
-                                                   None, [], None, flags)
+            irDefn = self.info.package.addFunction(name, astDefn=astDefn,
+                                                   typeParameters=implicitTypeParams,
+                                                   variables=[], flags=flags)
             self.makeConstructor(irDefn, irScopeDefn)
             irScopeDefn.constructors.append(irDefn)
         elif isinstance(astDefn, ast.TypeParameter):
@@ -1531,7 +1536,7 @@ class BuiltinClassScope(Scope):
                 self.bind(ir.CONSTRUCTOR_SUFFIX, defnInfo)
                 self.define(ir.CONSTRUCTOR_SUFFIX)
         for method in irClass.methods:
-            methodClass = method.getDefiningClass(irClass)
+            methodClass = method.definingClass
             inheritedScopeId = self.info.getScope(methodClass.id).scopeId
             inheritanceDepth = irClass.findDistanceToBaseClass(methodClass)
             defnInfo = DefnInfo(method, self.scopeId, True, inheritedScopeId, inheritanceDepth)

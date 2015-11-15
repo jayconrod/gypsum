@@ -148,7 +148,7 @@ class CompileVisitor(ast.NodeVisitor):
         elif self.compileHint is CLOSURE_CONSTRUCTOR_HINT:
             # Closures contain a bunch of contexts. These context parameters have the same order
             # as the corresponding fields, so we just need to load and store them.
-            fields = self.function.getReceiverClass().fields
+            fields = self.function.definingClass.fields
             for i in xrange(len(fields)):
                 paramIndex = i + 1   # skip receiver
                 self.ldlocal(paramIndex)
@@ -179,7 +179,7 @@ class CompileVisitor(ast.NodeVisitor):
         else:
             assert self.compileHint is ARRAY_ELEMENT_LENGTH_HINT
             self.loadThis()
-            clas = self.function.getReceiverClass()
+            clas = self.function.definingClass
             length = next(f for f in clas.fields if ARRAY in f.flags)
             self.ldf(length.index)
             self.ret()
@@ -236,7 +236,7 @@ class CompileVisitor(ast.NodeVisitor):
                            None, arguments, COMPILE_FOR_EFFECT, allowAllocation=False)
         elif isinstance(self.astDefn, ast.PrimaryConstructorDefinition):
             superCtorCalled = True
-            astClassDefn = self.function.getReceiverClass().astDefn
+            astClassDefn = self.function.definingClass.astDefn
             arguments = astClassDefn.superArgs if astClassDefn.superArgs is not None else []
             self.buildCall(self.info.getUseInfo(astClassDefn),
                            self.info.getCallInfo(astClassDefn),
@@ -245,13 +245,13 @@ class CompileVisitor(ast.NodeVisitor):
         # If no superconstructor was called, try to find a default superconstructor,
         # and call that.
         if not superCtorCalled:
-            supertype = self.function.getReceiverClass().supertypes[0]
+            supertype = self.function.definingClass.supertypes[0]
             superclass = supertype.clas
             defaultSuperCtors = [ctor for ctor in superclass.constructors if
                                  len(ctor.parameterTypes) == 1]
             assert len(defaultSuperCtors) <= 1
             if len(defaultSuperCtors) == 0:
-                raise SemanticException(self.function.getReceiverClass().getLocation(),
+                raise SemanticException(self.function.definingClass.getLocation(),
                                         "no default constructor in superclass %s" %
                                         superclass.name)
             self.loadThis()
@@ -261,7 +261,7 @@ class CompileVisitor(ast.NodeVisitor):
 
         # If no alternate constructor was called, call the initializer.
         if not altCtorCalled:
-            irInitializer = self.function.getReceiverClass().initializer
+            irInitializer = self.function.definingClass.initializer
             if irInitializer is not None:
                 self.loadThis()
                 self.buildImplicitStaticTypeArguments(self.function.typeParameters)
@@ -1497,7 +1497,7 @@ class CompileVisitor(ast.NodeVisitor):
         elif method.isFinal():
             self.callFunction(method)
         else:
-            index = method.getReceiverClass().getMethodIndex(method)
+            index = method.definingClass.getMethodIndex(method)
             self.callv(len(method.parameterTypes), index)
 
     HAVE_RECEIVER = "HAVE_RECEIVER"
@@ -1546,10 +1546,10 @@ class CompileVisitor(ast.NodeVisitor):
             # Constructor.
             if allowAllocation:
                 compileTypeArgs()
-                if irDefn.getReceiverClass().isForeign():
-                    self.allocobjf(irDefn.getReceiverClass())
+                if irDefn.definingClass.isForeign():
+                    self.allocobjf(irDefn.definingClass)
                 else:
-                    self.allocobj(irDefn.getReceiverClass())
+                    self.allocobj(irDefn.definingClass)
             elif receiver is None:
                 # This is a constructor called from another constructor. We'll load `this`.
                 self.loadThis()
@@ -1596,7 +1596,7 @@ class CompileVisitor(ast.NodeVisitor):
                 # primitive methods which can't be called virtually.
                 self.callFunction(irDefn)
             else:
-                index = irDefn.getReceiverClass().getMethodIndex(irDefn)
+                index = irDefn.definingClass.getMethodIndex(irDefn)
                 argCount = len(argExprs)
                 self.callv(argCount + 1, index)
 
@@ -1780,7 +1780,7 @@ class CompileVisitor(ast.NodeVisitor):
 
     def getScopeId(self):
         if isinstance(self.astDefn, ast.PrimaryConstructorDefinition):
-            astDefn = self.function.getReceiverClass().astDefn
+            astDefn = self.function.definingClass.astDefn
         else:
             astDefn = self.astDefn
         return self.info.getScope(astDefn).scopeId

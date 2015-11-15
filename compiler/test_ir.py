@@ -80,11 +80,13 @@ class TestIr(utils_test.TestCaseWithDefinitions):
         f1 = self.makeFunction("f", returnType=UnitType,
                                typeParameters=[],
                                parameterTypes=[rt, ClassType(self.A)],
-                               flags=frozenset([METHOD]))
+                               flags=frozenset([METHOD]),
+                               definingClass=self.base)
         f2 = self.makeFunction("f", returnType=UnitType,
                                typeParameters=[],
                                parameterTypes=[rt, ClassType(self.base)],
-                               flags=frozenset([METHOD]))
+                               flags=frozenset([METHOD]),
+                               definingClass=self.base)
         self.assertTrue(f2.mayOverride(f1))
         self.assertFalse(f1.mayOverride(f2))
 

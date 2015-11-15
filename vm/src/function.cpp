@@ -30,6 +30,7 @@ namespace internal {
   F(Function, typeParameters_)   \
   F(Function, returnType_)       \
   F(Function, parameterTypes_)   \
+  F(Function, definingClass_)    \
   F(Function, blockOffsets_)     \
   F(Function, package_)          \
   F(Function, stackPointerMap_)  \
@@ -54,6 +55,7 @@ Function::Function(Name* name,
                    BlockArray<TypeParameter>* typeParameters,
                    Type* returnType,
                    BlockArray<Type>* parameterTypes,
+                   Class* definingClass,
                    word_t localsSize,
                    const vector<u8>& instructions,
                    LengthArray* blockOffsets,
@@ -66,6 +68,7 @@ Function::Function(Name* name,
       typeParameters_(this, typeParameters),
       returnType_(this, returnType),
       parameterTypes_(this, parameterTypes),
+      definingClass_(this, definingClass),
       localsSize_(localsSize),
       instructionsSize_(instructions.size()),
       blockOffsets_(this, blockOffsets),
@@ -78,7 +81,8 @@ Function::Function(Name* name,
 
 Local<Function> Function::create(Heap* heap) {
   RETRY_WITH_GC(heap, return Local<Function>(new(heap, 0) Function(
-      nullptr, 0, nullptr, nullptr, nullptr, 0, vector<u8>{}, nullptr, nullptr, nullptr)));
+      nullptr, 0, nullptr, nullptr, nullptr, nullptr,
+      0, vector<u8>{}, nullptr, nullptr, nullptr)));
 }
 
 
@@ -88,13 +92,14 @@ Local<Function> Function::create(Heap* heap,
                                  const Handle<BlockArray<TypeParameter>>& typeParameters,
                                  const Handle<Type>& returnType,
                                  const Handle<BlockArray<Type>>& parameterTypes,
+                                 const Handle<Class>& definingClass,
                                  word_t localsSize,
                                  const vector<u8>& instructions,
                                  const Handle<LengthArray>& blockOffsets,
                                  const Handle<Package>& package) {
   RETRY_WITH_GC(heap, return Local<Function>(new(heap, instructions.size()) Function(
-      *name, flags, *typeParameters, *returnType, *parameterTypes, localsSize, instructions,
-      blockOffsets.getOrNull(), package.getOrNull(), nullptr)));
+      *name, flags, *typeParameters, *returnType, *parameterTypes, definingClass.getOrNull(),
+      localsSize, instructions, blockOffsets.getOrNull(), package.getOrNull(), nullptr)));
 }
 
 

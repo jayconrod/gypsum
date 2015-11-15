@@ -124,6 +124,8 @@ class Serializer(object):
         self.writeVbn(len(function.parameterTypes))
         for ty in function.parameterTypes:
             self.writeType(ty)
+        self.writeOption(self.writeClassId, function.definingClass)
+
         assert function.blocks is not None or \
                flags.ABSTRACT in function.flags or \
                flags.EXTERN in function.flags
@@ -279,6 +281,9 @@ class Serializer(object):
     def writeForeignMethodList(self, list):
         self.writeList(self.writeVbn, [m.id.index for m in list])
 
+    def writeClassId(self, clas):
+        self.writeVbn(clas.id.getDefnIndex())
+
     def writeList(self, writer, list):
         self.writeVbn(len(list))
         for elem in list:
@@ -430,6 +435,7 @@ class Deserializer(object):
         function.typeParameters = self.readList(self.readId, self.package.typeParameters)
         function.returnType = self.readType()
         function.parameterTypes = self.readList(self.readType)
+        function.definingClass = self.readOption(self.readId, self.package.classes)
         if flags.ABSTRACT not in function.flags:
             localsSize = self.readVbn()
             instructionsSize = self.readVbn()

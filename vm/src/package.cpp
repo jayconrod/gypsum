@@ -73,7 +73,8 @@ class Loader {
                           u32* flags,
                           Local<BlockArray<TypeParameter>>* typeParameters,
                           Local<Type>* returnType,
-                          Local<BlockArray<Type>>* parameterTypes);
+                          Local<BlockArray<Type>>* parameterTypes,
+                          Local<Class>* definingClass);
   void readClass(const Local<Class>& clas);
   Local<Field> readField();
   void readTypeParameter(const Local<TypeParameter>& typeParam);
@@ -94,6 +95,7 @@ class Loader {
 
   virtual Local<TypeParameter> getTypeParameter(length_t index) const = 0;
   virtual Local<Function> readIdAndGetMethod() = 0;
+  virtual Local<Class> readIdAndGetDefiningClass() = 0;
 
   Local<Package> package_;
   vector<Local<ExternTypeInfo>> externTypes_;
@@ -114,6 +116,7 @@ class PackageLoader: public Loader {
  protected:
   virtual Local<TypeParameter> getTypeParameter(length_t index) const;
   virtual Local<Function> readIdAndGetMethod();
+  virtual Local<Class> readIdAndGetDefiningClass();
 
  private:
   static const u32 kMagic = 0x676b7073;
@@ -141,6 +144,7 @@ class DependencyLoader: public Loader {
 
   virtual Local<TypeParameter> getTypeParameter(length_t index) const;
   virtual Local<Function> readIdAndGetMethod();
+  virtual Local<Class> readIdAndGetDefiningClass();
 
  private:
   Local<PackageDependency> dep_;
@@ -723,7 +727,9 @@ Local<Function> Loader::readFunction() {
   Local<BlockArray<TypeParameter>> typeParameters;
   Local<Type> returnType;
   Local<BlockArray<Type>> parameterTypes;
-  readFunctionHeader(&name, &flags, &typeParameters, &returnType, &parameterTypes);
+  Local<Class> definingClass;
+  readFunctionHeader(
+      &name, &flags, &typeParameters, &returnType, &parameterTypes, &definingClass);
 
   word_t localsSize = kNotSet;
   Local<LengthArray> blockOffsets;
@@ -742,7 +748,7 @@ Local<Function> Loader::readFunction() {
   }
 
   auto func = Function::create(heap(), name, flags, typeParameters,
-                               returnType, parameterTypes,
+                               returnType, parameterTypes, definingClass,
                                localsSize, instructions, blockOffsets,
                                package_);
   return func;
@@ -753,7 +759,8 @@ void Loader::readFunctionHeader(Local<Name>* name,
                                 u32* flags,
                                 Local<BlockArray<TypeParameter>>* typeParameters,
                                 Local<Type>* returnType,
-                                Local<BlockArray<Type>>* parameterTypes) {
+                                Local<BlockArray<Type>>* parameterTypes,
+                                Local<Class>* definingClass) {
   *name = readName();
   *flags = readValue<u32>();
 
@@ -771,6 +778,8 @@ void Loader::readFunctionHeader(Local<Name>* name,
   for (length_t i = 0; i < parameterCount; i++) {
     (*parameterTypes)->set(i, *readType());
   }
+
+  *definingClass = readIdAndGetDefiningClass();
 }
 
 
@@ -1210,6 +1219,22 @@ Local<Function> PackageLoader::readIdAndGetMethod() {
 }
 
 
+Local<Class> PackageLoader::readIdAndGetDefiningClass() {
+  auto opt = readLengthVbn();
+  if (opt == 0) {
+    return Local<Class>();
+  } else if (opt == 1) {
+    auto index = readLengthVbn();
+    if (index >= package_->classes()->length()) {
+      throw Error("invalid index for defining class");
+    }
+    return handle(package_->classes()->get(index));
+  } else {
+    throw Error("invalid option");
+  }
+}
+
+
 Local<PackageDependency> PackageLoader::readDependencyHeader() {
   auto depStr = readString();
   Local<Name> name;
@@ -1261,12 +1286,16 @@ void DependencyLoader::readExternFunction(const Handle<Function>& func) {
   Local<BlockArray<TypeParameter>> typeParameters;
   Local<Type> returnType;
   Local<BlockArray<Type>> parameterTypes;
-  readFunctionHeader(&name, &flags, &typeParameters, &returnType, &parameterTypes);
+  Local<Class> definingClass;
+
+  readFunctionHeader(
+      &name, &flags, &typeParameters, &returnType, &parameterTypes, &definingClass);
   func->setName(*name);
   func->setFlags(flags);
   func->setTypeParameters(*typeParameters);
   func->setReturnType(*returnType);
   func->setParameterTypes(*parameterTypes);
+  func->setDefiningClass(definingClass.getOrNull());
 
   if ((flags & EXTERN_FLAG) == 0) {
     throw Error("invalid function");
@@ -1332,6 +1361,21 @@ Local<Function> DependencyLoader::readIdAndGetMethod() {
     throw Error("invalid method index");
   }
   return handle(dep_->externMethods()->get(index));
+}
+
+Local<Class> DependencyLoader::readIdAndGetDefiningClass() {
+  auto opt = readLengthVbn();
+  if (opt == 0) {
+    return Local<Class>();
+  } else if (opt == 1) {
+    auto index = readLengthVbn();
+    if (index >= dep_->externClasses()->length()) {
+      throw Error("invalid defining class");
+    }
+    return handle(dep_->externClasses()->get(index));
+  } else {
+    throw Error("invalid option");
+  }
 }
 
 }
