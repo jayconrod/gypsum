@@ -272,7 +272,7 @@ def flattenClasses(info):
         irClass.fields = irSuperclass.fields + irClass.fields
         methods = list(irSuperclass.methods)
         for ownMethod in irClass.methods:
-            if hasattr(ownMethod, "override"):
+            if ownMethod.override is not None:
                 foundOverride = False
                 for i, inheritedMethod in enumerate(irSuperclass.methods):
                     if ownMethod.override is inheritedMethod:
@@ -368,8 +368,11 @@ class NameInfo(object):
         assert ctorNameInfo is not None
         return ctorNameInfo
 
-    def didResolveOverrides(self):
-        return self.overrides is not None
+    def shouldResolveOverrides(self):
+        return self.overrides is None and \
+            (self.isOverloaded() or \
+             (isinstance(self.overloads[0].irDefn, ir.Function) and \
+              OVERRIDE in self.overloads[0].irDefn.flags))
 
     def resolveOverrides(self):
         """Decides which definitions are overloads and which are overrides.
@@ -387,11 +390,9 @@ class NameInfo(object):
 
         The overriding function (A) will have its `override` attribute set to point to the
         overriden function (B). `overrides` will have an entry added."""
-        if self.didResolveOverrides():
+        if not self.shouldResolveOverrides():
             return
         self.overrides = {}
-        if not self.isOverloaded():
-            return
 
         # Sort overloads by depth to simplify the loop and avoid the last condition
         # mentioned above.
@@ -400,6 +401,7 @@ class NameInfo(object):
 
         # Compare each function with each other function with greater depth.
         for (aIndex, aDefnInfo) in enumerate(overloadsByDepth):
+            aIrDefn = aDefnInfo.irDefn
             aDepth = aDefnInfo.inheritanceDepth
             overrideIndex = None
             for (bIndex, bDefnInfo) in enumerate(overloadsByDepth[aIndex + 1:]):
@@ -409,7 +411,6 @@ class NameInfo(object):
                 if aDepth == bDepth:
                     continue
 
-                aIrDefn = aDefnInfo.irDefn
                 bIrDefn = bDefnInfo.irDefn
                 assert isinstance(aIrDefn, ir.Function) and isinstance(bIrDefn, ir.Function)
                 if aIrDefn.mayOverride(bIrDefn):
@@ -421,6 +422,11 @@ class NameInfo(object):
                     if bIrDefn.isFinal():
                         raise TypeException(aIrDefn.getLocation(),
                                             "%s: can't override final method" % self.name)
+
+                    if OVERRIDE not in aIrDefn.flags:
+                        raise TypeException(aIrDefn.getLocation(),
+                                            ("%s: can't override method in superclass " +
+                                                "without override attribute") % self.name)
 
                     aIrDefn.override = bIrDefn
                     self.overrides[bIrDefn.id] = aIrDefn.id
@@ -435,10 +441,16 @@ class NameInfo(object):
                     bDepth = bDefnInfo.inheritanceDepth
                     if bDepth > overrideDepth:
                         break
-                    if aDefnInfo.irDefn.mayOverride(bDefnInfo.irDefn):
-                        raise TypeException(aDefnInfo.irDefn.getLocation(),
+                    if aIrDefn.mayOverride(bDefnInfo.irDefn):
+                        raise TypeException(aIrDefn.getLocation(),
                                             "may override multiple definitions: %s" %
                                             self.name)
+
+            # If we did not find an override, check that no override was expected.
+            if overrideIndex is None and OVERRIDE in aIrDefn.flags:
+                raise TypeException(aIrDefn.getLocation(),
+                                    "%s: has override attribute but doesn't override anything" %
+                                    self.name)
 
         # Delete overriden functions from the overloads list. They will not be visible anymore
         # in lookups.
@@ -1393,7 +1405,8 @@ class ClassScope(Scope):
                                                            variables=[], flags=flags,
                                                            definingClass=irScopeDefn)
                 else:
-                    checkFlags(flags, frozenset([ABSTRACT, FINAL, PUBLIC, PROTECTED, PRIVATE]),
+                    checkFlags(flags, frozenset([ABSTRACT, FINAL, PUBLIC,
+                                                 PROTECTED, PRIVATE, OVERRIDE]),
                                astDefn.location)
                     irDefn = self.info.package.addFunction(name, astDefn=astDefn,
                                                            typeParameters=implicitTypeParams,
@@ -1452,7 +1465,8 @@ class ClassScope(Scope):
         else:
             assert isinstance(astDefn, ast.ArrayAccessorDefinition)
             name = self.makeName(astDefn.name)
-            checkFlags(flags, frozenset([FINAL, PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
+            checkFlags(flags, frozenset([FINAL, PUBLIC, PROTECTED, PRIVATE, OVERRIDE]),
+                       astDefn.location)
             flags |= frozenset([ARRAY])
             implicitTypeParams = self.getImplicitTypeParameters()
             irDefn = self.info.package.addFunction(name, astDefn,

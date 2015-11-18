@@ -493,6 +493,9 @@ class Function(ParameterizedDefn):
             opposed to any other class that inherits the method). For non-static methods, this
             could be derived from the receiver type, but there's no easy way to get it for
             static methods.
+        override (Function?): the method in a superclass that this method overrides. This should
+            be set if and only if the `OVERRIDE` flag is set. This is only valid for non-static,
+            non-constructor methods.
         insts (list[Instruction]?): a list of instructions to insert instead of calling this
             function. This is set for some (not all) builtin functions. For instance, the `+`
             method of `i64` has a list containing an `addi64` instruction.
@@ -503,7 +506,7 @@ class Function(ParameterizedDefn):
 
     def __init__(self, name, id, astDefn=None, returnType=None, typeParameters=None,
                  parameterTypes=None, variables=None, blocks=None, flags=frozenset(),
-                 definingClass=None, insts=None, compileHint=None):
+                 definingClass=None, override=None, insts=None, compileHint=None):
         super(Function, self).__init__(name, id, astDefn)
         self.returnType = returnType
         self.typeParameters = typeParameters
@@ -513,6 +516,7 @@ class Function(ParameterizedDefn):
         self.flags = flags
         self.definingClass = definingClass
         self.insts = insts
+        self.override = override
         self.compileHint = compileHint
 
     def __repr__(self):
@@ -583,7 +587,8 @@ class Function(ParameterizedDefn):
         return hasattr(receiverClass, "isPrimitive") and receiverClass.isPrimitive
 
     def mayOverride(self, other):
-        if not self.isMethod() or not other.isMethod():
+        if not self.isMethod() or self.isConstructor() or \
+           not other.isMethod() or other.isConstructor():
             return False
         selfExplicitTypeParameters = getExplicitTypeParameters(self)
         otherExplicitTypeParameters = getExplicitTypeParameters(other)

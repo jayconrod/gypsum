@@ -1421,12 +1421,12 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testRecursiveOverrideBuiltinWithoutReturnType(self):
         source = "class List(value: String, next: List?)\n" + \
-                 "  def to-string = value + if (next !== null) next.to-string else \"\""
+                 "  override def to-string = value + if (next !== null) next.to-string else \"\""
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testRecursiveOverrideBuiltin(self):
         source = "class List(value: String, next: List?)\n" + \
-                 "  def to-string: String = value + if (next !== null) next.to-string else \"\""
+                 "  override def to-string: String = value + if (next !== null) next.to-string else \"\""
         info = self.analyzeFromSource(source)
         List = info.package.findClass(name="List")
         useInfo = info.getUseInfo(info.ast.modules[0].definitions[0].members[0].body.right.trueExpr)
@@ -1435,7 +1435,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testOverrideWithImplicitTypeParameters(self):
         source = "class A[static T]\n" + \
-                 "  def to-string = \"A\"\n"
+                 "  override def to-string = \"A\"\n"
         info = self.analyzeFromSource(source)
         A = info.package.findClass(name="A")
         toString = A.findMethodByShortName("to-string")
@@ -1448,7 +1448,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "class Foo\n" + \
                  "  def m(b: B) = this\n" + \
                  "class Bar <: Foo\n" + \
-                 "  def m(a: A) = this\n"
+                 "  override def m(a: A) = this\n"
         info = self.analyzeFromSource(source)
         fooClass = info.package.findClass(name="Foo")
         barClass = info.package.findClass(name="Bar")
@@ -1463,7 +1463,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "class Foo\n" + \
                  "  def m = A()\n" + \
                  "class Bar <: Foo\n" + \
-                 "  def m = B()\n"
+                 "  override def m = B()\n"
         info = self.analyzeFromSource(source)
         fooClass = info.package.findClass(name="Foo")
         barClass = info.package.findClass(name="Bar")
@@ -1471,9 +1471,9 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testOverrideGrandParent(self):
         source = "abstract class A\n" + \
-                 "  abstract def to-string: String\n" + \
+                 "  override abstract def to-string: String\n" + \
                  "class B <: A\n" + \
-                 "  def to-string = \"B\""
+                 "  override def to-string = \"B\""
         info = self.analyzeFromSource(source)
         Object = getRootClass()
         ObjectToString = Object.findMethodByShortName("to-string")
@@ -1702,7 +1702,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "abstract class Function[static P, static R]\n" + \
                  "  abstract def apply(x: P): R\n" + \
                  "class AppendString <: Function[String, String]\n" + \
-                 "  def apply(x: String): String = x + \"foo\"\n"
+                 "  override def apply(x: String): String = x + \"foo\"\n"
         info = self.analyzeFromSource(source)
         abstractApply = info.package.findFunction(name="Function.apply", flag=ABSTRACT)
         AppendString = info.package.findClass(name="AppendString")

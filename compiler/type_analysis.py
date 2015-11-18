@@ -38,7 +38,7 @@ def analyzeTypes(info):
     # overriden function. The return type is not used to make override decisions, so this needs
     # to be done after overrides are resolved.
     for func in info.package.functions:
-        if hasattr(func, "override"):
+        if func.override is not None:
             overridenReturnType = func.override.returnType.substituteForInheritance(
                 func.definingClass, func.override.definingClass)
             if not func.returnType.isSubtypeOf(overridenReturnType):

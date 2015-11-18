@@ -66,7 +66,7 @@ class TestFlattenClasses(unittest.TestCase):
         source = "class A\n" + \
                  "  def f(x: i32) = x\n" + \
                  "class B <: A\n" + \
-                 "  def f(x: i32) = 12i32\n"
+                 "  override def f(x: i32) = 12i32\n"
         info = self.analyzeFromSource(source)
         B = info.package.findClass(name="B")
         self.assertEquals(self.rootMethodNames + ["f"],
