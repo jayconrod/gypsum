@@ -9,17 +9,17 @@ public abstract class Option[static +T]
   public abstract def get: T
 
 public class Some[static +T](value: T) <: Option[T]
-  public def is-defined = true
-  public def get = value
-  public def to-string = "Some(" + value.to-string + ")"
+  public override def is-defined = true
+  public override def get = value
+  public override def to-string = "Some(" + value.to-string + ")"
   public static def try-match(obj: Object): Option[T] =
     match (obj)
       case some: Some[_] => some
       case _ => None
 
 class None-class <: Option[Nothing]
-  public def is-defined = false
-  public def get = throw Exception()
-  public def to-string = "None"
+  public override def is-defined = false
+  public override def get = throw Exception()
+  public override def to-string = "None"
 
 public let None: Option[Nothing] = None-class()

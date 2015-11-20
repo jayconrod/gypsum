@@ -5,4 +5,4 @@
 // found in the LICENSE.txt file.
 
 public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)
-  public def to-string = "(" + _1.to-string + ", " + _2.to-string + ")"
+  public override def to-string = "(" + _1.to-string + ", " + _2.to-string + ")"
