@@ -697,6 +697,24 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         fNameInfo.resolveOverrides()
         self.assertEquals({}, fNameInfo.overrides)
 
+    def testOverrideMethodByItself(self):
+        source = "class Foo\n" + \
+                 "  override def f = 12"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testOverrideMethodInSameClass(self):
+        source = "class Foo\n" + \
+                 "  def f(arg: String) = 12\n" + \
+                 "  override def f(arg: Object) = 12"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testOverrideMethodWithOverloadInInheritedClass(self):
+        source = "class Foo\n" + \
+                 "  def f(arg: Object) = 12\n" + \
+                 "class Bar <: Foo\n" + \
+                 "  override def f(arg: String) = 12"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     def testCall(self):
         source = "def f(x: i64, y: boolean) = x\n" + \
                  "def g = f(1, true)"
