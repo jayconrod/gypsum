@@ -73,6 +73,7 @@
     "let"
     "match"
     "new"
+    "override"
     "private"
     "protected"
     "public"

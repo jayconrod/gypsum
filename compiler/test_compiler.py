@@ -3652,7 +3652,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testCallOverridenMethodWithTypeArgument(self):
         source = "class Foo[static T]\n" + \
-                 "  def to-string = \"Foo\"\n" + \
+                 "  override def to-string = \"Foo\"\n" + \
                  "def f(foo: Foo[Object]) =\n" + \
                  "  foo.to-string\n" + \
                  "  {}"

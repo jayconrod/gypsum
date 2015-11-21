@@ -17,7 +17,7 @@ class List[static E](value: E, next: List[E]?)
   // All classes inherit a `to-string` method from the root class, `Object`, which can be
   // overriden. We can call `to-string` on `value`, since we know `E` must be a subtype
   // of `Object`.
-  def to-string: String =
+  override def to-string: String =
     value.to-string + (if (next !== null) " " + next.to-string else "")
 
 
@@ -33,7 +33,7 @@ abstract class Function[static P, static R]
 // `AppendString` acts kind of like a closure here. It acts as a function which takes a `String`
 // as a parameter and returns another `String`. It is a subclass of `Function[String, String]`.
 class AppendString(suffix: String) <: Function[String, String]
-  def apply(param: String): String = param + suffix
+  override def apply(param: String): String = param + suffix
 
 
 // This is the traditional `map` function. It takes a function and a list, and creates a new

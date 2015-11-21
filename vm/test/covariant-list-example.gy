@@ -9,14 +9,14 @@ abstract class List[static +T]
   abstract def tail: List[T]
 
 class Nil-class <: List[Nothing]
-  def head = throw Exception()
-  def tail = throw Exception()
+  override def head = throw Exception()
+  override def tail = throw Exception()
 
 let Nil = Nil-class()
 
 class Cons[static +T](value: T, next: List[T]) <: List[T]
-  def head = value
-  def tail = next
+  override def head = value
+  override def tail = next
 
 
 def length(var list: List[Object]) =
