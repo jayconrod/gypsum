@@ -4,7 +4,6 @@
 
 - allow calling overridden methods via "super"
 - `final` attribute for classes, methods
-- `override` attribute for methods
 - `static` attribute for fields
 - annotations
 - require "get", "set" for implicit calls
