@@ -5,7 +5,7 @@
 
 
 class List[static E](value: E, next: List[E]?)
-  def to-string: String =
+  override def to-string: String =
     value.to-string + (if (next !== null) " " + next.to-string else "")
 
 
@@ -14,7 +14,7 @@ abstract class Function[static P, static R]
 
 
 class AppendString(suffix: String) <: Function[String, String]
-  def apply(param: String): String = param + suffix
+  override def apply(param: String): String = param + suffix
 
 
 def map[static T](fn: Function[T, T], list: List[T]?): List[T]? =

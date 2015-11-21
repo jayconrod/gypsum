@@ -14,7 +14,7 @@ final class Array[static T]
     array.set(2i32, c)
     array
 
-  def to-string =
+  override def to-string =
     var s = ""
     var i = 0i32
     while (i < length)

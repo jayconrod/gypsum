@@ -38,7 +38,7 @@
 // This class defines a 3-dimensional vector. It overloads operators for common
 // vector operations.
 class Vector(x: f64, y: f64, z: f64)
-  def to-string = "<" + x.to-string + ", " + y.to-string + ", " + z.to-string + ">"
+  override def to-string = "<" + x.to-string + ", " + y.to-string + ", " + z.to-string + ">"
 
   // This defines a binary operator. `this` is the left operand, and the parameter `v` is
   // the right operand.

@@ -5,7 +5,7 @@
 
 
 class Vector(x: f64, y: f64, z: f64)
-  def to-string = "<" + x.to-string + ", " + y.to-string + ", " + z.to-string + ">"
+  override def to-string = "<" + x.to-string + ", " + y.to-string + ", " + z.to-string + ">"
   def + (v: Vector) = Vector(x + v.x, y + v.y, z + v.z)
   def - (v: Vector) = Vector(x - v.x, y - v.y, z - v.z)
   def - = Vector(-x, -y, -z)
