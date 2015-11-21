@@ -54,38 +54,42 @@
 
 ;;; Code:
 
-(setq gypsum-keywords-regexp (regexp-opt
-  '("abstract"
-    "arrayelements"
-    "as"
-    "break"
-    "case"
-    "catch"
-    "class"
-    "continue"
-    "def"
-    "else"
-    "final"
-    "finally"
-    "if"
-    "import"
-    "lambda"
-    "let"
-    "match"
-    "new"
-    "override"
-    "private"
-    "protected"
-    "public"
-    "return"
-    "static"
-    "super"
-    "this"
-    "throw"
-    "trait"
-    "try"
-    "var"
-    "while")))
+(setq gypsum-keywords-regexp
+  (concat
+    "\\<\\(?:"
+    (regexp-opt
+      '("abstract"
+        "arrayelements"
+        "as"
+        "break"
+        "case"
+        "catch"
+        "class"
+        "continue"
+        "def"
+        "else"
+        "final"
+        "finally"
+        "if"
+        "import"
+        "lambda"
+        "let"
+        "match"
+        "new"
+        "override"
+        "private"
+        "protected"
+        "public"
+        "return"
+        "static"
+        "super"
+        "this"
+        "throw"
+        "trait"
+        "try"
+        "var"
+        "while"))
+    "\\)\\>"))
 
 (setq gypsum-type-keywords-regexp (regexp-opt
   '("boolean"
@@ -111,12 +115,12 @@
     ("\\<[+-]?\\.[0-9]+\\(?:[eE][+-]?[0-9]+\\)?\\>" . font-lock-constant-face)
     ("\\<[+-]?[0-9]+\\(?:[eE][+-]?[0-9]+\\)?\\>" . font-lock-constant-face)
     ("\"[^\"]*?\"" . font-lock-string-face)
-    ("\\(?:def\\|let\\|var\\|class\\) *\\([A-Za-z0-9_-]+\\)" 1 font-lock-variable-name-face)
+    ("\\<\\(?:def\\|let\\|var\\|class\\)\\> +\\([A-Za-z0-9_-]+\\)" 1 font-lock-variable-name-face)
     (,gypsum-keywords-regexp . font-lock-keyword-face)))
 
 
 (define-derived-mode gypsum-mode fundamental-mode
-  (setq font-lock-defaults '(gypsum-patterns))
+  (setq font-lock-defaults '(gypsum-patterns t))
   (setq mode-name "Gypsum"))
 
 
