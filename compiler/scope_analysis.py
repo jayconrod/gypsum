@@ -887,9 +887,9 @@ class Scope(ast.NodeVisitor):
         """For bindings with multiple definitions, resolves which definitions are overloads and
         which are overriden (and by which others).
 
-        All of the overloaded definitions must have type information before this is called."""
-        for nameInfo in self.bindings.values():
-            nameInfo.resolveOverrides()
+        All of the overloaded definitions must have type information before this is called.
+        This only needs to be performed in scopes that support overrides."""
+        pass
 
     def isLocal(self):
         """Returns true if values defined in the parent scope are accessible in this scope."""
@@ -1476,6 +1476,10 @@ class ClassScope(Scope):
             self.makeMethod(irDefn, irScopeDefn)
             irScopeDefn.methods.append(irDefn)
         return irDefn, shouldBind, isVisible
+
+    def resolveOverrides(self):
+        for nameInfo in self.bindings.values():
+            nameInfo.resolveOverrides()
 
     def canImport(self, defnInfo):
         if not super(ClassScope, self).canImport(defnInfo):

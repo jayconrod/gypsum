@@ -715,6 +715,27 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  override def f(arg: String) = 12"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
+    def testForeignClassWithOverrideMethod(self):
+        fooPackage = Package(name=Name(["foo"]))
+        clas = fooPackage.addClass(name=Name(["Bar"]), typeParameters=[],
+                                   supertypes=[getRootClassType()],
+                                   constructors=[], fields=[], methods=[],
+                                   flags=frozenset([PUBLIC]))
+        ty = ClassType(clas)
+        method = fooPackage.addFunction(name=Name(["Bar", "to-string"]),
+                                        returnType=getStringType(), typeParameters=[],
+                                        parameterTypes=[ty],
+                                        flags=frozenset([PUBLIC, METHOD, OVERRIDE]),
+                                        definingClass=clas)
+        clas.methods.append(method)
+        packageLoader = FakePackageLoader([fooPackage])
+
+        source = "import foo.Bar\n" + \
+                 "def f(bar: Bar) = bar.to-string"
+        info = self.analyzeFromSource(source, packageLoader=packageLoader)
+        useInfo = info.getUseInfo(info.ast.modules[0].definitions[-1].body)
+        self.assertIs(method.id, useInfo.defnInfo.irDefn.id)
+
     def testCall(self):
         source = "def f(x: i64, y: boolean) = x\n" + \
                  "def g = f(1, true)"
