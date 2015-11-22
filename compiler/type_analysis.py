@@ -946,7 +946,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         types = tuple(map(self.visit, node.expressions))
         if len(types) > compile_info.MAX_TUPLE_LENGTH:
             raise TypeException(node.location,
-                                "tuples longer than %d elements not supported" % len(types))
+                                "tuples longer than %d elements not supported" %
+                                compile_info.MAX_TUPLE_LENGTH)
         for (expr, ty) in zip(node.expressions, types):
             if not ty.isObject():
                 raise TypeException(expr.location,

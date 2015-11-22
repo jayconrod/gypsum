@@ -28,7 +28,7 @@ NOSTD_MODE = "nostd-mode"
 
 STD_NAME = ir.Name(["std"])
 
-MAX_TUPLE_LENGTH = 2
+MAX_TUPLE_LENGTH = 10
 
 class CompileInfo(object):
     """Contains state created and used by most compiler phases"""
