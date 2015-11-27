@@ -83,7 +83,8 @@ To install, use `M-x package-install-file`, then add this to your `.emacs`:
 * G++ 4.8 or any other C++ compiler which supports C++11 is needed to
   build CodeSwitch. Other binutils are assumed as well.
 * GNU Make 3.81 is needed to build CodeSwitch.
+* Doxygen is needed to generate documentation.
 
 Gypsum and CodeSwitch were developed and tested on Ubuntu 14.04 and
 MacOS X 10.10. They may work on other platforms with some
-modification, but nothing else is supported right now.
+modification, but nothing else is officially supported right now.

@@ -30,8 +30,22 @@ a set of globals, classes, functions. Packages may depend on other
 packages, and when you load a package, its dependencies will be loaded
 automatically (if they aren't loaded already).
 
+Before loading packages, you should tell the VM what directories may
+contain package files. These directories will be searched in the order
+they are added when a package is loaded by name or as a dependency.
+
+    vm.addPackageSearchPath("path/to/packages");
+
+After search paths are added, you can load packages by file name or
+symbolic name.
+
+    // Load by file name.
     codeswitch::Package package = vm.loadPackageFromFile("foo-1.0.csp");
 
+    // Load by symbolic name.
+    codeswitch::String nameString(vm, "foo");
+    codeswitch::Name name(nameString);
+    codeswitch::Package package = vm.loadPackage(name);
 
 ## Calling a package's entry function
 

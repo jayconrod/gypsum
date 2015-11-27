@@ -42,6 +42,8 @@ using namespace codeswitch::internal;
 TEST({testName}) {{
   u8 bytes[] = {{ {bytes} }};
   VM vm;
+  for (auto& path : split(getenv("CS_PACKAGE_PATH"), ':'))
+    vm.addPackageSearchPath(path);
   AllowAllocationScope allowAllocation(vm.heap(), true);
   HandleScope handleScope(&vm);
   auto package = Package::loadFromBytes(&vm, bytes, sizeof(bytes));

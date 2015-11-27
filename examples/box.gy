@@ -1,10 +1,5 @@
 // This is a simple Gypsum program.
-// You can compile it with this command:
-//   ../compiler/compiler box.gy -o box.csp
-// You can run it with this command:
-//   ../vm/out/debug/driver box.csp
-// (If you haven't built the VM yet, run this first):
-//   (cd ../vm; make -j)
+// See README.md for instructions for building and running.
 
 // This program shows how to use type parameters with functions and classes. Type parameters
 // are just like generics in Java. Right now, there are only static type parameters, which are

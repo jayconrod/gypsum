@@ -191,16 +191,39 @@ VM& VM::operator = (VM&& vm) {
 VM::~VM() { }
 
 
+void VM::addPackageSearchPath(const string& path) {
+  API_CHECK(!path.empty(), "path is empty");
+  impl_->vm.addPackageSearchPath(path);
+}
+
+
+Package VM::loadPackage(const Name& name) {
+  API_CHECK(name.impl_, "package name is not valid");
+  i::VM* vm = &impl_->vm;
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAlloc(vm->heap(), true);
+  try {
+    i::Persistent<i::Package> package = vm->loadPackage(name.impl_->name);
+    return package ? Package(new Package::Impl(package)) : Package();
+  } catch (i::Error& error) {
+    throw Error(new Error::Impl(error.message()));
+  }
+}
+
+
 Package VM::loadPackageFromFile(const string& fileName) {
   i::Persistent<i::Package> package;
   try {
     package = impl_->vm.loadPackage(fileName);
-  } catch (i::Error error) {
+  } catch (i::Error& error) {
     throw Error(new Error::Impl(error.message()));
   }
 
   return Package(new Package::Impl(package));
 }
+
+
+Package::Package() { }
 
 
 Package::Package(Impl* impl)
@@ -220,6 +243,16 @@ Package& Package::operator = (Package&& package) {
 Package::~Package() { }
 
 
+Package::operator bool () const {
+  return static_cast<bool>(impl_);
+}
+
+
+bool Package::operator ! () const {
+  return !impl_;
+}
+
+
 Function Package::entryFunction() {
   API_CHECK_SELF(Package);
   i::Function* function = impl_->package->entryFunction();
@@ -228,6 +261,9 @@ Function Package::entryFunction() {
   }
   return Function(new Function::Impl(i::Persistent<i::Function>(function)));
 }
+
+
+Function::Function() { }
 
 
 Function::Function(Impl* impl)
@@ -247,6 +283,19 @@ Function& Function::operator = (Function&& function) {
 Function::~Function() { }
 
 
+Function::operator bool () const {
+  return static_cast<bool>(impl_);
+}
+
+
+bool Function::operator ! () const {
+  return !impl_;
+}
+
+
+CallBuilder::CallBuilder() { }
+
+
 CallBuilder::CallBuilder(const Function& function) {
   API_CHECK(function.impl_, "not a valid function");
   impl_ = unique_ptr<CallBuilder::Impl>(new Impl(function.impl_->function));
@@ -264,6 +313,16 @@ CallBuilder& CallBuilder::operator = (CallBuilder&& builder) {
 
 
 CallBuilder::~CallBuilder() { }
+
+
+CallBuilder::operator bool () const {
+  return static_cast<bool>(impl_);
+}
+
+
+bool CallBuilder::operator ! () const {
+  return !impl_;
+}
 
 
 CallBuilder& CallBuilder::argUnit() {
@@ -455,6 +514,9 @@ i::i64 CallBuilder::Impl::call() {
 }
 
 
+Name::Name() { }
+
+
 Name::Name(Impl* impl)
     : impl_(impl) { }
 
@@ -472,6 +534,16 @@ Name& Name::operator = (Name&& name) {
 Name::~Name() { }
 
 
+Name::operator bool () const {
+  return static_cast<bool>(impl_);
+}
+
+
+bool Name::operator ! () const {
+  return !impl_;
+}
+
+
 Name Name::fromStringForDefn(const String& str) {
   API_CHECK(str.impl_ != nullptr, "string argument does not reference a string");
   const i::Persistent<i::String>& istr = str.impl_->str;
@@ -487,6 +559,7 @@ Name Name::fromStringForPackage(const String& str) {
   API_CHECK(str.impl_ != nullptr, "string argument does not reference a string");
   const i::Persistent<i::String>& istr = str.impl_->str;
   i::VM* vm = i::VM::fromAddress(*istr);
+  i::AllowAllocationScope allowAlloc(vm->heap(), true);
   i::HandleScope handleScope(vm);
   i::Local<i::Name> iname = i::Name::fromString(vm->heap(), istr, i::Name::PACKAGE_NAME);
   API_CHECK(iname, "string argument is not a valid name for packages");
@@ -494,12 +567,20 @@ Name Name::fromStringForPackage(const String& str) {
 }
 
 
+String::String() { }
+
+
 String::String(Impl* impl)
     : impl_(impl) { }
 
 
-String::String(VM& vm, const string& str)
-    : impl_(new Impl(i::String::fromUtf8String(vm.impl_->vm.heap(), str))) { }
+String::String(VM& vm, const string& str) {
+  auto heap = vm.impl_->vm.heap();
+  i::AllowAllocationScope allowAlloc(heap, true);
+  i::HandleScope handleScope(&vm.impl_->vm);
+  i::Local<i::String> istr = i::String::fromUtf8String(heap, str);
+  impl_.reset(new Impl(istr));
+}
 
 
 String::String(String&& str)
@@ -515,9 +596,22 @@ String& String::operator = (String&& str) {
 String::~String() { }
 
 
+String::operator bool () const {
+  return static_cast<bool>(impl_);
+}
+
+
+bool String::operator ! () const {
+  return !impl_;
+}
+
+
 string String::toStdString() const {
   return impl_->str->toUtf8StlString();
 }
+
+
+Error::Error() { }
 
 
 Error::Error(Impl* impl)
@@ -535,6 +629,16 @@ Error& Error::operator = (Error&& error) {
 
 
 Error::~Error() { }
+
+
+Error::operator bool () const {
+  return static_cast<bool>(impl_);
+}
+
+
+bool Error::operator ! () const {
+  return !impl_;
+}
 
 
 const char* Error::message() const {

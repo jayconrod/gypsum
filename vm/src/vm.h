@@ -48,7 +48,10 @@ class VM {
   HandleStorage& handleStorage() { return *handleStorage_; }
   const Persistent<Stack>& stack() { return stack_; }
 
+  void addPackageSearchPath(const std::string& path);
+
   Persistent<Package> findPackage(const Handle<Name>& name);
+  Persistent<Package> loadPackage(const Handle<Name>& name);
   Persistent<Package> loadPackage(const Handle<PackageDependency>& dependency);
   Persistent<Package> loadPackage(const std::string& fileName);
   void addPackage(const Handle<Package>& package);
@@ -61,7 +64,6 @@ class VM {
   }
 
  private:
-  void addPackageSearchPaths(const std::string& paths);
   std::string searchForPackage(const Handle<PackageDependency>& dependency);
   void loadPackageDependenciesAndInitialize(const Handle<Package>& package);
 

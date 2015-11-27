@@ -41,12 +41,10 @@ VM::VM(Flags flags)
   if (hasFlags(kVerifyHeap))
     heap()->verify();
 
-  const char* envSearchPaths = getenv("CS_PACKAGE_PATH");
-  if (envSearchPaths != nullptr)
-    addPackageSearchPaths(envSearchPaths);
   #ifdef CS_PACKAGE_PATH
-    if (packageSearchPaths_.empty())
-      addPackageSearchPaths(CS_PACKAGE_PATH);
+    for (auto& path : split(CS_PACKAGE_PATH, ':')) {
+      addPackageSearchPath(path);
+    }
   #endif
 }
 
@@ -63,12 +61,26 @@ VM* VM::fromAddress(void* address) {
 }
 
 
+void VM::addPackageSearchPath(const string& path) {
+  ASSERT(!path.empty());
+  packageSearchPaths_.push_back(path);
+}
+
+
 Persistent<Package> VM::findPackage(const Handle<Name>& name) {
   for (auto& package : packages_) {
     if (name->equals(package->name()))
       return package;
   }
   return Persistent<Package>();
+}
+
+
+Persistent<Package> VM::loadPackage(const Handle<Name>& name) {
+  auto dep = PackageDependency::create(heap(), name,
+      Persistent<PackageVersion>(), Persistent<PackageVersion>(),
+      0, 0, 0, 0, 0);
+  return loadPackage(dep);
 }
 
 
@@ -99,31 +111,12 @@ void VM::addPackage(const Handle<Package>& package) {
 }
 
 
-void VM::addPackageSearchPaths(const string& paths) {
-  size_t begin = 0;
-  auto end = paths.find(':');
-  while (end != string::npos) {
-    auto len = end - begin;
-    if (len > 0) {
-      auto path = paths.substr(begin, len);
-      packageSearchPaths_.push_back(path);
-    }
-    begin = end + 1;
-    end = paths.find(':', begin);
-  }
-  auto len = paths.size() - begin;
-  if (len > 0) {
-    auto path = paths.substr(begin, len);
-    packageSearchPaths_.push_back(path);
-  }
-}
-
-
 string VM::searchForPackage(const Handle<PackageDependency>& dependency) {
   AllowAllocationScope allowAllocation(heap(), true);
   auto packageName = Name::toString(heap(), handle(dependency->name()))
       ->toUtf8StlString();
-  size_t minNameLength = packageName.size() + 6;
+  string extension(".csp");
+  size_t minNameLength = packageName.size() + extension.size();
   for (auto path : packageSearchPaths_) {
     vector<string> files;
     try {
@@ -137,14 +130,21 @@ string VM::searchForPackage(const Handle<PackageDependency>& dependency) {
     for (auto file : files) {
       HandleScope handleScope(this);
       if (file.size() < minNameLength ||
-          file.substr(file.size() - 4, 4) != ".csp" ||
+          file.substr(file.size() - extension.size(), extension.size()) != extension ||
           file.substr(0, packageName.size()) != packageName) {
         continue;
       }
-      auto dashPos = file.find('-');
-      if (dashPos != packageName.size())
+      if (file.size() == packageName.size() + extension.size()) {
+        if (!bestVersion) {
+          bestFile = file;
+        }
         continue;
-      auto dotPos = file.size() - 4;
+      }
+      auto dashPos = file.find('-');
+      if (dashPos != packageName.size()) {
+        continue;
+      }
+      auto dotPos = file.size() - extension.size();
       auto versionStlStr = file.substr(dashPos + 1, dotPos - dashPos - 1);
       auto versionStr = String::fromUtf8String(heap(), versionStlStr);
       auto version = PackageVersion::fromString(heap(), versionStr);

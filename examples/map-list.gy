@@ -1,10 +1,5 @@
 // This is a simple Gypsum program.
-// You can compile it with this command:
-//   ../compiler/compiler map-list.gy -o map-list.csp
-// You can run it with this command:
-//   ../vm/out/debug/driver map-list.csp
-// (If you haven't built the VM yet, run this first):
-//   (cd ../vm; make -j)
+// See README.md for instructions for building and running.
 
 // This program shows how to use type parameters with classes and functions.
 

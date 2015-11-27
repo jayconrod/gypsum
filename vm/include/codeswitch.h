@@ -34,6 +34,9 @@ class VM final {
   VM& operator = (VM&&);
   ~VM();
 
+  void addPackageSearchPath(const std::string& path);
+
+  Package loadPackage(const Name& name);
   Package loadPackageFromFile(const std::string& fileName);
 
  private:
@@ -47,12 +50,16 @@ class Package final {
  public:
   class Impl;
 
+  Package();
   explicit Package(Impl* impl);
   Package(const Package&) = delete;
   Package(Package&& package);
   Package& operator = (const Package&) = delete;
   Package& operator = (Package&& package);
   ~Package();
+
+  operator bool () const;
+  bool operator ! () const;
 
   Function entryFunction();
 
@@ -65,12 +72,16 @@ class Function final {
  public:
   class Impl;
 
+  Function();
   explicit Function(Impl* impl);
   Function(const Function&) = delete;
   Function(Function&&);
   Function& operator = (const Function&) = delete;
   Function& operator = (Function&&);
   ~Function();
+
+  operator bool () const;
+  bool operator ! () const;
 
   template <class... Ts>
   void call(Ts... args);
@@ -99,12 +110,16 @@ class Function final {
 class CallBuilder final {
  public:
   class Impl;
+  CallBuilder();
   CallBuilder(const Function& function);
   CallBuilder(const CallBuilder&) = delete;
   CallBuilder(CallBuilder&& builder);
   CallBuilder& operator = (const CallBuilder&) = delete;
   CallBuilder& operator = (CallBuilder&& builder);
   ~CallBuilder();
+
+  operator bool () const;
+  bool operator ! () const;
 
   CallBuilder& argUnit();
   CallBuilder& arg(bool value);
@@ -150,6 +165,7 @@ class Name final {
  public:
   class Impl;
 
+  Name();
   explicit Name(Impl* impl);
   Name(const Name&) = delete;
   Name(Name&&);
@@ -157,11 +173,16 @@ class Name final {
   Name& operator = (Name&& name);
   ~Name();
 
+  operator bool () const;
+  bool operator ! () const;
+
   static Name fromStringForDefn(const String& str);
   static Name fromStringForPackage(const String& str);
 
  private:
   std::unique_ptr<Impl> impl_;
+
+  friend class VM;
 };
 
 
@@ -169,6 +190,7 @@ class String final {
  public:
   class Impl;
 
+  String();
   explicit String(Impl* impl);
   String(VM& vm, const std::string& str);
   String(const String&) = delete;
@@ -176,6 +198,9 @@ class String final {
   String& operator = (const String&) = delete;
   String& operator = (String&& str);
   ~String();
+
+  operator bool () const;
+  bool operator ! () const;
 
   std::string toStdString() const;
 
@@ -190,12 +215,16 @@ class Error final {
  public:
   class Impl;
 
+  Error();
   explicit Error(Impl* impl);
   Error(const Error&) = delete;
   Error(Error&& error);
   Error& operator = (const Error&) = delete;
   Error& operator = (Error&& error);
   ~Error();
+
+  operator bool () const;
+  bool operator ! () const;
 
   const char* message() const;
 

@@ -21,5 +21,5 @@ To run an individual example with the CodeSwitch VM:
 
 ```
 make build-vm -j8
-out/debug/driver out/debug/examples/hello.csp
+out/debug/driver -P out/debug -P out/debug/examples hello
 ```

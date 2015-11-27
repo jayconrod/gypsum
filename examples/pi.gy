@@ -1,10 +1,5 @@
 // This is a simple Gypsum program.
-// You can compile it with this command:
-//   ../compiler/compiler pi.gy -o pi.csp
-// You can run it with this command:
-//   ../vm/out/debug/driver pi.csp
-// (If you haven't built the VM yet, run this first):
-//   (cd ../vm; make -j)
+// See README.md for instructions for building and running.
 
 // This program approximates the value of pi by numerically measuring the area of a
 // quarter-circle of radius 2 (1/4 area = 1/4 * pi * r^2 = pi).

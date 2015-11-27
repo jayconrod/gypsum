@@ -29,6 +29,22 @@ void abort(const char* fileName, int lineNumber, const char* reason, ...) {
 }
 
 
+vector<string> split(const string& str, char delim) {
+  vector<string> pieces;
+  size_t begin = 0;
+  auto end = str.find(delim);
+  while (end != string::npos) {
+    auto len = end - begin;
+    pieces.push_back(str.substr(begin, len));
+    begin = end + 1;
+    end = str.find(delim, begin);
+  }
+  auto len = str.size() - begin;
+  pieces.push_back(str.substr(begin, len));
+  return pieces;
+}
+
+
 u32 utf8Decode(const u8* bytes, const u8* end) {
   return utf8Decode(&bytes, end);
 }
