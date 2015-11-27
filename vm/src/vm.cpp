@@ -26,8 +26,6 @@ using namespace std;
 namespace codeswitch {
 namespace internal {
 
-VM* VM::currentVM_;
-
 VM::VM(Flags flags)
     : flags_(flags),
       heap_(new Heap(this)),

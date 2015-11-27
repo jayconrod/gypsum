@@ -7,105 +7,298 @@
 #ifndef codeswitch_h
 #define codeswitch_h
 
+#include <memory>
 #include <string>
+#include <vector>
+
 #include <cstdint>
+
 
 namespace codeswitch {
 
-class Package;
+class Error;
 class Function;
-class Arguments;
+class Name;
+class Package;
+class String;
 
-class VM {
+
+class VM final {
  public:
+  class Impl;
+
   VM();
-  VM(const VM& vm);
+  VM(const VM&) = delete;
+  VM(VM&& vm);
+  VM& operator = (const VM&) = delete;
+  VM& operator = (VM&&);
   ~VM();
 
-  VM& operator = (const VM& vm);
-
-  Package loadPackage(const std::string& fileName);
+  Package loadPackageFromFile(const std::string& fileName);
 
  private:
-  class Impl;
-  Impl* impl_;
+  std::unique_ptr<Impl> impl_;
+
+  friend class String;
 };
 
 
-class Package {
+class Package final {
  public:
   class Impl;
-  explicit Package(Impl* impl);
-  Package(const Package& package);
-  ~Package();
 
-  Package& operator = (const Package& package);
+  explicit Package(Impl* impl);
+  Package(const Package&) = delete;
+  Package(Package&& package);
+  Package& operator = (const Package&) = delete;
+  Package& operator = (Package&& package);
+  ~Package();
 
   Function entryFunction();
 
  private:
-  Impl* impl_;
+  std::unique_ptr<Impl> impl_;
 };
 
 
-class Function {
+class Function final {
  public:
   class Impl;
+
   explicit Function(Impl* impl);
-  Function(const Function& function);
+  Function(const Function&) = delete;
+  Function(Function&&);
+  Function& operator = (const Function&) = delete;
+  Function& operator = (Function&&);
   ~Function();
 
-  Function& operator = (const Function& function);
-
-  void call(const Arguments& args);
-  bool callForBoolean(const Arguments& args);
-  int8_t callForI8(const Arguments& args);
-  int16_t callForI16(const Arguments& args);
-  int32_t callForI32(const Arguments& args);
-  int64_t callForI64(const Arguments& args);
-  float callForF32(const Arguments& args);
-  double callForF64(const Arguments& args);
+  template <class... Ts>
+  void call(Ts... args);
+  template <class... Ts>
+  bool callForBoolean(Ts... args);
+  template <class... Ts>
+  int8_t callForI8(Ts... args);
+  template <class... Ts>
+  int16_t callForI16(Ts... args);
+  template <class... Ts>
+  int32_t callForI32(Ts... args);
+  template <class... Ts>
+  int64_t callForI64(Ts... args);
+  template <class... Ts>
+  float callForF32(Ts... args);
+  template <class... Ts>
+  double callForF64(Ts... args);
 
  private:
-  Impl* impl_;
-  friend class Arguments;
+  std::unique_ptr<Impl> impl_;
+
+  friend class CallBuilder;
 };
 
 
-class Arguments {
+class CallBuilder final {
+ public:
+  class Impl;
+  CallBuilder(const Function& function);
+  CallBuilder(const CallBuilder&) = delete;
+  CallBuilder(CallBuilder&& builder);
+  CallBuilder& operator = (const CallBuilder&) = delete;
+  CallBuilder& operator = (CallBuilder&& builder);
+  ~CallBuilder();
+
+  CallBuilder& argUnit();
+  CallBuilder& arg(bool value);
+  CallBuilder& arg(int8_t value);
+  CallBuilder& arg(int16_t value);
+  CallBuilder& arg(int32_t value);
+  CallBuilder& arg(int64_t value);
+  CallBuilder& arg(float value);
+  CallBuilder& arg(double value);
+
+  CallBuilder& args() { return *this; }
+
+  template <class... Ts>
+  CallBuilder& args(bool value, Ts... rest);
+  template <class... Ts>
+  CallBuilder& args(int8_t value, Ts... rest);
+  template <class... Ts>
+  CallBuilder& args(int16_t value, Ts... rest);
+  template <class... Ts>
+  CallBuilder& args(int32_t value, Ts... rest);
+  template <class... Ts>
+  CallBuilder& args(int64_t value, Ts... rest);
+  template <class... Ts>
+  CallBuilder& args(float value, Ts... rest);
+  template <class... Ts>
+  CallBuilder& args(double value, Ts... rest);
+
+  void call();
+  bool callForBoolean();
+  int8_t callForI8();
+  int16_t callForI16();
+  int32_t callForI32();
+  int64_t callForI64();
+  float callForF32();
+  double callForF64();
+
+ private:
+  std::unique_ptr<Impl> impl_;
+};
+
+
+class Name final {
  public:
   class Impl;
 
-  explicit Arguments(const Function& function);
-  Arguments(const Arguments& arguments);
-  ~Arguments();
-  Arguments& operator = (const Arguments& arguments);
+  explicit Name(Impl* impl);
+  Name(const Name&) = delete;
+  Name(Name&&);
+  Name& operator = (const Name&) = delete;
+  Name& operator = (Name&& name);
+  ~Name();
 
-  void pushBoolean(bool arg);
-  void pushI8(int8_t arg);
-  void pushI16(int16_t arg);
-  void pushI32(int32_t arg);
-  void pushI64(int64_t arg);
-  void pushF32(float arg);
-  void pushF64(double arg);
-  bool isComplete() const;
+  static Name fromStringForDefn(const String& str);
+  static Name fromStringForPackage(const String& str);
 
  private:
-  Impl* impl_;
-  friend class Function;
+  std::unique_ptr<Impl> impl_;
 };
 
 
-class Error {
+class String final {
  public:
-  explicit Error(const void* impl);
+  class Impl;
+
+  explicit String(Impl* impl);
+  String(VM& vm, const std::string& str);
+  String(const String&) = delete;
+  String(String&& str);
+  String& operator = (const String&) = delete;
+  String& operator = (String&& str);
+  ~String();
+
+  std::string toStdString() const;
+
+ private:
+  std::unique_ptr<Impl> impl_;
+
+  friend class Name;
+};
+
+
+class Error final {
+ public:
+  class Impl;
+
+  explicit Error(Impl* impl);
+  Error(const Error&) = delete;
+  Error(Error&& error);
+  Error& operator = (const Error&) = delete;
+  Error& operator = (Error&& error);
   ~Error();
 
   const char* message() const;
 
  private:
-  const void* impl_;
+  std::unique_ptr<Impl> impl_;
 };
+
+
+template <class... Ts>
+void Function::call(Ts... args) {
+  CallBuilder(*this).args(args...).call();
+}
+
+
+template <class... Ts>
+bool Function::callForBoolean(Ts... args) {
+  return CallBuilder(*this).args(args...).callForBoolean();
+}
+
+
+template <class... Ts>
+int8_t Function::callForI8(Ts... args) {
+  return CallBuilder(*this).args(args...).callForI8();
+}
+
+
+template <class... Ts>
+int16_t Function::callForI16(Ts... args) {
+  return CallBuilder(*this).args(args...).callForI16();
+}
+
+
+template <class... Ts>
+int32_t Function::callForI32(Ts... args) {
+  return CallBuilder(*this).args(args...).callForI32();
+}
+
+
+template <class... Ts>
+int64_t Function::callForI64(Ts... args) {
+  return CallBuilder(*this).args(args...).callForI64();
+}
+
+
+template <class... Ts>
+float Function::callForF32(Ts... args) {
+  return CallBuilder(*this).args(args...).callForF32();
+}
+
+
+template <class... Ts>
+double Function::callForF64(Ts... args) {
+  return CallBuilder(*this).args(args...).callForF64();
+}
+
+
+template <class... Ts>
+CallBuilder& CallBuilder::args(bool value, Ts... rest) {
+  arg(value);
+  return args(rest...);
+}
+
+
+template <class... Ts>
+CallBuilder& CallBuilder::args(int8_t value, Ts... rest) {
+  arg(value);
+  return args(rest...);
+}
+
+
+template <class... Ts>
+CallBuilder& CallBuilder::args(int16_t value, Ts... rest) {
+  arg(value);
+  return args(rest...);
+}
+
+
+template <class... Ts>
+CallBuilder& CallBuilder::args(int32_t value, Ts... rest) {
+  arg(value);
+  return args(rest...);
+}
+
+
+template <class... Ts>
+CallBuilder& CallBuilder::args(int64_t value, Ts... rest) {
+  arg(value);
+  return args(rest...);
+}
+
+
+template <class... Ts>
+CallBuilder& CallBuilder::args(float value, Ts... rest) {
+  arg(value);
+  return args(rest...);
+}
+
+
+template <class... Ts>
+CallBuilder& CallBuilder::args(double value, Ts... rest) {
+  arg(value);
+  return args(rest...);
+}
 
 }
 

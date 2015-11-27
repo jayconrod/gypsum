@@ -5,32 +5,38 @@
 
 
 #include <iostream>
-#include <cstdlib>
+#include <memory>
+#include <string>
+
 #include <codeswitch.h>
 
-static void usage(const char* programName);
+using std::cerr;
+using std::move;
+using std::endl;
+using std::string;
+
+using codeswitch::Error;
+using codeswitch::Function;
+using codeswitch::Package;
+using codeswitch::VM;
+
 
 int main(int argc, char** argv) {
   if (argc != 2) {
-    usage(argv[0]);
+    cerr << "usage: " << argv[0] << " package-file" << endl;
+    return 1;
   }
+  string packageFileName(argv[1]);
 
   try {
-    codeswitch::VM vm;
-    codeswitch::Package package(vm.loadPackage(argv[1]));
-    codeswitch::Function function(package.entryFunction());
-    codeswitch::Arguments args(function);
-    function.call(args);
-  } catch (codeswitch::Error& err) {
-    std::cerr << "error: " << err.message() << std::endl;
-    exit(1);
+    VM vm;
+    auto package = vm.loadPackageFromFile(packageFileName);
+    auto function = package.entryFunction();
+    function.call();
+  } catch (Error& err) {
+    cerr << "error: " << err.message() << endl;
+    return 1;
   }
 
   return 0;
-}
-
-
-static void usage(const char* programName) {
-  std::cerr << "usage: " << programName << " package" << std::endl;
-  exit(1);
 }

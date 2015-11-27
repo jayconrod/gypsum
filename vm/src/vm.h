@@ -38,19 +38,6 @@ class VM {
   explicit VM(Flags flags = kDefaultFlags);
   ~VM();
 
-  static VM* current() { return currentVM_; }
-  static void setCurrent(VM* vm) { currentVM_ = vm; }
-  class Scope {
-   public:
-    Scope(VM* vm)
-        : oldVM_(VM::current()) {
-      VM::setCurrent(vm);
-    }
-    ~Scope() { VM::setCurrent(oldVM_); }
-   private:
-    VM* oldVM_;
-  };
-
   static VM* fromAddress(void* addr);
 
   Flags flags() { return flags_; };
@@ -77,8 +64,6 @@ class VM {
   void addPackageSearchPaths(const std::string& paths);
   std::string searchForPackage(const Handle<PackageDependency>& dependency);
   void loadPackageDependenciesAndInitialize(const Handle<Package>& package);
-
-  static VM* currentVM_;
 
   Flags flags_;
 
