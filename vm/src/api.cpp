@@ -253,7 +253,7 @@ bool Package::operator ! () const {
 }
 
 
-Function Package::entryFunction() {
+Function Package::entryFunction() const {
   API_CHECK_SELF(Package);
   i::Function* function = impl_->package->entryFunction();
   if (function == nullptr) {

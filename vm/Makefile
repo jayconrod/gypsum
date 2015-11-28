@@ -76,7 +76,7 @@ doc-vm-api: $(INCLUDE_DIR)/Doxyfile $(wildcard $(INCLUDE_DIR)/*.h)
 	@mkdir -p $(DOC_DIR)
 	@(cd $(INCLUDE_DIR); \
 	  sed -e "s%@@OUTPUT_DIRECTORY@@%$(DOC_DIR)/vm-api/%" <Doxyfile | \
-	  doxygen -)
+	  doxygen - 1>/dev/null)
 
 $(PROGRAMS) $(TEST):
 	$(CXX_LINK_EXEC) $(LDFLAGS) $^ -o $@
