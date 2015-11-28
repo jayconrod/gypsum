@@ -9,6 +9,7 @@
 #include <memory>
 
 #include "array.h"
+#include "builtins.h"
 #include "function.h"
 #include "handle.h"
 #include "heap.h"
@@ -122,7 +123,10 @@ class CallBuilder::Impl final {
     args_.push_back(Value(i::Persistent<i::Type>(i::Type::i64Type(vm_->roots())), bits));
   }
 
-  void callForUnit();
+  void arg(const String& value);
+  void arg(const Object& value);
+
+  void callForAny();
   bool callForBoolean();
   int8_t callForI8();
   int16_t callForI16();
@@ -130,6 +134,8 @@ class CallBuilder::Impl final {
   int64_t callForI64();
   float callForF32();
   double callForF64();
+  String callForString();
+  Object callForObject();
 
  private:
   enum Tag { PRIMITIVE, OBJECT };
@@ -171,6 +177,16 @@ class String::Impl final {
     API_CHECK(str, "string implementation does not reference a string");
   }
   i::Persistent<i::String> str;
+};
+
+
+class Object::Impl final {
+ public:
+  explicit Impl(const i::Handle<i::Object>& obj)
+      : obj(obj) {
+    API_CHECK(obj, "object implementation does not reference an object");
+  }
+  i::Persistent<i::Object> obj;
 };
 
 
@@ -381,9 +397,16 @@ CallBuilder& CallBuilder::arg(double value) {
 }
 
 
+CallBuilder& CallBuilder::arg(const String& value) {
+  API_CHECK_SELF(CallBuilder);
+  impl_->arg(value);
+  return *this;
+}
+
+
 void CallBuilder::call() {
   API_CHECK_SELF(CallBuilder);
-  impl_->callForUnit();
+  impl_->callForAny();
 }
 
 
@@ -429,9 +452,27 @@ double CallBuilder::callForF64() {
 }
 
 
-void CallBuilder::Impl::callForUnit() {
-  API_CHECK(function_->returnType()->form() == i::Type::UNIT_TYPE,
-      "wrong function return type");
+String CallBuilder::callForString() {
+  API_CHECK_SELF(CallBuilder);
+  return impl_->callForString();
+}
+
+
+void CallBuilder::Impl::arg(const String& value) {
+  API_CHECK(value, "not a valid String reference");
+  i::Persistent<i::Type> type(vm_->roots()->getBuiltinType(i::BUILTIN_STRING_CLASS_ID));
+  args_.push_back(Value(move(type), value.impl_->str));
+}
+
+
+void CallBuilder::Impl::arg(const Object& value) {
+  API_CHECK(value, "not a valid Object reference");
+  i::Persistent<i::Type> type(i::Type::rootClassType(vm_->roots()));
+  args_.push_back(Value(move(type), value.impl_->obj));
+}
+
+
+void CallBuilder::Impl::callForAny() {
   call();
 }
 
@@ -482,6 +523,30 @@ double CallBuilder::Impl::callForF64() {
   API_CHECK(function_->returnType()->form() == i::Type::F64_TYPE,
       "wrong function return type");
   return i::f64FromBits(static_cast<i::u64>(call()));
+}
+
+
+String CallBuilder::Impl::callForString() {
+  API_CHECK(function_->returnType()->equals(
+          vm_->roots()->getBuiltinType(i::BUILTIN_STRING_CLASS_ID)),
+      "wrong function return type");
+  i::i64 stringPtrBits = call();
+  i::AllowAllocationScope allowAlloc(vm_->heap(), false);
+  i::String* rawString = reinterpret_cast<i::String*>(static_cast<i::word_t>(stringPtrBits));
+  return String(rawString != nullptr
+      ? new String::Impl(i::Persistent<i::String>(rawString))
+      : nullptr);
+}
+
+
+Object CallBuilder::Impl::callForObject() {
+  API_CHECK(function_->returnType()->isRootClass(), "wrong function return type");
+  i::i64 objPtrBits = call();
+  i::AllowAllocationScope allowAlloc(vm_->heap(), false);
+  i::Object* rawObject = reinterpret_cast<i::Object*>(static_cast<i::word_t>(objPtrBits));
+  return Object(rawObject != nullptr
+      ? new Object::Impl(i::Persistent<i::Object>(rawObject))
+      : nullptr);
 }
 
 
@@ -611,7 +676,37 @@ string String::toStdString() const {
 }
 
 
+Object::Object() { }
+
+
+Object::Object(Impl* impl)
+    : impl_(impl) { }
+
+
+Object::Object(Object&& obj)
+    : impl_(move(obj.impl_)) { }
+
+
+Object& Object::operator = (Object&& obj) {
+  impl_ = move(obj.impl_);
+  return *this;
+}
+
+
+Object::~Object() { }
+
+
 Error::Error() { }
+
+
+Object::operator bool () const {
+  return static_cast<bool>(impl_);
+}
+
+
+bool Object::operator ! () const {
+  return !impl_;
+}
 
 
 Error::Error(Impl* impl)

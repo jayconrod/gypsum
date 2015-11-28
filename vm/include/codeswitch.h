@@ -19,6 +19,7 @@ namespace codeswitch {
 class Error;
 class Function;
 class Name;
+class Object;
 class Package;
 class String;
 
@@ -177,7 +178,7 @@ class Function final {
   void call(Ts... args);
 
   /**
-   * Calls a function that returns `boolean`.
+   * Calls a function that returns `boolean`
    *
    * @param args arguments to call the function with. These are type-checked.
    * @return the result of the function call.
@@ -188,7 +189,7 @@ class Function final {
   bool callForBoolean(Ts... args);
 
   /**
-   * Calls a function that returns `i8`.
+   * Calls a function that returns `i8`
    *
    * @param args arguments to call the function with. These are type-checked.
    * @return the result of the function call.
@@ -199,7 +200,7 @@ class Function final {
   int8_t callForI8(Ts... args);
 
   /**
-   * Calls a function that returns `i16`.
+   * Calls a function that returns `i16`
    *
    * @param args arguments to call the function with. These are type-checked.
    * @return the result of the function call.
@@ -210,7 +211,7 @@ class Function final {
   int16_t callForI16(Ts... args);
 
   /**
-   * Calls a function that returns `i32`.
+   * Calls a function that returns `i32`
    *
    * @param args arguments to call the function with. These are type-checked.
    * @return the result of the function call.
@@ -221,7 +222,7 @@ class Function final {
   int32_t callForI32(Ts... args);
 
   /**
-   * Calls a function that returns `i64`.
+   * Calls a function that returns `i64`
    *
    * @param args arguments to call the function with. These are type-checked.
    * @return the result of the function call.
@@ -232,7 +233,7 @@ class Function final {
   int64_t callForI64(Ts... args);
 
   /**
-   * Calls a function that returns `f32`.
+   * Calls a function that returns `f32`
    *
    * @param args arguments to call the function with. These are type-checked.
    * @return the result of the function call.
@@ -243,7 +244,7 @@ class Function final {
   float callForF32(Ts... args);
 
   /**
-   * Calls a function that returns `f64`.
+   * Calls a function that returns `f64`
    *
    * @param args arguments to call the function with. These are type-checked.
    * @return the result of the function call.
@@ -252,6 +253,28 @@ class Function final {
    */
   template <class... Ts>
   double callForF64(Ts... args);
+
+  /**
+   * Calls a function that returns `String`
+   *
+   * @param args arguments to call the function with. These are type-checked.
+   * @return the result of the function call.
+   * @throws Error if there is a type error with the arguments or return type or if the function
+   *   throws an exception.
+   */
+  template <class... Ts>
+  String callForString(Ts... args);
+
+  /**
+   * Calls a function that returns any object type
+   *
+   * @param args arguments to call the function with. These are type-checked.
+   * @return the result of the function call.
+   * @throws Error if there is a type error with the arguments or return type or if the function
+   *   throws an exception.
+   */
+  template <class... Ts>
+  Object callForObject(Ts... args);
 
  private:
   std::unique_ptr<Impl> impl_;
@@ -319,6 +342,12 @@ class CallBuilder final {
   /** Adds an `f64` value to the argument list */
   CallBuilder& arg(double value);
 
+  /** Adds a {@link String} value to the argument list */
+  CallBuilder& arg(const String& value);
+
+  /** Adds a {@link Object} value to the argument list */
+  CallBuilder& arg(const Object& value);
+
   /** Signals no arguments are needed */
   CallBuilder& args() { return *this; }
 
@@ -350,57 +379,81 @@ class CallBuilder final {
   template <class... Ts>
   CallBuilder& args(double value, Ts... rest);
 
+  /** Adds several values to the argument list, starting with a `String` value */
+  template <class... Ts>
+  CallBuilder& args(const String& value, Ts... rest);
+
+  /** Adds several values to the argument list, starting with an `Object` value */
+  template <class... Ts>
+  CallBuilder& args(const Object& value, Ts... rest);
+
   /** Calls the function and clears the argument list. The result is ignored. */
   void call();
 
   /**
-   * Calls the function and clears the argument list.
+   * Calls the function and clears the argument list
    *
    * @return the function's return value. The return type must be `boolean`.
    */
   bool callForBoolean();
 
   /**
-   * Calls the function and clears the argument list.
+   * Calls the function and clears the argument list
    *
    * @return the function's return value. The return type must be `i8`.
    */
   int8_t callForI8();
 
   /**
-   * Calls the function and clears the argument list.
+   * Calls the function and clears the argument list
    *
    * @return the function's return value. The return type must be `i16`.
    */
   int16_t callForI16();
 
   /**
-   * Calls the function and clears the argument list.
+   * Calls the function and clears the argument list
    *
    * @return the function's return value. The return type must be `i32`.
    */
   int32_t callForI32();
 
   /**
-   * Calls the function and clears the argument list.
+   * Calls the function and clears the argument list
    *
    * @return the function's return value. The return type must be `i64`.
    */
   int64_t callForI64();
 
   /**
-   * Calls the function and clears the argument list.
+   * Calls the function and clears the argument list
    *
    * @return the function's return value. The return type must be `f32`.
    */
   float callForF32();
 
   /**
-   * Calls the function and clears the argument list.
+   * Calls the function and clears the argument list
    *
    * @return the function's return value. The return type must be `f64`.
    */
   double callForF64();
+
+  /**
+   * Calls the function and clears the argument list
+   *
+   * @return the function's return value. The return type must be `String`. If `null` is
+   *   returned, this will be an invalid reference.
+   */
+  String callForString();
+
+  /**
+   * Calls the function and clears the argument list
+   *
+   * @return the function's return value. The return type must be some object type. If `null`
+   *  is returned, this will be an invalid reference.
+   */
+  Object callForObject();
 
  private:
   std::unique_ptr<Impl> impl_;
@@ -504,7 +557,40 @@ class String final {
  private:
   std::unique_ptr<Impl> impl_;
 
+  friend class CallBuilder;
   friend class Name;
+};
+
+
+/**
+ * An object of any type on the CodeSwitch garbage collected heap.
+ *
+ * Objects of this class actually manage pointers to objects on the garbage collected heap.
+ * Objects are in an "invalid" state if they are created with the default constructor or
+ * after being on the right side of a move assignment or construction.
+ */
+class Object final {
+ public:
+  class Impl;
+
+  Object();
+  explicit Object(Impl* impl);
+  Object(const Object&) = delete;
+  Object(Object&& obj);
+  Object& operator = (const Object&) = delete;
+  Object& operator = (Object&& obj);
+  ~Object();
+
+  /** Returns true if the reference is valid */
+  operator bool () const;
+
+  /** Returns true if the reference is not valid */
+  bool operator ! () const;
+
+ private:
+  std::unique_ptr<Impl> impl_;
+
+  friend class CallBuilder;
 };
 
 
@@ -583,6 +669,12 @@ double Function::callForF64(Ts... args) {
 
 
 template <class... Ts>
+String Function::callForString(Ts... args) {
+  return CallBuilder(*this).args(args...).callForString();
+}
+
+
+template <class... Ts>
 CallBuilder& CallBuilder::args(bool value, Ts... rest) {
   arg(value);
   return args(rest...);
@@ -626,6 +718,20 @@ CallBuilder& CallBuilder::args(float value, Ts... rest) {
 
 template <class... Ts>
 CallBuilder& CallBuilder::args(double value, Ts... rest) {
+  arg(value);
+  return args(rest...);
+}
+
+
+template <class... Ts>
+CallBuilder& CallBuilder::args(const String& value, Ts... rest) {
+  arg(value);
+  return args(rest...);
+}
+
+
+template <class... Ts>
+CallBuilder& CallBuilder::args(const Object& value, Ts... rest) {
   arg(value);
   return args(rest...);
 }

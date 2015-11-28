@@ -77,6 +77,7 @@ doc-vm-api: $(INCLUDE_DIR)/Doxyfile $(wildcard $(INCLUDE_DIR)/*.h)
 	@(cd $(INCLUDE_DIR); \
 	  sed -e "s%@@OUTPUT_DIRECTORY@@%$(DOC_DIR)/vm-api/%" <Doxyfile | \
 	  doxygen - 1>/dev/null)
+	@echo CodeSwitch API document written to $(DOC_DIR)/vm-api/
 
 $(PROGRAMS) $(TEST):
 	$(CXX_LINK_EXEC) $(LDFLAGS) $^ -o $@
