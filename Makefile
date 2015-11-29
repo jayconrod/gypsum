@@ -23,6 +23,7 @@ TOP := $(realpath $(dir $(lastword $(MAKEFILE_LIST))))
 OUT_BASE_DIR := $(TOP)/out
 OUT_DIR := $(OUT_BASE_DIR)/$(mode)
 GEN_DIR := $(OUT_DIR)/gen
+DOC_DIR := $(OUT_DIR)/doc
 
 COMMON_DIR := $(TOP)/common
 COMPILER_DIR := $(TOP)/compiler
@@ -41,6 +42,7 @@ RM ?= rm
 REMOVE := $(RM) -r
 PYTHON ?= python
 PYINSTALLER := pyinstaller --noconfirm --log-level=WARN
+DOXYGEN ?= doxygen
 
 # Internal tools and dependencies.
 GY_COMPILER := $(OUT_DIR)/compiler

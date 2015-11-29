@@ -6,376 +6,738 @@
 
 #include "codeswitch.h"
 
-#include <algorithm>
-#include <string>
-#include <utility>
-#include <vector>
-#include "block.h"
-#include "error.h"
-#include "function.h"
+#include <memory>
+
+#include "array.h"
+#include "builtins.h"
 #include "function.h"
 #include "handle.h"
+#include "heap.h"
 #include "interpreter.h"
+#include "name.h"
+#include "object.h"
 #include "package.h"
 #include "stack.h"
+#include "string.h"
 #include "type.h"
 #include "utils.h"
 #include "vm.h"
 
-using namespace std;
+using std::move;
+using std::string;
+using std::unique_ptr;
+using std::vector;
 
 namespace codeswitch {
 
 namespace i = internal;
 
-#define API_CHECK(cond, message) \
-do { \
-  if (!(cond)) { \
-    throw Error(message); \
-  } \
-} while(false)
+
+#define API_CHECK(expr, message) \
+  do { \
+    if (!(expr)) { \
+      throw Error(new Error::Impl(message)); \
+    } \
+  } while (false)
 
 
-#ifdef DEBUG
-#define API_ASSERT(cond, message) API_CHECK(cond, message)
-#else
-#define API_ASSERT(cond, message)
-#endif
+#define API_CHECK_SELF(type) API_CHECK(impl_, #type ": this is not a valid reference")
 
 
-#define API_UNREACHABLE() i::abort(__FILE__, __LINE__, "unreachable code")
-
-
-class RefCounted {
+class Error::Impl final {
  public:
-  RefCounted()
-      : refCount_(1) {}
-
-  int refCount() { return refCount_; }
-  void retain() { refCount_++; }
-  void release() {
-    refCount_--;
-    if (refCount_ == 0)
-      delete this;
-  }
-
- private:
-  int refCount_;
+  explicit Impl(const string& message)
+      : message(message) { }
+  explicit Impl(string&& message)
+      : message(message) { }
+  string message;
 };
 
 
-class VM::Impl : public RefCounted {
+class VM::Impl final {
  public:
-  Impl(i::VM* vm)
-      : vm_(vm) { }
-  ~Impl() {
-    delete vm_;
-  }
-
-  i::VM* vm() { return vm_; }
-
- private:
-  i::VM* vm_;
+  i::VM vm;
 };
 
 
-class Package::Impl : public RefCounted {
+class Package::Impl final {
  public:
-  Impl(i::VM* vm, i::Persistent<i::Package> package)
-      : vm_(vm),
-        package_(move(package)) { }
-
-  i::VM* vm() { return vm_; }
-  const i::Persistent<i::Package>& package() { return package_; }
-
- private:
-  i::VM* vm_;
-  i::Persistent<i::Package> package_;
+  explicit Impl(const i::Handle<i::Package>& package)
+      : package(package) {
+    API_CHECK(package, "package implementation does not reference a package");
+  }
+  i::Persistent<i::Package> package;
 };
 
 
-class Function::Impl : public RefCounted {
+class Function::Impl final {
  public:
-  Impl(i::VM* vm, i::Persistent<i::Function> function)
-      : vm_(vm),
-        function_(move(function)) { }
+  explicit Impl(const i::Handle<i::Function>& function)
+      : function(function) {
+    API_CHECK(function, "function implementation does not reference a function");
+  }
+  i::Persistent<i::Function> function;
+};
 
-  i::VM* vm() { return vm_; }
-  i::Persistent<i::Function>& function() { return function_; }
 
-  i::i64 call(i::i64* data, i::word_t count) {
-    const i::Persistent<i::Stack>& stack = vm()->stack();
-    i::word_t size = count * sizeof(i::i64);
-    stack->setStackPointerOffset(stack->stackPointerOffset() - size);
-    copy_n(data, count, reinterpret_cast<i::word_t*>(stack->sp()));
-
-    i::AllowAllocationScope allowAllocation(vm()->heap(), true);
-    i::Interpreter interpreter(vm(), stack);
-    i::i64 result = interpreter.call(function());
-    return result;
+class CallBuilder::Impl final {
+ public:
+  explicit Impl(const i::Handle<i::Function>& function)
+      : function_(function) {
+    API_CHECK(function, "call builder does not reference a valid function");
+    vm_ = i::VM::fromAddress(*function);
+    args_.reserve(function->parameterTypes()->length());
   }
 
+  void argUnit() {
+    args_.push_back(Value(i::Persistent<i::Type>(i::Type::unitType(vm_->roots())), 0));
+  }
+
+  void arg(bool value) {
+    args_.push_back(Value(i::Persistent<i::Type>(i::Type::i64Type(vm_->roots())), value));
+  }
+
+  void arg(int8_t value) {
+    args_.push_back(Value(i::Persistent<i::Type>(i::Type::i64Type(vm_->roots())), value));
+  }
+
+  void arg(int16_t value) {
+    args_.push_back(Value(i::Persistent<i::Type>(i::Type::i64Type(vm_->roots())), value));
+  }
+
+  void arg(int32_t value) {
+    args_.push_back(Value(i::Persistent<i::Type>(i::Type::i64Type(vm_->roots())), value));
+  }
+
+  void arg(int64_t value) {
+    args_.push_back(Value(i::Persistent<i::Type>(i::Type::i64Type(vm_->roots())), value));
+  }
+
+  void arg(float value) {
+    auto bits = i::f32ToBits(value);
+    args_.push_back(Value(i::Persistent<i::Type>(i::Type::i64Type(vm_->roots())), bits));
+  }
+
+  void arg(double value) {
+    auto bits = i::f64ToBits(value);
+    args_.push_back(Value(i::Persistent<i::Type>(i::Type::i64Type(vm_->roots())), bits));
+  }
+
+  void arg(const String& value);
+  void arg(const Object& value);
+
+  void callForAny();
+  bool callForBoolean();
+  int8_t callForI8();
+  int16_t callForI16();
+  int32_t callForI32();
+  int64_t callForI64();
+  float callForF32();
+  double callForF64();
+  String callForString();
+  Object callForObject();
+
  private:
+  enum Tag { PRIMITIVE, OBJECT };
+
+  struct Value {
+    Value(i::Persistent<i::Type>&& type, i::u64 primitive)
+        : tag(PRIMITIVE), type(type), primitive(primitive) { }
+    Value(i::Persistent<i::Type>&& type, const i::Handle<i::Object>& object)
+        : tag(OBJECT), type(type), object(i::Persistent<i::Object>(object)) { }
+
+    Tag tag;
+    i::Persistent<i::Type> type;
+    i::u64 primitive;
+    i::Persistent<i::Object> object;
+  };
+
+  i::i64 call();
+
   i::VM* vm_;
   i::Persistent<i::Function> function_;
+  vector<Value> args_;
 };
 
 
-class Arguments::Impl: public RefCounted {
+class Name::Impl final {
  public:
-  Impl(i::VM* vm, i::Persistent<i::Function> function)
-      : function_(move(function)),
-        paramIndex_(0),
-        data_(function_->parameterTypes()->length()) { }
-
-  i::i64* data() { return data_.data(); }
-
-  template <class T>
-  void push(T arg);
-
-  i::Type* nextType() {
-    API_CHECK(paramIndex_ < function_->parameterTypes()->length(), "too many arguments");
-    return function_->parameterTypes()->get(paramIndex_);
+  explicit Impl(const i::Handle<i::Name>& name)
+      : name(name) {
+    API_CHECK(name, "name implementation does not reference a name");
   }
-
-  bool isComplete() {
-    return paramIndex_ == function_->parameterTypes()->length();
-  }
-
- private:
-  i::Persistent<i::Function> function_;
-  i::length_t paramIndex_;
-  vector<i::i64> data_;
+  i::Persistent<i::Name> name;
 };
 
 
-template <class T>
-void Arguments::Impl::push(T arg) {
-  API_CHECK(paramIndex_ < function_->parameterTypes()->length(), "too many arguments");
-  data_[paramIndex_++] = static_cast<i::i64>(arg);
-}
+class String::Impl final {
+ public:
+  explicit Impl(const i::Handle<i::String>& str)
+      : str(str) {
+    API_CHECK(str, "string implementation does not reference a string");
+  }
+  i::Persistent<i::String> str;
+};
 
-template <>
-void Arguments::Impl::push<i::f32>(i::f32 arg) {
-  API_CHECK(paramIndex_ < function_->parameterTypes()->length(), "too many arguments");
-  auto bits = static_cast<i::u64>(i::f32ToBits(arg));
-  data_[paramIndex_++] = bits;
-}
 
-template <>
-void Arguments::Impl::push<i::f64>(i::f64 arg) {
-  API_CHECK(paramIndex_ < function_->parameterTypes()->length(), "too many arguments");
-  auto bits = i::f64ToBits(arg);
-  data_[paramIndex_++] = bits;
-}
+class Object::Impl final {
+ public:
+  explicit Impl(const i::Handle<i::Object>& obj)
+      : obj(obj) {
+    API_CHECK(obj, "object implementation does not reference an object");
+  }
+  i::Persistent<i::Object> obj;
+};
+
 
 VM::VM()
-    : impl_(new Impl(new i::VM())) {}
+    : impl_(new Impl) { }
 
 
-VM::VM(const VM& vm)
-    : impl_(vm.impl_) {
-  impl_->retain();
-}
+VM::VM(VM&& vm)
+    : impl_(move(vm.impl_)) { }
 
 
-VM& VM::operator = (const VM& vm) {
-  impl_->release();
-  impl_ = vm.impl_;
-  impl_->retain();
+VM& VM::operator = (VM&& vm) {
+  impl_ = move(vm.impl_);
   return *this;
 }
 
 
-VM::~VM() {
-  impl_->release();
+VM::~VM() { }
+
+
+void VM::addPackageSearchPath(const string& path) {
+  API_CHECK(!path.empty(), "path is empty");
+  impl_->vm.addPackageSearchPath(path);
 }
 
 
-Package VM::loadPackage(const string& fileName) {
-  i::VM::Scope vmScope(impl_->vm());
+Package VM::loadPackage(const Name& name) {
+  API_CHECK(name.impl_, "package name is not valid");
+  i::VM* vm = &impl_->vm;
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAlloc(vm->heap(), true);
+  try {
+    i::Persistent<i::Package> package = vm->loadPackage(name.impl_->name);
+    return package ? Package(new Package::Impl(package)) : Package();
+  } catch (i::Error& error) {
+    throw Error(new Error::Impl(error.message()));
+  }
+}
+
+
+Package VM::loadPackageFromFile(const string& fileName) {
   i::Persistent<i::Package> package;
   try {
-    package = impl_->vm()->loadPackage(fileName);
-  } catch (i::Error error) {
-    throw Error(error.message());
+    package = impl_->vm.loadPackage(fileName);
+  } catch (i::Error& error) {
+    throw Error(new Error::Impl(error.message()));
   }
 
-  return Package(new Package::Impl(impl_->vm(), move(package)));
+  return Package(new Package::Impl(package));
 }
+
+
+Package::Package() { }
 
 
 Package::Package(Impl* impl)
     : impl_(impl) { }
 
 
-Package::Package(const Package& package)
-    : impl_(package.impl_) {
-  impl_->retain();
-}
+Package::Package(Package&& package)
+    : impl_(move(package.impl_)) { }
 
 
-Package& Package::operator = (const Package& package) {
-  impl_->release();
-  impl_ = package.impl_;
-  impl_->retain();
+Package& Package::operator = (Package&& package) {
+  impl_ = move(package.impl_);
   return *this;
 }
 
 
-Package::~Package() {
-  impl_->release();
+Package::~Package() { }
+
+
+Package::operator bool () const {
+  return static_cast<bool>(impl_);
 }
 
 
-Function Package::entryFunction() {
-  i::VM::Scope vmScope(impl_->vm());
-  i::Persistent<i::Function> function(impl_->vm(), impl_->package()->entryFunction());
-  if (!function)
-    throw Error("this package does not have an entry function");
-  return Function(new Function::Impl(impl_->vm(), function));
+bool Package::operator ! () const {
+  return !impl_;
 }
+
+
+Function Package::entryFunction() const {
+  API_CHECK_SELF(Package);
+  i::Function* function = impl_->package->entryFunction();
+  if (function == nullptr) {
+    return Function(nullptr);
+  }
+  return Function(new Function::Impl(i::Persistent<i::Function>(function)));
+}
+
+
+Function::Function() { }
 
 
 Function::Function(Impl* impl)
     : impl_(impl) { }
 
 
-Function::Function(const Function& function)
-    : impl_(function.impl_) {
-  impl_->retain();
-}
+Function::Function(Function&& function)
+    : impl_(move(function.impl_)) { }
 
 
-Function& Function::operator = (const Function& function) {
-  impl_->release();
-  impl_ = function.impl_;
-  impl_->retain();
+Function& Function::operator = (Function&& function) {
+  impl_ = move(function.impl_);
   return *this;
 }
 
 
-Function::~Function() {
-  impl_->release();
+Function::~Function() { }
+
+
+Function::operator bool () const {
+  return static_cast<bool>(impl_);
 }
 
 
-void Function::call(const Arguments& args) {
-  i::VM::Scope vmScope(impl_->vm());
-  API_CHECK(args.isComplete(), "not enough arguments");
-  try {
-    impl_->call(args.impl_->data(), impl_->function()->parameterTypes()->length());
-  } catch (i::Error& exn) {
-    throw Error(exn.message());
+bool Function::operator ! () const {
+  return !impl_;
+}
+
+
+CallBuilder::CallBuilder() { }
+
+
+CallBuilder::CallBuilder(const Function& function) {
+  API_CHECK(function.impl_, "not a valid function");
+  impl_ = unique_ptr<CallBuilder::Impl>(new Impl(function.impl_->function));
+}
+
+
+CallBuilder::CallBuilder(CallBuilder&& builder)
+    : impl_(move(builder.impl_)) { }
+
+
+CallBuilder& CallBuilder::operator = (CallBuilder&& builder) {
+  impl_ = move(builder.impl_);
+  return *this;
+}
+
+
+CallBuilder::~CallBuilder() { }
+
+
+CallBuilder::operator bool () const {
+  return static_cast<bool>(impl_);
+}
+
+
+bool CallBuilder::operator ! () const {
+  return !impl_;
+}
+
+
+CallBuilder& CallBuilder::argUnit() {
+  API_CHECK_SELF(CallBuilder);
+  impl_->argUnit();
+  return *this;
+}
+
+
+CallBuilder& CallBuilder::arg(bool value) {
+  API_CHECK_SELF(CallBuilder);
+  impl_->arg(value);
+  return *this;
+}
+
+
+CallBuilder& CallBuilder::arg(int8_t value) {
+  API_CHECK_SELF(CallBuilder);
+  impl_->arg(value);
+  return *this;
+}
+
+
+CallBuilder& CallBuilder::arg(int16_t value) {
+  API_CHECK_SELF(CallBuilder);
+  impl_->arg(value);
+  return *this;
+}
+
+
+CallBuilder& CallBuilder::arg(int32_t value) {
+  API_CHECK_SELF(CallBuilder);
+  impl_->arg(value);
+  return *this;
+}
+
+
+CallBuilder& CallBuilder::arg(int64_t value) {
+  API_CHECK_SELF(CallBuilder);
+  impl_->arg(value);
+  return *this;
+}
+
+
+CallBuilder& CallBuilder::arg(float value) {
+  API_CHECK_SELF(CallBuilder);
+  impl_->arg(value);
+  return *this;
+}
+
+
+CallBuilder& CallBuilder::arg(double value) {
+  API_CHECK_SELF(CallBuilder);
+  impl_->arg(value);
+  return *this;
+}
+
+
+CallBuilder& CallBuilder::arg(const String& value) {
+  API_CHECK_SELF(CallBuilder);
+  impl_->arg(value);
+  return *this;
+}
+
+
+void CallBuilder::call() {
+  API_CHECK_SELF(CallBuilder);
+  impl_->callForAny();
+}
+
+
+bool CallBuilder::callForBoolean() {
+  API_CHECK_SELF(CallBuilder);
+  return impl_->callForBoolean();
+}
+
+
+int8_t CallBuilder::callForI8() {
+  API_CHECK_SELF(CallBuilder);
+  return impl_->callForI8();
+}
+
+
+int16_t CallBuilder::callForI16() {
+  API_CHECK_SELF(CallBuilder);
+  return impl_->callForI16();
+}
+
+
+int32_t CallBuilder::callForI32() {
+  API_CHECK_SELF(CallBuilder);
+  return impl_->callForI32();
+}
+
+
+int64_t CallBuilder::callForI64() {
+  API_CHECK_SELF(CallBuilder);
+  return impl_->callForI64();
+}
+
+
+float CallBuilder::callForF32() {
+  API_CHECK_SELF(CallBuilder);
+  return impl_->callForF32();
+}
+
+
+double CallBuilder::callForF64() {
+  API_CHECK_SELF(CallBuilder);
+  return impl_->callForF64();
+}
+
+
+String CallBuilder::callForString() {
+  API_CHECK_SELF(CallBuilder);
+  return impl_->callForString();
+}
+
+
+void CallBuilder::Impl::arg(const String& value) {
+  API_CHECK(value, "not a valid String reference");
+  i::Persistent<i::Type> type(vm_->roots()->getBuiltinType(i::BUILTIN_STRING_CLASS_ID));
+  args_.push_back(Value(move(type), value.impl_->str));
+}
+
+
+void CallBuilder::Impl::arg(const Object& value) {
+  API_CHECK(value, "not a valid Object reference");
+  i::Persistent<i::Type> type(i::Type::rootClassType(vm_->roots()));
+  args_.push_back(Value(move(type), value.impl_->obj));
+}
+
+
+void CallBuilder::Impl::callForAny() {
+  call();
+}
+
+
+bool CallBuilder::Impl::callForBoolean() {
+  API_CHECK(function_->returnType()->form() == i::Type::BOOLEAN_TYPE,
+      "wrong function return type");
+  return static_cast<bool>(call());
+}
+
+
+int8_t CallBuilder::Impl::callForI8() {
+  API_CHECK(function_->returnType()->form() == i::Type::I8_TYPE,
+      "wrong function return type");
+  return static_cast<int8_t>(call());
+}
+
+
+int16_t CallBuilder::Impl::callForI16() {
+  API_CHECK(function_->returnType()->form() == i::Type::I16_TYPE,
+      "wrong function return type");
+  return static_cast<int16_t>(call());
+}
+
+
+int32_t CallBuilder::Impl::callForI32() {
+  API_CHECK(function_->returnType()->form() == i::Type::I32_TYPE,
+      "wrong function return type");
+  return static_cast<int32_t>(call());
+}
+
+
+int64_t CallBuilder::Impl::callForI64() {
+  API_CHECK(function_->returnType()->form() == i::Type::I64_TYPE,
+      "wrong function return type");
+  return static_cast<int64_t>(call());
+}
+
+
+float CallBuilder::Impl::callForF32() {
+  API_CHECK(function_->returnType()->form() == i::Type::F32_TYPE,
+      "wrong function return type");
+  return i::f32FromBits(static_cast<i::u32>(call()));
+}
+
+
+double CallBuilder::Impl::callForF64() {
+  API_CHECK(function_->returnType()->form() == i::Type::F64_TYPE,
+      "wrong function return type");
+  return i::f64FromBits(static_cast<i::u64>(call()));
+}
+
+
+String CallBuilder::Impl::callForString() {
+  API_CHECK(function_->returnType()->equals(
+          vm_->roots()->getBuiltinType(i::BUILTIN_STRING_CLASS_ID)),
+      "wrong function return type");
+  i::i64 stringPtrBits = call();
+  i::AllowAllocationScope allowAlloc(vm_->heap(), false);
+  i::String* rawString = reinterpret_cast<i::String*>(static_cast<i::word_t>(stringPtrBits));
+  return String(rawString != nullptr
+      ? new String::Impl(i::Persistent<i::String>(rawString))
+      : nullptr);
+}
+
+
+Object CallBuilder::Impl::callForObject() {
+  API_CHECK(function_->returnType()->isRootClass(), "wrong function return type");
+  i::i64 objPtrBits = call();
+  i::AllowAllocationScope allowAlloc(vm_->heap(), false);
+  i::Object* rawObject = reinterpret_cast<i::Object*>(static_cast<i::word_t>(objPtrBits));
+  return Object(rawObject != nullptr
+      ? new Object::Impl(i::Persistent<i::Object>(rawObject))
+      : nullptr);
+}
+
+
+i::i64 CallBuilder::Impl::call() {
+  // Check arguments.
+  i::HandleScope handleScope(vm_);
+  API_CHECK(args_.size() == function_->parameterTypes()->length(), "wrong number of arguments");
+  for (i::length_t i = 0; i < args_.size(); i++) {
+    if (args_[i].tag == OBJECT) {
+      args_[i].type = i::Object::typeof(args_[i].object);
+    }
+    API_CHECK(i::Type::isSubtypeOf(args_[i].type, handle(function_->parameterTypes()->get(i))),
+        "type error");
   }
+
+  // Push arguments onto the stack.
+  i::AllowAllocationScope denyAlloc(vm_->heap(), false);
+  const i::Persistent<i::Stack>& stack = vm_->stack();
+  for (auto& arg : args_) {
+    if (arg.tag == OBJECT) {
+      stack->push(arg.object);
+    } else {
+      stack->push(arg.primitive);
+    }
+  }
+
+  // Perform the call.
+  i::Interpreter interpreter(vm_, vm_->stack());
+  return interpreter.call(function_);
 }
 
 
-#define DEFINE_CALL(ctype, typename, cast)                                                     \
-ctype Function::callFor##typename(const Arguments& args) {                                     \
-  i::VM::Scope vmScope(impl_->vm());                                                           \
-  API_CHECK(impl_->function()->returnType()->is##typename(), "type error");                    \
-  API_CHECK(args.isComplete(), "not enough arguments");                                        \
-  i::i64 result = i::kNotSet;                                                                  \
-  try {                                                                                        \
-    result = impl_->call(args.impl_->data(), impl_->function()->parameterTypes()->length());   \
-  } catch (i::Error& exn) {                                                                    \
-    throw Error(exn.message());                                                                \
-  }                                                                                            \
-  return cast(result);                                                                         \
-}                                                                                              \
-
-DEFINE_CALL(bool, Boolean, static_cast<bool>)
-DEFINE_CALL(int8_t, I8, static_cast<int8_t>)
-DEFINE_CALL(int16_t, I16, static_cast<int16_t>)
-DEFINE_CALL(int32_t, I32, static_cast<int32_t>)
-DEFINE_CALL(int64_t, I64, static_cast<int64_t>)
-DEFINE_CALL(float, F32, i::f32FromBits)
-DEFINE_CALL(double, F64, i::f64FromBits)
-
-#undef DEFINE_CALL
+Name::Name() { }
 
 
-Arguments::Arguments(const Function& function)
-    : impl_(new Impl(function.impl_->vm(), function.impl_->function())) {}
-
-
-Arguments::Arguments(const Arguments& arguments)
-    : impl_(arguments.impl_) {
-  impl_->retain();
-}
-
-
-Arguments::~Arguments() {
-  impl_->release();
-}
-
-
-Arguments& Arguments::operator = (const Arguments& arguments) {
-  impl_->release();
-  impl_ = arguments.impl_;
-  impl_->retain();
-  return *this;
-}
-
-
-void Arguments::pushBoolean(bool arg) {
-  API_CHECK(impl_->nextType()->isBoolean(), "type error");
-  impl_->push(arg);
-}
-
-
-void Arguments::pushI8(int8_t arg) {
-  API_CHECK(impl_->nextType()->isI8(), "type error");
-  impl_->push(arg);
-}
-
-
-void Arguments::pushI16(int16_t arg) {
-  API_CHECK(impl_->nextType()->isI16(), "type error");
-  impl_->push(arg);
-}
-
-
-void Arguments::pushI32(int32_t arg) {
-  API_CHECK(impl_->nextType()->isI32(), "type error");
-  impl_->push(arg);
-}
-
-
-void Arguments::pushI64(int64_t arg) {
-  API_CHECK(impl_->nextType()->isI64(), "type error");
-  impl_->push(arg);
-}
-
-
-void Arguments::pushF32(float arg) {
-  API_CHECK(impl_->nextType()->isF32(), "type error");
-  impl_->push(arg);
-}
-
-
-void Arguments::pushF64(double arg) {
-  API_CHECK(impl_->nextType()->isF64(), "type error");
-  impl_->push(arg);
-}
-
-
-bool Arguments::isComplete() const {
-  return impl_->isComplete();
-}
-
-
-Error::Error(const void* impl)
+Name::Name(Impl* impl)
     : impl_(impl) { }
 
 
-Error::~Error() {
+Name::Name(Name&& name)
+    : impl_(move(name.impl_)) { }
+
+
+Name& Name::operator = (Name&& name) {
+  impl_ = move(name.impl_);
+  return *this;
+}
+
+
+Name::~Name() { }
+
+
+Name::operator bool () const {
+  return static_cast<bool>(impl_);
+}
+
+
+bool Name::operator ! () const {
+  return !impl_;
+}
+
+
+Name Name::fromStringForDefn(const String& str) {
+  API_CHECK(str.impl_ != nullptr, "string argument does not reference a string");
+  const i::Persistent<i::String>& istr = str.impl_->str;
+  i::VM* vm = i::VM::fromAddress(*istr);
+  i::HandleScope handleScope(vm);
+  i::Local<i::Name> iname = i::Name::fromString(vm->heap(), istr, i::Name::DEFN_NAME);
+  API_CHECK(iname, "string argument is not a valid name for definitions");
+  return Name(new Name::Impl(i::Persistent<i::Name>(iname)));
+}
+
+
+Name Name::fromStringForPackage(const String& str) {
+  API_CHECK(str.impl_ != nullptr, "string argument does not reference a string");
+  const i::Persistent<i::String>& istr = str.impl_->str;
+  i::VM* vm = i::VM::fromAddress(*istr);
+  i::AllowAllocationScope allowAlloc(vm->heap(), true);
+  i::HandleScope handleScope(vm);
+  i::Local<i::Name> iname = i::Name::fromString(vm->heap(), istr, i::Name::PACKAGE_NAME);
+  API_CHECK(iname, "string argument is not a valid name for packages");
+  return Name(new Name::Impl(i::Persistent<i::Name>(iname)));
+}
+
+
+String::String() { }
+
+
+String::String(Impl* impl)
+    : impl_(impl) { }
+
+
+String::String(VM& vm, const string& str) {
+  auto heap = vm.impl_->vm.heap();
+  i::AllowAllocationScope allowAlloc(heap, true);
+  i::HandleScope handleScope(&vm.impl_->vm);
+  i::Local<i::String> istr = i::String::fromUtf8String(heap, str);
+  impl_.reset(new Impl(istr));
+}
+
+
+String::String(String&& str)
+    : impl_(move(str.impl_)) { }
+
+
+String& String::operator = (String&& str) {
+  impl_ = move(str.impl_);
+  return *this;
+}
+
+
+String::~String() { }
+
+
+String::operator bool () const {
+  return static_cast<bool>(impl_);
+}
+
+
+bool String::operator ! () const {
+  return !impl_;
+}
+
+
+string String::toStdString() const {
+  return impl_->str->toUtf8StlString();
+}
+
+
+Object::Object() { }
+
+
+Object::Object(Impl* impl)
+    : impl_(impl) { }
+
+
+Object::Object(Object&& obj)
+    : impl_(move(obj.impl_)) { }
+
+
+Object& Object::operator = (Object&& obj) {
+  impl_ = move(obj.impl_);
+  return *this;
+}
+
+
+Object::~Object() { }
+
+
+Error::Error() { }
+
+
+Object::operator bool () const {
+  return static_cast<bool>(impl_);
+}
+
+
+bool Object::operator ! () const {
+  return !impl_;
+}
+
+
+Error::Error(Impl* impl)
+    : impl_(impl) { }
+
+
+Error::Error(Error&& error)
+    : impl_(move(error.impl_)) { }
+
+
+Error& Error::operator = (Error&& error) {
+  impl_ = move(error.impl_);
+  return *this;
+}
+
+
+Error::~Error() { }
+
+
+Error::operator bool () const {
+  return static_cast<bool>(impl_);
+}
+
+
+bool Error::operator ! () const {
+  return !impl_;
 }
 
 
 const char* Error::message() const {
-  return reinterpret_cast<const char*>(impl_);
+  return impl_->message.c_str();
 }
 
 }

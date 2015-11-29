@@ -7,6 +7,9 @@
 #ifndef utils_h
 #define utils_h
 
+#include <string>
+#include <vector>
+
 #include <cstddef>
 #include <cstdint>
 
@@ -226,6 +229,9 @@ inline f64 f64FromBits(u64 bits) {
   cast.from = bits;
   return cast.to;
 }
+
+
+std::vector<std::string> split(const std::string& str, char delim);
 
 
 const u32 UTF8_DECODE_ERROR = 0xffffffffU;

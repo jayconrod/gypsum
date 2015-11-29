@@ -1,10 +1,5 @@
 // This is a simple Gypsum program.
-// You can compile it with this command:
-//   ../compiler/compiler list.gy -o list.csp
-// You can run it with this command:
-//   ../vm/out/debug/driver list.csp
-// (If you haven't built the VM yet, run this first):
-//   (cd ../vm; make -j)
+// See README.md for instructions for building and running.
 
 // This program sorts a linked list using a generic merge sort algorithm. This
 // is a more advanced example, which demonstrates two useful aspects of the

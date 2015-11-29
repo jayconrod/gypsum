@@ -36,24 +36,21 @@ Block** HandleStorage::createLocal(Block* block) {
 }
 
 
-void HandleStorage::createPersistent(Block* block, Block*** out_slot, size_t* out_index) {
+void HandleStorage::createPersistent(Block* block, Block*** out_slot) {
   if (persistentFreeList_.empty()) {
-    *out_index = persistentSlots_.size();
     persistentSlots_.push_back(block);
     *out_slot = &persistentSlots_.back();
   } else {
-    *out_index = persistentFreeList_.back();
+    *out_slot = persistentFreeList_.back();
     persistentFreeList_.pop_back();
-    *out_slot = &persistentSlots_[*out_index];
+    **out_slot = block;
   }
-  **out_slot = block;
 }
 
 
-void HandleStorage::destroyPersistent(size_t index) {
-  ASSERT(index < persistentSlots_.size());
-  persistentSlots_[index] = nullptr;
-  persistentFreeList_.push_back(index);
+void HandleStorage::destroyPersistent(Block** slot) {
+  *slot = nullptr;
+  persistentFreeList_.push_back(slot);
 }
 
 

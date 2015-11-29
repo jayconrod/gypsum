@@ -86,7 +86,7 @@ class Local: public Handle<T> {
 template <class T>
 class Persistent: public Handle<T> {
  public:
-  Persistent();
+  Persistent() {}
   template <class S>
   explicit Persistent(S* block);
   template <class S>
@@ -106,11 +106,14 @@ class Persistent: public Handle<T> {
 
  private:
   void release();
-  size_t index_;
 
   template <class S>
   friend class Persistent;
 };
+
+
+static_assert(sizeof(Persistent<Block>) == sizeof(void*),
+    "Persistent is not size of pointer");
 
 
 template <class T>
@@ -136,10 +139,10 @@ class HandleStorage {
   Block** createLocal(Block* block);
   template <class T>
   T** createLocal(T* block);
-  void createPersistent(Block* block, Block*** out_slot, size_t* out_index);
+  void createPersistent(Block* block, Block*** out_slot);
   template <class T>
-  void createPersistent(T* block, T*** out_slot, size_t* out_index);
-  void destroyPersistent(size_t index);
+  void createPersistent(T* block, T*** out_slot);
+  void destroyPersistent(Block** slot);
 
   class iterator: public std::iterator<std::input_iterator_tag, Block**> {
    public:
@@ -178,7 +181,7 @@ class HandleStorage {
   // We don't insert at the beginning.
   std::deque<Block*> localSlots_;
   std::deque<Block*> persistentSlots_;
-  std::vector<size_t> persistentFreeList_;
+  std::deque<Block**> persistentFreeList_;
 
   friend class GC;
   friend class HandleScope;
@@ -343,14 +346,9 @@ void Local<T>::clear() {
 
 
 template <class T>
-Persistent<T>::Persistent()
-    : index_(kNotSet) { }
-
-
-template <class T>
 template <class S>
 Persistent<T>::Persistent(S* block) {
-  HandleStorage::fromBlock(block)->createPersistent(block, &this->slot_, &index_);
+  HandleStorage::fromBlock(block)->createPersistent(block, &this->slot_);
   CHECK_SUBTYPE_VALUE(T*, block);
 }
 
@@ -358,36 +356,32 @@ Persistent<T>::Persistent(S* block) {
 template <class T>
 template <class S>
 Persistent<T>::Persistent(VM* vm, S* block) {
-  HandleStorage::fromVM(vm)->createPersistent(block, &this->slot_, &index_);
+  HandleStorage::fromVM(vm)->createPersistent(block, &this->slot_);
   CHECK_SUBTYPE_VALUE(T*, block);
 }
 
 
 template <class T>
-Persistent<T>::Persistent(const Persistent<T>& persistent)
-    : index_(kNotSet) {
+Persistent<T>::Persistent(const Persistent<T>& persistent) {
   if (persistent) {
-    HandleStorage::fromBlock(*persistent)->createPersistent(*persistent, &this->slot_, &index_);
+    HandleStorage::fromBlock(*persistent)->createPersistent(*persistent, &this->slot_);
   }
 }
 
 
 template <class T>
 template <class S>
-Persistent<T>::Persistent(const Handle<S>& handle)
-    : index_(kNotSet) {
+Persistent<T>::Persistent(const Handle<S>& handle) {
   if (handle)
-    HandleStorage::fromBlock(*handle)->createPersistent(*handle, &this->slot_, &index_);
+    HandleStorage::fromBlock(*handle)->createPersistent(*handle, &this->slot_);
   CHECK_SUBTYPE_VALUE(T*, *handle);
 }
 
 
 template <class T>
 Persistent<T>::Persistent(Persistent<T>&& persistent)
-    : Handle<T>(persistent.slot_),
-      index_(persistent.index_) {
+    : Handle<T>(persistent.slot_) {
   persistent.slot_ = nullptr;
-  persistent.index_ = kNotSet;
 }
 
 
@@ -401,7 +395,7 @@ template <class T>
 Persistent<T>& Persistent<T>::operator = (const Persistent<T>& persistent) {
   release();
   if (persistent) {
-    HandleStorage::fromBlock(*persistent)->createPersistent(*persistent, &this->slot_, &index_);
+    HandleStorage::fromBlock(*persistent)->createPersistent(*persistent, &this->slot_);
   }
   return *this;
 }
@@ -412,7 +406,7 @@ template <class S>
 Persistent<T>& Persistent<T>::operator = (const Handle<S>& handle) {
   if (this->isEmpty()) {
     if (handle)
-      HandleStorage::fromBlock(*handle)->createPersistent(*handle, &this->slot_, &index_);
+      HandleStorage::fromBlock(*handle)->createPersistent(*handle, &this->slot_);
   } else {
     if (handle) {
       *this->slot_ = *handle;
@@ -428,9 +422,7 @@ template <class T>
 Persistent<T>& Persistent<T>::operator = (Persistent<T>&& persistent) {
   release();
   this->slot_ = persistent.slot_;
-  index_ = persistent.index_;
   persistent.slot_ = nullptr;
-  persistent.index_ = kNotSet;
   return *this;
 }
 
@@ -445,10 +437,10 @@ void Persistent<T>::set(S* block) {
 
 template <class T>
 void Persistent<T>::release() {
-  if (index_ == kNotSet)
+  auto slot = reinterpret_cast<Block**>(this->slot_);
+  if (slot == nullptr)
     return;
-  HandleStorage::fromBlock(*this->slot_)->destroyPersistent(index_);
-  index_ = kNotSet;
+  HandleStorage::fromBlock(*slot)->destroyPersistent(slot);
   this->slot_ = nullptr;
 }
 
@@ -463,12 +455,10 @@ T** HandleStorage::createLocal(T* block) {
 
 
 template <class T>
-void HandleStorage::createPersistent(T* block, T*** out_slot, size_t* out_index) {
+void HandleStorage::createPersistent(T* block, T*** out_slot) {
   ASSERT(block != nullptr);
   CHECK_SUBTYPE_VALUE(Block*, block);
-  createPersistent(reinterpret_cast<Block*>(block),
-                   reinterpret_cast<Block***>(out_slot),
-                   out_index);
+  createPersistent(reinterpret_cast<Block*>(block), reinterpret_cast<Block***>(out_slot));
 }
 
 

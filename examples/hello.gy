@@ -1,10 +1,5 @@
 // This is a simple Gypsum program.
-// You can compile it with this command:
-//   ../compiler/compiler hello.gy -o hello.csp
-// You can run it with this command:
-//   ../vm/out/debug/driver hello.csp
-// (If you haven't built the VM yet, run this first):
-//   (cd ../vm; make -j)
+// See README.md for instructions for building and running.
 
 // All programs must have a `main` function, which takes no arguments. This is called
 // automatically when the program is run. We don't have to specify a return type for main,
