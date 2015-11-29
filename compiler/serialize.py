@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -127,8 +127,8 @@ class Serializer(object):
         self.writeOption(self.writeClassId, function.definingClass)
 
         assert function.blocks is not None or \
-               flags.ABSTRACT in function.flags or \
-               flags.EXTERN in function.flags
+               0 < len(frozenset([flags.ABSTRACT, flags.EXTERN, flags.NATIVE]) & function.flags)
+
         if function.blocks is not None:
             localsSize = 8 * len(filter(lambda v: v.kind is ir.LOCAL, function.variables))
             self.writeVbn(localsSize)

@@ -60,6 +60,7 @@ def _initialize():
     _flagGroups.append(frozenset([PUBLIC, PROTECTED, PRIVATE]))
     _flagGroups.append(frozenset([COVARIANT, CONTRAVARIANT]))
     _flagGroups.append(frozenset([ABSTRACT, FINAL]))
+    _flagGroups.append(frozenset([ABSTRACT, NATIVE]))
 _initialize()
 
 __all__ = ["getFlagByName", "checkFlagConflicts", "flagSetToFlagBits"] + \

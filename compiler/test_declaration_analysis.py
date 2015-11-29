@@ -313,6 +313,9 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
     def testFunctionMustHaveBody(self):
         self.assertRaises(ScopeException, self.analyzeFromSource, "def f: i64")
 
+    def testNativeFunctionMustNotHaveBody(self):
+        self.assertRaises(ScopeException, self.analyzeFromSource, "native def f = 12")
+
     def testFunctionMayNotBeAbstract(self):
         self.assertRaises(ScopeException, self.analyzeFromSource, "abstract def f: i64 = 12")
         self.assertRaises(ScopeException, self.analyzeFromSource, "abstract def f: i64")
@@ -332,6 +335,11 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.assertRaises(ScopeException, self.analyzeFromSource,
                           "abstract class C\n" +
                           "  abstract def f = 12")
+
+    def testNativeMethodMustNotHaveBody(self):
+        self.assertRaises(ScopeException, self.analyzeFromSource,
+                          "class C\n" + \
+                          "  native def f = 12")
 
     def testClassWithAbstractMethodMustBeAbstract(self):
         self.assertRaises(ScopeException, self.analyzeFromSource,
