@@ -75,6 +75,15 @@ Local<String> Name::toString(Heap* heap, const Handle<Name>& name) {
 }
 
 
+string Name::toStlString() {
+  string nameStr = components()->get(0)->toUtf8StlString();
+  for (length_t i = 1; i < components()->length(); i++) {
+    nameStr += "." + components()->get(i)->toUtf8StlString();
+  }
+  return nameStr;
+}
+
+
 int Name::compare(const Name* other) const {
   auto len = min(components()->length(), other->components()->length());
   for (length_t i = 0; i < len; i++) {

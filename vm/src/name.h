@@ -34,6 +34,7 @@ class Name: public Block {
 
   static Local<Name> fromString(Heap* heap, const Handle<String>& nameString, NameUsage usage);
   static Local<String> toString(Heap* heap, const Handle<Name>& name);
+  std::string toStlString();
 
   BlockArray<String>* components() const { return components_.get(); }
 

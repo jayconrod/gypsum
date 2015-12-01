@@ -12,6 +12,7 @@
 #include "block.h"
 #include "handle.h"
 #include "object.h"
+#include "platform.h"
 #include "utils.h"
 
 namespace codeswitch {
@@ -86,6 +87,9 @@ class Package: public Object {
     externTypes_.set(this, externTypes);
   }
 
+  NativeLibrary nativeLib() const { return nativeLib_; }
+  void setNativeLib(NativeLibrary nativeLib) { nativeLib_ = nativeLib; }
+
   static void link(const Handle<Package>& package);
 
  private:
@@ -104,6 +108,7 @@ class Package: public Object {
   length_t initFunctionIndex_;
   Ptr<ExportMap> exports_;
   Ptr<BlockArray<ExternTypeInfo>> externTypes_;
+  NativeLibrary nativeLib_;
   // Update PACKAGE_POINTER_LIST if pointers change.
 };
 
@@ -122,6 +127,7 @@ class PackageVersion: public Block {
   static Local<PackageVersion> create(Heap* heap, const Handle<I32Array>& components);
 
   static Local<PackageVersion> fromString(Heap* heap, const Handle<String>& versionString);
+  std::string toStlString();
 
   I32Array* components() const { return components_.get(); }
 

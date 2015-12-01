@@ -26,8 +26,41 @@ void releaseMemory(Address addr, size_t size);
  */
 std::vector<std::string> listDirectory(const std::string& path);
 
+/** The character that separates components in a path */
+extern const char kPathSeparator;
+
 /** Joins two components of a path, using a platform-specific separator, like `/`. */
 std::string pathJoin(const std::string& parent, const std::string& child);
+
+/** Returns the name of the directory that contains the given path */
+std::string pathDirName(const std::string& path);
+
+/** Handle for a native library */
+typedef void* NativeLibrary;
+
+/** Handle for a native function */
+typedef void* NativeFunction;
+
+/** Prefix string for native library file names (for example, "lib") */
+extern const char* kNativeLibraryPrefix;
+
+/** Extension for native library file names (for example ".so") */
+extern const char* kNativeLibrarySuffix;
+
+/** Loads a native library (.so, .dylib, .dll, etc) at the given location */
+NativeLibrary loadNativeLibrary(const std::string& path);
+
+/**
+ * Unloads a native library from memory. Functions loaded from this library will not be
+ * valid after this.
+ */
+void unloadNativeLibrary(NativeLibrary library);
+
+/**
+ * Loads a function from the library. An exception will be thrown in the function can't
+ * be found.
+ */
+NativeFunction loadNativeFunction(NativeLibrary library, const std::string& name);
 
 }
 }

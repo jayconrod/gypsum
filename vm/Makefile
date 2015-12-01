@@ -10,6 +10,7 @@ MKTEST := $(TEST_SRC_DIR)/mktest.py
 # Additional flags
 DEFINES += -DWORDSIZE=64 -DPAGESIZE=4096
 INCLUDES += -I$(INCLUDE_DIR) $(addprefix -iquote,$(LIB_SRC_DIR) $(TEST_SRC_DIR) $(GEN_DIR))
+LIBS := -ldl
 
 # Sources and intermediates
 csp_packages = $(addprefix $(GEN_DIR)/,$(addsuffix .csp,$(notdir $(basename $1))))
@@ -80,7 +81,7 @@ doc-vm-api: $(INCLUDE_DIR)/Doxyfile $(wildcard $(INCLUDE_DIR)/*.h)
 	@echo CodeSwitch API document written to $(DOC_DIR)/vm-api/
 
 $(PROGRAMS) $(TEST):
-	$(CXX_LINK_EXEC) $(LDFLAGS) $^ -o $@
+	$(CXX_LINK_EXEC) $(LDFLAGS) $^ $(LIBS) -o $@
 
 $(LIB):
 	$(CXX_LINK_STATIC) $@ $^

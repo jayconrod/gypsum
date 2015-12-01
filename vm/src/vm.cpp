@@ -226,7 +226,7 @@ void VM::loadPackageDependenciesAndInitialize(const Handle<Package>& package) {
         // Search the file system for the package and load it.
         auto depFileName = searchForPackage(dep);
         if (depFileName.empty()) {
-          throw Error("could not find package");
+          throw Error("could not find package: " + dep->name()->toStlString());
         }
 
         depPackage = Package::loadFromFile(this, depFileName);

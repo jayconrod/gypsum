@@ -108,8 +108,9 @@ class Loader {
 
 class PackageLoader: public Loader {
  public:
-  PackageLoader(VM* vm, istream& stream)
-      : Loader(vm, stream) { }
+  PackageLoader(VM* vm, istream& stream, const std::string& dirName = "")
+      : Loader(vm, stream),
+        dirName_(dirName) { }
 
   Local<Package> load();
 
@@ -122,6 +123,9 @@ class PackageLoader: public Loader {
   static const u32 kMagic = 0x676b7073;
 
   Local<PackageDependency> readDependencyHeader();
+  void loadNativeLibrary();
+
+  std::string dirName_;
 };
 
 
@@ -164,7 +168,8 @@ Package::Package(VM* vm)
                       reinterpret_cast<BlockArray<TypeParameter>*>(
                           vm->roots()->emptyBlockArray())),
       entryFunctionIndex_(kIndexNotSet),
-      initFunctionIndex_(kIndexNotSet) { }
+      initFunctionIndex_(kIndexNotSet),
+      nativeLib_(nullptr) { }
 
 
 Local<Package> Package::create(Heap* heap) {
@@ -173,11 +178,20 @@ Local<Package> Package::create(Heap* heap) {
 
 
 Local<Package> Package::loadFromFile(VM* vm, const string& fileName) {
+  // Find the parent directory.
+  string dirName = pathDirName(fileName);
+
+  // Open the package file.
   ifstream file(fileName.c_str(), ios::binary);
   if (!file.good())
     throw Error("could not open package file");
   file.exceptions(ios::failbit | ios::badbit | ios::eofbit);
-  auto package = loadFromStream(vm, file);
+
+  // Load it.
+  PackageLoader loader(vm, file, dirName);
+  auto package = loader.load();
+
+  // Check that there's no garbage at the end of the file.
   auto pos = file.tellg();
   file.seekg(0, ios::end);
   if (pos != file.tellg())
@@ -419,7 +433,8 @@ ostream& operator << (ostream& os, const Package* pkg) {
      << "\n  entry function index: " << pkg->entryFunctionIndex()
      << "\n  init function index: " << pkg->initFunctionIndex()
      << "\n  exports: " << brief(pkg->exports())
-     << "\n  externTypes: " << brief(pkg->externTypes());
+     << "\n  externTypes: " << brief(pkg->externTypes())
+     << "\n  nativeLib: " << pkg->nativeLib();
   return os;
 }
 
@@ -467,6 +482,15 @@ Local<PackageVersion> PackageVersion::fromString(Heap* heap,
   }
 
   return create(heap, components);
+}
+
+
+string PackageVersion::toStlString() {
+  string versionStr = to_string(components()->get(0));
+  for (length_t i = 1; i < components()->length(); i++) {
+    versionStr += "." + to_string(components()->get(i));
+  }
+  return versionStr;
 }
 
 
@@ -1169,9 +1193,11 @@ Local<Package> PackageLoader::load() {
       auto global = readGlobal();
       globalArray->set(i, *global);
     }
+    bool hasNativeFunctions = false;
     for (length_t i = 0; i < functionCount; i++) {
       auto function = readFunction();
       functionArray->set(i, *function);
+      hasNativeFunctions |= (NATIVE_FLAG & function->flags()) != 0;
     }
     for (length_t i = 0; i < classCount; i++) {
       auto clas = handle(classArray->get(i));
@@ -1193,6 +1219,10 @@ Local<Package> PackageLoader::load() {
       externTypesArray->set(i, *externTypes_[i]);
     }
     package_->setExternTypes(*externTypesArray);
+
+    if (hasNativeFunctions) {
+      loadNativeLibrary();
+    }
   } catch (istream::failure exn) {
     throw Error("error reading package");
   }
@@ -1289,6 +1319,20 @@ Local<PackageDependency> PackageLoader::readDependencyHeader() {
   }
 
   return dep;
+}
+
+
+void PackageLoader::loadNativeLibrary() {
+  if (dirName_.empty()) {
+    throw Error("cannot load native library; directory is unknown");
+  }
+  auto packageNameStr = package_->name()->toStlString();
+  auto packageVersionStr = package_->version()->toStlString();
+  auto libName = string(kNativeLibraryPrefix) + packageNameStr + "-" +
+      packageVersionStr + kNativeLibrarySuffix;
+  auto libPath = pathJoin(dirName_, libName);
+  auto lib = codeswitch::internal::loadNativeLibrary(libPath);
+  package_->setNativeLib(lib);
 }
 
 
