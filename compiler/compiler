@@ -14,6 +14,7 @@ import re
 import sys
 
 import ast
+from tok import NEWLINE, SPACE, COMMENT
 from location import NoLoc
 from ids import AstId, TARGET_PACKAGE_ID
 from ir import Package, PackageVersion, PackageDependency, Name
