@@ -9,7 +9,7 @@ import std.Option, Some, None
 
 def add-string(opt: Option[String], suffix: String) =
   match (opt)
-    case Some[String](prefix) => Some[String](prefix + suffix)
+    case Some[Object](prefix: String) => Some[String](prefix + suffix)
     case None => None
 
 def main =
