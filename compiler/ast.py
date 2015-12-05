@@ -475,9 +475,9 @@ class TupleType(Type):
         return self.types
 
 
-class ErasedType(Type):
+class BlankType(Type):
     def __repr__(self):
-        return "ErasedType"
+        return "BlankType"
 
 
 class Expression(Node):

@@ -206,7 +206,7 @@ class TypeVisitorBase(ast.NodeVisitor):
         flags = frozenset(map(astTypeFlagToIrTypeFlag, node.flags))
         return ir_t.ClassType(clas, types, flags)
 
-    def visitErasedType(self, node):
+    def visitBlankType(self, node):
         raise TypeException(node.location, "erased type can only be used as a type argument")
 
     def visitIntegerLiteral(self, node):
@@ -307,7 +307,7 @@ class TypeVisitorBase(ast.NodeVisitor):
         raise NotImplementedError
 
     def buildClassTypeArg(self, irParam, node):
-        if isinstance(node, ast.ErasedType):
+        if isinstance(node, ast.BlankType):
             return ir_t.VariableType(irParam)
         else:
             return self.visit(node)

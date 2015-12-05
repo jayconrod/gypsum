@@ -291,7 +291,7 @@ class TestParser(unittest.TestCase):
 
     def testImportBlank(self):
         self.checkParse(astImportStatement([astScopePrefixComponent("foo", None),
-                                            astScopePrefixComponent("bar", [astErasedType()])],
+                                            astScopePrefixComponent("bar", [astBlankType()])],
                                            None),
                         importStmt(),
                         "import foo.bar[_]._;")
@@ -388,7 +388,7 @@ class TestParser(unittest.TestCase):
 
     def testDestructurePatternAdvanced(self):
         self.checkParse(astDestructurePattern([astScopePrefixComponent("foo", None),
-                                               astScopePrefixComponent("Bar", [astErasedType()])],
+                                               astScopePrefixComponent("Bar", [astBlankType()])],
                                               [astVariablePattern("x", None),
                                                astVariablePattern("y", None)]),
                         pattern(), "foo.Bar[_](x, y)")
@@ -523,8 +523,8 @@ class TestParser(unittest.TestCase):
                         ty(),
                         "(A, B[C])?")
 
-    def testErasedType(self):
-        self.checkParse(astErasedType(), ty(), "_")
+    def testBlankType(self):
+        self.checkParse(astBlankType(), ty(), "_")
 
     # Expressions
     def testIntExpr(self):

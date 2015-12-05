@@ -1336,16 +1336,16 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "var g: (i64, i64)"
         self.assertRaises(TypeException, self.analyzeFromSource, source, name=STD_NAME)
 
-    def testErasedTypeAlone(self):
+    def testBlankTypeAlone(self):
         source = "var g: _"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
-    def testErasedTypeFunctionArg(self):
+    def testBlankTypeFunctionArg(self):
         source = "def f[static T] = {}\n" + \
                  "var g = f[_]"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
-    def testErasedTypeClassArg(self):
+    def testBlankTypeClassArg(self):
         source = "class Foo[static T <: String]\n" + \
                  "var g: Foo[_]"
         info = self.analyzeFromSource(source)

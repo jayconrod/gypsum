@@ -956,7 +956,7 @@ class TestCompiler(TestCaseWithDefinitions):
                            variables=[self.makeVariable("f.y", type=I64Type,
                                                         kind=LOCAL, flags=frozenset([LET]))]))
 
-    def testMatchExprWithVarWithErasedTypeArg(self):
+    def testMatchExprWithVarWithBlankTypeArg(self):
         source = "class Foo[static T]\n" + \
                  "def f(x: Object) =\n" + \
                  "  match (x)\n" + \

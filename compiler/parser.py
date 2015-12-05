@@ -284,7 +284,7 @@ def ty():
            (keyword("f32") ^ (lambda _, loc: ast.F32Type(loc))) | \
            (keyword("f64") ^ (lambda _, loc: ast.F64Type(loc))) | \
            (keyword("boolean") ^ (lambda _, loc: ast.BooleanType(loc))) | \
-           (keyword("_") ^ (lambda _, loc: ast.ErasedType(loc))) | \
+           (keyword("_") ^ (lambda _, loc: ast.BlankType(loc))) | \
            tupleType() | \
            classType()
 
