@@ -22,6 +22,9 @@ class Node(object):
         printer.visit(self)
         return buf.getvalue()
 
+    def tag(self):
+        return self.__class__.__name__
+
     def __eq__(self, other):
         return isinstance(other, self.__class__) and \
             all(v == other.__dict__[k] for k, v in self.__dict__.iteritems() if k != "location")
@@ -478,6 +481,19 @@ class TupleType(Type):
 class BlankType(Type):
     def __repr__(self):
         return "BlankType"
+
+
+class ExistentialType(Type):
+    def __init__(self, typeParameters, type, location):
+        super(ExistentialType, self).__init__(location)
+        self.typeParameters = typeParameters
+        self.type = type
+
+    def __repr__(self):
+        return "ExistentialType(%s, %s)" % (repr(self.parameters), repr(self.type))
+
+    def children(self):
+        return [self.typeParameters] + [self.type]
 
 
 class Expression(Node):

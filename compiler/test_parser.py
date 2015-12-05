@@ -526,6 +526,15 @@ class TestParser(unittest.TestCase):
     def testBlankType(self):
         self.checkParse(astBlankType(), ty(), "_")
 
+    def testExistentialType(self):
+        self.checkParse(astExistentialType([astTypeParameter([], None, "T1",
+                                                             astClassType([], "U", [], set()),
+                                                             astClassType([], "L", [], set())),
+                                            astTypeParameter([], None, "T2", None, None)],
+                                           astClassType([], "T1", [], set())),
+                        ty(),
+                        "forsome [T1 <: U >: L, T2] T1")
+
     # Expressions
     def testIntExpr(self):
         values = [("-42", -42, 64),

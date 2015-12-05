@@ -276,6 +276,21 @@ def scopePrefixComponent():
 
 # Types
 def ty():
+    def process(parsed, loc):
+        parsed = ct.untangle(parsed)
+        if len(parsed) == 2:
+            return parsed[0]
+        else:
+            sty = parsed[0]
+            tps = parsed[3]
+            return ast.ExistentialType(sty, tps, loc)
+
+    return simpleType() + ct.Opt(keyword("forsome") + \
+        ct.Commit(keyword("[") + ct.Rep1Sep(ct.Lazy(typeParameter), keyword(",")) +
+        keyword("]"))) ^ process
+
+
+def ty():
     return (keyword("unit") ^ (lambda _, loc: ast.UnitType(loc))) | \
            (keyword("i8") ^ (lambda _, loc: ast.I8Type(loc))) | \
            (keyword("i16") ^ (lambda _, loc: ast.I16Type(loc))) | \
@@ -286,7 +301,8 @@ def ty():
            (keyword("boolean") ^ (lambda _, loc: ast.BooleanType(loc))) | \
            (keyword("_") ^ (lambda _, loc: ast.BlankType(loc))) | \
            tupleType() | \
-           classType()
+           classType() | \
+           existentialType()
 
 
 def tyOpt():
@@ -313,6 +329,15 @@ def classType():
         flags = set([nullFlag]) if nullFlag is not None else set()
         return ast.ClassType(prefix, name, typeArgs, flags, loc)
     return scopePrefix() + ct.Opt(ct.Reserved(OPERATOR, "?")) ^ process
+
+
+def existentialType():
+    def process(parsed, loc):
+        _, _, tps, _, ty = ct.untangle(parsed)
+        return ast.ExistentialType(tps, ty, loc)
+    return keyword("forsome") + ct.Commit(keyword("[") + \
+        ct.Rep1Sep(ct.Lazy(typeParameter), keyword(",")) + keyword("]") + \
+        ct.Lazy(ty)) ^ process
 
 
 def typeArguments():
