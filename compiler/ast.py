@@ -493,7 +493,7 @@ class ExistentialType(Type):
         return "ExistentialType(%s, %s)" % (repr(self.parameters), repr(self.type))
 
     def children(self):
-        return [self.typeParameters] + [self.type]
+        return self.typeParameters + [self.type]
 
 
 class Expression(Node):

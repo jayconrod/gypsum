@@ -416,6 +416,45 @@ class VariableType(ObjectType):
         return self.typeParameter.upperBound.substituteForBaseClass(base)
 
 
+class ExistentialType(ObjectType):
+    propertyNames = Type.propertyNames + ("variables", "ty")
+    width = bytecode.WORD
+
+    def __init__(self, variables, ty):
+        assert isinstance(variables, tuple) and \
+            all(isinstance(v, TypeParameter) for v in variables)
+        assert isinstance(ty, ObjectType)
+        super(ExistentialType, self).__init__(ty.flags)
+        self.variables = variables
+        self.ty = ty
+
+    def __str__(self):
+        return "forsome [%s] %s" % (", ".join(map(str, self.variables)), str(self.ty))
+
+    def __repr__(self):
+        return "ExistentialType(%s, %s)" % (repr(self.variables), repr(self.ty))
+
+    def __hash__(self):
+        return utils.hashList(self.variables + (ty,))
+
+    def __eq__(self, other):
+        return self.__class__ is other.__class__ and \
+            len(self.variables) == len(other.variables) and \
+            all(s.id is t.id for s, t in zip(self.variables, other.variables)) and \
+            self.ty == other.ty
+
+    def substitute(self, parameters, replacements):
+        subTy = self.ty.substitute(parameters, replacements)
+        return self if subTy == self.ty else ExistentialType(self.variables, subTy)
+
+    def substituteForBaseClass(self, base):
+        subTy = self.ty.substituteForBaseClass(base)
+        return self if subTy == self.ty else ExistentialType(self.variables, subTy)
+
+    def getTypeArguments(self):
+        return self.ty.getTypeArguments()
+
+
 def getClassFromType(ty):
     if isinstance(ty, ClassType):
         return ty.clas

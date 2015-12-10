@@ -494,6 +494,20 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                  "import Bar.f"
         self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
+    def testExistentialType(self):
+        source = "let x: forsome [X] X"
+        info = self.analyzeFromSource(source)
+        astType = info.ast.modules[0].definitions[0].pattern.ty
+        scope = info.getScope(astType)
+        self.assertTrue(isinstance(scope, ExistentialTypeScope))
+        X = info.getDefnInfo(astType.typeParameters[0]).irDefn
+        expected = self.makeTypeParameter(Name([EXISTENTIAL_SUFFIX, "X"]), flags=frozenset())
+        self.assertEquals(expected, X)
+
+    def testExistentialTypeWithFlags(self):
+        source = "let x: forsome [static +X] X"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
 
 class TestPackageScope(unittest.TestCase):
     def infoAndScopeWithPackageNames(self, args):

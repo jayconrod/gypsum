@@ -1043,6 +1043,13 @@ class Scope(ast.NodeVisitor):
         """
         raise NotImplementedError
 
+    def scopeForExistential(self, ast):
+        return self.getOrCreateScope(ir.EXISTENTIAL_SUFFIX, ast, self.newScopeForExistential)
+
+    def newScopeForExistential(self, prefix, ast):
+        """Creates a new scope for an existential type."""
+        return ExistentialTypeScope(prefix, ast, self)
+
     def getOrCreateScope(self, shortName, ast, create):
         if ast.id in self.childScopes:
             return self.childScopes[ast.id]
@@ -1523,6 +1530,60 @@ class ClassScope(Scope):
         return ClassScope(prefix, ast, self)
 
 
+class ExistentialTypeScope(Scope):
+    def __init__(self, prefix, ast, parent):
+        super(ExistentialTypeScope, self).__init__(prefix, ast, ScopeId(ast.id),
+                                                   parent, parent.info)
+
+    def createIrDefn(self, astDefn, astVarDefn):
+        flags = getFlagsFromAstDefn(astDefn, astVarDefn)
+        if isinstance(astDefn, ast.TypeParameter):
+            name = self.makeName(astDefn.name)
+            if len(flags) > 0:
+                raise ScopeException(astDefn.location, "invalid flags: %s" % ", ".join(flags))
+            irDefn = self.info.package.addTypeParameter(name, astDefn=astDefn, flags=flags)
+        else:
+            raise NotImplementedError
+
+        shouldBind = True
+        isVisible = False
+        return irDefn, shouldBind, isVisible
+
+    def isDefinedAutomatically(self, astDefn):
+        return True
+
+    def findEnclosingClass(self):
+        return None
+
+    def requiresCapture(self):
+        # Types in this scope may be used by inner (existential) scopes.
+        return False
+
+    def captureScopeContext(self):
+        # Nothing can be captured.
+        raise NotImplementedError
+
+    def captureInContext(self, defnInfo, irContextClass):
+        # Nothing can be captured.
+        raise NotImplementedError
+
+    def makeClosure(self):
+        # Nothing can be captured.
+        raise NotImplementedError
+
+    def newLocalScope(self, prefix, ast):
+        # Not syntactically possible.
+        raise NotImplementedError
+
+    def newScopeForFunction(self):
+        # Not syntactically possible.
+        raise NotImplementedError
+
+    def newScopeForClass(self):
+        # Not syntactically possible.
+        raise NotImplementedError
+
+
 class BuiltinGlobalScope(Scope):
     def __init__(self, parent):
         super(BuiltinGlobalScope, self).__init__([], None, BUILTIN_SCOPE_ID,
@@ -1734,6 +1795,11 @@ class ScopeVisitor(ast.NodeVisitor):
             visitor.visit(node.condition)
         visitor.visit(node.expression)
 
+    def visitExistentialType(self, node):
+        scope = self.scope.scopeForExistential(node)
+        visitor = self.createChildVisitor(scope)
+        visitor.visitChildren(node)
+
     def visitDefault(self, node, *args):
         self.visitChildren(node, *args)
 
@@ -1778,6 +1844,8 @@ class DeclarationVisitor(ScopeVisitor):
         super(DeclarationVisitor, self).visitParameter(node)
 
     def visitVariablePattern(self, node, astVarDefn):
+        if node.ty is not None:
+            self.visit(node.ty)
         self.scope.declare(node, astVarDefn)
 
 
