@@ -189,9 +189,13 @@ class TypeVisitorBase(ast.NodeVisitor):
                 assert len(prefixTypeArgs) == 0
                 implicitTypeParams = ir.getImplicitTypeParameters(irDefn)
                 prefixTypeArgs = map(ir_t.VariableType, implicitTypeParams)
-            explicitTypeArgs = self.handleClassTypeArgs(irDefn, node.typeArguments)
+            explicitTypeArgs, existentialTypeParams = \
+                self.handleClassTypeArgs(irDefn, node.typeArguments)
             typeArgs = tuple(prefixTypeArgs + list(explicitTypeArgs))
-            return ir_t.ClassType(irDefn, typeArgs, flags)
+            ty = ir_t.ClassType(irDefn, typeArgs, flags)
+            if len(existentialTypeParams) > 0:
+                ty = ir_t.ExistentialType(existentialTypeParams, ty)
+            return ty
         else:
             assert isinstance(irDefn, ir.TypeParameter)
             if len(node.typeArguments) > 0:
@@ -202,12 +206,15 @@ class TypeVisitorBase(ast.NodeVisitor):
 
     def visitTupleType(self, node):
         clas = self.info.getTupleClass(len(node.types), node.location)
-        types = self.handleClassTypeArgs(clas, node.types)
+        types, existentialTypeParams = self.handleClassTypeArgs(clas, node.types)
         flags = frozenset(map(astTypeFlagToIrTypeFlag, node.flags))
-        return ir_t.ClassType(clas, types, flags)
+        ty = ir_t.ClassType(clas, types, flags)
+        if len(existentialTypeParams) > 0:
+            ty = ir_t.ExistentialType(existentialTypeParams, ty)
+        return ty
 
     def visitBlankType(self, node):
-        raise TypeException(node.location, "erased type can only be used as a type argument")
+        raise TypeException(node.location, "blank type can only be used as a type argument")
 
     def visitExistentialType(self, node):
         variables = tuple(self.info.getDefnInfo(v).irDefn for v in node.typeParameters)
@@ -283,6 +290,10 @@ class TypeVisitorBase(ast.NodeVisitor):
                                         (component.name,
                                          len(explicitTypeParams),
                                          len(astTypeArgs)))
+                for astTypeArg in astTypeArgs:
+                    if isinstance(astTypeArg, ast.BlankType):
+                        raise TypeException(astTypeArg.location,
+                                            "blank type not allowed as scope prefix type argument")
                 if not hasPrefix:
                     # If this is the first prefix, the class is defined in a parent scope.
                     # There may be some type parameters defined in one of its parent scopes
@@ -290,7 +301,9 @@ class TypeVisitorBase(ast.NodeVisitor):
                     implicitTypeParams = ir.getImplicitTypeParameters(irDefn)
                     implicitTypeArgs = map(ir_t.VariableType, implicitTypeParams)
                     typeArgs.extend(implicitTypeArgs)
-                explicitTypeArgs = self.handleClassTypeArgs(irDefn, astTypeArgs)
+                explicitTypeArgs, existentialTypeParams = \
+                    self.handleClassTypeArgs(irDefn, astTypeArgs)
+                assert len(existentialTypeParams) == 0
                 typeArgs.extend(explicitTypeArgs)
             else:
                 if component.typeArguments is not None:
@@ -309,13 +322,57 @@ class TypeVisitorBase(ast.NodeVisitor):
         return scope, typeArgs
 
     def handleClassTypeArgs(self, irClass, nodes):
+        """Builds and checks explicit type arguments for the given class.
+
+        Builds type arguments from `nodes`. During the declaration stage, bounds checking is
+        deferred until all definitions have been visited (`Type.isSubtypeOf` doesn't work
+        until then). During the definition stage, bounds checking is performed immediately.
+        For each `BlankType` in `nodes`, a new `TypeParameter` is introduced (for use in
+        an `ExistentialType`).
+
+        Note that this function doesn't return a full list of type arguments. The caller is
+        responsible for building implicit type arguments and including them at the beginning
+        of any type argument list.
+
+        Args:
+            irClass (ir.Class): the class we are building type arguments for
+            nodes (list(ast.Type)): a list of explicit type arguments in the AST. The length
+                must equal the number of explicit type parameters in `irClass`.
+
+        Returns:
+            (tuple(ir.Type), tuple(ir.TypeParameter)): A list of explicit type arguments
+            compiled from `nodes`, and a list of introduced parameters for an existential
+            type."""
         raise NotImplementedError
 
-    def buildClassTypeArg(self, irParam, node):
-        if isinstance(node, ast.BlankType):
-            return ir_t.VariableType(irParam)
+    def introduceExistentialTypeParameter(self, param, node):
+        """Introduces an existential type parameter based on a class type parameter.
+
+        This method may be called multiple times. A new type parameter will only be added the
+        first time. After that, the same type parameter will be returned.
+
+        Args:
+            param (ir.TypeParameter): a type parameter belonging to a class. The returned
+                type parameter will have the same bounds.
+            node (ast.BlankType): the node which causes this type parameter to be added.
+                `DefnInfo` will be created (if it doesn't already exist) with this node's id
+                as the key. The node's location may also be used for error reporting.
+
+        Returns:
+            (ir.TypeParameter, ir.VariableType): the introduced type parameter and a variable
+            type which wraps it.
+        """
+        assert isinstance(node, ast.BlankType)
+        if not self.info.hasDefnInfo(node):
+            paramName = ir.Name(self.scope().prefix + [ir.EXISTENTIAL_SUFFIX, ir.BLANK_SUFFIX])
+            blankParam = self.info.package.addTypeParameter(paramName, astDefn=node,
+                                                            upperBound=param.upperBound,
+                                                            lowerBound=param.lowerBound)
+            defnInfo = compile_info.DefnInfo(blankParam, self.scope().scopeId, isVisible=False)
+            self.info.setDefnInfo(node, defnInfo)
         else:
-            return self.visit(node)
+            blankParam = self.info.getDefnInfo(node).irDefn
+        return blankParam, ir_t.VariableType(blankParam)
 
     def handleResult(self, node, result, *unusedArgs, **unusedKwargs):
         if result is not None:
@@ -536,11 +593,16 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         typeParams = ir.getExplicitTypeParameters(irClass)
         assert len(typeParams) == len(nodes)
         typeArgs = []
+        introducedTypeParams = []
         for param, node in zip(typeParams, nodes):
-            arg = self.buildClassTypeArg(param, node)
-            self.typeArgsToCheck.append((arg, param, node.location))
+            if isinstance(node, ast.BlankType):
+                introducedTypeParam, arg = self.introduceExistentialTypeParameter(param, node)
+                introducedTypeParams.append(blankParam)
+            else:
+                arg = self.visit(node)
+                self.typeArgsToCheck.append((arg, param, node.location))
             typeArgs.append(arg)
-        return tuple(typeArgs)
+        return tuple(typeArgs), tuple(introducedTypeParams)
 
     def setMethodReceiverType(self, irFunction):
         assert irFunction.variables[0].name.short() == ir.RECEIVER_SUFFIX
@@ -1068,14 +1130,20 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         typeParams = ir.getExplicitTypeParameters(irClass)
         assert len(typeParams) == len(typeArgs)
         types = []
+        introducedTypeParams = []
         for tp, ta in zip(typeParams, typeArgs):
-            with VarianceScope.forArgument(self, tp.variance()):
-                ty = self.buildClassTypeArg(tp, ta)
-            if not (tp.lowerBound.isSubtypeOf(ty) and
-                    ty.isSubtypeOf(tp.upperBound)):
-                raise TypeException(ta.location, "%s: type argument is not in bounds" % tp.name)
+            if isinstance(ta, ast.BlankType):
+                tp, ty = self.introduceExistentialTypeParameter(tp, ta)
+                introducedTypeParams.append(tp)
+            else:
+                with VarianceScope.forArgument(self, tp.variance()):
+                    ty = self.visit(ta)
+                if not (tp.lowerBound.isSubtypeOf(ty) and
+                        ty.isSubtypeOf(tp.upperBound)):
+                    raise TypeException(ta.location,
+                                        "%s: type argument is not in bounds" % tp.name)
             types.append(ty)
-        return tuple(types)
+        return tuple(types), tuple(introducedTypeParams)
 
     def handleFunctionCommon(self, node, astReturnType, astBody):
         defnInfo = self.info.getDefnInfo(node)

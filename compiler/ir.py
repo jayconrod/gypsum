@@ -282,6 +282,7 @@ ANON_PARAMETER_SUFFIX = "$parameter"
 RECEIVER_SUFFIX = "$this"
 ARRAY_LENGTH_SUFFIX = "$length"
 EXISTENTIAL_SUFFIX = "$forsome"
+BLANK_SUFFIX = "$blank"
 
 
 class PackagePrefix(object):
@@ -1055,6 +1056,7 @@ __all__ = [
     "RECEIVER_SUFFIX",
     "ARRAY_LENGTH_SUFFIX",
     "EXISTENTIAL_SUFFIX",
+    "BLANK_SUFFIX",
     "PackagePrefix",
     "PackageDependency",
     "Global",

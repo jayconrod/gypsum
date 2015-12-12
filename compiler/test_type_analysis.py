@@ -1352,24 +1352,37 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "var g = f[_]"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
+    def testBlankTypeScopePrefix(self):
+        source = "class Foo[static T]\n" + \
+                 "  static def f = 12\n" + \
+                 "var g = Foo[_].f()"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     def testBlankTypeClassArg(self):
         source = "class Foo[static T <: String]\n" + \
                  "var g: Foo[_]"
         info = self.analyzeFromSource(source)
         ty = info.package.findGlobal(name="g").type
         Foo = info.package.findClass(name="Foo")
-        T = info.package.findTypeParameter(name="Foo.T")
-        self.assertEquals(ClassType(Foo, (VariableType(T),)), ty)
+        blankAst = info.ast.modules[0].definitions[1].pattern.ty.typeArguments[0]
+        X = info.getDefnInfo(blankAst).irDefn
+        self.assertEquals(getStringType(), X.upperBound)
+        self.assertIs(blankAst, X.astDefn)
+        expected = ExistentialType((X,), ClassType(Foo, (VariableType(X),)))
+        self.assertEquals(expected, ty)
 
-    def testErasedTupleTypeArg(self):
+    def testBlankTupleTypeArg(self):
         source = TUPLE_SOURCE + \
                  "var g: (_, _)"
         info = self.analyzeFromSource(source, name=STD_NAME)
         ty = info.package.findGlobal(name="g").type
         Tuple2 = info.package.findClass(name="Tuple2")
-        T1 = info.package.findTypeParameter(name="Tuple2.T1")
-        T2 = info.package.findTypeParameter(name="Tuple2.T2")
-        self.assertEquals(ClassType(Tuple2, (VariableType(T1), VariableType(T2))), ty)
+        tupleAst = info.ast.modules[0].definitions[-1].pattern.ty
+        X = info.getDefnInfo(tupleAst.types[0]).irDefn
+        Y = info.getDefnInfo(tupleAst.types[1]).irDefn
+        expected = ExistentialType((X, Y),
+                                   ClassType(Tuple2, (VariableType(X), VariableType(Y))))
+        self.assertEquals(expected, ty)
 
     def testExistentialType(self):
         source = "let g: forsome [X] X?"
