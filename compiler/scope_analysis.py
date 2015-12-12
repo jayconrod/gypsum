@@ -1778,6 +1778,14 @@ class ScopeVisitor(ast.NodeVisitor):
     def visitParameter(self, node):
         self.visit(node.pattern, node)
 
+    def visitVariablePattern(self, node, astVarDefn):
+        # Avoid passing `astVarDefn` to type visiting methods.
+        self.visitChildren(node)
+
+    def visitBlankPattern(self, node, astVarDefn):
+        # Avoid passing `astVarDefn` to type visiting methods.
+        self.visitChildren(node)
+
     def visitBlockExpression(self, node):
         if isinstance(self.scope.ast, ast.FunctionDefinition) and \
            self.scope.ast.body is node:

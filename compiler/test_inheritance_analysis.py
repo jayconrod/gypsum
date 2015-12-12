@@ -162,6 +162,12 @@ class TestInheritanceAnalysis(unittest.TestCase):
                  "def f[static T <: Baz >: foo.Bar]"
         self.assertRaises(ScopeException, self.analyzeFromSource, source, packageLoader=loader)
 
+    def testTypeParameterCycleExistential(self):
+        source = "class Foo\n" + \
+                 "class Bar <: Foo\n" + \
+                 "let g: forsome [X <: Bar >: Foo] X"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
     def testInheritedDefinitionsAreBound(self):
         source = "class Foo\n" + \
                  "  var x = 12\n" + \

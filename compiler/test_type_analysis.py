@@ -1251,10 +1251,17 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         rootClass = getRootClass()
         self.assertEquals(ClassType(rootClass, ()), info.package.findGlobal(name="g").type)
 
-    def testNullableType(self):
+    def testNullableClassType(self):
         info = self.analyzeFromSource("var g: Object?")
         expected = ClassType(getRootClass(), (), frozenset([NULLABLE_TYPE_FLAG]))
         self.assertEquals(expected, info.package.findGlobal(name="g").type)
+
+    def testNullableVariableType(self):
+        info = self.analyzeFromSource("def f[static T](x: T?) = x")
+        f = info.package.findFunction(name="f")
+        T = f.typeParameters[0]
+        expected = VariableType(T, frozenset([NULLABLE_TYPE_FLAG]))
+        self.assertEquals(expected, f.returnType)
 
     def testCallBuiltin(self):
         info = self.analyzeFromSource("def f = print(\"foo\")")
@@ -1363,6 +1370,15 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         T1 = info.package.findTypeParameter(name="Tuple2.T1")
         T2 = info.package.findTypeParameter(name="Tuple2.T2")
         self.assertEquals(ClassType(Tuple2, (VariableType(T1), VariableType(T2))), ty)
+
+    def testExistentialType(self):
+        source = "let g: forsome [X] X?"
+        info = self.analyzeFromSource(source)
+        ty = info.package.findGlobal(name="g").type
+        X = info.package.findTypeParameter(name=Name([EXISTENTIAL_SUFFIX, "X"]))
+        expected = ExistentialType((X,), VariableType(X, frozenset([NULLABLE_TYPE_FLAG])))
+        self.assertEquals(expected, ty)
+        self.assertTrue(ty.isNullable())
 
     # Closures
     def testFunctionContextFields(self):

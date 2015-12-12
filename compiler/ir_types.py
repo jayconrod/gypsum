@@ -397,7 +397,8 @@ class VariableType(ObjectType):
 
     def __eq__(self, other):
         return self.__class__ is other.__class__ and \
-               self.typeParameter is other.typeParameter
+               self.typeParameter is other.typeParameter and \
+               self.flags == other.flags
 
     def substitute(self, parameters, replacements):
         assert len(parameters) == len(replacements)
@@ -422,7 +423,7 @@ class ExistentialType(ObjectType):
 
     def __init__(self, variables, ty):
         assert isinstance(variables, tuple) and \
-            all(isinstance(v, TypeParameter) for v in variables)
+            all(v.__class__.__name__ == "TypeParameter" for v in variables)
         assert isinstance(ty, ObjectType)
         super(ExistentialType, self).__init__(ty.flags)
         self.variables = variables
@@ -441,7 +442,8 @@ class ExistentialType(ObjectType):
         return self.__class__ is other.__class__ and \
             len(self.variables) == len(other.variables) and \
             all(s.id is t.id for s, t in zip(self.variables, other.variables)) and \
-            self.ty == other.ty
+            self.ty == other.ty and \
+            self.flags == other.flags
 
     def substitute(self, parameters, replacements):
         subTy = self.ty.substitute(parameters, replacements)
@@ -516,7 +518,7 @@ def changeVariance(old, new):
 
 __all__ = ["BIVARIANT","INVARIANT", "UnitType", "BooleanType", "I8Type",
            "I16Type", "I32Type", "I64Type", "F32Type", "F64Type",
-           "VariableType", "ClassType",  "NoType",
+           "VariableType", "ClassType",  "ExistentialType", "NoType",
            "getRootClassType", "getStringType", "getPackageType", "getNullType",
            "getClassFromType", "NULLABLE_TYPE_FLAG", "changeVariance",
            "getNothingClassType"]

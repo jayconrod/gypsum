@@ -490,7 +490,7 @@ class ExistentialType(Type):
         self.type = type
 
     def __repr__(self):
-        return "ExistentialType(%s, %s)" % (repr(self.parameters), repr(self.type))
+        return "ExistentialType(%s, %s)" % (repr(self.typeParameters), repr(self.type))
 
     def children(self):
         return self.typeParameters + [self.type]

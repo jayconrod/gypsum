@@ -198,7 +198,7 @@ class TypeVisitorBase(ast.NodeVisitor):
                 raise TypeException(node.location,
                                     "%s: variable type does not accept type arguments" %
                                     node.name)
-            return ir_t.VariableType(irDefn)
+            return ir_t.VariableType(irDefn, flags)
 
     def visitTupleType(self, node):
         clas = self.info.getTupleClass(len(node.types), node.location)
@@ -208,6 +208,11 @@ class TypeVisitorBase(ast.NodeVisitor):
 
     def visitBlankType(self, node):
         raise TypeException(node.location, "erased type can only be used as a type argument")
+
+    def visitExistentialType(self, node):
+        variables = tuple(self.info.getDefnInfo(v).irDefn for v in node.typeParameters)
+        innerType = self.visit(node.type)
+        return ir_t.ExistentialType(variables, innerType)
 
     def visitIntegerLiteral(self, node):
         typeMap = { 8: ir_t.I8Type, 16: ir_t.I16Type, 32: ir_t.I32Type, 64: ir_t.I64Type }
