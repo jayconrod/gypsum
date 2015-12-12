@@ -454,9 +454,9 @@ class DeclarationTypeVisitor(TypeVisitorBase):
                 return default
             else:
                 ty = self.visit(bound)
-                if ty.isNullable():
+                if not ty.mayUseAsBound():
                     raise TypeException(bound.location,
-                                        "%s: bound may not be nullable" % node.name)
+                                        "type may not be used as a bound")
                 return ty
 
         self.scope().define(node.name)

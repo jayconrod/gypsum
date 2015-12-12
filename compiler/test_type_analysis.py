@@ -1412,6 +1412,14 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         lowerSource = "class Bar[static T >: Nothing?]"
         self.assertRaises(TypeException, self.analyzeFromSource, lowerSource)
 
+    def testPrimitiveBounds(self):
+        source = "class Foo[static T <: i64]"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
+    def testExistentialBounds(self):
+        source = "class Foo[static T <: forsome [X] X]"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
     def testCallWithSubtype(self):
         source = "class Foo\n" + \
                  "class Bar <: Foo\n" + \

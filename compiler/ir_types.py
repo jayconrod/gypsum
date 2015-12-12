@@ -232,6 +232,11 @@ class Type(data.Data):
     def uninitializedType(self):
         raise NotImplementedError
 
+    def mayUseAsBound(self):
+        """Returns whether this type may be used as an upper or lower bound for a type
+        parameter. Class and variable types return true; existential types return false."""
+        return False
+
 
 class SimpleType(Type):
     propertyNames = Type.propertyNames + ("name", "width")
@@ -319,7 +324,7 @@ class ObjectType(Type):
         return getNullType() if self.isNullable() else getNothingClassType()
 
 
-class ClassType(ObjectType):
+class ClassType(ObjectType,):
     propertyNames = Type.propertyNames + ("clas", "typeArguments")
     width = bytecode.WORD
 
@@ -374,6 +379,9 @@ class ClassType(ObjectType):
             ty = sty.substitute(ty.clas.typeParameters, ty.typeArguments)
         return ty
 
+    def mayUseAsBound(self):
+        return not self.isNullable()
+
     def getTypeArguments(self):
         return self.typeArguments
 
@@ -415,6 +423,9 @@ class VariableType(ObjectType):
 
     def substituteForBaseClass(self, base):
         return self.typeParameter.upperBound.substituteForBaseClass(base)
+
+    def mayUseAsBound(self):
+        return not self.isNullable()
 
 
 class ExistentialType(ObjectType):
