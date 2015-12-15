@@ -43,11 +43,11 @@ class Type(data.Data):
         return ty
 
     def isSubtypeOf(self, other):
-        return self.lub(other) == other
+        return self.lub(other).isEquivalent(other)
 
     def isDisjoint(self, other):
         lub = self.lub(other)
-        return self != lub and other != lub
+        return not self.isEquivalent(lub) and not other.isEquivalent(lub)
 
     def isPrimitive(self):
         raise NotImplementedError
@@ -61,13 +61,20 @@ class Type(data.Data):
             raise errors.TypeException(loc, "could not combine")
         return combined
 
+    def isEquivalent(self, other):
+        """Returns whether two types correspond to the same set of values.
+
+        This is a slightly more relaxed relation than == because two types may have different
+        forms but contain the same values."""
+        return self == other
+
     def lub(self, other):
         """Computes the least upper bound of two types on the type lattice. Note that since
         AnyType is not a valid type, this function returns AnyType to indicate that the
         two types couldn't be combined."""
-        return self._lubRec(other, [])
+        return self.lubRec_(other, [])
 
-    def _lubRec(self, other, stack):
+    def lubRec_(self, other, stack):
         # We need to be able to detect infinite recursion in order to ensure termination.
         # Consider the case below:
         #   class A[+T]
@@ -85,7 +92,7 @@ class Type(data.Data):
                 return AnyType
 
         # Basic rules that apply to all types.
-        if self == other:
+        if self.isEquivalent(other):
             return self
         if self is AnyType or other is AnyType:
             return self
@@ -93,6 +100,32 @@ class Type(data.Data):
             return other
         if other is NoType:
             return self
+
+        # Rules for existential types (always recursive)
+        if isinstance(self, ExistentialType) or isinstance(other, ExistentialType):
+            stack.append((self, other))
+
+            # At this point, we consider both types to be existential. Note that any type
+            # can be trivially closed with an existential. For example:
+            #   String == forsome [X] String
+
+            # We get the lub of the inner types.
+            selfInnerType = self.ty if isinstance(self, ExistentialType) else self
+            otherInnerType = other.ty if isinstance(other, ExistentialType) else other
+            innerLubType = selfInnerType.lubRec_(otherInnerType, stack)
+            stack.pop()
+
+            # Find which variables are still being used in the lub. If some of the variables
+            # from `self` and `other` are still present, return an existential with those.
+            # Note that unused variables can be removed from an existential type. For example:
+            #   forsome [X] Option[String] == Option[String]
+            # We must be careful the returned type has variables in a deterministic order.
+            # Technically, the order shouldn't matter, but it's infeasible to test whether two
+            # types are equivalent with arbitrary ordered variables, since they cannot easily
+            # be sorted.
+            selfVariables = self.variables if isinstance(self, ExistentialType) else ()
+            otherVariables = other.variables if isinstance(other, ExistentialType) else ()
+            return ExistentialType.trim(selfVariables + otherVariables, innerLubType)
 
         # Rules below apply only to object types.
         if self.isObject() and other.isObject():
@@ -134,8 +167,8 @@ class Type(data.Data):
                 # We need to combine the type arguments, according to the variance of the
                 # corresponding type parameters. This is not necessarily possible. If we get
                 # stuck, we'll try again with the superclass.
-                leftArgs = left.substituteForBaseClass(baseClass).typeArguments
-                rightArgs = right.substituteForBaseClass(baseClass).typeArguments
+                leftArgs = left.typeArguments
+                rightArgs = right.typeArguments
 
                 combinedArgs = []
                 combineSuccess = True
@@ -150,10 +183,10 @@ class Type(data.Data):
                     else:
                         stack.append((self, other))
                         if variance is flags.COVARIANT:
-                            combined = leftArg._lubRec(rightArg, stack)
+                            combined = leftArg.lubRec_(rightArg, stack)
                         else:
                             assert variance is flags.CONTRAVARIANT
-                            combined = leftArg._glbRec(rightArg, stack)
+                            combined = leftArg.glbRec_(rightArg, stack)
                         stack.pop()
                     if combined is AnyType:
                         combineSuccess = False
@@ -173,9 +206,9 @@ class Type(data.Data):
         """Computes the greatest lower bound of two types on the type lattice. Note that since
         this is not a true lattice with a bottom, there may be no shared lower bound (e.g.,
         for i64 and String). This function returns None in that case."""
-        return self._glbRec(ty, [])
+        return self.glbRec_(ty, [])
 
-    def _glbRec(self, ty, stack):
+    def glbRec_(self, ty, stack):
         if (self, ty) in stack:
             if self.isObject() and ty.isObject():
                 return getNothingClassType()
@@ -215,6 +248,11 @@ class Type(data.Data):
         return ty
 
     def getTypeArguments(self):
+        raise NotImplementedError
+
+    def findVariables(self):
+        """Returns a set of `DefnId`s for `TypeParameters` referenced through `VariableType`s
+        in this type."""
         raise NotImplementedError
 
     def size(self):
@@ -261,6 +299,9 @@ class SimpleType(Type):
 
     def isObject(self):
         return False
+
+    def findVariables(self):
+        return set()
 
     def size(self):
         widthSizes = { bytecode.W8: 1, bytecode.W16: 2, bytecode.W32: 4, bytecode.W64: 8 }
@@ -385,6 +426,12 @@ class ClassType(ObjectType,):
     def getTypeArguments(self):
         return self.typeArguments
 
+    def findVariables(self):
+        variables = set()
+        for typeArg in self.typeArguments:
+            variables |= typeArg.findVariables()
+        return variables
+
 
 class VariableType(ObjectType):
     propertyNames = Type.propertyNames + ("typeParameter",)
@@ -427,18 +474,45 @@ class VariableType(ObjectType):
     def mayUseAsBound(self):
         return not self.isNullable()
 
+    def findVariables(self):
+        return set([self.typeParameter.id])
+
 
 class ExistentialType(ObjectType):
     propertyNames = Type.propertyNames + ("variables", "ty")
     width = bytecode.WORD
 
     def __init__(self, variables, ty):
-        assert isinstance(variables, tuple) and \
-            all(v.__class__.__name__ == "TypeParameter" for v in variables)
-        assert isinstance(ty, ObjectType)
         super(ExistentialType, self).__init__(ty.flags)
         self.variables = variables
         self.ty = ty
+
+    @staticmethod
+    def trim(variables, ty):
+        """Creates an existential type with only the variables that are actually used.
+
+        Args:
+            variables (iterable(TypeParameter)): a sequence of variables that may be used
+                by `ty`. Duplicates are allowed.
+            ty (ObjectType): the inner type of the existential.
+
+        Returns:
+            (ObjectType): if one or more of the type parameters in `variables` are used in
+            `ty`, an `ExistentialType` is returned using only those variables. The variables
+            will be declared in the same order they were passed in. A variable will not be
+            declared more than once. If none of the type parameters are used, `ty` is
+            returned."""
+        variableIdsUsed = ty.findVariables()
+        variableIdsIntroduced = set()
+        variablesIntroduced = []
+        for v in variables:
+            if v.id in variableIdsUsed and v.id not in variableIdsIntroduced:
+                variablesIntroduced.append(v)
+                variableIdsIntroduced.add(v.id)
+        if len(variablesIntroduced) == 0:
+            return ty
+        else:
+            return ExistentialType(tuple(variablesIntroduced), ty)
 
     def __str__(self):
         return "forsome [%s] %s" % (", ".join(map(str, self.variables)), str(self.ty))
@@ -456,6 +530,19 @@ class ExistentialType(ObjectType):
             self.ty == other.ty and \
             self.flags == other.flags
 
+    def isEquivalent(self, other):
+        if self.__class__ is not other.__class__ or \
+           len(self.variables) != len(other.variables):
+            return False
+        if all(s.id is t.id for s, t in zip(self.variables, other.variables)) and \
+           self.ty.isEquivalent(other.ty):
+            return True
+        if any(not s.isEquivalent(t) for s, t in zip(self.variables, other.variables)):
+            return False
+        subArgs = [VariableType(v) for v in self.variables]
+        otherSubType = other.ty.substitute(other.variables, subArgs)
+        return self.ty.isEquivalent(otherSubType)
+
     def substitute(self, parameters, replacements):
         subTy = self.ty.substitute(parameters, replacements)
         return self if subTy == self.ty else ExistentialType(self.variables, subTy)
@@ -466,6 +553,9 @@ class ExistentialType(ObjectType):
 
     def getTypeArguments(self):
         return self.ty.getTypeArguments()
+
+    def findVariables(self):
+        return self.ty.findVariables()
 
 
 def getClassFromType(ty):
