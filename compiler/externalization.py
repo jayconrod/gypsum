@@ -12,6 +12,17 @@ from utils import each
 
 
 def externalize(info):
+    """Records dependencies on foreign definitions.
+
+    Each CodeSwitch package has a list of other packages it depends on. This list goes beyond
+    recording the name and version of each required package: it records the definitions that
+    are actually used. These are "extern" definitions (marked with the `EXTERN` flag), and
+    they can be referred to directly by the package like normal definitions.
+
+    During compilation, we may refer to "foreign" definitions which are actually in other
+    packages (not in the dependency list). This externalization step detects these foreign
+    definitions, creates "extern" stubs, and records them.
+    """
     externalizer = Externalizer(info.package, info.packageLoader)
 
     for useInfo in info.useInfo.itervalues():
@@ -114,9 +125,13 @@ class Externalizer(object):
     def externalizeType(self, ty):
         if isinstance(ty, ir_types.ClassType):
             self.externalizeDefn(ty.clas)
+            each(self.externalizeType, ty.typeArguments)
         elif isinstance(ty, ir_types.VariableType) and \
              ty.typeParameter.isForeign():
             self.externalizeDefn(ty.typeParameter)
+        elif isinstance(ty, ir_types.ExistentialType):
+            each(self.externalizeDefn, ty.variables)
+            self.externalizeType(ty.ty)
 
     def externalizeMethod(self, method, dep):
         self.package.addName(method.name)
