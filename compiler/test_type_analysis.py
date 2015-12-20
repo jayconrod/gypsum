@@ -1229,6 +1229,96 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         rootClass = getRootClass()
         self.assertEquals(ClassType(rootClass, ()), info.getType(info.ast.modules[0].definitions[0].body))
 
+    def testExistentialLoadVar(self):
+        source = "class Box[static T](value: T)\n" + \
+                 "def f(box: forsome [X] Box[X]) = box.value"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testExistentialLoadPlain(self):
+        source = "class Box[static T](value: i64)\n" + \
+                 "def f(box: forsome [X] Box[X]) = box.value"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(I64Type, f.returnType)
+
+    def testExistentialCallVar(self):
+        source = "class Box[static T](value: T)\n" + \
+                 "  def get = value\n" + \
+                 "def f(box: forsome [X] Box[X]) = box.get"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testExistentialCallPlain(self):
+        source = "class Box[static T]\n" + \
+                 "  def get = 12\n" + \
+                 "def f(box: forsome [X] Box[X]) = box.get"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(I64Type, f.returnType)
+
+    def testExistentialStoreVar(self):
+        source = "class Box[static T](value: T)\n" + \
+                 "def f(box: forsome [X] Box[X]) = { box.value = Object(); {}; }"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testExistentialStorePlain(self):
+        source = "class Box[static T]\n" + \
+                 "  var value: i64\n" + \
+                 "def f(box: forsome [X] Box[X]) = { box.value = 12; {}; }"
+        self.analyzeFromSource(source)
+        # pass if no error
+
+    def testDestructureMatchOnExistentialValue(self):
+        source = OPTION_SOURCE + \
+                 "def match-fn(obj: Object): Option[String] = None\n" + \
+                 "def f(x: forsome [X] X) =\n" + \
+                 "  match (x)\n" + \
+                 "    case match-fn(s) => s\n" + \
+                 "    case _ => \"nothing\""
+        self.analyzeFromSource(source, name=STD_NAME)
+        # pass if no errors
+
+    def testDestructureMatchWithExplicitExistentialMatcher(self):
+        source = OPTION_SOURCE + \
+                 "class Matcher[static T]\n" + \
+                 "  def try-match(obj: Object): Option[String] = None\n" + \
+                 "def f(x: Object, m: forsome [X] Matcher[X]) =\n" + \
+                 "  match (x)\n" + \
+                 "    case m.try-match(s) => s\n" + \
+                 "    case _ => \"nothing\""
+        self.analyzeFromSource(source, name=STD_NAME)
+        # pass if no errors
+
+    def testDestructureWithImplicitExistentialMatcher(self):
+        source = OPTION_SOURCE + \
+                 "class Matcher[static T]\n" + \
+                 "  def try-match(obj: Object): Option[String] = None\n" + \
+                 "def f(x: Object, m: forsome [X] Matcher[X]) =\n" + \
+                 "  match (x)\n" + \
+                 "    case m(s) => s\n" + \
+                 "    case _ => \"nothing\""
+        self.analyzeFromSource(source, name=STD_NAME)
+        # pass if no errors
+
+    def testMoveExistentialListOfBoxes(self):
+        source = "abstract class List[static T]\n" + \
+                 "  abstract def get(i: i64): T\n" + \
+                 "class Box[static T](value: T)\n" + \
+                 "def f(list: forsome [X] List[Box[X]]) =\n" + \
+                 "  list.get(0).value = list.get(1).value"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+        # This is technically safe, but we don't want the compiler to have to prove it. In
+        # Java, this would be done with a helper method with wildcard capture. We'll have
+        # something like that or an open expression in the future.
+
+    def testMoveListOfExistentialBoxes(self):
+        source = "abstract class List[static T]\n" + \
+                 "  abstract def get(i: i64): T\n" + \
+                 "class Box[static T](value: T)\n" + \
+                 "def f(list: List[forsome [X] Box[X]]) =\n" + \
+                 "  list.get(0).value = list.get(1).value"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+        # This is definitely not safe.
+
     # Types
     def testUnitType(self):
         info = self.analyzeFromSource("var g: unit")

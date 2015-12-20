@@ -125,7 +125,7 @@ class Type(data.Data):
             # be sorted.
             selfVariables = self.variables if isinstance(self, ExistentialType) else ()
             otherVariables = other.variables if isinstance(other, ExistentialType) else ()
-            return ExistentialType.trim(selfVariables + otherVariables, innerLubType)
+            return ExistentialType.close(selfVariables + otherVariables, innerLubType)
 
         # Rules below apply only to object types.
         if self.isObject() and other.isObject():
@@ -488,7 +488,7 @@ class ExistentialType(ObjectType):
         self.ty = ty
 
     @staticmethod
-    def trim(variables, ty):
+    def close(variables, ty):
         """Creates an existential type with only the variables that are actually used.
 
         Args:
@@ -563,6 +563,8 @@ def getClassFromType(ty):
         return ty.clas
     elif isinstance(ty, VariableType):
         return getClassFromType(ty.typeParameter.upperBound)
+    elif isinstance(ty, ExistentialType):
+        return getClassFromType(ty.ty)
     else:
         assert ty.isPrimitive()
         return builtins.getBuiltinClassFromType(ty)

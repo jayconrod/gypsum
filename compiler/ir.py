@@ -523,7 +523,7 @@ class Function(ParameterizedDefn):
 
     def __repr__(self):
         return reprFormat(self, "name", "returnType", "typeParameters", "parameterTypes",
-                          "variables", "blocks", "flags", "definingClass")
+                          "variables", "blocks", "flags")
 
     def __str__(self):
         buf = StringIO.StringIO()
