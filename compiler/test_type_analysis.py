@@ -943,6 +943,23 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "def f(x: i64) = match (x) { case y: String => y; }"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
+    def testMatchExprVarUntestable(self):
+        source = "class Foo[static T]\n" + \
+                 "def f(x: Object) =\n" + \
+                 "  match (x)\n" + \
+                 "    case foo: Foo[String] => 1"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testMatchExprVarExistentialTestable(self):
+        source = "class Foo[static T]\n" + \
+                 "def f(x: Object) =\n" + \
+                 "  match (x)\n" + \
+                 "    case foo: Foo[_] => 1"
+        info = self.analyzeFromSource(source)
+        matchAst = info.ast.modules[0].definitions[1].body.statements[0]
+        ty = info.getType(matchAst.matcher.cases[0].pattern)
+        self.assertTrue(isinstance(ty, ExistentialType))
+
     def testMatchExprVarShadow(self):
         source = "def f(x: Object) =\n" + \
                  "  let y = \"foo\"\n" + \
