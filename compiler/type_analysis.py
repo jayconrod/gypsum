@@ -404,6 +404,7 @@ class TypeVisitorBase(ast.NodeVisitor):
 
     def handleResult(self, node, result, *unusedArgs, **unusedKwargs):
         if result is not None:
+            assert not self.info.hasType(node) or self.info.getType(node) == result
             self.info.setType(node, result)
         return result
 
@@ -557,62 +558,49 @@ class DeclarationTypeVisitor(TypeVisitorBase):
                                 "patterns which might not match can't be used as parameters")
         return patTy
 
-    # We visit patterns to find the correct types for function parameters. Some patterns can't
-    # directly be part of function parameters, but they may be part of other patterns, so
-    # we need to type them all.
-
     def visitVariablePattern(self, node, isParam=False):
-        if not isParam:
-            return None
-        if node.ty is None:
+        if isParam and node.ty is None:
             raise TypeException(node.location, "%s: type not specified" % node.name)
-        return self.visit(node.ty)
+        return self.visit(node.ty) if node.ty is not None else None
 
     def visitBlankPattern(self, node, isParam=False):
-        if not isParam:
-            return None
-        if node.ty is None:
+        if isParam and node.ty is None:
             raise TypeException(node.location, "type not specified")
-        return self.visit(node.ty)
+        return self.visit(node.ty) if node.ty is not None else None
 
     def visitLiteralPattern(self, node, isParam=False):
         return self.visit(node.literal)
 
     def visitTuplePattern(self, node, isParam=False):
-        if not isParam:
-            return None
         patternTypes = tuple(self.visit(p, True) for p in node.patterns)
         tupleClass = self.info.getTupleClass(len(node.patterns), node.location)
         return ir_t.ClassType(tupleClass, patternTypes)
 
     def visitValuePattern(self, node, isParam=False):
-        if not isParam:
-            return None
         # Need to raise this early, since patternMustMatch is only called after a type is
         # returned. We may not be able to determine the type of this pattern, since it can
         # involve function calls as part of the scope prefix.
-        raise TypeException(node.location, "value pattern can't be used in a parameter")
+        if isParam:
+            raise TypeException(node.location, "value pattern can't be used in a parameter")
 
     def visitDestructurePattern(self, node, isParam=False):
-        if not isParam:
-            return None
         # Need to raise this early, since patternMustMatch is only called after a type
         # is returned.
-        raise TypeException(node.location, "destructure pattern can't be used in a parameter")
+        if isParam:
+            raise TypeException(node.location,
+                                "destructure pattern can't be used in a parameter")
 
     def visitUnaryPattern(self, node, isParam=False):
-        if not isParam:
-            return None
         # Need to raise this early, since patternMustMatch is only called after a type
         # is returned.
-        raise TypeException(node.location, "unary pattern can't be used in a parameter")
+        if isParam:
+            raise TypeException(node.location, "unary pattern can't be used in a parameter")
 
     def visitBinaryPattern(self, node, isParam=False):
-        if not isParam:
-            return None
         # Need to raise this early, since patternMustMatch is only called after a type
         # is returned.
-        raise TypeException(node.location, "binary pattern can't be used in a parameter")
+        if isParam:
+            raise TypeException(node.location, "binary pattern can't be used in a parameter")
 
     def visitDefault(self, node):
         self.visitChildren(node)
@@ -625,7 +613,7 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         for param, node in zip(typeParams, nodes):
             if isinstance(node, ast.BlankType):
                 introducedTypeParam, arg = self.introduceExistentialTypeParameter(param, node)
-                introducedTypeParams.append(blankParam)
+                introducedTypeParams.append(introducedTypeParam)
             else:
                 arg = self.visit(node)
                 self.typeArgsToCheck.append((arg, param, node.location))

@@ -956,7 +956,7 @@ class TestCompiler(TestCaseWithDefinitions):
                            variables=[self.makeVariable("f.y", type=I64Type,
                                                         kind=LOCAL, flags=frozenset([LET]))]))
 
-    def testMatchExprWithVarWithBlankTypeArg(self):
+    def testMatchExprWithVarWithBlankType(self):
         source = "class Foo[static T]\n" + \
                  "def f(x: Object) =\n" + \
                  "  match (x)\n" + \
@@ -964,13 +964,15 @@ class TestCompiler(TestCaseWithDefinitions):
                  "    case _ => 34"
         package = self.compileFromSource(source)
         Foo = package.findClass(name="Foo")
-        T = package.findTypeParameter(name="Foo.T")
-        yType = ClassType(Foo, (VariableType(T),))
+        X = package.findTypeParameter(pred=lambda tp: STATIC not in tp.flags)
+        yType = ExistentialType((X,), ClassType(Foo, (VariableType(X),)))
         self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
                                ldlocal(0),
-                               tyvd(T),
+                               tyvd(X),
+                               tyvd(X),
                                tycd(Foo),
+                               tyxd(1),
                                castcbr(1, 2),
                              ], [
                                stlocal(-1),
@@ -988,7 +990,41 @@ class TestCompiler(TestCaseWithDefinitions):
                                         self.makeVariable("f.y", type=yType,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
-    def testMatchExprWithVarWithErasedForeignTypeArg(self):
+    def testMatchExprWithVarWithExistentialType(self):
+        source = "class Foo[static T]\n" + \
+                 "def f(x: Object) =\n" + \
+                 "  match (x)\n" + \
+                 "    case y: forsome [X] Foo[X] => 12\n" + \
+                 "    case _ => 34"
+        package = self.compileFromSource(source)
+        Foo = package.findClass(name="Foo")
+        X = package.findTypeParameter(name=Name(["f", EXISTENTIAL_SUFFIX, "X"]))
+        yType = ExistentialType((X,), ClassType(Foo, (VariableType(X),)))
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               ldlocal(0),
+                               tyvd(X),
+                               tyvd(X),
+                               tycd(Foo),
+                               tyxd(1),
+                               castcbr(1, 2),
+                             ], [
+                               stlocal(-1),
+                               i64(12),
+                               branch(3),
+                             ], [
+                               drop(),
+                               i64(34),
+                               branch(3),
+                             ], [
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.x", type=getRootClassType(),
+                                                          kind=PARAMETER, flags=frozenset([LET])),
+                                        self.makeVariable("f.y", type=yType,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testMatchExprWithVarWithExistentialForeignTypeArg(self):
         foo = Package(name=Name(["foo"]))
         T = foo.addTypeParameter(Name(["Foo", "T"]), upperBound=getRootClassType(),
                                  lowerBound=getNothingClassType(), flags=frozenset([PUBLIC]))
@@ -999,15 +1035,18 @@ class TestCompiler(TestCaseWithDefinitions):
 
         source = "def f(x: Object) =\n" + \
                  "  match (x)\n" + \
-                 "    case y: foo.Foo[_] => 12\n" + \
+                 "    case y: forsome [X] foo.Foo[X] => 12\n" + \
                  "    case _ => 34"
         package = self.compileFromSource(source, packageLoader=loader)
-        yType = ClassType(Foo, (VariableType(T),))
+        X = package.findTypeParameter(name=Name(["f", EXISTENTIAL_SUFFIX, "X"]))
+        yType = ExistentialType((X,), ClassType(Foo, (VariableType(X),)))
         self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
                                ldlocal(0),
-                               tyvdf(T),
+                               tyvd(X),
+                               tyvd(X),
                                tycdf(Foo),
+                               tyxd(1),
                                castcbr(1, 2),
                              ], [
                                stlocal(-1),
@@ -1024,20 +1063,6 @@ class TestCompiler(TestCaseWithDefinitions):
                                                           kind=PARAMETER, flags=frozenset([LET])),
                                         self.makeVariable("f.y", type=yType,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
-
-    def testMatchExprWithVarWithRealTypeArg(self):
-        source = "class Foo[static T]\n" + \
-                 "def f(x: Object) =\n" + \
-                 "  match (x)\n" + \
-                 "    case y: Foo[String] => {}"
-        self.assertRaises(SemanticException, self.compileFromSource, source)
-
-    def testMatchExprWithVarWithOtherTypeArg(self):
-        source = "class Foo[static T]\n" + \
-                 "def f[static S](x: Object) =\n" + \
-                 "  match (x)\n" + \
-                 "    case y: Foo[S] => {}"
-        self.assertRaises(SemanticException, self.compileFromSource, source)
 
     def testMatchExprWithIntShadow(self):
         source = "def f(x: i64) =\n" + \
@@ -2944,15 +2969,6 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]],
                              variables=[self.makeVariable("f.exn", type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
-
-    def testMatchExceptionWithArgument(self):
-        source = "class E[static T] <: Exception\n" + \
-                 "def f =\n" + \
-                 "  try\n" + \
-                 "    0\n" + \
-                 "  catch\n" + \
-                 "    case x: E[String] => 1"
-        self.assertRaises(SemanticException, self.compileFromSource, source)
 
     def testFactorial(self):
         self.checkFunction("def f(var n: i64): i64 = {\n" +

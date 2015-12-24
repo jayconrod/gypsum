@@ -1219,6 +1219,15 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertIs(exnClass, exnTy.clas)
         self.assertIs(exnClass, info.package.findFunction(name="f").variables[0].type.clas)
 
+    def testTryCatchUntestable(self):
+        source = "class E[static T] <: Exception\n" + \
+                 "def f =\n" + \
+                 "  try\n" + \
+                 "    0\n" + \
+                 "  catch\n" + \
+                 "    case x: E[String] => 1"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     def testWhileExprNonBooleanCondition(self):
         self.assertRaises(TypeException, self.analyzeFromSource, "def f = while (-1) 12")
 
