@@ -49,6 +49,8 @@
 - {name: "tyvdf", iops: 2, push: 1, pop: 0, term: false}
 - {name: "tyflags", iops: 1, push: 0, pop: 0, term: false}
 - {name: "tyflagd", iops: 1, push: 1, pop: 1, term: false}
+- {name: "tyxs", iops: 1, push: 0, pop: 0, term: false}
+- {name: "tyxd", iops: 1, push: 1, pop: ~, term: false}
 - {name: "cast", iops: 0, push: 1, pop: 1, term: false}
 - {name: "castc", iops: 0, push: 1, pop: 2, term: false}
 - {name: "castcbr", iops: 2, push: 1, pop: 2, term: true}

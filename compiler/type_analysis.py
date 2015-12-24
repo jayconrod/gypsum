@@ -96,6 +96,33 @@ def resolveAllOverrides(info):
         scope.resolveOverrides()
 
 
+def typeCanBeTested(ty, existentialVarIds=None):
+    """Returns whether a type can be tested at runtime, for example with a `cast` or `castcbr`
+    instruction.
+
+    Type declaration must be complete before this is called."""
+    if existentialVarIds is None:
+        existentialVarIds = frozenset()
+
+    if isinstance(ty, ir_t.ClassType):
+        for tp, ta in zip(ty.clas.typeParameters, ty.typeArguments):
+            staticArgCanBeTested = STATIC in tp.flags and \
+                                   isinstance(ta, ir_t.VariableType) and \
+                                   ta.typeParameter.id in existentialVarIds
+            dynamicArgCanBeTested = STATIC not in tp.flags and \
+                                    typeCanBeTested(ta, existentialVarIds)
+            if not staticArgCanBeTested and not dynamicArgCanBeTested:
+                return False
+        return True
+    elif isinstance(ty, ir_t.VariableType):
+        return STATIC not in ty.typeParameter.flags
+    elif isinstance(ty, ir_t.ExistentialType):
+        return typeCanBeTested(ty.ty, existentialVarIds | frozenset(v.id for v in ty.variables))
+    else:
+        # Primitive types cannot be tested.
+        return False
+
+
 class TypeVisitorBase(ast.NodeVisitor):
     """Provides common functionality for type visitors, namely the visitor functions for the
     various ast.Type subclasses."""
@@ -792,7 +819,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             else:
                 varTy = None
 
-        patTy = self.findPatternType(varTy, exprTy, mode, node.name, node.location)
+        patTy = self.findPatternType(varTy, exprTy, mode, False, node.name, node.location)
 
         if not isShadow:
             irDefn = self.info.getDefnInfo(node).irDefn
@@ -804,12 +831,12 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def visitBlankPattern(self, node, exprTy, mode):
         blankTy = self.visit(node.ty) if node.ty is not None else None
-        patTy = self.findPatternType(blankTy, exprTy, mode, None, node.location)
+        patTy = self.findPatternType(blankTy, exprTy, mode, False, None, node.location)
         return patTy
 
     def visitLiteralPattern(self, node, exprTy, mode):
         litTy = self.visit(node.literal)
-        patTy = self.findPatternType(litTy, exprTy, mode, None, node.location)
+        patTy = self.findPatternType(litTy, exprTy, mode, False, None, node.location)
         return patTy
 
     def visitTuplePattern(self, node, exprTy, mode):
@@ -821,7 +848,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             elementTypes = tuple(self.visit(p, ir_t.getRootClassType(), mode)
                                  for p in node.patterns)
         tupleTy = ir_t.ClassType(tupleClass, elementTypes)
-        patTy = self.findPatternType(tupleTy, exprTy, mode, None, node.location)
+        patTy = self.findPatternType(tupleTy, exprTy, mode, True, None, node.location)
         return patTy
 
     def visitValuePattern(self, node, exprTy, mode):
@@ -1109,7 +1136,31 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                         "covariant type parameter used in invalid position")
         return ty
 
-    def findPatternType(self, patTy, exprTy, mode, name, loc):
+    def findPatternType(self, patTy, exprTy, mode, isDestructure, name, loc):
+        """Determines the type of a pattern and checks for matching errors.
+
+        Args:
+            patTy (Type?): the declared type of the pattern. Should be `None` if the type is
+                inferred from the expression.
+            exprTy (Type?): the type of the expression being matched. May be `None` if there is
+                no expression (for example, a parameter or variable declaration). Either `patTy`
+                or `exprTy` must be specified.
+            mode (symbol): either `COMPILE_FOR_VALUE` for variables and parameters or
+                `COMPILE_FOR_MATCH` for pattern matching.
+            isDestructure (bool): true if this is part of a destructuring pattern (just used
+                for tuple patterns). Checking is a little stricter if false, since sub-patterns
+                are not being matched.
+            name (str?): the name of the variable in the pattern, if there is one. Used for
+                error reporting.
+            loc (Location): location in source code, used for error reporting.
+
+        Returns:
+            (Type): if `patTy` is set, it is returned. Otherwise, `exprTy`.
+
+        Raises:
+            TypeException: for many reasons, for example, if no type can be inferred or if
+                types cannot be tested at runtime.
+        """
         nameStr = "%s: " % name if name is not None else ""
         scope = self.scope()
         if patTy is None and exprTy is None:
@@ -1122,6 +1173,11 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             elif mode is COMPILE_FOR_MATCH and \
                  exprTy.isDisjoint(patTy):
                 raise TypeException(loc, nameStr + "expression cannot match declared type")
+            elif mode is COMPILE_FOR_MATCH and \
+                 not isDestructure and \
+                 not exprTy.isSubtypeOf(patTy) and \
+                 not typeCanBeTested(patTy):
+                raise TypeException(loc, nameStr + "type cannot be tested at runtime")
             else:
                 return patTy
         else:

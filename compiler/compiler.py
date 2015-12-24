@@ -9,7 +9,7 @@ from functools import partial
 import ast
 from bytecode import W8, W16, W32, W64, BUILTIN_TYPE_CLASS_ID, BUILTIN_TYPE_CTOR_ID, instInfoByCode, BUILTIN_MATCH_EXCEPTION_CLASS_ID, BUILTIN_MATCH_EXCEPTION_CTOR_ID, BUILTIN_STRING_EQ_OP_ID
 from ir import IrTopDefn, Class, Field, Function, Global, LOCAL, Package, PACKAGE_INIT_NAME, RECEIVER_SUFFIX, Variable
-from ir_types import NoType, UnitType, BooleanType, I8Type, I16Type, I32Type, I64Type, F32Type, F64Type, ClassType, VariableType, NULLABLE_TYPE_FLAG, getExceptionClassType, getClassFromType, getStringType, getRootClassType
+from ir_types import NoType, UnitType, BooleanType, I8Type, I16Type, I32Type, I64Type, F32Type, F64Type, ClassType, VariableType, ExistentialType, NULLABLE_TYPE_FLAG, getExceptionClassType, getClassFromType, getStringType, getRootClassType
 import ir_instructions
 from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PACKAGE_INITIALIZER_HINT, ARRAY_ELEMENT_GET_HINT, ARRAY_ELEMENT_SET_HINT, ARRAY_ELEMENT_LENGTH_HINT, DefnInfo, NORMAL_MODE, STD_MODE, NOSTD_MODE
 from flags import ABSTRACT, STATIC, LET, ARRAY
@@ -1718,18 +1718,9 @@ class CompileVisitor(ast.NodeVisitor):
         """Builds a type on the static type argument stack and simultaneously builds an
         equivalent Type object on the value stack. This is useful for checked casts and other
         type tests."""
-        if isinstance(ty, VariableType):
-            if ty.typeParameter.isForeign():
-                self.tyvdf(ty.typeParameter)
-            else:
-                self.tyvd(ty.typeParameter)
-        else:
-            assert isinstance(ty, ClassType)
+        if isinstance(ty, ClassType):
             assert len(ty.clas.typeParameters) == len(ty.typeArguments)
             for param, arg in zip(ty.clas.typeParameters, ty.typeArguments):
-                if STATIC in param.flags and arg != VariableType(param):
-                    raise SemanticException(
-                        loc, "cannot dynamically check a type with static type parameters")
                 self.buildType(arg, loc)
             if ty.clas.isForeign():
                 self.tycdf(ty.clas)
@@ -1737,6 +1728,17 @@ class CompileVisitor(ast.NodeVisitor):
                 self.tycd(ty.clas)
             if ty.isNullable():
                 self.tyflagd(1)
+        elif isinstance(ty, VariableType):
+            if ty.typeParameter.isForeign():
+                self.tyvdf(ty.typeParameter)
+            else:
+                self.tyvd(ty.typeParameter)
+        else:
+            assert isinstance(ty, ExistentialType)
+            for v in ty.variables:
+                self.buildType(VariableType(v), loc)
+            self.buildType(ty.ty, loc)
+            self.tyxd(len(ty.variables))
 
     def buildImplicitStaticTypeArguments(self, typeParams):
         for param in typeParams:
@@ -1761,7 +1763,11 @@ class CompileVisitor(ast.NodeVisitor):
             assert not ty.typeParameter.isForeign()
             self.tyvs(ty.typeParameter)
         else:
-            raise NotImplementedError
+            assert isinstance(ty, ExistentialType)
+            for v in ty.variables:
+                self.buildStaticTypeArgument(VariableType(v))
+            self.buildStaticTypeArgument(ty.ty)
+            self.tyxs(len(ty.variables))
 
     def buildCast(self, ty):
         self.buildStaticTypeArgument(ty)
