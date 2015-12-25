@@ -1256,9 +1256,13 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(ClassType(rootClass, ()), info.getType(info.ast.modules[0].definitions[0].body))
 
     def testExistentialLoadVar(self):
-        source = "class Box[static T](value: T)\n" + \
-                 "def f(box: forsome [X] Box[X]) = box.value"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
+        source = "class Foo\n" + \
+                 "  let foof = 12\n" + \
+                 "class Bar[static T] <: Foo\n" + \
+                 "def f(bar: forsome [X] Bar[X]) = bar.foof"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(I64Type, f.returnType)
 
     def testExistentialLoadPlain(self):
         source = "class Box[static T](value: i64)\n" + \
@@ -1268,10 +1272,13 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(I64Type, f.returnType)
 
     def testExistentialCallVar(self):
-        source = "class Box[static T](value: T)\n" + \
-                 "  def get = value\n" + \
-                 "def f(box: forsome [X] Box[X]) = box.get"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
+        source = "class Foo\n" + \
+                 "  def foom = 12\n" + \
+                 "class Bar[static T] <: Foo\n" + \
+                 "def f(bar: forsome [X] Bar[X]) = bar.foom"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(I64Type, f.returnType)
 
     def testExistentialCallPlain(self):
         source = "class Box[static T]\n" + \
@@ -1331,7 +1338,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "class Box[static T](value: T)\n" + \
                  "def f(list: forsome [X] List[Box[X]]) =\n" + \
                  "  list.get(0).value = list.get(1).value"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
         # This is technically safe, but we don't want the compiler to have to prove it. In
         # Java, this would be done with a helper method with wildcard capture. We'll have
         # something like that or an open expression in the future.

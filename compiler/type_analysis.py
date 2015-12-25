@@ -276,6 +276,12 @@ class TypeVisitorBase(ast.NodeVisitor):
     def visitNullLiteral(self, node):
         return ir_t.getNullType()
 
+    def visitLvalue(self, node):
+        if isinstance(node, ast.PropertyExpression):
+            return self.visit(node, isLvalue=True)
+        else:
+            return self.visit(node)
+
     def isPrefixNode(self, node):
         return isinstance(node, ast.VariableExpression) or \
                isinstance(node, ast.PropertyExpression) or \
@@ -728,7 +734,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                             else []
             superScope = self.info.getScope(ir_t.getClassFromType(supertype))
             self.handlePropertyCall(ir.CONSTRUCTOR_SUFFIX, superScope, supertype,
-                                    None, superArgTypes, True, True, node.id, node.location)
+                                    None, superArgTypes, True, True, False,
+                                    node.id, node.location)
 
         irInitializer = irClass.initializer
         irInitializer.parameterTypes = [thisType]
@@ -844,7 +851,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         if len(node.prefix) > 0:
             hasReceiver = not self.info.hasScopePrefixInfo(node.prefix[-1])
             patTy = self.handlePropertyCall(node.name, scope, receiverType, None, None,
-                                            hasReceiver, False, node.id, node.location)
+                                            hasReceiver, False, False, node.id, node.location)
         else:
             patTy = self.handleUnprefixedCall(node.name, None, None, node.id, node.location)
         return patTy
@@ -921,14 +928,14 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def visitAssignExpression(self, node):
         rightTy = self.visit(node.right)
-        leftTy = self.visit(node.left)
+        leftTy = self.visitLvalue(node.left)
         if not rightTy.isSubtypeOf(leftTy):
             raise TypeException(node.location,
                                 "for assignment, expected %s but was %s" %
                                 (str(leftTy), str(rightTy)))
         return leftTy
 
-    def visitPropertyExpression(self, node, mayBePrefix=False):
+    def visitPropertyExpression(self, node, mayBePrefix=False, isLvalue=False):
         receiverType = self.visitPossiblePrefix(node.receiver)
         if self.info.hasScopePrefixInfo(node.receiver):
             receiverScope = self.info.getScope(
@@ -947,7 +954,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                  isinstance(node.receiver, ast.SuperExpression)
             ty = self.handlePropertyCall(node.propertyName, receiverScope, receiverType,
                                          None, None, hasReceiver, receiverIsReceiver,
-                                         node.id, node.location)
+                                         isLvalue, node.id, node.location)
         return ty
 
     def visitCallExpression(self, node, mayBePrefix=False):
@@ -982,13 +989,14 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             else:
                 ty = self.handlePropertyCall(node.callee.propertyName, receiverScope,
                                              receiverType, typeArgs, argTypes,
-                                             hasReceiver, False, node.id, node.location)
+                                             hasReceiver, False, False, node.id, node.location)
         elif isinstance(node.callee, ast.ThisExpression) or \
              isinstance(node.callee, ast.SuperExpression):
             receiverType = self.visit(node.callee)
             receiverScope = self.info.getScope(ir_t.getClassFromType(receiverType))
             self.handlePropertyCall(ir.CONSTRUCTOR_SUFFIX, receiverScope, receiverType,
-                                    typeArgs, argTypes, True, True, node.id, node.location)
+                                    typeArgs, argTypes, True, True, False,
+                                    node.id, node.location)
             ty = ir_t.UnitType
         else:
             # TODO: callable expression
@@ -1330,7 +1338,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                        if prefix[i].typeArguments is not None \
                        else None
             ty = self.handlePropertyCall(prefix[i].name, scope, receiverType, typeArgs, None,
-                                         True, False, prefix[i].id, prefix[i].location)
+                                         True, False, False, prefix[i].id, prefix[i].location)
             self.info.setType(prefix[i], ty)
             i += 1
 
@@ -1423,7 +1431,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         return self.getDefnType(receiverType, True, defnInfo.irDefn, allTypeArgs)
 
     def handlePropertyCall(self, name, receiverScope, receiverType,
-                           typeArgs, argTypes, hasReceiver, receiverIsReceiver, useAstId, loc):
+                           typeArgs, argTypes, hasReceiver, receiverIsReceiver,
+                           isLvalue, useAstId, loc):
         """Handles a reference to a property inside an object or a scope.
 
         This can be used for methods, fields, and inner-class constructors with an explicit
@@ -1443,6 +1452,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 expression is a scope prefix, there might be no receiver.
             receiverIsReceiver (bool): whether the receiver used in the call is the same as the
                 caller's receiver. This is required for some calls.
+            isLvalue (bool): whether the property is being assigned to. Normally, the type of
+                a field or return type of a method may be upcast, but this is not true
+                during assignments.
             useAstId (AstId): the AST id where the symbol is referenced. Used to save info.
             loc (Location): the location of the reference in source code. Used in errors.
 
@@ -1478,7 +1490,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
         self.scope().use(defnInfo, useAstId, useKind, loc)
         ty = self.getDefnType(receiverType, True, defnInfo.irDefn, allTypeArgs)
-        self.checkForExistentialVars(ty, existentialVars, name, loc)
+        ty = self.upcastExistentialVars(ty, existentialVars, isLvalue, name, loc)
         return ty
 
     def handleUnprefixedCall(self, name, typeArgs, argTypes, useAstId, loc):
@@ -1605,7 +1617,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
         self.scope().use(defnInfo, useAstId, useKind, loc)
         ty = self.getDefnType(receiverType, False, defnInfo.irDefn, allTypeArgs)
-        self.checkForExistentialVars(ty, existentialVars, name, loc)
+        ty = self.upcastExistentialVars(ty, existentialVars, False, name, loc)
 
         if isAssignment and not ty.isSubtypeOf(firstType):
             raise TypeException(loc,
@@ -1707,7 +1719,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             self.ensureTypeInfoForDefn(irDefn)
             returnType = self.getDefnType(receiverType, receiverIsExplicit,
                                           irDefn, allTypeArgs)
-            self.checkForExistentialVars(returnType, existentialVars, nameInfo.name, loc)
+            returnType = self.upcastExistentialVars(returnType, existentialVars,
+                                                    False, nameInfo.name, loc)
         else:
             # The name refers to a matcher scope or definition.
             matcherDefnInfo = nameInfo.getDefnInfo()
@@ -1746,7 +1759,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             try:
                 returnType = self.handlePropertyCall("try-match", matcherScope,
                                                      matcherReceiverType, None, [exprType],
-                                                     matcherHasReceiver, False,
+                                                     matcherHasReceiver, False, False,
                                                      matcherAstId, loc)
             except ScopeException:
                 raise TypeException(loc, "cannot match without `try-match` method")
@@ -2004,13 +2017,20 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             receiverType = receiverType.ty
         return receiverType, existentialVars
 
-    def checkForExistentialVars(self, ty, existentialVars, name, loc):
-        """Verifies that the given type does not contain any of the given existential variables.
+    def upcastExistentialVars(self, ty, existentialVars, isLvalue, name, loc):
+        """Upcasts the given type until none of the given existential variables are referenced.
+
+        This is used when typing expressions that may have existential receivers. It's unsafe
+        to return a type that has free existential variables, so we upcast to higher classes
+        (eventually to `Object` if we have to) until the variables are no longer referenced.
 
         Args:
             ty (Type): the type of a field or method return accessed through a possibly
                 existential receiver.
             existentialVars (list(Type)?): existential variables declared on the receiver.
+            isLvalue (bool): whether we are checking the type of an lvalue. If this is True,
+                we cannot upcast. We'll report any error if any of `existentialVars` are
+                referenced.
             name (str): name of field or method. Used for error reporting.
             loc (Location): location in source code where the field or method is accessed.
                 Used for error reporting.
@@ -2025,12 +2045,20 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         # We may also want to add an "open" expression the user can bind existential variables
         # explicitly or do something like "wildcard capture" when we have type inference for
         # type arguments.
-        if existentialVars is None or len(existentialVars) == 0:
-            return
+        if existentialVars is None or len(existentialVars) == 0 or not ty.isObject():
+            return ty
         existentialVarIds = set(v.id for v in existentialVars)
         referencedVarIds = ty.findVariables()
-        if not existentialVarIds.isdisjoint(referencedVarIds):
-            raise TypeException(loc, "%s: contains existential type variables" % name)
+        if isLvalue:
+            if not existentialVarIds.isdisjoint(referencedVarIds):
+                raise TypeException(loc, "%s: contains existential type variables" % name)
+            else:
+                return ty
+        else:
+            while not existentialVarIds.isdisjoint(referencedVarIds):
+                ty = ty.getBaseClassType()
+                referencedVarIds = ty.findVariables()
+            return ty
 
     def checkAndHandleReturnType(self, ty, loc):
         self.checkTypeVariance(ty, loc)

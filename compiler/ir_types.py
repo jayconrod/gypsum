@@ -354,12 +354,17 @@ class ObjectType(Type):
     def size(self):
         return bytecode.WORDSIZE
 
+    def getBaseClassType(self):
+        """Returns the `ClassType` this type is derived from. For root class types, this
+        returns `None`."""
+        raise NotImplementedError()
+
     def substituteForBaseClass(self, base):
         """Returns a base type of the corresponding class with type arguments substituted
         appropriately. For example, if we have class A[T] and class B <: A[C], then if we
         call this method on B, we will get A[C]. Note that this goes in the reverse direction
         from `substituteForInheritance`."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def uninitializedType(self):
         return getNullType() if self.isNullable() else getNothingClassType()
@@ -404,6 +409,11 @@ class ClassType(ObjectType,):
                self.flags == other.flags and \
                self.clas is other.clas and \
                self.typeArguments == other.typeArguments
+
+    def getBaseClassType(self):
+        if len(self.clas.supertypes) == 0:
+            return None
+        return self.substituteForBaseClass(self.clas.supertypes[0].clas)
 
     def substitute(self, parameters, replacements):
         return ClassType(self.clas,
@@ -454,6 +464,13 @@ class VariableType(ObjectType):
         return self.__class__ is other.__class__ and \
                self.typeParameter is other.typeParameter and \
                self.flags == other.flags
+
+    def getBaseClassType(self):
+        baseType = self
+        while isinstance(baseType, VariableType):
+            baseType = baseType.typeParameter.upperBound
+        assert isinstance(baseType, ClassType)
+        return baseType
 
     def substitute(self, parameters, replacements):
         assert len(parameters) == len(replacements)
@@ -542,6 +559,12 @@ class ExistentialType(ObjectType):
         subArgs = [VariableType(v) for v in self.variables]
         otherSubType = other.ty.substitute(other.variables, subArgs)
         return self.ty.isEquivalent(otherSubType)
+
+    def getBaseClassType(self):
+        innerBaseType = self.ty.getBaseClassType()
+        if innerBaseType is None:
+            return innerBaseType
+        return ExistentialType.close(self.variables, innerBaseType)
 
     def substitute(self, parameters, replacements):
         subTy = self.ty.substitute(parameters, replacements)
