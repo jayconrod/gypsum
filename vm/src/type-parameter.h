@@ -45,6 +45,7 @@ class TypeParameter: public Block {
   void setLowerBound(Type* newLowerBound) { lowerBound_.set(this, newLowerBound); }
 
   static bool isCompatibleWith(const Handle<TypeParameter>& a, const Handle<TypeParameter>& b);
+  bool isEquivalent(TypeParameter* other) const;
   bool hasCommonBound(TypeParameter* other) const;
 
   Variance variance() const;

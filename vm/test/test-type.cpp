@@ -417,6 +417,46 @@ TEST(SubtypeClassWithContravariantParameter) {
 }
 
 
+TEST(SubtypeEquivalentExistentials) {
+  TEST_PROLOGUE
+
+  auto X = TypeParameter::create(heap, NAME("X"), 0,
+                                 handle(Type::rootClassType(roots)),
+                                 handle(Type::nothingType(roots)));
+  auto XType = Type::create(heap, X);
+  auto eXType = Type::create(heap, vector<Local<TypeParameter>>{X}, XType);
+  auto Y = TypeParameter::create(heap, NAME("Y"), 0,
+                                 handle(Type::rootClassType(roots)),
+                                 handle(Type::nothingType(roots)));
+  auto YType = Type::create(heap, Y);
+  auto eYType = Type::create(heap, vector<Local<TypeParameter>>{Y}, YType);
+
+  ASSERT_TRUE(Type::isSubtypeOf(eXType, eYType));
+  ASSERT_TRUE(Type::isSubtypeOf(eYType, eXType));
+}
+
+
+TEST(SubtypeLeftExistential) {
+  TEST_PROLOGUE
+
+  auto rootType = handle(Type::rootClassType(roots));
+  auto nothingType = handle(Type::nothingType(roots));
+
+  auto Foo = Class::create(heap);
+  auto T = TypeParameter::create(heap, NAME("T"), COVARIANT_FLAG, rootType, nothingType);
+  auto fooTypeParameters = BlockArray<TypeParameter>::create(heap, 1);
+  fooTypeParameters->set(0, *T);
+  Foo->setTypeParameters(*fooTypeParameters);
+  Foo->setSupertype(Type::rootClassType(roots));
+
+  auto X = TypeParameter::create(heap, NAME("X"), 0, rootType, nothingType);
+  auto XType = Type::create(heap, X);
+  auto FooXType = Type::create(heap, Foo, vector<Local<Type>>{XType});
+  auto eXFooType = Type::create(heap, vector<Local<TypeParameter>>{X}, FooXType);
+  auto FooObjectType = Type::create(heap, Foo, vector<Local<Type>>{rootType});
+  ASSERT_TRUE(Type::isSubtypeOf(eXFooType, FooObjectType));
+}
+
 TEST(SubstituteTypeParameter) {
   TEST_PROLOGUE
 

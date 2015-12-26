@@ -814,7 +814,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             else:
                 varTy = None
 
-        patTy = self.findPatternType(varTy, exprTy, mode, False, node.name, node.location)
+        patTy = self.findPatternType(varTy, exprTy, mode, isShadow, node.name, node.location)
 
         if not isShadow:
             irDefn = self.info.getDefnInfo(node).irDefn
