@@ -1902,15 +1902,49 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 match = False
 
             if match:
-                if candidate is not None:
-                    raise TypeException(loc, "%s: ambiguous call to overloaded function" % \
-                                        name)
                 allTypeArgs, _ = typesAndArgs
-                candidate = (defnInfo, allTypeArgs)
+                if candidate is None:
+                    candidate = (defnInfo, allTypeArgs)
+                else:
+                    candidate = self.chooseOverload(candidate, (defnInfo, allTypeArgs),
+                                                    name, loc)
 
         if candidate is None:
             raise TypeException(loc, "%s: could not find compatible definition" % name)
         return candidate
+
+    def chooseOverload(self, first, second, name, loc):
+        """Chooses between two possible candidates for an overloaded function call. Both
+        candidates must be compatible with the provided arguments.
+
+        Args:
+            first (DefnInfo, list(Type)): the first candidate. Must be a Function.
+            second (DefnInfo, list(Type)): the second candidate. Must be a Function.
+            name (str): name of the function being called. Used for error reporting.
+            loc (Location): location in source of the call. Used for error reporting.
+
+        Return:
+            (DefnInfo, list(Type)): the more specific candidate is returned.
+
+        Raises:
+            TypeException: if the call is ambiguous
+        """
+        firstFunction = first[0].irDefn
+        secondFunction = second[0].irDefn
+        assert isinstance(firstFunction, ir.Function) and \
+               isinstance(secondFunction, ir.Function) and \
+               len(firstFunction.parameterTypes) == len(secondFunction.parameterTypes)
+        if all(pt1 == pt2 for pt1, pt2 in
+               zip(firstFunction.parameterTypes, secondFunction.parameterTypes)):
+            raise TypeException(loc, "%s: ambiguous call to overloaded function" % name)
+        elif all(pt1.isSubtypeOf(pt2) for pt1, pt2 in
+                 zip(firstFunction.parameterTypes, secondFunction.parameterTypes)):
+            return first
+        elif all(pt2.isSubtypeOf(pt2) for pt1, pt2 in
+                 zip(firstFunction.parameterTypes, secondFunction.parameterTypes)):
+            return second
+        else:
+            raise TypeException(loc, "%s: ambiguous call to overloaded function" % name)
 
     def checkCallAllowed(self, irCallee, receiverIsReceiver, useKind, loc):
         """Checks whether a call to a function is valid.
