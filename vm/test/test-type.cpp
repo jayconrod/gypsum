@@ -457,6 +457,20 @@ TEST(SubtypeLeftExistential) {
   ASSERT_TRUE(Type::isSubtypeOf(eXFooType, FooObjectType));
 }
 
+
+TEST(SubtypeRightExistential) {
+  TEST_PROLOGUE
+
+  auto rootType = handle(Type::rootClassType(roots));
+  auto stringType = handle(roots->getBuiltinType(BUILTIN_STRING_CLASS_ID));
+
+  auto X = TypeParameter::create(heap, NAME("X"), NO_FLAGS, rootType, stringType);
+  auto XType = Type::create(heap, X);
+  auto eXType = Type::create(heap, vector<Local<TypeParameter>>{X}, XType);
+  ASSERT_TRUE(Type::isSubtypeOf(stringType, eXType));
+}
+
+
 TEST(SubstituteTypeParameter) {
   TEST_PROLOGUE
 
