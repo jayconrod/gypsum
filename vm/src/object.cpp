@@ -59,15 +59,27 @@ Local<Object> Object::create(Heap* heap, const Handle<Meta>& meta, length_t leng
 
 
 Local<Type> Object::typeof(const Handle<Object>& object) {
+  auto heap = object->getHeap();
   auto clas = handle(object->meta()->clas());
-  vector<Local<Type>> typeArgs;
-  typeArgs.reserve(clas->typeParameterCount());
-  for (length_t i = 0; i < clas->typeParameterCount(); i++) {
-    auto typeParam = handle(clas->typeParameter(i));
-    ASSERT((typeParam->flags() & STATIC_FLAG) != 0);
-    typeArgs.push_back(Type::create(object->getHeap(), typeParam));
+  auto typeParamCount = clas->typeParameterCount();
+  Local<Type> type;
+  if (typeParamCount == 0) {
+    type = Type::create(heap, clas);
+  } else {
+    vector<Local<TypeParameter>> variables;
+    variables.reserve(typeParamCount);
+    vector<Local<Type>> typeArgs;
+    typeArgs.reserve(typeParamCount);
+    for (length_t i = 0; i < typeParamCount; i++) {
+      auto typeParam = handle(clas->typeParameter(i));
+      ASSERT((typeParam->flags() & STATIC_FLAG) != 0);
+      variables.push_back(typeParam);
+      auto typeArg = Type::create(heap, typeParam);
+      typeArgs.push_back(typeArg);
+    }
+    auto classType = Type::create(heap, clas, typeArgs);
+    type = Type::create(heap, variables, classType);
   }
-  auto type = Type::create(object->getHeap(), clas, typeArgs);
   return type;
 }
 

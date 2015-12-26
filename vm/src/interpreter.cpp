@@ -597,10 +597,33 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         {
           GCSafeScope gcSafe(this);
           HandleScope handleScope(vm_);
-          auto type = handle(mem<Type*>(stack_->sp()));
+          auto type = handle(mem<Type*>(stack_->sp() + kPrepareForGCSize));
           type = Type::createWithFlags(vm_->heap(), type, flags);
           mem<Type*>(stack_->sp()) = *type;
         }
+        break;
+      }
+
+      case TYXS:
+        readVbn();
+        break;
+
+      case TYXD: {
+        auto count = toLength(readVbn());
+        Type* type;
+        {
+          GCSafeScope gcSafe(this);
+          HandleScope handleScope(vm_);
+          auto innerType = handle(mem<Type*>(stack_->sp() + kPrepareForGCSize));
+          vector<Local<TypeParameter>> variables(count);
+          for (length_t i = 0; i < count; i++) {
+            auto varType = mem<Type*>(stack_->sp() + kPrepareForGCSize + (i + 1) * kSlotSize);
+            variables[count - i - 1] = handle(varType->asVariable());
+          }
+          type = *Type::create(vm_->heap(), variables, innerType);
+        }
+        stack_->setSp(stack_->sp() + count * kSlotSize);
+        mem<Type*>(stack_->sp()) = type;
         break;
       }
 

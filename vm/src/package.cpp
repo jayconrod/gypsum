@@ -935,8 +935,7 @@ Local<Type> Loader::readType() {
     }
 
     return ty;
-  } else {
-    ASSERT(form == Type::VARIABLE_TYPE);
+  } else if (form == Type::VARIABLE_TYPE) {
     auto depIndex = readVbn();
     auto defnIndex = readVbn();
 
@@ -968,6 +967,18 @@ Local<Type> Loader::readType() {
       ty = Type::create(heap(), param, flags);
     }
 
+    return ty;
+  } else {
+    ASSERT(form == Type::EXISTENTIAL_TYPE);
+    auto length = readLengthVbn();
+    vector<Local<TypeParameter>> variables;
+    variables.reserve(length);
+    for (length_t i = 0; i < length; i++) {
+      auto index = readLengthVbn();
+      variables.push_back(getTypeParameter(index));
+    }
+    auto innerType = readType();
+    auto ty = Type::create(heap(), variables, innerType);
     return ty;
   }
 }
