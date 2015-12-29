@@ -11,7 +11,7 @@ import flags
 import ids
 import ir_types
 import bytecode
-from utils import each, hashList, reprFormat
+from utils import each, indexSame, hashList, reprFormat
 
 import re
 import StringIO
@@ -107,24 +107,20 @@ class Package(object):
 
         self.exports = {}
 
-        def addExport(defn):
-            assert defn.name not in self.exports
-            self.exports[defn.name] = defn
-
         for g in self.globals:
             if flags.PUBLIC in g.flags:
-                addExport(g)
+                self.exports[g.name] = g
         for f in self.functions:
             if flags.PUBLIC in f.flags and \
                (flags.METHOD not in f.flags or \
                 len(frozenset([flags.STATIC, flags.CONSTRUCTOR]) & f.flags) > 0):
-                addExport(f)
+                self.exports[mangleFunctionName(f, self)] = f
         for c in self.classes:
             if flags.PUBLIC in c.flags:
-                addExport(c)
+                self.exports[c.name] = c
         for p in self.typeParameters:
             if flags.PUBLIC in c.flags:
-                addExport(p)
+                self.exports[p.name] = p
 
         return self.exports
 
@@ -137,7 +133,8 @@ class Package(object):
             depExports = dep.package.ensureExports()
             dep.linkedGlobals = [depExports[g.name] for g in dep.externGlobals]
             assert all(isinstance(g, Global) for g in dep.linkedGlobals)
-            dep.linkedFunctions = [depExports[f.name] for f in dep.externFunctions]
+            dep.linkedFunctions = [depExports[mangleFunctionName(f.name, self)]
+                                   for f in dep.externFunctions]
             assert all(isinstance(f, Function) for f in dep.linkedFunctions)
             dep.linkedClasses = [depExports[c.name] for c in dep.externClasses]
             assert all(isinstance(c, Class) for c in dep.linkedClasses)
@@ -1042,6 +1039,78 @@ def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes, importedTy
         return (allTypeArgs, allArgTypes)
     else:
         return None
+
+
+def mangleFunctionName(function, package):
+    """Returns a mangled name string which can be used to link overloaded functions."""
+    def mangleType(ty, variables):
+        if ty is ir_types.UnitType:
+            return "U"
+        elif ty is ir_types.BooleanType:
+            return "Z"
+        elif ty is ir_types.I8Type:
+            return "B"
+        elif ty is ir_types.I16Type:
+            return "S"
+        elif ty is ir_types.I32Type:
+            return "I"
+        elif ty is ir_types.I64Type:
+            return "L"
+        elif ty is ir_types.F32Type:
+            return "F"
+        elif ty is ir_types.F64Type:
+            return "D"
+        elif isinstance(ty, ir_types.ClassType):
+            nameStr = str(ty.clas.name)
+            if ty.clas.isForeign():
+                packageStr = str(package.dependencies[ty.clas.id.packageId.index].name)
+                prefixStr = "%d%s:%d%s" % (len(packageStr), packageStr, len(nameStr), nameStr)
+            elif ty.clas.isLocal():
+                prefixStr = ":%d%s" % (len(nameStr), nameStr)
+            else:
+                assert ty.clas.isBuiltin()
+                prefixStr = "::%d%s" % (len(nameStr), nameStr)
+            if len(ty.typeArguments) == 0:
+                typeArgStr = ""
+            else:
+                typeArgParts = [mangleType(a, variables) for a in ty.typeArguments]
+                typeArgStr = "[" + ",".join(typeArgParts) + "]"
+            flagStr = "?" if ty.isNullable() else ""
+            return "C" + prefixStr + typeArgStr + flagStr
+        elif isinstance(ty, ir_types.VariableType):
+            i = indexSame(variables, ty.typeParameter)
+            assert i >= 0
+            return "T%d%s" % (i, "?" if ty.isNullable() else "")
+        else:
+            assert isinstance(ty, ir_types.ExistentialType)
+            allVars = variables + list(ty.variables)
+            varParts = [mangleTypeParameter(p, allVars) for p in ty.variables]
+            varStr = "[" + ",".join(varParts) + "]"
+            tyStr = mangleType(ty.ty, allVars)
+            return "E" + varStr + tyStr
+
+    def mangleTypeParameter(typeParameter, variables):
+        flagStr = "s" if flags.STATIC in typeParameter.flags else ""
+        upperStr = mangleType(typeParameter.upperBound, variables)
+        lowerStr = mangleType(typeParameter.lowerBound, variables)
+        return "%s<%s>%s" % (flagStr, upperStr, lowerStr)
+
+    if len(function.name.components) == 1:
+        nameStr = "%d%s" % (len(function.name.components[0]), function.name.components[0])
+    else:
+        nameStr = "%s.%d%s" % (
+            ".".join(function.name.components[:-1]),
+            len(function.name.components[-1]),
+            function.name.components[-1])
+    if len(function.typeParameters) == 0:
+        typeParamsStr = ""
+    else:
+        typeParamsParts = [mangleTypeParameter(tp, function.typeParameters)
+                           for tp in function.typeParameters]
+        typeParamsStr = "[" + ",".join(typeParamsParts) + "]"
+    argsParts = [mangleType(pt, function.typeParameters) for pt in function.parameterTypes]
+    argsStr = "(" + ",".join(argsParts) + ")"
+    return nameStr + typeParamsStr + argsStr
 
 
 __all__ = [

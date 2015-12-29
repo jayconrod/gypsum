@@ -325,7 +325,7 @@ Type::Form Type::asPrimitive()const  {
 
 
 bool Type::isClass() const {
-  return form() == CLASS_TYPE;
+  return form() == CLASS_TYPE || form() == EXTERN_CLASS_TYPE;
 }
 
 
@@ -336,7 +336,7 @@ Class* Type::asClass() const {
 
 
 bool Type::isVariable() const {
-  return form() == VARIABLE_TYPE;
+  return form() == VARIABLE_TYPE || form() == EXTERN_VARIABLE_TYPE;
 }
 
 

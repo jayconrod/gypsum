@@ -123,6 +123,62 @@ class TestIr(utils_test.TestCaseWithDefinitions):
         C = self.makeClass("C", supertypes=[ClassType(B)])
         self.assertEquals([B, A], C.findClassPathToBaseClass(A))
 
+    def testMangleFunctionNameSimple(self):
+        package = ir.Package(ids.TARGET_PACKAGE_ID)
+        f = self.makeFunction(ir.Name(["foo", "bar", "baz"]), returnType=UnitType,
+                              typeParameters=[],
+                              parameterTypes=[UnitType, BooleanType, I8Type, I16Type,
+                                              I32Type, I64Type, F32Type, F64Type])
+        self.assertEquals("foo.bar.3baz(U,Z,B,S,I,L,F,D)", ir.mangleFunctionName(f, package))
+
+    def testMangleFunctionNameClasses(self):
+        package = ir.Package(ids.TARGET_PACKAGE_ID)
+        P = package.addTypeParameter(ir.Name(["P"]))
+        Q = package.addTypeParameter(ir.Name(["Q"]))
+        Local = package.addClass(ir.Name(["local", "Local"]), typeParameters=[P, Q])
+        otherPackage = ir.Package(name=ir.Name(["foo", "bar", "baz"]))
+        otherPackage.id.index = 0
+        S = otherPackage.addTypeParameter(ir.Name(["S"]))
+        T = otherPackage.addTypeParameter(ir.Name(["T"]))
+        Foreign = otherPackage.addClass(ir.Name(["foreign", "Foreign"]), typeParameters=[S, T])
+        Foreign.id.packageId = otherPackage.id
+        package.dependencies = [ir.PackageDependency(otherPackage.name, None, None)]
+
+        X = package.addTypeParameter(ir.Name(["X"]), upperBound=getRootClassType(),
+                                     lowerBound=getNothingClassType(),
+                                     flags=frozenset([STATIC]))
+        XType = VariableType(X)
+        Y = package.addTypeParameter(ir.Name(["Y"]), upperBound=getRootClassType(),
+                                     lowerBound=getNothingClassType())
+        YType = VariableType(Y, frozenset([NULLABLE_TYPE_FLAG]))
+        LocalType = ClassType(Local, (XType, YType))
+        ForeignType = ClassType(Foreign, (YType, XType), frozenset([NULLABLE_TYPE_FLAG]))
+        BuiltinType = getRootClassType()
+
+        f = package.addFunction(ir.Name(["quux"]), typeParameters=[X, Y],
+                                parameterTypes=[LocalType, ForeignType, BuiltinType])
+        expected = "4quux[s<C::6Object>C::7Nothing,<C::6Object>C::7Nothing](C:11local.Local[T0,T1?],C11foo.bar.baz:15foreign.Foreign[T1?,T0]?,C::6Object)"
+        self.assertEquals(expected, ir.mangleFunctionName(f, package))
+
+    def testMangleFunctionNameExistential(self):
+        package = ir.Package(ids.TARGET_PACKAGE_ID)
+        S = package.addTypeParameter(ir.Name(["S"]), upperBound=getRootClassType(),
+                                     lowerBound=getNothingClassType())
+        T = package.addTypeParameter(ir.Name(["T"]), upperBound=getRootClassType(),
+                                     lowerBound=getNothingClassType())
+        C = package.addClass(ir.Name(["C"]), typeParameters=[S, T])
+        P = package.addTypeParameter(ir.Name(["P"]), upperBound=getRootClassType(),
+                                     lowerBound=getNothingClassType())
+        PType = VariableType(P)
+        X = package.addTypeParameter(ir.Name(["X"]), upperBound=getRootClassType(),
+                                     lowerBound=getNothingClassType())
+        XType = VariableType(X)
+        eXType = ExistentialType((X,), ClassType(C, (PType, XType)))
+        f = package.addFunction(ir.Name(["foo"]), typeParameters=[P],
+                                parameterTypes=[eXType])
+        expected = "3foo[<C::6Object>C::7Nothing](E[<C::6Object>C::7Nothing]C:1C[T0,T1])"
+        self.assertEquals(expected, ir.mangleFunctionName(f, package))
+
 
 class TestName(unittest.TestCase):
     def testFromStringBasic(self):
