@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -50,10 +50,10 @@ class Type(data.Data):
         return not self.isEquivalent(lub) and not other.isEquivalent(lub)
 
     def isPrimitive(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def isObject(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def combine(self, ty, loc):
         combined = self.lub(ty)
@@ -237,7 +237,7 @@ class Type(data.Data):
             return NoType
 
     def substitute(self, parameters, replacements):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def substituteForInheritance(self, clas, base):
         assert clas.isSubclassOf(base)
@@ -248,15 +248,15 @@ class Type(data.Data):
         return ty
 
     def getTypeArguments(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def findVariables(self):
         """Returns a set of `DefnId`s for `TypeParameters` referenced through `VariableType`s
         in this type."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def size(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def alignment(self):
         return self.size()
@@ -268,7 +268,7 @@ class Type(data.Data):
         return NULLABLE_TYPE_FLAG in self.flags
 
     def uninitializedType(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def mayUseAsBound(self):
         """Returns whether this type may be used as an upper or lower bound for a type

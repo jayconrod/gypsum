@@ -1,4 +1,4 @@
-# Copyright 2015, Jay Conrod. All rights reserved.
+# Copyright 2015-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -13,14 +13,19 @@ from package_loader import BasePackageLoader
 from utils import Counter, reprFormat
 
 
-OPTION_SOURCE = "public class Option[static +T]\n" + \
+OPTION_SOURCE = "public abstract class Option[static +T]\n" + \
+                "  public abstract def is-defined: boolean\n" + \
+                "  public abstract def get: T\n" + \
                 "public class Some[static +T](value: T) <: Option[T]\n" + \
-                "  public def get = value\n" + \
+                "  public override def is-defined = true\n" + \
+                "  public override def get = value\n" + \
                 "  public static def try-match(obj: Object): Option[Object] =\n" + \
                 "    match (obj)\n" + \
                 "      case some: Some[_] => some\n" + \
                 "      case _ => None\n" + \
                 "class None-class <: Option[Nothing]\n" + \
+                "  public override def is-defined = false\n" + \
+                "  public override def get = throw Exception()\n" + \
                 "public let None: Option[Nothing] = None-class()\n"
 
 TUPLE_SOURCE = "class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n"

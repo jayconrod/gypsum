@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -1406,59 +1406,49 @@ class TestCompiler(TestCaseWithDefinitions):
                  "    case _ => 34"
         package = self.compileFromSource(source, name=STD_NAME)
         Matcher = package.findFunction(name="Matcher")
-        Some = package.findClass(name="Some")
-        T = Some.typeParameters[0]
-        get = Some.findMethodByShortName("get")
-        getIndex = Some.getMethodIndex(get)
+        Option = package.findClass(name="Option")
+        isDefined = Option.findMethodByShortName("is-defined")
+        isDefinedIndex = Option.getMethodIndex(isDefined)
+        get = Option.findMethodByShortName("get")
+        getIndex = Option.getMethodIndex(get)
         Tuple2 = package.findClass(name="Tuple2")
         self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
-                               # block 0
+                               # block 0 []
                                ldlocal(0),
                                dup(),
                                callg(Matcher),
-                               tyvd(T),
-                               tycd(Some),
-                               castcbr(1, 5),
+                               dup(),
+                               tycs(getStringClass()),
+                               tycs(getStringClass()),
+                               tycs(Tuple2),
+                               callv(1, isDefinedIndex),
+                               branchif(1, 2),
                              ], [
-                               # block 1
-                               tycs(getRootClass()),
+                               # block 1 [some value]
+                               tycs(getStringClass()),
+                               tycs(getStringClass()),
+                               tycs(Tuple2),
                                callv(1, getIndex),
-                               tyvd(Tuple2.typeParameters[0]),
-                               tyvd(Tuple2.typeParameters[1]),
-                               tycd(Tuple2),
-                               castc(),
                                dup(),
                                ldf(0),
-                               tycd(getStringClass()),
-                               castcbr(2, 4),
-                             ], [
-                               # block 2
                                stlocal(-1),
                                ldf(1),
-                               tycd(getStringClass()),
-                               castcbr(3, 5),
-                             ], [
-                               # block 3
                                stlocal(-2),
                                drop(),
                                i64(12),
-                               branch(7),
+                               branch(4),
                              ], [
-                               # block 4
+                               # block 2 [none value]
                                drop(),
-                               branch(5),
+                               branch(3),
                              ], [
-                               # block 5
-                               drop(),
-                               branch(6),
-                             ], [
-                               # block 6
+                               # block 3 [value]
                                drop(),
                                i64(34),
-                               branch(7),
+                               branch(4),
                              ], [
-                               # block 7
+                               # block 4 [result]
                                ret(),
                              ]],
                              variables=[self.makeVariable("f.obj", type=getRootClassType(),

@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -9,7 +9,7 @@ from functools import partial
 import ast
 from bytecode import W8, W16, W32, W64, BUILTIN_TYPE_CLASS_ID, BUILTIN_TYPE_CTOR_ID, instInfoByCode, BUILTIN_MATCH_EXCEPTION_CLASS_ID, BUILTIN_MATCH_EXCEPTION_CTOR_ID, BUILTIN_STRING_EQ_OP_ID
 from ir import IrTopDefn, Class, Field, Function, Global, LOCAL, Package, PACKAGE_INIT_NAME, RECEIVER_SUFFIX, Variable
-from ir_types import NoType, UnitType, BooleanType, I8Type, I16Type, I32Type, I64Type, F32Type, F64Type, ClassType, VariableType, ExistentialType, NULLABLE_TYPE_FLAG, getExceptionClassType, getClassFromType, getStringType, getRootClassType
+from ir_types import Type, NoType, UnitType, BooleanType, I8Type, I16Type, I32Type, I64Type, F32Type, F64Type, ClassType, VariableType, ExistentialType, NULLABLE_TYPE_FLAG, getExceptionClassType, getClassFromType, getStringType, getRootClassType
 import ir_instructions
 from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PACKAGE_INITIALIZER_HINT, ARRAY_ELEMENT_GET_HINT, ARRAY_ELEMENT_SET_HINT, ARRAY_ELEMENT_LENGTH_HINT, DefnInfo, NORMAL_MODE, STD_MODE, NOSTD_MODE
 from flags import ABSTRACT, STATIC, LET, ARRAY
@@ -1644,57 +1644,58 @@ class CompileVisitor(ast.NodeVisitor):
             self.dup()
             self.buildStaticTypeArguments(typeArgs)
             self.callFunction(irDefn)
+        returnType = irDefn.returnType.substitute(irDefn.typeParameters, typeArgs)
+        optionClass = self.info.getStdClass("Option", loc)
+        optionType = returnType.substituteForBaseClass(optionClass)
+        valueType = optionType.getTypeArguments()[0]
 
         # Check if it returned Some.
-        someClass = self.info.getStdClass("Some", loc)
-        someType = ClassType.forReceiver(someClass)
-        self.buildType(someType, loc)
+        self.dup()
+        self.buildStaticTypeArgument(valueType)
+        self.buildCallNamedMethod(optionType, "is-defined", COMPILE_FOR_VALUE)
         matcherSuccessBlock = self.newBlock()
-        dropSomeBlock = self.newBlock()
-        self.castcbr(matcherSuccessBlock.id, dropSomeBlock.id)
+        dropBlock = self.newBlock()
+        self.branchif(matcherSuccessBlock.id, dropBlock.id)
 
         # Get the value out of the Some. Cast it to a tuple if we need to.
         self.setCurrentBlock(matcherSuccessBlock)
-        self.buildStaticTypeArgument(getRootClassType())
-        self.buildCallNamedMethod(someType, "get", COMPILE_FOR_VALUE)
-        n = len(subPatterns)
-        if n > 1:
-            tupleClass = self.info.getTupleClass(n, loc)
-            tupleType = ClassType.forReceiver(tupleClass)
-            self.buildType(tupleType, loc)
-            self.castc()
+        self.buildStaticTypeArgument(valueType)
+        self.buildCallNamedMethod(optionType, "get", COMPILE_FOR_VALUE)
 
-        # If there is just one pattern inside, pass the value to that pattern. Otherwise,
-        # load each value out of the tuple and pass those to the patterns. Note that we pass
-        # Object as the expression type for each tuple. We haven't properly type checked the
-        # value we pulled out of the Some[_]. We need to type check these values at runtime,
-        # but the type checks should never fail.
+        # If there is just one sub-pattern, pass the value to that pattern. Otherwise, the
+        # value must be a tuple. Load each value out of the tuple and pass those to the
+        # sub-patterns.
         successState = None
+        n = len(subPatterns)
         if n == 1:
-            self.visit(subPatterns[0], COMPILE_FOR_MATCH, getRootClassType(), dropSomeBlock)
+            self.visit(subPatterns[0], COMPILE_FOR_MATCH, valueType, dropBlock)
             successState = self.saveCurrentBlock()
         else:
+            valueTypeArgs = valueType.getTypeArguments()
             dropFieldBlock = self.newBlock()
+            mustMatch = True
             for i in xrange(n - 1):
                 self.dup()
                 self.ldf(i)
-                self.visit(subPatterns[i], COMPILE_FOR_MATCH,
-                           getRootClassType(), dropFieldBlock)
+                self.visit(subPatterns[i], COMPILE_FOR_MATCH, valueTypeArgs[i], dropFieldBlock)
+                mustMatch &= type_analysis.patternMustMatch(subPatterns[i], valueTypeArgs[i],
+                                                           self.info)
             self.ldf(n - 1)
-            self.visit(subPatterns[-1], COMPILE_FOR_MATCH, getRootClassType(), dropSomeBlock)
+            self.visit(subPatterns[-1], COMPILE_FOR_MATCH, valueTypeArgs[-1], dropBlock)
             successState = self.saveCurrentBlock()
 
             # If one of the sub-patterns failed to match, we need to drop the field.
-            self.setCurrentBlock(dropFieldBlock)
-            self.drop()
-            self.branch(dropSomeBlock.id)
+            if not mustMatch:
+                self.setCurrentBlock(dropFieldBlock)
+                self.drop()
+                self.branch(dropBlock.id)
 
         # If the matcher did not return Some, drop the return value.
-        self.setCurrentBlock(dropSomeBlock)
+        self.setCurrentBlock(dropBlock)
         self.drop()
         self.branch(failBlock.id)
 
-        # Go back to the success block and drop the last field.
+        # Go back to the success block and drop value passed to the matcher.
         self.restoreCurrentBlock(successState)
         self.drop()
 
