@@ -834,10 +834,13 @@ class TestCompiler(TestCaseWithDefinitions):
         source = "public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n" + \
                  "def f = (\"foo\", \"bar\")._1"
         package = self.compileFromSource(source, name=STD_NAME)
+        stringClass = getStringClass()
         tupleClass = package.findClass(name="Tuple2")
         fooIndex = package.findString("foo")
         barIndex = package.findString("bar")
         expected = self.makeSimpleFunction("f", getStringType(), [[
+                       tycs(stringClass),
+                       tycs(stringClass),
                        allocobj(tupleClass),
                        dup(),
                        string(fooIndex),
@@ -1351,44 +1354,45 @@ class TestCompiler(TestCaseWithDefinitions):
         stringType = getStringType()
         tryMatch = package.findFunction(name="Some.try-match")
         some = package.findClass(name="Some")
+        isDefined = some.findMethodByShortName("is-defined")
+        isDefinedIndex = some.getMethodIndex(isDefined)
         get = some.findMethodByShortName("get")
         getIndex = some.getMethodIndex(get)
-        value = some.fields[0]
-        T = some.typeParameters[0]
         noIndex = package.findString("no")
         self.checkFunction(package,
                            self.makeSimpleFunction("f", stringType, [[
-                               # block 0
+                               # block 0 []
                                ldlocal(0),
                                dup(),
                                tycs(getRootClass()),
                                callg(tryMatch),
-                               tyvd(T),
-                               tycd(some),
-                               castcbr(1, 3),
+                               dup(),
+                               tycs(getRootClass()),
+                               callv(1, isDefinedIndex),
+                               branchif(1, 3),
                              ], [
-                               # block 1
+                               # block 1 [some value]
                                tycs(getRootClass()),
                                callv(1, getIndex),
                                tycd(getStringClass()),
                                castcbr(2, 3),
                              ], [
-                               # block 2
+                               # block 2 [string value]
                                stlocal(-1),
                                drop(),
                                ldlocal(-1),
                                branch(5),
                              ], [
-                               # block 3
+                               # block 3 [obj value]
                                drop(),
                                branch(4),
                              ], [
-                               # block 4
+                               # block 4 [value]
                                drop(),
                                string(noIndex),
                                branch(5),
                              ], [
-                               # block 5
+                               # block 5 [result]
                                ret(),
                              ]],
                              variables=[self.makeVariable("f.obj", type=getRootClassType(),
@@ -1471,41 +1475,40 @@ class TestCompiler(TestCaseWithDefinitions):
         Matcher = Foo.findMethodByShortName("Matcher")
         MatcherIndex = Foo.getMethodIndex(Matcher)
         Some = package.findClass(name="Some")
+        isDefined = Some.findMethodByShortName("is-defined")
+        isDefinedIndex = Some.getMethodIndex(isDefined)
         get = Some.findMethodByShortName("get")
         getIndex = Some.getMethodIndex(get)
         self.checkFunction(package,
                            self.makeSimpleFunction("Foo.f", I64Type, [[
-                               # block 0
+                               # block 0 []
                                ldlocal(1),
                                ldlocal(0),
                                dupi(1),
                                callv(2, MatcherIndex),
-                               tyvd(Some.typeParameters[0]),
-                               tycd(Some),
-                               castcbr(1, 3),
+                               dup(),
+                               tycs(getStringClass()),
+                               callv(1, isDefinedIndex),
+                               branchif(1, 2),
                              ], [
-                               # block 1
-                               tycs(getRootClass()),
+                               # block 1 [some value]
+                               tycs(getStringClass()),
                                callv(1, getIndex),
-                               tycd(getStringClass()),
-                               castcbr(2, 3),
-                             ], [
-                               # block 2
                                stlocal(-1),
                                drop(),
                                i64(12),
-                               branch(5),
-                             ], [
-                               # block 3
-                               drop(),
                                branch(4),
                              ], [
-                               # block 4
+                               # block 2 [none value]
+                               drop(),
+                               branch(3),
+                             ], [
+                               # block 3 [value]
                                drop(),
                                i64(34),
-                               branch(5),
+                               branch(4),
                              ], [
-                               # block 5
+                               # block 4 [result]
                                ret(),
                              ]],
                              variables=[self.makeVariable(Name(["Foo", "f", RECEIVER_SUFFIX]),
@@ -1527,42 +1530,41 @@ class TestCompiler(TestCaseWithDefinitions):
         package = self.compileFromSource(source, name=STD_NAME)
         matcher = package.findFunction(name="~")
         Some = package.findClass(name="Some")
+        isDefined = Some.findMethodByShortName("is-defined")
+        isDefinedIndex = Some.getMethodIndex(isDefined)
         get = Some.findMethodByShortName("get")
         getIndex = Some.getMethodIndex(get)
         objectType = getRootClassType()
         stringType = getStringType()
         self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
-                               # block 0
+                               # block 0 []
                                ldlocal(0),
                                dup(),
                                callg(matcher),
-                               tyvd(Some.typeParameters[0]),
-                               tycd(Some),
-                               castcbr(1, 3),
+                               dup(),
+                               tycs(getStringClass()),
+                               callv(1, isDefinedIndex),
+                               branchif(1, 2),
                              ], [
-                               # block 1
-                               tycs(getRootClass()),
+                               # block 1 [some value]
+                               tycs(getStringClass()),
                                callv(1, getIndex),
-                               tycd(getStringClass()),
-                               castcbr(2, 3),
-                             ], [
-                               # block 2
                                stlocal(-1),
                                drop(),
                                i64(12),
-                               branch(5),
-                             ], [
-                               # block 3
-                               drop(),
                                branch(4),
                              ], [
-                               # block 4
+                               # block 2 [none value]
+                               drop(),
+                               branch(3),
+                             ], [
+                               # block 3 [value]
                                drop(),
                                i64(34),
-                               branch(5),
+                               branch(4),
                              ], [
-                               # block 5
+                               # block 4 [result]
                                ret(),
                              ]],
                              variables=[self.makeVariable(Name(["f", "obj"]), type=objectType,
@@ -1587,6 +1589,8 @@ class TestCompiler(TestCaseWithDefinitions):
         Bar = package.findClass(name="Bar")
         matcher = package.findFunction(name="::.try-match")
         Some = package.findClass(name="Some")
+        isDefined = Some.findMethodByShortName("is-defined")
+        isDefinedIndex = Some.getMethodIndex(isDefined)
         get = Some.findMethodByShortName("get")
         getIndex = Some.getMethodIndex(get)
         Tuple = package.findClass(name="Tuple2")
@@ -1597,48 +1601,37 @@ class TestCompiler(TestCaseWithDefinitions):
                                ldlocal(0),
                                dup(),
                                callg(matcher),
-                               tyvd(Some.typeParameters[0]),
-                               tycd(Some),
-                               castcbr(1, 5),
+                               dup(),
+                               tycs(Foo),
+                               tycs(Bar),
+                               tycs(Tuple),
+                               callv(1, isDefinedIndex),
+                               branchif(1, 2),
                              ], [
                                # block 1 [some value]
-                               tycs(getRootClass()),
+                               tycs(Foo),
+                               tycs(Bar),
+                               tycs(Tuple),
                                callv(1, getIndex),
-                               tyvd(Tuple.typeParameters[0]),
-                               tyvd(Tuple.typeParameters[1]),
-                               tycd(Tuple),
-                               castc(),
                                dup(),
                                ldf(0),
-                               tycd(Foo),
-                               castcbr(2, 4),
-                             ], [
-                               # block 2 [field tuple value]
                                stlocal(-1),
                                ldf(1),
-                               tycd(Bar),
-                               castcbr(3, 5),
-                             ], [
-                               # block 3 [field value]
                                stlocal(-2),
                                drop(),
                                i64(12),
-                               branch(7),
+                               branch(4),
                              ], [
-                               # block 4 [junk junk value]
+                               # block 2 [none value]
                                drop(),
-                               branch(5),
+                               branch(3),
                              ], [
-                               # block 5 [junk value]
-                               drop(),
-                               branch(6),
-                             ], [
-                               # block 6 [value]
+                               # block 3 [value]
                                drop(),
                                i64(34),
-                               branch(7),
+                               branch(4),
                              ], [
-                               # block 7 [result]
+                               # block 4 [result]
                                ret(),
                              ]],
                              variables=[self.makeVariable(Name(["f", "obj"]), type=objectType,

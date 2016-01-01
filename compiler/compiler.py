@@ -615,11 +615,13 @@ class CompileVisitor(ast.NodeVisitor):
 
     def visitTupleExpression(self, expr, mode):
         ty = self.info.getType(expr)
+        typeArgs = map(self.info.getType, expr.expressions)
         tupleClass = ty.clas
         langMode = self.info.languageMode()
         assert langMode is not NOSTD_MODE
 
         # Allocate the tuple.
+        self.buildStaticTypeArguments(typeArgs)
         if langMode is NORMAL_MODE:
             self.allocobjf(tupleClass)
         else:
@@ -1061,15 +1063,28 @@ class CompileVisitor(ast.NodeVisitor):
         assert self.isDetached()
 
     def visitPartialFunctionCase(self, expr, mode, ty, doneBlock, failBlock):
-        if expr.condition is not None:
+        if expr.condition is None:
+            self.visit(expr.pattern, COMPILE_FOR_MATCH, ty, failBlock)
+        else:
+            # If there's a condition, duplicate the value before matching the pattern. The
+            # pattern will consume the value on a successful match, but we need to preserve
+            # it if the condition is false.
             assert self.unreachable or failBlock is not None
             failBlockId = failBlock.id if failBlock is not None else -1
             self.dup()
-        self.visit(expr.pattern, COMPILE_FOR_MATCH, ty, failBlock)
-        if expr.condition is not None:
+            mustMatch = type_analysis.patternMustMatch(expr.pattern, ty, self.info)
+            if mustMatch:
+                self.visit(expr.pattern, COMPILE_FOR_MATCH, ty, None)
+            else:
+                dropBlock = self.newBlock()
+                self.visit(expr.pattern, COMPILE_FOR_MATCH, ty, dropBlock)
             self.visit(expr.condition, COMPILE_FOR_VALUE)
             successBlock = self.newBlock()
             self.branchif(successBlock.id, failBlockId)
+            if not mustMatch:
+                self.setCurrentBlock(dropBlock)
+                self.drop()
+                self.branch(failBlockId)
             self.setCurrentBlock(successBlock)
             self.drop()
         self.visit(expr.expression, mode)

@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -578,9 +578,10 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         return self.visit(node.literal)
 
     def visitTuplePattern(self, node, isParam=False):
-        patternTypes = tuple(self.visit(p, True) for p in node.patterns)
+        patternTypes = tuple(self.visit(p, isParam) for p in node.patterns)
+        assert not isParam or None not in patternTypes
         tupleClass = self.info.getTupleClass(len(node.patterns), node.location)
-        return ir_t.ClassType(tupleClass, patternTypes)
+        return ir_t.ClassType(tupleClass, patternTypes) if isParam else None
 
     def visitValuePattern(self, node, isParam=False):
         # Need to raise this early, since patternMustMatch is only called after a type is
