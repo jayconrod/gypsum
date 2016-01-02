@@ -170,3 +170,40 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
                                              ir_types.UnitType, frozenset())
         externGlobal = self.externalizer.externalizeDefn(localGlobal)
         self.assertIs(localGlobal, externGlobal)
+
+    def testExternalizeVariableType(self):
+        T = self.otherPackage.addTypeParameter(ir.Name(["T"]),
+                                               upperBound=ir_types.getRootClassType(),
+                                               lowerBound=ir_types.getNothingClassType())
+        self.externalizer.externalizeType(ir_types.VariableType(T))
+        self.assertIsNotNone(T.id.externIndex)
+
+    def testExternalizeClassType(self):
+        C = self.otherPackage.addClass(ir.Name(["C"]),
+                                       typeParameters=[],
+                                       supertypes=[ir_types.getRootClassType()],
+                                       constructors=[], fields=[], methods=[])
+        self.externalizer.externalizeType(ir_types.ClassType(C))
+        self.assertIsNotNone(C.id.externIndex)
+
+    def testExternalizeLocalClassTypeWithForeignArg(self):
+        T = self.otherPackage.addTypeParameter(ir.Name(["T"]),
+                                               upperBound=ir_types.getRootClassType(),
+                                               lowerBound=ir_types.getNothingClassType())
+        S = self.package.addTypeParameter(ir.Name(["S"]),
+                                          upperBound=ir_types.getRootClassType(),
+                                          lowerBound=ir_types.getNothingClassType())
+        C = self.package.addClass(ir.Name(["C"]),
+                                  typeParameters=[S],
+                                  supertypes=[ir_types.getRootClassType()],
+                                  constructors=[], fields=[], methods=[])
+        self.externalizer.externalizeType(ir_types.ClassType(C, (ir_types.VariableType(T),)))
+        self.assertIsNotNone(T.id.externIndex)
+
+    def testExternalizeExistentialType(self):
+        X = self.otherPackage.addTypeParameter(ir.Name(["X"]),
+                                               upperBound=ir_types.getRootClassType(),
+                                               lowerBound=ir_types.getNothingClassType())
+        ty = ir_types.ExistentialType((X,), ir_types.VariableType(X))
+        self.externalizer.externalizeType(ty)
+        self.assertIsNotNone(X.id.externIndex)

@@ -8,18 +8,24 @@ public abstract class Option[static +T]
   public abstract def is-defined: boolean
   public abstract def get: T
 
+
 public class Some[static +T](value: T) <: Option[T]
   public override def is-defined = true
   public override def get = value
   public override def to-string = "Some(" + value.to-string + ")"
+
   public static def try-match(obj: Object): Option[Object] =
     match (obj)
       case some: Some[_] => some
       case _ => None
 
+  public static def try-match(opt: Option[T]) = opt
+
+
 class None-class <: Option[Nothing]
   public override def is-defined = false
   public override def get = throw Exception()
   public override def to-string = "None"
+
 
 public let None: Option[Nothing] = None-class()

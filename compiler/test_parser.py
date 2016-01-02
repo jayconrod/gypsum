@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -291,7 +291,7 @@ class TestParser(unittest.TestCase):
 
     def testImportBlank(self):
         self.checkParse(astImportStatement([astScopePrefixComponent("foo", None),
-                                            astScopePrefixComponent("bar", [astErasedType()])],
+                                            astScopePrefixComponent("bar", [astBlankType()])],
                                            None),
                         importStmt(),
                         "import foo.bar[_]._;")
@@ -388,7 +388,7 @@ class TestParser(unittest.TestCase):
 
     def testDestructurePatternAdvanced(self):
         self.checkParse(astDestructurePattern([astScopePrefixComponent("foo", None),
-                                               astScopePrefixComponent("Bar", [astErasedType()])],
+                                               astScopePrefixComponent("Bar", [astBlankType()])],
                                               [astVariablePattern("x", None),
                                                astVariablePattern("y", None)]),
                         pattern(), "foo.Bar[_](x, y)")
@@ -523,8 +523,17 @@ class TestParser(unittest.TestCase):
                         ty(),
                         "(A, B[C])?")
 
-    def testErasedType(self):
-        self.checkParse(astErasedType(), ty(), "_")
+    def testBlankType(self):
+        self.checkParse(astBlankType(), ty(), "_")
+
+    def testExistentialType(self):
+        self.checkParse(astExistentialType([astTypeParameter([], None, "T1",
+                                                             astClassType([], "U", [], set()),
+                                                             astClassType([], "L", [], set())),
+                                            astTypeParameter([], None, "T2", None, None)],
+                                           astClassType([], "T1", [], set())),
+                        ty(),
+                        "forsome [T1 <: U >: L, T2] T1")
 
     # Expressions
     def testIntExpr(self):
@@ -844,7 +853,7 @@ class TestParser(unittest.TestCase):
                                                       astPartialFunctionCase(astVariablePattern("y", None),
                                                                              None,
                                                                              astVariableExpression("y"))]),
-                        expression(),
+                        partialFnExpr(),
                         "{ case x if b => x; case y => y; }")
 
     def testMatchExpr(self):

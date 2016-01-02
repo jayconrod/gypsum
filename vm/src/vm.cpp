@@ -242,7 +242,7 @@ void VM::loadPackageDependenciesAndInitialize(const Handle<Package>& package) {
   // before their dependents.
   Interpreter interpreter(this, stack_);
   for (auto& package : loadedPackages) {
-    Package::link(heap(), package);
+    Package::link(package);
     if (package->initFunctionIndex() != kIndexNotSet) {
       Persistent<Function> init(package->initFunction());
       if (init->parameterTypes()->length() > 0) {

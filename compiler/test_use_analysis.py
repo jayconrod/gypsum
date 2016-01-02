@@ -293,6 +293,11 @@ class TestUseAnalysis(TestCaseWithDefinitions):
                  "def g = Foo.f"
         self.assertRaises(TypeException, self.analyzeFromSourceWithTypes, source)
 
+    def testUseExistentialVariableOutOfScope(self):
+        source = "var x: forsome [X] X\n" + \
+                 "var y: X"
+        self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
+
     # Regression tests
     def testUseTypeParameterInLaterPrimaryCtor(self):
         source = "class Foo\n" + \

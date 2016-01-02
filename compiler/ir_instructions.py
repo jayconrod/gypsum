@@ -205,6 +205,16 @@ class tyvdf(Instruction):
         super(tyvdf, self).__init__(param.id.packageId.index, param.id.externIndex)
 
 
+class tyxs(Instruction):
+    def popCount(self):
+        return self.operands[0]
+
+
+class tyxd(Instruction):
+    def popCount(self):
+        return self.operands[0]
+
+
 class callg(Instruction):
     def __init__(self, function):
         assert isinstance(function, ir.Function) and \

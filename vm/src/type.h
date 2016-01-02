@@ -47,6 +47,7 @@ class Type: public Object {
     // Object forms
     CLASS_TYPE,
     VARIABLE_TYPE,
+    EXISTENTIAL_TYPE,
 
     // Pseudo forms (still object forms)
     EXTERN_CLASS_TYPE,
@@ -80,6 +81,7 @@ class Type: public Object {
   explicit Type(Class* clas, Flags flags = NO_FLAGS);
   Type(Class* clas, const std::vector<Local<Type>>& typeArgs, Flags flags = NO_FLAGS);
   explicit Type(TypeParameter* param, Flags flags = NO_FLAGS);
+  Type(const std::vector<Local<TypeParameter>>& variables, Type* type);
   Type(Type* type, Flags flags);
   static Local<Type> create(Heap* heap, Form primitive, Flags flags = NO_FLAGS);
   static Local<Type> create(Heap* heap, const Handle<Class>& clas, Flags fags = NO_FLAGS);
@@ -90,6 +92,9 @@ class Type: public Object {
   static Local<Type> create(Heap* heap,
                             const Handle<TypeParameter>& param,
                             Flags flags = NO_FLAGS);
+  static Local<Type> create(Heap* heap,
+                            const std::vector<Local<TypeParameter>>& variables,
+                            const Handle<Type>& type);
   static Local<Type> createExtern(Heap* heap,
                                   const Handle<Class>& clas,
                                   const std::vector<Local<Type>>& typeArgs,
@@ -120,6 +125,9 @@ class Type: public Object {
   length_t typeArgumentCount() const;
   Type* typeArgument(length_t index) const;
   BindingList getTypeArgumentBindings() const;
+  length_t existentialVariableCount() const;
+  TypeParameter* existentialVariable(length_t index) const;
+  Type* existentialInnerType() const;
 
   Form form() const { return form_; }
   Flags flags() const { return flags_; }
@@ -130,6 +138,7 @@ class Type: public Object {
   Class* asClass() const;
   bool isVariable() const;
   TypeParameter* asVariable() const;
+  bool isExistential() const;
   Class* effectiveClass() const;
   bool isRootClass() const;
   bool isObject() const;

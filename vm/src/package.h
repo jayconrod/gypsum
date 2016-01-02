@@ -79,14 +79,14 @@ class Package: public Object {
 
   ExportMap* exports() const { return exports_.get(); }
   void setExports(ExportMap* exports) { exports_.set(this, exports); }
-  static void ensureExports(Heap* heap, const Handle<Package>& package);
+  static void ensureExports(const Handle<Package>& package);
 
   BlockArray<ExternTypeInfo>* externTypes() const { return externTypes_.get(); }
   void setExternTypes(BlockArray<ExternTypeInfo>* externTypes) {
     externTypes_.set(this, externTypes);
   }
 
-  static void link(Heap* heap, const Handle<Package>& package);
+  static void link(const Handle<Package>& package);
 
  private:
   DECLARE_POINTER_MAP()
@@ -236,6 +236,10 @@ class PackageDependency: public Block {
 };
 
 std::ostream& operator << (std::ostream& os, const PackageDependency* dep);
+
+
+Local<Name> mangleFunctionName(const Handle<Function>& function,
+                               const Handle<Package>& package);
 
 }
 }

@@ -81,6 +81,18 @@ Type::Type(TypeParameter* param, Flags flags)
 }
 
 
+Type::Type(const vector<Local<TypeParameter>>& variables, Type* type)
+    : Object(TYPE_BLOCK_TYPE),
+      form_(EXISTENTIAL_TYPE),
+      flags_(NO_FLAGS) {
+  ASSERT(length_ == 1 + variables.size());
+  elements_[0].set(this, type);
+  for (length_t i = 0; i < variables.size(); i++) {
+    elements_[i + 1].set(this, *variables[i]);
+  }
+}
+
+
 Type::Type(Type* type, Flags flags)
     : Object(TYPE_BLOCK_TYPE),
       form_(type->form_),
@@ -113,6 +125,14 @@ Local<Type> Type::create(Heap* heap,
 
 Local<Type> Type::create(Heap* heap, const Handle<TypeParameter>& param, Flags flags) {
   RETRY_WITH_GC(heap, return Local<Type>(new(heap, 1) Type(*param, flags)));
+}
+
+
+Local<Type> Type::create(Heap* heap,
+                         const vector<Local<TypeParameter>>& variables,
+                         const Handle<Type>& type) {
+  RETRY_WITH_GC(heap, return Local<Type>(
+      new(heap, 1 + variables.size()) Type(variables, *type)));
 }
 
 
@@ -273,6 +293,26 @@ Type::BindingList Type::getTypeArgumentBindings() const {
 }
 
 
+length_t Type::existentialVariableCount() const {
+  ASSERT(isExistential());
+  return length() - 1;
+}
+
+
+TypeParameter* Type::existentialVariable(length_t index) const {
+  ASSERT(isExistential());
+  auto varIndex = 1 + index;
+  ASSERT(varIndex <= length());
+  return block_cast<TypeParameter>(elements_[varIndex].get());
+}
+
+
+Type* Type::existentialInnerType() const {
+  ASSERT(isExistential() && length() > 0);
+  return block_cast<Type>(elements_[0].get());
+}
+
+
 bool Type::isPrimitive() const {
   return FIRST_PRIMITIVE_TYPE <= form() && form() <= LAST_PRIMITIVE_TYPE;
 }
@@ -285,7 +325,7 @@ Type::Form Type::asPrimitive()const  {
 
 
 bool Type::isClass() const {
-  return form() == CLASS_TYPE;
+  return form() == CLASS_TYPE || form() == EXTERN_CLASS_TYPE;
 }
 
 
@@ -296,13 +336,18 @@ Class* Type::asClass() const {
 
 
 bool Type::isVariable() const {
-  return form() == VARIABLE_TYPE;
+  return form() == VARIABLE_TYPE || form() == EXTERN_VARIABLE_TYPE;
 }
 
 
 TypeParameter* Type::asVariable() const {
   ASSERT(isVariable() && length() > 0);
   return block_cast<TypeParameter>(elements_[0].get());
+}
+
+
+bool Type::isExistential() const {
+  return form() == EXISTENTIAL_TYPE;
 }
 
 
@@ -396,13 +441,46 @@ bool Type::isSubtypeOf(Local<Type> left, Local<Type> right) {
     return true;
   if (left->isPrimitive() || right->isPrimitive())
     return false;
+  return isSubtypeOfWithVariance(left, right, BIVARIANT);
+}
+
+
+bool Type::isSubtypeOfWithVariance(Local<Type> left, Local<Type> right, Variance variance) {
+  ASSERT(left->isObject() && right->isObject());
+
   if (left->isVariable() &&
       right->isVariable() &&
       left->asVariable()->hasCommonBound(right->asVariable())) {
     return true;
   }
 
-  ASSERT(left->isObject() && right->isObject());
+  if (left->isExistential() || right->isExistential()) {
+    auto leftInnerType =
+        left->isExistential() ? handle(left->existentialInnerType()) : left;
+    auto rightInnerType =
+        right->isExistential() ? handle(right->existentialInnerType()) : right;
+
+    if (left->isExistential() && right->isExistential()) {
+      auto count = left->existentialVariableCount();
+      auto boundsAreEquivalent = count == right->existentialVariableCount();
+      for (length_t i = 0; boundsAreEquivalent && i < count; i++) {
+        boundsAreEquivalent &=
+            left->existentialVariable(i)->isEquivalent(right->existentialVariable(i));
+      }
+      if (boundsAreEquivalent) {
+        BindingList bindings;
+        for (length_t i = 0; i < count; i++) {
+          bindings.push_back(Binding(
+              handle(left->existentialVariable(i)),
+              create(left->getHeap(), handle(right->existentialVariable(i)))));
+        }
+        leftInnerType = substitute(leftInnerType, bindings);
+      }
+    }
+
+    return isSubtypeOfWithVariance(leftInnerType, rightInnerType, variance);
+  }
+
   while (left->isVariable()) {
     left = handle(left->asVariable()->upperBound());
   }
@@ -410,15 +488,10 @@ bool Type::isSubtypeOf(Local<Type> left, Local<Type> right) {
     right = handle(right->asVariable()->lowerBound());
   }
   ASSERT(left->isClass() && right->isClass());
+
   if (left->isNullable() && !right->isNullable())
     return false;
-  return isSubtypeOfWithVariance(left, right, BIVARIANT);
-}
 
-
-bool Type::isSubtypeOfWithVariance(Local<Type> left, Local<Type> right, Variance variance) {
-  ASSERT(left->isClass() && right->isClass());
-  ASSERT(!(left->isNullable() && !right->isNullable()));
   auto leftClass = handle(left->asClass());
   auto rightClass = handle(right->asClass());
 
@@ -481,9 +554,18 @@ bool Type::equals(Type* other) const {
         return false;
     }
     return true;
-  } else {
-    ASSERT(isVariable());
+  } else if (isVariable()) {
     return asVariable() == other->asVariable();
+  } else {
+    ASSERT(isExistential());
+    auto count = existentialVariableCount();
+    if (count != other->existentialVariableCount())
+      return false;
+    for (length_t i = 0; i < count; i++) {
+      if (existentialVariable(i) != other->existentialVariable(i))
+        return false;
+    }
+    return existentialInnerType()->equals(other->existentialInnerType());
   }
 }
 

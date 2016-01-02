@@ -1,10 +1,11 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
 
 #include <algorithm>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -14,9 +15,12 @@
 
 #include <codeswitch.h>
 
+namespace placeholders = std::placeholders;
+
 using std::cerr;
 using std::move;
 using std::endl;
+using std::function;
 using std::string;
 using std::vector;
 
@@ -29,11 +33,14 @@ using codeswitch::VM;
 
 
 vector<string> packagePaths;
-vector<string> packageNames;
+vector<function<Package(VM&)>> packageLoaders;
 
 
 static void printUsage(const char* programName) {
-  cerr << "usage: " << programName << "[-P package-path] package-name..." << endl;
+  cerr << "usage: " << programName << " [options] package-files...\n"
+      << "  -h|--help                     displays this help\n"
+      << "  -P|--package-path dir-name    adds a path to the list of package directories\n"
+      << "  -p|--package package-name     finds and loads a package by its name" << endl;
 }
 
 
@@ -53,6 +60,17 @@ static vector<string> split(const string& str, char delim) {
 }
 
 
+static Package loadPackageByName(const string& packageName, VM& vm) {
+  auto name = Name::fromStringForPackage(String(vm, packageName));
+  return vm.loadPackage(name);
+}
+
+
+static Package loadPackageFromFile(const string& fileName, VM& vm) {
+  return vm.loadPackageFromFile(fileName);
+}
+
+
 static bool processArgs(int argc, char* argv[]) {
   char* CS_PACKAGE_PATH = getenv("CS_PACKAGE_PATH");
   if (CS_PACKAGE_PATH != nullptr) {
@@ -62,18 +80,23 @@ static bool processArgs(int argc, char* argv[]) {
 
   for (int i = 1; i < argc; i++) {
     string arg(argv[i]);
-    if (arg == "-P") {
+    if (arg == "-h" || arg == "--help") {
+      return false;
+    } else if (arg == "-P" || arg == "--package-path") {
       if (i + 1 == argc) {
         return false;
       }
       packagePaths.push_back(argv[++i]);
-    } else if (arg == "-h" || arg == "--help") {
-      return false;
+    } else if (arg == "-p" || arg == "--package") {
+      if (i + 1 == argc) {
+        return false;
+      }
+      packageLoaders.push_back(bind(loadPackageByName, argv[++i], placeholders::_1));
     } else if (arg.size() > 0 && arg[0] == '-') {
       cerr << "unknown option: " << arg << endl;
       return false;
     } else {
-      packageNames.push_back(arg);
+      packageLoaders.push_back(bind(loadPackageFromFile, argv[i], placeholders::_1));
     }
   }
 
@@ -82,7 +105,7 @@ static bool processArgs(int argc, char* argv[]) {
 
 
 int main(int argc, char* argv[]) {
-  if (!processArgs(argc, argv) || packageNames.empty()) {
+  if (!processArgs(argc, argv) || packageLoaders.empty()) {
     printUsage(argv[0]);
     return 1;
   }
@@ -93,9 +116,8 @@ int main(int argc, char* argv[]) {
       vm.addPackageSearchPath(path);
     }
     bool executedEntry = false;
-    for (auto& packageName : packageNames) {
-      auto name = Name::fromStringForPackage(String(vm, packageName));
-      auto package = vm.loadPackage(name);
+    for (auto& loader : packageLoaders) {
+      auto package = loader(vm);
       auto entryFunction = package.entryFunction();
       if (entryFunction) {
         executedEntry = true;

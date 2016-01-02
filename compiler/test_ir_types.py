@@ -157,6 +157,73 @@ class TestIrTypes(TestCaseWithDefinitions):
         Tty = VariableType(T)
         self.assertTrue(getNothingClassType().isSubtypeOf(Tty))
 
+    def testEquivalentExistentials(self):
+        X = self.makeTypeParameter("X", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        Y = self.makeTypeParameter("Y", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        eX = ExistentialType((X,), VariableType(X))
+        eY = ExistentialType((Y,), VariableType(Y))
+        self.assertTrue(eX.isSubtypeOf(eY))
+        self.assertTrue(eY.isSubtypeOf(eX))
+
+    def testJointExistentials(self):
+        S = self.makeTypeParameter("S", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType(),
+                                   flags=frozenset([STATIC, COVARIANT]))
+        T = self.makeTypeParameter("T", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType(),
+                                   flags=frozenset([STATIC, COVARIANT]))
+        Foo = self.makeClass("Foo", typeParameters=[S, T],
+                             supertypes=[getRootClassType()])
+        X = self.makeTypeParameter("X", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        Y = self.makeTypeParameter("Y", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        eX = ExistentialType((X,), ClassType(Foo, (VariableType(X), getNothingClassType())))
+        eY = ExistentialType((Y,), ClassType(Foo, (getNothingClassType(), VariableType(Y))))
+        expected = ExistentialType((X, Y), ClassType(Foo, (VariableType(X), VariableType(Y))))
+        self.assertTrue(expected.isEquivalent(eX.lub(eY)))
+
+    def testExistentialOpen(self):
+        T = self.makeTypeParameter("T", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType(),
+                                   flags=frozenset([COVARIANT]))
+        Foo = self.makeClass("Foo", typeParameters=[T], supertypes=[getRootClassType()])
+        FooStringType = ClassType(Foo, (getStringType(),))
+        X = self.makeTypeParameter("X", upperBound=getStringType(),
+                                   lowerBound=getNothingClassType())
+        FooExType = ExistentialType((X,), ClassType(Foo, (VariableType(X),)))
+        self.assertTrue(FooExType.isSubtypeOf(FooStringType))
+
+    def testExistentialDifferentBoundsNotEquivalent(self):
+        X = self.makeTypeParameter("X", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        Y = self.makeTypeParameter("Y", upperBound=getStringType(),
+                                   lowerBound=getNothingClassType())
+        eXType = ExistentialType((X,), VariableType(X))
+        eYType = ExistentialType((Y,), VariableType(Y))
+        self.assertFalse(eXType.isEquivalent(eYType))
+
+    def testExistentialDifferentBoundsLub(self):
+        A = self.makeClass("A", typeParameters=[], supertypes=[getRootClassType()])
+        AType = ClassType(A)
+        S = self.makeTypeParameter("S", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        SType = VariableType(S)
+        B = self.makeClass("B", typeParameters=[S], supertypes=[AType])
+        T = self.makeTypeParameter("T", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        C = self.makeClass("C", typeParameters=[T], supertypes=[AType])
+
+        X = self.makeTypeParameter("X", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        Y = self.makeTypeParameter("Y", upperBound=getStringType(),
+                                   lowerBound=getNothingClassType())
+        eBXType = ExistentialType((X,), ClassType(B, (VariableType(X),)))
+        eCYType = ExistentialType((Y,), ClassType(C, (VariableType(Y),)))
+        self.assertEquals(AType, eBXType.lub(eCYType))
+
     def testSubstitute(self):
         T = self.makeTypeParameter("T", upperBound=ClassType(self.A),
                                    lowerBound=ClassType(self.B))

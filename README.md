@@ -56,11 +56,20 @@ To build and test the VM:
 make build-vm -j8
 ```
 
-To run a package:
+To build the standard library:
 
 ```
-out/debug/driver program.csp
+make build-std -j8
 ```
+
+To run a package that depends on the standard library (everything does
+by default):
+
+```
+out/debug/driver -P out/debug program.csp
+```
+
+See the `examples` directory for some programs to try out.
 
 ## Other goodies
 

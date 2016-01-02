@@ -943,6 +943,23 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "def f(x: i64) = match (x) { case y: String => y; }"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
+    def testMatchExprVarUntestable(self):
+        source = "class Foo[static T]\n" + \
+                 "def f(x: Object) =\n" + \
+                 "  match (x)\n" + \
+                 "    case foo: Foo[String] => 1"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testMatchExprVarExistentialTestable(self):
+        source = "class Foo[static T]\n" + \
+                 "def f(x: Object) =\n" + \
+                 "  match (x)\n" + \
+                 "    case foo: Foo[_] => 1"
+        info = self.analyzeFromSource(source)
+        matchAst = info.ast.modules[0].definitions[1].body.statements[0]
+        ty = info.getType(matchAst.matcher.cases[0].pattern)
+        self.assertTrue(isinstance(ty, ExistentialType))
+
     def testMatchExprVarShadow(self):
         source = "def f(x: Object) =\n" + \
                  "  let y = \"foo\"\n" + \
@@ -1202,6 +1219,15 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertIs(exnClass, exnTy.clas)
         self.assertIs(exnClass, info.package.findFunction(name="f").variables[0].type.clas)
 
+    def testTryCatchUntestable(self):
+        source = "class E[static T] <: Exception\n" + \
+                 "def f =\n" + \
+                 "  try\n" + \
+                 "    0\n" + \
+                 "  catch\n" + \
+                 "    case x: E[String] => 1"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     def testWhileExprNonBooleanCondition(self):
         self.assertRaises(TypeException, self.analyzeFromSource, "def f = while (-1) 12")
 
@@ -1229,6 +1255,103 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         rootClass = getRootClass()
         self.assertEquals(ClassType(rootClass, ()), info.getType(info.ast.modules[0].definitions[0].body))
 
+    def testExistentialLoadVar(self):
+        source = "class Foo\n" + \
+                 "  let foof = 12\n" + \
+                 "class Bar[static T] <: Foo\n" + \
+                 "def f(bar: forsome [X] Bar[X]) = bar.foof"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(I64Type, f.returnType)
+
+    def testExistentialLoadPlain(self):
+        source = "class Box[static T](value: i64)\n" + \
+                 "def f(box: forsome [X] Box[X]) = box.value"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(I64Type, f.returnType)
+
+    def testExistentialCallVar(self):
+        source = "class Foo\n" + \
+                 "  def foom = 12\n" + \
+                 "class Bar[static T] <: Foo\n" + \
+                 "def f(bar: forsome [X] Bar[X]) = bar.foom"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(I64Type, f.returnType)
+
+    def testExistentialCallPlain(self):
+        source = "class Box[static T]\n" + \
+                 "  def get = 12\n" + \
+                 "def f(box: forsome [X] Box[X]) = box.get"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(I64Type, f.returnType)
+
+    def testExistentialStoreVar(self):
+        source = "class Box[static T](value: T)\n" + \
+                 "def f(box: forsome [X] Box[X]) = { box.value = Object(); {}; }"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testExistentialStorePlain(self):
+        source = "class Box[static T]\n" + \
+                 "  var value: i64\n" + \
+                 "def f(box: forsome [X] Box[X]) = { box.value = 12; {}; }"
+        self.analyzeFromSource(source)
+        # pass if no error
+
+    def testDestructureMatchOnExistentialValue(self):
+        source = OPTION_SOURCE + \
+                 "def match-fn(obj: Object): Option[String] = None\n" + \
+                 "def f(x: forsome [X] X) =\n" + \
+                 "  match (x)\n" + \
+                 "    case match-fn(s) => s\n" + \
+                 "    case _ => \"nothing\""
+        self.analyzeFromSource(source, name=STD_NAME)
+        # pass if no errors
+
+    def testDestructureMatchWithExplicitExistentialMatcher(self):
+        source = OPTION_SOURCE + \
+                 "class Matcher[static T]\n" + \
+                 "  def try-match(obj: Object): Option[String] = None\n" + \
+                 "def f(x: Object, m: forsome [X] Matcher[X]) =\n" + \
+                 "  match (x)\n" + \
+                 "    case m.try-match(s) => s\n" + \
+                 "    case _ => \"nothing\""
+        self.analyzeFromSource(source, name=STD_NAME)
+        # pass if no errors
+
+    def testDestructureWithImplicitExistentialMatcher(self):
+        source = OPTION_SOURCE + \
+                 "class Matcher[static T]\n" + \
+                 "  def try-match(obj: Object): Option[String] = None\n" + \
+                 "def f(x: Object, m: forsome [X] Matcher[X]) =\n" + \
+                 "  match (x)\n" + \
+                 "    case m(s) => s\n" + \
+                 "    case _ => \"nothing\""
+        self.analyzeFromSource(source, name=STD_NAME)
+        # pass if no errors
+
+    def testMoveExistentialListOfBoxes(self):
+        source = "abstract class List[static T]\n" + \
+                 "  abstract def get(i: i64): T\n" + \
+                 "class Box[static T](value: T)\n" + \
+                 "def f(list: forsome [X] List[Box[X]]) =\n" + \
+                 "  list.get(0).value = list.get(1).value"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+        # This is technically safe, but we don't want the compiler to have to prove it. In
+        # Java, this would be done with a helper method with wildcard capture. We'll have
+        # something like that or an open expression in the future.
+
+    def testMoveListOfExistentialBoxes(self):
+        source = "abstract class List[static T]\n" + \
+                 "  abstract def get(i: i64): T\n" + \
+                 "class Box[static T](value: T)\n" + \
+                 "def f(list: List[forsome [X] Box[X]]) =\n" + \
+                 "  list.get(0).value = list.get(1).value"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+        # This is definitely not safe.
+
     # Types
     def testUnitType(self):
         info = self.analyzeFromSource("var g: unit")
@@ -1251,10 +1374,17 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         rootClass = getRootClass()
         self.assertEquals(ClassType(rootClass, ()), info.package.findGlobal(name="g").type)
 
-    def testNullableType(self):
+    def testNullableClassType(self):
         info = self.analyzeFromSource("var g: Object?")
         expected = ClassType(getRootClass(), (), frozenset([NULLABLE_TYPE_FLAG]))
         self.assertEquals(expected, info.package.findGlobal(name="g").type)
+
+    def testNullableVariableType(self):
+        info = self.analyzeFromSource("def f[static T](x: T?) = x")
+        f = info.package.findFunction(name="f")
+        T = f.typeParameters[0]
+        expected = VariableType(T, frozenset([NULLABLE_TYPE_FLAG]))
+        self.assertEquals(expected, f.returnType)
 
     def testCallBuiltin(self):
         info = self.analyzeFromSource("def f = print(\"foo\")")
@@ -1336,33 +1466,55 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "var g: (i64, i64)"
         self.assertRaises(TypeException, self.analyzeFromSource, source, name=STD_NAME)
 
-    def testErasedTypeAlone(self):
+    def testBlankTypeAlone(self):
         source = "var g: _"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
-    def testErasedTypeFunctionArg(self):
+    def testBlankTypeFunctionArg(self):
         source = "def f[static T] = {}\n" + \
                  "var g = f[_]"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
-    def testErasedTypeClassArg(self):
+    def testBlankTypeScopePrefix(self):
+        source = "class Foo[static T]\n" + \
+                 "  static def f = 12\n" + \
+                 "var g = Foo[_].f()"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testBlankTypeClassArg(self):
         source = "class Foo[static T <: String]\n" + \
                  "var g: Foo[_]"
         info = self.analyzeFromSource(source)
         ty = info.package.findGlobal(name="g").type
         Foo = info.package.findClass(name="Foo")
-        T = info.package.findTypeParameter(name="Foo.T")
-        self.assertEquals(ClassType(Foo, (VariableType(T),)), ty)
+        blankAst = info.ast.modules[0].definitions[1].pattern.ty.typeArguments[0]
+        X = info.getDefnInfo(blankAst).irDefn
+        self.assertEquals(getStringType(), X.upperBound)
+        self.assertIs(blankAst, X.astDefn)
+        expected = ExistentialType((X,), ClassType(Foo, (VariableType(X),)))
+        self.assertEquals(expected, ty)
 
-    def testErasedTupleTypeArg(self):
+    def testBlankTupleTypeArg(self):
         source = TUPLE_SOURCE + \
                  "var g: (_, _)"
         info = self.analyzeFromSource(source, name=STD_NAME)
         ty = info.package.findGlobal(name="g").type
         Tuple2 = info.package.findClass(name="Tuple2")
-        T1 = info.package.findTypeParameter(name="Tuple2.T1")
-        T2 = info.package.findTypeParameter(name="Tuple2.T2")
-        self.assertEquals(ClassType(Tuple2, (VariableType(T1), VariableType(T2))), ty)
+        tupleAst = info.ast.modules[0].definitions[-1].pattern.ty
+        X = info.getDefnInfo(tupleAst.types[0]).irDefn
+        Y = info.getDefnInfo(tupleAst.types[1]).irDefn
+        expected = ExistentialType((X, Y),
+                                   ClassType(Tuple2, (VariableType(X), VariableType(Y))))
+        self.assertEquals(expected, ty)
+
+    def testExistentialType(self):
+        source = "let g: forsome [X] X?"
+        info = self.analyzeFromSource(source)
+        ty = info.package.findGlobal(name="g").type
+        X = info.package.findTypeParameter(name=Name([EXISTENTIAL_SUFFIX, "X"]))
+        expected = ExistentialType((X,), VariableType(X, frozenset([NULLABLE_TYPE_FLAG])))
+        self.assertEquals(expected, ty)
+        self.assertTrue(ty.isNullable())
 
     # Closures
     def testFunctionContextFields(self):
@@ -1395,6 +1547,14 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertRaises(TypeException, self.analyzeFromSource, upperSource)
         lowerSource = "class Bar[static T >: Nothing?]"
         self.assertRaises(TypeException, self.analyzeFromSource, lowerSource)
+
+    def testPrimitiveBounds(self):
+        source = "class Foo[static T <: i64]"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
+    def testExistentialBounds(self):
+        source = "class Foo[static T <: forsome [X] X]"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
     def testCallWithSubtype(self):
         source = "class Foo\n" + \

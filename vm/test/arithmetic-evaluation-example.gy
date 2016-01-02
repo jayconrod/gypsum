@@ -1,0 +1,165 @@
+// Copyright 2016 Jay Conrod. All rights reserved.
+
+// This file is part of CodeSwitch. Use of this source code is governed by
+// the 3-clause BSD license that can be found in the LICENSE.txt file.
+
+
+// This program demonstrates destructuring pattern matching by defining a set of classes
+// that represent simple arithmetic expressions, then defining functions to evaluate and
+// optimize them.
+
+
+// The `Option` class represents a value that may or may not present. `Some` is a subclass
+// for values that ARE present. `None` is a singleton object that indicates no value is present.
+// It works kind of like `null`, but is safer to use. All of these are imported from the
+// standard library.
+import std.Option, Some, None
+
+// This is a simple class that wraps primitive 64-bit integers. As we'll see, destructuring
+// patterns only work on objects and cannot be used with primitives. So if we need to extract
+// integers from expressions, we need them to be wrapped in objects.
+class Integer(value: i64)
+  // We override common operators for convenience.
+  def - = Integer(-value)
+  def + (right: Integer) = Integer(value + right.value)
+  def - (right: Integer) = Integer(value - right.value)
+  def * (right: Integer) = Integer(value * right.value)
+  def / (right: Integer) = Integer(value / right.value)
+
+  override def to-string = value.to-string
+
+
+// The classes below represent various arithmetic expressions. Each class has a `try-match`
+// method, which is called automatically in pattern matching.
+abstract class Expr
+
+// This expression is just an integer constant.
+final class ConstExpr(value: Integer) <: Expr
+  // The `try-match` method tests whether `obj` is a `ConstExpr`. If it is, it returns a
+  // `Some` object with the contents (the constant value). Otherwise, it returns `None`.
+  // Options cannot contain primitive values. This is why we need the `Integer` class.
+  static def try-match(obj: Object): Option[Integer] =
+    match (obj)
+      case e: ConstExpr => Some[Integer](e.value)
+      case _ => None
+
+  override def to-string = value.to-string
+
+
+// This expression is for unary negation.
+final class NegExpr(expr: Expr) <: Expr
+  static def try-match(obj: Object): Option[Expr] =
+    match (obj)
+      case e: NegExpr => Some[Expr](e.expr)
+      case _ => None
+
+  override def to-string = "-(" + expr.to-string + ")"
+
+
+// The rest of the expressions are for binary expressions.
+final class AddExpr(left: Expr, right: Expr) <: Expr
+  static def try-match(obj: Object): Option[(Expr, Expr)] =
+    match (obj)
+      case e: AddExpr => Some[(Expr, Expr)]((e.left, e.right))
+      case _ => None
+
+  override def to-string = "(" + left.to-string + " + " + right.to-string + ")"
+
+
+final class SubExpr(left: Expr, right: Expr) <: Expr
+  static def try-match(obj: Object): Option[(Expr, Expr)] =
+    match (obj)
+      case e: SubExpr => Some[(Expr, Expr)]((e.left, e.right))
+      case _ => None
+
+  override def to-string = "(" + left.to-string + " - " + right.to-string + ")"
+
+
+final class MulExpr(left: Expr, right: Expr) <: Expr
+  static def try-match(obj: Object): Option[(Expr, Expr)] =
+    match (obj)
+      case e: MulExpr => Some[(Expr, Expr)]((e.left, e.right))
+      case _ => None
+
+  override def to-string = "(" + left.to-string + " * " + right.to-string + ")"
+
+
+final class DivExpr(left: Expr, right: Expr) <: Expr
+  static def try-match(obj: Object): Option[(Expr, Expr)] =
+    match (obj)
+      case e: DivExpr => Some[(Expr, Expr)]((e.left, e.right))
+      case _ => None
+
+  override def to-string = "(" + left.to-string + " / " + right.to-string + ")"
+
+
+// This function recursively evaluates an arithmetic expression tree. For each node in the
+// tree, it performs a destructuring pattern match to find the type and contents of the node.
+def evaluate(expr: Expr): Integer =
+  match (expr)
+    case ConstExpr(value) => value
+    case NegExpr(e) => -evaluate(e)
+    case AddExpr(left, right) => evaluate(left) + evaluate(right)
+    case SubExpr(left, right) => evaluate(left) - evaluate(right)
+    case MulExpr(left, right) => evaluate(left) * evaluate(right)
+    case DivExpr(left, right) => evaluate(left) / evaluate(right)
+
+// Destructuring probably requires a bit more explanation. When the compiler matches a pattern
+// like `AddExpr(left, right)`, it first looks for a matcher method. Usually this will be a
+// static method named `try-match` in the `AddExpr` class, but it could be a standalone function
+// named `AddExpr` or a `try-match` method on an object named `AddExpr`.
+//
+// In any case, the matcher method must return an `Option[(A, B)]` (for some types `A` and `B`;
+// in this case, these are both `Expr`). The number of values in the option tuple must equal
+// the number of sub-patterns in the destructure pattern. The compiler extracts each value
+// from the tuple and uses them to match the sub-patterns. In this case, the values are simply
+// bound to the variables `left` and `right`.
+
+
+// This function provides a more complicated example. It applies a few simplifications to
+// an arithmetic expression.
+def optimize(expr: Expr): Expr =
+  match (expr)
+    // If we add two constants, we can replace the add with a single constant.
+    case AddExpr(ConstExpr(left), ConstExpr(right)) => ConstExpr(left + right)
+
+    // If we add zero to anything, we can skip the addition.
+    case AddExpr(left, ConstExpr(const)) if const.value == 0 => optimize(left)
+    case AddExpr(ConstExpr(const), right) if const.value == 0 => optimize(right)
+
+    // If we can't perform one of the optimizations above, we just recurse into sub-expressions.
+    case NegExpr(expr) => NegExpr(optimize(expr))
+    case AddExpr(left, right) => AddExpr(optimize(left), optimize(right))
+    case SubExpr(left, right) => SubExpr(optimize(left), optimize(right))
+    case MulExpr(left, right) => MulExpr(optimize(left), optimize(right))
+    case DivExpr(left, right) => DivExpr(optimize(left), optimize(right))
+
+
+def main =
+  // 3 * 4 / 2 + -5
+  let expr =
+      AddExpr(
+          DivExpr(
+              MulExpr(
+                  ConstExpr(Integer(3)),
+                  ConstExpr(Integer(4))),
+              ConstExpr(Integer(2))),
+          NegExpr(
+              ConstExpr(Integer(5))))
+  let value = evaluate(expr)
+  if (1 != value.value)
+    throw Exception()
+
+  // (1 + 2) * (3 + 0)
+  let unopt-expr =
+      MulExpr(
+          AddExpr(
+              ConstExpr(Integer(1)),
+              ConstExpr(Integer(2))),
+          AddExpr(
+              ConstExpr(Integer(3)),
+              ConstExpr(Integer(0))))
+  let opt-expr = optimize(unopt-expr)
+  match (opt-expr)
+    case MulExpr(ConstExpr(a), ConstExpr(b)) if a.value == 3 && b.value == 3 => {}
+    case _ => throw Exception()

@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014-2015, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -13,6 +13,13 @@ from StringIO import StringIO
 def each(f, iterable):
     for elem in iterable:
         f(elem)
+
+def indexSame(haystack, needle):
+    for index, elem in enumerate(haystack):
+        if elem is needle:
+            return index
+    return -1
+
 
 def align(n, alignment):
     return (n + alignment - 1) & ~(alignment - 1)

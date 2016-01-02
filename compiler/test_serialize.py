@@ -135,7 +135,7 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
 
         package = ir.Package(id=ids.TARGET_PACKAGE_ID)
         package.classes = self.des.createEmptyClassList(4, package.id)
-        package.typeParameters = self.des.createEmptyTypeParameterList(2, package.id)
+        package.typeParameters = self.des.createEmptyTypeParameterList(3, package.id)
         self.ser.package = package
         self.des.package = package
 
@@ -156,6 +156,9 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
                                      (ir_types.ClassType(package.classes[3]),
                                       ir_types.VariableType(package.typeParameters[1]))))
         checkType(ir_types.VariableType(package.typeParameters[1], nullFlags))
+        checkType(ir_types.ExistentialType((package.typeParameters[2],),
+                                           (ir_types.VariableType(package.typeParameters[2],
+                                                                  nullFlags))))
 
     def testRewriteExternClassType(self):
         package = ir.Package(id=ids.TARGET_PACKAGE_ID)

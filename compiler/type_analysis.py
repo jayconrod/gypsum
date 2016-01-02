@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -96,6 +96,33 @@ def resolveAllOverrides(info):
         scope.resolveOverrides()
 
 
+def typeCanBeTested(ty, existentialVarIds=None):
+    """Returns whether a type can be tested at runtime, for example with a `cast` or `castcbr`
+    instruction.
+
+    Type declaration must be complete before this is called."""
+    if existentialVarIds is None:
+        existentialVarIds = frozenset()
+
+    if isinstance(ty, ir_t.ClassType):
+        for tp, ta in zip(ty.clas.typeParameters, ty.typeArguments):
+            staticArgCanBeTested = STATIC in tp.flags and \
+                                   isinstance(ta, ir_t.VariableType) and \
+                                   ta.typeParameter.id in existentialVarIds
+            dynamicArgCanBeTested = STATIC not in tp.flags and \
+                                    typeCanBeTested(ta, existentialVarIds)
+            if not staticArgCanBeTested and not dynamicArgCanBeTested:
+                return False
+        return True
+    elif isinstance(ty, ir_t.VariableType):
+        return STATIC not in ty.typeParameter.flags
+    elif isinstance(ty, ir_t.ExistentialType):
+        return typeCanBeTested(ty.ty, existentialVarIds | frozenset(v.id for v in ty.variables))
+    else:
+        # Primitive types cannot be tested.
+        return False
+
+
 class TypeVisitorBase(ast.NodeVisitor):
     """Provides common functionality for type visitors, namely the visitor functions for the
     various ast.Type subclasses."""
@@ -189,25 +216,38 @@ class TypeVisitorBase(ast.NodeVisitor):
                 assert len(prefixTypeArgs) == 0
                 implicitTypeParams = ir.getImplicitTypeParameters(irDefn)
                 prefixTypeArgs = map(ir_t.VariableType, implicitTypeParams)
-            explicitTypeArgs = self.handleClassTypeArgs(irDefn, node.typeArguments)
+            explicitTypeArgs, existentialTypeParams = \
+                self.handleClassTypeArgs(irDefn, node.typeArguments)
             typeArgs = tuple(prefixTypeArgs + list(explicitTypeArgs))
-            return ir_t.ClassType(irDefn, typeArgs, flags)
+            ty = ir_t.ClassType(irDefn, typeArgs, flags)
+            if len(existentialTypeParams) > 0:
+                ty = ir_t.ExistentialType(existentialTypeParams, ty)
+            return ty
         else:
             assert isinstance(irDefn, ir.TypeParameter)
             if len(node.typeArguments) > 0:
                 raise TypeException(node.location,
                                     "%s: variable type does not accept type arguments" %
                                     node.name)
-            return ir_t.VariableType(irDefn)
+            return ir_t.VariableType(irDefn, flags)
 
     def visitTupleType(self, node):
         clas = self.info.getTupleClass(len(node.types), node.location)
-        types = self.handleClassTypeArgs(clas, node.types)
+        types, existentialTypeParams = self.handleClassTypeArgs(clas, node.types)
         flags = frozenset(map(astTypeFlagToIrTypeFlag, node.flags))
-        return ir_t.ClassType(clas, types, flags)
+        ty = ir_t.ClassType(clas, types, flags)
+        if len(existentialTypeParams) > 0:
+            ty = ir_t.ExistentialType(existentialTypeParams, ty)
+        return ty
 
-    def visitErasedType(self, node):
-        raise TypeException(node.location, "erased type can only be used as a type argument")
+    def visitBlankType(self, node):
+        raise TypeException(node.location, "blank type can only be used as a type argument")
+
+    def visitExistentialType(self, node):
+        each(self.visit, node.typeParameters)
+        variables = tuple(self.info.getDefnInfo(v).irDefn for v in node.typeParameters)
+        innerType = self.visit(node.type)
+        return ir_t.ExistentialType(variables, innerType)
 
     def visitIntegerLiteral(self, node):
         typeMap = { 8: ir_t.I8Type, 16: ir_t.I16Type, 32: ir_t.I32Type, 64: ir_t.I64Type }
@@ -235,6 +275,12 @@ class TypeVisitorBase(ast.NodeVisitor):
 
     def visitNullLiteral(self, node):
         return ir_t.getNullType()
+
+    def visitLvalue(self, node):
+        if isinstance(node, ast.PropertyExpression):
+            return self.visit(node, isLvalue=True)
+        else:
+            return self.visit(node)
 
     def isPrefixNode(self, node):
         return isinstance(node, ast.VariableExpression) or \
@@ -278,6 +324,10 @@ class TypeVisitorBase(ast.NodeVisitor):
                                         (component.name,
                                          len(explicitTypeParams),
                                          len(astTypeArgs)))
+                for astTypeArg in astTypeArgs:
+                    if isinstance(astTypeArg, ast.BlankType):
+                        raise TypeException(astTypeArg.location,
+                                            "blank type not allowed as scope prefix type argument")
                 if not hasPrefix:
                     # If this is the first prefix, the class is defined in a parent scope.
                     # There may be some type parameters defined in one of its parent scopes
@@ -285,7 +335,9 @@ class TypeVisitorBase(ast.NodeVisitor):
                     implicitTypeParams = ir.getImplicitTypeParameters(irDefn)
                     implicitTypeArgs = map(ir_t.VariableType, implicitTypeParams)
                     typeArgs.extend(implicitTypeArgs)
-                explicitTypeArgs = self.handleClassTypeArgs(irDefn, astTypeArgs)
+                explicitTypeArgs, existentialTypeParams = \
+                    self.handleClassTypeArgs(irDefn, astTypeArgs)
+                assert len(existentialTypeParams) == 0
                 typeArgs.extend(explicitTypeArgs)
             else:
                 if component.typeArguments is not None:
@@ -304,16 +356,61 @@ class TypeVisitorBase(ast.NodeVisitor):
         return scope, typeArgs
 
     def handleClassTypeArgs(self, irClass, nodes):
+        """Builds and checks explicit type arguments for the given class.
+
+        Builds type arguments from `nodes`. During the declaration stage, bounds checking is
+        deferred until all definitions have been visited (`Type.isSubtypeOf` doesn't work
+        until then). During the definition stage, bounds checking is performed immediately.
+        For each `BlankType` in `nodes`, a new `TypeParameter` is introduced (for use in
+        an `ExistentialType`).
+
+        Note that this function doesn't return a full list of type arguments. The caller is
+        responsible for building implicit type arguments and including them at the beginning
+        of any type argument list.
+
+        Args:
+            irClass (ir.Class): the class we are building type arguments for
+            nodes (list(ast.Type)): a list of explicit type arguments in the AST. The length
+                must equal the number of explicit type parameters in `irClass`.
+
+        Returns:
+            (tuple(ir.Type), tuple(ir.TypeParameter)): A list of explicit type arguments
+            compiled from `nodes`, and a list of introduced parameters for an existential
+            type."""
         raise NotImplementedError
 
-    def buildClassTypeArg(self, irParam, node):
-        if isinstance(node, ast.ErasedType):
-            return ir_t.VariableType(irParam)
+    def introduceExistentialTypeParameter(self, param, node):
+        """Introduces an existential type parameter based on a class type parameter.
+
+        This method may be called multiple times. A new type parameter will only be added the
+        first time. After that, the same type parameter will be returned.
+
+        Args:
+            param (ir.TypeParameter): a type parameter belonging to a class. The returned
+                type parameter will have the same bounds.
+            node (ast.BlankType): the node which causes this type parameter to be added.
+                `DefnInfo` will be created (if it doesn't already exist) with this node's id
+                as the key. The node's location may also be used for error reporting.
+
+        Returns:
+            (ir.TypeParameter, ir.VariableType): the introduced type parameter and a variable
+            type which wraps it.
+        """
+        assert isinstance(node, ast.BlankType)
+        if not self.info.hasDefnInfo(node):
+            paramName = ir.Name(self.scope().prefix + [ir.EXISTENTIAL_SUFFIX, ir.BLANK_SUFFIX])
+            blankParam = self.info.package.addTypeParameter(paramName, astDefn=node,
+                                                            upperBound=param.upperBound,
+                                                            lowerBound=param.lowerBound)
+            defnInfo = compile_info.DefnInfo(blankParam, self.scope().scopeId, isVisible=False)
+            self.info.setDefnInfo(node, defnInfo)
         else:
-            return self.visit(node)
+            blankParam = self.info.getDefnInfo(node).irDefn
+        return blankParam, ir_t.VariableType(blankParam)
 
     def handleResult(self, node, result, *unusedArgs, **unusedKwargs):
         if result is not None:
+            assert not self.info.hasType(node) or self.info.getType(node) == result
             self.info.setType(node, result)
         return result
 
@@ -449,9 +546,9 @@ class DeclarationTypeVisitor(TypeVisitorBase):
                 return default
             else:
                 ty = self.visit(bound)
-                if ty.isNullable():
+                if not ty.mayUseAsBound():
                     raise TypeException(bound.location,
-                                        "%s: bound may not be nullable" % node.name)
+                                        "type may not be used as a bound")
                 return ty
 
         self.scope().define(node.name)
@@ -467,62 +564,50 @@ class DeclarationTypeVisitor(TypeVisitorBase):
                                 "patterns which might not match can't be used as parameters")
         return patTy
 
-    # We visit patterns to find the correct types for function parameters. Some patterns can't
-    # directly be part of function parameters, but they may be part of other patterns, so
-    # we need to type them all.
-
     def visitVariablePattern(self, node, isParam=False):
-        if not isParam:
-            return None
-        if node.ty is None:
+        if isParam and node.ty is None:
             raise TypeException(node.location, "%s: type not specified" % node.name)
-        return self.visit(node.ty)
+        return self.visit(node.ty) if node.ty is not None else None
 
     def visitBlankPattern(self, node, isParam=False):
-        if not isParam:
-            return None
-        if node.ty is None:
+        if isParam and node.ty is None:
             raise TypeException(node.location, "type not specified")
-        return self.visit(node.ty)
+        return self.visit(node.ty) if node.ty is not None else None
 
     def visitLiteralPattern(self, node, isParam=False):
         return self.visit(node.literal)
 
     def visitTuplePattern(self, node, isParam=False):
-        if not isParam:
-            return None
-        patternTypes = tuple(self.visit(p, True) for p in node.patterns)
+        patternTypes = tuple(self.visit(p, isParam) for p in node.patterns)
+        assert not isParam or None not in patternTypes
         tupleClass = self.info.getTupleClass(len(node.patterns), node.location)
-        return ir_t.ClassType(tupleClass, patternTypes)
+        return ir_t.ClassType(tupleClass, patternTypes) if isParam else None
 
     def visitValuePattern(self, node, isParam=False):
-        if not isParam:
-            return None
         # Need to raise this early, since patternMustMatch is only called after a type is
         # returned. We may not be able to determine the type of this pattern, since it can
         # involve function calls as part of the scope prefix.
-        raise TypeException(node.location, "value pattern can't be used in a parameter")
+        if isParam:
+            raise TypeException(node.location, "value pattern can't be used in a parameter")
 
     def visitDestructurePattern(self, node, isParam=False):
-        if not isParam:
-            return None
         # Need to raise this early, since patternMustMatch is only called after a type
         # is returned.
-        raise TypeException(node.location, "destructure pattern can't be used in a parameter")
+        if isParam:
+            raise TypeException(node.location,
+                                "destructure pattern can't be used in a parameter")
 
     def visitUnaryPattern(self, node, isParam=False):
-        if not isParam:
-            return None
         # Need to raise this early, since patternMustMatch is only called after a type
         # is returned.
-        raise TypeException(node.location, "unary pattern can't be used in a parameter")
+        if isParam:
+            raise TypeException(node.location, "unary pattern can't be used in a parameter")
 
     def visitBinaryPattern(self, node, isParam=False):
-        if not isParam:
-            return None
         # Need to raise this early, since patternMustMatch is only called after a type
         # is returned.
-        raise TypeException(node.location, "binary pattern can't be used in a parameter")
+        if isParam:
+            raise TypeException(node.location, "binary pattern can't be used in a parameter")
 
     def visitDefault(self, node):
         self.visitChildren(node)
@@ -531,11 +616,16 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         typeParams = ir.getExplicitTypeParameters(irClass)
         assert len(typeParams) == len(nodes)
         typeArgs = []
+        introducedTypeParams = []
         for param, node in zip(typeParams, nodes):
-            arg = self.buildClassTypeArg(param, node)
-            self.typeArgsToCheck.append((arg, param, node.location))
+            if isinstance(node, ast.BlankType):
+                introducedTypeParam, arg = self.introduceExistentialTypeParameter(param, node)
+                introducedTypeParams.append(introducedTypeParam)
+            else:
+                arg = self.visit(node)
+                self.typeArgsToCheck.append((arg, param, node.location))
             typeArgs.append(arg)
-        return tuple(typeArgs)
+        return tuple(typeArgs), tuple(introducedTypeParams)
 
     def setMethodReceiverType(self, irFunction):
         assert irFunction.variables[0].name.short() == ir.RECEIVER_SUFFIX
@@ -645,7 +735,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                             else []
             superScope = self.info.getScope(ir_t.getClassFromType(supertype))
             self.handlePropertyCall(ir.CONSTRUCTOR_SUFFIX, superScope, supertype,
-                                    None, superArgTypes, True, True, node.id, node.location)
+                                    None, superArgTypes, True, True, False,
+                                    node.id, node.location)
 
         irInitializer = irClass.initializer
         irInitializer.parameterTypes = [thisType]
@@ -724,7 +815,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             else:
                 varTy = None
 
-        patTy = self.findPatternType(varTy, exprTy, mode, node.name, node.location)
+        patTy = self.findPatternType(varTy, exprTy, mode, isShadow, node.name, node.location)
 
         if not isShadow:
             irDefn = self.info.getDefnInfo(node).irDefn
@@ -736,12 +827,12 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def visitBlankPattern(self, node, exprTy, mode):
         blankTy = self.visit(node.ty) if node.ty is not None else None
-        patTy = self.findPatternType(blankTy, exprTy, mode, None, node.location)
+        patTy = self.findPatternType(blankTy, exprTy, mode, False, None, node.location)
         return patTy
 
     def visitLiteralPattern(self, node, exprTy, mode):
         litTy = self.visit(node.literal)
-        patTy = self.findPatternType(litTy, exprTy, mode, None, node.location)
+        patTy = self.findPatternType(litTy, exprTy, mode, False, None, node.location)
         return patTy
 
     def visitTuplePattern(self, node, exprTy, mode):
@@ -753,7 +844,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             elementTypes = tuple(self.visit(p, ir_t.getRootClassType(), mode)
                                  for p in node.patterns)
         tupleTy = ir_t.ClassType(tupleClass, elementTypes)
-        patTy = self.findPatternType(tupleTy, exprTy, mode, None, node.location)
+        patTy = self.findPatternType(tupleTy, exprTy, mode, True, None, node.location)
         return patTy
 
     def visitValuePattern(self, node, exprTy, mode):
@@ -761,7 +852,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         if len(node.prefix) > 0:
             hasReceiver = not self.info.hasScopePrefixInfo(node.prefix[-1])
             patTy = self.handlePropertyCall(node.name, scope, receiverType, None, None,
-                                            hasReceiver, False, node.id, node.location)
+                                            hasReceiver, False, False, node.id, node.location)
         else:
             patTy = self.handleUnprefixedCall(node.name, None, None, node.id, node.location)
         return patTy
@@ -838,14 +929,14 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def visitAssignExpression(self, node):
         rightTy = self.visit(node.right)
-        leftTy = self.visit(node.left)
+        leftTy = self.visitLvalue(node.left)
         if not rightTy.isSubtypeOf(leftTy):
             raise TypeException(node.location,
                                 "for assignment, expected %s but was %s" %
                                 (str(leftTy), str(rightTy)))
         return leftTy
 
-    def visitPropertyExpression(self, node, mayBePrefix=False):
+    def visitPropertyExpression(self, node, mayBePrefix=False, isLvalue=False):
         receiverType = self.visitPossiblePrefix(node.receiver)
         if self.info.hasScopePrefixInfo(node.receiver):
             receiverScope = self.info.getScope(
@@ -864,7 +955,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                  isinstance(node.receiver, ast.SuperExpression)
             ty = self.handlePropertyCall(node.propertyName, receiverScope, receiverType,
                                          None, None, hasReceiver, receiverIsReceiver,
-                                         node.id, node.location)
+                                         isLvalue, node.id, node.location)
         return ty
 
     def visitCallExpression(self, node, mayBePrefix=False):
@@ -899,13 +990,14 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             else:
                 ty = self.handlePropertyCall(node.callee.propertyName, receiverScope,
                                              receiverType, typeArgs, argTypes,
-                                             hasReceiver, False, node.id, node.location)
+                                             hasReceiver, False, False, node.id, node.location)
         elif isinstance(node.callee, ast.ThisExpression) or \
              isinstance(node.callee, ast.SuperExpression):
             receiverType = self.visit(node.callee)
             receiverScope = self.info.getScope(ir_t.getClassFromType(receiverType))
             self.handlePropertyCall(ir.CONSTRUCTOR_SUFFIX, receiverScope, receiverType,
-                                    typeArgs, argTypes, True, True, node.id, node.location)
+                                    typeArgs, argTypes, True, True, False,
+                                    node.id, node.location)
             ty = ir_t.UnitType
         else:
             # TODO: callable expression
@@ -1041,7 +1133,31 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                         "covariant type parameter used in invalid position")
         return ty
 
-    def findPatternType(self, patTy, exprTy, mode, name, loc):
+    def findPatternType(self, patTy, exprTy, mode, isDestructure, name, loc):
+        """Determines the type of a pattern and checks for matching errors.
+
+        Args:
+            patTy (Type?): the declared type of the pattern. Should be `None` if the type is
+                inferred from the expression.
+            exprTy (Type?): the type of the expression being matched. May be `None` if there is
+                no expression (for example, a parameter or variable declaration). Either `patTy`
+                or `exprTy` must be specified.
+            mode (symbol): either `COMPILE_FOR_VALUE` for variables and parameters or
+                `COMPILE_FOR_MATCH` for pattern matching.
+            isDestructure (bool): true if this is part of a destructuring pattern (just used
+                for tuple patterns). Checking is a little stricter if false, since sub-patterns
+                are not being matched.
+            name (str?): the name of the variable in the pattern, if there is one. Used for
+                error reporting.
+            loc (Location): location in source code, used for error reporting.
+
+        Returns:
+            (Type): if `patTy` is set, it is returned. Otherwise, `exprTy`.
+
+        Raises:
+            TypeException: for many reasons, for example, if no type can be inferred or if
+                types cannot be tested at runtime.
+        """
         nameStr = "%s: " % name if name is not None else ""
         scope = self.scope()
         if patTy is None and exprTy is None:
@@ -1054,6 +1170,11 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             elif mode is COMPILE_FOR_MATCH and \
                  exprTy.isDisjoint(patTy):
                 raise TypeException(loc, nameStr + "expression cannot match declared type")
+            elif mode is COMPILE_FOR_MATCH and \
+                 not isDestructure and \
+                 not exprTy.isSubtypeOf(patTy) and \
+                 not typeCanBeTested(patTy):
+                raise TypeException(loc, nameStr + "type cannot be tested at runtime")
             else:
                 return patTy
         else:
@@ -1063,14 +1184,20 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         typeParams = ir.getExplicitTypeParameters(irClass)
         assert len(typeParams) == len(typeArgs)
         types = []
+        introducedTypeParams = []
         for tp, ta in zip(typeParams, typeArgs):
-            with VarianceScope.forArgument(self, tp.variance()):
-                ty = self.buildClassTypeArg(tp, ta)
-            if not (tp.lowerBound.isSubtypeOf(ty) and
-                    ty.isSubtypeOf(tp.upperBound)):
-                raise TypeException(ta.location, "%s: type argument is not in bounds" % tp.name)
+            if isinstance(ta, ast.BlankType):
+                tp, ty = self.introduceExistentialTypeParameter(tp, ta)
+                introducedTypeParams.append(tp)
+            else:
+                with VarianceScope.forArgument(self, tp.variance()):
+                    ty = self.visit(ta)
+                if not (tp.lowerBound.isSubtypeOf(ty) and
+                        ty.isSubtypeOf(tp.upperBound)):
+                    raise TypeException(ta.location,
+                                        "%s: type argument is not in bounds" % tp.name)
             types.append(ty)
-        return tuple(types)
+        return tuple(types), tuple(introducedTypeParams)
 
     def handleFunctionCommon(self, node, astReturnType, astBody):
         defnInfo = self.info.getDefnInfo(node)
@@ -1212,7 +1339,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                        if prefix[i].typeArguments is not None \
                        else None
             ty = self.handlePropertyCall(prefix[i].name, scope, receiverType, typeArgs, None,
-                                         True, False, prefix[i].id, prefix[i].location)
+                                         True, False, False, prefix[i].id, prefix[i].location)
             self.info.setType(prefix[i], ty)
             i += 1
 
@@ -1244,7 +1371,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         scope.use(defnInfo, useAstId, USE_AS_VALUE, loc)
         return self.getDefnType(receiverType, False, defnInfo.irDefn, allTypeArgs)
 
-    def handlePossiblePrefixSymbol(self, name, scope, scopeType, typeArgs, useAstId,loc):
+    def handlePossiblePrefixSymbol(self, name, scope, scopeType, typeArgs, useAstId, loc):
         """Processes a symbol reference which may be part of a scope prefix.
 
         If the symbol does turn out to be part of a prefix, `ScopePrefixInfo` will be saved
@@ -1305,7 +1432,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         return self.getDefnType(receiverType, True, defnInfo.irDefn, allTypeArgs)
 
     def handlePropertyCall(self, name, receiverScope, receiverType,
-                           typeArgs, argTypes, hasReceiver, receiverIsReceiver, useAstId, loc):
+                           typeArgs, argTypes, hasReceiver, receiverIsReceiver,
+                           isLvalue, useAstId, loc):
         """Handles a reference to a property inside an object or a scope.
 
         This can be used for methods, fields, and inner-class constructors with an explicit
@@ -1313,21 +1441,26 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         (use `handlePossibleScopePrefix` instead). `UseInfo` and `CallInfo` will be saved.
 
         Args:
-            name: the name of the symbol being referenced.
-            receiverScope: the `Scope` of the receiver or prefix.
-            receiverType: the `Type` of the receiver or the prefix. This is used to obtain
+            name (str): the name of the symbol being referenced.
+            receiverScope (Scope): scope of the receiver or prefix.
+            receiverType (Type): type of the receiver or the prefix. This is used to obtain
                 type arguments which may be implied in this call.
-            typeArgs: a list of `Type` arguments passes as part of the call. May be `None`.
-            argTypes: a list of `Type`s of arguments passed as part of the call. May be `None`.
-            hasReceiver: whether the expression has a receiver. If the beginning of the
+            typeArgs (list(Type)?): type arguments passes as part of the call. Should be `None`
+                if no type arguments were explicitly passed.
+            argTypes (list(Type)?): types of arguments passed as part of the call. Should be
+                `None` if no arguments were explicitly passed.
+            hasReceiver (bool): whether the expression has a receiver. If the beginning of the
                 expression is a scope prefix, there might be no receiver.
-            receiverIsReceiver: whether the receiver used in the call is the same as the
+            receiverIsReceiver (bool): whether the receiver used in the call is the same as the
                 caller's receiver. This is required for some calls.
-            useAstId: the AST id where the symbol is referenced. Used to save info.
-            loc: the location of the reference in source code. Used in errors.
+            isLvalue (bool): whether the property is being assigned to. Normally, the type of
+                a field or return type of a method may be upcast, but this is not true
+                during assignments.
+            useAstId (AstId): the AST id where the symbol is referenced. Used to save info.
+            loc (Location): the location of the reference in source code. Used in errors.
 
         Returns:
-            The `Type` of the definition that was referenced (with type substitution performed).
+            (Type): type of the definition that was referenced with type substitution performed.
 
         Raises:
             ScopeException: if a definition with this name can't be found or used.
@@ -1335,6 +1468,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         """
         nameInfo = receiverScope.lookupFromExternal(name, loc)
         useKind = USE_AS_PROPERTY
+        receiverType, existentialVars = self.openExistentialReceiver(receiverType)
 
         if nameInfo.isClass() and argTypes is not None:
             defnInfo, allTypeArgs, receiverType  = self.chooseConstructorFromNameInfo(
@@ -1356,7 +1490,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.checkCallAllowed(defnInfo.irDefn, receiverIsReceiver, useKind, loc)
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
         self.scope().use(defnInfo, useAstId, useKind, loc)
-        return self.getDefnType(receiverType, True, defnInfo.irDefn, allTypeArgs)
+        ty = self.getDefnType(receiverType, True, defnInfo.irDefn, allTypeArgs)
+        ty = self.upcastExistentialVars(ty, existentialVars, isLvalue, name, loc)
+        return ty
 
     def handleUnprefixedCall(self, name, typeArgs, argTypes, useAstId, loc):
         """Handles a call with arguments or type arguments without a prefix.
@@ -1409,16 +1545,16 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         the operator may be considered an assignment. `UseInfo` and `CallInfo` will be saved.
 
         Args:
-            name: the name of the operator.
-            firstType: the `Type` of the first operand. For unary operators, this is the only
+            name (str): name of the operator.
+            firstType (Type): type of the first operand. For unary operators, this is the only
                 operand. For binary operators, this is the operand on the left unless the
                 name ends with ':', in which case, this is the operand on the right.
-            secondType: the `Type` of the second operand or `None` for unary operators.
-            useAstId: the AST id where the operator is referenced. Used to save info.
-            loc: the location of the operator in source code. Used in errors.
+            secondType (Type?): type of the second operand or `None` for unary operators.
+            useAstId (AstId): id where the operator is referenced. Used to save info.
+            loc (Location): the location of the operator in source code. Used in errors.
 
         Returns:
-            The `Type` of the definition that was referenced (with type substitution performed).
+            (Type) type of the definition that was referenced with type substitution performed.
 
         Raises:
             ScopeException: if a definition with this name can't be found or used.
@@ -1447,7 +1583,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
         # Try to find a compatible operator in the first operand's scope.
         operandDefnInfo, operandAllTypeArgs, operandUseKind = None, None, None
-        operandReceiverType = firstType
+        operandReceiverType, operandExistentialVars = self.openExistentialReceiver(firstType)
         try:
             operandScope = self.info.getScope(ir_t.getClassFromType(firstType))
             operandNameInfo = operandScope.lookupFromExternal(name, loc,
@@ -1470,16 +1606,19 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             defnInfo, allTypeArgs, receiverType, useKind = \
                 selfDefnInfo, selfAllTypeArgs, selfReceiverType, selfUseKind
             isAssignment = name != selfNameInfo.name
+            existentialVars = None
         else:
             defnInfo, allTypeArgs, receiverType, useKind = \
                 operandDefnInfo, operandAllTypeArgs, operandReceiverType, operandUseKind
             isAssignment = name != operandNameInfo.name
+            existentialVars = operandExistentialVars
 
         # Record information and return the resulting type.
         self.checkCallAllowed(defnInfo.irDefn, False, useKind, loc)
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
         self.scope().use(defnInfo, useAstId, useKind, loc)
         ty = self.getDefnType(receiverType, False, defnInfo.irDefn, allTypeArgs)
+        ty = self.upcastExistentialVars(ty, existentialVars, False, name, loc)
 
         if isAssignment and not ty.isSubtypeOf(firstType):
             raise TypeException(loc,
@@ -1523,9 +1662,55 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def handleDestructure(self, nameInfo, receiverType, receiverIsExplicit,
                           typeArgs, exprType, subPatterns, mode, useAstId, matcherAstId, loc):
+        """Handles a destructuring pattern match.
+
+        A destructuring pattern match works by passing the object being matched to a matcher
+        function which returns a match result (an `Option`). The matcher function may be named
+        explicitly, or can be a method of a named object, or can be a static method in a
+        named class. If the match result is `Some`, the contents (either a single value or a
+        tuple) are used to match sub-patterns.
+
+        There are a few different patterns that can perform destructuring, so the caller is
+        expected to have done some work already. This method handles the common functionality
+        between all of them.
+
+        nameInfo (NameInfo): info for the definition used to perform the match. If this is a
+            (possibly overloaded) function, it is assumed to be an explicitly named matcher
+            function. If this is a global, field, or variable, it is assumed to be a matcher
+            object which has a "try-match" method that will be called. If this is a class,
+            it is assumed to contain a static "try-match" method that will be called. Otherwise,
+            the definition cannot be used and a `TypeException` will be raised.
+        receiverType (Type?): receiver type for the matcher. May be `None`, for example
+            for globals.
+        receiverIsExplicit (bool): whether the receiver for the matcher was specified
+            explicitly. This affects type substitution.
+        typeArgs (list(Type)?): a list of type arguments passed explicitly to the matcher.
+            Should be `None` if no type arguments were passed explicitly.
+        exprType (Type): the type of the expression being matched. This is the type of the
+            argument to the matcher function.
+        subPatterns (list(Pattern)): sub-patterns being matched as part of this destructuring.
+            They will be visiting recursively after we know what the matcher function returns.
+            The match result should have the same number of types (single type or tuple type)
+            as the number of sub-patterns in this list.
+        mode (symbol): compilation mode for patterns.
+        useAstId (AstId): id of the definition that contains the matcher method. Used to
+            record `UseInfo` and `CallInfo`.
+        matcherAstId (AstId): id of the matcher method itself. Some patterns (like
+            `UnaryPattern`) have a separate id just for this.
+        loc (Location): location of the match in source code. Used for error reporting.
+
+        Returns:
+            (Type): same as `exprType`. Destructures are not guaranteed, so we can't be any
+            more specific.
+
+        Raises:
+            ScopeException: if a matcher function can't be found or called.
+            TypeException: for many, many possible reasons.
+        """
         useKind = USE_AS_PROPERTY if receiverIsExplicit else USE_AS_VALUE
         if nameInfo.isFunction():
             # Call to possibly overloaded matcher function.
+            receiverType, existentialVars = self.openExistentialReceiver(receiverType)
             defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, receiverType,
                                                                 typeArgs, [exprType], loc)
             self.checkCallAllowed(defnInfo.irDefn, False, useKind, loc)
@@ -1535,6 +1720,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             self.ensureTypeInfoForDefn(irDefn)
             returnType = self.getDefnType(receiverType, receiverIsExplicit,
                                           irDefn, allTypeArgs)
+            returnType = self.upcastExistentialVars(returnType, existentialVars,
+                                                    False, nameInfo.name, loc)
         else:
             # The name refers to a matcher scope or definition.
             matcherDefnInfo = nameInfo.getDefnInfo()
@@ -1573,7 +1760,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             try:
                 returnType = self.handlePropertyCall("try-match", matcherScope,
                                                      matcherReceiverType, None, [exprType],
-                                                     matcherHasReceiver, False,
+                                                     matcherHasReceiver, False, False,
                                                      matcherAstId, loc)
             except ScopeException:
                 raise TypeException(loc, "cannot match without `try-match` method")
@@ -1716,15 +1903,49 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 match = False
 
             if match:
-                if candidate is not None:
-                    raise TypeException(loc, "%s: ambiguous call to overloaded function" % \
-                                        name)
                 allTypeArgs, _ = typesAndArgs
-                candidate = (defnInfo, allTypeArgs)
+                if candidate is None:
+                    candidate = (defnInfo, allTypeArgs)
+                else:
+                    candidate = self.chooseOverload(candidate, (defnInfo, allTypeArgs),
+                                                    name, loc)
 
         if candidate is None:
             raise TypeException(loc, "%s: could not find compatible definition" % name)
         return candidate
+
+    def chooseOverload(self, first, second, name, loc):
+        """Chooses between two possible candidates for an overloaded function call. Both
+        candidates must be compatible with the provided arguments.
+
+        Args:
+            first (DefnInfo, list(Type)): the first candidate. Must be a Function.
+            second (DefnInfo, list(Type)): the second candidate. Must be a Function.
+            name (str): name of the function being called. Used for error reporting.
+            loc (Location): location in source of the call. Used for error reporting.
+
+        Return:
+            (DefnInfo, list(Type)): the more specific candidate is returned.
+
+        Raises:
+            TypeException: if the call is ambiguous
+        """
+        firstFunction = first[0].irDefn
+        secondFunction = second[0].irDefn
+        assert isinstance(firstFunction, ir.Function) and \
+               isinstance(secondFunction, ir.Function) and \
+               len(firstFunction.parameterTypes) == len(secondFunction.parameterTypes)
+        if all(pt1 == pt2 for pt1, pt2 in
+               zip(firstFunction.parameterTypes, secondFunction.parameterTypes)):
+            raise TypeException(loc, "%s: ambiguous call to overloaded function" % name)
+        elif all(pt1.isSubtypeOf(pt2) for pt1, pt2 in
+                 zip(firstFunction.parameterTypes, secondFunction.parameterTypes)):
+            return first
+        elif all(pt2.isSubtypeOf(pt2) for pt1, pt2 in
+                 zip(firstFunction.parameterTypes, secondFunction.parameterTypes)):
+            return second
+        else:
+            raise TypeException(loc, "%s: ambiguous call to overloaded function" % name)
 
     def checkCallAllowed(self, irCallee, receiverIsReceiver, useKind, loc):
         """Checks whether a call to a function is valid.
@@ -1769,13 +1990,13 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         in order.
 
         Args:
-            receiverType: an optional `Type` which is the receiver of a function or field.
-            receiverIsExplicit: whether a receiver was specified explicitly. If the definition
-                is a field, type substitution is only performed if this is `True`. Type
-                arguments are meaningless if `False`.
-            irDefn: the definition that we want to know the type of.
-            typeArgs: an optional list of `Type` arguments applied to a function or class. Used
-                for type substitution in functions and fields.
+            receiverType (Type?): optional type of the receiver of a function or field.
+            receiverIsExplicit (bool): whether a receiver was specified explicitly. If the
+                definition is a field, type substitution is only performed if this is `True`.
+                Type arguments are meaningless if `False`.
+            irDefn (IrDefinition): the definition that we want to know the type of.
+            typeArgs (list(Type)?): an optional list of `Type` arguments applied to a function
+                or class. Used for type substitution in functions and fields.
         """
         self.ensureTypeInfoForDefn(irDefn)
         if isinstance(irDefn, ir.Function):
@@ -1809,6 +2030,70 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             if any(True for f in clas.fields if f is field):
                 return clas
         assert False, "field is not defined in this class or any superclass"
+
+    def openExistentialReceiver(self, receiverType):
+        """Unwraps a possibly existential type to return the type underneath and the declared
+        type variables.
+
+        This may be called on any type or `None`. In the case of a nested existential, all
+        existential layers are peeled off and all type variables are returned.
+
+        Args:
+            receiverType (Type?): any type. May be `None`.
+
+        Returns:
+            (Type?, list(TypeParameter)): if `receiverType` was `None` or some non-existential
+            type, then `receiverType` and the empty list are returned. If `receiverType` was
+            an existential type (possibly a nest), the underlying type and a list of
+            type parameters are returned."""
+        existentialVars = []
+        while isinstance(receiverType, ir_t.ExistentialType):
+            existentialVars += receiverType.variables
+            receiverType = receiverType.ty
+        return receiverType, existentialVars
+
+    def upcastExistentialVars(self, ty, existentialVars, isLvalue, name, loc):
+        """Upcasts the given type until none of the given existential variables are referenced.
+
+        This is used when typing expressions that may have existential receivers. It's unsafe
+        to return a type that has free existential variables, so we upcast to higher classes
+        (eventually to `Object` if we have to) until the variables are no longer referenced.
+
+        Args:
+            ty (Type): the type of a field or method return accessed through a possibly
+                existential receiver.
+            existentialVars (list(Type)?): existential variables declared on the receiver.
+            isLvalue (bool): whether we are checking the type of an lvalue. If this is True,
+                we cannot upcast. We'll report any error if any of `existentialVars` are
+                referenced.
+            name (str): name of field or method. Used for error reporting.
+            loc (Location): location in source code where the field or method is accessed.
+                Used for error reporting.
+
+        Raises:
+            TypeException: if `ty` contains any variables from `existentialVars`.
+        """
+        # NOTE: We are being more conservative than we technically need to be. We could upcast
+        # away the existential variables in rvalues. Currently, we use the same code to type
+        # lvalues and rvalues, and upcast would make assignment unsafe.
+        #
+        # We may also want to add an "open" expression the user can bind existential variables
+        # explicitly or do something like "wildcard capture" when we have type inference for
+        # type arguments.
+        if existentialVars is None or len(existentialVars) == 0 or not ty.isObject():
+            return ty
+        existentialVarIds = set(v.id for v in existentialVars)
+        referencedVarIds = ty.findVariables()
+        if isLvalue:
+            if not existentialVarIds.isdisjoint(referencedVarIds):
+                raise TypeException(loc, "%s: contains existential type variables" % name)
+            else:
+                return ty
+        else:
+            while not existentialVarIds.isdisjoint(referencedVarIds):
+                ty = ty.getBaseClassType()
+                referencedVarIds = ty.findVariables()
+            return ty
 
     def checkAndHandleReturnType(self, ty, loc):
         self.checkTypeVariance(ty, loc)

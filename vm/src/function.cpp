@@ -183,6 +183,11 @@ struct FrameState {
     return type;
   }
 
+  void pop(length_t count) {
+    ASSERT(count <= typeMap.size());
+    typeMap.erase(typeMap.end() - count, typeMap.end());
+  }
+
   Local<Type>& top() { return typeMap.back(); }
 
   void setLocal(i64 slot, const Local<Type>& type) {
@@ -198,7 +203,7 @@ struct FrameState {
   }
 
   Local<Type> popTypeArg() {
-    ASSERT(typeArgs.size() == 1);
+    ASSERT(typeArgs.size() >= 1);
     auto arg = typeArgs.back();
     typeArgs.pop_back();
     return arg;
@@ -632,6 +637,7 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           }
           vector<Local<Type>> typeArgs;
           currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
+          currentMap.pop(clas->typeParameterCount());
           auto type = Type::create(heap, clas, typeArgs);
           currentMap.pushTypeArg(type);
           auto valueType = handle(roots->getBuiltinType(BUILTIN_TYPE_CLASS_ID));
@@ -648,6 +654,7 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
               ->linkedClasses()->get(externIndex));
           vector<Local<Type>> typeArgs;
           currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
+          currentMap.pop(clas->typeParameterCount());
           auto type = Type::create(heap, clas, typeArgs);
           currentMap.pushTypeArg(type);
           auto valueType = handle(roots->getBuiltinType(BUILTIN_TYPE_CLASS_ID));
@@ -706,6 +713,38 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           auto flags = static_cast<Type::Flags>(rawFlags);
           ASSERT(flags == rawFlags && flags < Type::LAST_FLAG);
           auto type = Type::createWithFlags(heap, currentMap.popTypeArg(), flags);
+          currentMap.pop();
+          currentMap.pushTypeArg(type);
+          auto valueType = handle(roots->getBuiltinType(BUILTIN_TYPE_CLASS_ID));
+          currentMap.push(valueType);
+          break;
+        }
+
+        case TYXS: {
+          auto count = toLength(readVbn(bytecode, &pcOffset));
+          auto innerType = currentMap.popTypeArg();
+          vector<Local<TypeParameter>> variables(count);
+          for (length_t i = 0; i < count; i++) {
+            auto varType = currentMap.popTypeArg();
+            variables[count - i - 1] = handle(varType->asVariable());
+          }
+          auto type = Type::create(heap, variables, innerType);
+          currentMap.pushTypeArg(type);
+          break;
+        }
+
+        case TYXD: {
+          auto count = toLength(readVbn(bytecode, &pcOffset));
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          auto innerType = currentMap.popTypeArg();
+          vector<Local<TypeParameter>> variables(count);
+          for (length_t i = 0; i < count; i++) {
+            auto varType = currentMap.popTypeArg();
+            variables[count - i - 1] = handle(varType->asVariable());
+          }
+          currentMap.pop(count + 1);
+          auto type = Type::create(heap, variables, innerType);
           currentMap.pushTypeArg(type);
           auto valueType = handle(roots->getBuiltinType(BUILTIN_TYPE_CLASS_ID));
           currentMap.push(valueType);

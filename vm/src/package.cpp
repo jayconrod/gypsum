@@ -259,10 +259,11 @@ Function* Package::initFunction() const {
 }
 
 
-void Package::ensureExports(Heap* heap, const Handle<Package>& package) {
+void Package::ensureExports(const Handle<Package>& package) {
   if (package->exports_)
     return;
 
+  auto heap = package->getHeap();
   AllowAllocationScope allowAllocation(heap, true);
   HandleScope handleScope(heap->vm());
   auto exports = ExportMap::create(heap);
@@ -283,9 +284,9 @@ void Package::ensureExports(Heap* heap, const Handle<Package>& package) {
     if ((function->flags() & PUBLIC_FLAG) != 0 &&
         ((function->flags() & METHOD_FLAG) == 0 ||
          (function->flags() & (STATIC_FLAG | METHOD_FLAG)) != 0)) {
-      auto name = handle(function->name());
-      ASSERT(!exports->contains(*name));
-      ExportMap::add(heap, exports, name, function);
+      auto mangledName = mangleFunctionName(function, package);
+      ASSERT(!exports->contains(*mangledName));
+      ExportMap::add(heap, exports, mangledName, function);
     }
   }
 
@@ -313,7 +314,8 @@ void Package::ensureExports(Heap* heap, const Handle<Package>& package) {
 }
 
 
-void Package::link(Heap* heap, const Handle<Package>& package) {
+void Package::link(const Handle<Package>& package) {
+  auto heap = package->getHeap();
   auto vm = heap->vm();
   AllowAllocationScope allowAllocation(heap, true);
   HandleScope handleScope(vm);
@@ -321,7 +323,7 @@ void Package::link(Heap* heap, const Handle<Package>& package) {
   for (length_t i = 0; i < dependencies->length(); i++) {
     auto dependency = handle(dependencies->get(i));
     auto depPackage = handle(dependency->package());
-    ensureExports(heap, depPackage);
+    ensureExports(depPackage);
     auto depExports = handle(depPackage->exports());
 
     ASSERT(dependency->linkedGlobals() == nullptr);
@@ -347,15 +349,14 @@ void Package::link(Heap* heap, const Handle<Package>& package) {
     auto functionCount = externFunctions->length();
     auto linkedFunctions = BlockArray<Function>::create(heap, functionCount);
     {
-      AllowAllocationScope noAllocation(heap, false);
       for (length_t j = 0; j < functionCount; j++) {
-        auto externFunction = externFunctions->get(j);
-        auto name = externFunction->name();
-        auto linkedFunction = depExports->getOrElse(name, nullptr);
-        if (!linkedFunction || !isa<Function>(linkedFunction)) {
+        auto externFunction = handle(externFunctions->get(j));
+        auto mangledName = mangleFunctionName(externFunction, package);
+        Local<Block> linkedFunction(vm, depExports->getOrElse(*mangledName, nullptr));
+        if (!linkedFunction || !isa<Function>(*linkedFunction)) {
           throw Error("link error");
         }
-        linkedFunctions->set(j, block_cast<Function>(linkedFunction));
+        linkedFunctions->set(j, block_cast<Function>(*linkedFunction));
       }
     }
     dependency->setLinkedFunctions(*linkedFunctions);
@@ -935,8 +936,7 @@ Local<Type> Loader::readType() {
     }
 
     return ty;
-  } else {
-    ASSERT(form == Type::VARIABLE_TYPE);
+  } else if (form == Type::VARIABLE_TYPE) {
     auto depIndex = readVbn();
     auto defnIndex = readVbn();
 
@@ -968,6 +968,18 @@ Local<Type> Loader::readType() {
       ty = Type::create(heap(), param, flags);
     }
 
+    return ty;
+  } else {
+    ASSERT(form == Type::EXISTENTIAL_TYPE);
+    auto length = readLengthVbn();
+    vector<Local<TypeParameter>> variables;
+    variables.reserve(length);
+    for (length_t i = 0; i < length; i++) {
+      auto index = readLengthVbn();
+      variables.push_back(getTypeParameter(index));
+    }
+    auto innerType = readType();
+    auto ty = Type::create(heap(), variables, innerType);
     return ty;
   }
 }
@@ -1363,6 +1375,7 @@ Local<Function> DependencyLoader::readIdAndGetMethod() {
   return handle(dep_->externMethods()->get(index));
 }
 
+
 Local<Class> DependencyLoader::readIdAndGetDefiningClass() {
   auto opt = readLengthVbn();
   if (opt == 0) {
@@ -1377,6 +1390,183 @@ Local<Class> DependencyLoader::readIdAndGetDefiningClass() {
     throw Error("invalid option");
   }
 }
+
+
+static void mangleType(stringstream& str,
+                       const Handle<Type>& type,
+                       vector<Local<TypeParameter>>& variables,
+                       const Handle<Package>& package);
+
+static void mangleTypeParameter(stringstream& str,
+                                const Handle<TypeParameter>& typeParam,
+                                vector<Local<TypeParameter>>& variables,
+                                const Handle<Package>& package);
+
+
+Local<Name> mangleFunctionName(const Handle<Function>& function,
+                               const Handle<Package>& package) {
+  HandleScope handleScope(function->getVM());
+  auto heap = function->getHeap();
+
+  // Compute the last component of the function's mangled name.
+  stringstream str;
+  auto components = handle(function->name()->components());
+  auto lastComponent = handle(components->get(components->length() - 1));
+  str << lastComponent->length() << lastComponent->toUtf8StlString();
+  auto typeParams = handle(function->typeParameters());
+  vector<Local<TypeParameter>> variables;
+  if (typeParams->length() > 0) {
+    variables.reserve(typeParams->length());
+    str << '[';
+    for (length_t i = 0; i < typeParams->length(); i++) {
+      if (i > 0)
+        str << ',';
+      variables.push_back(handle(typeParams->get(i)));
+      mangleTypeParameter(str, variables.back(), variables, package);
+    }
+    str << ']';
+  }
+  str << '(';
+  auto paramTypes = handle(function->parameterTypes());
+  for (length_t i = 0; i < paramTypes->length(); i++) {
+    if (i > 0)
+      str << ',';
+    mangleType(str, handle(paramTypes->get(i)), variables, package);
+  }
+  str << ')';
+
+  // Build a new name using the mangled component.
+  auto mangledComponents = BlockArray<String>::create(heap, components->length());
+  for (length_t i = 0; i < components->length() - 1; i++) {
+    mangledComponents->set(i, components->get(i));
+  }
+  auto mangledComponent = String::fromUtf8String(heap, str.str());
+  mangledComponents->set(components->length() - 1, *mangledComponent);
+  auto mangledName = Name::create(heap, mangledComponents);
+
+  return handleScope.escape(*mangledName);
+}
+
+
+static void mangleType(stringstream& str,
+                       const Handle<Type>& type,
+                       vector<Local<TypeParameter>>& variables,
+                       const Handle<Package>& package) {
+  auto heap = type->getHeap();
+  switch (type->form()) {
+    case Type::UNIT_TYPE:
+      str << 'U';
+      break;
+
+    case Type::BOOLEAN_TYPE:
+      str << 'Z';
+      break;
+
+    case Type::I8_TYPE:
+      str << 'B';
+      break;
+
+    case Type::I16_TYPE:
+      str << 'S';
+      break;
+
+    case Type::I32_TYPE:
+      str << 'I';
+      break;
+
+    case Type::I64_TYPE:
+      str << 'L';
+      break;
+
+    case Type::F32_TYPE:
+      str << 'F';
+      break;
+
+    case Type::F64_TYPE:
+      str << 'D';
+      break;
+
+    case Type::CLASS_TYPE:
+    case Type::EXTERN_CLASS_TYPE: {
+      str << 'C';
+      auto clas = handle(type->asClass());
+      if (clas->package() == nullptr) {
+        str << "::";
+      } else if (clas->package() != *package) {
+        auto classPackageNameStr = Name::toString(heap, handle(clas->package()->name()));
+        str << classPackageNameStr->length() << classPackageNameStr->toUtf8StlString() << ':';
+      } else {
+        str << ':';
+      }
+      auto classNameStr = Name::toString(heap, handle(clas->name()));
+      str << classNameStr->length() << classNameStr->toUtf8StlString();
+      if (type->typeArgumentCount() > 0) {
+        str << '[';
+        for (length_t i = 0; i < type->typeArgumentCount(); i++) {
+          if (i > 0)
+            str << ',';
+          mangleType(str, handle(type->typeArgument(i)), variables, package);
+        }
+        str << ']';
+      }
+      if (type->isNullable())
+        str << '?';
+      break;
+    }
+
+    case Type::VARIABLE_TYPE:
+    case Type::EXTERN_VARIABLE_TYPE: {
+      str << 'T';
+      auto typeParameter = handle(type->asVariable());
+      length_t index = kLengthNotSet;
+      for (length_t i = 0; i < variables.size(); i++) {
+        if (*variables[i] == *typeParameter) {
+          index = i;
+          break;
+        }
+      }
+      ASSERT(index != kLengthNotSet);
+      str << index;
+      if (type->isNullable())
+        str << '?';
+      break;
+    }
+
+    case Type::EXISTENTIAL_TYPE: {
+      auto oldSize = variables.size();
+      str << "E[";
+      for (length_t i = 0; i < type->existentialVariableCount(); i++) {
+        if (i > 0)
+          str << ',';
+        variables.push_back(handle(type->existentialVariable(i)));
+        mangleTypeParameter(str, variables.back(), variables, package);
+      }
+      str << ']';
+      mangleType(str, handle(type->existentialInnerType()), variables, package);
+      variables.erase(variables.begin() + oldSize, variables.end());
+      break;
+    }
+
+    case Type::LABEL_TYPE:
+      UNREACHABLE();
+  }
+
+}
+
+
+void mangleTypeParameter(stringstream& str,
+                         const Handle<TypeParameter>& typeParam,
+                         vector<Local<TypeParameter>>& variables,
+                         const Handle<Package>& package) {
+  if ((STATIC_FLAG & typeParam->flags()) != 0) {
+    str << 's';
+  }
+  str << '<';
+  mangleType(str, handle(typeParam->upperBound()), variables, package);
+  str << '>';
+  mangleType(str, handle(typeParam->lowerBound()), variables, package);
+}
+
 
 }
 }

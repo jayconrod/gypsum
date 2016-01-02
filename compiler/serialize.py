@@ -231,12 +231,18 @@ class Serializer(object):
             clas = type.clas
             packageIndex = clas.id.getPackageIndex()
             defnIndex = clas.id.getDefnIndex()
-        else:
-            assert isinstance(type, ir_types.VariableType)
+        elif isinstance(type, ir_types.VariableType):
             form = 9
             param = type.typeParameter
             packageIndex = param.id.getPackageIndex()
             defnIndex = param.id.getDefnIndex()
+        else:
+            assert isinstance(type, ir_types.ExistentialType)
+            form = 10
+            self.writeVbn(form)
+            self.writeTypeParameterList(type.variables)
+            self.writeType(type.ty)
+            return
         flags = 0
         if ir_types.NULLABLE_TYPE_FLAG in type.flags:
             flags = flags | 1
@@ -574,6 +580,12 @@ class Deserializer(object):
             ty = ir_types.VariableType(param, flags)
             if isExtern:
                 self.package.externTypes.append(ty)
+        elif form == 10:
+            if flagBits != 0:
+                raise IOError("flags must not be set for existential type")
+            variables = self.readList(self.readId, self.package.typeParameters)
+            innerType = self.readType()
+            ty = ir_types.ExistentialType(variables, innerType)
         else:
             raise IOError("invalid type flags")
 

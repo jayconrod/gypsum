@@ -68,6 +68,12 @@ bool TypeParameter::isCompatibleWith(const Handle<TypeParameter>& a,
 }
 
 
+bool TypeParameter::isEquivalent(TypeParameter* other) const {
+  return upperBound()->equals(other->upperBound()) &&
+         lowerBound()->equals(other->lowerBound());
+}
+
+
 bool TypeParameter::hasCommonBound(TypeParameter* other) const {
   unordered_set<const TypeParameter*> otherLowerBounds{other};
   auto last = other;
