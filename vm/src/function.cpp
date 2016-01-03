@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -7,12 +7,15 @@
 #include "function.h"
 
 #include <algorithm>
+#include <string>
 #include <vector>
+#include "array.h"
 #include "block.h"
 #include "bytecode.h"
 #include "class.h"
 #include "field.h"
 #include "global.h"
+#include "name.h"
 #include "package.h"
 #include "roots.h"
 #include "string.h"
@@ -60,7 +63,8 @@ Function::Function(Name* name,
                    const vector<u8>& instructions,
                    LengthArray* blockOffsets,
                    Package* package,
-                   StackPointerMap* stackPointerMap)
+                   StackPointerMap* stackPointerMap,
+                   NativeFunction nativeFunction)
     : Block(FUNCTION_BLOCK_TYPE),
       name_(this, name),
       flags_(flags),
@@ -73,7 +77,8 @@ Function::Function(Name* name,
       instructionsSize_(instructions.size()),
       blockOffsets_(this, blockOffsets),
       package_(this, package),
-      stackPointerMap_(this, stackPointerMap) {
+      stackPointerMap_(this, stackPointerMap),
+      nativeFunction_(nullptr) {
   ASSERT(instructionsSize_ <= kMaxLength);
   copy_n(instructions.begin(), instructions.size(), instructionsStart());
 }
@@ -82,7 +87,7 @@ Function::Function(Name* name,
 Local<Function> Function::create(Heap* heap) {
   RETRY_WITH_GC(heap, return Local<Function>(new(heap, 0) Function(
       nullptr, 0, nullptr, nullptr, nullptr, nullptr,
-      0, vector<u8>{}, nullptr, nullptr, nullptr)));
+      0, vector<u8>{}, nullptr, nullptr, nullptr, nullptr)));
 }
 
 
@@ -96,10 +101,12 @@ Local<Function> Function::create(Heap* heap,
                                  word_t localsSize,
                                  const vector<u8>& instructions,
                                  const Handle<LengthArray>& blockOffsets,
-                                 const Handle<Package>& package) {
+                                 const Handle<Package>& package,
+                                 NativeFunction nativeFunction) {
   RETRY_WITH_GC(heap, return Local<Function>(new(heap, instructions.size()) Function(
       *name, flags, *typeParameters, *returnType, *parameterTypes, definingClass.getOrNull(),
-      localsSize, instructions, blockOffsets.getOrNull(), package.getOrNull(), nullptr)));
+      localsSize, instructions, blockOffsets.getOrNull(), package.getOrNull(), nullptr,
+      nativeFunction)));
 }
 
 
@@ -140,6 +147,54 @@ bool Function::hasPointerMapAtPcOffset(length_t pcOffset) const {
   if (map == nullptr)
     return false;
   return map->hasLocalsRegion(pcOffset);
+}
+
+
+bool Function::isNative() const {
+  return (NATIVE_FLAG & flags_) != 0;
+}
+
+
+static void buildFunctionName(string* nameStr, Name* name) {
+  auto components = name->components();
+  for (length_t i = 0; i < components->length(); i++) {
+    if (i > 0)
+      *nameStr += "__";
+    for (auto ch : *components->get(i)) {
+      auto valid = ('0' <= ch && ch <= '9') ||
+          ('A' <= ch && ch <= 'Z') ||
+          ('a' <= ch && ch <= 'z') ||
+          ch == '_';
+      *nameStr += valid ? static_cast<char>(ch) : '_';
+    }
+  }
+}
+
+
+void Function::ensureNativeFunction() {
+  if (nativeFunction_ != nullptr)
+    return;
+
+  // Get the native library.
+  auto library = package()->nativeLib();
+  ASSERT(library != nullptr);
+
+  // Determine the name of the function.
+  string nameStr;
+  buildFunctionName(&nameStr, package()->name());
+  nameStr += "___";
+  buildFunctionName(&nameStr, name());
+
+  // Load the function from the library.
+  auto fn = loadNativeFunction(library, nameStr);
+  ASSERT(fn != nullptr);
+  setNativeFunction(fn);
+}
+
+
+NativeFunction Function::ensureAndGetNativeFunction() {
+  ensureNativeFunction();
+  return nativeFunction();
 }
 
 

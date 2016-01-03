@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -12,6 +12,7 @@
 #include <vector>
 #include "array.h"
 #include "block.h"
+#include "platform.h"
 #include "type.h"
 #include "utils.h"
 
@@ -40,7 +41,8 @@ class Function: public Block {
            const std::vector<u8>& instructions,
            LengthArray* blockOffsets,
            Package* package,
-           StackPointerMap* stackPointerMap);
+           StackPointerMap* stackPointerMap,
+           NativeFunction nativeFunction);
   static Local<Function> create(Heap* heap);
   static Local<Function> create(Heap* heap,
                                 const Handle<Name>& name,
@@ -52,7 +54,8 @@ class Function: public Block {
                                 word_t localsSize,
                                 const std::vector<u8>& instructions,
                                 const Handle<LengthArray>& blockOffsets,
-                                const Handle<Package>& package);
+                                const Handle<Package>& package,
+                                NativeFunction nativeFunction);
 
   static word_t sizeForFunction(length_t instructionsSize);
 
@@ -107,6 +110,14 @@ class Function: public Block {
   }
   bool hasPointerMapAtPcOffset(length_t pcOffset) const;
 
+  bool isNative() const;
+  NativeFunction nativeFunction() const { return nativeFunction_; }
+  void setNativeFunction(NativeFunction newNativeFunction) {
+    nativeFunction_ = newNativeFunction;
+  }
+  void ensureNativeFunction();
+  NativeFunction ensureAndGetNativeFunction();
+
  private:
   DECLARE_POINTER_MAP()
   Ptr<Name> name_;
@@ -121,6 +132,7 @@ class Function: public Block {
   Ptr<LengthArray> blockOffsets_;
   Ptr<Package> package_;
   Ptr<StackPointerMap> stackPointerMap_;
+  NativeFunction nativeFunction_;
   // Update FUNCTION_POINTER_LIST if pointer members change.
 };
 

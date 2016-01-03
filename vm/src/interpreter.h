@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -37,6 +37,7 @@ class Interpreter {
 
   void ensurePointerMap(const Handle<Function>& function);
   void handleBuiltin(BuiltinId id);
+  void handleNative(const Handle<Function>& callee);
   Local<Meta> getMetaForClassId(i64 classId);
 
   void enter(const Handle<Function>& callee);

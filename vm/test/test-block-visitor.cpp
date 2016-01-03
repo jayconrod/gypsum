@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -150,7 +150,7 @@ static Local<Package> createTestPackage(Heap* heap) {
   auto function = Function::create(heap, NAME("foo"),
                                    0, emptyTypeParameters, returnType, parameterTypes,
                                    Local<Class>(), 2 * kWordSize, instList, blockOffsetList,
-                                   package);
+                                   package, nullptr);
   functions->set(0, *function);
   package->setFunctions(*functions);
   package->setEntryFunctionIndex(0);
@@ -204,6 +204,7 @@ TEST(BlockVisitorFunction) {
       reinterpret_cast<word_t>(blockOffsets) + 4,
       reinterpret_cast<word_t>(package) + 4,
       4,
+      0,
   };
   for (word_t i = 0; i < ARRAY_LENGTH(expected); i++)
     ASSERT_EQ(expected[i], reinterpret_cast<word_t*>(function)[i]);

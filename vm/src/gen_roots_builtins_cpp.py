@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2014-2015 Jay Conrod. All rights reserved.
+# Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 # This file is part of CodeSwitch. Use of this source code is governed by
 # the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -131,7 +131,8 @@ def initFunction(out, functionData):
     for i, name in enumerate(functionData["parameterTypes"]):
         out.write("    parameterTypes->set(%d, %s);\n" % (i, getTypeFromName(name)))
     out.write("    ::new(function) Function(name, PUBLIC_FLAG, emptyTypeParameters, " +
-              "returnType, parameterTypes, nullptr, 0, emptyInstructions, nullptr, nullptr, nullptr);\n")
+              "returnType, parameterTypes, nullptr, 0, emptyInstructions, " +
+              "nullptr, nullptr, nullptr, nullptr);\n")
     out.write("    function->setBuiltinId(%s);\n" % functionData["id"])
     out.write("  }")
 

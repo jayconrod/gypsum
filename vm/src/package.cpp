@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -759,7 +759,7 @@ Local<Function> Loader::readFunction() {
   word_t localsSize = kNotSet;
   Local<LengthArray> blockOffsets;
   vector<u8> instructions;
-  if ((flags & (ABSTRACT_FLAG | EXTERN_FLAG)) == 0) {
+  if ((flags & (ABSTRACT_FLAG | EXTERN_FLAG | NATIVE_FLAG)) == 0) {
     localsSize = readWordVbn();
     auto instructionsSize = readLengthVbn();
     instructions = readData(instructionsSize);
@@ -775,7 +775,7 @@ Local<Function> Loader::readFunction() {
   auto func = Function::create(heap(), name, flags, typeParameters,
                                returnType, parameterTypes, definingClass,
                                localsSize, instructions, blockOffsets,
-                               package_);
+                               package_, nullptr);
   return func;
 }
 

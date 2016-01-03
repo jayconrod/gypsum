@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -684,7 +684,11 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         } else {
           auto functionIndex = toLength(functionId);
           Persistent<Function> callee(function_->package()->getFunction(functionIndex));
-          enter(callee);
+          if (callee->isNative()) {
+            handleNative(callee);
+          } else {
+            enter(callee);
+          }
         }
         break;
       }
@@ -694,7 +698,11 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         auto externIndex = toLength(readVbn());
         Persistent<Function> callee(function_->package()->dependencies()->get(packageIndex)
             ->linkedFunctions()->get(externIndex));
-        enter(callee);
+        if (callee->isNative()) {
+          handleNative(callee);
+        } else {
+          enter(callee);
+        }
         break;
       }
 
@@ -708,6 +716,8 @@ i64 Interpreter::call(const Handle<Function>& callee) {
             receiver->meta()->getData(methodIndex)));
         if (callee->hasBuiltinId()) {
           handleBuiltin(callee->builtinId());
+        } else if (callee->isNative()) {
+          handleNative(callee);
         } else {
           enter(callee);
         }
@@ -993,6 +1003,28 @@ void Interpreter::handleBuiltin(BuiltinId id) {
     default:
       UNIMPLEMENTED();
   }
+}
+
+
+void Interpreter::handleNative(const Handle<Function>& callee) {
+  union {
+    NativeFunction rawNativeFunction;
+    i64 (*intNativeFunction)(VM*);
+  } functionPointers;
+
+  ASSERT((callee->flags() & (ABSTRACT_FLAG | EXTERN_FLAG | NATIVE_FLAG)) == NATIVE_FLAG);
+  i64 resultInt = 0xdeadca11;
+  {
+    GCSafeScope gcSafe(this);
+    HandleScope handleScope(vm_);
+    functionPointers.rawNativeFunction = callee->ensureAndGetNativeFunction();
+    auto nativeFunction = functionPointers.intNativeFunction;
+    resultInt = nativeFunction(vm_);
+  }
+  auto paramsSize = callee->parametersSize();
+  if (paramsSize > 0)
+    stack_->setSp(stack_->sp() + paramsSize);
+  stack_->push(resultInt);
 }
 
 
