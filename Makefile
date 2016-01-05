@@ -16,7 +16,12 @@ else
   POSIX := yes
 endif
 endif
-
+UNAME_M := $(shell uname -m)
+ifeq ($(UNAME_M),x86_64)
+  ARCH := x64
+else
+  $(error Unknown architecture: $(UNAME_M))
+endif
 
 # Places
 TOP := $(realpath $(dir $(lastword $(MAKEFILE_LIST))))
@@ -36,6 +41,8 @@ CXX ?= g++
 CXX_COMPILE := $(CXX) -c -std=c++11
 CXX_DEPENDS := $(CXX) -std=c++11 -MM
 CXX_LINK_EXEC := $(CXX)
+AS ?= as
+AS_COMPILE := $(AS) -c
 AR ?= ar
 CXX_LINK_STATIC := $(AR) rcs
 RM ?= rm

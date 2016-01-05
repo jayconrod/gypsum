@@ -12,6 +12,7 @@
 #include <string>
 #include <type_traits>
 #include <vector>
+#include "api.h"
 #include "array.h"
 #include "block.h"
 #include "builtins.h"
@@ -24,6 +25,7 @@
 #include "name.h"
 #include "object.h"
 #include "package.h"
+#include "platform.h"
 #include "roots.h"
 #include "stack.h"
 #include "string.h"
@@ -1007,24 +1009,14 @@ void Interpreter::handleBuiltin(BuiltinId id) {
 
 
 void Interpreter::handleNative(const Handle<Function>& callee) {
-  union {
-    NativeFunction rawNativeFunction;
-    i64 (*intNativeFunction)(VM*);
-  } functionPointers;
+  auto sp = stack_->sp();
+  stack_->push(static_cast<uint64_t>(pcOffset_));
+  stack_->push(function_ ? *function_ : nullptr);
 
-  ASSERT((callee->flags() & (ABSTRACT_FLAG | EXTERN_FLAG | NATIVE_FLAG)) == NATIVE_FLAG);
-  i64 resultInt = 0xdeadca11;
-  {
-    GCSafeScope gcSafe(this);
-    HandleScope handleScope(vm_);
-    functionPointers.rawNativeFunction = callee->ensureAndGetNativeFunction();
-    auto nativeFunction = functionPointers.intNativeFunction;
-    resultInt = nativeFunction(vm_);
-  }
-  auto paramsSize = callee->parametersSize();
-  if (paramsSize > 0)
-    stack_->setSp(stack_->sp() + paramsSize);
-  stack_->push(resultInt);
+  auto result = callNativeFunctionForI64(*callee, vm_, sp);
+
+  stack_->setSp(stack_->sp() + callee->parametersSize() + 2 * kSlotSize);
+  stack_->push(result);
 }
 
 

@@ -21,13 +21,16 @@ programs = $(addprefix $(OUT_DIR)/,$(notdir $(basename $1)))
 
 LIB_NAME := codeswitch
 LIB_SOURCES := $(wildcard $(LIB_SRC_DIR)/*.cpp) \
-  $(wildcard $(LIB_SRC_DIR)/$(OS)/*.cpp)
+  $(wildcard $(LIB_SRC_DIR)/$(OS)/*.cpp) \
+  $(wildcard $(LIB_SRC_DIR)/$(ARCH)/*.cpp)
 ifeq ($(POSIX),yes)
   LIB_SOURCES += $(wildcard $(LIB_SRC_DIR)/posix/*.cpp)
 endif
+LIB_AS_SOURCES := $(wildcard $(LIB_SRC_DIR)/$(ARCH)/*.s)
 LIB_GEN := $(GEN_DIR)/opcodes.h $(GEN_DIR)/builtins.h $(GEN_DIR)/flags.h $(GEN_DIR)/roots-builtins.cpp
 LIB_GEN_OBJS := $(call objects,$(filter %.cpp,$(LIB_GEN)))
 LIB_OBJECTS := $(call objects,$(LIB_SOURCES)) $(LIB_GEN_OBJS)
+LIB_AS_OBJECTS := $(call objects,$(LIB_AS_SOURCES))
 LIB_DEPS := $(call deps,$(LIB_SOURCES))
 LIB := $(OUT_DIR)/$(LIB_NAME).a
 
@@ -55,8 +58,10 @@ PROGRAM_DEPS := $(call deps,$(PROGRAM_SOURCES))
 PROGRAMS := $(call programs,$(PROGRAM_SOURCES))
 
 SOURCES := $(LIB_SOURCES) $(TEST_SOURCES) $(PROGRAM_SOURCES)
+AS_SOURCES := $(LIB_AS_SOURCES)
 DEPS := $(LIB_DEPS) $(TEST_DEPS) $(PROGRAM_DEPS)
 OBJECTS := $(LIB_OBJECTS) $(TEST_OBJECTS) $(PROGRAM_OBJECTS)
+AS_OBJECTS := $(LIB_AS_OBJECTS)
 GEN := $(LIB_GEN)
 
 # Rules
@@ -97,6 +102,10 @@ $(OBJECTS):
 	@$(CXX_DEPENDS) $(CXXFLAGS) $(DEFINES) $(INCLUDES) -MT $@ $(filter %.cpp,$^) >$(call deps,$(filter %.cpp,$^))
 	$(CXX_COMPILE) $(CXXFLAGS) $(DEFINES) $(INCLUDES) $(LIB_PREFIX_INCLUDE) $(filter %.cpp,$^) -o $@
 
+$(AS_OBJECTS):
+	@mkdir -p $(dir $@)
+	$(AS_COMPILE) $^ -o $@
+
 $(TEST_CSP_PACKAGES):
 	@mkdir -p $(dir $@)
 	$(GY_COMPILE) $< -o $@
@@ -116,7 +125,7 @@ $(GEN_DIR)/builtins.h: $(LIB_SRC_DIR)/gen_builtins_h.py $(COMMON_DIR)/builtins.y
 $(GEN_DIR)/flags.h: $(LIB_SRC_DIR)/gen_flags_h.py $(COMMON_DIR)/flags.yaml
 $(GEN_DIR)/roots-builtins.cpp: $(LIB_SRC_DIR)/gen_roots_builtins_cpp.py $(COMMON_DIR)/builtins.yaml
 
-$(LIB): $(LIB_OBJECTS)
+$(LIB): $(LIB_OBJECTS) $(LIB_AS_OBJECTS)
 
 $(TEST): $(TEST_OBJECTS) $(LIB)
 
@@ -131,7 +140,7 @@ $(OBJECTS): $(filter %.h,$(GEN))
 $(foreach src,$(PROGRAM_SOURCES),\
 	$(eval $(call programs,$(src)): $(call objects,$(src)) $(LIB)))
 
-$(foreach src,$(SOURCES),\
+$(foreach src,$(SOURCES) $(AS_SOURCES),\
   $(eval $(call objects,$(src)): $(src)))
 
 $(foreach src,$(filter %.cpp,$(LIB_GEN)),\

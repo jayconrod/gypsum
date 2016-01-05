@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -393,6 +393,16 @@ bool Type::isI32() const {
 
 bool Type::isI64() const {
   return form() == I64_TYPE;
+}
+
+
+bool Type::isInteger() const {
+  return I8_TYPE <= form() && form() <= I64_TYPE;
+}
+
+
+bool Type::isFloat() const {
+  return F32_TYPE <= form() && form() <= F64_TYPE;
 }
 
 

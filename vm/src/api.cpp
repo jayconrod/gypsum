@@ -5,8 +5,10 @@
 
 
 #include "codeswitch.h"
+#include "api.h"
 
 #include <memory>
+#include <vector>
 
 #include "array.h"
 #include "builtins.h"
@@ -17,6 +19,7 @@
 #include "name.h"
 #include "object.h"
 #include "package.h"
+#include "platform.h"
 #include "stack.h"
 #include "string.h"
 #include "type.h"
@@ -31,53 +34,6 @@ using std::vector;
 namespace codeswitch {
 
 namespace i = internal;
-
-
-#define API_CHECK(expr, message) \
-  do { \
-    if (!(expr)) { \
-      throw Error(new Error::Impl(message)); \
-    } \
-  } while (false)
-
-
-#define API_CHECK_SELF(type) API_CHECK(impl_, #type ": this is not a valid reference")
-
-
-class Error::Impl final {
- public:
-  explicit Impl(const string& message)
-      : message(message) { }
-  explicit Impl(string&& message)
-      : message(message) { }
-  string message;
-};
-
-
-class VM::Impl final {
- public:
-  i::VM vm;
-};
-
-
-class Package::Impl final {
- public:
-  explicit Impl(const i::Handle<i::Package>& package)
-      : package(package) {
-    API_CHECK(package, "package implementation does not reference a package");
-  }
-  i::Persistent<i::Package> package;
-};
-
-
-class Function::Impl final {
- public:
-  explicit Impl(const i::Handle<i::Function>& function)
-      : function(function) {
-    API_CHECK(function, "function implementation does not reference a function");
-  }
-  i::Persistent<i::Function> function;
-};
 
 
 class CallBuilder::Impl final {
@@ -157,36 +113,6 @@ class CallBuilder::Impl final {
   i::VM* vm_;
   i::Persistent<i::Function> function_;
   vector<Value> args_;
-};
-
-
-class Name::Impl final {
- public:
-  explicit Impl(const i::Handle<i::Name>& name)
-      : name(name) {
-    API_CHECK(name, "name implementation does not reference a name");
-  }
-  i::Persistent<i::Name> name;
-};
-
-
-class String::Impl final {
- public:
-  explicit Impl(const i::Handle<i::String>& str)
-      : str(str) {
-    API_CHECK(str, "string implementation does not reference a string");
-  }
-  i::Persistent<i::String> str;
-};
-
-
-class Object::Impl final {
- public:
-  explicit Impl(const i::Handle<i::Object>& obj)
-      : obj(obj) {
-    API_CHECK(obj, "object implementation does not reference an object");
-  }
-  i::Persistent<i::Object> obj;
 };
 
 
@@ -741,6 +667,47 @@ bool Error::operator ! () const {
 
 const char* Error::message() const {
   return impl_->message.c_str();
+}
+
+
+int64_t callNativeFunctionForI64(i::Function* callee, i::VM* vm, i::Address sp) {
+  // Prepare the arguments.
+  auto paramTypes = callee->parameterTypes();
+  auto argCount = paramTypes->length();
+  uint64_t rawArgs[argCount];
+  bool argsAreInt[argCount];
+  Object objects[argCount];
+
+  for (i::length_t i = 0; i < argCount; i++) {
+    uint64_t value = i::mem<uint64_t>(sp + (argCount - i - 1) * i::Interpreter::kSlotSize);
+    auto paramType = paramTypes->get(i);
+    if (paramType->isObject()) {
+      argsAreInt[i] = true;
+      auto rawObject = reinterpret_cast<i::Object*>(static_cast<i::word_t>(value));
+      if (rawObject != nullptr) {
+        objects[i] = Object(new Object::Impl(i::Persistent<i::Object>(vm, rawObject)));
+      }
+      rawArgs[i] = static_cast<uint64_t>(reinterpret_cast<i::word_t>(&objects[i]));
+    } else if (paramType->isFloat()) {
+      argsAreInt[i] = false;
+      rawArgs[i] = value;
+    } else {
+      argsAreInt[i] = true;
+      rawArgs[i] = value;
+    }
+  }
+
+  // Load the native function, if it's not loaded already.
+  auto nativeFunction = callee->ensureAndGetNativeFunction();
+
+  // Call the funtion via an assembly stub.
+  // HACK: the internal VM must have the same address as the external VM, since the external
+  // VM contains the internal VM as its first member. This will break if that changes to
+  // a pointer or if a virtual function is added.
+  VM* externalVm = reinterpret_cast<VM*>(vm);
+  auto result = i::callNativeFunction(
+      externalVm, nativeFunction, argCount, rawArgs, argsAreInt);
+  return result;
 }
 
 }

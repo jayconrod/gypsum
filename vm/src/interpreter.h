@@ -32,6 +32,8 @@ class Interpreter {
   static const int kCallerPcOffsetOffset = kFunctionOffset + kWordSize;
   static const int kFrameControlSize = kCallerPcOffsetOffset + kWordSize;
 
+  static const size_t kSlotSize = 8;
+
  private:
   static const length_t kDonePcOffset = ~0;
 
@@ -48,7 +50,6 @@ class Interpreter {
 
   template <typename T> void push(T value);
   template <typename T> T pop();
-  static const size_t kSlotSize = 8;
   static const size_t kPrepareForGCSize = kSlotSize;
 
   ptrdiff_t localOffsetFromIndex(i64 index);

@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -9,9 +9,14 @@
 
 #include <string>
 #include <vector>
+#include <cstdint>
+#include "codeswitch.h"
 #include "utils.h"
 
 namespace codeswitch {
+
+class VM;
+
 namespace internal {
 
 const int kReadable = 1;
@@ -62,7 +67,33 @@ void unloadNativeLibrary(NativeLibrary library);
  */
 NativeFunction loadNativeFunction(NativeLibrary library, const std::string& name);
 
+
+/**
+ * Calls a native function using arguments from the stack. The function will be called
+ * according to the normal calling convention of the system.
+ *
+ * @param vm a pointer to the virtual machine. This is passed as the first argument to
+ *     the function.
+ * @param function the function to call
+ * @param argCount the number of arguments passed to the function.
+ * @param rawArgs a pointer to the last argument on the stack. Arguments are stored in
+ *     64-bit slots. Later arguments are stored at lower addresses (the stack grows down).
+ *     These values will be loaded into registers or pushed onto the native stack, according
+ *     to the native calling convention.
+ * @param argsAreInt an array of flags. If a flag is true, that argument is an integer or
+ *     a pointer. Otherwise, it's a floating point number. This affects which registers
+ *     arguments are passed through.
+ * @return an integer returned by the native function.
+ */
+int64_t callNativeFunction(
+    codeswitch::VM* vm,
+    NativeFunction function,
+    word_t argCount,
+    uint64_t* rawArgs,
+    bool* argsAreInt);
+
 }
 }
+
 
 #endif
