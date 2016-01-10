@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014,2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -23,7 +23,7 @@ static int countHandles(HandleStorage& storage) {
 
 
 TEST(HandleScopeAndLocals) {
-  VM vm(0);
+  VM vm;
   int vmHandles = countHandles(vm.handleStorage());
   {
     HandleScope scopeA(&vm);
@@ -41,7 +41,7 @@ TEST(HandleScopeAndLocals) {
 
 
 TEST(PersistentHandles) {
-  VM vm(0);
+  VM vm;
   int vmHandles = countHandles(vm.handleStorage());
   auto a = new Persistent<Block>(vm.roots()->metaMeta());
   ASSERT_EQ(vmHandles + 1, countHandles(vm.handleStorage()));

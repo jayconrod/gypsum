@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -42,9 +42,19 @@ class Package: public Object {
   explicit Package(VM* vm);
   static Local<Package> create(Heap* heap);
 
-  static Local<Package> loadFromFile(VM* vm, const std::string& fileName);
-  static Local<Package> loadFromBytes(VM* vm, const u8* bytes, word_t size);
-  static Local<Package> loadFromStream(VM* vm, std::istream& stream);
+  static Local<Package> loadFromFile(VM* vm,
+      const std::string& fileName,
+      const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder
+          = std::vector<NativeFunctionSearch>());
+  static Local<Package> loadFromBytes(VM* vm,
+      const u8* bytes,
+      word_t size,
+      const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder
+          = std::vector<NativeFunctionSearch>());
+  static Local<Package> loadFromStream(VM* vm,
+      std::istream& stream,
+      const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder
+          = std::vector<NativeFunctionSearch>());
 
   DEFINE_INL_ACCESSORS2(u64, flags, setFlags)
   Name* name() const { return name_.get(); }
@@ -87,8 +97,26 @@ class Package: public Object {
     externTypes_.set(this, externTypes);
   }
 
-  NativeLibrary nativeLib() const { return nativeLib_; }
-  void setNativeLib(NativeLibrary nativeLib) { nativeLib_ = nativeLib; }
+  NativeLibrary nativeLibrary() const { return nativeLibrary_; }
+  void setNativeLibrary(NativeLibrary nativeLibrary) { nativeLibrary_ = nativeLibrary; }
+  u32 encodedNativeFunctionSearchOrder() const { return encodedNativeFunctionSearchOrder_; }
+  void setEncodedNativeFunctionSearchOrder(u32 encodedNativeFunctionSearchOrder) {
+    encodedNativeFunctionSearchOrder_ = encodedNativeFunctionSearchOrder;
+  }
+  std::vector<NativeFunctionSearch> nativeFunctionSearchOrder() const {
+    return decodeNativeFunctionSearchOrder(encodedNativeFunctionSearchOrder());
+  }
+  void setNativeFunctionSearchOrder(
+      const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
+    setEncodedNativeFunctionSearchOrder(
+        encodeNativeFunctionSearchOrder(nativeFunctionSearchOrder));
+  }
+  static std::vector<NativeFunctionSearch> decodeNativeFunctionSearchOrder(
+      u32 encodedNativeFunctionSearchOrder);
+  static u32 encodeNativeFunctionSearchOrder(
+      const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder);
+  bool mayLoadFunctionsFromNativeLibrary() const;
+  NativeFunction loadNativeFunction(Name* functionName);
 
   static void link(const Handle<Package>& package);
 
@@ -108,7 +136,8 @@ class Package: public Object {
   length_t initFunctionIndex_;
   Ptr<ExportMap> exports_;
   Ptr<BlockArray<ExternTypeInfo>> externTypes_;
-  NativeLibrary nativeLib_;
+  NativeLibrary nativeLibrary_;
+  u32 encodedNativeFunctionSearchOrder_;
   // Update PACKAGE_POINTER_LIST if pointers change.
 };
 

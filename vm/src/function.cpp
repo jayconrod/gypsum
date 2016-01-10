@@ -155,40 +155,10 @@ bool Function::isNative() const {
 }
 
 
-static void buildFunctionName(string* nameStr, Name* name) {
-  auto components = name->components();
-  for (length_t i = 0; i < components->length(); i++) {
-    if (i > 0)
-      *nameStr += "__";
-    for (auto ch : *components->get(i)) {
-      auto valid = ('0' <= ch && ch <= '9') ||
-          ('A' <= ch && ch <= 'Z') ||
-          ('a' <= ch && ch <= 'z') ||
-          ch == '_';
-      *nameStr += valid ? static_cast<char>(ch) : '_';
-    }
-  }
-}
-
-
 void Function::ensureNativeFunction() {
   if (nativeFunction_ != nullptr)
     return;
-
-  // Get the native library.
-  auto library = package()->nativeLib();
-  ASSERT(library != nullptr);
-
-  // Determine the name of the function.
-  string nameStr;
-  buildFunctionName(&nameStr, package()->name());
-  nameStr += "___";
-  buildFunctionName(&nameStr, name());
-
-  // Load the function from the library.
-  auto fn = loadNativeFunction(library, nameStr);
-  ASSERT(fn != nullptr);
-  setNativeFunction(fn);
+  nativeFunction_ = package()->loadNativeFunction(name());
 }
 
 

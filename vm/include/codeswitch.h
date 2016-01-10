@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -9,6 +9,7 @@
 
 #include <memory>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include <cstdint>
@@ -22,6 +23,60 @@ class Name;
 class Object;
 class Package;
 class String;
+
+/** Used to specify where native functions should be loaded from. */
+enum NativeFunctionSearch {
+  /**
+   * Native functions will be loaded from a dynamically loaded library that corresponds with
+   * the package they were loaded from. For example, if a native function is declared in
+   * foo-1.csp, it will be loaded from libfoo-1.so in the same directory.
+   */
+  SEARCH_LIBRARY_FUNCTIONS,
+
+  /**
+   * Native functions will be loaded from the VM's binary or any library it's dynamically
+   * linked with, according to the system search order.
+   */
+  SEARCH_LINKED_FUNCTIONS,
+
+  /** Native functions will be loaded from a table of functions registered with the VM. */
+  SEARCH_REGISTERED_FUNCTIONS,
+};
+
+
+/** Used to specify behavior when a new VM is created. */
+struct VMOptions {
+  VMOptions() {}
+
+  /**
+   * Determines how the VM searches for implementations of native functions. This may contain
+   * any subset of search commands in any order, but no duplicates are allowed. If this is
+   * empty, no native functions may be used. The default order is
+   * {@link SEARCH_REGISTERED_FUNCTIONS}, then {@link SEARCH_LIBRARY_FUNCTIONS}.
+   */
+  std::vector<NativeFunctionSearch> nativeFunctionSearchOrder =
+      std::vector<NativeFunctionSearch>{SEARCH_REGISTERED_FUNCTIONS, SEARCH_LIBRARY_FUNCTIONS};
+
+  /**
+   * A table of implementations for native functions. Functions can be registered here
+   * explicitly instead of relying on the VM to look them up in loaded libraries or in the
+   * binary that contains the VM. Each element of this list contains a package name, a
+   * function name, and a pointer to a function.
+   */
+  std::vector<std::tuple<std::string, std::string, void(*)()>> nativeFunctions;
+
+  /**
+   * When true, the VM will perform additional checks to verify the heap is in a good state
+   * after garbage collection and when the VM is destroyed. Useful for debugging the VM.
+   */
+  bool verifyHeap = false;
+
+  /**
+   * When a package is loaded by its symbolic name, these directories are searched in order
+   * for a suitable package file to load.
+   */
+  std::vector<std::string> packageSearchPaths;
+};
 
 
 /**
@@ -38,23 +93,12 @@ class VM final {
 
   /** Constructs a new virtual machine */
   VM();
+  VM(const VMOptions& vmOptions);
   VM(const VM&) = delete;
   VM(VM&& vm);
   VM& operator = (const VM&) = delete;
   VM& operator = (VM&&);
   ~VM();
-
-  /**
-   * Adds path to the list of directories to search when loading packages.
-   *
-   * When CodeSwitch loads a package by its symbolic name (either as a dependency or due to a
-   * direct request), it searches a list of directories for files with matching names. The list
-   * is empty initially. This method adds a directory to that list.
-   *
-   * @param path the directory to search. Must not be an empty string. If the path does not
-   *   point to a directory, it will be skipped when searching for packages.
-   */
-  void addPackageSearchPath(const std::string& path);
 
   /**
    * Loads a package by its symbolic name.
@@ -68,11 +112,16 @@ class VM final {
    * function, it will be executed.
    *
    * @param name the symbolic name of the package. Must be a valid reference.
+   * @param nativeFunctionSearchOrder overrides the native function search order for this
+   *     package only. If this is empty, the default VM order is used. This does not affect
+   *     packages that this package depends on which get loaded at the same time.
    * @return the loaded package. This will always be a valid reference.
    * @throws Error if a problem was encountered when loading the package or one of
    *   its dependencies.
    */
-  Package loadPackage(const Name& name);
+  Package loadPackage(const Name& name,
+      const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder
+          = std::vector<NativeFunctionSearch>());
 
   /**
    * Loads a package by its file name.
@@ -84,11 +133,16 @@ class VM final {
    * function, it will be executed.
    *
    * @param fileName a relative or absolute path to the package file
+   * @param nativeFunctionSearchOrder overrides the native function search order for this
+   *     package only. If this is empty, the default VM order is used. This does not affect
+   *     packages that this package depends on which get loaded at the same time.
    * @return the loaded package. This will always be a valid reference.
    * @throws Error if a problem was encountered when loading the package or one of
    *   its dependencies.
    */
-  Package loadPackageFromFile(const std::string& fileName);
+  Package loadPackageFromFile(const std::string& fileName,
+      const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder
+          = std::vector<NativeFunctionSearch>());
 
  private:
   std::unique_ptr<Impl> impl_;

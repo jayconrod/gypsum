@@ -75,5 +75,14 @@ NativeFunction loadNativeFunction(NativeLibrary library, const string& name) {
   return function;
 }
 
+
+NativeFunction loadLinkedNativeFunction(const string& name) {
+  auto function = dlsym(RTLD_DEFAULT, name.c_str());
+  if (function == nullptr) {
+    throw Error(name + ": could not load function: " + dlerror());
+  }
+  return function;
+}
+
 }
 }

@@ -108,9 +108,13 @@ class Loader {
 
 class PackageLoader: public Loader {
  public:
-  PackageLoader(VM* vm, istream& stream, const std::string& dirName = "")
+  PackageLoader(VM* vm,
+      istream& stream,
+      const string& dirName,
+      const vector<NativeFunctionSearch>& nativeFunctionSearchOrder)
       : Loader(vm, stream),
-        dirName_(dirName) { }
+        dirName_(dirName),
+        nativeFunctionSearchOrder_(nativeFunctionSearchOrder) { }
 
   Local<Package> load();
 
@@ -125,7 +129,8 @@ class PackageLoader: public Loader {
   Local<PackageDependency> readDependencyHeader();
   void loadNativeLibrary();
 
-  std::string dirName_;
+  string dirName_;
+  vector<NativeFunctionSearch> nativeFunctionSearchOrder_;
 };
 
 
@@ -169,7 +174,8 @@ Package::Package(VM* vm)
                           vm->roots()->emptyBlockArray())),
       entryFunctionIndex_(kIndexNotSet),
       initFunctionIndex_(kIndexNotSet),
-      nativeLib_(nullptr) { }
+      nativeLibrary_(nullptr),
+      encodedNativeFunctionSearchOrder_(0) { }
 
 
 Local<Package> Package::create(Heap* heap) {
@@ -177,7 +183,10 @@ Local<Package> Package::create(Heap* heap) {
 }
 
 
-Local<Package> Package::loadFromFile(VM* vm, const string& fileName) {
+Local<Package> Package::loadFromFile(
+    VM* vm,
+    const string& fileName,
+    const vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
   // Find the parent directory.
   string dirName = pathDirName(fileName);
 
@@ -188,7 +197,7 @@ Local<Package> Package::loadFromFile(VM* vm, const string& fileName) {
   file.exceptions(ios::failbit | ios::badbit | ios::eofbit);
 
   // Load it.
-  PackageLoader loader(vm, file, dirName);
+  PackageLoader loader(vm, file, dirName, nativeFunctionSearchOrder);
   auto package = loader.load();
 
   // Check that there's no garbage at the end of the file.
@@ -200,10 +209,14 @@ Local<Package> Package::loadFromFile(VM* vm, const string& fileName) {
 }
 
 
-Local<Package> Package::loadFromBytes(VM* vm, const u8* bytes, word_t size) {
+Local<Package> Package::loadFromBytes(
+    VM* vm,
+    const u8* bytes,
+    word_t size,
+    const vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
   stringstream stream(string(reinterpret_cast<const char*>(bytes), size));
   stream.exceptions(ios::failbit | ios::badbit | ios::eofbit);
-  auto package = loadFromStream(vm, stream);
+  auto package = loadFromStream(vm, stream, nativeFunctionSearchOrder);
   auto pos = stream.tellg();
   stream.seekg(0, ios::end);
   if (pos != stream.tellg())
@@ -213,8 +226,11 @@ Local<Package> Package::loadFromBytes(VM* vm, const u8* bytes, word_t size) {
 
 
 
-Local<Package> Package::loadFromStream(VM* vm, istream& stream) {
-  PackageLoader loader(vm, stream);
+Local<Package> Package::loadFromStream(
+    VM* vm,
+    istream& stream,
+    const vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
+  PackageLoader loader(vm, stream, "" /* dirName */, nativeFunctionSearchOrder);
   return loader.load();
 }
 
@@ -328,6 +344,83 @@ void Package::ensureExports(const Handle<Package>& package) {
 }
 
 
+vector<NativeFunctionSearch> Package::decodeNativeFunctionSearchOrder(
+    u32 encodedNativeFunctionSearchOrder) {
+  vector<NativeFunctionSearch> decoded;
+  decoded.reserve(4);
+  for (int i = 0; i < 4; i++) {
+    u8 encodedSearch = (encodedNativeFunctionSearchOrder >> (i * 8)) & 0xFF;
+    if (encodedSearch == 0) {
+      return decoded;
+    } else {
+      decoded.push_back(static_cast<NativeFunctionSearch>(encodedSearch - 1));
+    }
+  }
+  return decoded;
+}
+
+
+u32 Package::encodeNativeFunctionSearchOrder(
+    const vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
+  u32 encoded = 0;
+  for (word_t i = 0; i < nativeFunctionSearchOrder.size(); i++) {
+    encoded |= (static_cast<u32>(nativeFunctionSearchOrder[i]) + 1) << (i * 8);
+  }
+  return encoded;
+}
+
+
+bool Package::mayLoadFunctionsFromNativeLibrary() const {
+  auto searchOrder = nativeFunctionSearchOrder();
+  return find(searchOrder.begin(), searchOrder.end(), SEARCH_LIBRARY_FUNCTIONS)
+      != searchOrder.end();
+}
+
+
+static void buildFunctionName(string* nameStr, Name* name) {
+  auto components = name->components();
+  for (length_t i = 0; i < components->length(); i++) {
+    if (i > 0)
+      *nameStr += "__";
+    for (auto ch : *components->get(i)) {
+      auto valid = ('0' <= ch && ch <= '9') ||
+          ('A' <= ch && ch <= 'Z') ||
+          ('a' <= ch && ch <= 'z') ||
+          ch == '_';
+      *nameStr += valid ? static_cast<char>(ch) : '_';
+    }
+  }
+}
+
+
+NativeFunction Package::loadNativeFunction(Name* functionName) {
+  // Determine the name of the function.
+  string nameStr;
+  buildFunctionName(&nameStr, name());
+  nameStr += "___";
+  buildFunctionName(&nameStr, functionName);
+
+  // Search for the function according to the search order.
+  auto searchOrder = nativeFunctionSearchOrder();
+  for (auto search : searchOrder) {
+    NativeFunction fn = nullptr;
+    if (search == SEARCH_LIBRARY_FUNCTIONS) {
+      auto library = nativeLibrary();
+      ASSERT(library != nullptr);
+      fn = ::codeswitch::internal::loadNativeFunction(library, nameStr);
+    } else if (search == SEARCH_LINKED_FUNCTIONS) {
+      fn = loadLinkedNativeFunction(nameStr);
+    } else {
+      ASSERT(search == SEARCH_REGISTERED_FUNCTIONS);
+      fn = getVM()->loadRegisteredFunction(name(), functionName);
+    }
+    if (fn != nullptr)
+      return fn;
+  }
+  throw Error(nameStr + ": could not find native function");
+}
+
+
 void Package::link(const Handle<Package>& package) {
   auto heap = package->getHeap();
   auto vm = heap->vm();
@@ -434,7 +527,8 @@ ostream& operator << (ostream& os, const Package* pkg) {
      << "\n  init function index: " << pkg->initFunctionIndex()
      << "\n  exports: " << brief(pkg->exports())
      << "\n  externTypes: " << brief(pkg->externTypes())
-     << "\n  nativeLib: " << pkg->nativeLib();
+     << "\n  nativeLibrary: " << pkg->nativeLibrary()
+     << "\n  encodedNativeFunctionSearchOrder: " << pkg->encodedNativeFunctionSearchOrder();
   return os;
 }
 
@@ -1220,7 +1314,8 @@ Local<Package> PackageLoader::load() {
     }
     package_->setExternTypes(*externTypesArray);
 
-    if (hasNativeFunctions) {
+    package_->setNativeFunctionSearchOrder(nativeFunctionSearchOrder_);
+    if (hasNativeFunctions && package_->mayLoadFunctionsFromNativeLibrary()) {
       loadNativeLibrary();
     }
   } catch (istream::failure exn) {
@@ -1332,7 +1427,7 @@ void PackageLoader::loadNativeLibrary() {
       packageVersionStr + kNativeLibrarySuffix;
   auto libPath = pathJoin(dirName_, libName);
   auto lib = codeswitch::internal::loadNativeLibrary(libPath);
-  package_->setNativeLib(lib);
+  package_->setNativeLibrary(lib);
 }
 
 

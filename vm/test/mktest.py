@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2014-2015 Jay Conrod. All rights reserved.
+# Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 # This file is part of CodeSwitch. Use of this source code is governed by
 # the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -29,6 +29,8 @@ with open(outFileName, "w") as outFile:
 
 #include "test.h"
 
+#include "codeswitch.h"
+
 #include "function.h"
 #include "handle.h"
 #include "interpreter.h"
@@ -37,13 +39,17 @@ with open(outFileName, "w") as outFile:
 #include "utils.h"
 #include "vm.h"
 
+using codeswitch::VMOptions;
+using std::vector;
+
 using namespace codeswitch::internal;
 
 TEST({testName}) {{
   u8 bytes[] = {{ {bytes} }};
-  VM vm;
+  VMOptions vmOptions;
   for (auto& path : split(getenv("CS_PACKAGE_PATH"), ':'))
-    vm.addPackageSearchPath(path);
+    vmOptions.packageSearchPaths.push_back(path);
+  VM vm(vmOptions);;
   AllowAllocationScope allowAllocation(vm.heap(), true);
   HandleScope handleScope(&vm);
   auto package = Package::loadFromBytes(&vm, bytes, sizeof(bytes));

@@ -47,7 +47,7 @@ class IncrementVisitor: public BlockVisitorBase<IncrementVisitor> {
 
 TEST(BlockVisitorEncodedMeta) {
   // This test requires us to initialize the heap, which requires a VM.
-  VM vm(0);
+  VM vm;
 
   // The meta meta should have an encoded meta pointing to itself.
   Meta* metaMeta = vm.roots()->metaMeta();
@@ -174,7 +174,7 @@ const ExpectedPointerMap kExpectedPointerMaps[] = {
 
 
 TEST(BlockVisitorFunction) {
-  VM vm(0);
+  VM vm;
   Heap* heap = vm.heap();
   AllowAllocationScope allowAllocation(heap, true);
   HandleScope handleScope(&vm);
@@ -212,7 +212,7 @@ TEST(BlockVisitorFunction) {
 
 
 TEST(BuildStackPointerMap) {
-  VM vm(0);
+  VM vm;
   auto heap = vm.heap();
   AllowAllocationScope allowAllocation(heap, true);
   HandleScope handleScope(&vm);
@@ -260,7 +260,7 @@ class StackIncrementVisitor: public BlockVisitorBase<StackIncrementVisitor> {
 
 
 TEST(VisitAndRelocateStack) {
-  VM vm(0);
+  VM vm;
   auto heap = vm.heap();
   AllowAllocationScope allowAllocation(heap, true);
   HandleScope handleScope(&vm);

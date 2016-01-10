@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -228,6 +228,16 @@ inline f64 f64FromBits(u64 bits) {
   } cast;
   cast.from = bits;
   return cast.to;
+}
+
+
+inline size_t hashMix(size_t n) {
+  n = (n ^ 61) ^ (n >> 16);
+  n = n + (n << 3);
+  n = n ^ (n >> 4);
+  n = n * 0x27d4eb2d;
+  n = n ^ (n >> 15);
+  return n;
 }
 
 

@@ -56,6 +56,8 @@ class Error::Impl final {
 
 class VM::Impl final {
  public:
+  explicit Impl(const VMOptions& vmOptions)
+      : vm(vmOptions) { }
   internal::VM vm;
 };
 

@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "array.h"
+#include "bitmap.h"
 #include "builtins.h"
 #include "function.h"
 #include "handle.h"
@@ -117,7 +118,25 @@ class CallBuilder::Impl final {
 
 
 VM::VM()
-    : impl_(new Impl) { }
+    : impl_(new Impl(VMOptions())) { }
+
+
+static void checkNativeFunctionSearchOrder(
+    const vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
+  i::word_t bits = 0;
+  i::Bitmap bitmap(&bits, i::kBitsInWord);
+  for (auto search : nativeFunctionSearchOrder) {
+    API_CHECK(!bitmap[search], "duplicate entry in native function search order");
+    bitmap.set(search, true);
+  }
+}
+
+
+VM::VM(const VMOptions& vmOptions) {
+  // Check that there were no duplicates in the native function search order.
+  checkNativeFunctionSearchOrder(vmOptions.nativeFunctionSearchOrder);
+  impl_.reset(new Impl(vmOptions));
+}
 
 
 VM::VM(VM&& vm)
@@ -133,19 +152,16 @@ VM& VM::operator = (VM&& vm) {
 VM::~VM() { }
 
 
-void VM::addPackageSearchPath(const string& path) {
-  API_CHECK(!path.empty(), "path is empty");
-  impl_->vm.addPackageSearchPath(path);
-}
-
-
-Package VM::loadPackage(const Name& name) {
+Package VM::loadPackage(const Name& name,
+    const vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
   API_CHECK(name.impl_, "package name is not valid");
+  checkNativeFunctionSearchOrder(nativeFunctionSearchOrder);
   i::VM* vm = &impl_->vm;
   i::HandleScope handleScope(vm);
   i::AllowAllocationScope allowAlloc(vm->heap(), true);
   try {
-    i::Persistent<i::Package> package = vm->loadPackage(name.impl_->name);
+    i::Persistent<i::Package> package =
+        vm->loadPackage(name.impl_->name, nativeFunctionSearchOrder);
     if (!package) {
       throw Error(new Error::Impl("could not locate package"));
     }
@@ -156,10 +172,12 @@ Package VM::loadPackage(const Name& name) {
 }
 
 
-Package VM::loadPackageFromFile(const string& fileName) {
+Package VM::loadPackageFromFile(const string& fileName,
+    const vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
+  checkNativeFunctionSearchOrder(nativeFunctionSearchOrder);
   i::Persistent<i::Package> package;
   try {
-    package = impl_->vm.loadPackage(fileName);
+    package = impl_->vm.loadPackage(fileName, nativeFunctionSearchOrder);
   } catch (i::Error& error) {
     throw Error(new Error::Impl(error.message()));
   }

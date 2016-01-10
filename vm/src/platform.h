@@ -62,10 +62,17 @@ NativeLibrary loadNativeLibrary(const std::string& path);
 void unloadNativeLibrary(NativeLibrary library);
 
 /**
- * Loads a function from the library. An exception will be thrown in the function can't
+ * Loads a function from a library. An exception will be thrown if the function can't
  * be found.
  */
 NativeFunction loadNativeFunction(NativeLibrary library, const std::string& name);
+
+
+/**
+ * Loads a native function linked into the VM. An exception will be thrown if the function
+ * can't be found.
+ */
+NativeFunction loadLinkedNativeFunction(const std::string& name);
 
 
 /**
