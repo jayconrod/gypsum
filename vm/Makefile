@@ -32,7 +32,7 @@ LIB_GEN_OBJS := $(call objects,$(filter %.cpp,$(LIB_GEN)))
 LIB_OBJECTS := $(call objects,$(LIB_SOURCES)) $(LIB_GEN_OBJS)
 LIB_AS_OBJECTS := $(call objects,$(LIB_AS_SOURCES))
 LIB_DEPS := $(call deps,$(LIB_SOURCES))
-LIB := $(OUT_DIR)/$(LIB_NAME).a
+LIB := $(OUT_DIR)/$(LIB_NAME)$(STATIC_LIB_SUFFIX)
 
 LIB_PREFIX := $(LIB_SRC_DIR)/prefix.h
 ifeq ($(use_pch),yes)
@@ -46,23 +46,37 @@ endif
 TEST_GY_SOURCES := $(wildcard $(TEST_SRC_DIR)/*.gy)
 TEST_CSP_PACKAGES := $(call csp_packages,$(TEST_GY_SOURCES))
 TEST_CSP_TESTS := $(call csp_tests,$(TEST_CSP_PACKAGES))
-TEST_CXX_SOURCES := $(wildcard $(TEST_SRC_DIR)/*.cpp)
+TEST_CXX_SOURCES := $(filter-out $(TEST_SRC_DIR)/test-driver.cpp,$(wildcard $(TEST_SRC_DIR)/*.cpp))
 TEST_SOURCES := $(TEST_CXX_SOURCES) $(TEST_CSP_TESTS)
 TEST_OBJECTS := $(call objects,$(TEST_SOURCES))
-TEST_DEPS := $(call deps,$(TEST_SOURCES))
-TEST := $(OUT_DIR)/test-driver
+TEST_DRIVER_SRC := $(TEST_SRC_DIR)/test-driver.cpp
+TEST_DRIVER_OBJ := $(call objects,$(TEST_DRIVER_SRC))
+TEST_DEPS := $(call deps,$(TEST_SOURCES) $(TEST_DRIVER_SRC))
+TEST_DRIVER := $(OUT_DIR)/test-driver
+
+TEST_SUBDIRS := $(filter %/,$(wildcard $(TEST_SRC_DIR)/*/))
+TEST_PROGRAMS :=
+TEST_PROGRAM_SOURCES :=
+TEST_PROGRAM_OBJECTS :=
+TEST_PROGRAM_STATIC_LIBS :=
+TEST_PROGRAM_SHARED_LIBS :=
+$(foreach subdir,$(TEST_SUBDIRS),\
+  $(eval -include $(subdir)Makefile))
+TEST_PROGRAM_DEPS := $(call deps,$(TEST_PROGRAM_SOURCES))
 
 PROGRAM_SOURCES := $(wildcard $(PROGRAM_SRC_DIR)/*.cpp)
 PROGRAM_OBJECTS := $(call objects,$(PROGRAM_SOURCES))
 PROGRAM_DEPS := $(call deps,$(PROGRAM_SOURCES))
 PROGRAMS := $(call programs,$(PROGRAM_SOURCES))
 
-SOURCES := $(LIB_SOURCES) $(TEST_SOURCES) $(PROGRAM_SOURCES)
+SOURCES := $(LIB_SOURCES) $(TEST_SOURCES) $(PROGRAM_SOURCES) $(TEST_PROGRAM_SOURCES)
 AS_SOURCES := $(LIB_AS_SOURCES)
-DEPS := $(LIB_DEPS) $(TEST_DEPS) $(PROGRAM_DEPS)
-OBJECTS := $(LIB_OBJECTS) $(TEST_OBJECTS) $(PROGRAM_OBJECTS)
+DEPS := $(LIB_DEPS) $(TEST_DEPS) $(PROGRAM_DEPS) $(TEST_PROGRAM_DEPS)
+OBJECTS := $(LIB_OBJECTS) $(TEST_OBJECTS) $(PROGRAM_OBJECTS) $(TEST_PROGRAM_OBJECTS)
 AS_OBJECTS := $(LIB_AS_OBJECTS)
 GEN := $(LIB_GEN)
+STATIC_LIBS := $(LIB) $(TEST_PROGRAM_STATIC_LIBS)
+SHARED_LIBS := $(TEST_PROGRAM_SHARED_LIBS)
 
 # Rules
 .PHONY: build-vm check-vm
@@ -73,8 +87,8 @@ build-vm: $(PROGRAMS)
 
 check: check-vm
 
-check-vm: $(TEST)
-	@CS_PACKAGE_PATH="$(OUT_DIR)" $(TEST)
+check-vm: $(TEST_DRIVER) $(TEST_PROGRAMS)
+	@CS_PACKAGE_PATH="$(OUT_DIR)" $(TEST_DRIVER)
 
 doc: doc-vm-api
 
@@ -85,11 +99,14 @@ doc-vm-api: $(INCLUDE_DIR)/Doxyfile $(wildcard $(INCLUDE_DIR)/*.h)
 	  doxygen - 1>/dev/null)
 	@echo CodeSwitch API document written to $(DOC_DIR)/vm-api/
 
-$(PROGRAMS) $(TEST):
-	$(CXX_LINK_EXEC) $(LDFLAGS) $^ $(LIBS) -o $@
+$(PROGRAMS) $(TEST_DRIVER) $(TEST_PROGRAMS):
+	$(CXX_LINK_EXEC) $(LDFLAGS) $(filter %.o %.a,$^) $(LIBS) -o $@
 
-$(LIB):
+$(STATIC_LIBS):
 	$(CXX_LINK_STATIC) $@ $^
+
+$(SHARED_LIBS):
+	$(CXX_LINK_SHARED) $^ -o $@
 
 ifeq ($(use_pch),yes)
 $(LIB_PREFIX_COMPILED): $(LIB_PREFIX)
@@ -101,6 +118,11 @@ $(OBJECTS):
 	@mkdir -p $(dir $@)
 	@$(CXX_DEPENDS) $(CXXFLAGS) $(DEFINES) $(INCLUDES) -MT $@ $(filter %.cpp,$^) >$(call deps,$(filter %.cpp,$^))
 	$(CXX_COMPILE) $(CXXFLAGS) $(DEFINES) $(INCLUDES) $(LIB_PREFIX_INCLUDE) $(filter %.cpp,$^) -o $@
+
+$(TEST_DRIVER_OBJ): $(TEST_DRIVER_SRC)
+	@mkdir -p $(dir $@)
+	@$(CXX_DEPENDS) $(CXXFLAGS) $(DEFINES) $(INCLUDES) -MT $@ $(filter %.cpp,$^) >$(call deps,$(filter %.cpp,$^))
+	$(CXX_COMPILE) $(CXXFLAGS) $(DEFINES) $(INCLUDES) -DTEST_PROGRAMS="\"$(strip $(TEST_PROGRAMS))\"" $(filter %.cpp,$^) -o $@
 
 $(AS_OBJECTS):
 	@mkdir -p $(dir $@)
@@ -127,7 +149,7 @@ $(GEN_DIR)/roots-builtins.cpp: $(LIB_SRC_DIR)/gen_roots_builtins_cpp.py $(COMMON
 
 $(LIB): $(LIB_OBJECTS) $(LIB_AS_OBJECTS)
 
-$(TEST): $(TEST_OBJECTS) $(LIB)
+$(TEST_DRIVER): $(TEST_OBJECTS) $(TEST_DRIVER_OBJ) $(LIB)
 
 $(OBJECTS): $(filter %.h,$(GEN))
 ifeq ($(use_pch),yes)

@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -26,7 +26,11 @@ class TestException: public std::exception {
 
 class TestBase {
  public:
-  TestBase(const char* name);
+  explicit TestBase(const char* name);
+  TestBase(const TestBase&) = delete;
+  TestBase(TestBase&&) = delete;
+  TestBase& operator = (const TestBase&) = delete;
+  TestBase& operator = (TestBase&&) = delete;
 
   const char* name() const { return name_; }
 

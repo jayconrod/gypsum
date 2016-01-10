@@ -45,7 +45,7 @@ string pathDirName(const string& path) {
   } else if (sepPos == 0) {
     return "/";
   } else {
-    return path.substr(0, sepPos - 1);
+    return path.substr(0, sepPos);
   }
 }
 

@@ -159,8 +159,16 @@ i64 Interpreter::call(const Handle<Function>& callee) {
   SealHandleScope disallowHandles(vm_);
   AllowAllocationScope disallowAllocation(vm_->heap(), false);
 
-  // Set up initial stack frame.
   ASSERT(pcOffset_ == kDonePcOffset);
+
+  // If this is a native function, handle it directly.
+  if (callee->isNative()) {
+    handleNative(callee);
+    auto result = pop<i64>();
+    return result;
+  }
+
+  // Set up initial stack frame.
   enter(callee);
 
   // Interpreter loop.

@@ -226,6 +226,18 @@ Function Package::entryFunction() const {
 }
 
 
+Function Package::getFunction(const Name& name) const {
+  API_CHECK_SELF(Package);
+  auto functions = impl_->package->functions();
+  for (auto function : *functions) {
+    if (name.impl_->name->equals(*name.impl_->name)) {
+      return Function(new Function::Impl(i::Persistent<i::Function>(function)));
+    }
+  }
+  return Function(nullptr);
+}
+
+
 Function::Function() { }
 
 
@@ -560,6 +572,7 @@ Name Name::fromStringForDefn(const String& str) {
   API_CHECK(str.impl_ != nullptr, "string argument does not reference a string");
   const i::Persistent<i::String>& istr = str.impl_->str;
   i::VM* vm = i::VM::fromAddress(*istr);
+  i::AllowAllocationScope allowAlloc(vm->heap(), true);
   i::HandleScope handleScope(vm);
   i::Local<i::Name> iname = i::Name::fromString(vm->heap(), istr, i::Name::DEFN_NAME);
   API_CHECK(iname, "string argument is not a valid name for definitions");

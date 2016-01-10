@@ -188,6 +188,14 @@ class Package final {
    */
   Function entryFunction() const;
 
+  /**
+   * Gets a function from the package, by name.
+   *
+   * @return the named function from the package. If the package has no function by this name,
+   *   an invalid reference is returned.
+   */
+  Function getFunction(const Name& name) const;
+
  private:
   std::unique_ptr<Impl> impl_;
 };
@@ -568,6 +576,7 @@ class Name final {
  private:
   std::unique_ptr<Impl> impl_;
 
+  friend class Package;
   friend class VM;
 };
 

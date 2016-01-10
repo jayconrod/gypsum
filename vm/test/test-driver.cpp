@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014,2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -9,10 +9,17 @@
 #include <iostream>
 #include <iomanip>
 #include <string>
+#include <vector>
+#include <cerrno>
+#include <cstring>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include "error.h"
+
+#ifndef TEST_PROGRAMS
+  #define TEST_PROGRAMS ""
+#endif
 
 using namespace std;
 
@@ -48,8 +55,69 @@ void processArguments(int argc, char* argv[]) {
 }
 
 
+static vector<string> split(const string& str, char delim) {
+  vector<string> pieces;
+  size_t begin = 0;
+  auto end = str.find(delim);
+  while (end != string::npos) {
+    auto len = end - begin;
+    pieces.push_back(str.substr(begin, len));
+    begin = end + 1;
+    end = str.find(delim, begin);
+  }
+  auto len = str.size() - begin;
+  pieces.push_back(str.substr(begin, len));
+  return pieces;
+}
+
+
+static string basename(const string& path) {
+  auto pos = path.find_last_of('/');
+  if (pos == string::npos) {
+    return path;
+  } else if (pos == path.length() - 1) {
+    return ".";
+  } else {
+    return path.substr(pos + 1, path.length() - (pos + 1));
+  }
+}
+
+
+class SeparateTest: public TestBase {
+ public:
+  explicit SeparateTest(const string& executablePath)
+      : TestBase(basename(executablePath).c_str()),
+        executablePath_(executablePath) { }
+
+  virtual void test() {
+    auto pid = fork();
+    if (pid == 0) {
+      execl(executablePath_.c_str(), executablePath_.c_str());
+      cerr << '\n' << executablePath_ << ": error: " << strerror(errno) << endl;
+      _exit(4);
+    } else {
+      int status;
+      waitpid(pid, &status, 0);
+      if (WIFEXITED(status)) {
+        _exit(WEXITSTATUS(status));
+      } else {
+        _exit(5);
+      }
+    }
+  }
+
+ private:
+  string executablePath_;
+};
+
+
 int main(int argc, char* argv[]) {
   processArguments(argc, argv);
+
+  for (auto path : split(TEST_PROGRAMS, ' ')) {
+    if (!path.empty())
+      new SeparateTest(path);
+  }
 
   int testCount = 0;
   int passCount = 0;
