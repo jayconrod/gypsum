@@ -6,7 +6,17 @@
 
 #include "platform.h"
 
-extern "C" uint64_t codeswitch_glue_callNativeFunction(
+extern "C" uint64_t codeswitch_glue_callNativeFunctionRawForInt(
+    codeswitch::VM* vm,
+    codeswitch::internal::NativeFunction function,
+    uint64_t intArgCount,
+    uint64_t* intArgs,
+    uint64_t floatArgCount,
+    uint64_t* floatArgs,
+    uint64_t stackArgCount,
+    uint64_t* stackArgs);
+
+extern "C" double codeswitch_glue_callNativeFunctionRawForFloat(
     codeswitch::VM* vm,
     codeswitch::internal::NativeFunction function,
     uint64_t intArgCount,
@@ -19,12 +29,13 @@ extern "C" uint64_t codeswitch_glue_callNativeFunction(
 namespace codeswitch {
 namespace internal {
 
-int64_t callNativeFunction(
+int64_t callNativeFunctionRaw(
     codeswitch::VM* vm,
     NativeFunction function,
     word_t argCount,
     uint64_t* rawArgs,
-    bool* argsAreInt) {
+    bool* argsAreInt,
+    bool resultIsFloat) {
   const int kMaxIntArgs = 5;
   const int kMaxFloatArgs = 8;
   uint64_t intArgs[kMaxIntArgs];
@@ -46,8 +57,14 @@ int64_t callNativeFunction(
       }
     }
   }
-  return codeswitch_glue_callNativeFunction(
-      vm, function, ii, intArgs, fi, floatArgs, si, stackArgs + (argCount - si));
+  if (resultIsFloat) {
+    auto result = codeswitch_glue_callNativeFunctionRawForFloat(
+        vm, function, ii, intArgs, fi, floatArgs, si, stackArgs + (argCount - si));
+    return f64ToBits(result);
+  } else {
+    return codeswitch_glue_callNativeFunctionRawForInt(
+        vm, function, ii, intArgs, fi, floatArgs, si, stackArgs + (argCount - si));
+  }
 }
 
 }

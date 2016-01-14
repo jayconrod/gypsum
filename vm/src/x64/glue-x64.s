@@ -1,6 +1,9 @@
 	.text
-  .globl codeswitch_glue_callNativeFunction
-  .type codeswitch_glue_callNativeFunction, @function
+
+  .globl codeswitch_glue_callNativeFunctionRawForInt
+  .type codeswitch_glue_callNativeFunctionRawForInt, @function
+  .globl codeswitch_glue_callNativeFunctionRawForFloat
+  .type codeswitch_glue_callNativeFunctionRawForFloat, @function
 # %rdi VM*: the virtual machine to pass to the function as the first argument
 # %rsi/32(%rsp) NativeFunction: pointer to the function to call
 # %rdx/r10 int: number of integer arguments (at most 5)
@@ -10,7 +13,8 @@
 # 16(%rsp)/r10/8(%rsp) int: number of stack arguments
 # 8(%rsp)/r11/(%rsp) uint64_t*: array of stack arguments
 # (%rsp)/40(%rsp): return address
-codeswitch_glue_callNativeFunction:
+codeswitch_glue_callNativeFunctionRawForInt:
+codeswitch_glue_callNativeFunctionRawForFloat:
   # Reserve stack space for arguments and callee save regs.
   popq %rax  # return address
   popq %r10  # stack arg count
@@ -55,25 +59,25 @@ codeswitch_glue_callNativeFunction:
   movsd (%r11), %xmm0
   cmpq $1, %r10
   je .LloadStackArgs
-  movsd 8(%r11), %xmm0
+  movsd 8(%r11), %xmm1
   cmpq $2, %r10
   je .LloadStackArgs
-  movsd 16(%r11), %xmm0
+  movsd 16(%r11), %xmm2
   cmpq $3, %r10
   je .LloadStackArgs
-  movsd 24(%r11), %xmm0
+  movsd 24(%r11), %xmm3
   cmpq $4, %r10
   je .LloadStackArgs
-  movsd 32(%r11), %xmm0
+  movsd 32(%r11), %xmm4
   cmpq $5, %r10
   je .LloadStackArgs
-  movsd 40(%r11), %xmm0
+  movsd 40(%r11), %xmm5
   cmpq $6, %r10
   je .LloadStackArgs
-  movsd 48(%r11), %xmm0
+  movsd 48(%r11), %xmm6
   cmpq $7, %r10
   je .LloadStackArgs
-  movsd 56(%r11), %xmm0
+  movsd 56(%r11), %xmm7
 
   # Load the remaining arguments onto the stack
 .LloadStackArgs:

@@ -42,6 +42,16 @@ static int64_t registered_f(VM* vm) {
 }
 
 
+static int64_t integerParamsFunction(VM* vm, int64_t a, int64_t b) {
+  return a + b;
+}
+
+
+static double floatParamsFunction(VM* vm, double a, double b) {
+  return a + b;
+}
+
+
 int main(int argc, char* argv[]) {
   string programPath(argv[0]);
   auto programDir = dirName(programPath);
@@ -50,6 +60,12 @@ int main(int argc, char* argv[]) {
   vmOptions.packageSearchPaths.push_back(programDir);
   vmOptions.nativeFunctions.push_back(
       make_tuple("NativeCalls.registered", "f", reinterpret_cast<void(*)()>(registered_f)));
+  vmOptions.nativeFunctions.push_back(
+      make_tuple("NativeCalls.registered", "integerParams",
+          reinterpret_cast<void(*)()>(integerParamsFunction)));
+  vmOptions.nativeFunctions.push_back(
+      make_tuple("NativeCalls.registered", "floatParams",
+          reinterpret_cast<void(*)()>(floatParamsFunction)));
   VM vm(vmOptions);
   auto fName = Name::fromStringForDefn(String(vm, "f"));
   auto gName = Name::fromStringForDefn(String(vm, "g"));
@@ -92,6 +108,18 @@ int main(int argc, char* argv[]) {
   auto registered_g = registered.getFunction(gName);
   result = registered_g.callForI64();
   ASSERT_EQ(56, result);
+
+  // Check that we can call a function with integer parameters.
+  auto integerParamsName = Name::fromStringForDefn(String(vm, "integerParams"));
+  auto integerParams = registered.getFunction(integerParamsName);
+  result = integerParams.callForI64(12L, 34L);
+  ASSERT_EQ(46, result);
+
+  // Check that we can call a function with floating point parameters.
+  auto floatParamsName = Name::fromStringForDefn(String(vm, "floatParams"));
+  auto floatParams = registered.getFunction(floatParamsName);
+  auto fresult = floatParams.callForF64(3.0, -1.0);
+  ASSERT_EQ(2.0, fresult);
 
   return 0;
 }

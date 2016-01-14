@@ -1021,7 +1021,7 @@ void Interpreter::handleNative(const Handle<Function>& callee) {
   stack_->push(static_cast<uint64_t>(pcOffset_));
   stack_->push(function_ ? *function_ : nullptr);
 
-  auto result = callNativeFunctionForI64(*callee, vm_, sp);
+  auto result = callNativeFunction(*callee, vm_, sp);
 
   stack_->setSp(stack_->sp() + callee->parametersSize() + 2 * kSlotSize);
   stack_->push(result);

@@ -90,14 +90,17 @@ NativeFunction loadLinkedNativeFunction(const std::string& name);
  * @param argsAreInt an array of flags. If a flag is true, that argument is an integer or
  *     a pointer. Otherwise, it's a floating point number. This affects which registers
  *     arguments are passed through.
+ * @param resultIsFloat whether the result is a floating point value. This affects which
+ *     register the native function will return through.
  * @return an integer returned by the native function.
  */
-int64_t callNativeFunction(
+int64_t callNativeFunctionRaw(
     codeswitch::VM* vm,
     NativeFunction function,
     word_t argCount,
     uint64_t* rawArgs,
-    bool* argsAreInt);
+    bool* argsAreInt,
+    bool resultIsFloat);
 
 }
 }

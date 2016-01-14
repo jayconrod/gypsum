@@ -112,7 +112,7 @@ class Object::Impl final {
 };
 
 
-int64_t callNativeFunctionForI64(
+int64_t callNativeFunction(
     internal::Function* callee,
     internal::VM* vm,
     internal::Address sp);

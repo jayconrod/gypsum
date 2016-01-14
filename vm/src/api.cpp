@@ -51,19 +51,19 @@ class CallBuilder::Impl final {
   }
 
   void arg(bool value) {
-    args_.push_back(Value(i::Persistent<i::Type>(i::Type::i64Type(vm_->roots())), value));
+    args_.push_back(Value(i::Persistent<i::Type>(i::Type::booleanType(vm_->roots())), value));
   }
 
   void arg(int8_t value) {
-    args_.push_back(Value(i::Persistent<i::Type>(i::Type::i64Type(vm_->roots())), value));
+    args_.push_back(Value(i::Persistent<i::Type>(i::Type::i8Type(vm_->roots())), value));
   }
 
   void arg(int16_t value) {
-    args_.push_back(Value(i::Persistent<i::Type>(i::Type::i64Type(vm_->roots())), value));
+    args_.push_back(Value(i::Persistent<i::Type>(i::Type::i16Type(vm_->roots())), value));
   }
 
   void arg(int32_t value) {
-    args_.push_back(Value(i::Persistent<i::Type>(i::Type::i64Type(vm_->roots())), value));
+    args_.push_back(Value(i::Persistent<i::Type>(i::Type::i32Type(vm_->roots())), value));
   }
 
   void arg(int64_t value) {
@@ -72,12 +72,12 @@ class CallBuilder::Impl final {
 
   void arg(float value) {
     auto bits = i::f32ToBits(value);
-    args_.push_back(Value(i::Persistent<i::Type>(i::Type::i64Type(vm_->roots())), bits));
+    args_.push_back(Value(i::Persistent<i::Type>(i::Type::f32Type(vm_->roots())), bits));
   }
 
   void arg(double value) {
     auto bits = i::f64ToBits(value);
-    args_.push_back(Value(i::Persistent<i::Type>(i::Type::i64Type(vm_->roots())), bits));
+    args_.push_back(Value(i::Persistent<i::Type>(i::Type::f64Type(vm_->roots())), bits));
   }
 
   void arg(const String& value);
@@ -230,7 +230,7 @@ Function Package::getFunction(const Name& name) const {
   API_CHECK_SELF(Package);
   auto functions = impl_->package->functions();
   for (auto function : *functions) {
-    if (name.impl_->name->equals(*name.impl_->name)) {
+    if (function->name()->equals(*name.impl_->name)) {
       return Function(new Function::Impl(i::Persistent<i::Function>(function)));
     }
   }
@@ -701,7 +701,7 @@ const char* Error::message() const {
 }
 
 
-int64_t callNativeFunctionForI64(i::Function* callee, i::VM* vm, i::Address sp) {
+int64_t callNativeFunction(i::Function* callee, i::VM* vm, i::Address sp) {
   // Prepare the arguments.
   auto paramTypes = callee->parameterTypes();
   auto argCount = paramTypes->length();
@@ -731,13 +731,15 @@ int64_t callNativeFunctionForI64(i::Function* callee, i::VM* vm, i::Address sp) 
   // Load the native function, if it's not loaded already.
   auto nativeFunction = callee->ensureAndGetNativeFunction();
 
-  // Call the funtion via an assembly stub.
   // HACK: the internal VM must have the same address as the external VM, since the external
   // VM contains the internal VM as its first member. This will break if that changes to
   // a pointer or if a virtual function is added.
   VM* externalVm = reinterpret_cast<VM*>(vm);
-  auto result = i::callNativeFunction(
-      externalVm, nativeFunction, argCount, rawArgs, argsAreInt);
+
+  // Call the funtion via an assembly stub.
+  auto resultIsFloat = callee->returnType()->isFloat();
+  auto result = i::callNativeFunctionRaw(
+      externalVm, nativeFunction, argCount, rawArgs, argsAreInt, resultIsFloat);
   return result;
 }
 
