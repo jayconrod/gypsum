@@ -1,5 +1,15 @@
 	.text
 
+# The two functions below (actually one function with two labels) are responsible for actually
+# calling native functions. They load arguments passed in through arrays of different types
+# into register appropriate for the calling convention and onto the native stack. Once the
+# arguments are prepared, the native function is tail-called, which means that when the native
+# function returns, it returns directly to the caller
+# (codeswitch::internal::callNativeFunctionRaw) instead of this function. This function does
+# not construct its own stack frame and does not leave a return address. This lets us support
+# returns through %rax (for integers and pointers) and %xmm0 (for floating point) using the
+# same code. The caller will look for the return value in these two places, depending on
+# which symbol it uses to call.
   .globl codeswitch_glue_callNativeFunctionRawForInt
   .type codeswitch_glue_callNativeFunctionRawForInt, @function
   .globl codeswitch_glue_callNativeFunctionRawForFloat
@@ -15,7 +25,8 @@
 # (%rsp)/40(%rsp): return address
 codeswitch_glue_callNativeFunctionRawForInt:
 codeswitch_glue_callNativeFunctionRawForFloat:
-  # Reserve stack space for arguments and callee save regs.
+  # Reserve stack space for stack arguments and push registers we won't need immediately.
+  # We don't use any callee save registers.
   popq %rax  # return address
   popq %r10  # stack arg count
   popq %r11  # stack arg ptr
@@ -29,7 +40,7 @@ codeswitch_glue_callNativeFunctionRawForFloat:
   pushq %r10  # stack arg count
   pushq %r11  # stack arg ptr
 
-  # Move integer arguments into scratch registers, since we'll be replacing them.
+  # Move integer array pointer and size into scratch registers, since we'll be replacing them.
   movq %rdx, %r10  # int arg count
   movq %rcx, %r11  # int arg ptr
 
@@ -50,7 +61,7 @@ codeswitch_glue_callNativeFunctionRawForFloat:
   je .LloadFloatArgs
   movq 24(%r11), %r9
 
-  # Load float arguments
+  # Load float arguments.
 .LloadFloatArgs:
   movq 24(%rsp), %r10  # float arg count
   movq 16(%rsp), %r11  # float arg ptr
@@ -79,7 +90,7 @@ codeswitch_glue_callNativeFunctionRawForFloat:
   je .LloadStackArgs
   movsd 56(%r11), %xmm7
 
-  # Load the remaining arguments onto the stack
+  # Load the remaining arguments onto the stack.
 .LloadStackArgs:
   movq 8(%rsp), %r10  # stack arg count
   movq (%rsp), %r11  # stack arg ptr
@@ -92,7 +103,7 @@ codeswitch_glue_callNativeFunctionRawForFloat:
   cmpq $0, %r10
   jg .LloadStackArgLoop
 
-  # Restore the stack and make the call
+  # Restore the stack and make the call.
 .Lcall:
   addq $32, %rsp
   popq %rax  # native function

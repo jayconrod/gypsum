@@ -6,6 +6,9 @@
 
 #include "platform.h"
 
+// These functions are implemented in assembly (see glue-x64.s). They actually move arguments
+// into appropriate registers and tail-call the native function. Because they don't touch
+// the return value, they share the same implementation.
 extern "C" uint64_t codeswitch_glue_callNativeFunctionRawForInt(
     codeswitch::VM* vm,
     codeswitch::internal::NativeFunction function,
@@ -29,6 +32,9 @@ extern "C" double codeswitch_glue_callNativeFunctionRawForFloat(
 namespace codeswitch {
 namespace internal {
 
+// This function could be considered a helper function for the assembly functions above. It
+// loads arguments from the VM stack and segregates them into integer, pointer, and stack
+// arrays, depending on how they should be passed to the native function.
 int64_t callNativeFunctionRaw(
     codeswitch::VM* vm,
     NativeFunction function,

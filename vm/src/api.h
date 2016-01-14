@@ -112,6 +112,20 @@ class Object::Impl final {
 };
 
 
+/**
+ * Calls a native function using arguments on the VM stack. If the native function pointer
+ * has not been loaded already, it will be loaded at this call. Arguments will be moved into
+ * registers appropriate for the platform's calling convention, so the call can be made
+ * normally. Pointer arguments are wrapped in {@link Object}s and passed by value (we assume
+ * an {@link Object} is represented by a single pointer to its impl.
+ *
+ * @param callee the function to call. It must be native.
+ * @param vm a pointer to the internal VM. A pointer to the external VM will be passed to the
+ *     native function as the first argument.
+ * @param sp a pointer to the last argument on the stack. The calling function and its
+ *     pc offset must be pushed below this.
+ * @return the result from the native function. The VM stack is not modified.
+ */
 int64_t callNativeFunction(
     internal::Function* callee,
     internal::VM* vm,
