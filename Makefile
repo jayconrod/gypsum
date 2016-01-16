@@ -45,7 +45,7 @@ CXX ?= g++
 CXX_COMPILE := $(CXX) -c -std=c++11
 CXX_DEPENDS := $(CXX) -std=c++11 -MM
 CXX_LINK_EXEC := $(CXX)
-AS ?= as
+AS := $(CXX)
 AS_COMPILE := $(AS) -c
 AR ?= ar
 CXX_LINK_STATIC := $(AR) rcs

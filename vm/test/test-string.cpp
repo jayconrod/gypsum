@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -93,9 +93,9 @@ TEST(StringConcat) {
   auto foo = STR("foo");
   auto bar = STR("bar");
   auto expected = STR("foobar");
-  ASSERT_EQ(*foo, *String::concat(vm.heap(), foo, empty));
-  ASSERT_EQ(*foo, *String::concat(vm.heap(), empty, foo));
-  ASSERT_TRUE(expected->equals(*String::concat(vm.heap(), foo, bar)));
+  ASSERT_EQ(*foo, *String::concat(foo, empty));
+  ASSERT_EQ(*foo, *String::concat(empty, foo));
+  ASSERT_TRUE(expected->equals(*String::concat(foo, bar)));
 }
 
 
@@ -107,12 +107,12 @@ TEST(StringSubstring) {
 
   auto hello = STR("hello");
   auto empty = STR("");
-  ASSERT_TRUE(empty->equals(*String::substring(vm.heap(), hello, 0, 0)));
-  ASSERT_TRUE(empty->equals(*String::substring(vm.heap(), hello, 5, 5)));
+  ASSERT_TRUE(empty->equals(*String::substring(hello, 0, 0)));
+  ASSERT_TRUE(empty->equals(*String::substring(hello, 5, 5)));
   auto hel = STR("hel");
-  ASSERT_TRUE(hel->equals(*String::substring(vm.heap(), hello, 0, 3)));
+  ASSERT_TRUE(hel->equals(*String::substring(hello, 0, 3)));
   auto llo = STR("llo");
-  ASSERT_TRUE(llo->equals(*String::substring(vm.heap(), hello, 2, 5)));
+  ASSERT_TRUE(llo->equals(*String::substring(hello, 2, 5)));
 }
 
 

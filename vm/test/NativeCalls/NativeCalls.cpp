@@ -23,6 +23,7 @@ using codeswitch::Function;
 using codeswitch::Package;
 using codeswitch::Name;
 using codeswitch::NativeFunctionSearch;
+using codeswitch::Object;
 using codeswitch::SEARCH_REGISTERED_FUNCTIONS;
 using codeswitch::SEARCH_LIBRARY_FUNCTIONS;
 using codeswitch::SEARCH_LINKED_FUNCTIONS;
@@ -52,6 +53,16 @@ static double floatParamsFunction(VM* vm, double a, double b) {
 }
 
 
+static String stringParamsFunction(VM* vm, String a, String b) {
+  return a + b;
+}
+
+
+static Object nullObjectFunction(VM* vm) {
+  return Object();
+}
+
+
 int main(int argc, char* argv[]) {
   string programPath(argv[0]);
   auto programDir = dirName(programPath);
@@ -66,6 +77,12 @@ int main(int argc, char* argv[]) {
   vmOptions.nativeFunctions.push_back(
       make_tuple("NativeCalls.registered", "floatParams",
           reinterpret_cast<void(*)()>(floatParamsFunction)));
+  vmOptions.nativeFunctions.push_back(
+      make_tuple("NativeCalls.registered", "stringParams",
+          reinterpret_cast<void(*)()>(stringParamsFunction)));
+  vmOptions.nativeFunctions.push_back(
+      make_tuple("NativeCalls.registered", "nullObject",
+          reinterpret_cast<void(*)()>(nullObjectFunction)));
   VM vm(vmOptions);
   auto fName = Name::fromStringForDefn(String(vm, "f"));
   auto gName = Name::fromStringForDefn(String(vm, "g"));
@@ -112,7 +129,7 @@ int main(int argc, char* argv[]) {
   // Check that we can call a function with integer parameters.
   auto integerParamsName = Name::fromStringForDefn(String(vm, "integerParams"));
   auto integerParams = registered.getFunction(integerParamsName);
-  result = integerParams.callForI64(12L, 34L);
+  result = integerParams.callForI64(static_cast<int64_t>(12), static_cast<int64_t>(34));
   ASSERT_EQ(46, result);
 
   // Check that we can call a function with floating point parameters.
@@ -120,6 +137,18 @@ int main(int argc, char* argv[]) {
   auto floatParams = registered.getFunction(floatParamsName);
   auto fresult = floatParams.callForF64(3.0, -1.0);
   ASSERT_EQ(2.0, fresult);
+
+  // Check that we can call a function with string parameters.
+  auto stringParamsName = Name::fromStringForDefn(String(vm, "stringParams"));
+  auto stringParams = registered.getFunction(stringParamsName);
+  auto sresult = stringParams.callForString(String(vm, "foo"), String(vm, "bar"));
+  ASSERT_EQ(0, sresult.compare(String(vm, "foobar")));
+
+  // Check that we can call a function that returns null.
+  auto nullObjectName = Name::fromStringForDefn(String(vm, "nullObject"));
+  auto nullObject = registered.getFunction(nullObjectName);
+  auto oresult = nullObject.callForObject();
+  ASSERT_FALSE(oresult);
 
   return 0;
 }

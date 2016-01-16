@@ -10,7 +10,6 @@
 // into appropriate registers and tail-call the native function. Because they don't touch
 // the return value, they share the same implementation.
 extern "C" uint64_t codeswitch_glue_callNativeFunctionRawForInt(
-    codeswitch::VM* vm,
     codeswitch::internal::NativeFunction function,
     uint64_t intArgCount,
     uint64_t* intArgs,
@@ -20,7 +19,6 @@ extern "C" uint64_t codeswitch_glue_callNativeFunctionRawForInt(
     uint64_t* stackArgs);
 
 extern "C" double codeswitch_glue_callNativeFunctionRawForFloat(
-    codeswitch::VM* vm,
     codeswitch::internal::NativeFunction function,
     uint64_t intArgCount,
     uint64_t* intArgs,
@@ -41,35 +39,52 @@ int64_t callNativeFunctionRaw(
     word_t argCount,
     uint64_t* rawArgs,
     bool* argsAreInt,
-    bool resultIsFloat) {
-  const int kMaxIntArgs = 5;
+    NativeResultType nativeResultType) {
+  const int kMaxIntArgs = 6;
   const int kMaxFloatArgs = 8;
   uint64_t intArgs[kMaxIntArgs];
   uint64_t floatArgs[kMaxFloatArgs];
   uint64_t stackArgs[argCount];
-  uint64_t i, ii, fi, si;
-  for (i = 0, ii = 0, fi = 0, si = 0; i < argCount; i++) {
+  uint64_t resultPtr = kNotSet;
+  uint64_t intCount = 0, floatCount = 0, stackCount = 0;
+
+  if (nativeResultType == NATIVE_PTR) {
+    intArgs[intCount++] = reinterpret_cast<uint64_t>(&resultPtr);
+  }
+  intArgs[intCount++] = reinterpret_cast<uint64_t>(vm);
+
+  for (uint64_t i = 0; i < argCount; i++) {
     if (argsAreInt[i]) {
-      if (ii < kMaxIntArgs) {
-        intArgs[ii++] = rawArgs[i];
+      if (intCount < kMaxIntArgs) {
+        intArgs[intCount++] = rawArgs[i];
       } else {
-        stackArgs[argCount - si++ - 1] = rawArgs[i];
+        stackArgs[argCount - stackCount++ - 1] = rawArgs[i];
       }
     } else {
-      if (fi < kMaxFloatArgs) {
-        floatArgs[fi++] = rawArgs[i];
+      if (floatCount < kMaxFloatArgs) {
+        floatArgs[floatCount++] = rawArgs[i];
       } else {
-        stackArgs[argCount - si++ - 1] = rawArgs[i];
+        stackArgs[argCount - stackCount++ - 1] = rawArgs[i];
       }
     }
   }
-  if (resultIsFloat) {
-    auto result = codeswitch_glue_callNativeFunctionRawForFloat(
-        vm, function, ii, intArgs, fi, floatArgs, si, stackArgs + (argCount - si));
-    return f64ToBits(result);
+
+  uint64_t* stackArgPtr = stackArgs + (argCount - stackCount);
+  if (nativeResultType == NATIVE_INT) {
+    auto result = codeswitch_glue_callNativeFunctionRawForInt(
+        function, intCount, intArgs, floatCount, floatArgs, stackCount, stackArgPtr);
+    return result;
+  } else if (nativeResultType == NATIVE_FLOAT) {
+    auto fresult = codeswitch_glue_callNativeFunctionRawForFloat(
+        function, intCount, intArgs, floatCount, floatArgs, stackCount, stackArgPtr);
+    auto iresult = f64ToBits(fresult);
+    return iresult;
   } else {
-    return codeswitch_glue_callNativeFunctionRawForInt(
-        vm, function, ii, intArgs, fi, floatArgs, si, stackArgs + (argCount - si));
+    // NATIVE_PTR
+    codeswitch_glue_callNativeFunctionRawForInt(
+        function, intCount, intArgs, floatCount, floatArgs, stackCount, stackArgPtr);
+    auto derefPtr = resultPtr ? **reinterpret_cast<uint64_t**>(resultPtr) : 0;
+    return derefPtr;
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -194,7 +194,7 @@ u32 String::hashCode() const {
 }
 
 
-String* String::tryConcat(Heap* heap, String* other) {
+String* String::tryConcat(String* other) {
   if (other->length_ == 0) {
     return this;
   } else if (length_ == 0) {
@@ -205,31 +205,30 @@ String* String::tryConcat(Heap* heap, String* other) {
   if (consLength > kMaxLength)
     throw Error("maximum string length exeeded in concatenation");
 
-  auto cons = new(heap, consLength) String;
+  auto cons = new(getHeap(), consLength) String;
   copy_n(chars_, length_, cons->chars_);
   copy_n(other->chars_, other->length_, cons->chars_ + length_);
   return cons;
 }
 
 
-Local<String> String::concat(Heap* heap,
-                             const Handle<String>& left,
+Local<String> String::concat(const Handle<String>& left,
                              const Handle<String>& right) {
-  RETRY_WITH_GC(heap, return Local<String>(left->tryConcat(heap, *right)));
+  RETRY_WITH_GC(left->getHeap(), return Local<String>(left->tryConcat(*right)));
 }
 
 
-String* String::trySubstring(Heap* heap, length_t begin, length_t end) const {
+String* String::trySubstring(length_t begin, length_t end) const {
   ASSERT(begin <= end && end <= length());
   auto len = end - begin;
   auto beginChars = chars() + begin;
-  return new(heap, len) String(beginChars);
+  return new(getHeap(), len) String(beginChars);
 }
 
 
-Local<String> String::substring(Heap* heap, const Handle<String>& string,
+Local<String> String::substring(const Handle<String>& string,
                                 length_t begin, length_t end) {
-  RETRY_WITH_GC(heap, return Local<String>(string->trySubstring(heap, begin, end)));
+  RETRY_WITH_GC(string->getHeap(), return Local<String>(string->trySubstring(begin, end)));
 }
 
 
@@ -296,11 +295,11 @@ Local<BlockArray<String>> String::split(Heap* heap, const Handle<String>& string
   length_t pos = 0;
   for (length_t i = 0; i < count; i++) {
     auto next = string->find(sep, pos);
-    auto sub = String::substring(heap, string, pos, next);
+    auto sub = String::substring(string, pos, next);
     pieces->set(i, *sub);
     pos = next + 1;
   }
-  auto sub = String::substring(heap, string, pos, string->length());
+  auto sub = String::substring(string, pos, string->length());
   pieces->set(count, *sub);
   return pieces;
 }
@@ -325,11 +324,11 @@ Local<BlockArray<String>> String::split(Heap* heap,
   length_t pos = 0;
   for (length_t i = 0; i < count; i++) {
     auto next = string->find(*sep, pos);
-    auto sub = substring(heap, string, pos, next);
+    auto sub = substring(string, pos, next);
     pieces->set(i, *sub);
     pos = next + sep->length();
   }
-  auto sub = substring(heap, string, pos, string->length());
+  auto sub = substring(string, pos, string->length());
   pieces->set(count, *sub);
   return pieces;
 }

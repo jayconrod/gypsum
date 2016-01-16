@@ -914,7 +914,7 @@ void Interpreter::handleBuiltin(BuiltinId id) {
         HandleScope handleScope(vm_);
         auto right = handle(mem<String*>(stack_->sp() + kPrepareForGCSize));
         auto left = handle(mem<String*>(stack_->sp() + kPrepareForGCSize + kSlotSize));
-        result = *String::concat(vm_->heap(), left, right);
+        result = *String::concat(left, right);
       }
       pop<Block*>();  // right
       pop<Block*>();  // left

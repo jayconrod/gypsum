@@ -735,7 +735,7 @@ bool PackageDependency::parseNameAndVersion(Heap* heap,
   if (colonPos == depString->length() - 1)
     return false;
 
-  auto nameStr = String::substring(heap, depString, 0, colonPos);
+  auto nameStr = String::substring(depString, 0, colonPos);
   auto name = Name::fromString(heap, nameStr, Name::PACKAGE_NAME);
   if (!name)
     return false;
@@ -744,7 +744,7 @@ bool PackageDependency::parseNameAndVersion(Heap* heap,
   auto minEnd = dashPos != kIndexNotSet ? dashPos : depString->length();
   Local<PackageVersion> minVersion;
   if (minEnd - colonPos > 1) {
-    auto minVersionStr = String::substring(heap, depString, colonPos + 1, minEnd);
+    auto minVersionStr = String::substring(depString, colonPos + 1, minEnd);
     minVersion = PackageVersion::fromString(heap, minVersionStr);
     if (!minVersion)
       return false;
@@ -754,7 +754,7 @@ bool PackageDependency::parseNameAndVersion(Heap* heap,
   if (dashPos == kIndexNotSet) {
     maxVersion = minVersion;
   } else if (dashPos < depString->length() - 1) {
-    auto maxVersionStr = String::substring(heap, depString, dashPos + 1, depString->length());
+    auto maxVersionStr = String::substring(depString, dashPos + 1, depString->length());
     maxVersion = PackageVersion::fromString(heap, maxVersionStr);
     if (!maxVersion)
       return false;

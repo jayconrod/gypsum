@@ -415,39 +415,39 @@ class CallBuilder final {
 
   /** Adds several values to the argument list, starting with a `boolean` value */
   template <class... Ts>
-  CallBuilder& args(bool value, Ts... rest);
+  CallBuilder& args(bool value, Ts&&... rest);
 
   /** Adds several values to the argument list, starting with an `i8` value */
   template <class... Ts>
-  CallBuilder& args(int8_t value, Ts... rest);
+  CallBuilder& args(int8_t value, Ts&&... rest);
 
   /** Adds several values to the argument list, starting with an `i16` value */
   template <class... Ts>
-  CallBuilder& args(int16_t value, Ts... rest);
+  CallBuilder& args(int16_t value, Ts&&... rest);
 
   /** Adds several values to the argument list, starting with an `i32` value */
   template <class... Ts>
-  CallBuilder& args(int32_t value, Ts... rest);
+  CallBuilder& args(int32_t value, Ts&&... rest);
 
   /** Adds several values to the argument list, starting with an `i64` value */
   template <class... Ts>
-  CallBuilder& args(int64_t value, Ts... rest);
+  CallBuilder& args(int64_t value, Ts&&... rest);
 
   /** Adds several values to the argument list, starting with an `f32` value */
   template <class... Ts>
-  CallBuilder& args(float value, Ts... rest);
+  CallBuilder& args(float value, Ts&&... rest);
 
   /** Adds several values to the argument list, starting with an `f64` value */
   template <class... Ts>
-  CallBuilder& args(double value, Ts... rest);
+  CallBuilder& args(double value, Ts&&... rest);
 
   /** Adds several values to the argument list, starting with a `String` value */
   template <class... Ts>
-  CallBuilder& args(const String& value, Ts... rest);
+  CallBuilder& args(const String& value, Ts&&... rest);
 
   /** Adds several values to the argument list, starting with an `Object` value */
   template <class... Ts>
-  CallBuilder& args(const Object& value, Ts... rest);
+  CallBuilder& args(const Object& value, Ts&&... rest);
 
   /** Calls the function and clears the argument list. The result is ignored. */
   void call();
@@ -582,6 +582,38 @@ class Name final {
 
 
 /**
+ * An object of any type on the CodeSwitch garbage collected heap.
+ *
+ * Objects of this class actually manage pointers to objects on the garbage collected heap.
+ * Objects are in an "invalid" state if they are created with the default constructor or
+ * after being on the right side of a move assignment or construction.
+ */
+class Object final {
+ public:
+  class Impl;
+
+  Object();
+  explicit Object(Impl* impl);
+  Object(const Object&) = delete;
+  Object(Object&& obj);
+  Object& operator = (const Object&) = delete;
+  Object& operator = (Object&& obj);
+  ~Object();
+
+  /** Returns true if the reference is valid */
+  operator bool () const;
+
+  /** Returns true if the reference is not valid */
+  bool operator ! () const;
+
+ private:
+  std::unique_ptr<Impl> impl_;
+
+  friend class CallBuilder;
+};
+
+
+/**
  * A unicode string. Just a sequence of unicode code points.
  *
  * Objects of this class actually manage pointers to objects on the garbage collected heap.
@@ -614,6 +646,18 @@ class String final {
   /** Returns true if the reference is not valid */
   bool operator ! () const;
 
+  /** Concatenates two strings */
+  String operator + (const String& other) const;
+
+  /**
+   * Compares two strings lexicographically, by code point.
+   *
+   * @return 0 if the strings are equal, negative if the receiver is less than {@code other},
+   *     positive if the receiver is greater than {@code other}.
+   * @todo take locale into account.
+   */
+  int compare(const String& other) const;
+
   /** Creates an STL UTF-8 encoded string from this string */
   std::string toStdString() const;
 
@@ -622,38 +666,6 @@ class String final {
 
   friend class CallBuilder;
   friend class Name;
-};
-
-
-/**
- * An object of any type on the CodeSwitch garbage collected heap.
- *
- * Objects of this class actually manage pointers to objects on the garbage collected heap.
- * Objects are in an "invalid" state if they are created with the default constructor or
- * after being on the right side of a move assignment or construction.
- */
-class Object final {
- public:
-  class Impl;
-
-  Object();
-  explicit Object(Impl* impl);
-  Object(const Object&) = delete;
-  Object(Object&& obj);
-  Object& operator = (const Object&) = delete;
-  Object& operator = (Object&& obj);
-  ~Object();
-
-  /** Returns true if the reference is valid */
-  operator bool () const;
-
-  /** Returns true if the reference is not valid */
-  bool operator ! () const;
-
- private:
-  std::unique_ptr<Impl> impl_;
-
-  friend class CallBuilder;
 };
 
 
@@ -738,63 +750,69 @@ String Function::callForString(Ts... args) {
 
 
 template <class... Ts>
-CallBuilder& CallBuilder::args(bool value, Ts... rest) {
+Object Function::callForObject(Ts... args) {
+  return CallBuilder(*this).args(args...).callForObject();
+}
+
+
+template <class... Ts>
+CallBuilder& CallBuilder::args(bool value, Ts&&... rest) {
   arg(value);
   return args(rest...);
 }
 
 
 template <class... Ts>
-CallBuilder& CallBuilder::args(int8_t value, Ts... rest) {
+CallBuilder& CallBuilder::args(int8_t value, Ts&&... rest) {
   arg(value);
   return args(rest...);
 }
 
 
 template <class... Ts>
-CallBuilder& CallBuilder::args(int16_t value, Ts... rest) {
+CallBuilder& CallBuilder::args(int16_t value, Ts&&... rest) {
   arg(value);
   return args(rest...);
 }
 
 
 template <class... Ts>
-CallBuilder& CallBuilder::args(int32_t value, Ts... rest) {
+CallBuilder& CallBuilder::args(int32_t value, Ts&&... rest) {
   arg(value);
   return args(rest...);
 }
 
 
 template <class... Ts>
-CallBuilder& CallBuilder::args(int64_t value, Ts... rest) {
+CallBuilder& CallBuilder::args(int64_t value, Ts&&... rest) {
   arg(value);
   return args(rest...);
 }
 
 
 template <class... Ts>
-CallBuilder& CallBuilder::args(float value, Ts... rest) {
+CallBuilder& CallBuilder::args(float value, Ts&&... rest) {
   arg(value);
   return args(rest...);
 }
 
 
 template <class... Ts>
-CallBuilder& CallBuilder::args(double value, Ts... rest) {
+CallBuilder& CallBuilder::args(double value, Ts&&... rest) {
   arg(value);
   return args(rest...);
 }
 
 
 template <class... Ts>
-CallBuilder& CallBuilder::args(const String& value, Ts... rest) {
+CallBuilder& CallBuilder::args(const String& value, Ts&&... rest) {
   arg(value);
   return args(rest...);
 }
 
 
 template <class... Ts>
-CallBuilder& CallBuilder::args(const Object& value, Ts... rest) {
+CallBuilder& CallBuilder::args(const Object& value, Ts&&... rest) {
   arg(value);
   return args(rest...);
 }

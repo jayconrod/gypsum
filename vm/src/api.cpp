@@ -102,6 +102,8 @@ class CallBuilder::Impl final {
         : tag(PRIMITIVE), type(type), primitive(primitive) { }
     Value(i::Persistent<i::Type>&& type, const i::Handle<i::Object>& object)
         : tag(OBJECT), type(type), object(i::Persistent<i::Object>(object)) { }
+    Value(i::Persistent<i::Type>&& type, const i::Handle<i::String>& string)
+        : tag(OBJECT), type(type), object(i::Persistent<i::Object>(string)) { }
 
     Tag tag;
     i::Persistent<i::Type> type;
@@ -417,6 +419,12 @@ String CallBuilder::callForString() {
 }
 
 
+Object CallBuilder::callForObject() {
+  API_CHECK_SELF(CallBuilder);
+  return impl_->callForObject();
+}
+
+
 void CallBuilder::Impl::arg(const String& value) {
   API_CHECK(value, "not a valid String reference");
   i::Persistent<i::Type> type(vm_->roots()->getBuiltinType(i::BUILTIN_STRING_CLASS_ID));
@@ -512,6 +520,7 @@ Object CallBuilder::Impl::callForObject() {
 i::i64 CallBuilder::Impl::call() {
   // Check arguments.
   i::HandleScope handleScope(vm_);
+  i::AllowAllocationScope allowAlloc(vm_->heap(), true);
   API_CHECK(args_.size() == function_->parameterTypes()->length(), "wrong number of arguments");
   for (i::length_t i = 0; i < args_.size(); i++) {
     if (args_[i].tag == OBJECT) {
@@ -526,7 +535,7 @@ i::i64 CallBuilder::Impl::call() {
   const i::Persistent<i::Stack>& stack = vm_->stack();
   for (auto& arg : args_) {
     if (arg.tag == OBJECT) {
-      stack->push(arg.object);
+      stack->push(arg.object.getOrNull());
     } else {
       stack->push(arg.primitive);
     }
@@ -631,6 +640,24 @@ bool String::operator ! () const {
 }
 
 
+String String::operator + (const String& other) const {
+  API_CHECK_SELF(String);
+  API_CHECK_ARG(other);
+  auto vm = impl_->str->getVM();
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAllocation(vm->heap(), true);
+  i::Persistent<i::String> result(i::String::concat(impl_->str, other.impl_->str));
+  return String(new String::Impl(result));
+}
+
+
+int String::compare(const String& other) const {
+  API_CHECK_SELF(String);
+  API_CHECK_ARG(other);
+  return impl_->str->compare(*other.impl_->str);
+}
+
+
 string String::toStdString() const {
   return impl_->str->toUtf8StlString();
 }
@@ -705,9 +732,9 @@ int64_t callNativeFunction(i::Function* callee, i::VM* vm, i::Address sp) {
   // Prepare the arguments.
   auto paramTypes = callee->parameterTypes();
   auto argCount = paramTypes->length();
-  uint64_t rawArgs[argCount];
-  bool argsAreInt[argCount];
-  Object objects[argCount];
+  unique_ptr<uint64_t[]> rawArgs(new uint64_t[argCount]);
+  unique_ptr<bool[]> argsAreInt(new bool[argCount]);
+  unique_ptr<Object[]> objects(new Object[argCount]);
 
   for (i::length_t i = 0; i < argCount; i++) {
     uint64_t value = i::mem<uint64_t>(sp + (argCount - i - 1) * i::Interpreter::kSlotSize);
@@ -728,6 +755,11 @@ int64_t callNativeFunction(i::Function* callee, i::VM* vm, i::Address sp) {
     }
   }
 
+  auto returnType = callee->returnType();
+  auto resultType = returnType->isObject() ? i::NATIVE_PTR :
+      returnType->isFloat() ? i::NATIVE_FLOAT :
+      i::NATIVE_INT;
+
   // Load the native function, if it's not loaded already.
   auto nativeFunction = callee->ensureAndGetNativeFunction();
 
@@ -737,9 +769,9 @@ int64_t callNativeFunction(i::Function* callee, i::VM* vm, i::Address sp) {
   VM* externalVm = reinterpret_cast<VM*>(vm);
 
   // Call the funtion via an assembly stub.
-  auto resultIsFloat = callee->returnType()->isFloat();
   auto result = i::callNativeFunctionRaw(
-      externalVm, nativeFunction, argCount, rawArgs, argsAreInt, resultIsFloat);
+      externalVm, nativeFunction, argCount,
+      rawArgs.get(), argsAreInt.get(), resultType);
   return result;
 }
 

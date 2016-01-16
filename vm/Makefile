@@ -22,11 +22,12 @@ programs = $(addprefix $(OUT_DIR)/,$(notdir $(basename $1)))
 LIB_NAME := codeswitch
 LIB_SOURCES := $(wildcard $(LIB_SRC_DIR)/*.cpp) \
   $(wildcard $(LIB_SRC_DIR)/$(OS)/*.cpp) \
-  $(wildcard $(LIB_SRC_DIR)/$(ARCH)/*.cpp)
+  $(wildcard $(LIB_SRC_DIR)/$(ARCH)/*.cpp) \
+  $(wildcard $(LIB_SRC_DIR)/$(OS)-$(ARCH)/*.cpp)
 ifeq ($(POSIX),yes)
   LIB_SOURCES += $(wildcard $(LIB_SRC_DIR)/posix/*.cpp)
 endif
-LIB_AS_SOURCES := $(wildcard $(LIB_SRC_DIR)/$(ARCH)/*.s)
+LIB_AS_SOURCES := $(wildcard $(LIB_SRC_DIR)/$(OS)-$(ARCH)/*.s)
 LIB_GEN := $(GEN_DIR)/opcodes.h $(GEN_DIR)/builtins.h $(GEN_DIR)/flags.h $(GEN_DIR)/roots-builtins.cpp
 LIB_GEN_OBJS := $(call objects,$(filter %.cpp,$(LIB_GEN)))
 LIB_OBJECTS := $(call objects,$(LIB_SOURCES)) $(LIB_GEN_OBJS)

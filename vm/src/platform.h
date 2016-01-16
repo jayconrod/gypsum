@@ -75,6 +75,13 @@ NativeFunction loadNativeFunction(NativeLibrary library, const std::string& name
 NativeFunction loadLinkedNativeFunction(const std::string& name);
 
 
+enum NativeResultType {
+  NATIVE_INT,
+  NATIVE_FLOAT,
+  NATIVE_PTR,
+};
+
+
 /**
  * Calls a native function using arguments from the stack. The function will be called
  * according to the normal calling convention of the system.
@@ -90,8 +97,8 @@ NativeFunction loadLinkedNativeFunction(const std::string& name);
  * @param argsAreInt an array of flags. If a flag is true, that argument is an integer or
  *     a pointer. Otherwise, it's a floating point number. This affects which registers
  *     arguments are passed through.
- * @param resultIsFloat whether the result is a floating point value. This affects which
- *     register the native function will return through.
+ * @param nativeResultType whether the result is an integer, float, or pointer. This affects
+ *     how the result is returned.
  * @return an integer returned by the native function.
  */
 int64_t callNativeFunctionRaw(
@@ -100,7 +107,7 @@ int64_t callNativeFunctionRaw(
     word_t argCount,
     uint64_t* rawArgs,
     bool* argsAreInt,
-    bool resultIsFloat);
+    NativeResultType resultType);
 
 }
 }
