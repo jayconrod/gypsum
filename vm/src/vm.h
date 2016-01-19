@@ -47,6 +47,8 @@ class VM {
 
   static VM* fromAddress(void* addr);
 
+  ::codeswitch::VM* apiPtr() const { return apiPtr_; }
+  void setApiPtr(::codeswitch::VM* apiPtr) { apiPtr_ = apiPtr; }
   Heap* heap() { return heap_.get(); }
   Roots* roots() { return roots_.get(); }
   HandleStorage& handleStorage() { return *handleStorage_; }
@@ -78,6 +80,7 @@ class VM {
   std::string searchForPackage(const Handle<PackageDependency>& dependency);
   void loadPackageDependenciesAndInitialize(const Handle<Package>& package);
 
+  ::codeswitch::VM* apiPtr_;
   std::unique_ptr<Heap> heap_;
   std::unique_ptr<Roots> roots_;
   std::unique_ptr<HandleStorage> handleStorage_;

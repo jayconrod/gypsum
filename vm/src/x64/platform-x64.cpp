@@ -58,31 +58,30 @@ int64_t callNativeFunctionRaw(
       if (intCount < kMaxIntArgs) {
         intArgs[intCount++] = rawArgs[i];
       } else {
-        stackArgs[argCount - stackCount++ - 1] = rawArgs[i];
+        stackArgs[stackCount++] = rawArgs[i];
       }
     } else {
       if (floatCount < kMaxFloatArgs) {
         floatArgs[floatCount++] = rawArgs[i];
       } else {
-        stackArgs[argCount - stackCount++ - 1] = rawArgs[i];
+        stackArgs[stackCount++] = rawArgs[i];
       }
     }
   }
 
-  uint64_t* stackArgPtr = stackArgs + (argCount - stackCount);
   if (nativeResultType == NATIVE_INT) {
     auto result = codeswitch_glue_callNativeFunctionRawForInt(
-        function, intCount, intArgs, floatCount, floatArgs, stackCount, stackArgPtr);
+        function, intCount, intArgs, floatCount, floatArgs, stackCount, stackArgs);
     return result;
   } else if (nativeResultType == NATIVE_FLOAT) {
     auto fresult = codeswitch_glue_callNativeFunctionRawForFloat(
-        function, intCount, intArgs, floatCount, floatArgs, stackCount, stackArgPtr);
+        function, intCount, intArgs, floatCount, floatArgs, stackCount, stackArgs);
     auto iresult = f64ToBits(fresult);
     return iresult;
   } else {
     // NATIVE_PTR
     codeswitch_glue_callNativeFunctionRawForInt(
-        function, intCount, intArgs, floatCount, floatArgs, stackCount, stackArgPtr);
+        function, intCount, intArgs, floatCount, floatArgs, stackCount, stackArgs);
     auto derefPtr = resultPtr ? **reinterpret_cast<uint64_t**>(resultPtr) : 0;
     return derefPtr;
   }

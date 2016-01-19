@@ -39,6 +39,7 @@ codeswitch_glue_callNativeFunctionRawForFloat:
   popq %r11  # stack arg ptr
   shlq $3, %r9
   subq %r9, %rsp
+  andq $-16, %rsp
   shrq $3, %r9
   pushq %rax  # return address
   pushq %rdi  # native function

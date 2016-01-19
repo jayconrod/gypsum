@@ -138,15 +138,19 @@ VM::VM(const VMOptions& vmOptions) {
   // Check that there were no duplicates in the native function search order.
   checkNativeFunctionSearchOrder(vmOptions.nativeFunctionSearchOrder);
   impl_.reset(new Impl(vmOptions));
+  impl_->vm.setApiPtr(this);
 }
 
 
 VM::VM(VM&& vm)
-    : impl_(move(vm.impl_)) { }
+    : impl_(move(vm.impl_)) {
+  impl_->vm.setApiPtr(this);
+}
 
 
 VM& VM::operator = (VM&& vm) {
   impl_ = move(vm.impl_);
+  impl_->vm.setApiPtr(this);
   return *this;
 }
 
@@ -763,14 +767,9 @@ int64_t callNativeFunction(i::Function* callee, i::VM* vm, i::Address sp) {
   // Load the native function, if it's not loaded already.
   auto nativeFunction = callee->ensureAndGetNativeFunction();
 
-  // HACK: the internal VM must have the same address as the external VM, since the external
-  // VM contains the internal VM as its first member. This will break if that changes to
-  // a pointer or if a virtual function is added.
-  VM* externalVm = reinterpret_cast<VM*>(vm);
-
   // Call the funtion via an assembly stub.
   auto result = i::callNativeFunctionRaw(
-      externalVm, nativeFunction, argCount,
+      vm->apiPtr(), nativeFunction, argCount,
       rawArgs.get(), argsAreInt.get(), resultType);
   return result;
 }

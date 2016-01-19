@@ -13,3 +13,12 @@ native def integerParams(a: i64, b: i64): i64
 native def floatParams(a: f64, b: f64): f64
 native def stringParams(a: String, b: String): String
 native def nullObject: Object?
+native def manyParameters(
+    a: i64, b: f64, c: String,
+    d: i64, e: f64, f: String,
+    g: i64, h: f64, i: String,
+    j: i64, k: f64, l: String,
+    m: i64, n: f64, o: String,
+    p: i64, q: f64, r: String,
+    s: i64, t: f64, u: String,
+    v: i64, w: f64, x: String): String

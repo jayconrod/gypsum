@@ -5,6 +5,7 @@
 
 
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -17,6 +18,7 @@ using std::cout;
 using std::endl;
 using std::make_tuple;
 using std::string;
+using std::stringstream;
 using std::vector;
 
 using codeswitch::Function;
@@ -63,6 +65,45 @@ static Object nullObjectFunction(VM* vm) {
 }
 
 
+static String manyParametersFunction(VM* vm,
+    int64_t a, double b, String c,
+    int64_t d, double e, String f,
+    int64_t g, double h, String i,
+    int64_t j, double k, String l,
+    int64_t m, double n, String o,
+    int64_t p, double q, String r,
+    int64_t s, double t, String u,
+    int64_t v, double w, String x) {
+  stringstream ss;
+  ss << a << ' ';
+  ss << b << ' ';
+  ss << c.toStdString() << ' ';
+  ss << d << ' ';
+  ss << e << ' ';
+  ss << f.toStdString() << ' ';
+  ss << g << ' ';
+  ss << h << ' ';
+  ss << i.toStdString() << ' ';
+  ss << j << ' ';
+  ss << k << ' ';
+  ss << l.toStdString() << ' ';
+  ss << m << ' ';
+  ss << n << ' ';
+  ss << o.toStdString() << ' ';
+  ss << p << ' ';
+  ss << q << ' ';
+  ss << r.toStdString() << ' ';
+  ss << s << ' ';
+  ss << t << ' ';
+  ss << u.toStdString() << ' ';
+  ss << v << ' ';
+  ss << w << ' ';
+  ss << x.toStdString();
+  String result(*vm, ss.str());
+  return result;
+}
+
+
 int main(int argc, char* argv[]) {
   string programPath(argv[0]);
   auto programDir = dirName(programPath);
@@ -83,6 +124,9 @@ int main(int argc, char* argv[]) {
   vmOptions.nativeFunctions.push_back(
       make_tuple("NativeCalls.registered", "nullObject",
           reinterpret_cast<void(*)()>(nullObjectFunction)));
+  vmOptions.nativeFunctions.push_back(
+      make_tuple("NativeCalls.registered", "manyParameters",
+          reinterpret_cast<void(*)()>(manyParametersFunction)));
   VM vm(vmOptions);
   auto fName = Name::fromStringForDefn(String(vm, "f"));
   auto gName = Name::fromStringForDefn(String(vm, "g"));
@@ -149,6 +193,22 @@ int main(int argc, char* argv[]) {
   auto nullObject = registered.getFunction(nullObjectName);
   auto oresult = nullObject.callForObject();
   ASSERT_FALSE(oresult);
+
+  // Check that we can call a function with many parameters. This will force some of the
+  // parameters onto the stack.
+  auto manyParametersName = Name::fromStringForDefn(String(vm, "manyParameters"));
+  auto manyParameters = registered.getFunction(manyParametersName);
+  sresult = manyParameters.callForString(
+      static_cast<int64_t>(1), 2., String(vm, "3"),
+      static_cast<int64_t>(4), 5., String(vm, "6"),
+      static_cast<int64_t>(7), 8., String(vm, "9"),
+      static_cast<int64_t>(10), 11., String(vm, "12"),
+      static_cast<int64_t>(13), 14., String(vm, "15"),
+      static_cast<int64_t>(16), 17., String(vm, "18"),
+      static_cast<int64_t>(19), 20., String(vm, "21"),
+      static_cast<int64_t>(22), 23., String(vm, "24"));
+  ASSERT_EQ("1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24",
+      sresult.toStdString());
 
   return 0;
 }

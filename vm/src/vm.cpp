@@ -27,7 +27,8 @@ namespace codeswitch {
 namespace internal {
 
 VM::VM(const VMOptions& vmOptions)
-    : heap_(new Heap(this)),
+    : apiPtr_(nullptr),
+      heap_(new Heap(this)),
       roots_(new Roots),
       handleStorage_(new HandleStorage),
       packageSearchPaths_(vmOptions.packageSearchPaths),
