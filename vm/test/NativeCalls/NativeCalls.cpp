@@ -104,6 +104,18 @@ static String manyParametersFunction(VM* vm,
 }
 
 
+static Function* recursiveGypsumPtr = nullptr;
+static String recursiveNativeFunction(VM* vm, int64_t n, String a, String b, String result) {
+  if (n == 0) {
+    return result;
+  } else {
+    return recursiveGypsumPtr->callForString(
+        n - 1, String(*vm, "foo"), String(*vm, "bar"),
+        result + "," + a + b);
+  }
+}
+
+
 int main(int argc, char* argv[]) {
   string programPath(argv[0]);
   auto programDir = dirName(programPath);
@@ -127,6 +139,9 @@ int main(int argc, char* argv[]) {
   vmOptions.nativeFunctions.push_back(
       make_tuple("NativeCalls.registered", "manyParameters",
           reinterpret_cast<void(*)()>(manyParametersFunction)));
+  vmOptions.nativeFunctions.push_back(
+      make_tuple("NativeCalls.registered", "recursiveNative",
+          reinterpret_cast<void(*)()>(recursiveNativeFunction)));
   VM vm(vmOptions);
   auto fName = Name::fromStringForDefn(String(vm, "f"));
   auto gName = Name::fromStringForDefn(String(vm, "g"));
@@ -192,7 +207,7 @@ int main(int argc, char* argv[]) {
   auto nullObjectName = Name::fromStringForDefn(String(vm, "nullObject"));
   auto nullObject = registered.getFunction(nullObjectName);
   auto oresult = nullObject.callForObject();
-  ASSERT_FALSE(oresult);
+  ASSERT_FALSE(oresult.isValid());
 
   // Check that we can call a function with many parameters. This will force some of the
   // parameters onto the stack.
@@ -209,6 +224,16 @@ int main(int argc, char* argv[]) {
       static_cast<int64_t>(22), 23., String(vm, "24"));
   ASSERT_EQ("1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24",
       sresult.toStdString());
+
+  // Check that we can call a pair of functions which recurse between interpreted and native.
+  auto recursiveNativeName = Name::fromStringForDefn(String(vm, "recursiveNative"));
+  auto recursiveNative = registered.getFunction(recursiveNativeName);
+  auto recursiveGypsumName = Name::fromStringForDefn(String(vm, "recursiveGypsum"));
+  auto recursiveGypsum = registered.getFunction(recursiveGypsumName);
+  recursiveGypsumPtr = &recursiveGypsum;
+  sresult = recursiveNative.callForString(
+      static_cast<int64_t>(4), String(vm, "baz"), String(vm, "quux"), String(vm, ""));
+  ASSERT_EQ(",bazquux,foobar,bazquux,foobar", sresult.toStdString());
 
   return 0;
 }

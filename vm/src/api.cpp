@@ -655,6 +655,17 @@ String String::operator + (const String& other) const {
 }
 
 
+String String::operator + (const std::string& other) const {
+  API_CHECK_SELF(String);
+  auto vm = impl_->str->getVM();
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAllocation(vm->heap(), true);
+  auto internalOther = i::String::fromUtf8String(vm->heap(), other);
+  i::Persistent<i::String> result(i::String::concat(impl_->str, internalOther));
+  return String(new String::Impl(result));
+}
+
+
 int String::compare(const String& other) const {
   API_CHECK_SELF(String);
   API_CHECK_ARG(other);
@@ -690,7 +701,7 @@ Object::~Object() { }
 Error::Error() { }
 
 
-Object::operator bool () const {
+bool Object::isValid() const {
   return static_cast<bool>(impl_);
 }
 

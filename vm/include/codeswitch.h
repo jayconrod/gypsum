@@ -175,7 +175,7 @@ class Package final {
   ~Package();
 
   /** Returns true if the reference is valid */
-  operator bool () const;
+  explicit operator bool () const;
 
   /** Returns true if the reference is not valid */
   bool operator ! () const;
@@ -224,7 +224,7 @@ class Function final {
   ~Function();
 
   /** Returns true if the reference is valid */
-  operator bool () const;
+  explicit operator bool () const;
 
   /** Returns true if the reference is not valid */
   bool operator ! () const;
@@ -375,7 +375,7 @@ class CallBuilder final {
   ~CallBuilder();
 
   /** Returns true if the reference is valid */
-  operator bool () const;
+  explicit operator bool () const;
 
   /** Returns true if the reference is not valid */
   bool operator ! () const;
@@ -546,7 +546,7 @@ class Name final {
   ~Name();
 
   /** Returns true if the reference is valid */
-  operator bool () const;
+  explicit operator bool () const;
 
   /** Returns true if the reference is not valid */
   bool operator ! () const;
@@ -601,7 +601,12 @@ class Object final {
   ~Object();
 
   /** Returns true if the reference is valid */
-  operator bool () const;
+  bool isValid() const;
+
+  /** Returns true if the reference is valid */
+  explicit operator bool () const {
+    return isValid();
+  }
 
   /** Returns true if the reference is not valid */
   bool operator ! () const;
@@ -641,13 +646,16 @@ class String final {
   ~String();
 
   /** Returns true if the reference is valid */
-  operator bool () const;
+  explicit operator bool () const;
 
   /** Returns true if the reference is not valid */
   bool operator ! () const;
 
   /** Concatenates two strings */
   String operator + (const String& other) const;
+
+  /** Concatenates a string with an STL string */
+  String operator + (const std::string& other) const;
 
   /**
    * Compares two strings lexicographically, by code point.
@@ -684,7 +692,7 @@ class Error final {
   Error& operator = (Error&& error);
   ~Error();
 
-  operator bool () const;
+  explicit operator bool () const;
   bool operator ! () const;
 
   /** Returns a message contained by the error for logging or displaying to users */
