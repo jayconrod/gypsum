@@ -61,57 +61,8 @@ class VM::Impl final {
  public:
   explicit Impl(const VMOptions& vmOptions)
       : vm(vmOptions) { }
+  static internal::VM* unwrap(VM* vm) { return &vm->impl_->vm; }
   internal::VM vm;
-};
-
-
-class Package::Impl final {
- public:
-  explicit Impl(const internal::Handle<internal::Package>& package)
-      : package(package) {
-    API_CHECK(package, "package implementation does not reference a package");
-  }
-  internal::Persistent<internal::Package> package;
-};
-
-
-class Function::Impl final {
- public:
-  explicit Impl(const internal::Handle<internal::Function>& function)
-      : function(function) {
-    API_CHECK(function, "function implementation does not reference a function");
-  }
-  internal::Persistent<internal::Function> function;
-};
-
-
-class Name::Impl final {
- public:
-  explicit Impl(const internal::Handle<internal::Name>& name)
-      : name(name) {
-    API_CHECK(name, "name implementation does not reference a name");
-  }
-  internal::Persistent<internal::Name> name;
-};
-
-
-class String::Impl final {
- public:
-  explicit Impl(const internal::Handle<internal::String>& str)
-      : str(str) {
-    API_CHECK(str, "string implementation does not reference a string");
-  }
-  internal::Persistent<internal::String> str;
-};
-
-
-class Object::Impl final {
- public:
-  explicit Impl(const internal::Handle<internal::Object>& obj)
-      : obj(obj) {
-    API_CHECK(obj, "object implementation does not reference an object");
-  }
-  internal::Persistent<internal::Object> obj;
 };
 
 

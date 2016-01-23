@@ -151,6 +151,55 @@ class VM final {
 };
 
 
+class Impl;
+
+
+/**
+ * Internal base class for API objects that point to objects on the managed heap.
+ *
+ * Reference objects maintain pointers to these objects, which are registered with the
+ * garbage collector. The garbage collector will not delete objects while they are referenced.
+ * Referenced pointers will be updated when objects are moved during garbage collection.
+ *
+ * A reference is *valid* if it points to an object. If it is not valid, it points to nothing.
+ * Most API methods require valid pointers. Use {@code isValid} and the Boolean operators to
+ * test validity.
+ */
+class Reference {
+ protected:
+  Reference();
+  explicit Reference(Impl* impl);
+  Reference(const Reference&) = delete;
+  Reference(Reference&& ref);
+  Reference& operator = (const Reference&) = delete;
+  Reference& operator = (Reference&& ref);
+ public:
+  ~Reference();
+
+  /** Returns true if the reference points to an object */
+  bool isValid() const;
+
+  /**
+   * Releases the referenced object. If there are no other references to the object, it may
+   * be eligible for garbage collection. This reference will no longer be valid.
+   */
+  void clear();
+
+  /** Returns true if the reference points to an object */
+  explicit operator bool () const {
+    return isValid();
+  }
+
+  /** Returns false if the reference points to an object */
+  bool operator ! () const {
+    return !isValid();
+  }
+
+ protected:
+  Impl* impl_;
+};
+
+
 /**
  * A loadable collection of related globals, functions, and classes.
  *
@@ -162,23 +211,14 @@ class VM final {
  * Objects are in an "invalid" state if they are created with the default constructor or
  * after being on the right side of a move assignment or construction.
  */
-class Package final {
+class Package final : public Reference {
  public:
-  class Impl;
-
   Package();
   explicit Package(Impl* impl);
   Package(const Package&) = delete;
   Package(Package&& package);
-  Package& operator = (const Package&) = delete;
-  Package& operator = (Package&& package);
+  Package& operator = (Package&&) = default;
   ~Package();
-
-  /** Returns true if the reference is valid */
-  explicit operator bool () const;
-
-  /** Returns true if the reference is not valid */
-  bool operator ! () const;
 
   /**
    * Returns the package's entry function, if it has one.
@@ -195,9 +235,6 @@ class Package final {
    *   an invalid reference is returned.
    */
   Function getFunction(const Name& name) const;
-
- private:
-  std::unique_ptr<Impl> impl_;
 };
 
 
@@ -211,23 +248,13 @@ class Package final {
  * Objects are in an "invalid" state if they are created with the default constructor or
  * after being on the right side of a move assignment or construction.
  */
-class Function final {
+class Function final : public Reference {
  public:
-  class Impl;
-
   Function();
   explicit Function(Impl* impl);
-  Function(const Function&) = delete;
   Function(Function&&);
-  Function& operator = (const Function&) = delete;
-  Function& operator = (Function&&);
+  Function& operator = (Function&&) = default;
   ~Function();
-
-  /** Returns true if the reference is valid */
-  explicit operator bool () const;
-
-  /** Returns true if the reference is not valid */
-  bool operator ! () const;
 
   /**
    * Calls a function that returns `unit` (equivalent to `void`)
@@ -338,9 +365,6 @@ class Function final {
   template <class... Ts>
   Object callForObject(Ts... args);
 
- private:
-  std::unique_ptr<Impl> impl_;
-
   friend class CallBuilder;
 };
 
@@ -359,6 +383,7 @@ class Function final {
 class CallBuilder final {
  public:
   class Impl;
+
   CallBuilder();
 
   /**
@@ -368,17 +393,10 @@ class CallBuilder final {
    */
   CallBuilder(const Function& function);
 
-  CallBuilder(const CallBuilder&) = delete;
-  CallBuilder(CallBuilder&& builder);
+  CallBuilder(CallBuilder&& builder) = delete;
   CallBuilder& operator = (const CallBuilder&) = delete;
-  CallBuilder& operator = (CallBuilder&& builder);
+  CallBuilder& operator = (CallBuilder&& builder) = delete;
   ~CallBuilder();
-
-  /** Returns true if the reference is valid */
-  explicit operator bool () const;
-
-  /** Returns true if the reference is not valid */
-  bool operator ! () const;
 
   /** Adds a `unit` value to the argument list */
   CallBuilder& argUnit();
@@ -533,23 +551,13 @@ class CallBuilder final {
  * Objects are in an "invalid" state if they are created with the default constructor or
  * after being on the right side of a move assignment or construction.
  */
-class Name final {
+class Name final : public Reference {
  public:
-  class Impl;
-
   Name();
   explicit Name(Impl* impl);
-  Name(const Name&) = delete;
   Name(Name&&);
-  Name& operator = (const Name&) = delete;
-  Name& operator = (Name&& name);
+  Name& operator = (Name&&) = default;
   ~Name();
-
-  /** Returns true if the reference is valid */
-  explicit operator bool () const;
-
-  /** Returns true if the reference is not valid */
-  bool operator ! () const;
 
   /**
    * Parses a string to create a new name for a definition
@@ -573,9 +581,6 @@ class Name final {
    */
   static Name fromStringForPackage(const String& str);
 
- private:
-  std::unique_ptr<Impl> impl_;
-
   friend class Package;
   friend class VM;
 };
@@ -588,31 +593,13 @@ class Name final {
  * Objects are in an "invalid" state if they are created with the default constructor or
  * after being on the right side of a move assignment or construction.
  */
-class Object final {
+class Object final : public Reference {
  public:
-  class Impl;
-
   Object();
   explicit Object(Impl* impl);
-  Object(const Object&) = delete;
   Object(Object&& obj);
-  Object& operator = (const Object&) = delete;
-  Object& operator = (Object&& obj);
+  Object& operator = (Object&&) = default;
   ~Object();
-
-  /** Returns true if the reference is valid */
-  bool isValid() const;
-
-  /** Returns true if the reference is valid */
-  explicit operator bool () const {
-    return isValid();
-  }
-
-  /** Returns true if the reference is not valid */
-  bool operator ! () const;
-
- private:
-  std::unique_ptr<Impl> impl_;
 
   friend class CallBuilder;
 };
@@ -625,10 +612,8 @@ class Object final {
  * Objects are in an "invalid" state if they are created with the default constructor or
  * after being on the right side of a move assignment or construction.
  */
-class String final {
+class String final : public Reference {
  public:
-  class Impl;
-
   String();
   explicit String(Impl* impl);
 
@@ -639,17 +624,9 @@ class String final {
    * @param str a UTF-8 used to build the CodeSwitch string
    */
   String(VM& vm, const std::string& str);
-  String(const String&) = delete;
   String(String&& str);
-  String& operator = (const String&) = delete;
-  String& operator = (String&& str);
+  String& operator = (String&& str) = default;
   ~String();
-
-  /** Returns true if the reference is valid */
-  explicit operator bool () const;
-
-  /** Returns true if the reference is not valid */
-  bool operator ! () const;
 
   /** Concatenates two strings */
   String operator + (const String& other) const;
@@ -668,9 +645,6 @@ class String final {
 
   /** Creates an STL UTF-8 encoded string from this string */
   std::string toStdString() const;
-
- private:
-  std::unique_ptr<Impl> impl_;
 
   friend class CallBuilder;
   friend class Name;

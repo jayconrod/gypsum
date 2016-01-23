@@ -6,6 +6,11 @@
 
 #include "platform.h"
 
+#include "api.h"
+#include "block.h"
+#include "handle.h"
+#include "vm.h"
+
 // These functions are implemented in assembly (see glue-x64.s). They actually move arguments
 // into appropriate registers and tail-call the native function. Because they don't touch
 // the return value, they share the same implementation.
@@ -82,7 +87,12 @@ int64_t callNativeFunctionRaw(
     // NATIVE_PTR
     codeswitch_glue_callNativeFunctionRawForInt(
         function, intCount, intArgs, floatCount, floatArgs, stackCount, stackArgs);
-    auto derefPtr = resultPtr ? **reinterpret_cast<uint64_t**>(resultPtr) : 0;
+    int64_t derefPtr = 0;
+    if (resultPtr) {
+      derefPtr = *reinterpret_cast<int64_t*>(resultPtr);
+      codeswitch::VM::Impl::unwrap(vm)->handleStorage().destroyPersistent(
+          reinterpret_cast<Block**>(resultPtr));
+    }
     return derefPtr;
   }
 }
