@@ -22,12 +22,12 @@
   .globl _codeswitch_glue_callNativeFunctionRawForInt
   .globl _codeswitch_glue_callNativeFunctionRawForFloat
 # %rdi VM*: the virtual machine to pass to the function as the first argument
-# %rsi/32(%rsp) NativeFunction: pointer to the function to call
-# %rdx/r10 int: number of integer arguments (at most 5)
-# %rcx/r11 uint64_t*: array of integer arguments
-# %r8/r10/24(%rsp) int: number of float arguments (at most 8)
-# %r9/r11/16(%rsp) uint64_t*: array of float arguments
-# 16(%rsp)/r10/8(%rsp) int: number of stack arguments
+# %rdi/32(%rsp) NativeFunction: pointer to the function to call
+# %rsi/r10 int: number of integer arguments (at most 6)
+# %rdx/r11 uint64_t*: array of integer arguments
+# %rcx/r10/24(%rsp) int: number of float arguments (at most 8)
+# %r8/r11/16(%rsp) uint64_t*: array of float arguments
+# %r9/r10/8(%rsp) int: number of stack arguments
 # 8(%rsp)/r11/(%rsp) uint64_t*: array of stack arguments
 # (%rsp)/40(%rsp): return address
 _codeswitch_glue_callNativeFunctionRawForInt:
@@ -35,38 +35,41 @@ _codeswitch_glue_callNativeFunctionRawForFloat:
   # Reserve stack space for stack arguments and push registers we won't need immediately.
   # We don't use any callee save registers.
   popq %rax  # return address
-  popq %r10  # stack arg count
   popq %r11  # stack arg ptr
-  shlq $3, %r10
-  subq %r10, %rsp
-  shrq $3, %r10
+  shlq $3, %r9
+  subq %r9, %rsp
+  andq $-16, %rsp
+  shrq $3, %r9
   pushq %rax  # return address
-  pushq %rsi  # native function
-  pushq %r8  # float arg count
-  pushq %r9  # float arg ptr
-  pushq %r10  # stack arg count
+  pushq %rdi  # native function
+  pushq %rcx  # float arg count
+  pushq %r8  # float arg ptr
+  pushq %r9  # stack arg count
   pushq %r11  # stack arg ptr
 
   # Move integer array pointer and size into scratch registers, since we'll be replacing them.
-  movq %rdx, %r10  # int arg count
-  movq %rcx, %r11  # int arg ptr
+  movq %rsi, %r10  # int arg count
+  movq %rdx, %r11  # int arg ptr
 
   # Load integer arguments
   cmpq $0, %r10
   je LloadFloatArgs
-  movq (%r11), %rsi
+  movq (%r11), %rdi
   cmpq $1, %r10
   je LloadFloatArgs
-  movq 8(%r11), %rdx
+  movq 8(%r11), %rsi
   cmpq $2, %r10
   je LloadFloatArgs
-  movq 16(%r11), %rcx
+  movq 16(%r11), %rdx
   cmpq $3, %r10
   je LloadFloatArgs
-  movq 24(%r11), %r8
+  movq 24(%r11), %rcx
   cmpq $4, %r10
   je LloadFloatArgs
-  movq 24(%r11), %r9
+  movq 32(%r11), %r8
+  cmpq $5, %r10
+  je LloadFloatArgs
+  movq 40(%r11), %r9
 
   # Load float arguments.
 LloadFloatArgs:
