@@ -1,6 +1,6 @@
 ;;; gypsum-mode.el --- Syntax highlighting for Gypsum
 
-;; Copyright 2014-2015, Jay Conrod, all rights reserved.
+;; Copyright 2014-2016, Jay Conrod, all rights reserved.
 
 ;; Author: Jay Conrod <jayconrod@gmail.com>
 ;; Description: Syntax highlighting for Gypsum
@@ -75,6 +75,7 @@
         "lambda"
         "let"
         "match"
+        "native"
         "new"
         "override"
         "private"
