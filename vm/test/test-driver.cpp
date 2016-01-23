@@ -92,7 +92,7 @@ class SeparateTest: public TestBase {
   virtual void test() {
     auto pid = fork();
     if (pid == 0) {
-      execl(executablePath_.c_str(), executablePath_.c_str());
+      execl(executablePath_.c_str(), executablePath_.c_str(), nullptr);
       cerr << '\n' << executablePath_ << ": error: " << strerror(errno) << endl;
       _exit(4);
     } else {
