@@ -422,9 +422,6 @@ class CallBuilder final {
   /** Adds an `f64` value to the argument list */
   CallBuilder& arg(double value);
 
-  /** Adds a {@link String} value to the argument list */
-  CallBuilder& arg(const String& value);
-
   /** Adds a {@link Object} value to the argument list */
   CallBuilder& arg(const Object& value);
 
@@ -458,10 +455,6 @@ class CallBuilder final {
   /** Adds several values to the argument list, starting with an `f64` value */
   template <class... Ts>
   CallBuilder& args(double value, Ts&&... rest);
-
-  /** Adds several values to the argument list, starting with a `String` value */
-  template <class... Ts>
-  CallBuilder& args(const String& value, Ts&&... rest);
 
   /** Adds several values to the argument list, starting with an `Object` value */
   template <class... Ts>
@@ -593,7 +586,7 @@ class Name final : public Reference {
  * Objects are in an "invalid" state if they are created with the default constructor or
  * after being on the right side of a move assignment or construction.
  */
-class Object final : public Reference {
+class Object : public Reference {
  public:
   Object();
   explicit Object(Impl* impl);
@@ -612,7 +605,7 @@ class Object final : public Reference {
  * Objects are in an "invalid" state if they are created with the default constructor or
  * after being on the right side of a move assignment or construction.
  */
-class String final : public Reference {
+class String final : public Object {
  public:
   String();
   explicit String(Impl* impl);
@@ -781,13 +774,6 @@ CallBuilder& CallBuilder::args(float value, Ts&&... rest) {
 
 template <class... Ts>
 CallBuilder& CallBuilder::args(double value, Ts&&... rest) {
-  arg(value);
-  return args(rest...);
-}
-
-
-template <class... Ts>
-CallBuilder& CallBuilder::args(const String& value, Ts&&... rest) {
   arg(value);
   return args(rest...);
 }

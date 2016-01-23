@@ -388,7 +388,7 @@ CallBuilder& CallBuilder::arg(double value) {
 }
 
 
-CallBuilder& CallBuilder::arg(const String& value) {
+CallBuilder& CallBuilder::arg(const Object& value) {
   API_CHECK_SELF(CallBuilder);
   impl_->arg(value);
   return *this;
@@ -452,13 +452,6 @@ String CallBuilder::callForString() {
 Object CallBuilder::callForObject() {
   API_CHECK_SELF(CallBuilder);
   return impl_->callForObject();
-}
-
-
-void CallBuilder::Impl::arg(const String& value) {
-  API_CHECK(value, "not a valid String reference");
-  i::Persistent<i::Type> type(vm_->roots()->getBuiltinType(i::BUILTIN_STRING_CLASS_ID));
-  args_.push_back(Value(move(type), unwrap<i::String>(value)));
 }
 
 
@@ -615,7 +608,7 @@ String::String() { }
 
 
 String::String(Impl* impl)
-    : Reference(impl) { }
+    : Object(impl) { }
 
 
 String::String(VM& vm, const string& str) {
@@ -628,7 +621,7 @@ String::String(VM& vm, const string& str) {
 
 
 String::String(String&& str)
-    : Reference(move(str)) { }
+    : Object(move(str)) { }
 
 
 String::~String() { }
