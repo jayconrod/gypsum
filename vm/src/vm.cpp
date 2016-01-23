@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -26,11 +26,18 @@ using namespace std;
 namespace codeswitch {
 namespace internal {
 
-VM::VM(Flags flags)
-    : flags_(flags),
+VM::VM(const VMOptions& vmOptions)
+    : apiPtr_(nullptr),
       heap_(new Heap(this)),
       roots_(new Roots),
-      handleStorage_(new HandleStorage) {
+      handleStorage_(new HandleStorage),
+      packageSearchPaths_(vmOptions.packageSearchPaths),
+      nativeFunctionSearchOrder_(vmOptions.nativeFunctionSearchOrder),
+      shouldVerifyHeap_(vmOptions.verifyHeap) {
+  #ifdef DEBUG
+    shouldVerifyHeap_ = true;
+  #endif
+
   AllowAllocationScope allowAllocation(heap_.get(), true);
   roots_->initialize(heap());
   {
@@ -38,19 +45,30 @@ VM::VM(Flags flags)
     Local<Stack> stack = Stack::create(heap(), Stack::kDefaultSize);
     stack_ = Persistent<Stack>(stack);
   }
-  if (hasFlags(kVerifyHeap))
-    heap()->verify();
+
+  for (auto entry : vmOptions.nativeFunctions) {
+    pair<string, string> key(get<0>(entry), get<1>(entry));
+    union {
+      NativeFunction nativeFunctionAddr;
+      void (*nativeFunctionPtr)();
+    } nativeFunctionUnion;
+    nativeFunctionUnion.nativeFunctionPtr = get<2>(entry);
+    registeredNativeFunctions_[key] = nativeFunctionUnion.nativeFunctionAddr;
+  }
 
   #ifdef CS_PACKAGE_PATH
     for (auto& path : split(CS_PACKAGE_PATH, ':')) {
       addPackageSearchPath(path);
     }
   #endif
+
+  if (shouldVerifyHeap())
+    heap()->verify();
 }
 
 
 VM::~VM() {
-  if (hasFlags(kVerifyHeap))
+  if (shouldVerifyHeap())
     heap()->verify();
 }
 
@@ -58,12 +76,6 @@ VM::~VM() {
 VM* VM::fromAddress(void* address) {
   Chunk* page = Chunk::fromAddress(address);
   return page->vm();
-}
-
-
-void VM::addPackageSearchPath(const string& path) {
-  ASSERT(!path.empty());
-  packageSearchPaths_.push_back(path);
 }
 
 
@@ -76,15 +88,17 @@ Persistent<Package> VM::findPackage(const Handle<Name>& name) {
 }
 
 
-Persistent<Package> VM::loadPackage(const Handle<Name>& name) {
+Persistent<Package> VM::loadPackage(const Handle<Name>& name,
+    const vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
   auto dep = PackageDependency::create(heap(), name,
       Persistent<PackageVersion>(), Persistent<PackageVersion>(),
       0, 0, 0, 0, 0);
-  return loadPackage(dep);
+  return loadPackage(dep, nativeFunctionSearchOrder);
 }
 
 
-Persistent<Package> VM::loadPackage(const Handle<PackageDependency>& dependency) {
+Persistent<Package> VM::loadPackage(const Handle<PackageDependency>& dependency,
+    const vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
   HandleScope handleScope(this);
   auto package = findPackage(handle(dependency->name()));
   if (package && dependency->isSatisfiedBy(*package))
@@ -92,15 +106,21 @@ Persistent<Package> VM::loadPackage(const Handle<PackageDependency>& dependency)
 
   auto packagePath = searchForPackage(dependency);
   if (!packagePath.empty())
-    return loadPackage(packagePath);
+    return loadPackage(packagePath, nativeFunctionSearchOrder);
 
   return Persistent<Package>();
 }
 
 
-Persistent<Package> VM::loadPackage(const string& fileName) {
+Persistent<Package> VM::loadPackage(const string& fileName,
+    const vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
   HandleScope handleScope(this);
-  Persistent<Package> package(Package::loadFromFile(this, fileName.c_str()));
+  Persistent<Package> package;
+  if (nativeFunctionSearchOrder.empty()) {
+    package = Package::loadFromFile(this, fileName, nativeFunctionSearchOrder_);
+  } else {
+    package = Package::loadFromFile(this, fileName, nativeFunctionSearchOrder);
+  }
   loadPackageDependenciesAndInitialize(package);
   return package;
 }
@@ -108,6 +128,19 @@ Persistent<Package> VM::loadPackage(const string& fileName) {
 
 void VM::addPackage(const Handle<Package>& package) {
   loadPackageDependenciesAndInitialize(package);
+}
+
+
+NativeFunction VM::loadRegisteredFunction(Name* packageName, Name* functionName) {
+  return loadRegisteredFunction(packageName->toStlString(), functionName->toStlString());
+}
+
+
+NativeFunction VM::loadRegisteredFunction(const std::string& packageName,
+    const std::string& functionName) {
+  pair<string, string> key(packageName, functionName);
+  auto it = registeredNativeFunctions_.find(key);
+  return it == registeredNativeFunctions_.end() ? nullptr : it->second;
 }
 
 
@@ -226,10 +259,10 @@ void VM::loadPackageDependenciesAndInitialize(const Handle<Package>& package) {
         // Search the file system for the package and load it.
         auto depFileName = searchForPackage(dep);
         if (depFileName.empty()) {
-          throw Error("could not find package");
+          throw Error("could not find package: " + dep->name()->toStlString());
         }
 
-        depPackage = Package::loadFromFile(this, depFileName);
+        depPackage = Package::loadFromFile(this, depFileName, nativeFunctionSearchOrder_);
         loadingPackages.push_back(LoadState(depPackage));
       }
 

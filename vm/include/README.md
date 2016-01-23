@@ -90,4 +90,6 @@ errors. These can be caught, and an error message can be extracted.
       std::cerr << error.message() << std::endl;
     }
 
-.
+## Linking native functions
+
+See [Linking native functions](native.md)

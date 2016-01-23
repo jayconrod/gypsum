@@ -7,18 +7,20 @@
 #ifndef error_h
 #define error_h
 
+#include <string>
+
 namespace codeswitch {
 namespace internal {
 
 class Error {
  public:
-  Error(const char* message)
+  Error(const std::string& message)
       : message_(message) { }
 
-  const char* message() { return message_; }
-  
+  std::string message() const { return message_; }
+
  private:
-   const char* message_;
+  std::string message_;
 };
 
 }

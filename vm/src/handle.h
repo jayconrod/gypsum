@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -372,8 +372,11 @@ Persistent<T>::Persistent(const Persistent<T>& persistent) {
 template <class T>
 template <class S>
 Persistent<T>::Persistent(const Handle<S>& handle) {
-  if (handle)
-    HandleStorage::fromBlock(*handle)->createPersistent(*handle, &this->slot_);
+  if (handle) {
+    HandleStorage::fromBlock(*handle)->createPersistent(
+        reinterpret_cast<Block*>(*handle),
+        reinterpret_cast<Block***>(&this->slot_));
+  }
   CHECK_SUBTYPE_VALUE(T*, *handle);
 }
 

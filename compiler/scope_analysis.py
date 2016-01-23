@@ -1081,10 +1081,14 @@ class GlobalScope(Scope):
             checkFlags(flags, frozenset([LET, PUBLIC, PROTECTED]), astDefn.location)
             irDefn = self.info.package.addGlobal(name, astDefn, None, flags)
         elif isinstance(astDefn, ast.FunctionDefinition):
-            checkFlags(flags, frozenset([PUBLIC]), astDefn.location)
-            if astDefn.body is None:
+            checkFlags(flags, frozenset([PUBLIC, NATIVE]), astDefn.location)
+            if astDefn.body is None and NATIVE not in flags:
                 raise ScopeException(astDefn.location,
                                      "%s: global function must have body" % astDefn.name)
+            if astDefn.body is not None and NATIVE in flags:
+                raise ScopeException(astDefn.location,
+                                     "%s: native global function must not have body" %
+                                     astDefn.name)
             irDefn = self.info.package.addFunction(name, astDefn,
                                                    None, self.getImplicitTypeParameters(),
                                                    None, [], None, flags)
@@ -1186,10 +1190,13 @@ class FunctionScope(Scope):
             irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, ast.FunctionDefinition):
             name = self.makeName(astDefn.name)
-            checkFlags(flags, frozenset(), astDefn.location)
-            if astDefn.body is None:
+            checkFlags(flags, frozenset([NATIVE]), astDefn.location)
+            if astDefn.body is None and NATIVE not in flags:
                 raise ScopeException(astDefn.location,
                                      "%s: function must have body" % astDefn.name)
+            if astDefn.body is not None and NATIVE in flags:
+                raise ScopeException(astDefn.location,
+                                     "%s: native function must not have body" % astDefn.name)
             implicitTypeParams = self.getImplicitTypeParameters()
             irDefn = self.info.package.addFunction(name, astDefn,
                                                    None, implicitTypeParams,
@@ -1383,19 +1390,28 @@ class ClassScope(Scope):
             irScopeDefn.fields.append(irDefn)
         elif isinstance(astDefn, ast.FunctionDefinition):
             implicitTypeParams = self.getImplicitTypeParameters()
-            if ABSTRACT in flags and astDefn.body is not None:
-                raise ScopeException(astDefn.location,
-                                     "%s: abstract method must not have body" % astDefn.name)
-            if ABSTRACT not in flags and astDefn.body is None:
-                raise ScopeException(astDefn.location,
-                                     "%s: non-abstract method must have body" % astDefn.name)
+            if astDefn.body is not None:
+                if ABSTRACT in flags:
+                    raise ScopeException(astDefn.location,
+                                         "%s: abstract method must not have body" %
+                                         astDefn.name)
+                if NATIVE in flags:
+                    raise ScopeException(astDefn.location,
+                                         "%s: native method must not have body")
+            else:
+                if ABSTRACT not in flags and NATIVE not in flags:
+                    raise ScopeException(astDefn.location,
+                                         "%s: non-abstract method must have body" %
+                                         astDefn.name)
             if ABSTRACT in flags and ABSTRACT not in irScopeDefn.flags:
                 raise ScopeException(astDefn.location,
                                      "%s: abstract function not allowed in non-abstract class" %
                                      astDefn.name)
+
             if astDefn.name == "this":
                 name = self.makeName(ir.CONSTRUCTOR_SUFFIX)
-                checkFlags(flags, frozenset([PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
+                checkFlags(flags, frozenset([PUBLIC, PROTECTED, PRIVATE, NATIVE]),
+                           astDefn.location)
                 irDefn = self.info.package.addFunction(name, astDefn=astDefn,
                                                        typeParameters=implicitTypeParams,
                                                        variables=[], flags=flags)
@@ -1404,7 +1420,7 @@ class ClassScope(Scope):
             else:
                 name = self.makeName(astDefn.name)
                 if STATIC in flags:
-                    checkFlags(flags, frozenset([STATIC, PUBLIC, PROTECTED, PRIVATE]),
+                    checkFlags(flags, frozenset([STATIC, PUBLIC, PROTECTED, PRIVATE, NATIVE]),
                                astDefn.location)
                     flags |= frozenset([METHOD])
                     irDefn = self.info.package.addFunction(name, astDefn=astDefn,
@@ -1413,7 +1429,7 @@ class ClassScope(Scope):
                                                            definingClass=irScopeDefn)
                 else:
                     checkFlags(flags, frozenset([ABSTRACT, FINAL, PUBLIC,
-                                                 PROTECTED, PRIVATE, OVERRIDE]),
+                                                 PROTECTED, PRIVATE, OVERRIDE, NATIVE]),
                                astDefn.location)
                     irDefn = self.info.package.addFunction(name, astDefn=astDefn,
                                                            typeParameters=implicitTypeParams,

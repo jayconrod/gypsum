@@ -30,6 +30,7 @@ using codeswitch::Name;
 using codeswitch::Package;
 using codeswitch::String;
 using codeswitch::VM;
+using codeswitch::VMOptions;
 
 
 vector<string> packagePaths;
@@ -111,10 +112,11 @@ int main(int argc, char* argv[]) {
   }
 
   try {
-    VM vm;
+    VMOptions vmOptions;
     for (auto& path : packagePaths) {
-      vm.addPackageSearchPath(path);
+      vmOptions.packageSearchPaths.push_back(path);
     }
+    VM vm(vmOptions);
     bool executedEntry = false;
     for (auto& loader : packageLoaders) {
       auto package = loader(vm);

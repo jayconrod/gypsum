@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -32,11 +32,14 @@ class Interpreter {
   static const int kCallerPcOffsetOffset = kFunctionOffset + kWordSize;
   static const int kFrameControlSize = kCallerPcOffsetOffset + kWordSize;
 
+  static const size_t kSlotSize = 8;
+
  private:
   static const length_t kDonePcOffset = ~0;
 
   void ensurePointerMap(const Handle<Function>& function);
   void handleBuiltin(BuiltinId id);
+  void handleNative(const Handle<Function>& callee);
   Local<Meta> getMetaForClassId(i64 classId);
 
   void enter(const Handle<Function>& callee);
@@ -47,7 +50,6 @@ class Interpreter {
 
   template <typename T> void push(T value);
   template <typename T> T pop();
-  static const size_t kSlotSize = 8;
   static const size_t kPrepareForGCSize = kSlotSize;
 
   ptrdiff_t localOffsetFromIndex(i64 index);

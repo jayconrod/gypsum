@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -9,6 +9,7 @@
 
 #include <memory>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include <cstdint>
@@ -22,6 +23,60 @@ class Name;
 class Object;
 class Package;
 class String;
+
+/** Used to specify where native functions should be loaded from. */
+enum NativeFunctionSearch {
+  /**
+   * Native functions will be loaded from a dynamically loaded library that corresponds with
+   * the package they were loaded from. For example, if a native function is declared in
+   * foo-1.csp, it will be loaded from libfoo-1.so in the same directory.
+   */
+  SEARCH_LIBRARY_FUNCTIONS,
+
+  /**
+   * Native functions will be loaded from the VM's binary or any library it's dynamically
+   * linked with, according to the system search order.
+   */
+  SEARCH_LINKED_FUNCTIONS,
+
+  /** Native functions will be loaded from a table of functions registered with the VM. */
+  SEARCH_REGISTERED_FUNCTIONS,
+};
+
+
+/** Used to specify behavior when a new VM is created. */
+struct VMOptions {
+  VMOptions() {}
+
+  /**
+   * Determines how the VM searches for implementations of native functions. This may contain
+   * any subset of search commands in any order, but no duplicates are allowed. If this is
+   * empty, no native functions may be used. The default order is
+   * {@link SEARCH_REGISTERED_FUNCTIONS}, then {@link SEARCH_LIBRARY_FUNCTIONS}.
+   */
+  std::vector<NativeFunctionSearch> nativeFunctionSearchOrder =
+      std::vector<NativeFunctionSearch>{SEARCH_REGISTERED_FUNCTIONS, SEARCH_LIBRARY_FUNCTIONS};
+
+  /**
+   * A table of implementations for native functions. Functions can be registered here
+   * explicitly instead of relying on the VM to look them up in loaded libraries or in the
+   * binary that contains the VM. Each element of this list contains a package name, a
+   * function name, and a pointer to a function.
+   */
+  std::vector<std::tuple<std::string, std::string, void(*)()>> nativeFunctions;
+
+  /**
+   * When true, the VM will perform additional checks to verify the heap is in a good state
+   * after garbage collection and when the VM is destroyed. Useful for debugging the VM.
+   */
+  bool verifyHeap = false;
+
+  /**
+   * When a package is loaded by its symbolic name, these directories are searched in order
+   * for a suitable package file to load.
+   */
+  std::vector<std::string> packageSearchPaths;
+};
 
 
 /**
@@ -38,23 +93,12 @@ class VM final {
 
   /** Constructs a new virtual machine */
   VM();
+  VM(const VMOptions& vmOptions);
   VM(const VM&) = delete;
   VM(VM&& vm);
   VM& operator = (const VM&) = delete;
   VM& operator = (VM&&);
   ~VM();
-
-  /**
-   * Adds path to the list of directories to search when loading packages.
-   *
-   * When CodeSwitch loads a package by its symbolic name (either as a dependency or due to a
-   * direct request), it searches a list of directories for files with matching names. The list
-   * is empty initially. This method adds a directory to that list.
-   *
-   * @param path the directory to search. Must not be an empty string. If the path does not
-   *   point to a directory, it will be skipped when searching for packages.
-   */
-  void addPackageSearchPath(const std::string& path);
 
   /**
    * Loads a package by its symbolic name.
@@ -68,11 +112,16 @@ class VM final {
    * function, it will be executed.
    *
    * @param name the symbolic name of the package. Must be a valid reference.
+   * @param nativeFunctionSearchOrder overrides the native function search order for this
+   *     package only. If this is empty, the default VM order is used. This does not affect
+   *     packages that this package depends on which get loaded at the same time.
    * @return the loaded package. This will always be a valid reference.
    * @throws Error if a problem was encountered when loading the package or one of
    *   its dependencies.
    */
-  Package loadPackage(const Name& name);
+  Package loadPackage(const Name& name,
+      const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder
+          = std::vector<NativeFunctionSearch>());
 
   /**
    * Loads a package by its file name.
@@ -84,16 +133,70 @@ class VM final {
    * function, it will be executed.
    *
    * @param fileName a relative or absolute path to the package file
+   * @param nativeFunctionSearchOrder overrides the native function search order for this
+   *     package only. If this is empty, the default VM order is used. This does not affect
+   *     packages that this package depends on which get loaded at the same time.
    * @return the loaded package. This will always be a valid reference.
    * @throws Error if a problem was encountered when loading the package or one of
    *   its dependencies.
    */
-  Package loadPackageFromFile(const std::string& fileName);
+  Package loadPackageFromFile(const std::string& fileName,
+      const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder
+          = std::vector<NativeFunctionSearch>());
 
  private:
   std::unique_ptr<Impl> impl_;
 
   friend class String;
+};
+
+
+class Impl;
+
+
+/**
+ * Internal base class for API objects that point to objects on the managed heap.
+ *
+ * Reference objects maintain pointers to these objects, which are registered with the
+ * garbage collector. The garbage collector will not delete objects while they are referenced.
+ * Referenced pointers will be updated when objects are moved during garbage collection.
+ *
+ * A reference is *valid* if it points to an object. If it is not valid, it points to nothing.
+ * Most API methods require valid pointers. Use {@code isValid} and the Boolean operators to
+ * test validity.
+ */
+class Reference {
+ protected:
+  Reference();
+  explicit Reference(Impl* impl);
+  Reference(const Reference&) = delete;
+  Reference(Reference&& ref);
+  Reference& operator = (const Reference&) = delete;
+  Reference& operator = (Reference&& ref);
+ public:
+  ~Reference();
+
+  /** Returns true if the reference points to an object */
+  bool isValid() const;
+
+  /**
+   * Releases the referenced object. If there are no other references to the object, it may
+   * be eligible for garbage collection. This reference will no longer be valid.
+   */
+  void clear();
+
+  /** Returns true if the reference points to an object */
+  explicit operator bool () const {
+    return isValid();
+  }
+
+  /** Returns false if the reference points to an object */
+  bool operator ! () const {
+    return !isValid();
+  }
+
+ protected:
+  Impl* impl_;
 };
 
 
@@ -108,23 +211,14 @@ class VM final {
  * Objects are in an "invalid" state if they are created with the default constructor or
  * after being on the right side of a move assignment or construction.
  */
-class Package final {
+class Package final : public Reference {
  public:
-  class Impl;
-
   Package();
   explicit Package(Impl* impl);
   Package(const Package&) = delete;
   Package(Package&& package);
-  Package& operator = (const Package&) = delete;
-  Package& operator = (Package&& package);
+  Package& operator = (Package&&) = default;
   ~Package();
-
-  /** Returns true if the reference is valid */
-  operator bool () const;
-
-  /** Returns true if the reference is not valid */
-  bool operator ! () const;
 
   /**
    * Returns the package's entry function, if it has one.
@@ -134,8 +228,13 @@ class Package final {
    */
   Function entryFunction() const;
 
- private:
-  std::unique_ptr<Impl> impl_;
+  /**
+   * Gets a function from the package, by name.
+   *
+   * @return the named function from the package. If the package has no function by this name,
+   *   an invalid reference is returned.
+   */
+  Function getFunction(const Name& name) const;
 };
 
 
@@ -149,23 +248,13 @@ class Package final {
  * Objects are in an "invalid" state if they are created with the default constructor or
  * after being on the right side of a move assignment or construction.
  */
-class Function final {
+class Function final : public Reference {
  public:
-  class Impl;
-
   Function();
   explicit Function(Impl* impl);
-  Function(const Function&) = delete;
   Function(Function&&);
-  Function& operator = (const Function&) = delete;
-  Function& operator = (Function&&);
+  Function& operator = (Function&&) = default;
   ~Function();
-
-  /** Returns true if the reference is valid */
-  operator bool () const;
-
-  /** Returns true if the reference is not valid */
-  bool operator ! () const;
 
   /**
    * Calls a function that returns `unit` (equivalent to `void`)
@@ -276,9 +365,6 @@ class Function final {
   template <class... Ts>
   Object callForObject(Ts... args);
 
- private:
-  std::unique_ptr<Impl> impl_;
-
   friend class CallBuilder;
 };
 
@@ -297,6 +383,7 @@ class Function final {
 class CallBuilder final {
  public:
   class Impl;
+
   CallBuilder();
 
   /**
@@ -306,17 +393,10 @@ class CallBuilder final {
    */
   CallBuilder(const Function& function);
 
-  CallBuilder(const CallBuilder&) = delete;
-  CallBuilder(CallBuilder&& builder);
+  CallBuilder(CallBuilder&& builder) = delete;
   CallBuilder& operator = (const CallBuilder&) = delete;
-  CallBuilder& operator = (CallBuilder&& builder);
+  CallBuilder& operator = (CallBuilder&& builder) = delete;
   ~CallBuilder();
-
-  /** Returns true if the reference is valid */
-  operator bool () const;
-
-  /** Returns true if the reference is not valid */
-  bool operator ! () const;
 
   /** Adds a `unit` value to the argument list */
   CallBuilder& argUnit();
@@ -342,9 +422,6 @@ class CallBuilder final {
   /** Adds an `f64` value to the argument list */
   CallBuilder& arg(double value);
 
-  /** Adds a {@link String} value to the argument list */
-  CallBuilder& arg(const String& value);
-
   /** Adds a {@link Object} value to the argument list */
   CallBuilder& arg(const Object& value);
 
@@ -353,39 +430,35 @@ class CallBuilder final {
 
   /** Adds several values to the argument list, starting with a `boolean` value */
   template <class... Ts>
-  CallBuilder& args(bool value, Ts... rest);
+  CallBuilder& args(bool value, Ts&&... rest);
 
   /** Adds several values to the argument list, starting with an `i8` value */
   template <class... Ts>
-  CallBuilder& args(int8_t value, Ts... rest);
+  CallBuilder& args(int8_t value, Ts&&... rest);
 
   /** Adds several values to the argument list, starting with an `i16` value */
   template <class... Ts>
-  CallBuilder& args(int16_t value, Ts... rest);
+  CallBuilder& args(int16_t value, Ts&&... rest);
 
   /** Adds several values to the argument list, starting with an `i32` value */
   template <class... Ts>
-  CallBuilder& args(int32_t value, Ts... rest);
+  CallBuilder& args(int32_t value, Ts&&... rest);
 
   /** Adds several values to the argument list, starting with an `i64` value */
   template <class... Ts>
-  CallBuilder& args(int64_t value, Ts... rest);
+  CallBuilder& args(int64_t value, Ts&&... rest);
 
   /** Adds several values to the argument list, starting with an `f32` value */
   template <class... Ts>
-  CallBuilder& args(float value, Ts... rest);
+  CallBuilder& args(float value, Ts&&... rest);
 
   /** Adds several values to the argument list, starting with an `f64` value */
   template <class... Ts>
-  CallBuilder& args(double value, Ts... rest);
-
-  /** Adds several values to the argument list, starting with a `String` value */
-  template <class... Ts>
-  CallBuilder& args(const String& value, Ts... rest);
+  CallBuilder& args(double value, Ts&&... rest);
 
   /** Adds several values to the argument list, starting with an `Object` value */
   template <class... Ts>
-  CallBuilder& args(const Object& value, Ts... rest);
+  CallBuilder& args(const Object& value, Ts&&... rest);
 
   /** Calls the function and clears the argument list. The result is ignored. */
   void call();
@@ -471,23 +544,13 @@ class CallBuilder final {
  * Objects are in an "invalid" state if they are created with the default constructor or
  * after being on the right side of a move assignment or construction.
  */
-class Name final {
+class Name final : public Reference {
  public:
-  class Impl;
-
   Name();
   explicit Name(Impl* impl);
-  Name(const Name&) = delete;
   Name(Name&&);
-  Name& operator = (const Name&) = delete;
-  Name& operator = (Name&& name);
+  Name& operator = (Name&&) = default;
   ~Name();
-
-  /** Returns true if the reference is valid */
-  operator bool () const;
-
-  /** Returns true if the reference is not valid */
-  bool operator ! () const;
 
   /**
    * Parses a string to create a new name for a definition
@@ -511,54 +574,8 @@ class Name final {
    */
   static Name fromStringForPackage(const String& str);
 
- private:
-  std::unique_ptr<Impl> impl_;
-
+  friend class Package;
   friend class VM;
-};
-
-
-/**
- * A unicode string. Just a sequence of unicode code points.
- *
- * Objects of this class actually manage pointers to objects on the garbage collected heap.
- * Objects are in an "invalid" state if they are created with the default constructor or
- * after being on the right side of a move assignment or construction.
- */
-class String final {
- public:
-  class Impl;
-
-  String();
-  explicit String(Impl* impl);
-
-  /**
-   * Constructs a new string from an STL string
-   *
-   * @param vm the CodeSwitch virtual machine
-   * @param str a UTF-8 used to build the CodeSwitch string
-   */
-  String(VM& vm, const std::string& str);
-  String(const String&) = delete;
-  String(String&& str);
-  String& operator = (const String&) = delete;
-  String& operator = (String&& str);
-  ~String();
-
-  /** Returns true if the reference is valid */
-  operator bool () const;
-
-  /** Returns true if the reference is not valid */
-  bool operator ! () const;
-
-  /** Creates an STL UTF-8 encoded string from this string */
-  std::string toStdString() const;
-
- private:
-  std::unique_ptr<Impl> impl_;
-
-  friend class CallBuilder;
-  friend class Name;
 };
 
 
@@ -569,28 +586,61 @@ class String final {
  * Objects are in an "invalid" state if they are created with the default constructor or
  * after being on the right side of a move assignment or construction.
  */
-class Object final {
+class Object : public Reference {
  public:
-  class Impl;
-
   Object();
   explicit Object(Impl* impl);
-  Object(const Object&) = delete;
   Object(Object&& obj);
-  Object& operator = (const Object&) = delete;
-  Object& operator = (Object&& obj);
+  Object& operator = (Object&&) = default;
   ~Object();
 
-  /** Returns true if the reference is valid */
-  operator bool () const;
+  friend class CallBuilder;
+};
 
-  /** Returns true if the reference is not valid */
-  bool operator ! () const;
 
- private:
-  std::unique_ptr<Impl> impl_;
+/**
+ * A unicode string. Just a sequence of unicode code points.
+ *
+ * Objects of this class actually manage pointers to objects on the garbage collected heap.
+ * Objects are in an "invalid" state if they are created with the default constructor or
+ * after being on the right side of a move assignment or construction.
+ */
+class String final : public Object {
+ public:
+  String();
+  explicit String(Impl* impl);
+
+  /**
+   * Constructs a new string from an STL string
+   *
+   * @param vm the CodeSwitch virtual machine
+   * @param str a UTF-8 used to build the CodeSwitch string
+   */
+  String(VM& vm, const std::string& str);
+  String(String&& str);
+  String& operator = (String&& str) = default;
+  ~String();
+
+  /** Concatenates two strings */
+  String operator + (const String& other) const;
+
+  /** Concatenates a string with an STL string */
+  String operator + (const std::string& other) const;
+
+  /**
+   * Compares two strings lexicographically, by code point.
+   *
+   * @return 0 if the strings are equal, negative if the receiver is less than {@code other},
+   *     positive if the receiver is greater than {@code other}.
+   * @todo take locale into account.
+   */
+  int compare(const String& other) const;
+
+  /** Creates an STL UTF-8 encoded string from this string */
+  std::string toStdString() const;
 
   friend class CallBuilder;
+  friend class Name;
 };
 
 
@@ -609,7 +659,7 @@ class Error final {
   Error& operator = (Error&& error);
   ~Error();
 
-  operator bool () const;
+  explicit operator bool () const;
   bool operator ! () const;
 
   /** Returns a message contained by the error for logging or displaying to users */
@@ -675,63 +725,62 @@ String Function::callForString(Ts... args) {
 
 
 template <class... Ts>
-CallBuilder& CallBuilder::args(bool value, Ts... rest) {
+Object Function::callForObject(Ts... args) {
+  return CallBuilder(*this).args(args...).callForObject();
+}
+
+
+template <class... Ts>
+CallBuilder& CallBuilder::args(bool value, Ts&&... rest) {
   arg(value);
   return args(rest...);
 }
 
 
 template <class... Ts>
-CallBuilder& CallBuilder::args(int8_t value, Ts... rest) {
+CallBuilder& CallBuilder::args(int8_t value, Ts&&... rest) {
   arg(value);
   return args(rest...);
 }
 
 
 template <class... Ts>
-CallBuilder& CallBuilder::args(int16_t value, Ts... rest) {
+CallBuilder& CallBuilder::args(int16_t value, Ts&&... rest) {
   arg(value);
   return args(rest...);
 }
 
 
 template <class... Ts>
-CallBuilder& CallBuilder::args(int32_t value, Ts... rest) {
+CallBuilder& CallBuilder::args(int32_t value, Ts&&... rest) {
   arg(value);
   return args(rest...);
 }
 
 
 template <class... Ts>
-CallBuilder& CallBuilder::args(int64_t value, Ts... rest) {
+CallBuilder& CallBuilder::args(int64_t value, Ts&&... rest) {
   arg(value);
   return args(rest...);
 }
 
 
 template <class... Ts>
-CallBuilder& CallBuilder::args(float value, Ts... rest) {
+CallBuilder& CallBuilder::args(float value, Ts&&... rest) {
   arg(value);
   return args(rest...);
 }
 
 
 template <class... Ts>
-CallBuilder& CallBuilder::args(double value, Ts... rest) {
+CallBuilder& CallBuilder::args(double value, Ts&&... rest) {
   arg(value);
   return args(rest...);
 }
 
 
 template <class... Ts>
-CallBuilder& CallBuilder::args(const String& value, Ts... rest) {
-  arg(value);
-  return args(rest...);
-}
-
-
-template <class... Ts>
-CallBuilder& CallBuilder::args(const Object& value, Ts... rest) {
+CallBuilder& CallBuilder::args(const Object& value, Ts&&... rest) {
   arg(value);
   return args(rest...);
 }

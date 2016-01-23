@@ -12,7 +12,7 @@ from ir import IrTopDefn, Class, Field, Function, Global, LOCAL, Package, PACKAG
 from ir_types import Type, NoType, UnitType, BooleanType, I8Type, I16Type, I32Type, I64Type, F32Type, F64Type, ClassType, VariableType, ExistentialType, NULLABLE_TYPE_FLAG, getExceptionClassType, getClassFromType, getStringType, getRootClassType
 import ir_instructions
 from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PACKAGE_INITIALIZER_HINT, ARRAY_ELEMENT_GET_HINT, ARRAY_ELEMENT_SET_HINT, ARRAY_ELEMENT_LENGTH_HINT, DefnInfo, NORMAL_MODE, STD_MODE, NOSTD_MODE
-from flags import ABSTRACT, STATIC, LET, ARRAY
+from flags import ABSTRACT, STATIC, LET, ARRAY, NATIVE
 from errors import SemanticException
 from builtins import getTypeClass, getExceptionClass, getRootClass, getStringClass, getBuiltinFunctionById, getBuiltinClassById
 import type_analysis
@@ -189,7 +189,7 @@ class CompileVisitor(ast.NodeVisitor):
     def getParametersAndStatements(self):
         if isinstance(self.astDefn, ast.FunctionDefinition):
             if self.astDefn.body is None:
-                assert ABSTRACT in self.function.flags
+                assert ABSTRACT in self.function.flags or NATIVE in self.function.flags
                 return None, None
             parameters = self.astDefn.parameters
             if isinstance(self.astDefn.body, ast.BlockExpression):

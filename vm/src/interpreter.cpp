@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -12,6 +12,7 @@
 #include <string>
 #include <type_traits>
 #include <vector>
+#include "api.h"
 #include "array.h"
 #include "block.h"
 #include "builtins.h"
@@ -24,6 +25,7 @@
 #include "name.h"
 #include "object.h"
 #include "package.h"
+#include "platform.h"
 #include "roots.h"
 #include "stack.h"
 #include "string.h"
@@ -157,8 +159,16 @@ i64 Interpreter::call(const Handle<Function>& callee) {
   SealHandleScope disallowHandles(vm_);
   AllowAllocationScope disallowAllocation(vm_->heap(), false);
 
-  // Set up initial stack frame.
   ASSERT(pcOffset_ == kDonePcOffset);
+
+  // If this is a native function, handle it directly.
+  if (callee->isNative()) {
+    handleNative(callee);
+    auto result = pop<i64>();
+    return result;
+  }
+
+  // Set up initial stack frame.
   enter(callee);
 
   // Interpreter loop.
@@ -684,7 +694,11 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         } else {
           auto functionIndex = toLength(functionId);
           Persistent<Function> callee(function_->package()->getFunction(functionIndex));
-          enter(callee);
+          if (callee->isNative()) {
+            handleNative(callee);
+          } else {
+            enter(callee);
+          }
         }
         break;
       }
@@ -694,7 +708,11 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         auto externIndex = toLength(readVbn());
         Persistent<Function> callee(function_->package()->dependencies()->get(packageIndex)
             ->linkedFunctions()->get(externIndex));
-        enter(callee);
+        if (callee->isNative()) {
+          handleNative(callee);
+        } else {
+          enter(callee);
+        }
         break;
       }
 
@@ -708,6 +726,8 @@ i64 Interpreter::call(const Handle<Function>& callee) {
             receiver->meta()->getData(methodIndex)));
         if (callee->hasBuiltinId()) {
           handleBuiltin(callee->builtinId());
+        } else if (callee->isNative()) {
+          handleNative(callee);
         } else {
           enter(callee);
         }
@@ -894,7 +914,7 @@ void Interpreter::handleBuiltin(BuiltinId id) {
         HandleScope handleScope(vm_);
         auto right = handle(mem<String*>(stack_->sp() + kPrepareForGCSize));
         auto left = handle(mem<String*>(stack_->sp() + kPrepareForGCSize + kSlotSize));
-        result = *String::concat(vm_->heap(), left, right);
+        result = *String::concat(left, right);
       }
       pop<Block*>();  // right
       pop<Block*>();  // left
@@ -993,6 +1013,18 @@ void Interpreter::handleBuiltin(BuiltinId id) {
     default:
       UNIMPLEMENTED();
   }
+}
+
+
+void Interpreter::handleNative(const Handle<Function>& callee) {
+  auto sp = stack_->sp();
+  stack_->push(static_cast<uint64_t>(pcOffset_));
+  stack_->push(function_ ? *function_ : nullptr);
+
+  auto result = callNativeFunction(*callee, vm_, sp);
+
+  stack_->setSp(stack_->sp() + callee->parametersSize() + 2 * kSlotSize);
+  stack_->push(result);
 }
 
 

@@ -35,5 +35,8 @@ void releaseMemory(Address addr, size_t size) {
   munmap(reinterpret_cast<void*>(addr), size);
 }
 
+
+const char* kNativeLibrarySuffix = ".dylib";
+
 }
 }

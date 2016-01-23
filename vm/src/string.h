@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -52,12 +52,11 @@ class String: public Object {
   int compare(String* other) const;
   u32 hashCode() const;
 
-  String* tryConcat(Heap* heap, String* other);
-  static Local<String> concat(Heap* heap,
-                              const Handle<String>& left,
+  String* tryConcat(String* other);
+  static Local<String> concat(const Handle<String>& left,
                               const Handle<String>& right);
-  String* trySubstring(Heap* heap, length_t begin, length_t end) const;
-  static Local<String> substring(Heap* heap, const Handle<String>& string,
+  String* trySubstring(length_t begin, length_t end) const;
+  static Local<String> substring(const Handle<String>& string,
                                  length_t begin, length_t end);
 
   length_t find(u32 needle, length_t start = 0) const;

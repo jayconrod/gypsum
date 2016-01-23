@@ -1,12 +1,12 @@
-// Copyright 2015 Jay Conrod. All rights reserved.
+// Copyright 2015-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
-
 #include "platform.h"
 
 #include <dirent.h>
+#include <dlfcn.h>
 #include "error.h"
 
 using namespace std;
@@ -30,8 +30,58 @@ vector<string> listDirectory(const std::string& path) {
 }
 
 
+const char kPathSeparator = '/';
+
+
 string pathJoin(const string& parent, const string& child) {
-  return parent + '/' + child;
+  return parent + kPathSeparator + child;
+}
+
+
+string pathDirName(const string& path) {
+  auto sepPos = path.rfind(kPathSeparator);
+  if (sepPos == string::npos) {
+    return ".";
+  } else if (sepPos == 0) {
+    return "/";
+  } else {
+    return path.substr(0, sepPos);
+  }
+}
+
+
+const char* kNativeLibraryPrefix = "lib";
+
+
+NativeLibrary loadNativeLibrary(const string& path) {
+  auto handle = dlopen(path.c_str(), RTLD_LAZY | RTLD_LOCAL);
+  if (handle == nullptr) {
+    throw Error(path + ": could not load library: " + dlerror());
+  }
+  return handle;
+}
+
+
+void unloadNativeLibrary(NativeLibrary library) {
+  dlclose(library);
+}
+
+
+NativeFunction loadNativeFunction(NativeLibrary library, const string& name) {
+  auto function = dlsym(library, name.c_str());
+  if (function == nullptr) {
+    throw Error(name + ": could not load function: " + dlerror());
+  }
+  return function;
+}
+
+
+NativeFunction loadLinkedNativeFunction(const string& name) {
+  auto function = dlsym(RTLD_DEFAULT, name.c_str());
+  if (function == nullptr) {
+    throw Error(name + ": could not load function: " + dlerror());
+  }
+  return function;
 }
 
 }

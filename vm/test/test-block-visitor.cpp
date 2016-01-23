@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -47,7 +47,7 @@ class IncrementVisitor: public BlockVisitorBase<IncrementVisitor> {
 
 TEST(BlockVisitorEncodedMeta) {
   // This test requires us to initialize the heap, which requires a VM.
-  VM vm(0);
+  VM vm;
 
   // The meta meta should have an encoded meta pointing to itself.
   Meta* metaMeta = vm.roots()->metaMeta();
@@ -150,7 +150,7 @@ static Local<Package> createTestPackage(Heap* heap) {
   auto function = Function::create(heap, NAME("foo"),
                                    0, emptyTypeParameters, returnType, parameterTypes,
                                    Local<Class>(), 2 * kWordSize, instList, blockOffsetList,
-                                   package);
+                                   package, nullptr);
   functions->set(0, *function);
   package->setFunctions(*functions);
   package->setEntryFunctionIndex(0);
@@ -174,7 +174,7 @@ const ExpectedPointerMap kExpectedPointerMaps[] = {
 
 
 TEST(BlockVisitorFunction) {
-  VM vm(0);
+  VM vm;
   Heap* heap = vm.heap();
   AllowAllocationScope allowAllocation(heap, true);
   HandleScope handleScope(&vm);
@@ -204,6 +204,7 @@ TEST(BlockVisitorFunction) {
       reinterpret_cast<word_t>(blockOffsets) + 4,
       reinterpret_cast<word_t>(package) + 4,
       4,
+      0,
   };
   for (word_t i = 0; i < ARRAY_LENGTH(expected); i++)
     ASSERT_EQ(expected[i], reinterpret_cast<word_t*>(function)[i]);
@@ -211,7 +212,7 @@ TEST(BlockVisitorFunction) {
 
 
 TEST(BuildStackPointerMap) {
-  VM vm(0);
+  VM vm;
   auto heap = vm.heap();
   AllowAllocationScope allowAllocation(heap, true);
   HandleScope handleScope(&vm);
@@ -259,7 +260,7 @@ class StackIncrementVisitor: public BlockVisitorBase<StackIncrementVisitor> {
 
 
 TEST(VisitAndRelocateStack) {
-  VM vm(0);
+  VM vm;
   auto heap = vm.heap();
   AllowAllocationScope allowAllocation(heap, true);
   HandleScope handleScope(&vm);
