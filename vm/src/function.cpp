@@ -858,8 +858,10 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           maps.push_back(currentMap);
           word_t slot = currentMap.size() - argCount;
           Local<Class> clas(currentMap.typeMap[slot]->effectiveClass());
-          Local<Function> callee(clas->methods()->get(methodIndex));
+          Class::ensureInstanceMeta(clas);
+          Local<Function> callee(clas->getNonStaticMethod(methodIndex));
 
+          ASSERT(currentMap.size() >= callee->parameterTypes()->length());
           for (word_t i = 0, n = callee->parameterTypes()->length(); i < n; i++)
             currentMap.pop();
           auto returnType = currentMap.substituteReturnType(callee);

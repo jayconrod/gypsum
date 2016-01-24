@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -102,6 +102,12 @@ TypeParameter* Class::typeParameter(length_t index) const {
 
 length_t Class::typeParameterCount() const {
   return typeParameters()->length();
+}
+
+
+Function* Class::getNonStaticMethod(length_t index) const {
+  ASSERT(instanceMeta_);
+  return block_cast<Function>(instanceMeta_.get()->getData(index));
 }
 
 
