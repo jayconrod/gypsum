@@ -1,0 +1,90 @@
+// This is a simple Gypsum program.
+// See README.md for instructions for building and running.
+
+// This program demonstrates how array elements can be added to a class. Gypsum doesn't have
+// arrays as a separate primitive. Instead, you can use an `arrayelements` declaration to
+// add elements to any class. Instances of that class will have array elements immediately
+// after normal fields in memory. This results in better cache behavior because of improved
+// spatial locality, and it reduces the number of allocations that need to be performed.
+
+
+import std.IllegalArgumentException
+
+// This class represents a set of 32-bit integers. Internally, it is a bitmap: if a bit is set,
+// the corresponding number is in the class. The bitmap is stored as a sequence of bytes
+// at the end of each `BitSet` object.
+final class BitSet
+  // We declare a private constructor so clients are forced to use the `create` method to
+  // build new instances. `BitSet` has no normal fields, so this method does nothing.
+  private def this = {}
+
+  // This method creates new `BitSet` objects. We give it a maximum integer that can be stored
+  // in the set, and it calculates the number of bytes needed, then allocates a new `BitSet`.
+  static def create(max: i32) =
+    let bytes-needed = (max + 7i32) / 8i32
+    // This expression is how we allocate objects with array elements. The number of elements
+    // follows the `new` keyword. This must always be `i32`. The number of elements cannot
+    // be changed after an object is allocated.
+    new(bytes-needed) BitSet
+
+  // This method checks whether a number is in the set.
+  def contains(n: i32) =
+    if (in-range(n))
+      let byte = get-byte(byte-index(n))
+      (byte & bit-mask(bit-index(n))) != 0i8
+    else
+      false
+
+  // This method adds a number to the set by setting the corresponding bit.
+  def add(n: i32) =
+    if (!in-range(n))
+      throw IllegalArgumentException()
+    var byte = get-byte(byte-index(n))
+    byte |= bit-mask(bit-index(n))
+    set-byte(byte-index(n), byte)
+
+  // This method removes a number from the set by clearing the corresponding bit.
+  def remove(n: i32) =
+    if (!in-range(n))
+      throw IllegalArgumentException()
+    var byte = get-byte(byte-index(n))
+    byte &= ~bit-mask(bit-index(n))
+    set-byte(byte-index(n), byte)
+
+  // These are private helper methods.
+  private def in-range(n: i32) = n >= 0i32 && n / 8i32 < capacity
+  private def byte-index(n: i32) = n / 8i32
+  private def bit-index(n: i32) = (n % 8i32).to-i8
+  private def bit-mask(ix: i8) = 1i8 << ix
+
+  // This declaration is what gives `BitSet` its array elements. This can only be used in
+  // `final` classes. If a class were not `final`, subclasses could declare additional fields,
+  // and it would be hard to know where the first array element was.
+  //
+  // This declaration has four parts: the element type (`i8`), the get method (`get-byte`),
+  // the set method (`set-byte`), and the length method (`capacity`). The three methods are
+  // generated automatically by the compiler. The get method takes one argument, an index, and
+  // returns an array element. The set method takes an index and a value and stores that value
+  // at the index. The length method returns the number of array elements (set with `new`).
+  // These methods are declared `private` to avoid exposing implementation details to clients.
+  arrayelements i8,
+      private get-byte,
+      private set-byte,
+      private capacity
+
+
+def main =
+  let set = BitSet.create(100i32)
+  print("12 in set? " + set.contains(12i32).to-string + "\n")
+  print("34 in set? " + set.contains(34i32).to-string + "\n")
+  print("42 in set? " + set.contains(42i32).to-string + "\n")
+  print("adding 12 to set\n")
+  set.add(12i32)
+  print("adding 42 to set\n")
+  set.add(42i32)
+  print("12 in set? " + set.contains(12i32).to-string + "\n")
+  print("34 in set? " + set.contains(34i32).to-string + "\n")
+  print("42 in set? " + set.contains(42i32).to-string + "\n")
+  print("removing 12 from set\n")
+  set.remove(12i32)
+  print("12 in set? " + set.contains(12i32).to-string + "\n")
