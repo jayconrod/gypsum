@@ -21,8 +21,9 @@ from utils import Counter, COMPILE_FOR_EFFECT, COMPILE_FOR_VALUE, COMPILE_FOR_UN
 def compile(info):
     for clas in info.package.classes:
         assignFieldIndices(clas, info)
-    init = info.package.addFunction(PACKAGE_INIT_NAME, None, UnitType, [], [], [], None, frozenset())
-    init.compileHint = PACKAGE_INITIALIZER_HINT
+    init = info.package.addFunction(PACKAGE_INIT_NAME, returnType=UnitType,
+                                    typeParameters=[], parameterTypes=[], variables=[],
+                                    compileHint=PACKAGE_INITIALIZER_HINT)
     info.package.initFunction = init.id
     for function in info.package.functions:
         compiler = CompileVisitor(function, info)

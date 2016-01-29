@@ -256,8 +256,8 @@ class TestCompiler(TestCaseWithDefinitions):
         foo = Package(name=Name(["foo"]))
         self.assertIsNot(foo.id, TARGET_PACKAGE_ID)
         self.assertIsNone(foo.id.index)
-        x = foo.addGlobal(Name(["x"]), None, I64Type, frozenset([PUBLIC]))
-        y = foo.addGlobal(Name(["y"]), None, I64Type, frozenset([PUBLIC]))
+        x = foo.addGlobal(Name(["x"]), type=I64Type, flags=frozenset([PUBLIC]))
+        y = foo.addGlobal(Name(["y"]), type=I64Type, flags=frozenset([PUBLIC]))
         source = "def f = foo.y"
         package = self.compileFromSource(source, packageLoader=FakePackageLoader([foo]))
         depIndex = foo.id.index
@@ -277,7 +277,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testStoreForeignGlobal(self):
         foo = Package(name=Name(["foo"]))
-        x = foo.addGlobal(Name(["x"]), None, I64Type, frozenset([PUBLIC]))
+        x = foo.addGlobal(Name(["x"]), type=I64Type, flags=frozenset([PUBLIC]))
         loader = FakePackageLoader([foo])
         source = "def f =\n" + \
                  "  foo.x = 12\n" + \
@@ -1280,7 +1280,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testMatchExprWithValuePrimitive(self):
         foo = Package(name=Name(["foo"]))
-        bar = foo.addGlobal(Name(["bar"]), None, I64Type, frozenset([PUBLIC, LET]))
+        bar = foo.addGlobal(Name(["bar"]), type=I64Type, flags=frozenset([PUBLIC, LET]))
         loader = FakePackageLoader([foo])
 
         source = "def f(x: i64) =\n" + \
@@ -1313,7 +1313,7 @@ class TestCompiler(TestCaseWithDefinitions):
         stringType = getStringType()
         stringClass = stringType.clas
         foo = Package(name=Name(["foo"]))
-        bar = foo.addGlobal(Name(["bar"]), None, stringType, frozenset([PUBLIC, LET]))
+        bar = foo.addGlobal(Name(["bar"]), type=stringType, flags=frozenset([PUBLIC, LET]))
         loader = FakePackageLoader([foo])
 
         source = "def f(x: String) =\n" + \
@@ -3020,8 +3020,9 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testForeignFunctionCall(self):
         foo = Package(name=Name(["foo"]))
-        bar = foo.addFunction(Name(["bar"]), None, I64Type, [], [I64Type],
-                              None, None, frozenset([PUBLIC]))
+        bar = foo.addFunction(Name(["bar"]), returnType=I64Type,
+                              typeParameters=[], parameterTypes=[I64Type],
+                              flags=frozenset([PUBLIC]))
         loader = FakePackageLoader([foo])
         source = "def f = foo.bar(12)"
         package = self.compileFromSource(source, packageLoader=loader)
@@ -3040,8 +3041,8 @@ class TestCompiler(TestCaseWithDefinitions):
         T = foo.addTypeParameter(Name(["foo", "T"]), upperBound=getRootClassType(),
                                  lowerBound=getNothingClassType(), flags=frozenset([STATIC]))
         Tty = VariableType(T)
-        bar = foo.addFunction(Name(["bar"]), None, Tty, [T], [Tty],
-                              None, None, frozenset([PUBLIC]))
+        bar = foo.addFunction(Name(["bar"]), returnType=Tty, typeParameters=[T],
+                              parameterTypes=[Tty], flags=frozenset([PUBLIC]))
         loader = FakePackageLoader([foo])
         source = "def f(s: String) = foo.bar[String](s)"
         package = self.compileFromSource(source, packageLoader=loader)

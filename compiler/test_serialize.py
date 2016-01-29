@@ -1,4 +1,4 @@
-# Copyright 2015, Jay Conrod. All rights reserved.
+# Copyright 2015-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -87,8 +87,9 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
 
     def testRewriteLocalMethodId(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
-        method = package.addFunction(ir.Name(["foo"]), None, ir_types.UnitType, [], [],
-                                      None, None, frozenset([flags.METHOD]))
+        method = package.addFunction(ir.Name(["foo"]), returnType=ir_types.UnitType,
+                                     typeParameters=[], parameterTypes=[],
+                                     flags=frozenset([flags.METHOD]))
         self.ser.package = package
         self.ser.writeMethodId(method)
         self.des.package = package
@@ -98,8 +99,9 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
     def testRewriteForeignMethodId(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
         otherPackage = ir.Package()
-        method = otherPackage.addFunction(ir.Name(["foo"]), None, ir_types.UnitType, [], [],
-                                           None, None, frozenset([flags.METHOD]))
+        method = otherPackage.addFunction(ir.Name(["foo"]), returnType=ir_types.UnitType,
+                                          typeParameters=[], parameterTypes=[],
+                                          flags=frozenset([flags.METHOD]))
         loader = utils_test.FakePackageLoader([otherPackage])
         externalizer = externalization.Externalizer(package, loader)
         externMethod = externalizer.externalizeDefn(method)
@@ -257,18 +259,20 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
                                 flags=frozenset([flags.PUBLIC, flags.FINAL, flags.ARRAY]))
         ty = ir_types.ClassType(clas)
         constructor = package.addFunction(ir.Name(["Foo", ir.CONSTRUCTOR_SUFFIX]),
-                                          None, ir_types.UnitType, [],
-                                          [ty], None, None,
-                                          frozenset([flags.PUBLIC, flags.METHOD]))
+                                          returnType=ir_types.UnitType, typeParameters=[],
+                                          parameterTypes=[ty],
+                                          flags=frozenset([flags.PUBLIC, flags.METHOD]))
         clas.constructors = [constructor]
-        localMethod = package.addFunction(ir.Name(["Foo", "m"]), None, ir_types.I64Type, [],
-                                          [ty], None, None,
-                                          frozenset([flags.PUBLIC, flags.METHOD]))
+        localMethod = package.addFunction(ir.Name(["Foo", "m"]), returnType=ir_types.I64Type,
+                                          typeParameters=[], parameterTypes=[ty],
+                                          flags=frozenset([flags.PUBLIC, flags.METHOD]))
         otherPackage = ir.Package()
         loader = utils_test.FakePackageLoader([otherPackage])
-        otherMethod = otherPackage.addFunction(ir.Name(["Foo", "o"]), None, ir_types.I64Type,
-                                               [], [ir_types.getRootClassType()], None, None,
-                                               frozenset([flags.PUBLIC, flags.METHOD]))
+        otherMethod = otherPackage.addFunction(ir.Name(["Foo", "o"]),
+                                               returnType=ir_types.I64Type,
+                                               typeParameters=[],
+                                               parameterTypes=[ir_types.getRootClassType()],
+                                               flags=frozenset([flags.PUBLIC, flags.METHOD]))
         externalizer = externalization.Externalizer(package, loader)
         externMethod = externalizer.externalizeDefn(otherMethod)
         builtinMethod = builtins.getBuiltinFunctionById(bytecode.BUILTIN_ROOT_CLASS_TO_STRING_ID)

@@ -77,7 +77,8 @@ def initClass(out, classData):
             out.write("    auto field%dName = nameFromUtf8CString(heap, \"%s\");\n" %
                       (i, fieldData["name"]))
             typeName = fieldData["type"]
-            out.write("    auto field%d = new(heap) Field(field%dName, PUBLIC_FLAG, %s);\n" %
+            out.write(("    auto field%d = new(heap) Field(field%dName, nullptr, " +
+                       "PUBLIC_FLAG, %s);\n") %
                       (i, i, getTypeFromName(typeName)))
             out.write("    fields->set(%d, field%d);\n" % (i, i))
     if "elements" not in classData:
@@ -107,8 +108,9 @@ def initClass(out, classData):
                   len(allMethodIds))
         for i, id in enumerate(allMethodIds):
             out.write("    methods->set(%d, getBuiltinFunction(%s));\n" % (i, id))
-    out.write("    ::new(clas) Class(name, PUBLIC_FLAG, typeParameters, supertype, fields, " +
-              "constructors, methods, nullptr, nullptr, elementType, lengthFieldIndex);\n")
+    out.write("    ::new(clas) Class(name, nullptr, PUBLIC_FLAG, typeParameters, supertype, " +
+              "fields, constructors, methods, nullptr, nullptr, elementType, " +
+              "lengthFieldIndex);\n")
     if classData.get("isOpaque"):
         out.write("    builtinMetas_.push_back(nullptr);\n  }")
     else:
@@ -130,7 +132,7 @@ def initFunction(out, functionData):
               len(functionData["parameterTypes"]))
     for i, name in enumerate(functionData["parameterTypes"]):
         out.write("    parameterTypes->set(%d, %s);\n" % (i, getTypeFromName(name)))
-    out.write("    ::new(function) Function(name, PUBLIC_FLAG, emptyTypeParameters, " +
+    out.write("    ::new(function) Function(name, nullptr, PUBLIC_FLAG, emptyTypeParameters, " +
               "returnType, parameterTypes, nullptr, 0, emptyInstructions, " +
               "nullptr, nullptr, nullptr, nullptr);\n")
     out.write("    function->setBuiltinId(%s);\n" % functionData["id"])

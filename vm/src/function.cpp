@@ -30,6 +30,7 @@ namespace internal {
 
 #define FUNCTION_POINTER_LIST(F) \
   F(Function, name_)             \
+  F(Function, sourceName_)       \
   F(Function, typeParameters_)   \
   F(Function, returnType_)       \
   F(Function, parameterTypes_)   \
@@ -54,6 +55,7 @@ void* Function::operator new(size_t, Heap* heap, length_t instructionsSize) {
 
 
 Function::Function(Name* name,
+                   String* sourceName,
                    u32 flags,
                    BlockArray<TypeParameter>* typeParameters,
                    Type* returnType,
@@ -67,6 +69,7 @@ Function::Function(Name* name,
                    NativeFunction nativeFunction)
     : Block(FUNCTION_BLOCK_TYPE),
       name_(this, name),
+      sourceName_(this, sourceName),
       flags_(flags),
       builtinId_(0),
       typeParameters_(this, typeParameters),
@@ -86,13 +89,14 @@ Function::Function(Name* name,
 
 Local<Function> Function::create(Heap* heap) {
   RETRY_WITH_GC(heap, return Local<Function>(new(heap, 0) Function(
-      nullptr, 0, nullptr, nullptr, nullptr, nullptr,
+      nullptr, nullptr, 0, nullptr, nullptr, nullptr, nullptr,
       0, vector<u8>{}, nullptr, nullptr, nullptr, nullptr)));
 }
 
 
 Local<Function> Function::create(Heap* heap,
                                  const Handle<Name>& name,
+                                 const Handle<String>& sourceName,
                                  u32 flags,
                                  const Handle<BlockArray<TypeParameter>>& typeParameters,
                                  const Handle<Type>& returnType,
@@ -104,9 +108,9 @@ Local<Function> Function::create(Heap* heap,
                                  const Handle<Package>& package,
                                  NativeFunction nativeFunction) {
   RETRY_WITH_GC(heap, return Local<Function>(new(heap, instructions.size()) Function(
-      *name, flags, *typeParameters, *returnType, *parameterTypes, definingClass.getOrNull(),
-      localsSize, instructions, blockOffsets.getOrNull(), package.getOrNull(), nullptr,
-      nativeFunction)));
+      *name, sourceName.getOrNull(), flags, *typeParameters, *returnType, *parameterTypes,
+      definingClass.getOrNull(), localsSize, instructions, blockOffsets.getOrNull(),
+      package.getOrNull(), nullptr, nativeFunction)));
 }
 
 
@@ -173,6 +177,7 @@ ostream& operator << (ostream& os, const Function* fn) {
   if (fn->hasBuiltinId())
     os << "\n  builtin id: " << fn->builtinId();
   os << "\n  name: " << brief(fn->name())
+     << "\n  sourceName: " << brief(fn->sourceName())
      << "\n  type parameters: " << brief(fn->typeParameters())
      << "\n  returnType: " << brief(fn->returnType())
      << "\n  parameterTypes: " << brief(fn->parameterTypes())

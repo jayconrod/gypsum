@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -22,10 +22,11 @@ class TypeParameter: public Block {
   static const BlockType kBlockType = TYPE_PARAMETER_BLOCK_TYPE;
 
   void* operator new (size_t, Heap* heap);
-  TypeParameter(Name* name, u32 flags, Type* upperBound, Type* lowerBound);
+  TypeParameter(Name* name, String* sourceName, u32 flags, Type* upperBound, Type* lowerBound);
   static Local<TypeParameter> create(Heap* heap);
   static Local<TypeParameter> create(Heap* heap,
                                      const Handle<Name>& name,
+                                     const Handle<String>& sourceName,
                                      u32 flags,
                                      const Handle<Type>& upperBound,
                                      const Handle<Type>& lowerBound);
@@ -37,6 +38,8 @@ class TypeParameter: public Block {
 
   Name* name() const { return name_.get(); }
   void setName(Name* name) { name_.set(this, name); }
+  String* sourceName() const { return sourceName_.get(); }
+  void setSourceName(String* sourceName) { sourceName_.set(this, sourceName); }
   u32 flags() const { return flags_; }
   void setFlags(u32 newFlags) { flags_ = newFlags; }
   Type* upperBound() const { return upperBound_.get(); }
@@ -54,6 +57,7 @@ class TypeParameter: public Block {
   DECLARE_POINTER_MAP()
 
   Ptr<Name> name_;
+  Ptr<String> sourceName_;
   u32 flags_;
   Ptr<Type> upperBound_;
   Ptr<Type> lowerBound_;

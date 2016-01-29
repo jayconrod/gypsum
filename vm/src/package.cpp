@@ -70,6 +70,7 @@ class Loader {
   Local<Global> readGlobal();
   Local<Function> readFunction();
   void readFunctionHeader(Local<Name>* name,
+                          Local<String>* sourceName,
                           u32* flags,
                           Local<BlockArray<TypeParameter>>* typeParameters,
                           Local<Type>* returnType,
@@ -83,6 +84,8 @@ class Loader {
   template <typename T>
   T readValue();
   Local<Name> readName();
+  Local<String> readSourceName();
+  Local<String> readStringId();
   length_t readLength();
   vector<u8> readData(word_t size);
   DefnId readDefnIdVbns();
@@ -90,6 +93,9 @@ class Loader {
   word_t readWordVbn();
   length_t readLengthVbn();
   id_t readIdVbn();
+
+  template <class T>
+  T readOption(function<T()> reader, T noValue);
 
   DependencyLoader createDependencyLoader(const Handle<PackageDependency>& dep);
 
@@ -834,21 +840,24 @@ Local<String> Loader::readString() {
 
 Local<Global> Loader::readGlobal() {
   auto name = readName();
+  auto sourceName = readSourceName();
   auto flags = readValue<u32>();
   auto type = readType();
-  return Global::create(heap(), name, flags, type);
+  return Global::create(heap(), name, sourceName, flags, type);
 }
 
 
 Local<Function> Loader::readFunction() {
   Local<Name> name;
+  Local<String> sourceName;
   u32 flags;
   Local<BlockArray<TypeParameter>> typeParameters;
   Local<Type> returnType;
   Local<BlockArray<Type>> parameterTypes;
   Local<Class> definingClass;
   readFunctionHeader(
-      &name, &flags, &typeParameters, &returnType, &parameterTypes, &definingClass);
+      &name, &sourceName, &flags, &typeParameters,
+      &returnType, &parameterTypes, &definingClass);
 
   word_t localsSize = kNotSet;
   Local<LengthArray> blockOffsets;
@@ -866,7 +875,7 @@ Local<Function> Loader::readFunction() {
     }
   }
 
-  auto func = Function::create(heap(), name, flags, typeParameters,
+  auto func = Function::create(heap(), name, sourceName, flags, typeParameters,
                                returnType, parameterTypes, definingClass,
                                localsSize, instructions, blockOffsets,
                                package_, nullptr);
@@ -875,12 +884,14 @@ Local<Function> Loader::readFunction() {
 
 
 void Loader::readFunctionHeader(Local<Name>* name,
+                                Local<String>* sourceName,
                                 u32* flags,
                                 Local<BlockArray<TypeParameter>>* typeParameters,
                                 Local<Type>* returnType,
                                 Local<BlockArray<Type>>* parameterTypes,
                                 Local<Class>* definingClass) {
   *name = readName();
+  *sourceName = readSourceName();
   *flags = readValue<u32>();
 
   auto typeParameterCount = readLengthVbn();
@@ -904,6 +915,7 @@ void Loader::readFunctionHeader(Local<Name>* name,
 
 void Loader::readClass(const Local<Class>& clas) {
   auto name = readName();
+  auto sourceName = readSourceName();
   auto flags = readValue<u32>();
 
   auto typeParamCount = readLengthVbn();
@@ -956,6 +968,7 @@ void Loader::readClass(const Local<Class>& clas) {
   }
 
   clas->setName(*name);
+  clas->setSourceName(sourceName.getOrNull());
   clas->setFlags(flags);
   clas->setTypeParameters(*typeParameters);
   clas->setSupertype(*supertype);
@@ -970,19 +983,22 @@ void Loader::readClass(const Local<Class>& clas) {
 
 Local<Field> Loader::readField() {
   auto name = readName();
+  auto sourceName = readSourceName();
   auto flags = readValue<u32>();
   auto type = readType();
-  auto field = Field::create(heap(), name, flags, type);
+  auto field = Field::create(heap(), name, sourceName, flags, type);
   return field;
 }
 
 
 void Loader::readTypeParameter(const Local<TypeParameter>& param) {
   auto name = readName();
+  auto sourceName = readSourceName();
   auto flags = readValue<u32>();
   auto upperBound = readType();
   auto lowerBound = readType();
   param->setName(*name);
+  param->setSourceName(sourceName.getOrNull());
   param->setFlags(flags);
   param->setUpperBound(*upperBound);
   param->setLowerBound(*lowerBound);
@@ -1115,13 +1131,24 @@ Local<Name> Loader::readName() {
   auto length = readLengthVbn();
   auto components = BlockArray<String>::create(heap(), length);
   for (length_t i = 0; i < length; i++) {
-    auto index = readLengthVbn();
-    if (index >= package_->strings()->length()) {
-      throw Error("name index out of bounds");
-    }
-    components->set(i, package_->strings()->get(index));
+    auto component = readStringId();
+    components->set(i, *component);
   }
   return Name::create(heap(), components);
+}
+
+
+Local<String> Loader::readSourceName() {
+  return readOption<Local<String>>([this]() { return readStringId(); }, Local<String>());
+}
+
+
+Local<String> Loader::readStringId() {
+  auto index = readLengthVbn();
+  if (index >= package_->strings()->length()) {
+    throw Error("string index out of bounds");
+  }
+  return handle(package_->strings()->get(index));
 }
 
 
@@ -1198,6 +1225,19 @@ id_t Loader::readIdVbn() {
 }
 
 
+template <class T>
+T Loader::readOption(function<T()> reader, T noValue) {
+  i64 n = readVbn();
+  if (n == 0) {
+    return noValue;
+  } else if (n == 1) {
+    return reader();
+  } else {
+    throw Error("invalid option");
+  }
+}
+
+
 DependencyLoader Loader::createDependencyLoader(const Handle<PackageDependency>& dep) {
   return DependencyLoader(vm_, stream_, package_, dep);
 }
@@ -1212,7 +1252,7 @@ Local<Package> PackageLoader::load() {
       throw Error("package file is corrupt");
     auto majorVersion = readValue<u16>();
     auto minorVersion = readValue<u16>();
-    if (majorVersion != 0 || minorVersion != 18)
+    if (majorVersion != 0 || minorVersion != 19)
       throw Error("package file has wrong format version");
 
     package_ = handleScope.escape(*Package::create(heap()));
@@ -1433,6 +1473,7 @@ void PackageLoader::loadNativeLibrary() {
 
 void DependencyLoader::readExternFunction(const Handle<Function>& func) {
   Local<Name> name;
+  Local<String> sourceName;
   u32 flags;
   Local<BlockArray<TypeParameter>> typeParameters;
   Local<Type> returnType;
@@ -1440,8 +1481,10 @@ void DependencyLoader::readExternFunction(const Handle<Function>& func) {
   Local<Class> definingClass;
 
   readFunctionHeader(
-      &name, &flags, &typeParameters, &returnType, &parameterTypes, &definingClass);
+      &name, &sourceName, &flags, &typeParameters,
+      &returnType, &parameterTypes, &definingClass);
   func->setName(*name);
+  func->setSourceName(sourceName.getOrNull());
   func->setFlags(flags);
   func->setTypeParameters(*typeParameters);
   func->setReturnType(*returnType);

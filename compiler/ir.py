@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -64,6 +64,8 @@ class Package(object):
         id = ids.DefnId(self.id, ids.DefnId.GLOBAL, len(self.globals))
         self.addName(name)
         g = Global(name, id, *args, **kwargs)
+        if g.sourceName is not None:
+            self.findOrAddString(g.sourceName)
         self.globals.append(g)
         return g
 
@@ -71,6 +73,8 @@ class Package(object):
         id = ids.DefnId(self.id, ids.DefnId.FUNCTION, len(self.functions))
         self.addName(name)
         f = Function(name, id, *args, **kwargs)
+        if f.sourceName is not None:
+            self.findOrAddString(f.sourceName)
         self.functions.append(f)
         return f
 
@@ -78,6 +82,8 @@ class Package(object):
         id = ids.DefnId(self.id, ids.DefnId.CLASS, len(self.classes))
         self.addName(name)
         c = Class(name, id, *args, **kwargs)
+        if c.sourceName is not None:
+            self.findOrAddString(c.sourceName)
         self.classes.append(c)
         return c
 
@@ -85,12 +91,17 @@ class Package(object):
         id = ids.DefnId(self.id, ids.DefnId.TYPE_PARAMETER, len(self.typeParameters))
         self.addName(name)
         p = TypeParameter(name, id, *args, **kwargs)
+        if p.sourceName is not None:
+            self.findOrAddString(p.sourceName)
         self.typeParameters.append(p)
         return p
 
     def newField(self, name, **kwargs):
         self.addName(name)
-        return Field(name, **kwargs)
+        f = Field(name, **kwargs)
+        if f.sourceName is not None:
+            self.findOrAddString(f.sourceName)
+        return f
 
     def ensureDependency(self, package):
         if package.id.index is not None:
@@ -381,10 +392,13 @@ class PackageDependency(object):
 
 
 class IrDefinition(object):
-    def __init__(self, name, astDefn):
+    def __init__(self, name, sourceName, astDefn):
         assert name is None or isinstance(name, Name)
+        assert sourceName is None or isinstance(sourceName, str) \
+            or isinstance(sourceName, unicode)
         assert astDefn is None or isinstance(astDefn, ast.Node)
         self.name = name
+        self.sourceName = sourceName
         self.astDefn = astDefn
 
     def __eq__(self, other):
@@ -401,8 +415,8 @@ class IrDefinition(object):
 
 
 class IrTopDefn(IrDefinition):
-    def __init__(self, name, id, astDefn):
-        super(IrTopDefn, self).__init__(name, astDefn)
+    def __init__(self, name, id, sourceName, astDefn):
+        super(IrTopDefn, self).__init__(name, sourceName, astDefn)
         self.id = id
 
     def isBuiltin(self):
@@ -435,14 +449,15 @@ class Global(IrTopDefn):
     Attributes:
         name (Name): the name of the global
         id (DefnId): unique identifier for the global.
+        sourceName (str?): name of the definition in source code
         astDefn (ast.Node?): the location in source code where the global is defined.
         type (Type?): the type of the global. May be `None` before type analysis.
         flags (frozenset[flag]): flags indicating how this global may be used. Valid flags are
             `EXTERN`, `LET`, `PUBLIC`.
     """
 
-    def __init__(self, name, id, astDefn=None, type=None, flags=frozenset()):
-        super(Global, self).__init__(name, id, astDefn)
+    def __init__(self, name, id, sourceName=None, astDefn=None, type=None, flags=frozenset()):
+        super(Global, self).__init__(name, id, sourceName, astDefn)
         self.type = type
         self.flags = flags
 
@@ -468,6 +483,7 @@ class Function(ParameterizedDefn):
     Attributes:
         name (Name): the name of the function.
         id (DefnId): unique identifier for the function.
+        sourceName (str?): name of the definition in source code
         astDefn (ast.Node?): the location in source code where the function is defined.
         returnType (Type?): the return type of the function. May be `None` before type analysis.
         typeParameters (list[TypeParameter]?): a list of type parameters used in this
@@ -503,10 +519,11 @@ class Function(ParameterizedDefn):
             from a function body (which may not be present).
     """
 
-    def __init__(self, name, id, astDefn=None, returnType=None, typeParameters=None,
-                 parameterTypes=None, variables=None, blocks=None, flags=frozenset(),
-                 definingClass=None, override=None, insts=None, compileHint=None):
-        super(Function, self).__init__(name, id, astDefn)
+    def __init__(self, name, id, sourceName=None, astDefn=None, returnType=None,
+                 typeParameters=None, parameterTypes=None, variables=None, blocks=None,
+                 flags=frozenset(), definingClass=None, override=None, insts=None,
+                 compileHint=None):
+        super(Function, self).__init__(name, id, sourceName, astDefn)
         self.returnType = returnType
         self.typeParameters = typeParameters
         self.parameterTypes = parameterTypes
@@ -613,6 +630,7 @@ class Class(ParameterizedDefn):
     Attributes:
         name (Name): the name of the class.
         id (DefnId): unique identifier for the class.
+        sourceName (str?): name of the definition in source code
         astDefn (ast.Node?): the location in source code where the class is defined.
         typeParameters (list[TypeParameter]?): a list of type parameters used in this
             definition. Values with a `ClassType` for this class must have type arguments that
@@ -642,10 +660,10 @@ class Class(ParameterizedDefn):
             `ABSTRACT`, `ARRAY`, `EXTERN`, `PUBLIC`, `PROTECTED`, `PRIVATE`.
     """
 
-    def __init__(self, name, id, astDefn=None, typeParameters=None, supertypes=None,
-                 initializer=None, constructors=None, fields=None, methods=None,
-                 elementType=None, flags=frozenset()):
-        super(Class, self).__init__(name, id, astDefn)
+    def __init__(self, name, id, sourceName=None, astDefn=None, typeParameters=None,
+                 supertypes=None, initializer=None, constructors=None, fields=None,
+                 methods=None, elementType=None, flags=frozenset()):
+        super(Class, self).__init__(name, id, sourceName, astDefn)
         self.typeParameters = typeParameters
         self.supertypes = supertypes
         self.initializer = initializer
@@ -846,6 +864,7 @@ class TypeParameter(IrTopDefn):
     Attributes:
         name (Name): the name of the type parameter.
         id (DefnId): unique identifier of the type parameter.
+        sourceName (str?): name of the definition in source code
         astDefn (ast.Node?): the location in source code where the type parameter is defined.
         upperBound (Type?): type arguments must be a subtype of this. May be `None` before
             type analysis.
@@ -855,9 +874,9 @@ class TypeParameter(IrTopDefn):
             flags are `EXTERN`, `CONTRAVARIANT`, `COVARIANT`, `STATIC`.
     """
 
-    def __init__(self, name, id, astDefn=None,
+    def __init__(self, name, id, sourceName=None, astDefn=None,
                  upperBound=None, lowerBound=None, flags=frozenset(), clas=None):
-        super(TypeParameter, self).__init__(name, id, astDefn)
+        super(TypeParameter, self).__init__(name, id, sourceName, astDefn)
         self.upperBound = upperBound
         self.lowerBound = lowerBound
         self.flags = flags
@@ -934,8 +953,9 @@ LOCAL = "local"
 PARAMETER = "parameter"
 
 class Variable(IrDefinition):
-    def __init__(self, name, astDefn=None, type=None, kind=LOCAL, flags=frozenset()):
-        super(Variable, self).__init__(name, astDefn)
+    def __init__(self, name, sourceName=None, astDefn=None, type=None, kind=LOCAL,
+                 flags=frozenset()):
+        super(Variable, self).__init__(name, sourceName, astDefn)
         self.type = type
         self.kind = kind
         self.flags = flags
@@ -959,6 +979,7 @@ class Field(IrDefinition):
 
     Attributes:
         name (Name): the name of the field.
+        sourceName (str?): name of the definition in source code
         astDefn (ast.Node?): the location in source code where the field is defined.
         type (Type?): the type of the field. May be `None` before type analysis.
         flags (frozenset[flag]): flags indicating how this field is used. Valid flags are
@@ -968,8 +989,9 @@ class Field(IrDefinition):
             instructions. This will usually be `None` before semantic analysis.
     """
 
-    def __init__(self, name, astDefn=None, type=None, flags=frozenset(), index=None):
-        super(Field, self).__init__(name, astDefn)
+    def __init__(self, name, sourceName=None, astDefn=None, type=None, flags=frozenset(),
+                 index=None):
+        super(Field, self).__init__(name, sourceName, astDefn)
         self.type = type
         self.flags = flags
         self.index = index

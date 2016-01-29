@@ -34,6 +34,7 @@ class Class: public Block {
 
   void* operator new(size_t, Heap* heap);
   Class(Name* name,
+        String* sourceName,
         u32 flags,
         BlockArray<TypeParameter>* typeParameters,
         Type* supertype,
@@ -47,6 +48,7 @@ class Class: public Block {
   static Local<Class> create(Heap* heap);
   static Local<Class> create(Heap* heap,
                              const Handle<Name>& name,
+                             const Handle<String>& sourceName,
                              u32 flags,
                              const Handle<BlockArray<TypeParameter>>& typeParameters,
                              const Handle<Type>& supertype,
@@ -65,6 +67,9 @@ class Class: public Block {
 
   Name* name() const { return name_.get(); }
   void setName(Name* name) { name_.set(this, name); }
+
+  String* sourceName() const { return sourceName_.get(); }
+  void setSourceName(String* sourceName) { sourceName_.set(this, sourceName); }
 
   u32 flags() const { return flags_; }
   void setFlags(u32 flags) { flags_ = flags; }
@@ -122,6 +127,7 @@ class Class: public Block {
 
   DECLARE_POINTER_MAP()
   Ptr<Name> name_;
+  Ptr<String> sourceName_;
   u32 flags_;
   Ptr<BlockArray<TypeParameter>> typeParameters_;
   Ptr<Type> supertype_;

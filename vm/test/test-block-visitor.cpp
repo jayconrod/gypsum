@@ -147,7 +147,7 @@ static Local<Package> createTestPackage(Heap* heap) {
   auto functions = BlockArray<Function>::create(heap, 1);
   Local<BlockArray<TypeParameter>> emptyTypeParameters(
       reinterpret_cast<BlockArray<TypeParameter>*>(roots->emptyBlockArray()));
-  auto function = Function::create(heap, NAME("foo"),
+  auto function = Function::create(heap, NAME("foo"), STR("foo"),
                                    0, emptyTypeParameters, returnType, parameterTypes,
                                    Local<Class>(), 2 * kWordSize, instList, blockOffsetList,
                                    package, nullptr);
@@ -181,6 +181,7 @@ TEST(BlockVisitorFunction) {
   auto package = *createTestPackage(heap);
   auto function = package->getFunction(0);
   auto name = function->name();
+  auto sourceName = function->sourceName();
   auto typeParameters = function->typeParameters();
   auto returnType = function->returnType();
   auto parameterTypes = function->parameterTypes();
@@ -193,6 +194,7 @@ TEST(BlockVisitorFunction) {
   word_t expected[] = {
       FUNCTION_BLOCK_TYPE << 2,
       reinterpret_cast<word_t>(name) + 4,
+      reinterpret_cast<word_t>(sourceName) + 4,
       0,
       0,
       reinterpret_cast<word_t>(typeParameters) + 4,
