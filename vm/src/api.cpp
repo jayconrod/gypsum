@@ -959,6 +959,43 @@ void Object::setField(const Field& field, const Value& value) {
 }
 
 
+bool Object::hasElements() const {
+  API_CHECK_SELF(Object);
+  return unwrapRaw<i::Object>(*this)->meta()->hasElements();
+}
+
+
+uint32_t Object::length() const {
+  API_CHECK_SELF(Object);
+  return unwrapRaw<i::Object>(*this)->elementsLength();
+}
+
+
+Value Object::getElement(uint32_t index) const {
+  API_CHECK_SELF(Object);
+  API_CHECK(hasElements(), "object does not have array elements");
+  API_CHECK(index < length(), "array element index is out of bounds");
+  auto iobj = unwrapRaw<i::Object>(*this);
+  auto clas = iobj->meta()->clas();
+  auto type = clas->elementType();
+  return valueFromRaw(type, iobj->getRawElement(index));
+}
+
+
+void Object::setElement(uint32_t index, const Value& value) {
+  API_CHECK_SELF(Object);
+  API_CHECK(hasElements(), "object does not have array elements");
+  API_CHECK(index < length(), "array element index is out of bounds");
+  auto iobj = unwrap<i::Object>(*this);
+  auto vm = iobj->getVM();
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAlloc(vm->heap(), true);
+  auto type = handle(iobj->meta()->clas()->elementType());
+  auto bits = rawFromValue(value, type);
+  iobj->setRawElement(index, bits);
+}
+
+
 Error::Error() { }
 
 

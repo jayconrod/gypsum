@@ -33,6 +33,9 @@ class Object: public Block {
   u64 getRawField(const Field* field) const;
   void setRawField(const Field* field, u64 bits);
 
+  u64 getRawElement(length_t index) const;
+  void setRawElement(length_t index, u64 bits);
+
  protected:
   explicit Object(BlockType blockType);
 };

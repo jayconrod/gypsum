@@ -154,6 +154,44 @@ void Object::setRawField(const Field* field, u64 bits) {
 }
 
 
+u64 Object::getRawElement(length_t index) const {
+  ASSERT(meta()->hasElements());
+  ASSERT(index < elementsLength());
+  auto base = elementsBase();
+  auto size = meta()->clas()->elementType()->typeSize();
+  auto addr = base + index * size;
+  if (size == 1) {
+    return static_cast<u64>(mem<u8>(addr));
+  } else if (size == 2) {
+    return static_cast<u64>(mem<u16>(addr));
+  } else if (size == 4) {
+    return static_cast<u64>(mem<u32>(addr));
+  } else {
+    ASSERT(size == 8);
+    return mem<u64>(addr);
+  }
+}
+
+
+void Object::setRawElement(length_t index, u64 bits) {
+  ASSERT(meta()->hasElements());
+  ASSERT(index < elementsLength());
+  auto base = elementsBase();
+  auto size = meta()->clas()->elementType()->typeSize();
+  auto addr = base + index * size;
+  if (size == 1) {
+    mem<u8>(addr) = static_cast<u8>(bits);
+  } else if (size == 2) {
+    mem<u16>(addr) = static_cast<u16>(bits);
+  } else if (size == 4) {
+    mem<u32>(addr) = static_cast<u32>(bits);
+  } else {
+    ASSERT(size == 8);
+    mem<u64>(addr) = bits;
+  }
+}
+
+
 ostream& operator << (ostream& os, const Object* obj) {
   return os << brief(obj);
 }

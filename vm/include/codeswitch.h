@@ -783,6 +783,32 @@ class Object: public Reference {
    */
   void setField(const std::string& fieldSourceName, const Value& value);
 
+  /** Returns whether this object has array elements. */
+  bool hasElements() const;
+
+  /**
+   * Returns the number of array elements this object has or 0 if the object has no
+   * array elements.
+   */
+  uint32_t length() const;
+
+  /**
+   * Loads an array element.
+   *
+   * @param index the zero-based position of the element. Must be less than the value
+   *     returned by {@link #length}.
+   */
+  Value getElement(uint32_t index) const;
+
+  /**
+   * Stores a value into an array element.
+   *
+   * @param index the zero-based position of the element. Must be less than the value
+   *     returned by {@link #length}.
+   * @param value the value to store.
+   */
+  void setElement(uint32_t index, const Value& value);
+
   friend class CallBuilder;
 };
 
