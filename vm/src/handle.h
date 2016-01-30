@@ -133,7 +133,7 @@ class HandleStorage {
 
   // These methods help the templated handle constructors avoid a direct dependency on the VM
   // class itself. Since vm.h includes this header, we would have a circular reference.
-  static HandleStorage* fromBlock(Block* block);
+  static HandleStorage* fromBlock(const Block* block);
   static HandleStorage* fromVM(VM* vm);
 
   Block** createLocal(Block* block);

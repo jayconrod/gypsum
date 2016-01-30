@@ -47,7 +47,7 @@ class String: public Object {
   std::vector<u8> toUtf8StlVector() const;
   std::string toUtf8StlString() const;
 
-  bool equals(String* other) const;
+  bool equals(const String* other) const;
   bool equals(const char* other) const;
   int compare(String* other) const;
   u32 hashCode() const;

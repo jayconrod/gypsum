@@ -41,10 +41,10 @@ namespace internal {
   } while (false)
 
 
-#define API_CHECK_ARG(ref) API_CHECK(ref.impl_, #ref ": not a valid reference")
+#define API_CHECK_ARG(ref) API_CHECK(ref, #ref ": not a valid reference")
 
 
-#define API_CHECK_SELF(type) API_CHECK(impl_, #type ": this is not a valid reference")
+#define API_CHECK_SELF(type) API_CHECK(*this, #type ": this is not a valid reference")
 
 
 class Error::Impl final {

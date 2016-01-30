@@ -14,6 +14,7 @@
 #include "bitmap.h"
 #include "block.h"
 #include "builtins.h"
+#include "field.h"
 #include "function.h"
 #include "global.h"
 #include "handle.h"
@@ -94,16 +95,6 @@ static VM* refVM(const Reference& ref) {
 }
 
 
-static const uint8_t kBooleanTag = 0;
-static const uint8_t kI8Tag = 1;
-static const uint8_t kI16Tag = 2;
-static const uint8_t kI32Tag = 3;
-static const uint8_t kI64Tag = 4;
-static const uint8_t kF32Tag = 5;
-static const uint8_t kF64Tag = 6;
-static const uint8_t kRefTag = 7;
-
-
 static Value valueFromRaw(i::Type* type, i::i64 bits) {
   if (type->isBoolean()) {
     return Value(static_cast<bool>(bits));
@@ -145,26 +136,21 @@ class Value::Impl final {
 };
 
 
-static i::i64 rawFromValue(const Value& value, i::Type* type) {
+static i::i64 rawFromValue(const Value& value, const i::Handle<i::Type>& type) {
   auto tag = Value::Impl::getValueTag(value);
-  if (tag == kRefTag) {
+  if (tag == i::Type::CLASS_TYPE) {
     const Object& obj = Value::Impl::getValueRef(value);
     if (!obj) {
       API_CHECK(type->isObject() && type->isNullable(), "type error");
       return 0;
     } else {
-      auto rawObj = unwrapRaw<i::Object>(Value::Impl::getValueRef(value));
-      return static_cast<i::i64>(reinterpret_cast<intptr_t>(rawObj));
+      i::Local<i::Object> iobj(const_cast<i::Object*>(unwrapRaw<i::Object>(obj)));
+      auto objType = i::Object::typeof(iobj);
+      API_CHECK(i::Type::isSubtypeOf(objType, type), "type error");
+      return static_cast<i::i64>(static_cast<i::u64>(reinterpret_cast<uintptr_t>(*iobj)));
     }
   } else {
-    API_CHECK((tag == kBooleanTag && type->isBoolean()) ||
-              (tag == kI8Tag && type->isI8()) ||
-              (tag == kI16Tag && type->isI16()) ||
-              (tag == kI32Tag && type->isI32()) ||
-              (tag == kI64Tag && type->isI64()) ||
-              (tag == kF32Tag && type->isF32()) ||
-              (tag == kF64Tag && type->isF64()),
-              "type error");
+    API_CHECK(tag == type->form(), "type error");
     return Value::Impl::getValueBits(value);
   }
 }
@@ -392,7 +378,7 @@ Package::Package(Impl* impl)
 
 Function Package::entryFunction() const {
   API_CHECK_SELF(Package);
-  i::Function* function = unwrap<i::Package>(*this)->entryFunction();
+  i::Function* function = unwrapRaw<i::Package>(*this)->entryFunction();
   if (function == nullptr) {
     return Function();
   }
@@ -402,9 +388,10 @@ Function Package::entryFunction() const {
 
 Global Package::findGlobal(const Name& name) const {
   API_CHECK_SELF(Package);
-  auto globals = unwrap<i::Package>(*this)->globals();
+  API_CHECK_ARG(name);
+  auto globals = unwrapRaw<i::Package>(*this)->globals();
   for (auto global : *globals) {
-    if (global->name()->equals(*unwrap<i::Name>(name))) {
+    if (global->name()->equals(unwrapRaw<i::Name>(name))) {
       return wrap<Global, i::Global>(global);
     }
   }
@@ -414,12 +401,13 @@ Global Package::findGlobal(const Name& name) const {
 
 Global Package::findGlobal(const String& sourceName) const {
   API_CHECK_SELF(Package);
-  auto globals = unwrap<i::Package>(*this)->globals();
+  API_CHECK_ARG(sourceName);
+  auto globals = unwrapRaw<i::Package>(*this)->globals();
   i::u32 mask = i::PUBLIC_FLAG | i::STATIC_FLAG;
   i::u32 expectedFlags = i::PUBLIC_FLAG;
   for (auto global : *globals) {
     if ((global->flags() & mask) == expectedFlags &&
-        global->sourceName()->equals(*unwrap<i::String>(sourceName))) {
+        global->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
       return wrap<Global, i::Global>(global);
     }
   }
@@ -430,15 +418,16 @@ Global Package::findGlobal(const String& sourceName) const {
 Global Package::findGlobal(const string& sourceName) const {
   API_CHECK_SELF(Package);
   String sourceNameStr(refVM(*this), sourceName);
-  return findGlobal(sourceName);
+  return findGlobal(sourceNameStr);
 }
 
 
 Function Package::findFunction(const Name& name) const {
   API_CHECK_SELF(Package);
-  auto functions = unwrap<i::Package>(*this)->functions();
+  API_CHECK_ARG(name);
+  auto functions = unwrapRaw<i::Package>(*this)->functions();
   for (auto function : *functions) {
-    if (function->name()->equals(*unwrap<i::Name>(name))) {
+    if (function->name()->equals(unwrapRaw<i::Name>(name))) {
       return wrap<Function, i::Function>(function);
     }
   }
@@ -448,12 +437,13 @@ Function Package::findFunction(const Name& name) const {
 
 Function Package::findFunction(const String& sourceName) const {
   API_CHECK_SELF(Package);
-  auto functions = unwrap<i::Package>(*this)->functions();
+  API_CHECK_ARG(sourceName);
+  auto functions = unwrapRaw<i::Package>(*this)->functions();
   i::u32 mask = i::PUBLIC_FLAG | i::STATIC_FLAG | i::METHOD_FLAG;
   i::u32 expectedFlags = i::PUBLIC_FLAG;
   for (auto function : *functions) {
     if ((function->flags() & mask) == expectedFlags &&
-        function->sourceName()->equals(*unwrap<i::String>(sourceName))) {
+        function->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
       return wrap<Function, i::Function>(function);
     }
   }
@@ -465,6 +455,40 @@ Function Package::findFunction(const string& sourceName) const {
   API_CHECK_SELF(Package);
   String sourceNameStr(refVM(*this), sourceName);
   return findFunction(sourceNameStr);
+}
+
+
+Class Package::findClass(const Name& name) const {
+  API_CHECK_SELF(Package);
+  API_CHECK_ARG(name);
+  auto classes = unwrapRaw<i::Package>(*this)->classes();
+  for (auto clas : *classes) {
+    if (clas->name()->equals(unwrapRaw<i::Name>(name))) {
+      return wrap<Class, i::Class>(clas);
+    }
+  }
+  return Class();
+}
+
+
+Class Package::findClass(const String& sourceName) const {
+  API_CHECK_SELF(Package);
+  API_CHECK_ARG(sourceName);
+  auto classes = unwrapRaw<i::Package>(*this)->classes();
+  for (auto clas : *classes) {
+    if ((clas->flags() & i::PUBLIC_FLAG) == i::PUBLIC_FLAG &&
+        clas->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
+      return wrap<Class, i::Class>(clas);
+    }
+  }
+  return Class();
+}
+
+
+Class Package::findClass(const string& sourceName) const {
+  API_CHECK_SELF(Package);
+  String sourceNameStr(refVM(*this), sourceName);
+  return findClass(sourceNameStr);
 }
 
 
@@ -489,7 +513,10 @@ void Global::setValue(const Value& value) {
   API_CHECK_SELF(Global);
   API_CHECK(isConstant(), "global cannot be set because it is constant");
   auto self = unwrap<i::Global>(*this);
-  self->setRaw(rawFromValue(value, self->type()));
+  auto vm = self->getVM();
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAlloc(vm->heap(), true);  // for type checking
+  self->setRaw(rawFromValue(value, handle(self->type())));
 }
 
 
@@ -497,7 +524,89 @@ Function::Function(Impl* impl)
     : Reference(impl) { }
 
 
-CallBuilder::CallBuilder() { }
+Class::Class(Impl* impl)
+    : Reference(impl) { }
+
+
+Function Class::findMethod(const Name& name) const {
+  API_CHECK_SELF(Class);
+  API_CHECK_ARG(name);
+  auto methods = unwrapRaw<i::Class>(*this)->methods();
+  for (auto method : *methods) {
+    if (method->name()->equals(unwrapRaw<i::Name>(name))) {
+      return wrap<Function, i::Function>(method);
+    }
+  }
+  return Function();
+}
+
+
+Function Class::findMethod(const String& sourceName) const {
+  API_CHECK_SELF(Class);
+  API_CHECK_ARG(sourceName);
+  auto methods = unwrapRaw<i::Class>(*this)->methods();
+  for (auto method : *methods) {
+    if ((method->flags() & i::PUBLIC_FLAG) == i::PUBLIC_FLAG &&
+        method->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
+      return wrap<Function, i::Function>(method);
+    }
+  }
+  return Function();
+}
+
+
+Function Class::findMethod(const string& sourceName) const {
+  API_CHECK_SELF(Class);
+  String sourceNameStr(refVM(*this), sourceName);
+  return findMethod(sourceName);
+}
+
+
+Field Class::findField(const Name& name) const {
+  API_CHECK_SELF(Class);
+  API_CHECK_ARG(name);
+  auto fields = unwrapRaw<i::Class>(*this)->fields();
+  for (auto field : *fields) {
+    if (field->name()->equals(unwrapRaw<i::Name>(name))) {
+      return wrap<Field, i::Field>(field);
+    }
+  }
+  return Field();
+}
+
+
+Field Class::findField(const String& sourceName) const {
+  API_CHECK_SELF(Class);
+  API_CHECK_ARG(sourceName);
+  auto fields = unwrapRaw<i::Class>(*this)->fields();
+  i::u32 mask = i::PUBLIC_FLAG | i::STATIC_FLAG;
+  i::u32 expectedFlags = i::PUBLIC_FLAG;
+  for (auto field : *fields) {
+    if ((field->flags() & mask) == expectedFlags &&
+        field->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
+      return wrap<Field, i::Field>(field);
+    }
+  }
+  return Field();
+}
+
+
+Field Class::findField(const string& sourceName) const {
+  API_CHECK_SELF(Class);
+  String sourceNameStr(refVM(*this), sourceName);
+  return findField(sourceNameStr);
+}
+
+
+Field::Field(Impl* impl)
+    : Reference(impl) { }
+
+
+CallBuilder::~CallBuilder() {
+  // DO NOT REMOVE.
+  // This cannot be defined as `default` in the header since the client doesn't know whether
+  // `Impl` has a non-trivial destructor.
+}
 
 
 CallBuilder::CallBuilder(const Function& function) {
@@ -506,128 +615,106 @@ CallBuilder::CallBuilder(const Function& function) {
 }
 
 
-CallBuilder::~CallBuilder() { }
-
-
 CallBuilder& CallBuilder::argUnit() {
-  API_CHECK_SELF(CallBuilder);
   impl_->argUnit();
   return *this;
 }
 
 
 CallBuilder& CallBuilder::arg(bool value) {
-  API_CHECK_SELF(CallBuilder);
   impl_->arg(value);
   return *this;
 }
 
 
 CallBuilder& CallBuilder::arg(int8_t value) {
-  API_CHECK_SELF(CallBuilder);
   impl_->arg(value);
   return *this;
 }
 
 
 CallBuilder& CallBuilder::arg(int16_t value) {
-  API_CHECK_SELF(CallBuilder);
   impl_->arg(value);
   return *this;
 }
 
 
 CallBuilder& CallBuilder::arg(int32_t value) {
-  API_CHECK_SELF(CallBuilder);
   impl_->arg(value);
   return *this;
 }
 
 
 CallBuilder& CallBuilder::arg(int64_t value) {
-  API_CHECK_SELF(CallBuilder);
   impl_->arg(value);
   return *this;
 }
 
 
 CallBuilder& CallBuilder::arg(float value) {
-  API_CHECK_SELF(CallBuilder);
   impl_->arg(value);
   return *this;
 }
 
 
 CallBuilder& CallBuilder::arg(double value) {
-  API_CHECK_SELF(CallBuilder);
   impl_->arg(value);
   return *this;
 }
 
 
 CallBuilder& CallBuilder::arg(const Object& value) {
-  API_CHECK_SELF(CallBuilder);
   impl_->arg(value);
   return *this;
 }
 
 
 void CallBuilder::call() {
-  API_CHECK_SELF(CallBuilder);
   impl_->callForAny();
 }
 
 
 bool CallBuilder::callForBoolean() {
-  API_CHECK_SELF(CallBuilder);
   return impl_->callForBoolean();
 }
 
 
 int8_t CallBuilder::callForI8() {
-  API_CHECK_SELF(CallBuilder);
   return impl_->callForI8();
 }
 
 
 int16_t CallBuilder::callForI16() {
-  API_CHECK_SELF(CallBuilder);
   return impl_->callForI16();
 }
 
 
 int32_t CallBuilder::callForI32() {
-  API_CHECK_SELF(CallBuilder);
   return impl_->callForI32();
 }
 
 
 int64_t CallBuilder::callForI64() {
-  API_CHECK_SELF(CallBuilder);
   return impl_->callForI64();
 }
 
 
 float CallBuilder::callForF32() {
-  API_CHECK_SELF(CallBuilder);
   return impl_->callForF32();
 }
 
 
 double CallBuilder::callForF64() {
-  API_CHECK_SELF(CallBuilder);
   return impl_->callForF64();
 }
 
 
 String CallBuilder::callForString() {
-  API_CHECK_SELF(CallBuilder);
   return impl_->callForString();
 }
 
 
 Object CallBuilder::callForObject() {
-  API_CHECK_SELF(CallBuilder);
   return impl_->callForObject();
 }
 
@@ -826,6 +913,52 @@ Object::Object(Impl* impl)
     : Reference(impl) { }
 
 
+bool Object::isInstanceOf(const Class& clas) const {
+  API_CHECK_SELF(Object);
+  API_CHECK_ARG(clas);
+  auto selfClass = unwrapRaw<i::Object>(*this)->clas();
+  auto otherClass = unwrapRaw<i::Class>(clas);
+  return selfClass->isSubclassOf(otherClass);
+}
+
+
+Class Object::clas() const {
+  API_CHECK_SELF(Object);
+  return wrap<Class, i::Class>(unwrapRaw<i::Object>(*this)->clas());
+}
+
+
+Value Object::getField(const Field& field) const {
+  API_CHECK_SELF(Object);
+  API_CHECK_SELF(Field);
+  auto iobj = unwrapRaw<i::Object>(*this);
+  auto ifield = unwrapRaw<i::Field>(field);
+  auto bits = iobj->getRawField(ifield);
+  return valueFromRaw(ifield->type(), bits);
+}
+
+
+Value Object::getField(const string& fieldSourceName) const {
+  API_CHECK_SELF(Object);
+  auto field = clas().findField(fieldSourceName);
+  API_CHECK(field, "field could not be found");
+  return getField(field);
+}
+
+
+void Object::setField(const Field& field, const Value& value) {
+  API_CHECK_SELF(Object);
+  API_CHECK_ARG(field);
+  auto iobj = unwrap<i::Object>(*this);
+  auto ifield = unwrap<i::Field>(field);
+  auto vm = iobj->getVM();
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAlloc(vm->heap(), true);
+  auto bits = rawFromValue(value, handle(ifield->type()));
+  iobj->setRawField(*ifield, bits);
+}
+
+
 Error::Error() { }
 
 
@@ -863,95 +996,95 @@ const char* Error::message() const {
 
 Value::Value(bool b)
     : bits_(static_cast<uint64_t>(b)),
-      tag_(kBooleanTag) { }
+      tag_(i::Type::BOOLEAN_TYPE) { }
 
 
 Value::Value(int8_t n)
     : bits_(static_cast<uint64_t>(n)),
-      tag_(kI8Tag) { }
+      tag_(i::Type::I8_TYPE) { }
 
 
 Value::Value(int16_t n)
     : bits_(static_cast<uint64_t>(n)),
-      tag_(kI16Tag) { }
+      tag_(i::Type::I16_TYPE) { }
 
 
 Value::Value(int32_t n)
     : bits_(static_cast<uint64_t>(n)),
-      tag_(kI32Tag) { }
+      tag_(i::Type::I32_TYPE) { }
 
 
 Value::Value(int64_t n)
     : bits_(static_cast<uint64_t>(n)),
-      tag_(kI64Tag) { }
+      tag_(i::Type::I64_TYPE) { }
 
 
 Value::Value(float n)
     : bits_(i::f32ToBits(n)),
-      tag_(kF32Tag) { }
+      tag_(i::Type::F32_TYPE) { }
 
 
 Value::Value(double n)
     : bits_(i::f64ToBits(n)),
-      tag_(kF64Tag) { }
+      tag_(i::Type::F64_TYPE) { }
 
 
 Value::Value(const Object& o)
     : bits_(0),
       ref_(o),
-      tag_(kRefTag) { }
+      tag_(i::Type::CLASS_TYPE) { }
 
 
 Value::Value(Object&& o)
     : bits_(0),
       ref_(move(o)),
-      tag_(kRefTag) { }
+      tag_(i::Type::CLASS_TYPE) { }
 
 
 bool Value::asBoolean() const {
-  API_CHECK(tag_ == kBooleanTag, "value is not Boolean");
+  API_CHECK(tag_ == i::Type::BOOLEAN_TYPE, "value is not Boolean");
   return static_cast<bool>(bits_);
 }
 
 
 int8_t Value::asI8() const {
-  API_CHECK(tag_ == kI8Tag, "value is not i8");
+  API_CHECK(tag_ == i::Type::I8_TYPE, "value is not i8");
   return static_cast<int8_t>(bits_);
 }
 
 
 int16_t Value::asI16() const {
-  API_CHECK(tag_ == kI16Tag, "value is not i16");
+  API_CHECK(tag_ == i::Type::I16_TYPE, "value is not i16");
   return static_cast<int16_t>(bits_);
 }
 
 
 int32_t Value::asI32() const {
-  API_CHECK(tag_ == kI32Tag, "value is not i32");
+  API_CHECK(tag_ == i::Type::I32_TYPE, "value is not i32");
   return static_cast<int32_t>(bits_);
 }
 
 
 int64_t Value::asI64() const {
-  API_CHECK(tag_ == kI64Tag, "value is not i64");
+  API_CHECK(tag_ == i::Type::I64_TYPE, "value is not i64");
   return static_cast<int64_t>(bits_);
 }
 
 
 float Value::asF32() const {
-  API_CHECK(tag_ == kF32Tag, "value is not f32");
+  API_CHECK(tag_ == i::Type::F32_TYPE, "value is not f32");
   return i::f32FromBits(static_cast<i::u32>(bits_));
 }
 
 
 double Value::asF64() const {
-  API_CHECK(tag_ == kF64Tag, "value is not f64");
+  API_CHECK(tag_ == i::Type::F64_TYPE, "value is not f64");
   return i::f64FromBits(bits_);
 }
 
 
 const String& Value::asString() const {
-  API_CHECK(tag_ == kRefTag &&
+  API_CHECK(tag_ == i::Type::CLASS_TYPE &&
       (!ref_ || i::isa<i::String>(unwrapRaw<i::Object>(ref_))),
       "value is not String");
   return static_cast<const String&>(ref_);
@@ -959,13 +1092,13 @@ const String& Value::asString() const {
 
 
 const Object& Value::asObject() const {
-  API_CHECK(tag_ == kRefTag, "value is not Object");
+  API_CHECK(tag_ == i::Type::CLASS_TYPE, "value is not Object");
   return ref_;
 }
 
 
 String&& Value::moveString() {
-  API_CHECK(tag_ == kRefTag &&
+  API_CHECK(tag_ == i::Type::CLASS_TYPE &&
       (!ref_ || i::isa<i::String>(unwrapRaw<i::Object>(ref_))),
       "value is not String");
   return static_cast<String&&>(move(ref_));
@@ -973,7 +1106,7 @@ String&& Value::moveString() {
 
 
 Object&& Value::moveObject() {
-  API_CHECK(tag_ == kRefTag, "value is not Object");
+  API_CHECK(tag_ == i::Type::CLASS_TYPE, "value is not Object");
   return move(ref_);
 }
 

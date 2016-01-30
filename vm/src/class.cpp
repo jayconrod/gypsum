@@ -213,7 +213,7 @@ void Class::ensureInstanceMeta(const Handle<Class>& clas) {
 }
 
 
-bool Class::isSubclassOf(Class* other) const {
+bool Class::isSubclassOf(const Class* other) const {
   auto current = this;
   while (current->supertype() != nullptr && current != other) {
     current = current->supertype()->asClass();

@@ -118,7 +118,7 @@ class Class: public Block {
   static Local<Meta> ensureAndGetInstanceMeta(const Handle<Class>& clas);
   static void ensureInstanceMeta(const Handle<Class>& clas);
 
-  bool isSubclassOf(Class* other) const;
+  bool isSubclassOf(const Class* other) const;
 
  private:
   void computeSizeAndPointerMap(u32* size, bool* hasPointers, BitSet* pointerMap) const;

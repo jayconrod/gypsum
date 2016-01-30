@@ -17,7 +17,9 @@
 
 namespace codeswitch {
 
+class Class;
 class Error;
+class Field;
 class Function;
 class Global;
 class Name;
@@ -273,6 +275,30 @@ class Package final : public Reference {
    *     an invalid reference is returned.
    */
   Function findFunction(const std::string& sourceName) const;
+
+  /**
+   * Finds and returns a class from the package by name.
+   *
+   * @return the named class from the package. If the package has no class by this name,
+   *     an invalid reference is returned.
+   */
+  Class findClass(const Name& name) const;
+
+  /**
+   * Finds and returns a public class from the package by its short name from source code.
+   *
+   * @return the named class from the package. If the package has no class by this name,
+   *     an invalid reference is returned.
+   */
+  Class findClass(const String& sourceName) const;
+
+  /**
+   * Finds and returns a public class from the package by its short name from source code.
+   *
+   * @return the named class from the package. If the package has no class by this name,
+   *     an invalid reference is returned.
+   */
+  Class findClass(const std::string& sourceName) const;
 };
 
 
@@ -425,6 +451,75 @@ class Function final : public Reference {
 };
 
 
+/** A class definition. */
+class Class final : public Reference {
+ public:
+  Class() = default;
+  explicit Class(Impl* impl);
+
+  /**
+   * Finds and returns a method of the class by name.
+   *
+   * @return the named method from the class. If the class has no method by this name,
+   *     an invalid reference is returned.
+   */
+  Function findMethod(const Name& name) const;
+
+  /**
+   * Finds and returns a public method of the class by its short name from source code.
+   *
+   * @return the named method from the class. If the class has no method by this name,
+   *     an invalid reference is returned.
+   */
+  Function findMethod(const String& sourceName) const;
+
+  /**
+   * Finds and returns a public method of the class by its short name from source code.
+   *
+   * @return the named method from the class. If the class has no method by this name,
+   *     an invalid reference is returned.
+   */
+  Function findMethod(const std::string& sourceName) const;
+
+  /**
+   * Finds and returns a field of the class by name.
+   *
+   * @return the named field from the class. If the class has no field by this name,
+   *     an invalid reference is returned.
+   */
+  Field findField(const Name& name) const;
+
+  /**
+   * Finds and returns a public field of the class by its short name from source code.
+   * Static fields are not searched.
+   *
+   * @return the named field from the class. If the class has no field by this name,
+   *     an invalid reference is returned.
+   */
+  Field findField(const String& sourceName) const;
+
+  /**
+   * Finds and returns a public field of the class by its short name from source code.
+   * Static fields are not searched.
+   *
+   * @return the named field from the class. If the class has no field by this name,
+   *     an invalid reference is returned.
+   */
+  Field findField(const std::string& sourceName) const;
+};
+
+
+/**
+ * Represents a field within an object. Can be passed to {@link Object} methods to load
+ * and store values in those field.
+ */
+class Field final : public Reference {
+ public:
+  Field() = default;
+  explicit Field(Impl* impl);
+};
+
+
 /**
  * Builds a call to a function, pushing individual arguments onto a stack.
  *
@@ -440,19 +535,17 @@ class CallBuilder final {
  public:
   class Impl;
 
-  CallBuilder();
-
   /**
    * Constructs a new call builder
    *
    * @param function the function to be called. Must be a valid reference.
    */
-  CallBuilder(const Function& function);
+  explicit CallBuilder(const Function& function);
+  ~CallBuilder();
 
   CallBuilder(CallBuilder&& builder) = delete;
   CallBuilder& operator = (const CallBuilder&) = delete;
   CallBuilder& operator = (CallBuilder&& builder) = delete;
-  ~CallBuilder();
 
   /** Adds a `unit` value to the argument list */
   CallBuilder& argUnit();
@@ -639,10 +732,56 @@ class Name final : public Reference {
  * Objects are in an "invalid" state if they are created with the default constructor or
  * after being on the right side of a move assignment or construction.
  */
-class Object : public Reference {
+class Object: public Reference {
  public:
   Object() = default;
   explicit Object(Impl* impl);
+
+  /** Returns whether this object is an instance of the given class. */
+  bool isInstanceOf(const Class& clas) const;
+
+  /** Returns the class this object is an instance of. */
+  Class clas() const;
+
+  /**
+   * Loads the value stored in a field of the object.
+   *
+   * @param field a field which must have been retrieved from this object's {@link Class}
+   *     (which can be obtained by calling {@link #clas}) or any superclass.
+   */
+  Value getField(const Field& field) const;
+
+  /**
+   * Loads the value stored in the named field of the object.
+   *
+   * This method is provided for convenience, not speed. It performs a lookup on every call.
+   * If you are loading from the same field repeatedly, consider
+   * {@link #getField(const Field&)} instead.
+   *
+   * @param fieldSourceName the name from source code of a public, non-static field.
+   */
+  Value getField(const std::string& fieldSourceName) const;
+
+  /**
+   * Sets the value of a field in the object.
+   *
+   * @param field a field which must have been retrieved from this object's {@link Class}
+   *     (which can be obtained by calling {@link #clas}) or any superclass.
+   * @param value the value to store in the field.
+   */
+  void setField(const Field& field, const Value& value);
+
+  /**
+   * Sets the value of the named field in the object.
+   *
+   * This method is provided for convenience, not speed. It performs a lookup on every call.
+   * If you are loading from the same field repeatedly, consider
+   * {@link #setField(const Field&, const Value&)} instead.
+   *
+   * @param fieldSourceName the name from source code of a public, non-static field.
+   * @param the value to store in the field.
+   */
+  void setField(const std::string& fieldSourceName, const Value& value);
 
   friend class CallBuilder;
 };
@@ -730,6 +869,7 @@ class Value final {
  public:
   class Impl;
 
+  Value();
   Value(bool b);
   Value(int8_t n);
   Value(int16_t n);
