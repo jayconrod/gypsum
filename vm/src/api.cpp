@@ -12,8 +12,10 @@
 
 #include "array.h"
 #include "bitmap.h"
+#include "block.h"
 #include "builtins.h"
 #include "function.h"
+#include "global.h"
 #include "handle.h"
 #include "heap.h"
 #include "interpreter.h"
@@ -53,6 +55,18 @@ static const i::Persistent<T>& unwrap(const Reference& ref) {
 }
 
 
+template <class T>
+static T* unwrapRaw(Reference& ref) {
+  return **reinterpret_cast<i::Persistent<T>*>(&ref);
+}
+
+
+template <class T>
+static const T* unwrapRaw(const Reference& ref) {
+  return **reinterpret_cast<const i::Persistent<T>*>(&ref);
+}
+
+
 template <class ExternalT, class InternalT>
 static ExternalT wrap(const i::Handle<InternalT>& block) {
   if (!block)
@@ -72,6 +86,87 @@ static ExternalT wrap(InternalT* block) {
   InternalT** slot = nullptr;
   handleStorage.createPersistent(block, &slot);
   return ExternalT(reinterpret_cast<Impl*>(slot));
+}
+
+
+static VM* refVM(const Reference& ref) {
+  return unwrap<i::Block>(ref)->getVM()->apiPtr();
+}
+
+
+static const uint8_t kBooleanTag = 0;
+static const uint8_t kI8Tag = 1;
+static const uint8_t kI16Tag = 2;
+static const uint8_t kI32Tag = 3;
+static const uint8_t kI64Tag = 4;
+static const uint8_t kF32Tag = 5;
+static const uint8_t kF64Tag = 6;
+static const uint8_t kRefTag = 7;
+
+
+static Value valueFromRaw(i::Type* type, i::i64 bits) {
+  if (type->isBoolean()) {
+    return Value(static_cast<bool>(bits));
+  } else if (type->isI8()) {
+    return Value(static_cast<int8_t>(bits));
+  } else if (type->isI16()) {
+    return Value(static_cast<int16_t>(bits));
+  } else if (type->isI32()) {
+    return Value(static_cast<int32_t>(bits));
+  } else if (type->isI64()) {
+    return Value(static_cast<int64_t>(bits));
+  } else if (type->isF32()) {
+    return Value(i::f32FromBits(bits));
+  } else if (type->isF64()) {
+    return Value(i::f64FromBits(bits));
+  } else {
+    API_CHECK(type->isObject(), "internal value cannot be returned");
+    auto rawObject = reinterpret_cast<i::Object*>(static_cast<intptr_t>(bits));
+    return Value(wrap<Object, i::Object>(rawObject));
+  }
+}
+
+
+class Value::Impl final {
+ public:
+  static uint64_t getValueBits(const Value& value) {
+    return value.bits_;
+  }
+
+
+  static const Object& getValueRef(const Value& value) {
+    return value.ref_;
+  }
+
+
+  static const uint8_t getValueTag(const Value& value) {
+    return value.tag_;
+  }
+};
+
+
+static i::i64 rawFromValue(const Value& value, i::Type* type) {
+  auto tag = Value::Impl::getValueTag(value);
+  if (tag == kRefTag) {
+    const Object& obj = Value::Impl::getValueRef(value);
+    if (!obj) {
+      API_CHECK(type->isObject() && type->isNullable(), "type error");
+      return 0;
+    } else {
+      auto rawObj = unwrapRaw<i::Object>(Value::Impl::getValueRef(value));
+      return static_cast<i::i64>(reinterpret_cast<intptr_t>(rawObj));
+    }
+  } else {
+    API_CHECK((tag == kBooleanTag && type->isBoolean()) ||
+              (tag == kI8Tag && type->isI8()) ||
+              (tag == kI16Tag && type->isI16()) ||
+              (tag == kI32Tag && type->isI32()) ||
+              (tag == kI64Tag && type->isI64()) ||
+              (tag == kF32Tag && type->isF32()) ||
+              (tag == kF64Tag && type->isF64()),
+              "type error");
+    return Value::Impl::getValueBits(value);
+  }
 }
 
 
@@ -238,9 +333,30 @@ Reference::Reference(Impl* impl)
     : impl_(impl) { }
 
 
+Reference::Reference(const Reference& ref)
+    : impl_(nullptr) {
+  *this = ref;
+}
+
+
 Reference::Reference(Reference&& ref)
     : impl_(ref.impl_) {
   ref.impl_ = nullptr;
+}
+
+
+Reference& Reference::operator = (const Reference& ref) {
+  if (this != &ref) {
+    if (!ref) {
+      clear();
+    } else {
+      auto block = *reinterpret_cast<i::Block**>(ref.impl_);
+      auto slotPtr = reinterpret_cast<i::Block***>(&impl_);
+      auto handleStorage = i::HandleStorage::fromBlock(block);
+      handleStorage->createPersistent(block, slotPtr);
+    }
+  }
+  return *this;
 }
 
 
@@ -270,18 +386,8 @@ void Reference::clear() {
 }
 
 
-Package::Package() { }
-
-
 Package::Package(Impl* impl)
     : Reference(impl) { }
-
-
-Package::Package(Package&& package)
-    : Reference(package.impl_) { }
-
-
-Package::~Package() { }
 
 
 Function Package::entryFunction() const {
@@ -294,7 +400,41 @@ Function Package::entryFunction() const {
 }
 
 
-Function Package::getFunction(const Name& name) const {
+Global Package::findGlobal(const Name& name) const {
+  API_CHECK_SELF(Package);
+  auto globals = unwrap<i::Package>(*this)->globals();
+  for (auto global : *globals) {
+    if (global->name()->equals(*unwrap<i::Name>(name))) {
+      return wrap<Global, i::Global>(global);
+    }
+  }
+  return Global();
+}
+
+
+Global Package::findGlobal(const String& sourceName) const {
+  API_CHECK_SELF(Package);
+  auto globals = unwrap<i::Package>(*this)->globals();
+  i::u32 mask = i::PUBLIC_FLAG | i::STATIC_FLAG;
+  i::u32 expectedFlags = i::PUBLIC_FLAG;
+  for (auto global : *globals) {
+    if ((global->flags() & mask) == expectedFlags &&
+        global->sourceName()->equals(*unwrap<i::String>(sourceName))) {
+      return wrap<Global, i::Global>(global);
+    }
+  }
+  return Global();
+}
+
+
+Global Package::findGlobal(const string& sourceName) const {
+  API_CHECK_SELF(Package);
+  String sourceNameStr(refVM(*this), sourceName);
+  return findGlobal(sourceName);
+}
+
+
+Function Package::findFunction(const Name& name) const {
   API_CHECK_SELF(Package);
   auto functions = unwrap<i::Package>(*this)->functions();
   for (auto function : *functions) {
@@ -302,22 +442,59 @@ Function Package::getFunction(const Name& name) const {
       return wrap<Function, i::Function>(function);
     }
   }
-  return Function(nullptr);
+  return Function();
 }
 
 
-Function::Function() { }
+Function Package::findFunction(const String& sourceName) const {
+  API_CHECK_SELF(Package);
+  auto functions = unwrap<i::Package>(*this)->functions();
+  i::u32 mask = i::PUBLIC_FLAG | i::STATIC_FLAG | i::METHOD_FLAG;
+  i::u32 expectedFlags = i::PUBLIC_FLAG;
+  for (auto function : *functions) {
+    if ((function->flags() & mask) == expectedFlags &&
+        function->sourceName()->equals(*unwrap<i::String>(sourceName))) {
+      return wrap<Function, i::Function>(function);
+    }
+  }
+  return Function();
+}
+
+
+Function Package::findFunction(const string& sourceName) const {
+  API_CHECK_SELF(Package);
+  String sourceNameStr(refVM(*this), sourceName);
+  return findFunction(sourceNameStr);
+}
+
+
+Global::Global(Impl* impl)
+    : Reference(impl) { }
+
+
+bool Global::isConstant() const {
+  API_CHECK_SELF(Global);
+  return (unwrap<i::Global>(*this)->flags() & i::LET_FLAG) != 0;
+}
+
+
+Value Global::value() const {
+  API_CHECK_SELF(Global);
+  auto self = unwrap<i::Global>(*this);
+  return valueFromRaw(self->type(), self->getRaw());
+}
+
+
+void Global::setValue(const Value& value) {
+  API_CHECK_SELF(Global);
+  API_CHECK(isConstant(), "global cannot be set because it is constant");
+  auto self = unwrap<i::Global>(*this);
+  self->setRaw(rawFromValue(value, self->type()));
+}
 
 
 Function::Function(Impl* impl)
     : Reference(impl) { }
-
-
-Function::Function(Function&& function)
-    : Reference(move(function)) { }
-
-
-Function::~Function() { }
 
 
 CallBuilder::CallBuilder() { }
@@ -566,18 +743,8 @@ i::i64 CallBuilder::Impl::call() {
 }
 
 
-Name::Name() { }
-
-
 Name::Name(Impl* impl)
     : Reference(impl) { }
-
-
-Name::Name(Name&& name)
-    : Reference(move(name)) { }
-
-
-Name::~Name() { }
 
 
 Name Name::fromStringForDefn(const String& str) {
@@ -604,27 +771,17 @@ Name Name::fromStringForPackage(const String& str) {
 }
 
 
-String::String() { }
-
-
 String::String(Impl* impl)
     : Object(impl) { }
 
 
-String::String(VM& vm, const string& str) {
-  auto heap = vm.impl_->vm.heap();
+String::String(VM* vm, const string& str) {
+  auto heap = vm->impl_->vm.heap();
   i::AllowAllocationScope allowAlloc(heap, true);
-  i::HandleScope handleScope(&vm.impl_->vm);
+  i::HandleScope handleScope(&vm->impl_->vm);
   i::Local<i::String> istr = i::String::fromUtf8String(heap, str);
   *this = move(wrap<String, i::String>(istr));
 }
-
-
-String::String(String&& str)
-    : Object(move(str)) { }
-
-
-String::~String() { }
 
 
 String String::operator + (const String& other) const {
@@ -665,18 +822,8 @@ string String::toStdString() const {
 }
 
 
-Object::Object() { }
-
-
 Object::Object(Impl* impl)
     : Reference(impl) { }
-
-
-Object::Object(Object&& obj)
-    : Reference(move(obj)) { }
-
-
-Object::~Object() { }
 
 
 Error::Error() { }
@@ -711,6 +858,123 @@ bool Error::operator ! () const {
 
 const char* Error::message() const {
   return impl_->message.c_str();
+}
+
+
+Value::Value(bool b)
+    : bits_(static_cast<uint64_t>(b)),
+      tag_(kBooleanTag) { }
+
+
+Value::Value(int8_t n)
+    : bits_(static_cast<uint64_t>(n)),
+      tag_(kI8Tag) { }
+
+
+Value::Value(int16_t n)
+    : bits_(static_cast<uint64_t>(n)),
+      tag_(kI16Tag) { }
+
+
+Value::Value(int32_t n)
+    : bits_(static_cast<uint64_t>(n)),
+      tag_(kI32Tag) { }
+
+
+Value::Value(int64_t n)
+    : bits_(static_cast<uint64_t>(n)),
+      tag_(kI64Tag) { }
+
+
+Value::Value(float n)
+    : bits_(i::f32ToBits(n)),
+      tag_(kF32Tag) { }
+
+
+Value::Value(double n)
+    : bits_(i::f64ToBits(n)),
+      tag_(kF64Tag) { }
+
+
+Value::Value(const Object& o)
+    : bits_(0),
+      ref_(o),
+      tag_(kRefTag) { }
+
+
+Value::Value(Object&& o)
+    : bits_(0),
+      ref_(move(o)),
+      tag_(kRefTag) { }
+
+
+bool Value::asBoolean() const {
+  API_CHECK(tag_ == kBooleanTag, "value is not Boolean");
+  return static_cast<bool>(bits_);
+}
+
+
+int8_t Value::asI8() const {
+  API_CHECK(tag_ == kI8Tag, "value is not i8");
+  return static_cast<int8_t>(bits_);
+}
+
+
+int16_t Value::asI16() const {
+  API_CHECK(tag_ == kI16Tag, "value is not i16");
+  return static_cast<int16_t>(bits_);
+}
+
+
+int32_t Value::asI32() const {
+  API_CHECK(tag_ == kI32Tag, "value is not i32");
+  return static_cast<int32_t>(bits_);
+}
+
+
+int64_t Value::asI64() const {
+  API_CHECK(tag_ == kI64Tag, "value is not i64");
+  return static_cast<int64_t>(bits_);
+}
+
+
+float Value::asF32() const {
+  API_CHECK(tag_ == kF32Tag, "value is not f32");
+  return i::f32FromBits(static_cast<i::u32>(bits_));
+}
+
+
+double Value::asF64() const {
+  API_CHECK(tag_ == kF64Tag, "value is not f64");
+  return i::f64FromBits(bits_);
+}
+
+
+const String& Value::asString() const {
+  API_CHECK(tag_ == kRefTag &&
+      (!ref_ || i::isa<i::String>(unwrapRaw<i::Object>(ref_))),
+      "value is not String");
+  return static_cast<const String&>(ref_);
+}
+
+
+const Object& Value::asObject() const {
+  API_CHECK(tag_ == kRefTag, "value is not Object");
+  return ref_;
+}
+
+
+String&& Value::moveString() {
+  API_CHECK(tag_ == kRefTag &&
+      (!ref_ || i::isa<i::String>(unwrapRaw<i::Object>(ref_))),
+      "value is not String");
+  return static_cast<String&&>(move(ref_));
+}
+
+
+Object&& Value::moveObject() {
+  API_CHECK(tag_ == kRefTag, "value is not Object");
+  return move(ref_);
 }
 
 

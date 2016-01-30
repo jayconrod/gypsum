@@ -19,10 +19,12 @@ namespace codeswitch {
 
 class Error;
 class Function;
+class Global;
 class Name;
 class Object;
 class Package;
 class String;
+class Value;
 
 /** Used to specify where native functions should be loaded from. */
 enum NativeFunctionSearch {
@@ -169,9 +171,9 @@ class Reference {
  protected:
   Reference();
   explicit Reference(Impl* impl);
-  Reference(const Reference&) = delete;
+  Reference(const Reference& ref);
   Reference(Reference&& ref);
-  Reference& operator = (const Reference&) = delete;
+  Reference& operator = (const Reference& ref);
   Reference& operator = (Reference&& ref);
  public:
   ~Reference();
@@ -206,35 +208,96 @@ class Reference {
  * Packages are loaded from files using {@link VM#loadPackage} or
  * {@link VM#loadPackageFromFile}. Package may reference definitions in other packages. When
  * a package is loaded, its dependencies are automatically loaded first.
- *
- * Objects of this class actually manage pointers to objects on the garbage collected heap.
- * Objects are in an "invalid" state if they are created with the default constructor or
- * after being on the right side of a move assignment or construction.
  */
 class Package final : public Reference {
  public:
-  Package();
+  Package() = default;
   explicit Package(Impl* impl);
-  Package(const Package&) = delete;
-  Package(Package&& package);
-  Package& operator = (Package&&) = default;
-  ~Package();
 
   /**
    * Returns the package's entry function, if it has one.
    *
    * @return the package's entry function. If the package has no entry function, an invalid
-   *   reference is returned.
+   *     reference is returned.
    */
   Function entryFunction() const;
 
   /**
-   * Gets a function from the package, by name.
+   * Finds and returns a global from the package by name.
+   *
+   * @return the named global from the package. If the package has no global by this name,
+   *     and invalid reference is returned.
+   */
+  Global findGlobal(const Name& name) const;
+
+  /**
+   * Finds and returns a public global from the package by its short name from source code.
+   * Static fields are not searched.
+   *
+   * @return the named global from the package. If the package has no global by this name,
+   *     and invalid reference is returned.
+   */
+  Global findGlobal(const String& sourceName) const;
+
+  /**
+   * Finds and returns a public global from the package by its short name from source code.
+   * Static fields are not searched.
+   *
+   * @return the named global from the package. If the package has no global by this name,
+   *     and invalid reference is returned.
+   */
+  Global findGlobal(const std::string& sourceName) const;
+
+  /**
+   * Finds and returns a function from the package by name.
    *
    * @return the named function from the package. If the package has no function by this name,
-   *   an invalid reference is returned.
+   *     an invalid reference is returned.
    */
-  Function getFunction(const Name& name) const;
+  Function findFunction(const Name& name) const;
+
+  /**
+   * Finds and returns a public function from the package by its short name from source code.
+   * Methods (static or otherwise) are not searched.
+   *
+   * @return the named function from the package. If the package has no function by this name,
+   *     an invalid reference is returned.
+   */
+  Function findFunction(const String& sourceName) const;
+
+  /**
+   * Finds and returns a public function from the package by its short name from source code.
+   * Methods (static or otherwise) are not searched.
+   *
+   * @return the named function from the package. If the package has no function by this name,
+   *     an invalid reference is returned.
+   */
+  Function findFunction(const std::string& sourceName) const;
+};
+
+
+/**
+ * A global variable or static field of a class.
+ *
+ * Objects of this class can be used to get or set the values of global variables. Some
+ * globals are constant and their values cannot be changed through this API.
+ */
+class Global final : public Reference {
+ public:
+  Global() = default;
+  explicit Global(Impl* impl);
+
+  /**
+   * Returns whether the value of this global can be altered through the API. If true,
+   * {@link #setValue} must not be called.
+   */
+  bool isConstant() const;
+
+  /** Returns the value of this global. */
+  Value value() const;
+
+  /** Sets the value of this global. {@link #isConstant} must be false. */
+  void setValue(const Value& value);
 };
 
 
@@ -243,18 +306,11 @@ class Package final : public Reference {
  *
  * Functions can be called using either the provided `call` methods or
  * `CallBuilder`.
- *
- * Objects of this class actually manage pointers to objects on the garbage collected heap.
- * Objects are in an "invalid" state if they are created with the default constructor or
- * after being on the right side of a move assignment or construction.
  */
 class Function final : public Reference {
  public:
-  Function();
+  Function() = default;
   explicit Function(Impl* impl);
-  Function(Function&&);
-  Function& operator = (Function&&) = default;
-  ~Function();
 
   /**
    * Calls a function that returns `unit` (equivalent to `void`)
@@ -546,11 +602,8 @@ class CallBuilder final {
  */
 class Name final : public Reference {
  public:
-  Name();
+  Name() = default;
   explicit Name(Impl* impl);
-  Name(Name&&);
-  Name& operator = (Name&&) = default;
-  ~Name();
 
   /**
    * Parses a string to create a new name for a definition
@@ -588,11 +641,8 @@ class Name final : public Reference {
  */
 class Object : public Reference {
  public:
-  Object();
+  Object() = default;
   explicit Object(Impl* impl);
-  Object(Object&& obj);
-  Object& operator = (Object&&) = default;
-  ~Object();
 
   friend class CallBuilder;
 };
@@ -607,7 +657,7 @@ class Object : public Reference {
  */
 class String final : public Object {
  public:
-  String();
+  String() = default;
   explicit String(Impl* impl);
 
   /**
@@ -616,10 +666,7 @@ class String final : public Object {
    * @param vm the CodeSwitch virtual machine
    * @param str a UTF-8 used to build the CodeSwitch string
    */
-  String(VM& vm, const std::string& str);
-  String(String&& str);
-  String& operator = (String&& str) = default;
-  ~String();
+  String(VM* vm, const std::string& str);
 
   /** Concatenates two strings */
   String operator + (const String& other) const;
@@ -667,6 +714,50 @@ class Error final {
 
  private:
   std::unique_ptr<Impl> impl_;
+};
+
+
+/**
+ * Represents a value that can be returned or passed as an argument to a {@link Function}.
+ * Values can also be loaded from and stored to {@link Global}s.
+ *
+ * Values can be created implicitly from primitive types and object references. This lets you
+ * pass primitives directly to methods like {@link Global#setValue}. Note that creating a
+ * value by moving an object reference is significantly faster than copying the reference,
+ * so this should be preferred when possible.
+ */
+class Value final {
+ public:
+  class Impl;
+
+  Value(bool b);
+  Value(int8_t n);
+  Value(int16_t n);
+  Value(int32_t n);
+  Value(int64_t n);
+  Value(float n);
+  Value(double n);
+  Value(const Object& o);
+  Value(Object&& o);
+
+  bool asBoolean() const;
+  int8_t asI8() const;
+  int16_t asI16() const;
+  int32_t asI32() const;
+  int64_t asI64() const;
+  float asF32() const;
+  double asF64() const;
+  const String& asString() const;
+  const Object& asObject() const;
+  String&& moveString();
+  Object&& moveObject();
+
+ private:
+  uint64_t bits_;
+  Object ref_;
+  uint8_t tag_;
+
+  friend Impl;
 };
 
 

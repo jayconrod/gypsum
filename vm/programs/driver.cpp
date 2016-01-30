@@ -34,7 +34,7 @@ using codeswitch::VMOptions;
 
 
 vector<string> packagePaths;
-vector<function<Package(VM&)>> packageLoaders;
+vector<function<Package(VM*)>> packageLoaders;
 
 
 static void printUsage(const char* programName) {
@@ -61,14 +61,14 @@ static vector<string> split(const string& str, char delim) {
 }
 
 
-static Package loadPackageByName(const string& packageName, VM& vm) {
+static Package loadPackageByName(const string& packageName, VM* vm) {
   auto name = Name::fromStringForPackage(String(vm, packageName));
-  return vm.loadPackage(name);
+  return vm->loadPackage(name);
 }
 
 
-static Package loadPackageFromFile(const string& fileName, VM& vm) {
-  return vm.loadPackageFromFile(fileName);
+static Package loadPackageFromFile(const string& fileName, VM* vm) {
+  return vm->loadPackageFromFile(fileName);
 }
 
 
@@ -119,7 +119,7 @@ int main(int argc, char* argv[]) {
     VM vm(vmOptions);
     bool executedEntry = false;
     for (auto& loader : packageLoaders) {
-      auto package = loader(vm);
+      auto package = loader(&vm);
       auto entryFunction = package.entryFunction();
       if (entryFunction) {
         executedEntry = true;
