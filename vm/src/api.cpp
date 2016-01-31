@@ -848,6 +848,11 @@ Name Name::fromStringForDefn(const String& str) {
 }
 
 
+Name Name::fromStringForDefn(VM* vm, const string& str) {
+  return fromStringForDefn(String(vm, str));
+}
+
+
 Name Name::fromStringForPackage(const String& str) {
   API_CHECK(str.impl_ != nullptr, "string argument does not reference a string");
   auto istr = unwrap<i::String>(str);
@@ -857,6 +862,11 @@ Name Name::fromStringForPackage(const String& str) {
   auto iname = i::Name::fromString(vm->heap(), istr, i::Name::PACKAGE_NAME);
   API_CHECK(iname, "string argument is not a valid name for packages");
   return wrap<Name, i::Name>(iname);
+}
+
+
+Name Name::fromStringForPackage(VM* vm, const string& str) {
+  return fromStringForPackage(vm, str);
 }
 
 

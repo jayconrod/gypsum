@@ -710,6 +710,18 @@ class Name final : public Reference {
   static Name fromStringForDefn(const String& str);
 
   /**
+   * Parses a string to create a new name for a definition
+   *
+   * @param vm a pointer to the VM.
+   * @param str the string to parse. It is split on '.' characters, and the pieces form the
+   *   components of the new name. The pieces may contain any character except '.', but must
+   *   not be empty.
+   * @return the newly constructed name. This will always be a valid reference.
+   * @throws Error if str could not be parsed.
+   */
+  static Name fromStringForDefn(VM* vm, const std::string& str);
+
+  /**
    * Parses a string to create a new name for a package
    *
    * @param str the string to parse. It is split on '.' characters, and the pieces form the
@@ -719,6 +731,18 @@ class Name final : public Reference {
    * @throws Error if str could not be parsed.
    */
   static Name fromStringForPackage(const String& str);
+
+  /**
+   * Parses a string to create a new name for a package
+   *
+   * @param vm a pointer to the VM.
+   * @param str the string to parse. It is split on '.' characters, and the pieces form the
+   *   components of the new name. Each piece must start with a character in the range
+   *   A-Z or a-z. After that characters may be in the ranges A-Z, a-z, 0-9, or _.
+   * @return the newly constructed name. This will always be a valid reference.
+   * @throws Error if str could not be parsed.
+   */
+  static Name fromStringForPackage(VM* vm, const std::string& str);
 
   friend class Package;
   friend class VM;
