@@ -785,8 +785,7 @@ class Object: public Reference {
    * Loads the value stored in the named field of the object.
    *
    * This method is provided for convenience, not speed. It performs a lookup on every call.
-   * If you are loading from the same field repeatedly, consider
-   * {@link #getField(const Field&)} instead.
+   * If you are loading from the same field repeatedly, consider the other {@code getField}.
    *
    * @param fieldSourceName the name from source code of a public, non-static field.
    */
@@ -809,7 +808,7 @@ class Object: public Reference {
    * {@link #setField(const Field&, const Value&)} instead.
    *
    * @param fieldSourceName the name from source code of a public, non-static field.
-   * @param the value to store in the field.
+   * @param value the value to store in the field.
    */
   void setField(const std::string& fieldSourceName, const Value& value);
 
@@ -919,7 +918,7 @@ class Object: public Reference {
    * Copies values into a native arrya from the object's array elements.
    *
    * @param index the location of the first element to read.
-   * @param from a pointer to the native array to copy to.
+   * @param to a pointer to the native array to copy to.
    * @param count the number of elements to copy. {@code index + count} must be less than
    *     {@link #length}.
    */
@@ -929,7 +928,7 @@ class Object: public Reference {
    * Copies values into a native arrya from the object's array elements.
    *
    * @param index the location of the first element to read.
-   * @param from a pointer to the native array to copy to.
+   * @param to a pointer to the native array to copy to.
    * @param count the number of elements to copy. {@code index + count} must be less than
    *     {@link #length}.
    */
@@ -939,7 +938,7 @@ class Object: public Reference {
    * Copies values into a native arrya from the object's array elements.
    *
    * @param index the location of the first element to read.
-   * @param from a pointer to the native array to copy to.
+   * @param to a pointer to the native array to copy to.
    * @param count the number of elements to copy. {@code index + count} must be less than
    *     {@link #length}.
    */
@@ -949,7 +948,7 @@ class Object: public Reference {
    * Copies values into a native arrya from the object's array elements.
    *
    * @param index the location of the first element to read.
-   * @param from a pointer to the native array to copy to.
+   * @param to a pointer to the native array to copy to.
    * @param count the number of elements to copy. {@code index + count} must be less than
    *     {@link #length}.
    */
@@ -959,7 +958,7 @@ class Object: public Reference {
    * Copies values into a native arrya from the object's array elements.
    *
    * @param index the location of the first element to read.
-   * @param from a pointer to the native array to copy to.
+   * @param to a pointer to the native array to copy to.
    * @param count the number of elements to copy. {@code index + count} must be less than
    *     {@link #length}.
    */
@@ -969,7 +968,7 @@ class Object: public Reference {
    * Copies values into a native arrya from the object's array elements.
    *
    * @param index the location of the first element to read.
-   * @param from a pointer to the native array to copy to.
+   * @param to a pointer to the native array to copy to.
    * @param count the number of elements to copy. {@code index + count} must be less than
    *     {@link #length}.
    */
@@ -979,7 +978,7 @@ class Object: public Reference {
    * Copies values into a native arrya from the object's array elements.
    *
    * @param index the location of the first element to read.
-   * @param from a pointer to the native array to copy to.
+   * @param to a pointer to the native array to copy to.
    * @param count the number of elements to copy. {@code index + count} must be less than
    *     {@link #length}.
    */
