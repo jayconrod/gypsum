@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -450,8 +450,8 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
 
     def testImportGlobalFromPackage(self):
         foo = Package(name=Name(["foo"]))
-        foo.addGlobal(Name(["bar"]), None, None, frozenset([PUBLIC, LET]))
-        foo.addGlobal(Name(["baz"]), None, None, frozenset([LET]))
+        foo.addGlobal(Name(["bar"]), flags=frozenset([PUBLIC, LET]))
+        foo.addGlobal(Name(["baz"]), flags=frozenset([LET]))
         source = "import foo._"
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         scope = info.getScope(GLOBAL_SCOPE_ID)
@@ -573,22 +573,22 @@ class TestPackageScope(unittest.TestCase):
 
     def testPackageClassHasScope(self):
         package = Package(name=Name(["foo"]))
-        clas = package.addClass(Name(["C"]), None, typeParameters=[],
+        clas = package.addClass(Name(["C"]), typeParameters=[],
                                 supertypes=[getRootClassType()], flags=frozenset([PUBLIC]))
         classType = ClassType(clas)
-        publicCtor = package.addFunction(Name(["C", CONSTRUCTOR_SUFFIX]), None, UnitType, [],
-                                         [classType], None, None,
-                                         frozenset([PUBLIC, METHOD, EXTERN]))
-        privateCtor = package.addFunction(Name(["C", CONSTRUCTOR_SUFFIX]), None, UnitType, [],
-                                          [classType], None, None,
-                                          frozenset([PRIVATE, METHOD, EXTERN]))
+        publicCtor = package.addFunction(Name(["C", CONSTRUCTOR_SUFFIX]), returnType=UnitType,
+                                         typeParameters=[], parameterTypes=[classType],
+                                         flags=frozenset([PUBLIC, METHOD, EXTERN]))
+        privateCtor = package.addFunction(Name(["C", CONSTRUCTOR_SUFFIX]), returnType=UnitType,
+                                          typeParameters=[], parameterTypes=[classType],
+                                          flags=frozenset([PRIVATE, METHOD, EXTERN]))
         clas.constructors = [publicCtor, privateCtor]
-        publicMethod = package.addFunction(Name(["C", "m1"]), None, UnitType, [],
-                                           [classType], None, None,
-                                           frozenset([PUBLIC, METHOD, EXTERN]))
-        privateMethod = package.addFunction(Name(["C", "m2"]), None, UnitType, [],
-                                            [classType], None, None,
-                                            frozenset([PRIVATE, METHOD, EXTERN]))
+        publicMethod = package.addFunction(Name(["C", "m1"]), returnType=UnitType,
+                                           typeParameters=[], parameterTypes=[classType],
+                                           flags=frozenset([PUBLIC, METHOD, EXTERN]))
+        privateMethod = package.addFunction(Name(["C", "m2"]), returnType=UnitType,
+                                            typeParameters=[], parameterTypes=[classType],
+                                            flags=frozenset([PRIVATE, METHOD, EXTERN]))
         clas.methods = [publicMethod, privateMethod]
         publicField = package.newField(Name(["C", "x"]), type=UnitType,
                                        flags=frozenset([PUBLIC, EXTERN]))

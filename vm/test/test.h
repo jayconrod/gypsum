@@ -66,8 +66,8 @@ inline void assertFalse(bool result, const std::string& message) {
 #define MESSAGE(msg) __FILE__ ":" S_(__LINE__) ": " msg
 
 
-#define ASSERT_TRUE(cond) assertTrue((cond), MESSAGE(#cond))
-#define ASSERT_FALSE(cond) assertFalse((cond), MESSAGE(#cond))
+#define ASSERT_TRUE(cond) assertTrue(static_cast<bool>(cond), MESSAGE(#cond))
+#define ASSERT_FALSE(cond) assertFalse(static_cast<bool>(cond), MESSAGE(#cond))
 #define ASSERT_EQ(expected, actual) assertTrue((expected) == (actual), \
     MESSAGE(#expected " == " #actual))
 #define ASSERT_NE(expected, actual) assertTrue((expected) != (actual), \

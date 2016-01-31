@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014,2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -19,7 +19,7 @@ HandleStorage::HandleStorage()
     : canCreateLocal_(false) { }
 
 
-HandleStorage* HandleStorage::fromBlock(Block* block) {
+HandleStorage* HandleStorage::fromBlock(const Block* block) {
   return fromVM(block->getVM());
 }
 

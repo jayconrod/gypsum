@@ -1,4 +1,4 @@
- // Copyright 2014-2015 Jay Conrod. All rights reserved.
+ // Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -48,10 +48,10 @@ TEST(PrimitiveTypeEquals) {
 TEST(ClassTypeEquals) {
   TEST_PROLOGUE
 
-  auto S = TypeParameter::create(heap, NAME("S"), 0,
+  auto S = TypeParameter::create(heap, NAME("S"), STR("S"), 0,
                                  handle(Type::rootClassType(vm.roots())),
                                  handle(Type::nothingType(vm.roots())));
-  auto T = TypeParameter::create(heap, NAME("T"), 0,
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), 0,
                                  handle(Type::rootClassType(vm.roots())),
                                  handle(Type::nothingType(vm.roots())));
   auto C = Class::create(heap);
@@ -77,11 +77,11 @@ TEST(ClassTypeEquals) {
 TEST(VariableTypeEquals) {
   TEST_PROLOGUE
 
-  auto S = TypeParameter::create(heap, NAME("S"), 0,
+  auto S = TypeParameter::create(heap, NAME("S"), STR("S"), 0,
                                  handle(Type::rootClassType(vm.roots())),
                                  handle(Type::nothingType(vm.roots())));
   auto SType = Type::create(heap, S);
-  auto T = TypeParameter::create(heap, NAME("T"), 0,
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), 0,
                                  handle(Type::rootClassType(vm.roots())),
                                  handle(Type::nothingType(vm.roots())));
   auto TType = Type::create(heap, T);
@@ -134,7 +134,7 @@ TEST(SubtypeClassNothing) {
 TEST(SubtypeParameterSimple) {
   TEST_PROLOGUE
 
-  auto T = TypeParameter::create(heap, NAME("T"), 0,
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), 0,
                                  handle(Type::rootClassType(vm.roots())),
                                  handle(Type::nothingType(vm.roots())));
   auto TType = Type::create(heap, T);
@@ -162,9 +162,9 @@ TEST(SubtypeParametersOverlapping) {
   C->setTypeParameters(*emptyTypeParameters);
   auto CType = Type::create(heap, C);
 
-  auto T = TypeParameter::create(heap, NAME("T"), 0, AType, CType);
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), 0, AType, CType);
   auto TType = Type::create(heap, T);
-  auto S = TypeParameter::create(heap, NAME("S"), 0, BType, CType);
+  auto S = TypeParameter::create(heap, NAME("S"), STR("S"), 0, BType, CType);
   auto SType = Type::create(heap, S);
   ASSERT_FALSE(Type::isSubtypeOf(SType, TType));
 }
@@ -188,9 +188,9 @@ TEST(SubtypeParametersNonOverlapping) {
   C->setTypeParameters(*emptyTypeParameters);
   auto CType = Type::create(heap, C);
 
-  auto T = TypeParameter::create(heap, NAME("T"), 0, AType, BType);
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), 0, AType, BType);
   auto TType = Type::create(heap, T);
-  auto S = TypeParameter::create(heap, NAME("S"), 0, BType, CType);
+  auto S = TypeParameter::create(heap, NAME("S"), STR("S"), 0, BType, CType);
   auto SType = Type::create(heap, S);
   ASSERT_TRUE(Type::isSubtypeOf(SType, TType));
 }
@@ -201,11 +201,11 @@ TEST(SubtypeParametersTransitiveUpper) {
 
   auto rootType = handle(Type::rootClassType(vm.roots()));
   auto nothingType = handle(Type::nothingType(vm.roots()));
-  auto U = TypeParameter::create(heap, NAME("U"), 0, rootType, nothingType);
+  auto U = TypeParameter::create(heap, NAME("U"), STR("U"), 0, rootType, nothingType);
   auto UType = Type::create(heap, U);
-  auto T = TypeParameter::create(heap, NAME("T"), 0, UType, nothingType);
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), 0, UType, nothingType);
   auto TType = Type::create(heap, T);
-  auto S = TypeParameter::create(heap, NAME("S"), 0, TType, nothingType);
+  auto S = TypeParameter::create(heap, NAME("S"), STR("S"), 0, TType, nothingType);
   auto SType = Type::create(heap, S);
 
   ASSERT_TRUE(Type::isSubtypeOf(SType, UType));
@@ -217,11 +217,11 @@ TEST(SubtypeParametersTransitiveLower) {
 
   auto rootType = handle(Type::rootClassType(vm.roots()));
   auto nothingType = handle(Type::nothingType(vm.roots()));
-  auto U = TypeParameter::create(heap, NAME("U"), 0, rootType, nothingType);
+  auto U = TypeParameter::create(heap, NAME("U"), STR("U"), 0, rootType, nothingType);
   auto UType = Type::create(heap, U);
-  auto T = TypeParameter::create(heap, NAME("T"), 0, rootType, UType);
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), 0, rootType, UType);
   auto TType = Type::create(heap, T);
-  auto S = TypeParameter::create(heap, NAME("S"), 0, rootType, TType);
+  auto S = TypeParameter::create(heap, NAME("S"), STR("S"), 0, rootType, TType);
   auto SType = Type::create(heap, S);
 
   ASSERT_TRUE(Type::isSubtypeOf(UType, SType));
@@ -233,11 +233,11 @@ TEST(SubtypeParametersTransitiveMiddle) {
 
   auto rootType = handle(Type::rootClassType(vm.roots()));
   auto nothingType = handle(Type::nothingType(vm.roots()));
-  auto M = TypeParameter::create(heap, NAME("M"), 0, rootType, nothingType);
+  auto M = TypeParameter::create(heap, NAME("M"), STR("M"), 0, rootType, nothingType);
   auto MType = Type::create(heap, M);
-  auto S = TypeParameter::create(heap, NAME("S"), 0, MType, nothingType);
+  auto S = TypeParameter::create(heap, NAME("S"), STR("S"), 0, MType, nothingType);
   auto SType = Type::create(heap, S);
-  auto T = TypeParameter::create(heap, NAME("T"), 0, rootType, MType);
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), 0, rootType, MType);
   auto TType = Type::create(heap, T);
 
   ASSERT_TRUE(Type::isSubtypeOf(SType, TType));
@@ -249,9 +249,9 @@ TEST(SubtypeClassWithParametersSelf) {
 
   auto rootType = handle(Type::rootClassType(vm.roots()));
   auto nothingType = handle(Type::nothingType(vm.roots()));
-  auto T = TypeParameter::create(heap, NAME("T"), 0, rootType, nothingType);
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), 0, rootType, nothingType);
   auto TType = Type::create(heap, T);
-  auto S = TypeParameter::create(heap, NAME("S"), 0, rootType, nothingType);
+  auto S = TypeParameter::create(heap, NAME("S"), STR("S"), 0, rootType, nothingType);
   auto SType = Type::create(heap, S);
 
   auto A = Class::create(heap);
@@ -289,7 +289,7 @@ TEST(SubtypeSubclassWithParameters) {
 
   auto rootType = handle(Type::rootClassType(vm.roots()));
   auto nothingType = handle(Type::nothingType(vm.roots()));
-  auto T = TypeParameter::create(heap, NAME("T"), 0, rootType, nothingType);
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), 0, rootType, nothingType);
 
   auto A = Class::create(heap);
   A->setSupertype(*rootType);
@@ -326,7 +326,7 @@ TEST(SubtypeSuperclassWithParameters) {
 
   auto rootType = handle(Type::rootClassType(vm.roots()));
   auto nothingType = handle(Type::nothingType(vm.roots()));
-  auto T = TypeParameter::create(heap, NAME("T"), 0, rootType, nothingType);
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), 0, rootType, nothingType);
 
   auto A = Class::create(heap);
   auto emptyTypeParameters = handle(reinterpret_cast<BlockArray<TypeParameter>*>(
@@ -357,7 +357,7 @@ TEST(SubtypeClassWithCovariantParameter) {
 
   auto rootType = handle(Type::rootClassType(vm.roots()));
   auto nothingType = handle(Type::nothingType(vm.roots()));
-  auto T = TypeParameter::create(heap, NAME("T"), COVARIANT_FLAG, rootType, nothingType);
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), COVARIANT_FLAG, rootType, nothingType);
 
   auto B = Class::create(heap);
   auto emptyTypeParameters = handle(reinterpret_cast<BlockArray<TypeParameter>*>(
@@ -390,7 +390,7 @@ TEST(SubtypeClassWithContravariantParameter) {
 
   auto rootType = handle(Type::rootClassType(vm.roots()));
   auto nothingType = handle(Type::nothingType(vm.roots()));
-  auto T = TypeParameter::create(heap, NAME("T"), CONTRAVARIANT_FLAG, rootType, nothingType);
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), CONTRAVARIANT_FLAG, rootType, nothingType);
 
   auto A = Class::create(heap);
   auto emptyTypeParameters = handle(reinterpret_cast<BlockArray<TypeParameter>*>(
@@ -420,12 +420,12 @@ TEST(SubtypeClassWithContravariantParameter) {
 TEST(SubtypeEquivalentExistentials) {
   TEST_PROLOGUE
 
-  auto X = TypeParameter::create(heap, NAME("X"), 0,
+  auto X = TypeParameter::create(heap, NAME("X"), STR("X"), 0,
                                  handle(Type::rootClassType(roots)),
                                  handle(Type::nothingType(roots)));
   auto XType = Type::create(heap, X);
   auto eXType = Type::create(heap, vector<Local<TypeParameter>>{X}, XType);
-  auto Y = TypeParameter::create(heap, NAME("Y"), 0,
+  auto Y = TypeParameter::create(heap, NAME("Y"), STR("Y"), 0,
                                  handle(Type::rootClassType(roots)),
                                  handle(Type::nothingType(roots)));
   auto YType = Type::create(heap, Y);
@@ -443,13 +443,13 @@ TEST(SubtypeLeftExistential) {
   auto nothingType = handle(Type::nothingType(roots));
 
   auto Foo = Class::create(heap);
-  auto T = TypeParameter::create(heap, NAME("T"), COVARIANT_FLAG, rootType, nothingType);
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), COVARIANT_FLAG, rootType, nothingType);
   auto fooTypeParameters = BlockArray<TypeParameter>::create(heap, 1);
   fooTypeParameters->set(0, *T);
   Foo->setTypeParameters(*fooTypeParameters);
   Foo->setSupertype(Type::rootClassType(roots));
 
-  auto X = TypeParameter::create(heap, NAME("X"), 0, rootType, nothingType);
+  auto X = TypeParameter::create(heap, NAME("X"), STR("X"), 0, rootType, nothingType);
   auto XType = Type::create(heap, X);
   auto FooXType = Type::create(heap, Foo, vector<Local<Type>>{XType});
   auto eXFooType = Type::create(heap, vector<Local<TypeParameter>>{X}, FooXType);
@@ -464,7 +464,7 @@ TEST(SubtypeRightExistential) {
   auto rootType = handle(Type::rootClassType(roots));
   auto stringType = handle(roots->getBuiltinType(BUILTIN_STRING_CLASS_ID));
 
-  auto X = TypeParameter::create(heap, NAME("X"), NO_FLAGS, rootType, stringType);
+  auto X = TypeParameter::create(heap, NAME("X"), STR("X"), NO_FLAGS, rootType, stringType);
   auto XType = Type::create(heap, X);
   auto eXType = Type::create(heap, vector<Local<TypeParameter>>{X}, XType);
   ASSERT_TRUE(Type::isSubtypeOf(stringType, eXType));
@@ -474,11 +474,11 @@ TEST(SubtypeRightExistential) {
 TEST(SubstituteTypeParameter) {
   TEST_PROLOGUE
 
-  auto S = TypeParameter::create(heap, NAME("S"), 0,
+  auto S = TypeParameter::create(heap, NAME("S"), STR("S"), 0,
                                  handle(Type::rootClassType(vm.roots())),
                                  handle(Type::nothingType(vm.roots())));
   auto SType = Type::create(heap, S);
-  auto T = TypeParameter::create(heap, NAME("T"), 0,
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), 0,
                                  handle(Type::rootClassType(vm.roots())),
                                  handle(Type::nothingType(vm.roots())));
   auto TType = Type::create(heap, T);
@@ -492,7 +492,7 @@ TEST(SubstituteTypeParameter) {
 TEST(SubstituteClassWithTypeParameter) {
   TEST_PROLOGUE
 
-  auto S = TypeParameter::create(heap, NAME("S"), 0,
+  auto S = TypeParameter::create(heap, NAME("S"), STR("S"), 0,
                                  handle(Type::rootClassType(vm.roots())),
                                  handle(Type::nothingType(vm.roots())));
   auto C = Class::create(heap);
@@ -502,7 +502,7 @@ TEST(SubstituteClassWithTypeParameter) {
   vector<Local<Type>> CTypeArgs { Type::create(heap, S) };
   auto CType = Type::create(heap, C, CTypeArgs);
 
-  auto T = TypeParameter::create(heap, NAME("T"), 0,
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), 0,
                                  handle(Type::rootClassType(vm.roots())),
                                  handle(Type::nothingType(vm.roots())));
   auto TType = Type::create(heap, T);
@@ -518,7 +518,7 @@ TEST(SubstituteForBaseClass) {
   TEST_PROLOGUE
 
   // class A[T]
-  auto T = TypeParameter::create(heap, NAME("T"), 0,
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), 0,
                                  handle(Type::rootClassType(vm.roots())),
                                  handle(Type::nothingType(vm.roots())));
   auto ATypeParams = BlockArray<TypeParameter>::create(heap, 1);
@@ -528,7 +528,7 @@ TEST(SubstituteForBaseClass) {
   A->setSupertype(Type::rootClassType(vm.roots()));
 
   // class B[U] <: A[U]
-  auto U = TypeParameter::create(heap, NAME("U"), 0,
+  auto U = TypeParameter::create(heap, NAME("U"), STR("U"), 0,
                                  handle(Type::rootClassType(vm.roots())),
                                  handle(Type::nothingType(vm.roots())));
   auto BTypeParams = BlockArray<TypeParameter>::create(heap, 1);
@@ -553,7 +553,7 @@ TEST(SubstituteForBaseClass) {
   D->setSupertype(*DSupertype);
 
   // V <: D
-  auto V = TypeParameter::create(heap, NAME("V"), 0,
+  auto V = TypeParameter::create(heap, NAME("V"), STR("V"), 0,
                                  Type::create(heap, D),
                                  handle(Type::nothingType(vm.roots())));
   auto VType = Type::create(heap, V);
@@ -569,15 +569,15 @@ TEST(SubstituteForInheritance) {
   TEST_PROLOGUE
 
   // Type parameters S, T, U
-  auto S = TypeParameter::create(heap, NAME("S"), 0,
+  auto S = TypeParameter::create(heap, NAME("S"), STR("S"), 0,
                                  handle(Type::rootClassType(vm.roots())),
                                  handle(Type::nothingType(vm.roots())));
   auto SType = Type::create(heap, S);
-  auto T = TypeParameter::create(heap, NAME("T"), 0,
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), 0,
                                  handle(Type::rootClassType(vm.roots())),
                                  handle(Type::nothingType(vm.roots())));
   auto TType = Type::create(heap, T);
-  auto U = TypeParameter::create(heap, NAME("U"), 0,
+  auto U = TypeParameter::create(heap, NAME("U"), STR("U"), 0,
                                  handle(Type::rootClassType(vm.roots())),
                                  handle(Type::nothingType(vm.roots())));
   auto UType = Type::create(heap, U);

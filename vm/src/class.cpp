@@ -23,6 +23,7 @@ namespace internal {
 
 #define CLASS_POINTER_LIST(F) \
   F(Class, name_)             \
+  F(Class, sourceName_)       \
   F(Class, typeParameters_)   \
   F(Class, supertype_)        \
   F(Class, fields_)           \
@@ -43,6 +44,7 @@ void* Class::operator new (size_t, Heap* heap) {
 
 
 Class::Class(Name* name,
+             String* sourceName,
              u32 flags,
              BlockArray<TypeParameter>* typeParameters,
              Type* supertype,
@@ -55,6 +57,7 @@ Class::Class(Name* name,
              length_t lengthFieldIndex)
     : Block(CLASS_BLOCK_TYPE),
       name_(this, name),
+      sourceName_(this, sourceName),
       flags_(flags),
       typeParameters_(this, typeParameters),
       supertype_(this, supertype),
@@ -71,6 +74,7 @@ Class::Class(Name* name,
 
 Local<Class> Class::create(Heap* heap,
                            const Handle<Name>& name,
+                           const Handle<String>& sourceName,
                            u32 flags,
                            const Handle<BlockArray<TypeParameter>>& typeParameters,
                            const Handle<Type>& supertype,
@@ -82,7 +86,8 @@ Local<Class> Class::create(Heap* heap,
                            const Handle<Type>& elementType,
                            length_t lengthFieldIndex) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
-      *name, flags, *typeParameters, *supertype, *fields, *constructors, *methods,
+      *name, sourceName.getOrNull(), flags, *typeParameters, *supertype,
+      *fields, *constructors, *methods,
       package.getOrNull(), instanceMeta.getOrNull(),
       elementType.getOrNull(), lengthFieldIndex)));
 }
@@ -90,7 +95,7 @@ Local<Class> Class::create(Heap* heap,
 
 Local<Class> Class::create(Heap* heap) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
-      nullptr, 0, nullptr, nullptr, nullptr, nullptr, nullptr,
+      nullptr, nullptr, 0, nullptr, nullptr, nullptr, nullptr, nullptr,
       nullptr, nullptr, nullptr, kIndexNotSet)));
 }
 
@@ -208,7 +213,7 @@ void Class::ensureInstanceMeta(const Handle<Class>& clas) {
 }
 
 
-bool Class::isSubclassOf(Class* other) const {
+bool Class::isSubclassOf(const Class* other) const {
   auto current = this;
   while (current->supertype() != nullptr && current != other) {
     current = current->supertype()->asClass();
@@ -240,6 +245,7 @@ void Class::computeSizeAndPointerMapForType(Type* type, u32* size,
 ostream& operator << (ostream& os, const Class* clas) {
   os << brief(clas)
      << "\n  name: " << brief(clas->name())
+     << "\n  sourceName: " << brief(clas->sourceName())
      << "\n  supertype: " << brief(clas->supertype())
      << "\n  fields: " << brief(clas->fields())
      << "\n  constructors: " << brief(clas->constructors())

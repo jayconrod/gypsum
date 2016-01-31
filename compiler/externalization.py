@@ -1,4 +1,4 @@
-# Copyright 2015, Jay Conrod. All rights reserved.
+# Copyright 2015-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -77,7 +77,8 @@ class Externalizer(object):
         id.externIndex = len(externDefns)
 
         if isinstance(defn, ir.Global):
-            externDefn = ir.Global(defn.name, id, defn.astDefn, defn.type, externFlags)
+            externDefn = ir.Global(defn.name, id, astDefn=defn.astDefn,
+                                   type=defn.type, flags=externFlags)
             externDefns.append(externDefn)
             self.externalizeType(defn.type)
         elif isinstance(defn, ir.Function):

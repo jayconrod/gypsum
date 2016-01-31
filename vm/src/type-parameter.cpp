@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -22,6 +22,7 @@ namespace internal {
 
 #define TYPE_PARAMETERS_POINTER_LIST(F) \
   F(TypeParameter, name_)               \
+  F(TypeParameter, sourceName_)         \
   F(TypeParameter, upperBound_)         \
   F(TypeParameter, lowerBound_)         \
 
@@ -35,9 +36,15 @@ void* TypeParameter::operator new (size_t, Heap* heap) {
 }
 
 
-TypeParameter::TypeParameter(Name* name, u32 flags, Type* upperBound, Type* lowerBound)
+TypeParameter::TypeParameter(
+    Name* name,
+    String* sourceName,
+    u32 flags,
+    Type* upperBound,
+    Type* lowerBound)
     : Block(TYPE_PARAMETER_BLOCK_TYPE),
       name_(this, name),
+      sourceName_(this, sourceName),
       flags_(flags),
       upperBound_(this, upperBound),
       lowerBound_(this, lowerBound) { }
@@ -45,17 +52,18 @@ TypeParameter::TypeParameter(Name* name, u32 flags, Type* upperBound, Type* lowe
 
 Local<TypeParameter> TypeParameter::create(Heap* heap) {
   RETRY_WITH_GC(heap, return Local<TypeParameter>(
-      new(heap) TypeParameter(nullptr, 0, nullptr, nullptr)));
+      new(heap) TypeParameter(nullptr, nullptr, 0, nullptr, nullptr)));
 }
 
 
 Local<TypeParameter> TypeParameter::create(Heap* heap,
                                            const Handle<Name>& name,
+                                           const Handle<String>& sourceName,
                                            u32 flags,
                                            const Handle<Type>& upperBound,
                                            const Handle<Type>& lowerBound) {
-  RETRY_WITH_GC(heap, return Local<TypeParameter>(
-      new(heap) TypeParameter(*name, flags, upperBound.getOrNull(), lowerBound.getOrNull())));
+  RETRY_WITH_GC(heap, return Local<TypeParameter>(new(heap) TypeParameter(
+      *name, sourceName.getOrNull(), flags, upperBound.getOrNull(), lowerBound.getOrNull())));
 }
 
 
@@ -106,6 +114,7 @@ Variance TypeParameter::variance() const {
 ostream& operator << (ostream& os, const TypeParameter* tp) {
   os << brief(tp)
      << "\n  name: " << brief(tp->name())
+     << "\n  source name: " << brief(tp->sourceName())
      << "\n  upper bound: " << brief(tp->upperBound())
      << "\n  lower bound: " << brief(tp->lowerBound());
   return os;

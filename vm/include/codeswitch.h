@@ -17,12 +17,16 @@
 
 namespace codeswitch {
 
+class Class;
 class Error;
+class Field;
 class Function;
+class Global;
 class Name;
 class Object;
 class Package;
 class String;
+class Value;
 
 /** Used to specify where native functions should be loaded from. */
 enum NativeFunctionSearch {
@@ -169,9 +173,9 @@ class Reference {
  protected:
   Reference();
   explicit Reference(Impl* impl);
-  Reference(const Reference&) = delete;
+  Reference(const Reference& ref);
   Reference(Reference&& ref);
-  Reference& operator = (const Reference&) = delete;
+  Reference& operator = (const Reference& ref);
   Reference& operator = (Reference&& ref);
  public:
   ~Reference();
@@ -206,35 +210,120 @@ class Reference {
  * Packages are loaded from files using {@link VM#loadPackage} or
  * {@link VM#loadPackageFromFile}. Package may reference definitions in other packages. When
  * a package is loaded, its dependencies are automatically loaded first.
- *
- * Objects of this class actually manage pointers to objects on the garbage collected heap.
- * Objects are in an "invalid" state if they are created with the default constructor or
- * after being on the right side of a move assignment or construction.
  */
 class Package final : public Reference {
  public:
-  Package();
+  Package() = default;
   explicit Package(Impl* impl);
-  Package(const Package&) = delete;
-  Package(Package&& package);
-  Package& operator = (Package&&) = default;
-  ~Package();
 
   /**
    * Returns the package's entry function, if it has one.
    *
    * @return the package's entry function. If the package has no entry function, an invalid
-   *   reference is returned.
+   *     reference is returned.
    */
   Function entryFunction() const;
 
   /**
-   * Gets a function from the package, by name.
+   * Finds and returns a global from the package by name.
+   *
+   * @return the named global from the package. If the package has no global by this name,
+   *     and invalid reference is returned.
+   */
+  Global findGlobal(const Name& name) const;
+
+  /**
+   * Finds and returns a public global from the package by its short name from source code.
+   * Static fields are not searched.
+   *
+   * @return the named global from the package. If the package has no global by this name,
+   *     and invalid reference is returned.
+   */
+  Global findGlobal(const String& sourceName) const;
+
+  /**
+   * Finds and returns a public global from the package by its short name from source code.
+   * Static fields are not searched.
+   *
+   * @return the named global from the package. If the package has no global by this name,
+   *     and invalid reference is returned.
+   */
+  Global findGlobal(const std::string& sourceName) const;
+
+  /**
+   * Finds and returns a function from the package by name.
    *
    * @return the named function from the package. If the package has no function by this name,
-   *   an invalid reference is returned.
+   *     an invalid reference is returned.
    */
-  Function getFunction(const Name& name) const;
+  Function findFunction(const Name& name) const;
+
+  /**
+   * Finds and returns a public function from the package by its short name from source code.
+   * Methods (static or otherwise) are not searched.
+   *
+   * @return the named function from the package. If the package has no function by this name,
+   *     an invalid reference is returned.
+   */
+  Function findFunction(const String& sourceName) const;
+
+  /**
+   * Finds and returns a public function from the package by its short name from source code.
+   * Methods (static or otherwise) are not searched.
+   *
+   * @return the named function from the package. If the package has no function by this name,
+   *     an invalid reference is returned.
+   */
+  Function findFunction(const std::string& sourceName) const;
+
+  /**
+   * Finds and returns a class from the package by name.
+   *
+   * @return the named class from the package. If the package has no class by this name,
+   *     an invalid reference is returned.
+   */
+  Class findClass(const Name& name) const;
+
+  /**
+   * Finds and returns a public class from the package by its short name from source code.
+   *
+   * @return the named class from the package. If the package has no class by this name,
+   *     an invalid reference is returned.
+   */
+  Class findClass(const String& sourceName) const;
+
+  /**
+   * Finds and returns a public class from the package by its short name from source code.
+   *
+   * @return the named class from the package. If the package has no class by this name,
+   *     an invalid reference is returned.
+   */
+  Class findClass(const std::string& sourceName) const;
+};
+
+
+/**
+ * A global variable or static field of a class.
+ *
+ * Objects of this class can be used to get or set the values of global variables. Some
+ * globals are constant and their values cannot be changed through this API.
+ */
+class Global final : public Reference {
+ public:
+  Global() = default;
+  explicit Global(Impl* impl);
+
+  /**
+   * Returns whether the value of this global can be altered through the API. If true,
+   * {@link #setValue} must not be called.
+   */
+  bool isConstant() const;
+
+  /** Returns the value of this global. */
+  Value value() const;
+
+  /** Sets the value of this global. {@link #isConstant} must be false. */
+  void setValue(const Value& value);
 };
 
 
@@ -243,18 +332,11 @@ class Package final : public Reference {
  *
  * Functions can be called using either the provided `call` methods or
  * `CallBuilder`.
- *
- * Objects of this class actually manage pointers to objects on the garbage collected heap.
- * Objects are in an "invalid" state if they are created with the default constructor or
- * after being on the right side of a move assignment or construction.
  */
 class Function final : public Reference {
  public:
-  Function();
+  Function() = default;
   explicit Function(Impl* impl);
-  Function(Function&&);
-  Function& operator = (Function&&) = default;
-  ~Function();
 
   /**
    * Calls a function that returns `unit` (equivalent to `void`)
@@ -369,6 +451,81 @@ class Function final : public Reference {
 };
 
 
+/** A class definition. */
+class Class final : public Reference {
+ public:
+  Class() = default;
+  explicit Class(Impl* impl);
+
+  /**
+   * Finds and returns a method of the class by name.
+   *
+   * @return the named method from the class. If the class has no method by this name,
+   *     an invalid reference is returned.
+   */
+  Function findMethod(const Name& name) const;
+
+  /**
+   * Finds and returns a public method of the class by its short name from source code.
+   *
+   * @return the named method from the class. If the class has no method by this name,
+   *     an invalid reference is returned.
+   */
+  Function findMethod(const String& sourceName) const;
+
+  /**
+   * Finds and returns a public method of the class by its short name from source code.
+   *
+   * @return the named method from the class. If the class has no method by this name,
+   *     an invalid reference is returned.
+   */
+  Function findMethod(const std::string& sourceName) const;
+
+  /**
+   * Finds and returns a field of the class by name.
+   *
+   * @return the named field from the class. If the class has no field by this name,
+   *     an invalid reference is returned.
+   */
+  Field findField(const Name& name) const;
+
+  /**
+   * Finds and returns a public field of the class by its short name from source code.
+   * Static fields are not searched.
+   *
+   * @return the named field from the class. If the class has no field by this name,
+   *     an invalid reference is returned.
+   */
+  Field findField(const String& sourceName) const;
+
+  /**
+   * Finds and returns a public field of the class by its short name from source code.
+   * Static fields are not searched.
+   *
+   * @return the named field from the class. If the class has no field by this name,
+   *     an invalid reference is returned.
+   */
+  Field findField(const std::string& sourceName) const;
+};
+
+
+/**
+ * Represents a field within an object. Can be passed to {@link Object} methods to load
+ * and store values in those field.
+ */
+class Field final : public Reference {
+ public:
+  Field() = default;
+  explicit Field(Impl* impl);
+
+  /**
+   * Returns whether the value of this field can be altered through the API. If true,
+   * {@link Object#setField} must not be called.
+   */
+  bool isConstant() const;
+};
+
+
 /**
  * Builds a call to a function, pushing individual arguments onto a stack.
  *
@@ -384,19 +541,17 @@ class CallBuilder final {
  public:
   class Impl;
 
-  CallBuilder();
-
   /**
    * Constructs a new call builder
    *
    * @param function the function to be called. Must be a valid reference.
    */
-  CallBuilder(const Function& function);
+  explicit CallBuilder(const Function& function);
+  ~CallBuilder();
 
   CallBuilder(CallBuilder&& builder) = delete;
   CallBuilder& operator = (const CallBuilder&) = delete;
   CallBuilder& operator = (CallBuilder&& builder) = delete;
-  ~CallBuilder();
 
   /** Adds a `unit` value to the argument list */
   CallBuilder& argUnit();
@@ -546,11 +701,8 @@ class CallBuilder final {
  */
 class Name final : public Reference {
  public:
-  Name();
+  Name() = default;
   explicit Name(Impl* impl);
-  Name(Name&&);
-  Name& operator = (Name&&) = default;
-  ~Name();
 
   /**
    * Parses a string to create a new name for a definition
@@ -564,6 +716,18 @@ class Name final : public Reference {
   static Name fromStringForDefn(const String& str);
 
   /**
+   * Parses a string to create a new name for a definition
+   *
+   * @param vm a pointer to the VM.
+   * @param str the string to parse. It is split on '.' characters, and the pieces form the
+   *   components of the new name. The pieces may contain any character except '.', but must
+   *   not be empty.
+   * @return the newly constructed name. This will always be a valid reference.
+   * @throws Error if str could not be parsed.
+   */
+  static Name fromStringForDefn(VM* vm, const std::string& str);
+
+  /**
    * Parses a string to create a new name for a package
    *
    * @param str the string to parse. It is split on '.' characters, and the pieces form the
@@ -573,6 +737,18 @@ class Name final : public Reference {
    * @throws Error if str could not be parsed.
    */
   static Name fromStringForPackage(const String& str);
+
+  /**
+   * Parses a string to create a new name for a package
+   *
+   * @param vm a pointer to the VM.
+   * @param str the string to parse. It is split on '.' characters, and the pieces form the
+   *   components of the new name. Each piece must start with a character in the range
+   *   A-Z or a-z. After that characters may be in the ranges A-Z, a-z, 0-9, or _.
+   * @return the newly constructed name. This will always be a valid reference.
+   * @throws Error if str could not be parsed.
+   */
+  static Name fromStringForPackage(VM* vm, const std::string& str);
 
   friend class Package;
   friend class VM;
@@ -586,13 +762,227 @@ class Name final : public Reference {
  * Objects are in an "invalid" state if they are created with the default constructor or
  * after being on the right side of a move assignment or construction.
  */
-class Object : public Reference {
+class Object: public Reference {
  public:
-  Object();
+  Object() = default;
   explicit Object(Impl* impl);
-  Object(Object&& obj);
-  Object& operator = (Object&&) = default;
-  ~Object();
+
+  /** Returns whether this object is an instance of the given class. */
+  bool isInstanceOf(const Class& clas) const;
+
+  /** Returns the class this object is an instance of. */
+  Class clas() const;
+
+  /**
+   * Loads the value stored in a field of the object.
+   *
+   * @param field a field which must have been retrieved from this object's {@link Class}
+   *     (which can be obtained by calling {@link #clas}) or any superclass.
+   */
+  Value getField(const Field& field) const;
+
+  /**
+   * Loads the value stored in the named field of the object.
+   *
+   * This method is provided for convenience, not speed. It performs a lookup on every call.
+   * If you are loading from the same field repeatedly, consider the other {@code getField}.
+   *
+   * @param fieldSourceName the name from source code of a public, non-static field.
+   */
+  Value getField(const std::string& fieldSourceName) const;
+
+  /**
+   * Sets the value of a field in the object.
+   *
+   * @param field a field which must have been retrieved from this object's {@link Class}
+   *     (which can be obtained by calling {@link #clas}) or any superclass.
+   * @param value the value to store in the field.
+   */
+  void setField(const Field& field, const Value& value);
+
+  /**
+   * Sets the value of the named field in the object.
+   *
+   * This method is provided for convenience, not speed. It performs a lookup on every call.
+   * If you are loading from the same field repeatedly, consider
+   * {@link #setField(const Field&, const Value&)} instead.
+   *
+   * @param fieldSourceName the name from source code of a public, non-static field.
+   * @param value the value to store in the field.
+   */
+  void setField(const std::string& fieldSourceName, const Value& value);
+
+  /** Returns whether this object has array elements. */
+  bool hasElements() const;
+
+  /**
+   * Returns whether this object's array elements are immutable. {@link #hasElements} must
+   * be true for this object.
+   */
+  bool elementsAreConstant() const;
+
+  /**
+   * Returns the number of array elements this object has or 0 if the object has no
+   * array elements.
+   */
+  uint32_t length() const;
+
+  /**
+   * Loads an array element.
+   *
+   * @param index the zero-based position of the element. Must be less than the value
+   *     returned by {@link #length}.
+   */
+  Value getElement(uint32_t index) const;
+
+  /**
+   * Stores a value into an array element.
+   *
+   * @param index the zero-based position of the element. Must be less than the value
+   *     returned by {@link #length}.
+   * @param value the value to store.
+   */
+  void setElement(uint32_t index, const Value& value);
+
+  /**
+   * Copies values from a native array into the object's array elements.
+   *
+   * @param index the location of the first element to write.
+   * @param from a pointer to the native array to copy from.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsFrom(uint32_t index, const bool* from, uint32_t count);
+
+  /**
+   * Copies values from a native array into the object's array elements.
+   *
+   * @param index the location of the first element to write.
+   * @param from a pointer to the native array to copy from.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsFrom(uint32_t index, const int8_t* from, uint32_t count);
+
+  /**
+   * Copies values from a native array into the object's array elements.
+   *
+   * @param index the location of the first element to write.
+   * @param from a pointer to the native array to copy from.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsFrom(uint32_t index, const int16_t* from, uint32_t count);
+
+  /**
+   * Copies values from a native array into the object's array elements.
+   *
+   * @param index the location of the first element to write.
+   * @param from a pointer to the native array to copy from.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsFrom(uint32_t index, const int32_t* from, uint32_t count);
+
+  /**
+   * Copies values from a native array into the object's array elements.
+   *
+   * @param index the location of the first element to write.
+   * @param from a pointer to the native array to copy from.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsFrom(uint32_t index, const int64_t* from, uint32_t count);
+
+  /**
+   * Copies values from a native array into the object's array elements.
+   *
+   * @param index the location of the first element to write.
+   * @param from a pointer to the native array to copy from.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsFrom(uint32_t index, const float* from, uint32_t count);
+
+  /**
+   * Copies values from a native array into the object's array elements.
+   *
+   * @param index the location of the first element to write.
+   * @param from a pointer to the native array to copy from.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsFrom(uint32_t index, const double* from, uint32_t count);
+
+  /**
+   * Copies values into a native arrya from the object's array elements.
+   *
+   * @param index the location of the first element to read.
+   * @param to a pointer to the native array to copy to.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsTo(uint32_t index, bool* to, uint32_t count) const;
+
+  /**
+   * Copies values into a native arrya from the object's array elements.
+   *
+   * @param index the location of the first element to read.
+   * @param to a pointer to the native array to copy to.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsTo(uint32_t index, int8_t* to, uint32_t count) const;
+
+  /**
+   * Copies values into a native arrya from the object's array elements.
+   *
+   * @param index the location of the first element to read.
+   * @param to a pointer to the native array to copy to.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsTo(uint32_t index, int16_t* to, uint32_t count) const;
+
+  /**
+   * Copies values into a native arrya from the object's array elements.
+   *
+   * @param index the location of the first element to read.
+   * @param to a pointer to the native array to copy to.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsTo(uint32_t index, int32_t* to, uint32_t count) const;
+
+  /**
+   * Copies values into a native arrya from the object's array elements.
+   *
+   * @param index the location of the first element to read.
+   * @param to a pointer to the native array to copy to.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsTo(uint32_t index, int64_t* to, uint32_t count) const;
+
+  /**
+   * Copies values into a native arrya from the object's array elements.
+   *
+   * @param index the location of the first element to read.
+   * @param to a pointer to the native array to copy to.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsTo(uint32_t index, float* to, uint32_t count) const;
+
+  /**
+   * Copies values into a native arrya from the object's array elements.
+   *
+   * @param index the location of the first element to read.
+   * @param to a pointer to the native array to copy to.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsTo(uint32_t index, double* to, uint32_t count) const;
 
   friend class CallBuilder;
 };
@@ -607,7 +997,7 @@ class Object : public Reference {
  */
 class String final : public Object {
  public:
-  String();
+  String() = default;
   explicit String(Impl* impl);
 
   /**
@@ -616,10 +1006,7 @@ class String final : public Object {
    * @param vm the CodeSwitch virtual machine
    * @param str a UTF-8 used to build the CodeSwitch string
    */
-  String(VM& vm, const std::string& str);
-  String(String&& str);
-  String& operator = (String&& str) = default;
-  ~String();
+  String(VM* vm, const std::string& str);
 
   /** Concatenates two strings */
   String operator + (const String& other) const;
@@ -667,6 +1054,51 @@ class Error final {
 
  private:
   std::unique_ptr<Impl> impl_;
+};
+
+
+/**
+ * Represents a value that can be returned or passed as an argument to a {@link Function}.
+ * Values can also be loaded from and stored to {@link Global}s.
+ *
+ * Values can be created implicitly from primitive types and object references. This lets you
+ * pass primitives directly to methods like {@link Global#setValue}. Note that creating a
+ * value by moving an object reference is significantly faster than copying the reference,
+ * so this should be preferred when possible.
+ */
+class Value final {
+ public:
+  class Impl;
+
+  Value();
+  Value(bool b);
+  Value(int8_t n);
+  Value(int16_t n);
+  Value(int32_t n);
+  Value(int64_t n);
+  Value(float n);
+  Value(double n);
+  Value(const Object& o);
+  Value(Object&& o);
+
+  bool asBoolean() const;
+  int8_t asI8() const;
+  int16_t asI16() const;
+  int32_t asI32() const;
+  int64_t asI64() const;
+  float asF32() const;
+  double asF64() const;
+  const String& asString() const;
+  const Object& asObject() const;
+  String&& moveString();
+  Object&& moveObject();
+
+ private:
+  uint64_t bits_;
+  Object ref_;
+  uint8_t tag_;
+
+  friend Impl;
 };
 
 

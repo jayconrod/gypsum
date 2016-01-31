@@ -7,13 +7,17 @@
 #include "codeswitch.h"
 #include "api.h"
 
+#include <algorithm>
 #include <memory>
 #include <vector>
 
 #include "array.h"
 #include "bitmap.h"
+#include "block.h"
 #include "builtins.h"
+#include "field.h"
 #include "function.h"
+#include "global.h"
 #include "handle.h"
 #include "heap.h"
 #include "interpreter.h"
@@ -27,6 +31,7 @@
 #include "utils.h"
 #include "vm.h"
 
+using std::copy_n;
 using std::move;
 using std::string;
 using std::unique_ptr;
@@ -53,6 +58,18 @@ static const i::Persistent<T>& unwrap(const Reference& ref) {
 }
 
 
+template <class T>
+static T* unwrapRaw(Reference& ref) {
+  return **reinterpret_cast<i::Persistent<T>*>(&ref);
+}
+
+
+template <class T>
+static const T* unwrapRaw(const Reference& ref) {
+  return **reinterpret_cast<const i::Persistent<T>*>(&ref);
+}
+
+
 template <class ExternalT, class InternalT>
 static ExternalT wrap(const i::Handle<InternalT>& block) {
   if (!block)
@@ -72,6 +89,72 @@ static ExternalT wrap(InternalT* block) {
   InternalT** slot = nullptr;
   handleStorage.createPersistent(block, &slot);
   return ExternalT(reinterpret_cast<Impl*>(slot));
+}
+
+
+static VM* refVM(const Reference& ref) {
+  return unwrap<i::Block>(ref)->getVM()->apiPtr();
+}
+
+
+static Value valueFromRaw(i::Type* type, i::i64 bits) {
+  if (type->isBoolean()) {
+    return Value(static_cast<bool>(bits));
+  } else if (type->isI8()) {
+    return Value(static_cast<int8_t>(bits));
+  } else if (type->isI16()) {
+    return Value(static_cast<int16_t>(bits));
+  } else if (type->isI32()) {
+    return Value(static_cast<int32_t>(bits));
+  } else if (type->isI64()) {
+    return Value(static_cast<int64_t>(bits));
+  } else if (type->isF32()) {
+    return Value(i::f32FromBits(bits));
+  } else if (type->isF64()) {
+    return Value(i::f64FromBits(bits));
+  } else {
+    API_CHECK(type->isObject(), "internal value cannot be returned");
+    auto rawObject = reinterpret_cast<i::Object*>(static_cast<intptr_t>(bits));
+    return Value(wrap<Object, i::Object>(rawObject));
+  }
+}
+
+
+class Value::Impl final {
+ public:
+  static uint64_t getValueBits(const Value& value) {
+    return value.bits_;
+  }
+
+
+  static const Object& getValueRef(const Value& value) {
+    return value.ref_;
+  }
+
+
+  static const uint8_t getValueTag(const Value& value) {
+    return value.tag_;
+  }
+};
+
+
+static i::i64 rawFromValue(const Value& value, const i::Handle<i::Type>& type) {
+  auto tag = Value::Impl::getValueTag(value);
+  if (tag == i::Type::CLASS_TYPE) {
+    const Object& obj = Value::Impl::getValueRef(value);
+    if (!obj) {
+      API_CHECK(type->isObject() && type->isNullable(), "type error");
+      return 0;
+    } else {
+      i::Local<i::Object> iobj(const_cast<i::Object*>(unwrapRaw<i::Object>(obj)));
+      auto objType = i::Object::typeof(iobj);
+      API_CHECK(i::Type::isSubtypeOf(objType, type), "type error");
+      return static_cast<i::i64>(static_cast<i::u64>(reinterpret_cast<uintptr_t>(*iobj)));
+    }
+  } else {
+    API_CHECK(tag == type->form(), "type error");
+    return Value::Impl::getValueBits(value);
+  }
 }
 
 
@@ -238,9 +321,30 @@ Reference::Reference(Impl* impl)
     : impl_(impl) { }
 
 
+Reference::Reference(const Reference& ref)
+    : impl_(nullptr) {
+  *this = ref;
+}
+
+
 Reference::Reference(Reference&& ref)
     : impl_(ref.impl_) {
   ref.impl_ = nullptr;
+}
+
+
+Reference& Reference::operator = (const Reference& ref) {
+  if (this != &ref) {
+    if (!ref) {
+      clear();
+    } else {
+      auto block = *reinterpret_cast<i::Block**>(ref.impl_);
+      auto slotPtr = reinterpret_cast<i::Block***>(&impl_);
+      auto handleStorage = i::HandleStorage::fromBlock(block);
+      handleStorage->createPersistent(block, slotPtr);
+    }
+  }
+  return *this;
 }
 
 
@@ -270,23 +374,13 @@ void Reference::clear() {
 }
 
 
-Package::Package() { }
-
-
 Package::Package(Impl* impl)
     : Reference(impl) { }
 
 
-Package::Package(Package&& package)
-    : Reference(package.impl_) { }
-
-
-Package::~Package() { }
-
-
 Function Package::entryFunction() const {
   API_CHECK_SELF(Package);
-  i::Function* function = unwrap<i::Package>(*this)->entryFunction();
+  i::Function* function = unwrapRaw<i::Package>(*this)->entryFunction();
   if (function == nullptr) {
     return Function();
   }
@@ -294,33 +388,240 @@ Function Package::entryFunction() const {
 }
 
 
-Function Package::getFunction(const Name& name) const {
+Global Package::findGlobal(const Name& name) const {
   API_CHECK_SELF(Package);
-  auto functions = unwrap<i::Package>(*this)->functions();
-  for (auto function : *functions) {
-    if (function->name()->equals(*unwrap<i::Name>(name))) {
-      return wrap<Function, i::Function>(function);
+  API_CHECK_ARG(name);
+  auto globals = unwrapRaw<i::Package>(*this)->globals();
+  for (auto global : *globals) {
+    if (global->name()->equals(unwrapRaw<i::Name>(name))) {
+      return wrap<Global, i::Global>(global);
     }
   }
-  return Function(nullptr);
+  return Global();
 }
 
 
-Function::Function() { }
+Global Package::findGlobal(const String& sourceName) const {
+  API_CHECK_SELF(Package);
+  API_CHECK_ARG(sourceName);
+  auto globals = unwrapRaw<i::Package>(*this)->globals();
+  i::u32 mask = i::PUBLIC_FLAG | i::STATIC_FLAG;
+  i::u32 expectedFlags = i::PUBLIC_FLAG;
+  for (auto global : *globals) {
+    if ((global->flags() & mask) == expectedFlags &&
+        global->sourceName() != nullptr &&
+        global->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
+      return wrap<Global, i::Global>(global);
+    }
+  }
+  return Global();
+}
+
+
+Global Package::findGlobal(const string& sourceName) const {
+  API_CHECK_SELF(Package);
+  String sourceNameStr(refVM(*this), sourceName);
+  return findGlobal(sourceNameStr);
+}
+
+
+Function Package::findFunction(const Name& name) const {
+  API_CHECK_SELF(Package);
+  API_CHECK_ARG(name);
+  auto functions = unwrapRaw<i::Package>(*this)->functions();
+  for (auto function : *functions) {
+    if (function->name()->equals(unwrapRaw<i::Name>(name))) {
+      return wrap<Function, i::Function>(function);
+    }
+  }
+  return Function();
+}
+
+
+Function Package::findFunction(const String& sourceName) const {
+  API_CHECK_SELF(Package);
+  API_CHECK_ARG(sourceName);
+  auto functions = unwrapRaw<i::Package>(*this)->functions();
+  i::u32 mask = i::PUBLIC_FLAG | i::STATIC_FLAG | i::METHOD_FLAG;
+  i::u32 expectedFlags = i::PUBLIC_FLAG;
+  for (auto function : *functions) {
+    if ((function->flags() & mask) == expectedFlags &&
+        function->sourceName() != nullptr &&
+        function->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
+      return wrap<Function, i::Function>(function);
+    }
+  }
+  return Function();
+}
+
+
+Function Package::findFunction(const string& sourceName) const {
+  API_CHECK_SELF(Package);
+  String sourceNameStr(refVM(*this), sourceName);
+  return findFunction(sourceNameStr);
+}
+
+
+Class Package::findClass(const Name& name) const {
+  API_CHECK_SELF(Package);
+  API_CHECK_ARG(name);
+  auto classes = unwrapRaw<i::Package>(*this)->classes();
+  for (auto clas : *classes) {
+    if (clas->name()->equals(unwrapRaw<i::Name>(name))) {
+      return wrap<Class, i::Class>(clas);
+    }
+  }
+  return Class();
+}
+
+
+Class Package::findClass(const String& sourceName) const {
+  API_CHECK_SELF(Package);
+  API_CHECK_ARG(sourceName);
+  auto classes = unwrapRaw<i::Package>(*this)->classes();
+  for (auto clas : *classes) {
+    if ((clas->flags() & i::PUBLIC_FLAG) == i::PUBLIC_FLAG &&
+        clas->sourceName() != nullptr &&
+        clas->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
+      return wrap<Class, i::Class>(clas);
+    }
+  }
+  return Class();
+}
+
+
+Class Package::findClass(const string& sourceName) const {
+  API_CHECK_SELF(Package);
+  String sourceNameStr(refVM(*this), sourceName);
+  return findClass(sourceNameStr);
+}
+
+
+Global::Global(Impl* impl)
+    : Reference(impl) { }
+
+
+bool Global::isConstant() const {
+  API_CHECK_SELF(Global);
+  return (unwrap<i::Global>(*this)->flags() & i::LET_FLAG) != 0;
+}
+
+
+Value Global::value() const {
+  API_CHECK_SELF(Global);
+  auto self = unwrap<i::Global>(*this);
+  return valueFromRaw(self->type(), self->getRaw());
+}
+
+
+void Global::setValue(const Value& value) {
+  API_CHECK_SELF(Global);
+  API_CHECK(!isConstant(), "global cannot be set because it is constant");
+  auto self = unwrap<i::Global>(*this);
+  auto vm = self->getVM();
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAlloc(vm->heap(), true);  // for type checking
+  self->setRaw(rawFromValue(value, handle(self->type())));
+}
 
 
 Function::Function(Impl* impl)
     : Reference(impl) { }
 
 
-Function::Function(Function&& function)
-    : Reference(move(function)) { }
+Class::Class(Impl* impl)
+    : Reference(impl) { }
 
 
-Function::~Function() { }
+Function Class::findMethod(const Name& name) const {
+  API_CHECK_SELF(Class);
+  API_CHECK_ARG(name);
+  auto methods = unwrapRaw<i::Class>(*this)->methods();
+  for (auto method : *methods) {
+    if ((method->flags() & i::PRIVATE_FLAG) == 0 &&
+        method->name()->equals(unwrapRaw<i::Name>(name))) {
+      return wrap<Function, i::Function>(method);
+    }
+  }
+  return Function();
+}
 
 
-CallBuilder::CallBuilder() { }
+Function Class::findMethod(const String& sourceName) const {
+  API_CHECK_SELF(Class);
+  API_CHECK_ARG(sourceName);
+  auto methods = unwrapRaw<i::Class>(*this)->methods();
+  for (auto method : *methods) {
+    if ((method->flags() & i::PUBLIC_FLAG) == i::PUBLIC_FLAG &&
+        method->sourceName() != nullptr &&
+        method->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
+      return wrap<Function, i::Function>(method);
+    }
+  }
+  return Function();
+}
+
+
+Function Class::findMethod(const string& sourceName) const {
+  API_CHECK_SELF(Class);
+  String sourceNameStr(refVM(*this), sourceName);
+  return findMethod(sourceNameStr);
+}
+
+
+Field Class::findField(const Name& name) const {
+  API_CHECK_SELF(Class);
+  API_CHECK_ARG(name);
+  auto fields = unwrapRaw<i::Class>(*this)->fields();
+  for (auto field : *fields) {
+    if ((field->flags() & i::PRIVATE_FLAG) == 0 &&
+        field->name()->equals(unwrapRaw<i::Name>(name))) {
+      return wrap<Field, i::Field>(field);
+    }
+  }
+  return Field();
+}
+
+
+Field Class::findField(const String& sourceName) const {
+  API_CHECK_SELF(Class);
+  API_CHECK_ARG(sourceName);
+  auto fields = unwrapRaw<i::Class>(*this)->fields();
+  i::u32 mask = i::PUBLIC_FLAG | i::STATIC_FLAG;
+  i::u32 expectedFlags = i::PUBLIC_FLAG;
+  for (auto field : *fields) {
+    if ((field->flags() & mask) == expectedFlags &&
+        field->sourceName() != nullptr &&
+        field->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
+      return wrap<Field, i::Field>(field);
+    }
+  }
+  return Field();
+}
+
+
+Field Class::findField(const string& sourceName) const {
+  API_CHECK_SELF(Class);
+  String sourceNameStr(refVM(*this), sourceName);
+  return findField(sourceNameStr);
+}
+
+
+Field::Field(Impl* impl)
+    : Reference(impl) { }
+
+
+bool Field::isConstant() const {
+  API_CHECK_SELF(Field);
+  return (unwrapRaw<i::Field>(*this)->flags() & i::LET_FLAG) != 0;
+}
+
+
+CallBuilder::~CallBuilder() {
+  // DO NOT REMOVE.
+  // This cannot be defined as `default` in the header since the client doesn't know whether
+  // `Impl` has a non-trivial destructor.
+}
 
 
 CallBuilder::CallBuilder(const Function& function) {
@@ -329,128 +630,106 @@ CallBuilder::CallBuilder(const Function& function) {
 }
 
 
-CallBuilder::~CallBuilder() { }
-
-
 CallBuilder& CallBuilder::argUnit() {
-  API_CHECK_SELF(CallBuilder);
   impl_->argUnit();
   return *this;
 }
 
 
 CallBuilder& CallBuilder::arg(bool value) {
-  API_CHECK_SELF(CallBuilder);
   impl_->arg(value);
   return *this;
 }
 
 
 CallBuilder& CallBuilder::arg(int8_t value) {
-  API_CHECK_SELF(CallBuilder);
   impl_->arg(value);
   return *this;
 }
 
 
 CallBuilder& CallBuilder::arg(int16_t value) {
-  API_CHECK_SELF(CallBuilder);
   impl_->arg(value);
   return *this;
 }
 
 
 CallBuilder& CallBuilder::arg(int32_t value) {
-  API_CHECK_SELF(CallBuilder);
   impl_->arg(value);
   return *this;
 }
 
 
 CallBuilder& CallBuilder::arg(int64_t value) {
-  API_CHECK_SELF(CallBuilder);
   impl_->arg(value);
   return *this;
 }
 
 
 CallBuilder& CallBuilder::arg(float value) {
-  API_CHECK_SELF(CallBuilder);
   impl_->arg(value);
   return *this;
 }
 
 
 CallBuilder& CallBuilder::arg(double value) {
-  API_CHECK_SELF(CallBuilder);
   impl_->arg(value);
   return *this;
 }
 
 
 CallBuilder& CallBuilder::arg(const Object& value) {
-  API_CHECK_SELF(CallBuilder);
   impl_->arg(value);
   return *this;
 }
 
 
 void CallBuilder::call() {
-  API_CHECK_SELF(CallBuilder);
   impl_->callForAny();
 }
 
 
 bool CallBuilder::callForBoolean() {
-  API_CHECK_SELF(CallBuilder);
   return impl_->callForBoolean();
 }
 
 
 int8_t CallBuilder::callForI8() {
-  API_CHECK_SELF(CallBuilder);
   return impl_->callForI8();
 }
 
 
 int16_t CallBuilder::callForI16() {
-  API_CHECK_SELF(CallBuilder);
   return impl_->callForI16();
 }
 
 
 int32_t CallBuilder::callForI32() {
-  API_CHECK_SELF(CallBuilder);
   return impl_->callForI32();
 }
 
 
 int64_t CallBuilder::callForI64() {
-  API_CHECK_SELF(CallBuilder);
   return impl_->callForI64();
 }
 
 
 float CallBuilder::callForF32() {
-  API_CHECK_SELF(CallBuilder);
   return impl_->callForF32();
 }
 
 
 double CallBuilder::callForF64() {
-  API_CHECK_SELF(CallBuilder);
   return impl_->callForF64();
 }
 
 
 String CallBuilder::callForString() {
-  API_CHECK_SELF(CallBuilder);
   return impl_->callForString();
 }
 
 
 Object CallBuilder::callForObject() {
-  API_CHECK_SELF(CallBuilder);
   return impl_->callForObject();
 }
 
@@ -528,7 +807,7 @@ String CallBuilder::Impl::callForString() {
 
 
 Object CallBuilder::Impl::callForObject() {
-  API_CHECK(function_->returnType()->isRootClass(), "wrong function return type");
+  API_CHECK(function_->returnType()->isObject(), "wrong function return type");
   i::i64 objPtrBits = call();
   i::AllowAllocationScope allowAlloc(vm_->heap(), false);
   i::Object* rawObject = reinterpret_cast<i::Object*>(static_cast<i::word_t>(objPtrBits));
@@ -566,18 +845,8 @@ i::i64 CallBuilder::Impl::call() {
 }
 
 
-Name::Name() { }
-
-
 Name::Name(Impl* impl)
     : Reference(impl) { }
-
-
-Name::Name(Name&& name)
-    : Reference(move(name)) { }
-
-
-Name::~Name() { }
 
 
 Name Name::fromStringForDefn(const String& str) {
@@ -589,6 +858,11 @@ Name Name::fromStringForDefn(const String& str) {
   auto iname = i::Name::fromString(vm->heap(), istr, i::Name::DEFN_NAME);
   API_CHECK(iname, "string argument is not a valid name for definitions");
   return wrap<Name, i::Name>(iname);
+}
+
+
+Name Name::fromStringForDefn(VM* vm, const string& str) {
+  return fromStringForDefn(String(vm, str));
 }
 
 
@@ -604,27 +878,22 @@ Name Name::fromStringForPackage(const String& str) {
 }
 
 
-String::String() { }
+Name Name::fromStringForPackage(VM* vm, const string& str) {
+  return fromStringForPackage(vm, str);
+}
 
 
 String::String(Impl* impl)
     : Object(impl) { }
 
 
-String::String(VM& vm, const string& str) {
-  auto heap = vm.impl_->vm.heap();
+String::String(VM* vm, const string& str) {
+  auto heap = vm->impl_->vm.heap();
   i::AllowAllocationScope allowAlloc(heap, true);
-  i::HandleScope handleScope(&vm.impl_->vm);
+  i::HandleScope handleScope(&vm->impl_->vm);
   i::Local<i::String> istr = i::String::fromUtf8String(heap, str);
   *this = move(wrap<String, i::String>(istr));
 }
-
-
-String::String(String&& str)
-    : Object(move(str)) { }
-
-
-String::~String() { }
 
 
 String String::operator + (const String& other) const {
@@ -665,18 +934,260 @@ string String::toStdString() const {
 }
 
 
-Object::Object() { }
-
-
 Object::Object(Impl* impl)
     : Reference(impl) { }
 
 
-Object::Object(Object&& obj)
-    : Reference(move(obj)) { }
+bool Object::isInstanceOf(const Class& clas) const {
+  API_CHECK_SELF(Object);
+  API_CHECK_ARG(clas);
+  auto selfClass = unwrapRaw<i::Object>(*this)->clas();
+  auto otherClass = unwrapRaw<i::Class>(clas);
+  return selfClass->isSubclassOf(otherClass);
+}
 
 
-Object::~Object() { }
+Class Object::clas() const {
+  API_CHECK_SELF(Object);
+  return wrap<Class, i::Class>(unwrapRaw<i::Object>(*this)->clas());
+}
+
+
+Value Object::getField(const Field& field) const {
+  API_CHECK_SELF(Object);
+  API_CHECK_SELF(Field);
+  auto iobj = unwrapRaw<i::Object>(*this);
+  auto ifield = unwrapRaw<i::Field>(field);
+  auto bits = iobj->getRawField(ifield);
+  return valueFromRaw(ifield->type(), bits);
+}
+
+
+Value Object::getField(const string& fieldSourceName) const {
+  API_CHECK_SELF(Object);
+  auto field = clas().findField(fieldSourceName);
+  API_CHECK(field, "field could not be found");
+  return getField(field);
+}
+
+
+void Object::setField(const Field& field, const Value& value) {
+  API_CHECK_SELF(Object);
+  API_CHECK_ARG(field);
+  auto iobj = unwrap<i::Object>(*this);
+  auto ifield = unwrap<i::Field>(field);
+  auto vm = iobj->getVM();
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAlloc(vm->heap(), true);
+  auto bits = rawFromValue(value, handle(ifield->type()));
+  iobj->setRawField(*ifield, bits);
+}
+
+
+bool Object::hasElements() const {
+  API_CHECK_SELF(Object);
+  return unwrapRaw<i::Object>(*this)->meta()->hasElements();
+}
+
+
+bool Object::elementsAreConstant() const {
+  API_CHECK_SELF(Object);
+  API_CHECK(hasElements(), "object does not have array elements");
+  return (unwrapRaw<i::Object>(*this)->meta()->clas()->flags() & i::ARRAY_FINAL_FLAG) != 0;
+}
+
+
+uint32_t Object::length() const {
+  API_CHECK_SELF(Object);
+  return unwrapRaw<i::Object>(*this)->elementsLength();
+}
+
+
+Value Object::getElement(uint32_t index) const {
+  API_CHECK_SELF(Object);
+  API_CHECK(hasElements(), "object does not have array elements");
+  API_CHECK(index < length(), "array element index is out of bounds");
+  auto iobj = unwrapRaw<i::Object>(*this);
+  auto clas = iobj->meta()->clas();
+  auto type = clas->elementType();
+  return valueFromRaw(type, iobj->getRawElement(index));
+}
+
+
+void Object::setElement(uint32_t index, const Value& value) {
+  API_CHECK_SELF(Object);
+  API_CHECK(hasElements(), "object does not have array elements");
+  API_CHECK(!elementsAreConstant(), "array elements are not mutable");
+  API_CHECK(index < length(), "array element index is out of bounds");
+  auto iobj = unwrap<i::Object>(*this);
+  auto vm = iobj->getVM();
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAlloc(vm->heap(), true);
+  auto type = handle(iobj->meta()->clas()->elementType());
+  auto bits = rawFromValue(value, type);
+  iobj->setRawElement(index, bits);
+}
+
+
+void Object::copyElementsFrom(uint32_t index, const bool* from, uint32_t count) {
+  API_CHECK_SELF(Object);
+  API_CHECK(hasElements(), "object does not have array elements");
+  API_CHECK(!elementsAreConstant(), "array elements are not mutable");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
+  auto iobj = unwrapRaw<i::Object>(*this);
+  API_CHECK(iobj->meta()->clas()->elementType()->isBoolean(), "type error");
+  auto to = reinterpret_cast<bool*>(iobj->elementsBase()) + index;
+  copy_n(from, count, to);
+}
+
+
+void Object::copyElementsFrom(uint32_t index, const int8_t* from, uint32_t count) {
+  API_CHECK_SELF(Object);
+  API_CHECK(hasElements(), "object does not have array elements");
+  API_CHECK(!elementsAreConstant(), "array elements are not mutable");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
+  auto iobj = unwrapRaw<i::Object>(*this);
+  API_CHECK(iobj->meta()->clas()->elementType()->isI8(), "type error");
+  auto to = reinterpret_cast<int8_t*>(iobj->elementsBase()) + index;
+  copy_n(from, count, to);
+}
+
+
+void Object::copyElementsFrom(uint32_t index, const int16_t* from, uint32_t count) {
+  API_CHECK_SELF(Object);
+  API_CHECK(hasElements(), "object does not have array elements");
+  API_CHECK(!elementsAreConstant(), "array elements are not mutable");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
+  auto iobj = unwrapRaw<i::Object>(*this);
+  API_CHECK(iobj->meta()->clas()->elementType()->isI16(), "type error");
+  auto to = reinterpret_cast<int16_t*>(iobj->elementsBase()) + index;
+  copy_n(from, count, to);
+}
+
+
+void Object::copyElementsFrom(uint32_t index, const int32_t* from, uint32_t count) {
+  API_CHECK_SELF(Object);
+  API_CHECK(hasElements(), "object does not have array elements");
+  API_CHECK(!elementsAreConstant(), "array elements are not mutable");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
+  auto iobj = unwrapRaw<i::Object>(*this);
+  API_CHECK(iobj->meta()->clas()->elementType()->isI32(), "type error");
+  auto to = reinterpret_cast<int32_t*>(iobj->elementsBase()) + index;
+  copy_n(from, count, to);
+}
+
+
+void Object::copyElementsFrom(uint32_t index, const int64_t* from, uint32_t count) {
+  API_CHECK_SELF(Object);
+  API_CHECK(hasElements(), "object does not have array elements");
+  API_CHECK(!elementsAreConstant(), "array elements are not mutable");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
+  auto iobj = unwrapRaw<i::Object>(*this);
+  API_CHECK(iobj->meta()->clas()->elementType()->isI64(), "type error");
+  auto to = reinterpret_cast<int64_t*>(iobj->elementsBase()) + index;
+  copy_n(from, count, to);
+}
+
+
+void Object::copyElementsFrom(uint32_t index, const float* from, uint32_t count) {
+  API_CHECK_SELF(Object);
+  API_CHECK(hasElements(), "object does not have array elements");
+  API_CHECK(!elementsAreConstant(), "array elements are not mutable");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
+  auto iobj = unwrapRaw<i::Object>(*this);
+  API_CHECK(iobj->meta()->clas()->elementType()->isF32(), "type error");
+  auto to = reinterpret_cast<float*>(iobj->elementsBase()) + index;
+  copy_n(from, count, to);
+}
+
+
+void Object::copyElementsFrom(uint32_t index, const double* from, uint32_t count) {
+  API_CHECK_SELF(Object);
+  API_CHECK(hasElements(), "object does not have array elements");
+  API_CHECK(!elementsAreConstant(), "array elements are not mutable");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
+  auto iobj = unwrapRaw<i::Object>(*this);
+  API_CHECK(iobj->meta()->clas()->elementType()->isF64(), "type error");
+  auto to = reinterpret_cast<double*>(iobj->elementsBase()) + index;
+  copy_n(from, count, to);
+}
+
+
+void Object::copyElementsTo(uint32_t index, bool* to, uint32_t count) const {
+  API_CHECK_SELF(Object);
+  API_CHECK(hasElements(), "object does not have array elements");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
+  auto iobj = unwrapRaw<i::Object>(*this);
+  API_CHECK(iobj->meta()->clas()->elementType()->isBoolean(), "type error");
+  auto from = reinterpret_cast<bool*>(iobj->elementsBase()) + index;
+  copy_n(from, count, to);
+}
+
+
+void Object::copyElementsTo(uint32_t index, int8_t* to, uint32_t count) const {
+  API_CHECK_SELF(Object);
+  API_CHECK(hasElements(), "object does not have array elements");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
+  auto iobj = unwrapRaw<i::Object>(*this);
+  API_CHECK(iobj->meta()->clas()->elementType()->isI8(), "type error");
+  auto from = reinterpret_cast<int8_t*>(iobj->elementsBase()) + index;
+  copy_n(from, count, to);
+}
+
+
+void Object::copyElementsTo(uint32_t index, int16_t* to, uint32_t count) const {
+  API_CHECK_SELF(Object);
+  API_CHECK(hasElements(), "object does not have array elements");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
+  auto iobj = unwrapRaw<i::Object>(*this);
+  API_CHECK(iobj->meta()->clas()->elementType()->isI16(), "type error");
+  auto from = reinterpret_cast<int16_t*>(iobj->elementsBase()) + index;
+  copy_n(from, count, to);
+}
+
+
+void Object::copyElementsTo(uint32_t index, int32_t* to, uint32_t count) const {
+  API_CHECK_SELF(Object);
+  API_CHECK(hasElements(), "object does not have array elements");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
+  auto iobj = unwrapRaw<i::Object>(*this);
+  API_CHECK(iobj->meta()->clas()->elementType()->isI32(), "type error");
+  auto from = reinterpret_cast<int32_t*>(iobj->elementsBase()) + index;
+  copy_n(from, count, to);
+}
+
+
+void Object::copyElementsTo(uint32_t index, int64_t* to, uint32_t count) const {
+  API_CHECK_SELF(Object);
+  API_CHECK(hasElements(), "object does not have array elements");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
+  auto iobj = unwrapRaw<i::Object>(*this);
+  API_CHECK(iobj->meta()->clas()->elementType()->isI64(), "type error");
+  auto from = reinterpret_cast<int64_t*>(iobj->elementsBase()) + index;
+  copy_n(from, count, to);
+}
+
+
+void Object::copyElementsTo(uint32_t index, float* to, uint32_t count) const {
+  API_CHECK_SELF(Object);
+  API_CHECK(hasElements(), "object does not have array elements");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
+  auto iobj = unwrapRaw<i::Object>(*this);
+  API_CHECK(iobj->meta()->clas()->elementType()->isF32(), "type error");
+  auto from = reinterpret_cast<float*>(iobj->elementsBase()) + index;
+  copy_n(from, count, to);
+}
+
+
+void Object::copyElementsTo(uint32_t index, double* to, uint32_t count) const {
+  API_CHECK_SELF(Object);
+  API_CHECK(hasElements(), "object does not have array elements");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
+  auto iobj = unwrapRaw<i::Object>(*this);
+  API_CHECK(iobj->meta()->clas()->elementType()->isF64(), "type error");
+  auto from = reinterpret_cast<double*>(iobj->elementsBase()) + index;
+  copy_n(from, count, to);
+}
 
 
 Error::Error() { }
@@ -711,6 +1222,123 @@ bool Error::operator ! () const {
 
 const char* Error::message() const {
   return impl_->message.c_str();
+}
+
+
+Value::Value(bool b)
+    : bits_(static_cast<uint64_t>(b)),
+      tag_(i::Type::BOOLEAN_TYPE) { }
+
+
+Value::Value(int8_t n)
+    : bits_(static_cast<uint64_t>(n)),
+      tag_(i::Type::I8_TYPE) { }
+
+
+Value::Value(int16_t n)
+    : bits_(static_cast<uint64_t>(n)),
+      tag_(i::Type::I16_TYPE) { }
+
+
+Value::Value(int32_t n)
+    : bits_(static_cast<uint64_t>(n)),
+      tag_(i::Type::I32_TYPE) { }
+
+
+Value::Value(int64_t n)
+    : bits_(static_cast<uint64_t>(n)),
+      tag_(i::Type::I64_TYPE) { }
+
+
+Value::Value(float n)
+    : bits_(i::f32ToBits(n)),
+      tag_(i::Type::F32_TYPE) { }
+
+
+Value::Value(double n)
+    : bits_(i::f64ToBits(n)),
+      tag_(i::Type::F64_TYPE) { }
+
+
+Value::Value(const Object& o)
+    : bits_(0),
+      ref_(o),
+      tag_(i::Type::CLASS_TYPE) { }
+
+
+Value::Value(Object&& o)
+    : bits_(0),
+      ref_(move(o)),
+      tag_(i::Type::CLASS_TYPE) { }
+
+
+bool Value::asBoolean() const {
+  API_CHECK(tag_ == i::Type::BOOLEAN_TYPE, "value is not Boolean");
+  return static_cast<bool>(bits_);
+}
+
+
+int8_t Value::asI8() const {
+  API_CHECK(tag_ == i::Type::I8_TYPE, "value is not i8");
+  return static_cast<int8_t>(bits_);
+}
+
+
+int16_t Value::asI16() const {
+  API_CHECK(tag_ == i::Type::I16_TYPE, "value is not i16");
+  return static_cast<int16_t>(bits_);
+}
+
+
+int32_t Value::asI32() const {
+  API_CHECK(tag_ == i::Type::I32_TYPE, "value is not i32");
+  return static_cast<int32_t>(bits_);
+}
+
+
+int64_t Value::asI64() const {
+  API_CHECK(tag_ == i::Type::I64_TYPE, "value is not i64");
+  return static_cast<int64_t>(bits_);
+}
+
+
+float Value::asF32() const {
+  API_CHECK(tag_ == i::Type::F32_TYPE, "value is not f32");
+  return i::f32FromBits(static_cast<i::u32>(bits_));
+}
+
+
+double Value::asF64() const {
+  API_CHECK(tag_ == i::Type::F64_TYPE, "value is not f64");
+  return i::f64FromBits(bits_);
+}
+
+
+const String& Value::asString() const {
+  API_CHECK(tag_ == i::Type::CLASS_TYPE &&
+      (!ref_ || i::isa<i::String>(unwrapRaw<i::Object>(ref_))),
+      "value is not String");
+  return static_cast<const String&>(ref_);
+}
+
+
+const Object& Value::asObject() const {
+  API_CHECK(tag_ == i::Type::CLASS_TYPE, "value is not Object");
+  return ref_;
+}
+
+
+String&& Value::moveString() {
+  API_CHECK(tag_ == i::Type::CLASS_TYPE &&
+      (!ref_ || i::isa<i::String>(unwrapRaw<i::Object>(ref_))),
+      "value is not String");
+  return static_cast<String&&>(move(ref_));
+}
+
+
+Object&& Value::moveObject() {
+  API_CHECK(tag_ == i::Type::CLASS_TYPE, "value is not Object");
+  return move(ref_);
 }
 
 

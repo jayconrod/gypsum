@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -101,7 +101,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testValueParam(self):
         foo = Package(name=Name(["foo"]))
-        foo.addGlobal(Name(["bar"]), None, UnitType, frozenset([PUBLIC, LET]))
+        foo.addGlobal(Name(["bar"]), type=UnitType, flags=frozenset([PUBLIC, LET]))
         source = "def f(foo.bar) = 12"
         self.assertRaises(TypeException, self.analyzeFromSource,
                           source, packageLoader=FakePackageLoader([foo]))
@@ -401,7 +401,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testPropertyForeignGlobal(self):
         source = "var x = foo.bar"
         foo = Package(name=Name(["foo"]))
-        bar = foo.addGlobal(Name(["bar"]), None, UnitType, frozenset([PUBLIC, LET]))
+        bar = foo.addGlobal(Name(["bar"]), type=UnitType, flags=frozenset([PUBLIC, LET]))
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         x = info.package.findGlobal(name="x")
         self.assertEquals(UnitType, x.type)
@@ -410,8 +410,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testPropertyForeignFunction(self):
         source = "var x = foo.bar"
         foo = Package(name=Name(["foo"]))
-        bar = foo.addFunction(Name(["bar"]), None, UnitType, [], [], None, None,
-                              frozenset([PUBLIC]))
+        bar = foo.addFunction(Name(["bar"]), returnType=UnitType, typeParameters=[],
+                              parameterTypes=[], flags=frozenset([PUBLIC]))
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         x = info.package.findGlobal(name="x")
         self.assertEquals(UnitType, x.type)
@@ -440,8 +440,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testCallForeignFunctionWithArg(self):
         source = "var x = foo.bar(12)"
         foo = Package(name=Name(["foo"]))
-        bar = foo.addFunction(Name(["bar"]), None, I64Type, [], [I64Type],
-                              None, None, frozenset([PUBLIC]))
+        bar = foo.addFunction(Name(["bar"]), returnType=I64Type, typeParameters=[],
+                              parameterTypes=[I64Type], flags=frozenset([PUBLIC]))
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         x = info.package.findGlobal(name="x")
         self.assertEquals(I64Type, x.type)
@@ -452,8 +452,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         T = foo.addTypeParameter(Name(["T"]), upperBound=getRootClassType(),
                                  lowerBound=getNothingClassType(), flags=frozenset([STATIC]))
         Tty = VariableType(T)
-        bar = foo.addFunction(Name(["bar"]), None, Tty, [T], [Tty], None, None,
-                              frozenset([PUBLIC]))
+        bar = foo.addFunction(Name(["bar"]), returnType=Tty, typeParameters=[T],
+                              parameterTypes=[Tty], flags=frozenset([PUBLIC]))
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         x = info.package.findGlobal(name="x")
         self.assertEquals(getStringType(), x.type)
@@ -1021,7 +1021,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testMatchExprValue(self):
         foo = Package(name=Name(["foo"]))
-        foo.addGlobal(Name(["bar"]), None, I64Type, frozenset([PUBLIC, LET]))
+        foo.addGlobal(Name(["bar"]), type=I64Type, flags=frozenset([PUBLIC, LET]))
         source = "def f(x: i64) =\n" + \
                  "  match (x)\n" + \
                  "    case foo.bar => 1"
@@ -2235,7 +2235,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testImportGlobalFromPackage(self):
         foo = Package(name=Name(["foo"]))
-        bar = foo.addGlobal(Name(["bar"]), None, I64Type, frozenset([PUBLIC]))
+        bar = foo.addGlobal(Name(["bar"]), type=I64Type, flags=frozenset([PUBLIC]))
         source = "import foo.bar as baz\n" + \
                  "let x = baz"
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))

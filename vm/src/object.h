@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014,2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -13,6 +13,8 @@
 namespace codeswitch {
 namespace internal {
 
+class Class;
+class Field;
 class Type;
 
 class Object: public Block {
@@ -26,6 +28,13 @@ class Object: public Block {
   static Local<Object> create(Heap* heap, const Handle<Meta>& meta, length_t length);
 
   static Local<Type> typeof(const Handle<Object>& object);
+  Class* clas() const;
+
+  u64 getRawField(const Field* field) const;
+  void setRawField(const Field* field, u64 bits);
+
+  u64 getRawElement(length_t index) const;
+  void setRawElement(length_t index, u64 bits);
 
  protected:
   explicit Object(BlockType blockType);

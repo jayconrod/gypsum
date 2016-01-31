@@ -1,4 +1,4 @@
-# Copyright 2015, Jay Conrod. All rights reserved.
+# Copyright 2015-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -34,14 +34,13 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
                                                methods=[], flags=frozenset([flags.PUBLIC]))
         self.classTy = ir_types.ClassType(self.clas)
         ctor = self.otherPackage.addFunction(ir.Name([ir.CONSTRUCTOR_SUFFIX]),
-                                             None, ir_types.UnitType,
-                                             [], [], None, None,
-                                             frozenset([flags.PUBLIC,
-                                                        flags.METHOD]))
+                                             returnType=ir_types.UnitType,
+                                             typeParameters=[], parameterTypes=[],
+                                             flags=frozenset([flags.PUBLIC, flags.METHOD]))
         self.clas.constructors = [ctor]
-        method = self.otherPackage.addFunction(ir.Name(["m"]), None, ir_types.UnitType,
-                                               [], [], None, None,
-                                               frozenset([flags.PUBLIC, flags.METHOD]))
+        method = self.otherPackage.addFunction(ir.Name(["m"]), returnType=ir_types.UnitType,
+                                               typeParameters=[], parameterTypes=[],
+                                               flags=frozenset([flags.PUBLIC, flags.METHOD]))
         self.clas.methods = [method]
         self.param = self.otherPackage.addTypeParameter(ir.Name(["T"]),
                                                         upperBound=self.rootClassType,
@@ -74,8 +73,8 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
         self.assertIs(expected, defn)
 
     def testExternalizeGlobal(self):
-        globl = self.otherPackage.addGlobal(ir.Name(["g"]), None, self.classTy,
-                                            frozenset([flags.PUBLIC]))
+        globl = self.otherPackage.addGlobal(ir.Name(["g"]), type=self.classTy,
+                                            flags=frozenset([flags.PUBLIC]))
         externGlobal = self.externalizer.externalizeDefn(globl)
         expected = self.makeGlobal(ir.Name(["g"]), id=globl.id, type=self.classTy,
                                    flags=frozenset([flags.PUBLIC, flags.EXTERN]))
@@ -83,9 +82,10 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
         self.checkExternPosition(externGlobal)
 
     def testExternalizeFunction(self):
-        function = self.otherPackage.addFunction(ir.Name(["f"]), None, self.classTy,
-                                                 [self.param], [self.varTy], None, None,
-                                                 frozenset([flags.PUBLIC]))
+        function = self.otherPackage.addFunction(ir.Name(["f"]), returnType=self.classTy,
+                                                 typeParameters=[self.param],
+                                                 parameterTypes=[self.varTy],
+                                                 flags=frozenset([flags.PUBLIC]))
         externFunction = self.externalizer.externalizeDefn(function)
         expected = ir.Function(ir.Name(["f"]), function.id, returnType=self.classTy,
                                typeParameters=[self.externParam],
@@ -102,17 +102,19 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
                                           flags=frozenset([flags.ARRAY, flags.FINAL, flags.PUBLIC]))
         clasTy = ir_types.ClassType(clas, (self.varTy,))
         ctor = self.otherPackage.addFunction(ir.Name(["C", ir.CONSTRUCTOR_SUFFIX]),
-                                             None, ir_types.UnitType, [self.param],
-                                             [clasTy], None, None,
-                                             frozenset([flags.PUBLIC, flags.METHOD]))
+                                             returnType=ir_types.UnitType,
+                                             typeParameters=[self.param],
+                                             parameterTypes=[clasTy],
+                                             flags=frozenset([flags.PUBLIC, flags.METHOD]))
         clas.constructors = [ctor]
         field = self.otherPackage.newField(ir.Name(["C", "x"]),
                                            type=clasTy, flags=frozenset([flags.PUBLIC]))
         clas.fields = [field]
-        method = self.otherPackage.addFunction(ir.Name(["C", "f"]), None,
-                                               ir_types.UnitType, [self.param], [clasTy],
-                                               None, None,
-                                               frozenset([flags.PUBLIC, flags.METHOD]))
+        method = self.otherPackage.addFunction(ir.Name(["C", "f"]),
+                                               returnType=ir_types.UnitType,
+                                               typeParameters=[self.param],
+                                               parameterTypes=[clasTy],
+                                               flags=frozenset([flags.PUBLIC, flags.METHOD]))
         builtinMethod = \
             builtins.getBuiltinFunctionById(bytecode.BUILTIN_ROOT_CLASS_TO_STRING_ID)
         clas.methods = [method, builtinMethod]
@@ -166,8 +168,7 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
         self.assertIs(rootClass, externClass)
 
     def testExternalizeLocalDefn(self):
-        localGlobal = self.package.addGlobal(ir.Name(["g"]), None,
-                                             ir_types.UnitType, frozenset())
+        localGlobal = self.package.addGlobal(ir.Name(["g"]), type=ir_types.UnitType)
         externGlobal = self.externalizer.externalizeDefn(localGlobal)
         self.assertIs(localGlobal, externGlobal)
 

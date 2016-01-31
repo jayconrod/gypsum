@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -652,23 +652,25 @@ class Scope(ast.NodeVisitor):
         flags = getFlagsFromAstDefn(astDefn, None)
         checkFlags(flags, frozenset([ABSTRACT, FINAL, PUBLIC, PROTECTED]), astDefn.location)
         name = self.makeName(astDefn.name)
-        irDefn = self.info.package.addClass(name, astDefn=astDefn,
+        irDefn = self.info.package.addClass(name, sourceName=astDefn.name, astDefn=astDefn,
                                             typeParameters=implicitTypeParams,
                                             constructors=[], fields=[], methods=[], flags=flags)
 
         irInitializerName = name.withSuffix(ir.CLASS_INIT_SUFFIX)
-        irInitializer = self.info.package.addFunction(irInitializerName, astDefn,
-                                                      None, list(implicitTypeParams),
-                                                      None, [], None, frozenset([INITIALIZER]))
+        irInitializer = self.info.package.addFunction(irInitializerName, astDefn=astDefn,
+                                                      typeParameters=list(implicitTypeParams),
+                                                      variables=[],
+                                                      flags=frozenset([INITIALIZER]))
         self.makeMethod(irInitializer, irDefn)
         irDefn.initializer = irInitializer
 
         if not astDefn.hasConstructors():
             ctorFlags = flags & frozenset([PUBLIC, PROTECTED])
             irDefaultCtorName = name.withSuffix(ir.CONSTRUCTOR_SUFFIX)
-            irDefaultCtor = self.info.package.addFunction(irDefaultCtorName, astDefn,
-                                                          None, list(implicitTypeParams),
-                                                          None, [], None, ctorFlags)
+            irDefaultCtor = self.info.package.addFunction(irDefaultCtorName, astDefn=astDefn,
+                                                          typeParameters=
+                                                              list(implicitTypeParams),
+                                                          variables=[], flags=ctorFlags)
             self.makeConstructor(irDefaultCtor, irDefn)
             irDefn.constructors.append(irDefaultCtor)
         classInfo = ClassInfo(irDefn)
@@ -685,7 +687,7 @@ class Scope(ast.NodeVisitor):
         function.flags |= frozenset([METHOD])
         function.definingClass = clas
         thisName = function.name.withSuffix(ir.RECEIVER_SUFFIX)
-        this = ir.Variable(thisName, astDefn=function.astDefn,
+        this = ir.Variable(thisName, sourceName="this", astDefn=function.astDefn,
                            kind=ir.PARAMETER, flags=frozenset([LET]))
         function.variables.insert(0, this)
 
@@ -1079,7 +1081,8 @@ class GlobalScope(Scope):
         shouldBind = True
         if isinstance(astDefn, ast.VariablePattern):
             checkFlags(flags, frozenset([LET, PUBLIC, PROTECTED]), astDefn.location)
-            irDefn = self.info.package.addGlobal(name, astDefn, None, flags)
+            irDefn = self.info.package.addGlobal(name, sourceName=astDefn.name, astDefn=astDefn,
+                                                 flags=flags)
         elif isinstance(astDefn, ast.FunctionDefinition):
             checkFlags(flags, frozenset([PUBLIC, NATIVE]), astDefn.location)
             if astDefn.body is None and NATIVE not in flags:
@@ -1089,9 +1092,12 @@ class GlobalScope(Scope):
                 raise ScopeException(astDefn.location,
                                      "%s: native global function must not have body" %
                                      astDefn.name)
-            irDefn = self.info.package.addFunction(name, astDefn,
-                                                   None, self.getImplicitTypeParameters(),
-                                                   None, [], None, flags)
+            irDefn = self.info.package.addFunction(name, sourceName=astDefn.name,
+                                                   astDefn=astDefn,
+                                                   typeParameters=
+                                                       self.getImplicitTypeParameters(),
+                                                   variables=[],
+                                                   flags=flags)
             if astDefn.name == "main":
                 assert self.info.package.entryFunction is None
                 self.info.package.entryFunction = irDefn.id
@@ -1168,7 +1174,8 @@ class FunctionScope(Scope):
             if STATIC not in flags:
                 raise NotImplementedError
             flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
-            irDefn = self.info.package.addTypeParameter(name, astDefn=astDefn, flags=flags)
+            irDefn = self.info.package.addTypeParameter(name, sourceName=astDefn.name,
+                                                        astDefn=astDefn, flags=flags)
             irScopeDefn.typeParameters.append(irDefn)
         elif isinstance(astDefn, ast.Parameter):
             checkFlags(flags, frozenset(), astDefn.location)
@@ -1186,7 +1193,8 @@ class FunctionScope(Scope):
             isParameter = isinstance(astVarDefn, ast.Parameter) and \
                           astVarDefn.pattern is astDefn
             kind = ir.PARAMETER if isParameter else ir.LOCAL
-            irDefn = ir.Variable(name, astDefn=astDefn, kind=kind, flags=flags)
+            irDefn = ir.Variable(name, sourceName=astDefn.name, astDefn=astDefn,
+                                 kind=kind, flags=flags)
             irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, ast.FunctionDefinition):
             name = self.makeName(astDefn.name)
@@ -1198,9 +1206,10 @@ class FunctionScope(Scope):
                 raise ScopeException(astDefn.location,
                                      "%s: native function must not have body" % astDefn.name)
             implicitTypeParams = self.getImplicitTypeParameters()
-            irDefn = self.info.package.addFunction(name, astDefn,
-                                                   None, implicitTypeParams,
-                                                   None, [], None, flags)
+            irDefn = self.info.package.addFunction(name, sourceName=astDefn.name,
+                                                   astDefn=astDefn,
+                                                   typeParameters=implicitTypeParams,
+                                                   variables=[], flags=flags)
         elif isinstance(astDefn, ast.ClassDefinition):
             irDefn, shouldBind = self.createIrClassDefn(astDefn)
         else:
@@ -1235,13 +1244,14 @@ class FunctionScope(Scope):
         irContextType = ClassType(irContextClass, ())
         ctorName = contextClassName.withSuffix(ir.CONSTRUCTOR_SUFFIX)
         receiverName = ctorName.withSuffix(ir.RECEIVER_SUFFIX)
-        ctor = self.info.package.addFunction(ctorName, None,
-                                             UnitType, list(implicitTypeParams),
-                                             [irContextType],
-                                             [ir.Variable(receiverName, type=irContextType,
-                                                          kind=ir.PARAMETER,
-                                                          flags=frozenset([LET]))],
-                                             [], frozenset([METHOD]))
+        ctor = self.info.package.addFunction(ctorName, returnType=UnitType,
+                                             typeParameters=list(implicitTypeParams),
+                                             parameterTypes=[irContextType],
+                                             variables=[
+                                                 ir.Variable(receiverName, type=irContextType,
+                                                             kind=ir.PARAMETER,
+                                                             flags=frozenset([LET]))],
+                                             flags=frozenset([METHOD]))
         ctor.compileHint = CONTEXT_CONSTRUCTOR_HINT
         irContextClass.constructors.append(ctor)
         contextInfo.irContextClass = irContextClass
@@ -1386,7 +1396,8 @@ class ClassScope(Scope):
         if isinstance(astDefn, ast.VariablePattern):
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([LET, PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
-            irDefn = self.info.package.newField(name, astDefn=astDefn, flags=flags)
+            irDefn = self.info.package.newField(name, sourceName=astDefn.name,
+                                                astDefn=astDefn, flags=flags)
             irScopeDefn.fields.append(irDefn)
         elif isinstance(astDefn, ast.FunctionDefinition):
             implicitTypeParams = self.getImplicitTypeParameters()
@@ -1423,7 +1434,8 @@ class ClassScope(Scope):
                     checkFlags(flags, frozenset([STATIC, PUBLIC, PROTECTED, PRIVATE, NATIVE]),
                                astDefn.location)
                     flags |= frozenset([METHOD])
-                    irDefn = self.info.package.addFunction(name, astDefn=astDefn,
+                    irDefn = self.info.package.addFunction(name, sourceName=astDefn.name,
+                                                           astDefn=astDefn,
                                                            typeParameters=implicitTypeParams,
                                                            variables=[], flags=flags,
                                                            definingClass=irScopeDefn)
@@ -1431,7 +1443,8 @@ class ClassScope(Scope):
                     checkFlags(flags, frozenset([ABSTRACT, FINAL, PUBLIC,
                                                  PROTECTED, PRIVATE, OVERRIDE, NATIVE]),
                                astDefn.location)
-                    irDefn = self.info.package.addFunction(name, astDefn=astDefn,
+                    irDefn = self.info.package.addFunction(name, sourceName=astDefn.name,
+                                                           astDefn=astDefn,
                                                            typeParameters=implicitTypeParams,
                                                            variables=[], flags=flags)
                     self.makeMethod(irDefn, irScopeDefn)
@@ -1453,7 +1466,8 @@ class ClassScope(Scope):
             if STATIC not in flags:
                 raise NotImplementedError
             flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
-            irDefn = self.info.package.addTypeParameter(name, astDefn=astDefn, flags=flags)
+            irDefn = self.info.package.addTypeParameter(name, sourceName=astDefn.name,
+                                                        astDefn=astDefn, flags=flags)
             irDefn.clas = irScopeDefn
             irScopeDefn.typeParameters.append(irDefn)
             irScopeDefn.initializer.typeParameters.append(irDefn)
@@ -1468,7 +1482,7 @@ class ClassScope(Scope):
             name = self.makeName(astDefn.pattern.name) \
                    if isinstance(astDefn.pattern, ast.VariablePattern) \
                    else self.makeName(ir.ANON_PARAMETER_SUFFIX)
-            irDefn = ir.Variable(name, astDefn=astDefn,
+            irDefn = ir.Variable(name, sourceName=astDefn.pattern.name, astDefn=astDefn,
                                  kind=ir.PARAMETER, flags=frozenset([LET]))
             irCtor = self.info.getDefnInfo(self.ast.constructor).irDefn
             irCtor.variables.append(irDefn)
@@ -1480,6 +1494,8 @@ class ClassScope(Scope):
             if FINAL not in irScopeDefn.flags:
                 raise ScopeException(astDefn.location, "non-final class may not have elements")
             irScopeDefn.flags |= frozenset([ARRAY])
+            if FINAL in flags:
+                irScopeDefn.flags |= frozenset([ARRAY_FINAL])
             name = self.makeName(ir.ARRAY_LENGTH_SUFFIX)
             irDefn = self.info.package.newField(name, astDefn=astDefn, type=I32Type,
                                                 flags=frozenset([PRIVATE, LET, ARRAY]))
@@ -1492,7 +1508,8 @@ class ClassScope(Scope):
                        astDefn.location)
             flags |= frozenset([ARRAY])
             implicitTypeParams = self.getImplicitTypeParameters()
-            irDefn = self.info.package.addFunction(name, astDefn,
+            irDefn = self.info.package.addFunction(name, sourceName=astDefn.name,
+                                                   astDefn=astDefn,
                                                    typeParameters=implicitTypeParams,
                                                    variables=[],
                                                    flags=flags)
@@ -1557,7 +1574,8 @@ class ExistentialTypeScope(Scope):
             name = self.makeName(astDefn.name)
             if len(flags) > 0:
                 raise ScopeException(astDefn.location, "invalid flags: %s" % ", ".join(flags))
-            irDefn = self.info.package.addTypeParameter(name, astDefn=astDefn, flags=flags)
+            irDefn = self.info.package.addTypeParameter(name, sourceName=astDefn.name,
+                                                        astDefn=astDefn, flags=flags)
         else:
             raise NotImplementedError
 

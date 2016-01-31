@@ -1,4 +1,4 @@
-// Copyright 2015 Jay Conrod. All rights reserved.
+// Copyright 2015-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -178,10 +178,12 @@ TEST(PackageExports) {
   auto package = Package::create(heap);
   auto globals = BlockArray<Global>::create(heap, 2);
   auto fooName = NAME("foo");
-  auto foo = Global::create(heap, fooName, NO_FLAGS, handle(Type::unitType(roots)));
+  auto foo = Global::create(heap, fooName, STR("foo"),
+      NO_FLAGS, handle(Type::unitType(roots)));
   globals->set(0, *foo);
   auto barName = NAME("bar");
-  auto bar = Global::create(heap, barName, PUBLIC_FLAG, handle(Type::unitType(roots)));
+  auto bar = Global::create(heap, barName, STR("bar"), PUBLIC_FLAG,
+      handle(Type::unitType(roots)));
   globals->set(1, *bar);
   package->setGlobals(*globals);
 
@@ -202,7 +204,7 @@ TEST(PackageLink) {
   auto fooDep = PackageDependency::create(heap, fooName, nullVersion, nullVersion,
                                           1, 0, 0, 0, 0);
   ASSERT_EQ(nullptr, fooDep->linkedGlobals());
-  auto externBar = Global::create(heap, NAME("bar"),
+  auto externBar = Global::create(heap, NAME("bar"), STR("bar"),
                                   EXTERN_FLAG | PUBLIC_FLAG,
                                   handle(Type::unitType(roots)));
   fooDep->externGlobals()->set(0, *externBar);
@@ -212,7 +214,8 @@ TEST(PackageLink) {
 
   auto fooPackage = Package::create(heap);
   auto fooGlobals = BlockArray<Global>::create(heap, 1);
-  auto bar = Global::create(heap, NAME("bar"), PUBLIC_FLAG, handle(Type::unitType(roots)));
+  auto bar = Global::create(heap, NAME("bar"), STR("bar"), PUBLIC_FLAG,
+      handle(Type::unitType(roots)));
   fooGlobals->set(0, *bar);
   fooPackage->setGlobals(*fooGlobals);
   fooDep->setPackage(*fooPackage);
@@ -236,7 +239,7 @@ TEST(PackageLinkMissingGlobal) {
   auto fooDep = PackageDependency::create(heap, fooName, nullVersion, nullVersion,
                                           1, 0, 0, 0, 0);
   ASSERT_EQ(nullptr, fooDep->linkedGlobals());
-  auto externBar = Global::create(heap, NAME("bar"),
+  auto externBar = Global::create(heap, NAME("bar"), STR("bar"),
                                   EXTERN_FLAG | PUBLIC_FLAG,
                                   handle(Type::unitType(roots)));
   fooDep->externGlobals()->set(0, *externBar);
@@ -284,8 +287,8 @@ TEST(TestMangleFunctionNameClasses) {
   auto lower = handle(Type::nothingType(roots));
 
   auto package = Package::create(heap);
-  auto P = TypeParameter::create(heap, NAME("P"), NO_FLAGS, upper, lower);
-  auto Q = TypeParameter::create(heap, NAME("Q"), NO_FLAGS, upper, lower);
+  auto P = TypeParameter::create(heap, NAME("P"), STR("P"), NO_FLAGS, upper, lower);
+  auto Q = TypeParameter::create(heap, NAME("Q"), STR("Q"), NO_FLAGS, upper, lower);
   auto localClass = Class::create(heap);
   localClass->setName(*NAME("local.Local"));
   localClass->setPackage(*package);
@@ -294,8 +297,8 @@ TEST(TestMangleFunctionNameClasses) {
   localTypeParameters->set(1, *Q);
   auto otherPackage = Package::create(heap);
   otherPackage->setName(*NAME("foo.bar.baz"));
-  auto S = TypeParameter::create(heap, NAME("S"), NO_FLAGS, upper, lower);
-  auto T = TypeParameter::create(heap, NAME("T"), NO_FLAGS, upper, lower);
+  auto S = TypeParameter::create(heap, NAME("S"), STR("S"), NO_FLAGS, upper, lower);
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), NO_FLAGS, upper, lower);
   auto foreignClass = Class::create(heap);
   foreignClass->setName(*NAME("foreign.Foreign"));
   auto foreignTypeParameters = BlockArray<TypeParameter>::create(heap, 2);
@@ -303,9 +306,9 @@ TEST(TestMangleFunctionNameClasses) {
   foreignTypeParameters->set(1, *T);
   foreignClass->setPackage(*otherPackage);
 
-  auto X = TypeParameter::create(heap, NAME("X"), STATIC_FLAG, upper, lower);
+  auto X = TypeParameter::create(heap, NAME("X"), STR("X"), STATIC_FLAG, upper, lower);
   auto XType = Type::create(heap, X);
-  auto Y = TypeParameter::create(heap, NAME("Y"), NO_FLAGS, upper, lower);
+  auto Y = TypeParameter::create(heap, NAME("Y"), STR("Y"), NO_FLAGS, upper, lower);
   auto YType = Type::create(heap, Y, Type::NULLABLE_FLAG);
   auto localType = Type::create(heap, localClass, vector<Local<Type>>{XType, YType});
   auto foreignType = Type::create(heap, foreignClass, vector<Local<Type>>{YType, XType},
@@ -338,8 +341,8 @@ TEST(MangleFunctionNameExistential) {
   auto lower = handle(Type::nothingType(roots));
 
   auto package = Package::create(heap);
-  auto S = TypeParameter::create(heap, NAME("S"), NO_FLAGS, upper, lower);
-  auto T = TypeParameter::create(heap, NAME("T"), NO_FLAGS, upper, lower);
+  auto S = TypeParameter::create(heap, NAME("S"), STR("S"), NO_FLAGS, upper, lower);
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), NO_FLAGS, upper, lower);
   auto C = Class::create(heap);
   C->setName(*NAME("C"));
   C->setPackage(*package);
@@ -347,9 +350,9 @@ TEST(MangleFunctionNameExistential) {
   CTypeParameters->set(0, *S);
   CTypeParameters->set(1, *T);
   C->setTypeParameters(*CTypeParameters);
-  auto P = TypeParameter::create(heap, NAME("P"), NO_FLAGS, upper, lower);
+  auto P = TypeParameter::create(heap, NAME("P"), STR("P"), NO_FLAGS, upper, lower);
   auto PType = Type::create(heap, P);
-  auto X = TypeParameter::create(heap, NAME("X"), NO_FLAGS, upper, lower);
+  auto X = TypeParameter::create(heap, NAME("X"), STR("X"), NO_FLAGS, upper, lower);
   auto XType = Type::create(heap, X);
   auto eXType = Type::create(heap, vector<Local<TypeParameter>>{X},
                              Type::create(heap, C, vector<Local<Type>>{PType, XType}));

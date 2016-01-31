@@ -15,6 +15,118 @@ public final class Array[static +T]
       set(i, a.get(i))
       i += 1i32
 
-  static def create(a: MutableArray[T]) = new(a.length) Array[T](a)
+  public static def create(a: MutableArray[T]) = new(a.length) Array[T](a)
 
   final arrayelements T, public get, private set, public length
+
+
+public final class MutableBooleanArray
+  arrayelements boolean, public get, public set, public length
+
+
+public final class BooleanArray
+  private def this(a: MutableBooleanArray) =
+    var i = 0i32
+    while (i < length)
+      set(i, a.get(i))
+      i += 1i32
+
+  public static def create(a: MutableBooleanArray) = new(a.length) BooleanArray(a)
+
+  final arrayelements boolean, public get, private set, public length
+
+
+public final class MutableI8Array
+  arrayelements i8, public get, public set, public length
+
+
+public final class I8Array
+  private def this(a: MutableI8Array) =
+    var i = 0i32
+    while (i < length)
+      set(i, a.get(i))
+      i += 1i32
+
+  public static def create(a: MutableI8Array) = new(a.length) I8Array(a)
+
+  final arrayelements i8, public get, private set, public length
+
+
+public final class MutableI16Array
+  arrayelements i16, public get, public set, public length
+
+
+public final class I16Array
+  private def this(a: MutableI16Array) =
+    var i = 0i32
+    while (i < length)
+      set(i, a.get(i))
+      i += 1i32
+
+  public static def create(a: MutableI16Array) = new(a.length) I16Array(a)
+
+  final arrayelements i16, public get, private set, public length
+
+
+public final class MutableI32Array
+  arrayelements i32, public get, public set, public length
+
+
+public final class I32Array
+  private def this(a: MutableI32Array) =
+    var i = 0i32
+    while (i < length)
+      set(i, a.get(i))
+      i += 1i32
+
+  public static def create(a: MutableI32Array) = new(a.length) I32Array(a)
+
+  final arrayelements i32, public get, private set, public length
+
+
+public final class MutableI64Array
+  arrayelements i64, public get, public set, public length
+
+
+public final class I64Array
+  private def this(a: MutableI64Array) =
+    var i = 0i32
+    while (i < length)
+      set(i, a.get(i))
+      i += 1i32
+
+  public static def create(a: MutableI64Array) = new(a.length) I64Array(a)
+
+  final arrayelements i64, public get, private set, public length
+
+
+public final class MutableF32Array
+  arrayelements f32, public get, public set, public length
+
+
+public final class F32Array
+  private def this(a: MutableF32Array) =
+    var i = 0i32
+    while (i < length)
+      set(i, a.get(i))
+      i += 1i32
+
+  public static def create(a: MutableF32Array) = new(a.length) F32Array(a)
+
+  final arrayelements f32, public get, private set, public length
+
+
+public final class MutableF64Array
+  arrayelements f64, public get, public set, public length
+
+
+public final class F64Array
+  private def this(a: MutableF64Array) =
+    var i = 0i32
+    while (i < length)
+      set(i, a.get(i))
+      i += 1i32
+
+  public static def create(a: MutableF64Array) = new(a.length) F64Array(a)
+
+  final arrayelements f64, public get, private set, public length

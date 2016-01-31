@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -22,11 +22,13 @@ class Field: public Block {
   static const BlockType kBlockType = FIELD_BLOCK_TYPE;
 
   void* operator new (size_t, Heap* heap);
-  Field(Name* name, u32 flags, Type* type);
+  Field(Name* name, String* sourceName, u32 flags, Type* type);
   static Local<Field> create(Heap* heap, const Handle<Name>& name,
+                             const Handle<String>& sourceName,
                              u32 flags, const Handle<Type>& type);
 
   Name* name() const { return name_.get(); }
+  String* sourceName() const { return sourceName_.get(); }
   u32 flags() const { return flags_; }
   Type* type() const { return type_.get(); }
 
@@ -34,6 +36,7 @@ class Field: public Block {
   DECLARE_POINTER_MAP()
 
   Ptr<Name> name_;
+  Ptr<String> sourceName_;
   u32 flags_;
   Ptr<Type> type_;
   // Update FIELD_POINTER_LIST if pointer members change.

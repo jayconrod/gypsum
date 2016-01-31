@@ -152,7 +152,7 @@ string String::toUtf8StlString() const {
 }
 
 
-bool String::equals(String* other) const {
+bool String::equals(const String* other) const {
   if (length() != other->length())
     return false;
   for (length_t i = 0; i < length(); i++) {

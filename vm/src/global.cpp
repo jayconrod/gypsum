@@ -1,4 +1,4 @@
-// Copyright 2015 Jay Conrod. All rights reserved.
+// Copyright 2015-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -16,6 +16,7 @@ namespace internal {
 
 #define GLOBAL_POINTERS_LIST(F) \
   F(Global, name_)              \
+  F(Global, sourceName_)        \
   F(Global, type_)              \
 
 DEFINE_POINTER_MAP(Global, GLOBAL_POINTERS_LIST)
@@ -23,9 +24,10 @@ DEFINE_POINTER_MAP(Global, GLOBAL_POINTERS_LIST)
 #undef GLOBAL_POINTERS_LIST
 
 
-Global::Global(Name* name, u32 flags, Type* type)
+Global::Global(Name* name, String* sourceName, u32 flags, Type* type)
     : Block(GLOBAL_BLOCK_TYPE),
       name_(this, name),
+      sourceName_(this, sourceName),
       flags_(flags),
       type_(this, type) {
   value_.primitive = 0;
@@ -33,8 +35,10 @@ Global::Global(Name* name, u32 flags, Type* type)
 
 
 Local<Global> Global::create(Heap* heap, const Handle<Name>& name,
+                             const Handle<String>& sourceName,
                              u32 flags, const Handle<Type>& type) {
-  RETRY_WITH_GC(heap, return Local<Global>(new(heap) Global(*name, flags, *type)));
+  RETRY_WITH_GC(heap, return Local<Global>(new(heap) Global(
+      *name, sourceName.getOrNull(), flags, *type)));
 }
 
 
@@ -101,6 +105,7 @@ void Global::setRaw(i64 value) {
 ostream& operator << (ostream& os, const Global* global) {
   os << brief(global)
      << "\n  name: " << brief(global->name())
+     << "\n  sourceName: " << brief(global->sourceName())
      << "\n  type: " << brief(global->type())
      << "\n  value: ";
   if (global->isPrimitive()) {

@@ -48,7 +48,7 @@ def deserialize(fileName):
 HEADER_FORMAT = "<Ihhqiiiiiiii"
 MAGIC = 0x676b7073
 MAJOR_VERSION = 0
-MINOR_VERSION = 18
+MINOR_VERSION = 19
 
 FLAG_FORMAT = "<i"
 
@@ -111,13 +111,19 @@ class Serializer(object):
         self.writeVbn(size)
         self.outFile.write(encoded)
 
+    def writeStringIndex(self, s):
+        index = self.package.findString(s)
+        self.writeVbn(index)
+
     def writeGlobal(self, globl):
         self.writeName(globl.name)
+        self.writeOption(self.writeStringIndex, globl.sourceName)
         self.writeFlags(globl.flags)
         self.writeType(globl.type)
 
     def writeFunction(self, function):
         self.writeName(function.name)
+        self.writeOption(self.writeStringIndex, function.sourceName)
         self.writeFlags(function.flags)
         self.writeTypeParameterList(function.typeParameters)
         self.writeType(function.returnType)
@@ -163,6 +169,7 @@ class Serializer(object):
 
     def writeClass(self, clas):
         self.writeName(clas.name)
+        self.writeOption(self.writeStringIndex, clas.sourceName)
         self.writeFlags(clas.flags)
         self.writeTypeParameterList(clas.typeParameters)
         self.writeType(clas.supertypes[0])
@@ -177,11 +184,13 @@ class Serializer(object):
 
     def writeField(self, field):
         self.writeName(field.name)
+        self.writeOption(self.writeStringIndex, field.sourceName)
         self.writeFlags(field.flags)
         self.writeType(field.type)
 
     def writeTypeParameter(self, typeParameter):
         self.writeName(typeParameter.name)
+        self.writeOption(self.writeStringIndex, typeParameter.sourceName)
         self.writeFlags(typeParameter.flags)
         self.writeType(typeParameter.upperBound)
         self.writeType(typeParameter.lowerBound)
@@ -430,13 +439,19 @@ class Deserializer(object):
         encoded = self.inFile.read(size)
         return encoded.decode("utf-8")
 
+    def readStringIndex(self):
+        index = self.readVbn()
+        return self.package.strings[index]
+
     def readGlobal(self, globl):
         globl.name = self.readName()
+        globl.sourceName = self.readOption(self.readStringIndex)
         globl.flags = self.readFlags()
         globl.type = self.readType()
 
     def readFunction(self, function):
         function.name = self.readName()
+        function.sourceName = self.readOption(self.readStringIndex)
         function.flags = self.readFlags()
         function.typeParameters = self.readList(self.readId, self.package.typeParameters)
         function.returnType = self.readType()
@@ -455,6 +470,7 @@ class Deserializer(object):
 
     def readClass(self, clas):
         clas.name = self.readName()
+        clas.sourceName = self.readOption(self.readStringIndex)
         clas.flags = self.readFlags()
         assert flags.EXTERN not in clas.flags
         clas.typeParameters = self.readList(self.readId, self.package.typeParameters)
@@ -466,6 +482,7 @@ class Deserializer(object):
 
     def readForeignClass(self, clas, dep):
         clas.name = self.readName()
+        clas.sourceName = self.readOption(self.readStringIndex)
         clas.flags = self.readFlags()
         assert flags.EXTERN in clas.flags
         clas.typeParameters = self.readList(self.readId, dep.typeParameters)
@@ -484,13 +501,15 @@ class Deserializer(object):
 
     def readField(self, index):
         name = self.readName()
+        sourceName = self.readOption(self.readStringIndex)
         flags = self.readFlags()
         ty = self.readType()
-        field = ir.Field(name, type=ty, flags=flags, index=index)
+        field = ir.Field(name, sourceName=sourceName, type=ty, flags=flags, index=index)
         return field
 
     def readTypeParameter(self, param):
         param.name = self.readName()
+        param.sourceName = self.readOption(self.readStringIndex)
         param.flags = self.readFlags()
         param.upperBound = self.readType()
         param.lowerBound = self.readType()

@@ -32,6 +32,7 @@ class Function: public Block {
 
   void* operator new(size_t, Heap* heap, length_t instructionsSize);
   Function(Name* name,
+           String* sourceName,
            u32 flags,
            BlockArray<TypeParameter>* typeParameters,
            Type* returnType,
@@ -46,6 +47,7 @@ class Function: public Block {
   static Local<Function> create(Heap* heap);
   static Local<Function> create(Heap* heap,
                                 const Handle<Name>& name,
+                                const Handle<String>& sourceName,
                                 u32 flags,
                                 const Handle<BlockArray<TypeParameter>>& typeParameters,
                                 const Handle<Type>& returnType,
@@ -61,6 +63,8 @@ class Function: public Block {
 
   Name* name() const { return name_.get(); }
   void setName(Name* newName) { name_.set(this, newName); }
+  String* sourceName() const { return sourceName_.get(); }
+  void setSourceName(String* newSourceName) { sourceName_.set(this, newSourceName); }
   u32 flags() const { return flags_; }
   void setFlags(u32 newFlags) { flags_ = newFlags; }
 
@@ -121,6 +125,7 @@ class Function: public Block {
  private:
   DECLARE_POINTER_MAP()
   Ptr<Name> name_;
+  Ptr<String> sourceName_;
   u32 flags_;
   BuiltinId builtinId_;
   Ptr<BlockArray<TypeParameter>> typeParameters_;
