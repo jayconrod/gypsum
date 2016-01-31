@@ -28,8 +28,8 @@ int main(int argc, char* argv[]) {
   VMOptions vmOptions;
   vmOptions.packageSearchPaths.push_back(dirName(argv[0]));
   VM vm(vmOptions);
-  auto name = Name::fromStringForPackage(String(&vm, "ApiByName"));
-  auto package = vm.loadPackage(name);
+  auto packageName = Name::fromStringForPackage(String(&vm, "ApiByName"));
+  auto package = vm.loadPackage(packageName);
   ASSERT_TRUE(package);
 
   // Check that when we load a global that doesn't exist, we get a bad reference.
