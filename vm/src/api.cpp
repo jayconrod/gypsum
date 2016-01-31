@@ -807,7 +807,7 @@ String CallBuilder::Impl::callForString() {
 
 
 Object CallBuilder::Impl::callForObject() {
-  API_CHECK(function_->returnType()->isRootClass(), "wrong function return type");
+  API_CHECK(function_->returnType()->isObject(), "wrong function return type");
   i::i64 objPtrBits = call();
   i::AllowAllocationScope allowAlloc(vm_->heap(), false);
   i::Object* rawObject = reinterpret_cast<i::Object*>(static_cast<i::word_t>(objPtrBits));
@@ -990,6 +990,13 @@ bool Object::hasElements() const {
 }
 
 
+bool Object::elementsAreConstant() const {
+  API_CHECK_SELF(Object);
+  API_CHECK(hasElements(), "object does not have array elements");
+  return (unwrapRaw<i::Object>(*this)->meta()->clas()->flags() & i::ARRAY_FINAL_FLAG) != 0;
+}
+
+
 uint32_t Object::length() const {
   API_CHECK_SELF(Object);
   return unwrapRaw<i::Object>(*this)->elementsLength();
@@ -1010,6 +1017,7 @@ Value Object::getElement(uint32_t index) const {
 void Object::setElement(uint32_t index, const Value& value) {
   API_CHECK_SELF(Object);
   API_CHECK(hasElements(), "object does not have array elements");
+  API_CHECK(!elementsAreConstant(), "array elements are not mutable");
   API_CHECK(index < length(), "array element index is out of bounds");
   auto iobj = unwrap<i::Object>(*this);
   auto vm = iobj->getVM();
@@ -1024,7 +1032,8 @@ void Object::setElement(uint32_t index, const Value& value) {
 void Object::copyElementsFrom(uint32_t index, const bool* from, uint32_t count) {
   API_CHECK_SELF(Object);
   API_CHECK(hasElements(), "object does not have array elements");
-  API_CHECK(index + count < length(), "array element index is out of bounds");
+  API_CHECK(!elementsAreConstant(), "array elements are not mutable");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
   auto iobj = unwrapRaw<i::Object>(*this);
   API_CHECK(iobj->meta()->clas()->elementType()->isBoolean(), "type error");
   auto to = reinterpret_cast<bool*>(iobj->elementsBase()) + index;
@@ -1035,7 +1044,8 @@ void Object::copyElementsFrom(uint32_t index, const bool* from, uint32_t count) 
 void Object::copyElementsFrom(uint32_t index, const int8_t* from, uint32_t count) {
   API_CHECK_SELF(Object);
   API_CHECK(hasElements(), "object does not have array elements");
-  API_CHECK(index + count < length(), "array element index is out of bounds");
+  API_CHECK(!elementsAreConstant(), "array elements are not mutable");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
   auto iobj = unwrapRaw<i::Object>(*this);
   API_CHECK(iobj->meta()->clas()->elementType()->isI8(), "type error");
   auto to = reinterpret_cast<int8_t*>(iobj->elementsBase()) + index;
@@ -1046,7 +1056,8 @@ void Object::copyElementsFrom(uint32_t index, const int8_t* from, uint32_t count
 void Object::copyElementsFrom(uint32_t index, const int16_t* from, uint32_t count) {
   API_CHECK_SELF(Object);
   API_CHECK(hasElements(), "object does not have array elements");
-  API_CHECK(index + count < length(), "array element index is out of bounds");
+  API_CHECK(!elementsAreConstant(), "array elements are not mutable");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
   auto iobj = unwrapRaw<i::Object>(*this);
   API_CHECK(iobj->meta()->clas()->elementType()->isI16(), "type error");
   auto to = reinterpret_cast<int16_t*>(iobj->elementsBase()) + index;
@@ -1057,7 +1068,8 @@ void Object::copyElementsFrom(uint32_t index, const int16_t* from, uint32_t coun
 void Object::copyElementsFrom(uint32_t index, const int32_t* from, uint32_t count) {
   API_CHECK_SELF(Object);
   API_CHECK(hasElements(), "object does not have array elements");
-  API_CHECK(index + count < length(), "array element index is out of bounds");
+  API_CHECK(!elementsAreConstant(), "array elements are not mutable");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
   auto iobj = unwrapRaw<i::Object>(*this);
   API_CHECK(iobj->meta()->clas()->elementType()->isI32(), "type error");
   auto to = reinterpret_cast<int32_t*>(iobj->elementsBase()) + index;
@@ -1068,7 +1080,8 @@ void Object::copyElementsFrom(uint32_t index, const int32_t* from, uint32_t coun
 void Object::copyElementsFrom(uint32_t index, const int64_t* from, uint32_t count) {
   API_CHECK_SELF(Object);
   API_CHECK(hasElements(), "object does not have array elements");
-  API_CHECK(index + count < length(), "array element index is out of bounds");
+  API_CHECK(!elementsAreConstant(), "array elements are not mutable");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
   auto iobj = unwrapRaw<i::Object>(*this);
   API_CHECK(iobj->meta()->clas()->elementType()->isI64(), "type error");
   auto to = reinterpret_cast<int64_t*>(iobj->elementsBase()) + index;
@@ -1079,7 +1092,8 @@ void Object::copyElementsFrom(uint32_t index, const int64_t* from, uint32_t coun
 void Object::copyElementsFrom(uint32_t index, const float* from, uint32_t count) {
   API_CHECK_SELF(Object);
   API_CHECK(hasElements(), "object does not have array elements");
-  API_CHECK(index + count < length(), "array element index is out of bounds");
+  API_CHECK(!elementsAreConstant(), "array elements are not mutable");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
   auto iobj = unwrapRaw<i::Object>(*this);
   API_CHECK(iobj->meta()->clas()->elementType()->isF32(), "type error");
   auto to = reinterpret_cast<float*>(iobj->elementsBase()) + index;
@@ -1090,7 +1104,8 @@ void Object::copyElementsFrom(uint32_t index, const float* from, uint32_t count)
 void Object::copyElementsFrom(uint32_t index, const double* from, uint32_t count) {
   API_CHECK_SELF(Object);
   API_CHECK(hasElements(), "object does not have array elements");
-  API_CHECK(index + count < length(), "array element index is out of bounds");
+  API_CHECK(!elementsAreConstant(), "array elements are not mutable");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
   auto iobj = unwrapRaw<i::Object>(*this);
   API_CHECK(iobj->meta()->clas()->elementType()->isF64(), "type error");
   auto to = reinterpret_cast<double*>(iobj->elementsBase()) + index;
@@ -1101,7 +1116,7 @@ void Object::copyElementsFrom(uint32_t index, const double* from, uint32_t count
 void Object::copyElementsTo(uint32_t index, bool* to, uint32_t count) const {
   API_CHECK_SELF(Object);
   API_CHECK(hasElements(), "object does not have array elements");
-  API_CHECK(index + count < length(), "array element index is out of bounds");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
   auto iobj = unwrapRaw<i::Object>(*this);
   API_CHECK(iobj->meta()->clas()->elementType()->isBoolean(), "type error");
   auto from = reinterpret_cast<bool*>(iobj->elementsBase()) + index;
@@ -1112,7 +1127,7 @@ void Object::copyElementsTo(uint32_t index, bool* to, uint32_t count) const {
 void Object::copyElementsTo(uint32_t index, int8_t* to, uint32_t count) const {
   API_CHECK_SELF(Object);
   API_CHECK(hasElements(), "object does not have array elements");
-  API_CHECK(index + count < length(), "array element index is out of bounds");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
   auto iobj = unwrapRaw<i::Object>(*this);
   API_CHECK(iobj->meta()->clas()->elementType()->isI8(), "type error");
   auto from = reinterpret_cast<int8_t*>(iobj->elementsBase()) + index;
@@ -1123,7 +1138,7 @@ void Object::copyElementsTo(uint32_t index, int8_t* to, uint32_t count) const {
 void Object::copyElementsTo(uint32_t index, int16_t* to, uint32_t count) const {
   API_CHECK_SELF(Object);
   API_CHECK(hasElements(), "object does not have array elements");
-  API_CHECK(index + count < length(), "array element index is out of bounds");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
   auto iobj = unwrapRaw<i::Object>(*this);
   API_CHECK(iobj->meta()->clas()->elementType()->isI16(), "type error");
   auto from = reinterpret_cast<int16_t*>(iobj->elementsBase()) + index;
@@ -1134,7 +1149,7 @@ void Object::copyElementsTo(uint32_t index, int16_t* to, uint32_t count) const {
 void Object::copyElementsTo(uint32_t index, int32_t* to, uint32_t count) const {
   API_CHECK_SELF(Object);
   API_CHECK(hasElements(), "object does not have array elements");
-  API_CHECK(index + count < length(), "array element index is out of bounds");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
   auto iobj = unwrapRaw<i::Object>(*this);
   API_CHECK(iobj->meta()->clas()->elementType()->isI32(), "type error");
   auto from = reinterpret_cast<int32_t*>(iobj->elementsBase()) + index;
@@ -1145,7 +1160,7 @@ void Object::copyElementsTo(uint32_t index, int32_t* to, uint32_t count) const {
 void Object::copyElementsTo(uint32_t index, int64_t* to, uint32_t count) const {
   API_CHECK_SELF(Object);
   API_CHECK(hasElements(), "object does not have array elements");
-  API_CHECK(index + count < length(), "array element index is out of bounds");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
   auto iobj = unwrapRaw<i::Object>(*this);
   API_CHECK(iobj->meta()->clas()->elementType()->isI64(), "type error");
   auto from = reinterpret_cast<int64_t*>(iobj->elementsBase()) + index;
@@ -1156,7 +1171,7 @@ void Object::copyElementsTo(uint32_t index, int64_t* to, uint32_t count) const {
 void Object::copyElementsTo(uint32_t index, float* to, uint32_t count) const {
   API_CHECK_SELF(Object);
   API_CHECK(hasElements(), "object does not have array elements");
-  API_CHECK(index + count < length(), "array element index is out of bounds");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
   auto iobj = unwrapRaw<i::Object>(*this);
   API_CHECK(iobj->meta()->clas()->elementType()->isF32(), "type error");
   auto from = reinterpret_cast<float*>(iobj->elementsBase()) + index;
@@ -1167,7 +1182,7 @@ void Object::copyElementsTo(uint32_t index, float* to, uint32_t count) const {
 void Object::copyElementsTo(uint32_t index, double* to, uint32_t count) const {
   API_CHECK_SELF(Object);
   API_CHECK(hasElements(), "object does not have array elements");
-  API_CHECK(index + count < length(), "array element index is out of bounds");
+  API_CHECK(index + count <= length(), "array element index is out of bounds");
   auto iobj = unwrapRaw<i::Object>(*this);
   API_CHECK(iobj->meta()->clas()->elementType()->isF64(), "type error");
   auto from = reinterpret_cast<double*>(iobj->elementsBase()) + index;

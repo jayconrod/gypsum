@@ -817,6 +817,12 @@ class Object: public Reference {
   bool hasElements() const;
 
   /**
+   * Returns whether this object's array elements are immutable. {@link #hasElements} must
+   * be true for this object.
+   */
+  bool elementsAreConstant() const;
+
+  /**
    * Returns the number of array elements this object has or 0 if the object has no
    * array elements.
    */

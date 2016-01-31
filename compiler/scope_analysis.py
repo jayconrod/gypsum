@@ -1494,6 +1494,8 @@ class ClassScope(Scope):
             if FINAL not in irScopeDefn.flags:
                 raise ScopeException(astDefn.location, "non-final class may not have elements")
             irScopeDefn.flags |= frozenset([ARRAY])
+            if FINAL in flags:
+                irScopeDefn.flags |= frozenset([ARRAY_FINAL])
             name = self.makeName(ir.ARRAY_LENGTH_SUFFIX)
             irDefn = self.info.package.newField(name, astDefn=astDefn, type=I32Type,
                                                 flags=frozenset([PRIVATE, LET, ARRAY]))
