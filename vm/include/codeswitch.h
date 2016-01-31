@@ -809,6 +809,146 @@ class Object: public Reference {
    */
   void setElement(uint32_t index, const Value& value);
 
+  /**
+   * Copies values from a native array into the object's array elements.
+   *
+   * @param index the location of the first element to write.
+   * @param from a pointer to the native array to copy from.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsFrom(uint32_t index, const bool* from, uint32_t count);
+
+  /**
+   * Copies values from a native array into the object's array elements.
+   *
+   * @param index the location of the first element to write.
+   * @param from a pointer to the native array to copy from.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsFrom(uint32_t index, const int8_t* from, uint32_t count);
+
+  /**
+   * Copies values from a native array into the object's array elements.
+   *
+   * @param index the location of the first element to write.
+   * @param from a pointer to the native array to copy from.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsFrom(uint32_t index, const int16_t* from, uint32_t count);
+
+  /**
+   * Copies values from a native array into the object's array elements.
+   *
+   * @param index the location of the first element to write.
+   * @param from a pointer to the native array to copy from.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsFrom(uint32_t index, const int32_t* from, uint32_t count);
+
+  /**
+   * Copies values from a native array into the object's array elements.
+   *
+   * @param index the location of the first element to write.
+   * @param from a pointer to the native array to copy from.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsFrom(uint32_t index, const int64_t* from, uint32_t count);
+
+  /**
+   * Copies values from a native array into the object's array elements.
+   *
+   * @param index the location of the first element to write.
+   * @param from a pointer to the native array to copy from.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsFrom(uint32_t index, const float* from, uint32_t count);
+
+  /**
+   * Copies values from a native array into the object's array elements.
+   *
+   * @param index the location of the first element to write.
+   * @param from a pointer to the native array to copy from.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsFrom(uint32_t index, const double* from, uint32_t count);
+
+  /**
+   * Copies values into a native arrya from the object's array elements.
+   *
+   * @param index the location of the first element to read.
+   * @param from a pointer to the native array to copy to.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsTo(uint32_t index, bool* to, uint32_t count) const;
+
+  /**
+   * Copies values into a native arrya from the object's array elements.
+   *
+   * @param index the location of the first element to read.
+   * @param from a pointer to the native array to copy to.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsTo(uint32_t index, int8_t* to, uint32_t count) const;
+
+  /**
+   * Copies values into a native arrya from the object's array elements.
+   *
+   * @param index the location of the first element to read.
+   * @param from a pointer to the native array to copy to.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsTo(uint32_t index, int16_t* to, uint32_t count) const;
+
+  /**
+   * Copies values into a native arrya from the object's array elements.
+   *
+   * @param index the location of the first element to read.
+   * @param from a pointer to the native array to copy to.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsTo(uint32_t index, int32_t* to, uint32_t count) const;
+
+  /**
+   * Copies values into a native arrya from the object's array elements.
+   *
+   * @param index the location of the first element to read.
+   * @param from a pointer to the native array to copy to.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsTo(uint32_t index, int64_t* to, uint32_t count) const;
+
+  /**
+   * Copies values into a native arrya from the object's array elements.
+   *
+   * @param index the location of the first element to read.
+   * @param from a pointer to the native array to copy to.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsTo(uint32_t index, float* to, uint32_t count) const;
+
+  /**
+   * Copies values into a native arrya from the object's array elements.
+   *
+   * @param index the location of the first element to read.
+   * @param from a pointer to the native array to copy to.
+   * @param count the number of elements to copy. {@code index + count} must be less than
+   *     {@link #length}.
+   */
+  void copyElementsTo(uint32_t index, double* to, uint32_t count) const;
+
   friend class CallBuilder;
 };
 
