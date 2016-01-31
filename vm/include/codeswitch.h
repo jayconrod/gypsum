@@ -517,6 +517,12 @@ class Field final : public Reference {
  public:
   Field() = default;
   explicit Field(Impl* impl);
+
+  /**
+   * Returns whether the value of this field can be altered through the API. If true,
+   * {@link Object#setField} must not be called.
+   */
+  bool isConstant() const;
 };
 
 

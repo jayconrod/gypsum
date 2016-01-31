@@ -409,6 +409,7 @@ Global Package::findGlobal(const String& sourceName) const {
   i::u32 expectedFlags = i::PUBLIC_FLAG;
   for (auto global : *globals) {
     if ((global->flags() & mask) == expectedFlags &&
+        global->sourceName() != nullptr &&
         global->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
       return wrap<Global, i::Global>(global);
     }
@@ -445,6 +446,7 @@ Function Package::findFunction(const String& sourceName) const {
   i::u32 expectedFlags = i::PUBLIC_FLAG;
   for (auto function : *functions) {
     if ((function->flags() & mask) == expectedFlags &&
+        function->sourceName() != nullptr &&
         function->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
       return wrap<Function, i::Function>(function);
     }
@@ -479,6 +481,7 @@ Class Package::findClass(const String& sourceName) const {
   auto classes = unwrapRaw<i::Package>(*this)->classes();
   for (auto clas : *classes) {
     if ((clas->flags() & i::PUBLIC_FLAG) == i::PUBLIC_FLAG &&
+        clas->sourceName() != nullptr &&
         clas->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
       return wrap<Class, i::Class>(clas);
     }
@@ -513,7 +516,7 @@ Value Global::value() const {
 
 void Global::setValue(const Value& value) {
   API_CHECK_SELF(Global);
-  API_CHECK(isConstant(), "global cannot be set because it is constant");
+  API_CHECK(!isConstant(), "global cannot be set because it is constant");
   auto self = unwrap<i::Global>(*this);
   auto vm = self->getVM();
   i::HandleScope handleScope(vm);
@@ -535,7 +538,8 @@ Function Class::findMethod(const Name& name) const {
   API_CHECK_ARG(name);
   auto methods = unwrapRaw<i::Class>(*this)->methods();
   for (auto method : *methods) {
-    if (method->name()->equals(unwrapRaw<i::Name>(name))) {
+    if ((method->flags() & i::PRIVATE_FLAG) == 0 &&
+        method->name()->equals(unwrapRaw<i::Name>(name))) {
       return wrap<Function, i::Function>(method);
     }
   }
@@ -549,6 +553,7 @@ Function Class::findMethod(const String& sourceName) const {
   auto methods = unwrapRaw<i::Class>(*this)->methods();
   for (auto method : *methods) {
     if ((method->flags() & i::PUBLIC_FLAG) == i::PUBLIC_FLAG &&
+        method->sourceName() != nullptr &&
         method->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
       return wrap<Function, i::Function>(method);
     }
@@ -560,7 +565,7 @@ Function Class::findMethod(const String& sourceName) const {
 Function Class::findMethod(const string& sourceName) const {
   API_CHECK_SELF(Class);
   String sourceNameStr(refVM(*this), sourceName);
-  return findMethod(sourceName);
+  return findMethod(sourceNameStr);
 }
 
 
@@ -569,7 +574,8 @@ Field Class::findField(const Name& name) const {
   API_CHECK_ARG(name);
   auto fields = unwrapRaw<i::Class>(*this)->fields();
   for (auto field : *fields) {
-    if (field->name()->equals(unwrapRaw<i::Name>(name))) {
+    if ((field->flags() & i::PRIVATE_FLAG) == 0 &&
+        field->name()->equals(unwrapRaw<i::Name>(name))) {
       return wrap<Field, i::Field>(field);
     }
   }
@@ -585,6 +591,7 @@ Field Class::findField(const String& sourceName) const {
   i::u32 expectedFlags = i::PUBLIC_FLAG;
   for (auto field : *fields) {
     if ((field->flags() & mask) == expectedFlags &&
+        field->sourceName() != nullptr &&
         field->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
       return wrap<Field, i::Field>(field);
     }
@@ -602,6 +609,12 @@ Field Class::findField(const string& sourceName) const {
 
 Field::Field(Impl* impl)
     : Reference(impl) { }
+
+
+bool Field::isConstant() const {
+  API_CHECK_SELF(Field);
+  return (unwrapRaw<i::Field>(*this)->flags() & i::LET_FLAG) != 0;
+}
 
 
 CallBuilder::~CallBuilder() {
