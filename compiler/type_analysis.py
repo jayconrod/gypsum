@@ -2073,13 +2073,6 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         Raises:
             TypeException: if `ty` contains any variables from `existentialVars`.
         """
-        # NOTE: We are being more conservative than we technically need to be. We could upcast
-        # away the existential variables in rvalues. Currently, we use the same code to type
-        # lvalues and rvalues, and upcast would make assignment unsafe.
-        #
-        # We may also want to add an "open" expression the user can bind existential variables
-        # explicitly or do something like "wildcard capture" when we have type inference for
-        # type arguments.
         if existentialVars is None or len(existentialVars) == 0 or not ty.isObject():
             return ty
         existentialVarIds = set(v.id for v in existentialVars)
