@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -92,6 +92,8 @@ class Type;
 ostream& operator << (ostream&, const Type*);
 class String;
 ostream& operator << (ostream&, const String*);
+class ThreadBindle;
+ostream& operator << (ostream&, const ThreadBindle*);
 
 
 void dump(const Block* block) {
@@ -118,6 +120,7 @@ void dump(const Block* block) {
     case OBJECT_BLOCK_TYPE: cerr << reinterpret_cast<const Object*>(block); break;
     case TYPE_BLOCK_TYPE: cerr << reinterpret_cast<const Type*>(block); break;
     case STRING_BLOCK_TYPE: cerr << reinterpret_cast<const String*>(block); break;
+    case THREAD_BINDLE_BLOCK_TYPE: cerr << reinterpret_cast<const ThreadBindle*>(block); break;
     default:
       cerr << brief(block);
   }

@@ -56,7 +56,7 @@ TEST({testName}) {{
   vm.addPackage(package);
 
   Local<Stack> stack(vm.stack());
-  Interpreter interpreter(&vm, stack);
+  Interpreter interpreter(&vm, stack, vm.threadBindle());
   Local<Function> init(&vm, package->initFunction());
   Local<Function> entry(&vm, package->entryFunction());
   try {{

@@ -27,6 +27,7 @@ class Block;
 class Heap;
 class Name;
 class Stack;
+class ThreadBindle;
 class Package;
 class PackageDependency;
 
@@ -53,6 +54,7 @@ class VM {
   Roots* roots() { return roots_.get(); }
   HandleStorage& handleStorage() { return *handleStorage_; }
   const Persistent<Stack>& stack() { return stack_; }
+  const Persistent<ThreadBindle>& threadBindle() { return threadBindle_; }
 
   Persistent<Package> findPackage(const Handle<Name>& name);
   Persistent<Package> loadPackage(const Handle<Name>& name,
@@ -85,6 +87,7 @@ class VM {
   std::unique_ptr<Roots> roots_;
   std::unique_ptr<HandleStorage> handleStorage_;
   Persistent<Stack> stack_;
+  Persistent<ThreadBindle> threadBindle_;
   std::vector<std::string> packageSearchPaths_;
   std::vector<Persistent<Package>> packages_;
   std::vector<NativeFunctionSearch> nativeFunctionSearchOrder_;

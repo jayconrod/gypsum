@@ -19,11 +19,12 @@ namespace internal {
 class Function;
 class Meta;
 class Stack;
+class ThreadBindle;
 class Type;
 
 class Interpreter {
  public:
-  Interpreter(VM* vm, const Handle<Stack>& stack);
+  Interpreter(VM* vm, const Handle<Stack>& stack, const Handle<ThreadBindle>& threadBindle);
 
   i64 call(const Handle<Function>& callee);
 
@@ -45,8 +46,6 @@ class Interpreter {
   void enter(const Handle<Function>& callee);
   void leave();
   void doThrow(Block* exception);
-
-  void throwBuiltinException(BuiltinId id);
 
   template <typename T> void push(T value);
   template <typename T> T pop();
@@ -102,6 +101,7 @@ class Interpreter {
 
   VM* vm_;
   Persistent<Stack> stack_;
+  Persistent<ThreadBindle> threadBindle_;
 
   Persistent<Function> function_;
   length_t pcOffset_;

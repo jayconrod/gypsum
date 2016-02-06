@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -70,6 +70,7 @@ class Roots {
     F(String, falseString, FALSE_STRING)                              \
     F(Meta, blockHashMapTableMeta, BLOCK_HASH_MAP_TABLE_META)         \
     F(Meta, blockHashMapMeta, BLOCK_HASH_MAP_META)                    \
+    F(Meta, threadBindleMeta, THREAD_BINDLE_META)                     \
 
   #define DEFINE_BASIC_GETTER(type, name, NAME)                       \
   type* name() const {                                                \

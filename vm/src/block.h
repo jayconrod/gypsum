@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -42,6 +42,7 @@ V(Object, OBJECT)                                                              \
 V(Type, TYPE)                                                                  \
 V(ExternTypeInfo, EXTERN_TYPE_INFO)                                            \
 V(String, STRING)                                                              \
+V(ThreadBindle, THREAD_BINDLE)                                                 \
 
 
 #define ENUM_BLOCK_TYPE(Name, NAME) NAME##_BLOCK_TYPE,

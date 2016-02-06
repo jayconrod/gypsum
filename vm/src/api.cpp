@@ -840,7 +840,7 @@ i::i64 CallBuilder::Impl::call() {
   }
 
   // Perform the call.
-  i::Interpreter interpreter(vm_, vm_->stack());
+  i::Interpreter interpreter(vm_, vm_->stack(), vm_->threadBindle());
   return interpreter.call(function_);
 }
 

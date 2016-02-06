@@ -29,6 +29,7 @@
 #include "roots.h"
 #include "stack.h"
 #include "string.h"
+#include "thread-bindle.h"
 #include "type.h"
 #include "type-parameter.h"
 
@@ -37,9 +38,13 @@ using namespace std;
 namespace codeswitch {
 namespace internal {
 
-Interpreter::Interpreter(VM* vm, const Handle<Stack>& stack)
+Interpreter::Interpreter(
+    VM* vm,
+    const Handle<Stack>& stack,
+    const Handle<ThreadBindle>& threadBindle)
     : vm_(vm),
       stack_(stack),
+      threadBindle_(threadBindle),
       pcOffset_(kDonePcOffset),
       isPreparedForGC_(false) { }
 
@@ -142,14 +147,14 @@ class Interpreter::GCSafeScope {
 
 #define CHECK_NON_NULL(block)                                         \
   if ((block) == nullptr) {                                           \
-    throwBuiltinException(BUILTIN_NULL_POINTER_EXCEPTION_CLASS_ID);   \
+    doThrow(threadBindle_->takeNullPointerException());               \
     break;                                                            \
   }                                                                   \
 
 
 #define CHECK_ARRAY_INDEX_BOUNDS(block, index)                                     \
   if ((index) < 0 || static_cast<word_t>(index) >= (block)->elementsLength()) {    \
-    throwBuiltinException(BUILTIN_ARRAY_INDEX_OUT_OF_BOUNDS_EXCEPTION_CLASS_ID);   \
+    doThrow(threadBindle_->takeArrayIndexOutOfBoundsException());                  \
     break;                                                                         \
   }                                                                                \
 
@@ -360,7 +365,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         auto global = function_->package()->getGlobal(index);
         auto value = global->getRaw();
         if (global->type()->isObject() && !global->type()->isNullable() && value == 0) {
-          throwBuiltinException(BUILTIN_UNINITIALIZED_EXCEPTION_CLASS_ID);
+          doThrow(threadBindle_->takeUninitializedException());
         } else {
           push(value);
         }
@@ -374,7 +379,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
             ->linkedGlobals()->get(externIndex);
         auto value = global->getRaw();
         if (global->type()->isObject() && !global->type()->isNullable() && value == 0) {
-          throwBuiltinException(BUILTIN_UNINITIALIZED_EXCEPTION_CLASS_ID);
+          doThrow(threadBindle_->takeUninitializedException());
         } else {
           push(value);
         }
@@ -655,7 +660,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
             isSubtype = Type::isSubtypeOf(objectType, type);
           }
           if (!isSubtype) {
-            throwBuiltinException(BUILTIN_CAST_EXCEPTION_CLASS_ID);
+            doThrow(threadBindle_->takeCastException());
             break;
           }
         }
@@ -994,17 +999,21 @@ void Interpreter::handleBuiltin(BuiltinId id) {
     case BUILTIN_READ_FUNCTION_ID: {
       string stlString;
       getline(cin, stlString);
-      if (!cin.good()) {
-        throwBuiltinException(BUILTIN_EXCEPTION_CLASS_ID);
-        break;
-      }
       String* result = nullptr;
       {
         GCSafeScope gcSafe(this);
         HandleScope handleScope(vm_);
-        result = *String::fromUtf8String(vm_->heap(),
-                                         reinterpret_cast<const u8*>(stlString.data()),
-                                         stlString.length());
+        if (!cin.good()) {
+          auto clas = handle(vm_->roots()->getBuiltinClass(BUILTIN_EXCEPTION_CLASS_ID));
+          auto meta = Class::ensureAndGetInstanceMeta(clas);
+          auto exn = Object::create(vm_->heap(), meta);
+          doThrow(*exn);
+          break;
+        } else {
+          result = *String::fromUtf8String(vm_->heap(),
+                                           reinterpret_cast<const u8*>(stlString.data()),
+                                           stlString.length());
+        }
       }
       push<Block*>(result);
       break;
@@ -1094,6 +1103,9 @@ void Interpreter::doThrow(Block* exception) {
     pcOffset_ = handler.pcOffset;
     push(exception);
   }
+  GCSafeScope gcSafe(this);
+  HandleScope handleScope(vm_);
+  ThreadBindle::restoreExceptions(threadBindle_);
 }
 
 
@@ -1147,21 +1159,14 @@ void Interpreter::unprepareForGC() {
 }
 
 
-void Interpreter::throwBuiltinException(BuiltinId id) {
-  Object* exn = nullptr;
-  {
-    GCSafeScope gcSafe(this);
-    HandleScope handleScope(vm_);
-    auto exnMeta = handle(vm_->roots()->getBuiltinMeta(id));
-    exn = *Object::create(vm_->heap(), exnMeta);
-  }
-  doThrow(exn);
-}
-
-
 void Interpreter::load(Block* block, word_t offset, Type* type) {
   if (type->isObject()) {
-    push(mem<Block*>(block, offset));
+    auto ptr = mem<Block*>(block, offset);
+    if (!type->isNullable() && ptr == kUninitialized) {
+      doThrow(threadBindle_->takeUninitializedException());
+      return;
+    }
+    push(ptr);
   } else {
     auto size = type->typeSize();
     if (size == 1) {

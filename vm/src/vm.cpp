@@ -20,6 +20,7 @@
 #include "roots.h"
 #include "stack.h"
 #include "string.h"
+#include "thread-bindle.h"
 
 using namespace std;
 
@@ -44,6 +45,9 @@ VM::VM(const VMOptions& vmOptions)
     HandleScope handleScope(handleStorage_.get());
     Local<Stack> stack = Stack::create(heap(), Stack::kDefaultSize);
     stack_ = Persistent<Stack>(stack);
+    Local<ThreadBindle> threadBindle = ThreadBindle::create(heap());
+    ThreadBindle::restoreExceptions(threadBindle);
+    threadBindle_ = Persistent<ThreadBindle>(threadBindle);
   }
 
   for (auto entry : vmOptions.nativeFunctions) {
@@ -273,7 +277,7 @@ void VM::loadPackageDependenciesAndInitialize(const Handle<Package>& package) {
   // Initialize all the packages we loaded (if they need to be initialized). Note that we
   // appended packages to `loadedPackages` in post-order, so dependencies will be initialized
   // before their dependents.
-  Interpreter interpreter(this, stack_);
+  Interpreter interpreter(this, stack_, threadBindle_);
   for (auto& package : loadedPackages) {
     Package::link(package);
     if (package->initFunctionIndex() != kIndexNotSet) {

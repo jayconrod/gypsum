@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -17,6 +17,7 @@
 #include "package.h"
 #include "stack.h"
 #include "string.h"
+#include "thread-bindle.h"
 #include "type.h"
 #include "type-parameter.h"
 
@@ -198,6 +199,11 @@ void Roots::initialize(Heap* heap) {
   blockHashMapMeta->hasPointers_ = true;
   blockHashMapMeta->objectPointerMap().setWord(0, DefaultBlockHashMap::kPointerMap);
   basicRoots_[BLOCK_HASH_MAP_META_ROOT_INDEX] = blockHashMapMeta;
+
+  auto threadBindleMeta = new(heap, 0, sizeof(ThreadBindle), 0) Meta(THREAD_BINDLE_BLOCK_TYPE);
+  threadBindleMeta->hasPointers_ = true;
+  threadBindleMeta->objectPointerMap().setWord(0, ThreadBindle::kPointerMap);
+  basicRoots_[THREAD_BINDLE_META_ROOT_INDEX] = threadBindleMeta;
 }
 
 
@@ -225,6 +231,7 @@ Meta* Roots::getMetaForBlockType(int type) {
     case TYPE_BLOCK_TYPE: return typeMeta();
     case EXTERN_TYPE_INFO_BLOCK_TYPE: return externTypeInfoMeta();
     case STRING_BLOCK_TYPE: return stringMeta();
+    case THREAD_BINDLE_BLOCK_TYPE: return threadBindleMeta();
     default:
       UNREACHABLE();
       return nullptr;
