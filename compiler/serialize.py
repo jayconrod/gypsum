@@ -457,7 +457,7 @@ class Deserializer(object):
         function.returnType = self.readType()
         function.parameterTypes = self.readList(self.readType)
         function.definingClass = self.readOption(self.readId, self.package.classes)
-        if flags.ABSTRACT not in function.flags:
+        if frozenset([flags.ABSTRACT, flags.NATIVE]).isdisjoint(function.flags):
             localsSize = self.readVbn()
             instructionsSize = self.readVbn()
             instructionsBuffer = self.inFile.read(instructionsSize)

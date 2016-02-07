@@ -66,7 +66,7 @@ GY_DEPS := $(GY_COMPILER) $(STD_PACKAGE)
 
 # Flags
 CXXFLAGS := -Werror -Wall -Wno-invalid-offsetof -fPIC
-LDFLAGS :=
+LDFLAGS := -rdynamic
 INCLUDES :=
 ifeq ($(mode),debug)
   CXXFLAGS += -O0 -g3

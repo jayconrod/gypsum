@@ -3,6 +3,8 @@ STD_SOURCES := $(wildcard $(STD_SRC_DIR)/*.gy)
 
 .PHONY: build-std check-std
 
+include $(STD_DIR)/io/Makefile
+
 all: build-std
 
 build-std: $(STD_PACKAGE)
