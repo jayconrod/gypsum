@@ -5,3 +5,5 @@
 // found in the LICENSE.txt file.
 
 public class IOException <: Exception
+
+public class StreamClosedException <: IOException
