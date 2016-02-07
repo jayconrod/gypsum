@@ -37,21 +37,45 @@ class ThreadBindle: public Block {
   DEFINE_NEW(ThreadBindle)
   static Local<ThreadBindle> create(Heap* heap);
 
+  /**
+   * Allocates all built-in exceptions. This should be called right after the `ThreadBindle`
+   * is created, before any code is executed with it.
+   */
+  static void createExceptions(const Handle<ThreadBindle>& bindle);
+
+  /**
+   * Returns true if it is safe to execute code with this bindle.
+   *
+   * This checks that all built-in exceptions have been allocated.
+   */
+  bool isReady() const;
+
   Object* takeArrayIndexOutOfBoundsException();
   Object* takeCastException();
   Object* takeNullPointerException();
+  Object* takeOutOfMemoryException();
   Object* takeUninitializedException();
 
   /**
-   * Re-allocates any built-in exceptions that were taken and thrown. This should be called
-   * after any `take` method is called the next time it is safe to allocate memory.
+   * Allocates a new exception to replace a built-in exception after a `take` method above.
+   *
+   * This should be called as part of the exception-throwing process, before executing more
+   * code. It is safe to call this if no built-in exception was taken.
    */
-  static void restoreExceptions(const Handle<ThreadBindle>& bindle);
+  static void restoreTakenException(const Handle<ThreadBindle>& bindle);
 
  private:
-  friend std::ostream& operator << (std::ostream& os, const ThreadBindle* bindle);
+  enum TakenException {
+    NONE_TAKEN,
+    NOT_ALLOCATED,
+    ARRAY_INDEX_OUT_OF_BOUNDS_TAKEN,
+    CAST_TAKEN,
+    NULL_POINTER_TAKEN,
+    OUT_OF_MEMORY_TAKEN,
+    UNINITIALIZED_TAKEN
+  };
 
-  Object* takeException(Ptr<Object>* exn);
+  Object* takeException(Ptr<Object>* exn, TakenException taken);
   static void restoreException(
       const Handle<ThreadBindle>& bindle,
       Ptr<Object>* exn,
@@ -61,8 +85,12 @@ class ThreadBindle: public Block {
   Ptr<Object> arrayIndexOutOfBoundsException_;
   Ptr<Object> castException_;
   Ptr<Object> nullPointerException_;
+  Ptr<Object> outOfMemoryException_;
   Ptr<Object> uninitializedException_;
+  TakenException taken_;
   // Update FUNCTION_POINTER_LIST if pointer members change.
+
+  friend std::ostream& operator << (std::ostream& os, const ThreadBindle* bindle);
 };
 
 std::ostream& operator << (std::ostream& os, const ThreadBindle* bindle);

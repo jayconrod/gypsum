@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -78,6 +78,13 @@ class Heap {
    *  or tagged values.
    */
   static const word_t kMinAddress = PAGESIZE;
+
+  /**
+   * The maximum number of bytes that can be requested in an allocation. Currently, this is
+   * bound by the chunk size. When large chunks are allowed, this will probably be bound
+   * to 2 GiB, since signed 32-bit integers are frequently inputs to address calculations.
+   */
+  static const u64 kMaxAllocatableSize = Chunk::kMaxBlockSize;
 
   bool isAllocationAllowed() const { return isAllocationAllowed_; }
   void setIsAllocationAllowed(bool allowed) { isAllocationAllowed_ = allowed; }

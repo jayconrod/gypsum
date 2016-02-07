@@ -46,7 +46,7 @@ VM::VM(const VMOptions& vmOptions)
     Local<Stack> stack = Stack::create(heap(), Stack::kDefaultSize);
     stack_ = Persistent<Stack>(stack);
     Local<ThreadBindle> threadBindle = ThreadBindle::create(heap());
-    ThreadBindle::restoreExceptions(threadBindle);
+    ThreadBindle::createExceptions(threadBindle);
     threadBindle_ = Persistent<ThreadBindle>(threadBindle);
   }
 

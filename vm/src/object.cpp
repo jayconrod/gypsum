@@ -33,9 +33,12 @@ void* Object::operator new (size_t, Heap* heap, Meta* meta) {
 
 void* Object::operator new (size_t, Heap* heap, Meta* meta, length_t length) {
   ASSERT(meta->elementSize() > 0);
+  u64 size = meta->objectSize() + static_cast<u64>(length) * meta->elementSize();
+  if (size > Heap::kMaxAllocatableSize) {
+    throw AllocationError(false /* shouldRetryAfterGC */);
+  }
   ASSERT(length <= kMaxLength);
-  auto size = meta->objectSize() + length * meta->elementSize();
-  auto obj = reinterpret_cast<Object*>(heap->allocate(size));
+  auto obj = reinterpret_cast<Object*>(heap->allocate(static_cast<word_t>(size)));
   obj->setMeta(meta);
   obj->setElementsLength(length);
   return obj;

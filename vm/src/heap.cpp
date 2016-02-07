@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014,2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -34,6 +34,7 @@ Heap::Heap(VM* vm)
 
 Address Heap::allocateUninitialized(word_t size) {
   size = align(size, kBlockAlignment);
+  ASSERT(size <= kMaxAllocatableSize);
   auto addr = allocateFast(size);
   if (addr == 0)
     return allocateSlow(size);
@@ -43,6 +44,7 @@ Address Heap::allocateUninitialized(word_t size) {
 
 Address Heap::allocate(word_t size) {
   size = align(size, kBlockAlignment);
+  ASSERT(size <= kMaxAllocatableSize);
   auto addr = allocateUninitialized(size);
   if (addr != 0)
     fill_n(reinterpret_cast<word_t*>(addr), size / kWordSize, 0);

@@ -110,6 +110,17 @@
         - ArrayIndexOutOfBoundsException
   fields: []
   methods: []
+- name: OutOfMemoryException
+  id: BUILTIN_OUT_OF_MEMORY_EXCEPTION_CLASS_ID
+  isPrimitive: false
+  supertype: Exception
+  constructors:
+    - id: BUILTIN_OUT_OF_MEMORY_EXCEPTION_CTOR_ID
+      returnType: unit
+      parameterTypes:
+        - OutOfMemoryException
+  fields: []
+  methods: []
 - name: Type
   id: BUILTIN_TYPE_CLASS_ID
   isPrimitive: false

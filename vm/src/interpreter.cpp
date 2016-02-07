@@ -160,6 +160,8 @@ class Interpreter::GCSafeScope {
 
 
 i64 Interpreter::call(const Handle<Function>& callee) {
+  ASSERT(threadBindle_->isReady());
+
   // TODO: figure out a reasonable way to manage locals here.
   SealHandleScope disallowHandles(vm_);
   AllowAllocationScope disallowAllocation(vm_->heap(), false);
@@ -451,11 +453,14 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       case ALLOCOBJ: {
         auto classId = readVbn();
         Object* obj = nullptr;
-        {
+        try {
           GCSafeScope gcSafe(this);
           HandleScope handleScope(vm_);
           auto meta = getMetaForClassId(classId);
           obj = *Object::create(vm_->heap(), meta);
+        } catch (AllocationError& e) {
+          doThrow(threadBindle_->takeOutOfMemoryException());
+          break;
         }
         push<Block*>(obj);
         break;
@@ -465,13 +470,16 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         auto depIndex = toLength(readVbn());
         auto externIndex = toLength(readVbn());
         Object* obj = nullptr;
-        {
+        try {
           GCSafeScope gcSafe(this);
           HandleScope handleScope(vm_);
           auto clas = handle(function_->package()->dependencies()->get(depIndex)
               ->linkedClasses()->get(externIndex));
           auto meta = Class::ensureAndGetInstanceMeta(clas);
           obj = *Object::create(vm_->heap(), meta);
+        } catch (AllocationError& e) {
+          doThrow(threadBindle_->takeOutOfMemoryException());
+          break;
         }
         push<Block*>(obj);
         break;
@@ -481,11 +489,14 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         auto classId = readVbn();
         length_t length = pop<i32>();
         Object* array = nullptr;
-        {
+        try {
           GCSafeScope gcSafe(this);
           HandleScope handleScope(vm_);
           auto meta = getMetaForClassId(classId);
           array = *Object::create(vm_->heap(), meta, length);
+        } catch (AllocationError& e) {
+          doThrow(threadBindle_->takeOutOfMemoryException());
+          break;
         }
         push<Block*>(array);
         break;
@@ -496,13 +507,16 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         auto externIndex = toLength(readVbn());
         length_t length = pop<i32>();
         Object* array = nullptr;
-        {
+        try {
           GCSafeScope gcSafe(this);
           HandleScope handleScope(vm_);
           auto clas = handle(function_->package()->dependencies()->get(depIndex)
               ->linkedClasses()->get(externIndex));
           auto meta = Class::ensureAndGetInstanceMeta(clas);
           array = *Object::create(vm_->heap(), meta, length);
+        } catch (AllocationError& e) {
+          doThrow(threadBindle_->takeOutOfMemoryException());
+          break;
         }
         push<Block*>(array);
         break;
@@ -529,7 +543,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         auto classId = readVbn();
         Type* type = nullptr;
         auto count = kLengthNotSet;
-        {
+        try {
           GCSafeScope gcSafe(this);
           HandleScope handleScope(vm_);
           auto clas = handle(isBuiltinId(classId)
@@ -544,6 +558,9 @@ i64 Interpreter::call(const Handle<Function>& callee) {
             typeArgs.push_back(arg);
           }
           type = *Type::create(vm_->heap(), clas, typeArgs);
+        } catch (AllocationError& e) {
+          doThrow(threadBindle_->takeOutOfMemoryException());
+          break;
         }
         stack_->setSp(stack_->sp() + count * kSlotSize);
         push<Block*>(type);
@@ -555,7 +572,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         auto externIndex = readVbn();
         Type* type = nullptr;
         auto count = kLengthNotSet;
-        {
+        try {
           GCSafeScope gcSafe(this);
           HandleScope handleScope(vm_);
           auto clas = handle(function_->package()->dependencies()->get(depIndex)
@@ -569,6 +586,9 @@ i64 Interpreter::call(const Handle<Function>& callee) {
             typeArgs.push_back(arg);
           }
           type = *Type::create(vm_->heap(), clas, typeArgs);
+        } catch (AllocationError& e) {
+          doThrow(threadBindle_->takeOutOfMemoryException());
+          break;
         }
         stack_->setSp(stack_->sp() + count * kSlotSize);
         push<Block*>(type);
@@ -578,11 +598,14 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       case TYVD: {
         auto typeParamId = readVbn();
         Type* type = nullptr;
-        {
+        try {
           GCSafeScope gcSafe(this);
           HandleScope handleScope(vm_);
           auto typeParam = handle(function_->package()->getTypeParameter(typeParamId));
           type = *Type::create(vm_->heap(), typeParam);
+        } catch (AllocationError& e) {
+          doThrow(threadBindle_->takeOutOfMemoryException());
+          break;
         }
         push<Block*>(type);
         break;
@@ -592,12 +615,15 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         auto depIndex = readVbn();
         auto externIndex = readVbn();
         Type* type = nullptr;
-        {
+        try {
           GCSafeScope gcSafe(this);
           HandleScope handleScope(vm_);
           auto typeParam = handle(function_->package()->dependencies()->get(depIndex)
               ->linkedTypeParameters()->get(externIndex));
           type = *Type::create(vm_->heap(), typeParam);
+        } catch (AllocationError& e) {
+          doThrow(threadBindle_->takeOutOfMemoryException());
+          break;
         }
         push<Block*>(type);
         break;
@@ -609,12 +635,15 @@ i64 Interpreter::call(const Handle<Function>& callee) {
 
       case TYFLAGD: {
         auto flags = static_cast<Type::Flags>(readVbn());
-        {
+        try {
           GCSafeScope gcSafe(this);
           HandleScope handleScope(vm_);
           auto type = handle(mem<Type*>(stack_->sp() + kPrepareForGCSize));
           type = Type::createWithFlags(vm_->heap(), type, flags);
           mem<Type*>(stack_->sp()) = *type;
+        } catch (AllocationError& e) {
+          doThrow(threadBindle_->takeOutOfMemoryException());
+          break;
         }
         break;
       }
@@ -626,7 +655,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       case TYXD: {
         auto count = toLength(readVbn());
         Type* type;
-        {
+        try {
           GCSafeScope gcSafe(this);
           HandleScope handleScope(vm_);
           auto innerType = handle(mem<Type*>(stack_->sp() + kPrepareForGCSize));
@@ -636,6 +665,9 @@ i64 Interpreter::call(const Handle<Function>& callee) {
             variables[count - i - 1] = handle(varType->asVariable());
           }
           type = *Type::create(vm_->heap(), variables, innerType);
+        } catch (AllocationError& e) {
+          doThrow(threadBindle_->takeOutOfMemoryException());
+          break;
         }
         stack_->setSp(stack_->sp() + count * kSlotSize);
         mem<Type*>(stack_->sp()) = type;
@@ -646,7 +678,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
 
       case CASTC:
-        {
+        try {
           GCSafeScope gcSafe(this);
           HandleScope handleScope(vm_);
           auto type = handle(mem<Type*>(stack_->sp() + kPrepareForGCSize));
@@ -663,6 +695,9 @@ i64 Interpreter::call(const Handle<Function>& callee) {
             doThrow(threadBindle_->takeCastException());
             break;
           }
+        } catch (AllocationError& e) {
+          doThrow(threadBindle_->takeOutOfMemoryException());
+          break;
         }
         pop<Block*>();
         // object stays on top of the stack.
@@ -672,7 +707,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         auto trueBlockIndex = toLength(readVbn());
         auto falseBlockIndex = toLength(readVbn());
         auto isSubtype = false;
-        {
+        try {
           GCSafeScope gcSafe(this);
           HandleScope handleScope(vm_);
           auto type = handle(mem<Type*>(stack_->sp(), kPrepareForGCSize));
@@ -684,6 +719,9 @@ i64 Interpreter::call(const Handle<Function>& callee) {
             auto objectType = Object::typeof(object);
             isSubtype = Type::isSubtypeOf(objectType, type);
           }
+        } catch (AllocationError& e) {
+          doThrow(threadBindle_->takeOutOfMemoryException());
+          break;
         }
         pop<Block*>();
         // object stays on top of the stack.
@@ -856,10 +894,13 @@ void Interpreter::handleBuiltin(BuiltinId id) {
   switch (id) {
     case BUILTIN_ROOT_CLASS_TO_STRING_ID: {
       String* result = nullptr;
-      {
+      try {
         GCSafeScope gcSafe(this);
         HandleScope handleScope(vm_);
         result = *String::fromUtf8CString(vm_->heap(), "Object");
+      } catch (AllocationError& e) {
+        doThrow(threadBindle_->takeOutOfMemoryException());
+        break;
       }
       pop<Block*>();  // receiver
       push<Block*>(result);
@@ -867,11 +908,14 @@ void Interpreter::handleBuiltin(BuiltinId id) {
     }
     case BUILTIN_ROOT_CLASS_TYPEOF_ID: {
       Type* type = nullptr;
-      {
+      try {
         GCSafeScope gcSafe(this);
         HandleScope handleScope(vm_);
         auto receiver = handle(mem<Object*>(stack_->sp() + kPrepareForGCSize));
         type = *Object::typeof(receiver);
+      } catch (AllocationError& e) {
+        doThrow(threadBindle_->takeOutOfMemoryException());
+        break;
       }
       pop<Block*>();  // receiver
       push<Block*>(type);
@@ -894,12 +938,15 @@ void Interpreter::handleBuiltin(BuiltinId id) {
 
     case BUILTIN_TYPE_IS_SUBTYPE_OF_ID: {
       bool result = false;
-      {
+      try {
         GCSafeScope gcSafe(this);
         HandleScope handleScope(vm_);
         auto other = handle(mem<Type*>(stack_->sp() + kPrepareForGCSize));
         auto receiver = handle(mem<Type*>(stack_->sp() + kPrepareForGCSize + kSlotSize));
         result = Type::isSubtypeOf(other, receiver);
+      } catch (AllocationError& e) {
+        doThrow(threadBindle_->takeOutOfMemoryException());
+        break;
       }
       pop<Block*>();  // other
       pop<Block*>();  // receiver
@@ -914,12 +961,15 @@ void Interpreter::handleBuiltin(BuiltinId id) {
 
     case BUILTIN_STRING_CONCAT_OP_ID: {
       String* result = nullptr;
-      {
+      try {
         GCSafeScope gcSafe(this);
         HandleScope handleScope(vm_);
         auto right = handle(mem<String*>(stack_->sp() + kPrepareForGCSize));
         auto left = handle(mem<String*>(stack_->sp() + kPrepareForGCSize + kSlotSize));
         result = *String::concat(left, right);
+      } catch (AllocationError& e) {
+        doThrow(threadBindle_->takeOutOfMemoryException());
+        break;
       }
       pop<Block*>();  // right
       pop<Block*>();  // left
@@ -1000,7 +1050,7 @@ void Interpreter::handleBuiltin(BuiltinId id) {
       string stlString;
       getline(cin, stlString);
       String* result = nullptr;
-      {
+      try {
         GCSafeScope gcSafe(this);
         HandleScope handleScope(vm_);
         if (!cin.good()) {
@@ -1014,6 +1064,9 @@ void Interpreter::handleBuiltin(BuiltinId id) {
                                            reinterpret_cast<const u8*>(stlString.data()),
                                            stlString.length());
         }
+      } catch (AllocationError& e) {
+        doThrow(threadBindle_->takeOutOfMemoryException());
+        break;
       }
       push<Block*>(result);
       break;
@@ -1052,7 +1105,12 @@ void Interpreter::enter(const Handle<Function>& callee) {
   // This may trigger garbage collection (since pointer maps are allocated like everything
   // else), but that's fine since we're at a safepoint, and we haven't built the frame yet.
   ASSERT((callee->flags() & (ABSTRACT_FLAG | EXTERN_FLAG)) == 0);
-  ensurePointerMap(callee);
+  try {
+    ensurePointerMap(callee);
+  } catch (AllocationError& e) {
+    doThrow(threadBindle_->takeOutOfMemoryException());
+    return;
+  }
 
   stack_->align(kWordSize);
   stack_->push(static_cast<word_t>(pcOffset_));
@@ -1082,10 +1140,7 @@ void Interpreter::doThrow(Block* exception) {
   if (handlers_.empty()) {
     // If the exception is unhandled, we need to completely unwind the stack and reset the state
     // of the interpreter in case it is used again.
-    stack_->resetPointers();
-    function_ = Persistent<Function>();
-    pcOffset_ = kPcNotSet;
-    throw Error("unhandled exception");
+    reset();
   } else {
     // If there is a handler, we pop the exception, unwind the stack, push the exception, and
     // resume execution there.
@@ -1103,9 +1158,23 @@ void Interpreter::doThrow(Block* exception) {
     pcOffset_ = handler.pcOffset;
     push(exception);
   }
-  GCSafeScope gcSafe(this);
-  HandleScope handleScope(vm_);
-  ThreadBindle::restoreExceptions(threadBindle_);
+  try {
+    GCSafeScope gcSafe(this);
+    HandleScope handleScope(vm_);
+    ThreadBindle::restoreTakenException(threadBindle_);
+  } catch (AllocationError& e) {
+    reset();
+  }
+  if (pcOffset_ == kPcNotSet) {
+    throw Error("unhandled exception");
+  }
+}
+
+
+void Interpreter::reset() {
+  stack_->resetPointers();
+  function_ = Persistent<Function>();
+  pcOffset_ = kPcNotSet;
 }
 
 
@@ -1282,7 +1351,7 @@ void Interpreter::intToString() {
   auto value = pop<T>();
   push<T>(value);  // hack to restore the stack
   String* result = nullptr;
-  {
+  try {
     GCSafeScope gcSafe(this);
     HandleScope handleScope(vm_);
     stringstream stream;
@@ -1292,6 +1361,9 @@ void Interpreter::intToString() {
     result = *String::fromUtf8String(vm_->heap(),
                                      reinterpret_cast<const u8*>(stlString.data()),
                                      size, size);
+  } catch (AllocationError& e) {
+    doThrow(threadBindle_->takeOutOfMemoryException());
+    return;
   }
   pop<T>();  // receiver
   push<Block*>(result);
@@ -1303,7 +1375,7 @@ void Interpreter::floatToString() {
   auto value = pop<T>();
   push<T>(value);  // hack to restore the stack
   String* result = nullptr;
-  {
+  try {
     GCSafeScope gcSafe(this);
     HandleScope handleScope(vm_);
     stringstream stream;
@@ -1313,6 +1385,9 @@ void Interpreter::floatToString() {
     result = *String::fromUtf8String(vm_->heap(),
                                      reinterpret_cast<const u8*>(stlString.data()),
                                      size, size);
+  } catch (AllocationError& e) {
+    doThrow(threadBindle_->takeOutOfMemoryException());
+    return;
   }
   pop<T>();  // receiver
   push<Block*>(result);

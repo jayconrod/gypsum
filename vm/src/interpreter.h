@@ -46,6 +46,7 @@ class Interpreter {
   void enter(const Handle<Function>& callee);
   void leave();
   void doThrow(Block* exception);
+  void reset();
 
   template <typename T> void push(T value);
   template <typename T> T pop();
