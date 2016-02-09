@@ -453,6 +453,7 @@ class Deserializer(object):
         function.name = self.readName()
         function.sourceName = self.readOption(self.readStringIndex)
         function.flags = self.readFlags()
+        assert flags.EXTERN not in function.flags
         function.typeParameters = self.readList(self.readId, self.package.typeParameters)
         function.returnType = self.readType()
         function.parameterTypes = self.readList(self.readType)
@@ -463,6 +464,16 @@ class Deserializer(object):
             instructionsBuffer = self.inFile.read(instructionsSize)
             blockOffsets = self.readList(self.readVbn)
             function.blocks = self.decodeInstructions(instructionsBuffer, blockOffsets)
+
+    def readForeignFunction(self, function, dep):
+        function.name = self.readName()
+        function.sourceName = self.readOption(self.readStringIndex)
+        function.flags = self.readFlags()
+        assert flags.EXTERN in function.flags
+        function.typeParameters = self.readList(self.readId, dep.externTypeParameters)
+        function.returnType = self.readType()
+        function.parameterTypes = self.readList(self.readType)
+        function.definingClass = self.readOption(self.readId, self.package.classes)
 
     def decodeInstructions(self, instructionsBuffer, blockOffsets):
         # TODO: implement if we ever actually need this.
@@ -485,11 +496,12 @@ class Deserializer(object):
         clas.sourceName = self.readOption(self.readStringIndex)
         clas.flags = self.readFlags()
         assert flags.EXTERN in clas.flags
-        clas.typeParameters = self.readList(self.readId, dep.typeParameters)
+        clas.typeParameters = self.readList(self.readId, dep.externTypeParameters)
         clas.supertypes = [self.readType()]
         clas.fields = self.readFields()
         clas.constructors = self.readList(self.readId, dep.externMethods)
         clas.methods = self.readList(self.readId, dep.externMethods)
+        clas.elementType = self.readOption(self.readType)
 
     def readFields(self):
         n = self.readVbn()
@@ -535,11 +547,11 @@ class Deserializer(object):
         for g in dep.externGlobals:
             self.readGlobal(g)
         for f in dep.externFunctions:
-            self.readFunction(f)
+            self.readForeignFunction(f, dep)
         for c in dep.externClasses:
-            self.readForeignClass(c)
+            self.readForeignClass(c, dep)
         for m in dep.externMethods:
-            self.readFunction(m)
+            self.readForeignFunction(m, dep)
         for p in dep.externTypeParameters:
             self.readTypeParameter(p)
 
