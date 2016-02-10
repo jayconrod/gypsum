@@ -841,7 +841,11 @@ i::i64 CallBuilder::Impl::call() {
 
   // Perform the call.
   i::Interpreter interpreter(vm_, vm_->stack(), vm_->threadBindle());
-  return interpreter.call(function_);
+  try {
+    return interpreter.call(function_);
+  } catch (i::Exception& exception) {
+    throw Exception(move(wrap<Object, i::Object>(exception.get())));
+  }
 }
 
 
@@ -1225,6 +1229,20 @@ const char* Error::message() const {
 }
 
 
+Exception::Exception(Object&& exception)
+    : exception_(move(exception)) { }
+
+
+Object& Exception::get() {
+  return exception_;
+}
+
+
+const Object& Exception::get() const {
+  return exception_;
+}
+
+
 Value::Value(bool b)
     : bits_(static_cast<uint64_t>(b)),
       tag_(i::Type::BOOLEAN_TYPE) { }
@@ -1380,10 +1398,20 @@ int64_t callNativeFunction(i::Function* callee, i::VM* vm, i::Address sp) {
   // Call the funtion via an assembly stub.
   i::SealHandleScope noHandles(vm);
   i::AllowAllocationScope noAlloc(vm->heap(), false);
-  auto result = i::callNativeFunctionRaw(
-      vm->apiPtr(), nativeFunction, argCount,
-      rawArgs.get(), argsAreInt.get(), resultType);
-  return result;
+  try {
+    auto result = i::callNativeFunctionRaw(
+        vm->apiPtr(), nativeFunction, argCount,
+        rawArgs.get(), argsAreInt.get(), resultType);
+    return result;
+  } catch (Exception& e) {
+    throw i::Exception(unwrapRaw<i::Object>(e.get()));
+  } catch (Object& e) {
+    if (e) {
+      throw i::Exception(unwrapRaw<i::Object>(e));
+    } else {
+      throw e;
+    }
+  }
 }
 
 }

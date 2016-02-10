@@ -17,10 +17,12 @@
 using std::cout;
 using std::endl;
 using std::make_tuple;
+using std::move;
 using std::string;
 using std::stringstream;
 using std::vector;
 
+using codeswitch::Exception;
 using codeswitch::Function;
 using codeswitch::Package;
 using codeswitch::Name;
@@ -116,6 +118,16 @@ static String recursiveNativeFunction(VM* vm, int64_t n, String a, String b, Str
 }
 
 
+static void throwNativeFunction(VM* vm, Object exception) {
+  throw Exception(move(exception));
+}
+
+
+static void throwNativeFunctionLazy(VM* vm, Object exception) {
+  throw exception;
+}
+
+
 int main(int argc, char* argv[]) {
   string programPath(argv[0]);
   auto programDir = dirName(programPath);
@@ -142,6 +154,12 @@ int main(int argc, char* argv[]) {
   vmOptions.nativeFunctions.push_back(
       make_tuple("NativeCalls.registered", "recursiveNative",
           reinterpret_cast<void(*)()>(recursiveNativeFunction)));
+  vmOptions.nativeFunctions.push_back(
+      make_tuple("NativeCalls.registered", "throwNativeFunction",
+          reinterpret_cast<void(*)()>(throwNativeFunction)));
+  vmOptions.nativeFunctions.push_back(
+      make_tuple("NativeCalls.registered", "throwNativeFunctionLazy",
+          reinterpret_cast<void(*)()>(throwNativeFunctionLazy)));
   VM vm(vmOptions);
   auto fName = Name::fromStringForDefn(String(&vm, "f"));
   auto gName = Name::fromStringForDefn(String(&vm, "g"));
@@ -234,6 +252,21 @@ int main(int argc, char* argv[]) {
   sresult = recursiveNative.callForString(
       static_cast<int64_t>(4), String(&vm, "baz"), String(&vm, "quux"), String(&vm, ""));
   ASSERT_EQ(",bazquux,foobar,bazquux,foobar", sresult.toStdString());
+
+  // Check that we can catch an unhandled exception thrown from interpreted code.
+  auto throwFunctionName = Name::fromStringForDefn(String(&vm, "throwFunction"));
+  auto throwFunction = registered.findFunction(throwFunctionName);
+  ASSERT_THROWS(Exception, throwFunction.call());
+
+  // Check that we can catch an exception thrown from native code in interpreted code.
+  auto catchFunctionName = Name::fromStringForDefn(String(&vm, "catchFunction"));
+  auto catchFunction = registered.findFunction(catchFunctionName);
+  ASSERT_TRUE(catchFunction.callForBoolean());
+
+  // Check that we can catch an unwrapped exception thrown from native code in interpreted code.
+  auto catchFunctionLazyName = Name::fromStringForDefn(&vm, "catchFunctionLazy");
+  auto catchFunctionLazy = registered.findFunction(catchFunctionLazyName);
+  ASSERT_TRUE(catchFunctionLazy.callForBoolean());
 
   return 0;
 }

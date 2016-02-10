@@ -30,3 +30,25 @@ def recursiveGypsum(n: i64, a: String, b: String, result: String) =
     result
   else
     recursiveNative(n - 1, "baz", "quux", result + "," + a + b)
+
+def throwFunction = throw Exception()
+
+native def throwNativeFunction(obj: Exception): unit
+
+def catchFunction =
+  let thrown = Exception()
+  try
+    throwNativeFunction(thrown)
+    false
+  catch (e: Exception)
+    e === thrown
+
+native def throwNativeFunctionLazy(obj: Exception): unit
+
+def catchFunctionLazy =
+  let thrown = Exception()
+  try
+    throwNativeFunctionLazy(thrown)
+    false
+  catch (e: Exception)
+    e === thrown
