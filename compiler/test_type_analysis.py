@@ -2109,6 +2109,36 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.analyzeFromSource(source)
         # pass if no exception is raised
 
+    def testDerivedArrayClassHasArrayFlag(self):
+        source = "class Array\n" + \
+                 "  arrayelements Object, get, set, length\n" + \
+                 "class Derived <: Array"
+        info = self.analyzeFromSource(source)
+        Derived = info.package.findClass(name="Derived")
+        self.assertTrue(ARRAY in Derived.flags)
+
+    def testDerivedFinalArrayClassHasFinalArrayFlag(self):
+        source = "class Array\n" + \
+                 "  final arrayelements Object, get, set, length\n" + \
+                 "class Derived <: Array"
+        info = self.analyzeFromSource(source)
+        Derived = info.package.findClass(name="Derived")
+        self.assertTrue(ARRAY_FINAL in Derived.flags)
+
+    def testDerivedArrayClassWithFields(self):
+        source = "class Array\n" + \
+                 "  arrayelements Object, get, set, length\n" + \
+                 "class Derived <: Array\n" + \
+                 "  let x = 12"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
+    def testDerivedArrayClassWithMoreElements(self):
+        source = "class Array\n" + \
+                 "  arrayelements Object, get, set, length\n" + \
+                 "class Derived <: Array\n" + \
+                 "  arrayelements i32, get, set, length"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     def testNewArray(self):
         source = "final class Array[static T]\n" + \
                  "  arrayelements T, get, set, length\n" + \

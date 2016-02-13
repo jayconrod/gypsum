@@ -144,7 +144,12 @@ def analyzeInheritance(info):
         clas = scope.getIrDefn()
         classInfo = info.getClassInfo(clas)
 
-        superclassScope = info.getScope(classInfo.superclassInfo.irDefn.id)
+        superclass = classInfo.superclassInfo.irDefn
+        if ARRAY in superclass.flags:
+            clas.flags |= frozenset([ARRAY])
+            if ARRAY_FINAL in superclass.flags:
+                clas.flags |= frozenset([ARRAY_FINAL])
+        superclassScope = info.getScope(superclass.id)
         for name, defnInfo in superclassScope.iterBindings():
             if defnInfo.inheritanceDepth == NOT_HERITABLE:
                 continue
@@ -1491,8 +1496,6 @@ class ClassScope(Scope):
             irDefn, shouldBind = self.createIrClassDefn(astDefn)
         elif isinstance(astDefn, ast.ArrayElementsStatement):
             checkFlags(flags, frozenset([FINAL]), astDefn.location)
-            if FINAL not in irScopeDefn.flags:
-                raise ScopeException(astDefn.location, "non-final class may not have elements")
             irScopeDefn.flags |= frozenset([ARRAY])
             if FINAL in flags:
                 irScopeDefn.flags |= frozenset([ARRAY_FINAL])

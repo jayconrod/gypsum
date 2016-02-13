@@ -423,11 +423,6 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                                          flags=frozenset([PRIVATE, LET, ARRAY])),
                           lengthField)
 
-    def testNonFinalClassWithArrayElements(self):
-        source = "class Foo\n" + \
-                 "  arrayelements i32, get, set, length"
-        self.assertRaises(ScopeException, self.analyzeFromSource, source)
-
     def testClassWithArrayElementsWithBadFlag(self):
         source = "final class Foo[static T]\n" + \
                  "  private arrayelements T, get, set, length"

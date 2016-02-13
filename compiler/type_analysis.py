@@ -478,6 +478,11 @@ class DeclarationTypeVisitor(TypeVisitorBase):
 
     def visitClassDefinition(self, node):
         irClass = self.info.getDefnInfo(node).irDefn
+        irSuperclass = self.info.getClassInfo(irClass).superclassInfo.irDefn
+        if ARRAY in irSuperclass.flags and len(irClass.fields) > 0:
+            raise TypeException(node.location,
+                                "%s: cannot derive from array class and declare new fields" %
+                                node.name)
         for param in node.typeParameters:
             self.visit(param)
         if node.constructor is not None:
