@@ -54,10 +54,10 @@ int main(int argc, char* argv[]) {
     ASSERT_EQ(35L, global.value().asI64());
   }
 
-  // Check that we can't load a non-public global by source name.
+  // Check that we can load a non-public global by source name.
   {
     auto global = package.findGlobal("hidden-var");
-    ASSERT_FALSE(global);
+    ASSERT_TRUE(global);
     global = package.findGlobal(Name::fromStringForDefn(&vm, "hidden-var"));
     ASSERT_TRUE(global);
   }
@@ -90,10 +90,10 @@ int main(int argc, char* argv[]) {
     ASSERT_EQ(12L, function.callForI64());
   }
 
-  // Check that we cannot load a non-public function by its source name.
+  // Check that we can load a non-public function by its source name.
   {
     auto function = package.findFunction("hidden-fn");
-    ASSERT_FALSE(function);
+    ASSERT_TRUE(function);
     function = package.findFunction(Name::fromStringForDefn(&vm, "hidden-fn"));
     ASSERT_TRUE(function);
   }
@@ -116,10 +116,10 @@ int main(int argc, char* argv[]) {
     ASSERT_TRUE(clas);
   }
 
-  // Check that we cannot load a non-public class by its source name.
+  // Check that we can load a non-public class by its source name.
   {
     auto clas = package.findClass("PrivClass");
-    ASSERT_FALSE(clas);
+    ASSERT_TRUE(clas);
     clas = package.findClass(Name::fromStringForDefn(&vm, "PrivClass"));
     ASSERT_TRUE(clas);
   }

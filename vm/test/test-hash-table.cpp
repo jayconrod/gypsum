@@ -1,4 +1,4 @@
-// Copyright 2015 Jay Conrod. All rights reserved.
+// Copyright 2015-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -27,7 +27,7 @@ TEST(HashMapBasics) {
   auto baz = STR("baz");
   ASSERT_FALSE(map->contains(*foo));
 
-  StringHashMap::add(heap, map, foo, foo);
+  StringHashMap::add(map, foo, foo);
   ASSERT_EQ(1, map->length());
   ASSERT_FALSE(map->isEmpty());
   ASSERT_TRUE(map->contains(*foo));
@@ -35,18 +35,18 @@ TEST(HashMapBasics) {
   ASSERT_EQ(*foo, map->getOrElse(*foo, nullptr));
   ASSERT_EQ(nullptr, map->getOrElse(*bar, nullptr));
 
-  StringHashMap::add(heap, map, bar, bar);
-  StringHashMap::add(heap, map, baz, baz);
+  StringHashMap::add(map, bar, bar);
+  StringHashMap::add(map, baz, baz);
   ASSERT_EQ(3, map->length());
   ASSERT_TRUE(map->contains(*bar));
   ASSERT_TRUE(map->contains(*baz));
 
-  StringHashMap::remove(heap, map, foo);
+  StringHashMap::remove(map, foo);
   ASSERT_EQ(2, map->length());
   ASSERT_FALSE(map->contains(*foo));
 
-  StringHashMap::remove(heap, map, bar);
-  StringHashMap::remove(heap, map, baz);
+  StringHashMap::remove(map, bar);
+  StringHashMap::remove(map, baz);
   ASSERT_TRUE(map->isEmpty());
 }
 
@@ -71,7 +71,7 @@ TEST(HashMapStress) {
       HandleScope handleScope(&vm);
       for (length_t j = 0; j < repetitions; j++) {
         auto s = handle(strings->get(j));
-        StringHashMap::add(heap, map, s, s);
+        StringHashMap::add(map, s, s);
         ASSERT_EQ(j + 1, map->length());
       }
     }
@@ -86,7 +86,7 @@ TEST(HashMapStress) {
       HandleScope handleScope(&vm);
       for (length_t j = 0; j < repetitions; j++) {
         auto s = handle(strings->get(j));
-        StringHashMap::remove(heap, map, s);
+        StringHashMap::remove(map, s);
         ASSERT_EQ(repetitions - j - 1, map->length());
       }
     }

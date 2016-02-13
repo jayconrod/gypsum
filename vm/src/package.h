@@ -97,6 +97,51 @@ class Package: public Object {
     externTypes_.set(this, externTypes);
   }
 
+  BlockHashMap<Name, Global>* globalNameIndex() const { return globalNameIndex_.get(); }
+  void setGlobalNameIndex(BlockHashMap<Name, Global>* index) {
+    globalNameIndex_.set(this, index);
+  }
+  static Local<BlockHashMap<Name, Global>> ensureAndGetGlobalNameIndex(
+      const Handle<Package>& package);
+  BlockHashMap<String, Global>* globalSourceNameIndex() const {
+    return globalSourceNameIndex_.get();
+  }
+  void setGlobalSourceNameIndex(BlockHashMap<String, Global>* index) {
+    globalSourceNameIndex_.set(this, index);
+  }
+  static Local<BlockHashMap<String, Global>> ensureAndGetGlobalSourceNameIndex(
+      const Handle<Package>& package);
+
+  BlockHashMap<Name, Function>* functionNameIndex() const { return functionNameIndex_.get(); }
+  void setFunctionNameIndex(BlockHashMap<Name, Function>* index) {
+    functionNameIndex_.set(this, index);
+  }
+  static Local<BlockHashMap<Name, Function>> ensureAndGetFunctionNameIndex(
+      const Handle<Package>& package);
+  BlockHashMap<String, Function>* functionSourceNameIndex() const {
+    return functionSourceNameIndex_.get();
+  }
+  void setFunctionSourceNameIndex(BlockHashMap<String, Function>* index) {
+    functionSourceNameIndex_.set(this, index);
+  }
+  static Local<BlockHashMap<String, Function>> ensureAndGetFunctionSourceNameIndex(
+      const Handle<Package>& package);
+
+  BlockHashMap<Name, Class>* classNameIndex() const { return classNameIndex_.get(); }
+  void setClassNameIndex(BlockHashMap<Name, Class>* index) {
+    classNameIndex_.set(this, index);
+  }
+  static Local<BlockHashMap<Name, Class>> ensureAndGetClassNameIndex(
+      const Handle<Package>& package);
+  BlockHashMap<String, Class>* classSourceNameIndex() const {
+    return classSourceNameIndex_.get();
+  }
+  void setClassSourceNameIndex(BlockHashMap<String, Class>* index) {
+    classSourceNameIndex_.set(this, index);
+  }
+  static Local<BlockHashMap<String, Class>> ensureAndGetClassSourceNameIndex(
+      const Handle<Package>& package);
+
   NativeLibrary nativeLibrary() const { return nativeLibrary_; }
   void setNativeLibrary(NativeLibrary nativeLibrary) { nativeLibrary_ = nativeLibrary; }
   u32 encodedNativeFunctionSearchOrder() const { return encodedNativeFunctionSearchOrder_; }
@@ -136,6 +181,12 @@ class Package: public Object {
   length_t initFunctionIndex_;
   Ptr<ExportMap> exports_;
   Ptr<BlockArray<ExternTypeInfo>> externTypes_;
+  Ptr<BlockHashMap<Name, Global>> globalNameIndex_;
+  Ptr<BlockHashMap<String, Global>> globalSourceNameIndex_;
+  Ptr<BlockHashMap<Name, Function>> functionNameIndex_;
+  Ptr<BlockHashMap<String, Function>> functionSourceNameIndex_;
+  Ptr<BlockHashMap<Name, Class>> classNameIndex_;
+  Ptr<BlockHashMap<String, Class>> classSourceNameIndex_;
   NativeLibrary nativeLibrary_;
   u32 encodedNativeFunctionSearchOrder_;
   // Update PACKAGE_POINTER_LIST if pointers change.
