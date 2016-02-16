@@ -77,9 +77,10 @@ def initClass(out, classData):
             out.write("    auto field%dName = nameFromUtf8CString(heap, \"%s\");\n" %
                       (i, fieldData["name"]))
             typeName = fieldData["type"]
+            flags = buildFlags(fieldData["flags"])
             out.write(("    auto field%d = new(heap) Field(field%dName, nullptr, " +
-                       "PUBLIC_FLAG, %s);\n") %
-                      (i, i, getTypeFromName(typeName)))
+                       "%s, %s);\n") %
+                      (i, i, flags, getTypeFromName(typeName)))
             out.write("    fields->set(%d, field%d);\n" % (i, i))
     if "elements" not in classData:
         out.write("    Type* elementType = nullptr;\n")
@@ -139,6 +140,13 @@ def initFunction(out, functionData):
     out.write("  }")
 
 
+def buildFlags(flagsData):
+    if len(flagsData) == 0:
+        return "NO_FLAGS"
+    else:
+        return " | ".join([f + "_FLAG" for f in flagsData])
+
+
 def findClass(name):
     return next(classData for classData in classesData if classData["name"] == name)
 
@@ -184,6 +192,7 @@ with open(rootsBuiltinsName, "w") as rootsBuiltinsFile:
 #include "block.h"
 #include "class.h"
 #include "field.h"
+#include "flags.h"
 #include "function.h"
 #include "name.h"
 #include "string.h"

@@ -134,8 +134,10 @@
   fields:
     - name: length
       type: i32
+      flags: [PRIVATE, LET, ARRAY]
     - name: flags
       type: i32
+      flags: [PRIVATE, LET]
   elements: Object
   methods:
     - name: is-subtype-of
@@ -152,6 +154,7 @@
   fields:
     - name: length
       type: i32
+      flags: [PUBLIC, LET, ARRAY]
   elements: i32
   methods:
     - name: "to-string"

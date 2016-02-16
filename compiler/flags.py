@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -10,6 +10,10 @@ import yaml
 
 def getFlagByName(name):
     return _flagNames[name]
+
+
+def canonicalizeFlagName(name):
+    return _canonicalFlags[name]
 
 
 def checkFlagConflicts(flags):
@@ -37,6 +41,7 @@ def flagBitsToFlagSet(flagBits):
 
 _flagsToCodes = {}
 _codesToFlags = {}
+_canonicalFlags = {}
 _flagNames = {}
 _flagGroups = []
 
@@ -55,6 +60,7 @@ def _initialize():
 
         _flagsToCodes[flagName] = code
         _codesToFlags[code] = flagName
+        _canonicalFlags[flagName] = flagName
         _flagNames[flagName.lower()] = flagName
         code <<= 1
     _flagGroups.append(frozenset([PUBLIC, PROTECTED, PRIVATE]))

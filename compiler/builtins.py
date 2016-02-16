@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -154,10 +154,11 @@ def _initialize():
         function.flags |= frozenset([flags.CONSTRUCTOR])
         return function
 
-    def buildField(fieldData, clas):
+    def buildField(fieldData, index, clas):
         name = ir.Name([clas.name.short(), fieldData["name"]])
         ty = buildType(fieldData["type"])
-        return ir.Field(name, type=ty, flags=frozenset([flags.PUBLIC]))
+        flags = buildFlags(fieldData["flags"])
+        return ir.Field(name, type=ty, flags=flags, index=index)
 
     def declareClass(classData):
         name = ir.Name([classData["name"]])
@@ -180,8 +181,8 @@ def _initialize():
                 clas.methods = []
             clas.constructors = [buildConstructor(ctorData, clas)
                                  for ctorData in classData["constructors"]]
-            clas.fields += [buildField(fieldData, clas)
-                            for fieldData in classData["fields"]]
+            clas.fields += [buildField(fieldData, index, clas)
+                            for index, fieldData in enumerate(classData["fields"])]
         else:
             clas.supertypes = []
             clas.fields = []
@@ -206,6 +207,9 @@ def _initialize():
         function = buildFunction(functionData)
         _builtinFunctions.append(function)
         _builtinFunctionNameMap[function.name] = function
+
+    def buildFlags(flagsData):
+        return frozenset(map(flags.canonicalizeFlagName, flagsData))
 
     with utils.openCommonFile("builtins.yaml") as builtinsFile:
         classes, functions = yaml.load_all(builtinsFile.read())
