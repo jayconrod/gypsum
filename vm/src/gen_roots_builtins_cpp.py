@@ -68,6 +68,7 @@ def initClass(out, classData):
         out.write("    Type* supertype = nullptr;\n")
     else:
         out.write("    auto supertype = %s;\n" % getTypeFromName(classData["supertype"]))
+    out.write("    u32 flags = " + buildFlags(classData["flags"]) + ";\n")
     if len(classData["fields"]) == 0:
         out.write("    auto fields = reinterpret_cast<BlockArray<Field>*>(emptyBlockArray());\n")
     else:
@@ -109,7 +110,7 @@ def initClass(out, classData):
                   len(allMethodIds))
         for i, id in enumerate(allMethodIds):
             out.write("    methods->set(%d, getBuiltinFunction(%s));\n" % (i, id))
-    out.write("    ::new(clas) Class(name, nullptr, PUBLIC_FLAG, typeParameters, supertype, " +
+    out.write("    ::new(clas) Class(name, nullptr, flags, typeParameters, supertype, " +
               "fields, constructors, methods, nullptr, nullptr, elementType, " +
               "lengthFieldIndex);\n")
     if classData.get("isOpaque"):
@@ -133,7 +134,8 @@ def initFunction(out, functionData):
               len(functionData["parameterTypes"]))
     for i, name in enumerate(functionData["parameterTypes"]):
         out.write("    parameterTypes->set(%d, %s);\n" % (i, getTypeFromName(name)))
-    out.write("    ::new(function) Function(name, nullptr, PUBLIC_FLAG, emptyTypeParameters, " +
+    out.write("    u32 flags = " + buildFlags(functionData["flags"]) + "\n;")
+    out.write("    ::new(function) Function(name, nullptr, flags, emptyTypeParameters, " +
               "returnType, parameterTypes, nullptr, 0, emptyInstructions, " +
               "nullptr, nullptr, nullptr, nullptr);\n")
     out.write("    function->setBuiltinId(%s);\n" % functionData["id"])
