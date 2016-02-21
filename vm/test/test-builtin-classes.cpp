@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014,2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -29,7 +29,7 @@ TEST(StringSize) {
   HandleScope handleScope(&vm);
   auto str = String::fromUtf8CString(vm.heap(), "");
   ASSERT_EQ(0, str->elementsLength());
-  ASSERT_EQ(str->sizeOfBlock(), sizeof(String));
+  ASSERT_EQ(reinterpret_cast<Address>(&str->chars_[0]), str->elementsBase());
 }
 
 

@@ -188,7 +188,7 @@ void Block::setElementsLength(word_t length) {
 
 ptrdiff_t Block::elementsOffset() const {
   ASSERT(meta()->hasElements());
-  return align(meta()->objectSize(), kWordSize);
+  return align(meta()->objectSize(), meta()->elementSize());
 }
 
 
