@@ -188,6 +188,16 @@
       parameterTypes:
         - String
       flags: [PUBLIC, METHOD]
+    - name: get
+      id: BUILTIN_STRING_GET_ID
+      returnType: i32
+      parameterTypes:
+        - String
+        - i32
+      flags: [PUBLIC, METHOD, ARRAY]
+      insts:
+        - swap
+        - lde
     - name: "+"
       id: BUILTIN_STRING_CONCAT_OP_ID
       returnType: String
