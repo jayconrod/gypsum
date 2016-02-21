@@ -4,12 +4,12 @@
 // source code is governed by the 3-clause BSD license that can be
 // found in the LICENSE.txt file.
 
-import std.I8Array
+import std.MutableI8Array
 
 public abstract class InputStream
   public abstract def close: unit
   public abstract def is-closed: boolean
-  public abstract def read(buffer: I8Array, offset: i32, count: i32): i32
+  public abstract def read(buffer: MutableI8Array, offset: i32, count: i32): i32
 
 
 public final class FileInputStream <: InputStream
@@ -30,7 +30,7 @@ public final class FileInputStream <: InputStream
 
   public override def is-closed = fd < 0i32
 
-  public override def read(buffer: I8Array, offset: i32, count: i32): i32 =
+  public override def read(buffer: MutableI8Array, offset: i32, count: i32): i32 =
     if (is-closed)
       throw StreamClosedException()
     read-fd(fd, buffer, offset, count)
@@ -39,4 +39,4 @@ public final class FileInputStream <: InputStream
 
   private static native def close-fd(fd: i32): unit
 
-  private static native def read-fd(fd: i32, buffer: I8Array, offset: i32, count: i32): i32
+  private static native def read-fd(fd: i32, buffer: MutableI8Array, offset: i32, count: i32): i32
