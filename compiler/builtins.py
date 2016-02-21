@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -135,33 +135,36 @@ def _initialize():
         nameComponents.append(functionData.get("name", ir.CONSTRUCTOR_SUFFIX))
         name = ir.Name(nameComponents)
         id = getattr(bytecode, functionData["id"])
+        flags = buildFlags(functionData["flags"])
         function = ir.Function(name, id,
                                returnType=buildType(functionData["returnType"]),
                                typeParameters=[],
                                parameterTypes=map(buildType, functionData["parameterTypes"]),
-                               flags=frozenset([flags.PUBLIC]), insts=functionData.get("insts"))
+                               flags=flags, insts=functionData.get("insts"))
         _builtinFunctionIdMap[id] = function
         return function
 
     def buildMethod(functionData, clas):
         function = buildFunction(functionData, clas.name.short())
-        function.flags |= frozenset([flags.METHOD])
+        assert flags.METHOD in function.flags
         function.definingClass = clas
         return function
 
     def buildConstructor(functionData, clas):
         function = buildMethod(functionData, clas)
-        function.flags |= frozenset([flags.CONSTRUCTOR])
+        assert flags.CONSTRUCTOR in function.flags
         return function
 
-    def buildField(fieldData, clas):
+    def buildField(fieldData, index, clas):
         name = ir.Name([clas.name.short(), fieldData["name"]])
         ty = buildType(fieldData["type"])
-        return ir.Field(name, type=ty, flags=frozenset([flags.PUBLIC]))
+        flags = buildFlags(fieldData["flags"])
+        return ir.Field(name, type=ty, flags=flags, index=index)
 
     def declareClass(classData):
         name = ir.Name([classData["name"]])
-        clas = ir.Class(name, None, typeParameters=[], flags=frozenset([flags.PUBLIC]))
+        flags = buildFlags(classData["flags"])
+        clas = ir.Class(name, None, typeParameters=[], flags=flags)
         _builtinClasses.append(clas)
         _builtinClassNameMap[classData["name"]] = clas
 
@@ -180,8 +183,8 @@ def _initialize():
                 clas.methods = []
             clas.constructors = [buildConstructor(ctorData, clas)
                                  for ctorData in classData["constructors"]]
-            clas.fields += [buildField(fieldData, clas)
-                            for fieldData in classData["fields"]]
+            clas.fields += [buildField(fieldData, index, clas)
+                            for index, fieldData in enumerate(classData["fields"])]
         else:
             clas.supertypes = []
             clas.fields = []
@@ -206,6 +209,9 @@ def _initialize():
         function = buildFunction(functionData)
         _builtinFunctions.append(function)
         _builtinFunctionNameMap[function.name] = function
+
+    def buildFlags(flagsData):
+        return frozenset(map(flags.canonicalizeFlagName, flagsData))
 
     with utils.openCommonFile("builtins.yaml") as builtinsFile:
         classes, functions = yaml.load_all(builtinsFile.read())

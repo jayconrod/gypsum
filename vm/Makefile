@@ -147,6 +147,7 @@ $(GEN_DIR)/opcodes.h: $(LIB_SRC_DIR)/gen_opcodes.py $(COMMON_DIR)/opcodes.yaml
 $(GEN_DIR)/builtins.h: $(LIB_SRC_DIR)/gen_builtins_h.py $(COMMON_DIR)/builtins.yaml
 $(GEN_DIR)/flags.h: $(LIB_SRC_DIR)/gen_flags_h.py $(COMMON_DIR)/flags.yaml
 $(GEN_DIR)/roots-builtins.cpp: $(LIB_SRC_DIR)/gen_roots_builtins_cpp.py $(COMMON_DIR)/builtins.yaml
+$(OUT_DIR)/roots-builtins.o: $(LIB_SRC_DIR)/array.h $(GEN_DIR)/builtins.h $(LIB_SRC_DIR)/block.h $(LIB_SRC_DIR)/class.h $(LIB_SRC_DIR)/field.h $(GEN_DIR)/flags.h $(LIB_SRC_DIR)/function.h $(LIB_SRC_DIR)/name.h $(LIB_SRC_DIR)/string.h $(LIB_SRC_DIR)/type.h
 
 $(LIB): $(LIB_OBJECTS) $(LIB_AS_OBJECTS)
 

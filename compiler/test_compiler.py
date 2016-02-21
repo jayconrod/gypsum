@@ -3906,3 +3906,9 @@ class TestCompiler(TestCaseWithDefinitions):
                                                                                 kind=PARAMETER,
                                                                                 flags=frozenset([LET]))],
                                                    flags=frozenset([METHOD, CONSTRUCTOR])))
+
+    def testStringLengthCantBeWritten(self):
+        source = "def f =\n" + \
+                 "  let s = \"foobar\"\n" + \
+                 "  s.length = 42i32"
+        self.assertRaises(SemanticException, self.compileFromSource, source)
