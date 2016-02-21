@@ -134,7 +134,7 @@ def initFunction(out, functionData):
               len(functionData["parameterTypes"]))
     for i, name in enumerate(functionData["parameterTypes"]):
         out.write("    parameterTypes->set(%d, %s);\n" % (i, getTypeFromName(name)))
-    out.write("    u32 flags = " + buildFlags(functionData["flags"]) + "\n;")
+    out.write("    u32 flags = " + buildFlags(functionData["flags"]) + ";\n")
     out.write("    ::new(function) Function(name, nullptr, flags, emptyTypeParameters, " +
               "returnType, parameterTypes, nullptr, 0, emptyInstructions, " +
               "nullptr, nullptr, nullptr, nullptr);\n")
@@ -253,15 +253,6 @@ void Roots::initializeBuiltins(Heap* heap) {
     rootsBuiltinsFile.write("""
 
   //
-  // Initialize classes
-  //""")
-    for classData in classesData:
-        if not classData["isPrimitive"]:
-            initClass(rootsBuiltinsFile, classData)
-
-    rootsBuiltinsFile.write("""
-
-  //
   // Initialize functions
   //
   vector<u8> emptyInstructions;
@@ -275,5 +266,14 @@ void Roots::initializeBuiltins(Heap* heap) {
             initFunction(rootsBuiltinsFile, methodData)
     for functionData in functionsData:
         initFunction(rootsBuiltinsFile, functionData)
+
+    rootsBuiltinsFile.write("""
+
+  //
+  // Initialize classes
+  //""")
+    for classData in classesData:
+        if not classData["isPrimitive"]:
+            initClass(rootsBuiltinsFile, classData)
 
     rootsBuiltinsFile.write("\n}\n\n}\n}\n")
