@@ -142,6 +142,19 @@
       flags: [PUBLIC, CONSTRUCTOR, METHOD]
   fields: []
   methods: []
+- name: IllegalArgumentException
+  id: BUILTIN_ILLEGAL_ARGUMENT_EXCEPTION_CLASS_ID
+  isPrimitive: false
+  supertype: Exception
+  flags: [PUBLIC, FINAL]
+  constructors:
+    - id: BUILTIN_ILLEGAL_ARGUMENT_EXCEPTION_CTOR_ID
+      returnType: unit
+      parameterTypes:
+        - IllegalArgumentException
+      flags: [PUBLIC, CONSTRUCTOR, METHOD]
+  fields: []
+  methods: []
 - name: Type
   id: BUILTIN_TYPE_CLASS_ID
   isPrimitive: false
@@ -198,6 +211,12 @@
       insts:
         - swap
         - lde
+    - name: from-code-points
+      id: BUILTIN_STRING_FROM_CODE_POINTS_ID
+      returnType: String
+      parameterTypes:
+        - Object
+      flags: [PUBLIC, STATIC, METHOD]
     - name: "+"
       id: BUILTIN_STRING_CONCAT_OP_ID
       returnType: String
