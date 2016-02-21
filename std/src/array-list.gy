@@ -1,0 +1,78 @@
+// Copyright 2016, Jay Conrod. All rights reserved.
+//
+// This file is part of the Gypsum standard library. Use of this
+// source code is governed by the 3-clause BSD license that can be
+// found in the LICENSE.txt file.
+
+public class MutableArrayList[static T]
+  private var length_: i32
+  private var capacity: i32
+  private var elements: MutableArray[T]
+
+  public def this = this(16i32)
+
+  public def this(initial-capacity: i32) =
+    length_ = 0i32
+    capacity = 0i32
+    reserve(initial-capacity)
+
+  public def length = length_
+
+  public def get(index: i32): T =
+    if (index < 0i32 || index >= length)
+      throw ArrayIndexOutOfBoundsException()
+    elements.get(index)
+
+  public def set(index: i32, value: T): unit =
+    if (index < 0i32 || index >= length)
+      throw ArrayIndexOutOfBoundsException()
+    elements.set(index, value)
+
+  public def reserve(min-capacity: i32): unit =
+    if (capacity < min-capacity)
+      let new-elements = new(min-capacity) MutableArray[T]
+      var i = 0i32
+      while (i < length)
+        new-elements.set(i, elements.get(i))
+        i += 1i32
+      elements = new-elements
+      capacity = min-capacity
+      elements
+
+  public def insert(index: i32, value: T): unit =
+    if (index < 0i32 || index > length)
+      throw ArrayIndexOutOfBoundsException()
+    if (length == capacity)
+      reserve(capacity * 2i32)
+    var i = length
+    while (i > index)
+      elements.set(i, elements.get(i - 1i32))
+      i -= 1i32
+    elements.set(i, value)
+    length_ += 1i32
+    {}
+
+  public def remove(index: i32): T =
+    if (index < 0i32 || index >= length)
+      throw ArrayIndexOutOfBoundsException()
+    let value = elements.get(index)
+    var i = index
+    while (i < length - 1i32)
+      elements.set(i, elements.get(i + 1i32))
+      i += 1i32
+    length_ -= 1i32
+    value
+
+  public def push(value: T) = insert(length, value)
+
+  public def pop = remove(length - 1i32)
+
+  override public def to-string =
+    var s = "["
+    var i = 0i32
+    while (i < length)
+      if (i > 0i32)
+        s += ", "
+      s += get(i).to-string
+      i += 1i32
+    s + "]"
