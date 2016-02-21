@@ -246,7 +246,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(I64Type, info.package.findGlobal(name="x").type)
 
     def testIntLiteralBounds(self):
-        self.assertRaises(TypeException, self.analyzeFromSource, "var x = 128i8")
+        self.assertRaises(TypeException, self.analyzeFromSource, "var x = 256i8")
         self.assertRaises(TypeException, self.analyzeFromSource, "var x = -129i8")
 
     def testIntLiteralWidths(self):

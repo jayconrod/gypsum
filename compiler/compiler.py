@@ -1449,15 +1449,19 @@ class CompileVisitor(ast.NodeVisitor):
 
     def buildLiteral(self, lit):
         if isinstance(lit, ast.IntegerLiteral):
+            value = lit.value
+            if value >= 2 ** (lit.width - 1):
+                value -= 2 ** lit.width
+            assert -(2 ** (lit.width - 1)) <= value and value < 2 ** (lit.width - 1)
             if lit.width == 8:
-                self.i8(lit.value)
+                self.i8(value)
             elif lit.width == 16:
-                self.i16(lit.value)
+                self.i16(value)
             elif lit.width == 32:
-                self.i32(lit.value)
+                self.i32(value)
             else:
                 assert lit.width == 64
-                self.i64(lit.value)
+                self.i64(value)
         elif isinstance(lit, ast.FloatLiteral):
             if lit.width == 32:
                 self.f32(lit.value)
