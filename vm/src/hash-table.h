@@ -1,4 +1,4 @@
-// Copyright 2015 Jay Conrod. All rights reserved.
+// Copyright 2015-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -152,15 +152,15 @@ class HashMap: public Block {
   Table* table() { return table_.get(); }
   const Table* table() const { return table_.get(); }
 
-  static void add(Heap* heap, Local<HashMap<Table>> map,
+  static void add(Local<HashMap<Table>> map,
                   const typename Table::Element::SafeKey& key,
                   const typename Table::Element::SafeValue& value) {
-    ensureCapacity(heap, map, 1);
+    ensureCapacity(map->getHeap(), map, 1);
     typename Table::Element element(key, value);
     map->table()->add(element);
   }
 
-  static void remove(Heap* heap, Local<HashMap<Table>> map,
+  static void remove(Local<HashMap<Table>> map,
                      const typename Table::Element::SafeKey& key) {
     if (!map->table_)
       return;

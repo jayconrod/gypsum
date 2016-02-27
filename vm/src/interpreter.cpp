@@ -1109,7 +1109,13 @@ void Interpreter::handleNative(const Handle<Function>& callee) {
   stack_->push(static_cast<uint64_t>(pcOffset_));
   stack_->push(function_ ? *function_ : nullptr);
 
-  auto result = callNativeFunction(*callee, vm_, sp);
+  int64_t result;
+  try {
+    result = callNativeFunction(*callee, vm_, sp);
+  } catch (Exception& e) {
+    doThrow(*e.get());
+    return;
+  }
 
   stack_->setSp(stack_->sp() + callee->parametersSize() + 2 * kSlotSize);
   stack_->push(result);
@@ -1192,7 +1198,7 @@ void Interpreter::doThrow(Block* exception) {
     reset();
   }
   if (pcOffset_ == kPcNotSet) {
-    throw Error("unhandled exception");
+    throw Exception(block_cast<Object>(exception));
   }
 }
 

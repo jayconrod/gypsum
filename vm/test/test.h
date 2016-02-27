@@ -77,7 +77,7 @@ inline void assertFalse(bool result, const std::string& message) {
       bool _success = false; \
       try { \
         expr; \
-      } catch (exn_name exn) { \
+      } catch (exn_name& exn) { \
         _success = true; \
       } \
       assertTrue(_success, MESSAGE(#expr " throws " #exn_name)); \

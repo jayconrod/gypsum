@@ -1032,7 +1032,9 @@ class String final : public Object {
 
 
 /**
- * Top-level exception class for API errors.
+ * Exception class for API errors and internal errors. These errors are due to programmer
+ * mistakes, so there's not usually a reasonable way to handle them, other than reporting
+ * and exiting.
  */
 class Error final {
  public:
@@ -1054,6 +1056,34 @@ class Error final {
 
  private:
   std::unique_ptr<Impl> impl_;
+};
+
+
+/**
+ * Exception class for unhandled exceptions thrown from native code. It contains a reference
+ * to the exception that was thrown. This also works in reverse: this can be thrown from
+ * native functions and handled by interpreted code.
+ */
+class Exception final {
+ public:
+  /**
+   * Constructs a new exception wrapper.
+   *
+   * @param exception the exception being thrown. It must be a valid reference to an instance
+   *     of `Exception` or some subclass. The reference will be moved into the wrapper.
+   */
+  explicit Exception(Object&& exception);
+  Exception(const Exception&) = delete;
+  Exception(Exception&& exception) = default;
+  Exception& operator = (const Exception&) = delete;
+  Exception& operator = (Exception&&) = default;
+  ~Exception() = default;
+
+  Object& get();
+  const Object& get() const;
+
+ private:
+  Object exception_;
 };
 
 

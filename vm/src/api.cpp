@@ -19,6 +19,7 @@
 #include "function.h"
 #include "global.h"
 #include "handle.h"
+#include "hash-table.h"
 #include "heap.h"
 #include "interpreter.h"
 #include "name.h"
@@ -391,30 +392,26 @@ Function Package::entryFunction() const {
 Global Package::findGlobal(const Name& name) const {
   API_CHECK_SELF(Package);
   API_CHECK_ARG(name);
-  auto globals = unwrapRaw<i::Package>(*this)->globals();
-  for (auto global : *globals) {
-    if (global->name()->equals(unwrapRaw<i::Name>(name))) {
-      return wrap<Global, i::Global>(global);
-    }
-  }
-  return Global();
+  auto self = unwrap<i::Package>(*this);
+  auto vm = self->getVM();
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAlloc(vm->heap(), true);
+  auto index = i::Package::ensureAndGetGlobalNameIndex(self);
+  auto global = index->getOrElse(*unwrap<i::Name>(name), nullptr);
+  return global ? wrap<Global, i::Global>(global) : Global();
 }
 
 
 Global Package::findGlobal(const String& sourceName) const {
   API_CHECK_SELF(Package);
   API_CHECK_ARG(sourceName);
-  auto globals = unwrapRaw<i::Package>(*this)->globals();
-  i::u32 mask = i::PUBLIC_FLAG | i::STATIC_FLAG;
-  i::u32 expectedFlags = i::PUBLIC_FLAG;
-  for (auto global : *globals) {
-    if ((global->flags() & mask) == expectedFlags &&
-        global->sourceName() != nullptr &&
-        global->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
-      return wrap<Global, i::Global>(global);
-    }
-  }
-  return Global();
+  auto self = unwrap<i::Package>(*this);
+  auto vm = self->getVM();
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAlloc(vm->heap(), true);
+  auto index = i::Package::ensureAndGetGlobalSourceNameIndex(self);
+  auto global = index->getOrElse(*unwrap<i::String>(sourceName), nullptr);
+  return global ? wrap<Global, i::Global>(global) : Global();
 }
 
 
@@ -428,30 +425,26 @@ Global Package::findGlobal(const string& sourceName) const {
 Function Package::findFunction(const Name& name) const {
   API_CHECK_SELF(Package);
   API_CHECK_ARG(name);
-  auto functions = unwrapRaw<i::Package>(*this)->functions();
-  for (auto function : *functions) {
-    if (function->name()->equals(unwrapRaw<i::Name>(name))) {
-      return wrap<Function, i::Function>(function);
-    }
-  }
-  return Function();
+  auto self = unwrap<i::Package>(*this);
+  auto vm = self->getVM();
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAlloc(vm->heap(), true);
+  auto index = i::Package::ensureAndGetFunctionNameIndex(self);
+  auto function = index->getOrElse(*unwrap<i::Name>(name), nullptr);
+  return function ? wrap<Function, i::Function>(function) : Function();
 }
 
 
 Function Package::findFunction(const String& sourceName) const {
   API_CHECK_SELF(Package);
   API_CHECK_ARG(sourceName);
-  auto functions = unwrapRaw<i::Package>(*this)->functions();
-  i::u32 mask = i::PUBLIC_FLAG | i::STATIC_FLAG | i::METHOD_FLAG;
-  i::u32 expectedFlags = i::PUBLIC_FLAG;
-  for (auto function : *functions) {
-    if ((function->flags() & mask) == expectedFlags &&
-        function->sourceName() != nullptr &&
-        function->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
-      return wrap<Function, i::Function>(function);
-    }
-  }
-  return Function();
+  auto self = unwrap<i::Package>(*this);
+  auto vm = self->getVM();
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAlloc(vm->heap(), true);
+  auto index = i::Package::ensureAndGetFunctionSourceNameIndex(self);
+  auto function = index->getOrElse(*unwrap<i::String>(sourceName), nullptr);
+  return function ? wrap<Function, i::Function>(function) : Function();
 }
 
 
@@ -465,28 +458,26 @@ Function Package::findFunction(const string& sourceName) const {
 Class Package::findClass(const Name& name) const {
   API_CHECK_SELF(Package);
   API_CHECK_ARG(name);
-  auto classes = unwrapRaw<i::Package>(*this)->classes();
-  for (auto clas : *classes) {
-    if (clas->name()->equals(unwrapRaw<i::Name>(name))) {
-      return wrap<Class, i::Class>(clas);
-    }
-  }
-  return Class();
+  auto self = unwrap<i::Package>(*this);
+  auto vm = self->getVM();
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAlloc(vm->heap(), true);
+  auto index = i::Package::ensureAndGetClassNameIndex(self);
+  auto clas = index->getOrElse(*unwrap<i::Name>(name), nullptr);
+  return clas ? wrap<Class, i::Class>(clas) : Class();
 }
 
 
 Class Package::findClass(const String& sourceName) const {
   API_CHECK_SELF(Package);
   API_CHECK_ARG(sourceName);
-  auto classes = unwrapRaw<i::Package>(*this)->classes();
-  for (auto clas : *classes) {
-    if ((clas->flags() & i::PUBLIC_FLAG) == i::PUBLIC_FLAG &&
-        clas->sourceName() != nullptr &&
-        clas->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
-      return wrap<Class, i::Class>(clas);
-    }
-  }
-  return Class();
+  auto self = unwrap<i::Package>(*this);
+  auto vm = self->getVM();
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAlloc(vm->heap(), true);
+  auto index = i::Package::ensureAndGetClassSourceNameIndex(self);
+  auto clas = index->getOrElse(*unwrap<i::String>(sourceName), nullptr);
+  return clas ? wrap<Class, i::Class>(clas) : Class();
 }
 
 
@@ -841,7 +832,11 @@ i::i64 CallBuilder::Impl::call() {
 
   // Perform the call.
   i::Interpreter interpreter(vm_, vm_->stack(), vm_->threadBindle());
-  return interpreter.call(function_);
+  try {
+    return interpreter.call(function_);
+  } catch (i::Exception& exception) {
+    throw Exception(move(wrap<Object, i::Object>(exception.get())));
+  }
 }
 
 
@@ -1225,6 +1220,20 @@ const char* Error::message() const {
 }
 
 
+Exception::Exception(Object&& exception)
+    : exception_(move(exception)) { }
+
+
+Object& Exception::get() {
+  return exception_;
+}
+
+
+const Object& Exception::get() const {
+  return exception_;
+}
+
+
 Value::Value(bool b)
     : bits_(static_cast<uint64_t>(b)),
       tag_(i::Type::BOOLEAN_TYPE) { }
@@ -1380,10 +1389,20 @@ int64_t callNativeFunction(i::Function* callee, i::VM* vm, i::Address sp) {
   // Call the funtion via an assembly stub.
   i::SealHandleScope noHandles(vm);
   i::AllowAllocationScope noAlloc(vm->heap(), false);
-  auto result = i::callNativeFunctionRaw(
-      vm->apiPtr(), nativeFunction, argCount,
-      rawArgs.get(), argsAreInt.get(), resultType);
-  return result;
+  try {
+    auto result = i::callNativeFunctionRaw(
+        vm->apiPtr(), nativeFunction, argCount,
+        rawArgs.get(), argsAreInt.get(), resultType);
+    return result;
+  } catch (Exception& e) {
+    throw i::Exception(unwrapRaw<i::Object>(e.get()));
+  } catch (Object& e) {
+    if (e) {
+      throw i::Exception(unwrapRaw<i::Object>(e));
+    } else {
+      throw e;
+    }
+  }
 }
 
 }

@@ -36,16 +36,22 @@ namespace codeswitch {
 namespace internal {
 
 #define PACKAGE_POINTER_LIST(F) \
-  F(Package, name_)             \
-  F(Package, version_)          \
-  F(Package, dependencies_)     \
-  F(Package, strings_)          \
-  F(Package, globals_)          \
-  F(Package, functions_)        \
-  F(Package, classes_)          \
-  F(Package, typeParameters_)   \
-  F(Package, exports_)          \
-  F(Package, externTypes_)      \
+  F(Package, name_) \
+  F(Package, version_) \
+  F(Package, dependencies_) \
+  F(Package, strings_) \
+  F(Package, globals_) \
+  F(Package, functions_) \
+  F(Package, classes_) \
+  F(Package, typeParameters_) \
+  F(Package, exports_) \
+  F(Package, externTypes_) \
+  F(Package, globalNameIndex_)  \
+  F(Package, globalSourceNameIndex_) \
+  F(Package, functionNameIndex_) \
+  F(Package, functionSourceNameIndex_) \
+  F(Package, classNameIndex_) \
+  F(Package, classSourceNameIndex_) \
 
 DEFINE_POINTER_MAP(Package, PACKAGE_POINTER_LIST)
 
@@ -310,7 +316,7 @@ void Package::ensureExports(const Handle<Package>& package) {
     if ((global->flags() & PUBLIC_FLAG) != 0) {
       auto name = handle(global->name());
       ASSERT(!exports->contains(*name));
-      ExportMap::add(heap, exports, name, global);
+      ExportMap::add(exports, name, global);
     }
   }
 
@@ -322,7 +328,7 @@ void Package::ensureExports(const Handle<Package>& package) {
          (function->flags() & (STATIC_FLAG | METHOD_FLAG)) != 0)) {
       auto mangledName = mangleFunctionName(function, package);
       ASSERT(!exports->contains(*mangledName));
-      ExportMap::add(heap, exports, mangledName, function);
+      ExportMap::add(exports, mangledName, function);
     }
   }
 
@@ -332,7 +338,7 @@ void Package::ensureExports(const Handle<Package>& package) {
     if ((clas->flags() & PUBLIC_FLAG) != 0) {
       auto name = handle(clas->name());
       ASSERT(!exports->contains(*name));
-      ExportMap::add(heap, exports, name, clas);
+      ExportMap::add(exports, name, clas);
     }
   }
 
@@ -342,11 +348,137 @@ void Package::ensureExports(const Handle<Package>& package) {
     if ((typeParameter->flags() & PUBLIC_FLAG) != 0) {
       auto name = handle(typeParameter->name());
       ASSERT(!exports->contains(*name));
-      ExportMap::add(heap, exports, name, typeParameter);
+      ExportMap::add(exports, name, typeParameter);
     }
   }
 
   package->setExports(*exports);
+}
+
+
+template <class K, class T, class GetKey, class Filter>
+static Local<BlockHashMap<K, T>> buildIndex(
+    const Handle<BlockArray<T>>& defns,
+    GetKey getKey,
+    Filter filter) {
+  auto index = BlockHashMap<K, T>::create(defns->getHeap());
+  HandleScope handleScope(defns->getVM());
+  for (length_t i = 0, n = defns->length(); i < n; i++) {
+    auto defn = handle(defns->get(i));
+    if (filter(defn)) {
+      auto key = getKey(defn);
+      if (key) {
+        BlockHashMap<K, T>::add(index, key, defn);
+      }
+    }
+  }
+  return index;
+}
+
+
+template <class T, class Filter>
+static Local<BlockHashMap<Name, T>> buildNameIndex(
+    const Handle<BlockArray<T>>& defns,
+    Filter filter) {
+  return buildIndex<Name, T>(defns, [](const Handle<T>& defn) { return handle(defn->name()); }, filter);
+}
+
+
+template <class T, class Filter>
+static Local<BlockHashMap<String, T>> buildSourceNameIndex(
+    const Handle<BlockArray<T>>& defns,
+    Filter filter) {
+  auto getKey = [](const Handle<T>& defn) {
+    return defn->sourceName() ? handle(defn->sourceName()) : Local<String>();
+  };
+  return buildIndex<String, T>(defns, getKey, filter);
+}
+
+
+static bool globalFilter(const Handle<Global>& global) {
+  return true;
+}
+
+
+Local<BlockHashMap<Name, Global>> Package::ensureAndGetGlobalNameIndex(
+    const Handle<Package>& package) {
+  if (package->globalNameIndex()) {
+    return handle(package->globalNameIndex());
+  }
+  auto index = buildNameIndex<Global>(handle(package->globals()), globalFilter);
+  package->setGlobalNameIndex(*index);
+  return index;
+}
+
+
+Local<BlockHashMap<String, Global>> Package::ensureAndGetGlobalSourceNameIndex(
+    const Handle<Package>& package) {
+  if (package->globalSourceNameIndex()) {
+    return handle(package->globalSourceNameIndex());
+  }
+  auto index = buildSourceNameIndex<Global>(handle(package->globals()), globalFilter);
+  package->setGlobalSourceNameIndex(*index);
+  return index;
+}
+
+
+static bool functionNameFilter(const Handle<Function>& function) {
+  return true;
+}
+
+
+Local<BlockHashMap<Name, Function>> Package::ensureAndGetFunctionNameIndex(
+    const Handle<Package>& package) {
+  if (package->functionNameIndex()) {
+    return handle(package->functionNameIndex());
+  }
+  auto index = buildNameIndex<Function>(handle(package->functions()), functionNameFilter);
+  package->setFunctionNameIndex(*index);
+  return index;
+}
+
+
+static bool functionSourceNameFilter(const Handle<Function>& function) {
+  return (function->flags() & METHOD_FLAG) == 0;
+}
+
+
+Local<BlockHashMap<String, Function>> Package::ensureAndGetFunctionSourceNameIndex(
+    const Handle<Package>& package) {
+  if (package->functionSourceNameIndex()) {
+    return handle(package->functionSourceNameIndex());
+  }
+  auto index = buildSourceNameIndex<Function>(
+      handle(package->functions()), functionSourceNameFilter);
+  package->setFunctionSourceNameIndex(*index);
+  return index;
+}
+
+
+static bool classFilter(const Handle<Class>& clas) {
+  return true;
+}
+
+
+Local<BlockHashMap<Name, Class>> Package::ensureAndGetClassNameIndex(
+    const Handle<Package>& package) {
+  if (package->classNameIndex()) {
+    return handle(package->classNameIndex());
+  }
+  auto index = buildNameIndex<Class>(handle(package->classes()), classFilter);
+  package->setClassNameIndex(*index);
+  return index;
+}
+
+
+Local<BlockHashMap<String, Class>> Package::ensureAndGetClassSourceNameIndex(
+    const Handle<Package>& package) {
+  if (package->classSourceNameIndex()) {
+    return handle(package->classSourceNameIndex());
+  }
+  auto index = buildSourceNameIndex<Class>(handle(package->classes()), classFilter);
+  package->setClassSourceNameIndex(*index);
+  return index;
 }
 
 
@@ -533,6 +665,12 @@ ostream& operator << (ostream& os, const Package* pkg) {
      << "\n  init function index: " << pkg->initFunctionIndex()
      << "\n  exports: " << brief(pkg->exports())
      << "\n  externTypes: " << brief(pkg->externTypes())
+     << "\n  global name index: " << brief(pkg->globalNameIndex())
+     << "\n  global source name index: " << brief(pkg->globalSourceNameIndex())
+     << "\n  function name index: " << brief(pkg->functionNameIndex())
+     << "\n  function source name index: " << brief(pkg->functionSourceNameIndex())
+     << "\n  class name index: " << brief(pkg->classNameIndex())
+     << "\n  class source name index: " << brief(pkg->classSourceNameIndex())
      << "\n  nativeLibrary: " << pkg->nativeLibrary()
      << "\n  encodedNativeFunctionSearchOrder: " << pkg->encodedNativeFunctionSearchOrder();
   return os;

@@ -18,6 +18,7 @@ namespace internal {
 
 class Function;
 class Meta;
+class Object;
 class Stack;
 class ThreadBindle;
 class Type;
@@ -112,6 +113,20 @@ class Interpreter {
   bool isPreparedForGC_;
 
   NON_COPYABLE(Interpreter)
+};
+
+
+class Exception {
+ public:
+  explicit Exception(Object* rawException)
+      : exception_(rawException) { }
+  explicit Exception(const Handle<Object>& exception)
+      : exception_(exception) { }
+
+  const Handle<Object>& get() const { return exception_; }
+
+ private:
+  Persistent<Object> exception_;
 };
 
 }
