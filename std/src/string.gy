@@ -91,7 +91,8 @@ def utf8-code-point-length(utf8: MutableI8Array, index: i32): i32 =
 def utf8-code-point-at(utf8: MutableI8Array, index: i32): i32 =
   let first = utf8.get(index)
   let n = utf8-code-point-length(utf8, index)
-  var code-point = (first & 0b00111111i8).to-i32
+  let first-bit-count = if (n == 1i32) 7i8 else 8i8 - n.to-i8 - 1i8
+  var code-point = (first & ((1i8 << first-bit-count) - 1i8)).to-i32
   var i = 1i32
   while (i < n)
     let next = utf8.get(index + i)
