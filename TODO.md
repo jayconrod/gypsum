@@ -3,7 +3,6 @@
 ## Language features
 
 - allow calling overridden methods via "super"
-- `final` attribute for classes, methods
 - `static` attribute for fields
 - annotations
 - require "get", "set" for implicit calls
@@ -37,15 +36,12 @@
 
 ## VM features
 - native object access (depends on dynamic features)
-- native implementations for functions
 - backtrace implementation for exceptions
 
 ## Standard library features
-- tuples
 - lists
 - maps
 - sets
-- file i/o
 - net
 - concurrency
 
@@ -58,9 +54,7 @@
 ## Compiler
 - Coding convention
 - improved debug output for scope, types, etc.
-- AST classes should always be referenced through module and should not start with Ast
 - Does NameInfo.findDefnInfoWithArgTypes need to return allArgTypes? Seems unused.
-- Speed up and parallelize tests
 
 ## VM
 - use variadic arguments for API call
