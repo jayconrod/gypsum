@@ -959,6 +959,32 @@ void Interpreter::handleBuiltin(BuiltinId id) {
       break;
     }
 
+    case BUILTIN_STRING_FROM_CODE_POINTS_ID: {
+      String* result = nullptr;
+      try {
+        GCSafeScope gcSafe(this);
+        HandleScope handleScope(vm_);
+        auto array = handle(mem<Object*>(stack_->sp() + kPrepareForGCSize));
+        auto clas = handle(array->meta()->clas());
+        if (!clas->elementType() || !clas->elementType()->isI32()) {
+          auto exnClass = handle(
+              vm_->roots()->getBuiltinClass(BUILTIN_ILLEGAL_ARGUMENT_EXCEPTION_CLASS_ID));
+          auto exnMeta = Class::ensureAndGetInstanceMeta(exnClass);
+          auto exn = Object::create(vm_->heap(), exnMeta);
+          doThrow(*exn);
+          break;
+        }
+        auto chars = reinterpret_cast<const u32*>(array->elementsBase());
+        result = *String::create(vm_->heap(), array->elementsLength(), chars);
+      } catch (AllocationError& e) {
+        doThrow(threadBindle_->takeOutOfMemoryException());
+        break;
+      }
+      pop<Block*>();  // array
+      push<Block*>(result);
+      break;
+    }
+
     case BUILTIN_STRING_CONCAT_OP_ID: {
       String* result = nullptr;
       try {

@@ -117,6 +117,12 @@ class TestCompiler(TestCaseWithDefinitions):
                                i64(12),
                                ret()]]))
 
+    def testUnsignedIntLiteral(self):
+        self.checkFunction("def f = 0x80i8",
+                           self.makeSimpleFunction("f", I8Type, [[
+                               i8(-128),
+                               ret()]]))
+
     def testFloatLiterals(self):
         self.checkFunction("def f = 1f32",
                            self.makeSimpleFunction("f", F32Type, [[

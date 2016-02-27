@@ -255,9 +255,10 @@ class TypeVisitorBase(ast.NodeVisitor):
             raise TypeException(node.location, "invalid integer literal width: %d" % node.width)
         minValue = -2 ** (node.width - 1)
         maxValue = 2 ** (node.width - 1) - 1
-        if node.value < minValue or maxValue < node.value:
+        maxUnsignedValue = 2 ** node.width - 1
+        if node.value < minValue or maxUnsignedValue < node.value:
             raise TypeException(node.location,
-                                "interger literal value %d does not fit in %d bits" %
+                                "integer literal value %d does not fit in %d bits" %
                                 (node.value, node.width))
         return typeMap[node.width]
 
