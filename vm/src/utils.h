@@ -41,6 +41,7 @@ typedef I32Array WordArray;
 typedef word_t Address;
 const size_t kWordSize = WORDSIZE / 8;
 const int kBitsInWord = WORDSIZE;
+const int kMaxAlignment = 8;
 const word_t kNotSet = static_cast<word_t>(-1);
 const word_t kNotFound = static_cast<word_t>(-1);
 void* const kFailed = reinterpret_cast<void*>(1);

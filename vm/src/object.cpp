@@ -33,7 +33,8 @@ void* Object::operator new (size_t, Heap* heap, Meta* meta) {
 
 void* Object::operator new (size_t, Heap* heap, Meta* meta, length_t length) {
   ASSERT(meta->elementSize() > 0);
-  u64 size = meta->objectSize() + static_cast<u64>(length) * meta->elementSize();
+  u64 size = elementsOffset(meta->objectSize(), meta->elementSize()) +
+      static_cast<u64>(length) * meta->elementSize();
   if (size > Heap::kMaxAllocatableSize) {
     throw AllocationError(false /* shouldRetryAfterGC */);
   }

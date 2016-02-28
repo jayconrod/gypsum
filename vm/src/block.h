@@ -139,6 +139,7 @@ BLOCK_TYPE_LIST(DECLARE_TYPE_CHECK)
 
   word_t elementsLength() const;
   ptrdiff_t elementsOffset() const;
+  static u32 elementsOffset(u32 objectSize, u32 elementSize);
   Address elementsBase() const;
   word_t elementsSize() const;
 

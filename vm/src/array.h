@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -43,7 +43,7 @@ class Array: public Block {
 
   static word_t sizeForLength(length_t length) {
     ASSERT(length <= kMaxLength);
-    return sizeof(Array) + sizeof(T) * length;
+    return elementsOffset(sizeof(Array), sizeof(T)) + sizeof(T) * length;
   }
 
   length_t length() const { return length_; }

@@ -22,7 +22,7 @@ namespace internal {
 
 word_t String::sizeForLength(length_t length) {
   ASSERT(length <= kMaxLength);
-  return sizeof(String) + length * sizeof(u32);
+  return elementsOffset(sizeof(String), sizeof(u32)) + length * sizeof(u32);
 }
 
 

@@ -20,7 +20,7 @@ namespace internal {
 
 word_t Type::sizeForLength(length_t length) {
   ASSERT(length <= kMaxLength);
-  return align(sizeof(Type), kWordSize) + length * kWordSize;
+  return elementsOffset(sizeof(Type), kWordSize) + length * kWordSize;
 }
 
 

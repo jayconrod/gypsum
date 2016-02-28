@@ -116,7 +116,7 @@ Local<Function> Function::create(Heap* heap,
 
 word_t Function::sizeForFunction(length_t instructionsSize) {
   ASSERT(instructionsSize <= kMaxLength);
-  return align(sizeof(Function), kWordSize) + instructionsSize;
+  return elementsOffset(sizeof(Function), 1) + instructionsSize;
 }
 
 

@@ -10,6 +10,7 @@
 #include <iostream>
 #include "block.h"
 #include "handle.h"
+#include "utils.h"
 
 namespace codeswitch {
 namespace internal {
@@ -34,7 +35,7 @@ class HashTable: public Block {
   }
 
   static word_t sizeForCapacity(length_t length) {
-    return sizeof(HashTable<E>) + length * sizeof(E);
+    return elementsOffset(sizeof(HashTable<E>), sizeof(E)) + length * sizeof(E);
   }
 
   length_t capacity() const { return capacity_; }
