@@ -114,9 +114,14 @@ class SeparateTest: public TestBase {
 int main(int argc, char* argv[]) {
   processArguments(argc, argv);
 
-  for (auto path : split(TEST_PROGRAMS, ' ')) {
-    if (!path.empty())
-      new SeparateTest(path);
+  if (shouldFork) {
+    for (auto path : split(TEST_PROGRAMS, ' ')) {
+      if (!path.empty())
+        new SeparateTest(path);
+    }
+  } else {
+    cerr << "skipping " << split(TEST_PROGRAMS, ' ').size()
+         << " tests that require fork" << endl;
   }
 
   int testCount = 0;
@@ -132,51 +137,68 @@ int main(int argc, char* argv[]) {
       cout << test->name() << "...";
       cout.flush();
     }
-    pid_t pid;
-    if (shouldFork)
-      pid = fork();
-    else
-      pid = 0;
+    char code = ' ';
+    if (shouldFork) {
+      pid_t pid = fork();
+      if (pid == 0) {
+        // Run test in child process.
+        try {
+          test->test();
+        } catch (TestException& exn) {
+          cerr << '\n' << test->name() << ": test error: " << exn.message() << endl;
+          _exit(1);
+        } catch (codeswitch::internal::Error& exn) {
+          cerr << '\n' << test->name() << ": internal error: " << exn.message() << endl;
+          _exit(2);
+        } catch (...) {
+          cerr << '\n' << test->name()
+               << ": error: unknown exception" << endl;
+          _exit(3);
+        }
+        _exit(0);
+      }
 
-    if (pid == 0) {
-      // Run test in child process.
+      int status;
+      waitpid(pid, &status, 0);
+      if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+        passCount++;
+        code = '.';
+      } else if (WIFEXITED(status) && WEXITSTATUS(status) == 1) {
+        failCount++;
+        code = 'F';
+      } else {
+        errorCount++;
+        code = 'E';
+        if (WIFSIGNALED(status)) {
+          cerr << '\n' << test->name()
+               << ": error: terminated by signal " << WTERMSIG(status) << endl;
+        } else {
+          cerr << '\n' << test->name()
+               << ": unknown error code: " << status << endl;
+        }
+      }
+    } else {
+      // Run test directly.
       try {
         test->test();
+        code = '.';
+        passCount++;
       } catch (TestException& exn) {
         cerr << '\n' << test->name() << ": test error: " << exn.message() << endl;
-        _exit(1);
+        failCount++;
+        code = 'F';
       } catch (codeswitch::internal::Error& exn) {
         cerr << '\n' << test->name() << ": internal error: " << exn.message() << endl;
-        _exit(2);
+        errorCount++;
+        code = 'E';
       } catch (...) {
         cerr << '\n' << test->name()
              << ": error: unknown exception" << endl;
-        _exit(3);
+        errorCount++;
+        code = 'E';
       }
-      if (shouldFork)
-        _exit(0);
     }
 
-    int status;
-    if (shouldFork)
-      waitpid(pid, &status, 0);
-    else
-      status = 0;
-    char code = ' ';
-    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-      passCount++;
-      code = '.';
-    } else if (WIFEXITED(status) && WEXITSTATUS(status) == 1) {
-      failCount++;
-      code = 'F';
-    } else {
-      errorCount++;
-      code = 'E';
-      if (WIFSIGNALED(status)) {
-        cerr << '\n' << test->name()
-             << ": error: terminated by signal " << WTERMSIG(status) << endl;
-      }
-    }
     if (!verbose) {
       cout << code;
       cout.flush();
