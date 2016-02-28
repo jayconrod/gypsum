@@ -72,7 +72,7 @@ int main(int argc, char* argv[]) {
   {
     auto function = package.findFunction(Name::fromStringForDefn(&vm, "pub-fn"));
     ASSERT_TRUE(function);
-    ASSERT_EQ(12L, function.callForI64());
+    ASSERT_EQ(12L, function.call().asI64());
   }
 
   // Check that we can load a static method by name.
@@ -80,14 +80,14 @@ int main(int argc, char* argv[]) {
     auto function =
         package.findFunction(Name::fromStringForDefn(&vm, "PubClass.pub-static-method"));
     ASSERT_TRUE(function);
-    ASSERT_EQ(34L, function.callForI64());
+    ASSERT_EQ(34L, function.call().asI64());
   }
 
   // Check that we can load a public function by its source name.
   {
     auto function = package.findFunction("pub-fn");
     ASSERT_TRUE(function);
-    ASSERT_EQ(12L, function.callForI64());
+    ASSERT_EQ(12L, function.call().asI64());
   }
 
   // Check that we can load a non-public function by its source name.
@@ -182,14 +182,14 @@ int main(int argc, char* argv[]) {
   {
     auto method = fooClass.findMethod(Name::fromStringForDefn(&vm, "Foo.normal-method"));
     ASSERT_TRUE(method);
-    ASSERT_EQ(34L, method.callForI64(fooObj));
+    ASSERT_EQ(34L, method.call(fooObj).asI64());
   }
 
   // Check that we can load a public method by its source name.
   {
     auto method = fooClass.findMethod("pub-method");
     ASSERT_TRUE(method);
-    ASSERT_EQ(12L, method.callForI64(fooObj));
+    ASSERT_EQ(12L, method.call(fooObj).asI64());
   }
 
   // Check that we cannot load a non-public method by its source name.
@@ -202,14 +202,14 @@ int main(int argc, char* argv[]) {
   {
     auto method = fooClass.findMethod("static-method");
     ASSERT_TRUE(method);
-    ASSERT_EQ(123L, method.callForI64());
+    ASSERT_EQ(123L, method.call().asI64());
   }
 
   // Check that we can load a protected method by name.
   {
     auto method = fooClass.findMethod(Name::fromStringForDefn(&vm, "Foo.prot-method"));
     ASSERT_TRUE(method);
-    ASSERT_EQ(56L, method.callForI64(fooObj));
+    ASSERT_EQ(56L, method.call(fooObj).asI64());
   }
 
   // Check that we cannot load a private method by name.

@@ -338,114 +338,8 @@ class Function final : public Reference {
   Function() = default;
   explicit Function(Impl* impl);
 
-  /**
-   * Calls a function that returns `unit` (equivalent to `void`)
-   *
-   * @param args arguments to call the function with. These are type-checked.
-   * @throws Error if there is a type error with the arguments or return type or if the function
-   *   throws an exception.
-   */
-  template <class... Ts>
-  void call(Ts... args);
-
-  /**
-   * Calls a function that returns `boolean`
-   *
-   * @param args arguments to call the function with. These are type-checked.
-   * @return the result of the function call.
-   * @throws Error if there is a type error with the arguments or return type or if the function
-   *   throws an exception.
-   */
-  template <class... Ts>
-  bool callForBoolean(Ts... args);
-
-  /**
-   * Calls a function that returns `i8`
-   *
-   * @param args arguments to call the function with. These are type-checked.
-   * @return the result of the function call.
-   * @throws Error if there is a type error with the arguments or return type or if the function
-   *   throws an exception.
-   */
-  template <class... Ts>
-  int8_t callForI8(Ts... args);
-
-  /**
-   * Calls a function that returns `i16`
-   *
-   * @param args arguments to call the function with. These are type-checked.
-   * @return the result of the function call.
-   * @throws Error if there is a type error with the arguments or return type or if the function
-   *   throws an exception.
-   */
-  template <class... Ts>
-  int16_t callForI16(Ts... args);
-
-  /**
-   * Calls a function that returns `i32`
-   *
-   * @param args arguments to call the function with. These are type-checked.
-   * @return the result of the function call.
-   * @throws Error if there is a type error with the arguments or return type or if the function
-   *   throws an exception.
-   */
-  template <class... Ts>
-  int32_t callForI32(Ts... args);
-
-  /**
-   * Calls a function that returns `i64`
-   *
-   * @param args arguments to call the function with. These are type-checked.
-   * @return the result of the function call.
-   * @throws Error if there is a type error with the arguments or return type or if the function
-   *   throws an exception.
-   */
-  template <class... Ts>
-  int64_t callForI64(Ts... args);
-
-  /**
-   * Calls a function that returns `f32`
-   *
-   * @param args arguments to call the function with. These are type-checked.
-   * @return the result of the function call.
-   * @throws Error if there is a type error with the arguments or return type or if the function
-   *   throws an exception.
-   */
-  template <class... Ts>
-  float callForF32(Ts... args);
-
-  /**
-   * Calls a function that returns `f64`
-   *
-   * @param args arguments to call the function with. These are type-checked.
-   * @return the result of the function call.
-   * @throws Error if there is a type error with the arguments or return type or if the function
-   *   throws an exception.
-   */
-  template <class... Ts>
-  double callForF64(Ts... args);
-
-  /**
-   * Calls a function that returns `String`
-   *
-   * @param args arguments to call the function with. These are type-checked.
-   * @return the result of the function call.
-   * @throws Error if there is a type error with the arguments or return type or if the function
-   *   throws an exception.
-   */
-  template <class... Ts>
-  String callForString(Ts... args);
-
-  /**
-   * Calls a function that returns any object type
-   *
-   * @param args arguments to call the function with. These are type-checked.
-   * @return the result of the function call.
-   * @throws Error if there is a type error with the arguments or return type or if the function
-   *   throws an exception.
-   */
-  template <class... Ts>
-  Object callForObject(Ts... args);
+  template <class... Args>
+  Value call(Args&&... args);
 
   friend class CallBuilder;
 };
@@ -553,135 +447,14 @@ class CallBuilder final {
   CallBuilder& operator = (const CallBuilder&) = delete;
   CallBuilder& operator = (CallBuilder&& builder) = delete;
 
-  /** Adds a `unit` value to the argument list */
-  CallBuilder& argUnit();
+  CallBuilder& arg(Value&& value);
 
-  /** Adds a `boolean` value to the argument list */
-  CallBuilder& arg(bool value);
+  CallBuilder& args();
 
-  /** Adds an `i8` value to the argument list */
-  CallBuilder& arg(int8_t value);
+  template <class... Args>
+  CallBuilder& args(Value&& first, Args&&... rest);
 
-  /** Adds an `i16` value to the argument list */
-  CallBuilder& arg(int16_t value);
-
-  /** Adds an `i32` value to the argument list */
-  CallBuilder& arg(int32_t value);
-
-  /** Adds an `i64` value to the argument list */
-  CallBuilder& arg(int64_t value);
-
-  /** Adds an `f32` value to the argument list */
-  CallBuilder& arg(float value);
-
-  /** Adds an `f64` value to the argument list */
-  CallBuilder& arg(double value);
-
-  /** Adds a {@link Object} value to the argument list */
-  CallBuilder& arg(const Object& value);
-
-  /** Signals no arguments are needed */
-  CallBuilder& args() { return *this; }
-
-  /** Adds several values to the argument list, starting with a `boolean` value */
-  template <class... Ts>
-  CallBuilder& args(bool value, Ts&&... rest);
-
-  /** Adds several values to the argument list, starting with an `i8` value */
-  template <class... Ts>
-  CallBuilder& args(int8_t value, Ts&&... rest);
-
-  /** Adds several values to the argument list, starting with an `i16` value */
-  template <class... Ts>
-  CallBuilder& args(int16_t value, Ts&&... rest);
-
-  /** Adds several values to the argument list, starting with an `i32` value */
-  template <class... Ts>
-  CallBuilder& args(int32_t value, Ts&&... rest);
-
-  /** Adds several values to the argument list, starting with an `i64` value */
-  template <class... Ts>
-  CallBuilder& args(int64_t value, Ts&&... rest);
-
-  /** Adds several values to the argument list, starting with an `f32` value */
-  template <class... Ts>
-  CallBuilder& args(float value, Ts&&... rest);
-
-  /** Adds several values to the argument list, starting with an `f64` value */
-  template <class... Ts>
-  CallBuilder& args(double value, Ts&&... rest);
-
-  /** Adds several values to the argument list, starting with an `Object` value */
-  template <class... Ts>
-  CallBuilder& args(const Object& value, Ts&&... rest);
-
-  /** Calls the function and clears the argument list. The result is ignored. */
-  void call();
-
-  /**
-   * Calls the function and clears the argument list
-   *
-   * @return the function's return value. The return type must be `boolean`.
-   */
-  bool callForBoolean();
-
-  /**
-   * Calls the function and clears the argument list
-   *
-   * @return the function's return value. The return type must be `i8`.
-   */
-  int8_t callForI8();
-
-  /**
-   * Calls the function and clears the argument list
-   *
-   * @return the function's return value. The return type must be `i16`.
-   */
-  int16_t callForI16();
-
-  /**
-   * Calls the function and clears the argument list
-   *
-   * @return the function's return value. The return type must be `i32`.
-   */
-  int32_t callForI32();
-
-  /**
-   * Calls the function and clears the argument list
-   *
-   * @return the function's return value. The return type must be `i64`.
-   */
-  int64_t callForI64();
-
-  /**
-   * Calls the function and clears the argument list
-   *
-   * @return the function's return value. The return type must be `f32`.
-   */
-  float callForF32();
-
-  /**
-   * Calls the function and clears the argument list
-   *
-   * @return the function's return value. The return type must be `f64`.
-   */
-  double callForF64();
-
-  /**
-   * Calls the function and clears the argument list
-   *
-   * @return the function's return value. The return type must be `String`. If `null` is
-   *   returned, this will be an invalid reference.
-   */
-  String callForString();
-
-  /**
-   * Calls the function and clears the argument list
-   *
-   * @return the function's return value. The return type must be some object type. If `null`
-   *  is returned, this will be an invalid reference.
-   */
-  Object callForObject();
+  Value call();
 
  private:
   std::unique_ptr<Impl> impl_;
@@ -1132,118 +905,15 @@ class Value final {
 };
 
 
-template <class... Ts>
-void Function::call(Ts... args) {
-  CallBuilder(*this).args(args...).call();
+template <class... Args>
+Value Function::call(Args&&... args) {
+  return CallBuilder(*this).args(args...).call();
 }
 
 
-template <class... Ts>
-bool Function::callForBoolean(Ts... args) {
-  return CallBuilder(*this).args(args...).callForBoolean();
-}
-
-
-template <class... Ts>
-int8_t Function::callForI8(Ts... args) {
-  return CallBuilder(*this).args(args...).callForI8();
-}
-
-
-template <class... Ts>
-int16_t Function::callForI16(Ts... args) {
-  return CallBuilder(*this).args(args...).callForI16();
-}
-
-
-template <class... Ts>
-int32_t Function::callForI32(Ts... args) {
-  return CallBuilder(*this).args(args...).callForI32();
-}
-
-
-template <class... Ts>
-int64_t Function::callForI64(Ts... args) {
-  return CallBuilder(*this).args(args...).callForI64();
-}
-
-
-template <class... Ts>
-float Function::callForF32(Ts... args) {
-  return CallBuilder(*this).args(args...).callForF32();
-}
-
-
-template <class... Ts>
-double Function::callForF64(Ts... args) {
-  return CallBuilder(*this).args(args...).callForF64();
-}
-
-
-template <class... Ts>
-String Function::callForString(Ts... args) {
-  return CallBuilder(*this).args(args...).callForString();
-}
-
-
-template <class... Ts>
-Object Function::callForObject(Ts... args) {
-  return CallBuilder(*this).args(args...).callForObject();
-}
-
-
-template <class... Ts>
-CallBuilder& CallBuilder::args(bool value, Ts&&... rest) {
-  arg(value);
-  return args(rest...);
-}
-
-
-template <class... Ts>
-CallBuilder& CallBuilder::args(int8_t value, Ts&&... rest) {
-  arg(value);
-  return args(rest...);
-}
-
-
-template <class... Ts>
-CallBuilder& CallBuilder::args(int16_t value, Ts&&... rest) {
-  arg(value);
-  return args(rest...);
-}
-
-
-template <class... Ts>
-CallBuilder& CallBuilder::args(int32_t value, Ts&&... rest) {
-  arg(value);
-  return args(rest...);
-}
-
-
-template <class... Ts>
-CallBuilder& CallBuilder::args(int64_t value, Ts&&... rest) {
-  arg(value);
-  return args(rest...);
-}
-
-
-template <class... Ts>
-CallBuilder& CallBuilder::args(float value, Ts&&... rest) {
-  arg(value);
-  return args(rest...);
-}
-
-
-template <class... Ts>
-CallBuilder& CallBuilder::args(double value, Ts&&... rest) {
-  arg(value);
-  return args(rest...);
-}
-
-
-template <class... Ts>
-CallBuilder& CallBuilder::args(const Object& value, Ts&&... rest) {
-  arg(value);
+template <class... Args>
+CallBuilder& CallBuilder::args(Value&& first, Args&&... rest) {
+  arg(std::move(first));
   return args(rest...);
 }
 
