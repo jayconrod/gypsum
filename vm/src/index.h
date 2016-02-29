@@ -1,4 +1,4 @@
-// Copyright 2014-2016 Jay Conrod. All rights reserved.
+// Copyright 2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -7,6 +7,7 @@
 #ifndef index_h
 #define index_h
 
+#include <string>
 #include "array.h"
 #include "handle.h"
 #include "hash-table.h"
@@ -15,6 +16,9 @@
 
 namespace codeswitch {
 namespace internal {
+
+class Function;
+class Package;
 
 template <class K, class T, class GetKey, class Filter>
 static Local<BlockHashMap<K, T>> buildIndex(
@@ -68,6 +72,17 @@ template <class T>
 bool allDefnFilter(const Handle<T>& defn) {
   return true;
 }
+
+Local<Name> mangleFunctionName(const Handle<Function>& function);
+
+Local<Name> mangleFunctionName(const Handle<Function>& function,
+                               const Handle<Package>& package);
+
+Local<String> mangleFunctionSourceName(const Handle<Function>& function);
+
+Local<Name> mangleName(const Handle<Name>& name, const std::string& signature);
+
+Local<String> mangleSourceName(const Handle<String>& sourceName, const std::string& signature);
 
 }
 }

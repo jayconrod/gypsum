@@ -21,6 +21,7 @@
 #include "handle.h"
 #include "hash-table.h"
 #include "heap.h"
+#include "index.h"
 #include "interpreter.h"
 #include "name.h"
 #include "object.h"
