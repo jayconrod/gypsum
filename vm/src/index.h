@@ -78,6 +78,8 @@ Local<Name> mangleFunctionName(const Handle<Function>& function);
 Local<Name> mangleFunctionName(const Handle<Function>& function,
                                const Handle<Package>& package);
 
+Local<String> mangleSignature(const Handle<Function>& function);
+
 Local<String> mangleFunctionSourceName(const Handle<Function>& function);
 
 Local<Name> mangleName(const Handle<Name>& name, const std::string& signature);

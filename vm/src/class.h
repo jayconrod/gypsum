@@ -9,6 +9,7 @@
 
 #include <iostream>
 #include "block.h"
+#include "hash-table.h"
 #include "utils.h"
 
 namespace codeswitch {
@@ -110,6 +111,43 @@ class Class: public Block {
   length_t lengthFieldIndex() const { return lengthFieldIndex_; }
   void setLengthFieldIndex(length_t newIndex) { lengthFieldIndex_ = newIndex; }
 
+  BlockHashMap<Name, Field>* fieldNameIndex() const { return fieldNameIndex_.get(); }
+  void setFieldNameIndex(BlockHashMap<Name, Field>* index) {
+    fieldNameIndex_.set(this, index);
+  }
+  static Local<BlockHashMap<Name, Field>> ensureAndGetFieldNameIndex(
+      const Handle<Class>& clas);
+  BlockHashMap<String, Field>* fieldSourceNameIndex() const {
+    return fieldSourceNameIndex_.get();
+  }
+  void setFieldSourceNameIndex(BlockHashMap<String, Field>* index) {
+    fieldSourceNameIndex_.set(this, index);
+  }
+  static Local<BlockHashMap<String, Field>> ensureAndGetFieldSourceNameIndex(
+      const Handle<Class>& clas);
+  BlockHashMap<Name, Function>* methodNameIndex() const { return methodNameIndex_.get(); }
+  void setMethodNameIndex(BlockHashMap<Name, Function>* index) {
+    methodNameIndex_.set(this, index);
+  }
+  static Local<BlockHashMap<Name, Function>> ensureAndGetMethodNameIndex(
+      const Handle<Class>& clas);
+  BlockHashMap<String, Function>* methodSourceNameIndex() const {
+    return methodSourceNameIndex_.get();
+  }
+  void setMethodSourceNameIndex(BlockHashMap<String, Function>* index) {
+    methodSourceNameIndex_.set(this, index);
+  }
+  static Local<BlockHashMap<String, Function>> ensureAndGetMethodSourceNameIndex(
+      const Handle<Class>& clas);
+  BlockHashMap<String, Function>* constructorSignatureIndex() const {
+    return constructorSignatureIndex_.get();
+  }
+  void setConstructorSignatureIndex(BlockHashMap<String, Function>* index) {
+    constructorSignatureIndex_.set(this, index);
+  }
+  static Local<BlockHashMap<String, Function>> ensureAndGetConstructorSignatureIndex(
+      const Handle<Class>& clas);
+
   /** Constructs a new instance Meta whether one already exists or not. Does not use handles
    *  or invoke the garbage collector. This is used by Roots, since GC is not available there.
    *  `ensureAndGetInstaceMeta` should be called normally.
@@ -138,6 +176,11 @@ class Class: public Block {
   Ptr<Meta> instanceMeta_;
   Ptr<Type> elementType_;
   length_t lengthFieldIndex_;
+  Ptr<BlockHashMap<Name, Field>> fieldNameIndex_;
+  Ptr<BlockHashMap<String, Field>> fieldSourceNameIndex_;
+  Ptr<BlockHashMap<Name, Function>> methodNameIndex_;
+  Ptr<BlockHashMap<String, Function>> methodSourceNameIndex_;
+  Ptr<BlockHashMap<String, Function>> constructorSignatureIndex_;
   // Update CLASS_POINTER_LIST if pointer members change.
 };
 

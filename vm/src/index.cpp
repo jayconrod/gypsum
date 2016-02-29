@@ -66,6 +66,13 @@ Local<Name> mangleFunctionName(const Handle<Function>& function,
 }
 
 
+Local<String> mangleSignature(const Handle<Function>& function) {
+  stringstream str;
+  mangleFunctionSignature(str, function, handle(function->package()));
+  return String::fromUtf8String(function->getHeap(), str.str());
+}
+
+
 Local<String> mangleFunctionSourceName(const Handle<Function>& function) {
   if (!function->sourceName())
     return Local<String>();

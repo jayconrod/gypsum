@@ -12,6 +12,7 @@
 #include "flags.h"
 #include "function.h"
 #include "handle.h"
+#include "index.h"
 #include "package.h"
 #include "roots.h"
 #include "type.h"
@@ -22,16 +23,21 @@ namespace codeswitch {
 namespace internal {
 
 #define CLASS_POINTER_LIST(F) \
-  F(Class, name_)             \
-  F(Class, sourceName_)       \
-  F(Class, typeParameters_)   \
-  F(Class, supertype_)        \
-  F(Class, fields_)           \
-  F(Class, constructors_)     \
-  F(Class, methods_)          \
-  F(Class, package_)          \
-  F(Class, instanceMeta_)     \
-  F(Class, elementType_)      \
+  F(Class, name_) \
+  F(Class, sourceName_) \
+  F(Class, typeParameters_) \
+  F(Class, supertype_) \
+  F(Class, fields_) \
+  F(Class, constructors_) \
+  F(Class, methods_) \
+  F(Class, package_) \
+  F(Class, instanceMeta_) \
+  F(Class, elementType_) \
+  F(Class, fieldNameIndex_) \
+  F(Class, fieldSourceNameIndex_) \
+  F(Class, methodNameIndex_) \
+  F(Class, methodSourceNameIndex_) \
+  F(Class, constructorSignatureIndex_) \
 
 DEFINE_POINTER_MAP(Class, CLASS_POINTER_LIST)
 
@@ -155,6 +161,63 @@ Class* Class::findFieldClass(length_t index) {
   }
   UNREACHABLE();
   return nullptr;
+}
+
+
+Local<BlockHashMap<Name, Field>> Class::ensureAndGetFieldNameIndex(const Handle<Class>& clas) {
+  if (clas->fieldNameIndex()) {
+    return handle(clas->fieldNameIndex());
+  }
+  auto index = buildNameIndex<Field>(handle(clas->fields()), allDefnFilter<Field>);
+  clas->setFieldNameIndex(*index);
+  return index;
+}
+
+
+Local<BlockHashMap<String, Field>> Class::ensureAndGetFieldSourceNameIndex(
+    const Handle<Class>& clas) {
+  if (clas->fieldSourceNameIndex()) {
+    return handle(clas->fieldSourceNameIndex());
+  }
+  auto index = buildSourceNameIndex<Field>(handle(clas->fields()), allDefnFilter<Field>);
+  clas->setFieldSourceNameIndex(*index);
+  return index;
+}
+
+
+Local<BlockHashMap<Name, Function>> Class::ensureAndGetMethodNameIndex(
+    const Handle<Class>& clas) {
+  if (clas->methodNameIndex()) {
+    return handle(clas->methodNameIndex());
+  }
+  auto index = buildNameIndex<Function>(handle(clas->methods()), allDefnFilter<Function>);
+  clas->setMethodNameIndex(*index);
+  return index;
+}
+
+
+Local<BlockHashMap<String, Function>> Class::ensureAndGetMethodSourceNameIndex(
+    const Handle<Class>& clas) {
+  if (clas->methodSourceNameIndex()) {
+    return handle(clas->methodSourceNameIndex());
+  }
+  auto index = buildSourceNameIndex<Function>(handle(clas->methods()), allDefnFilter<Function>);
+  clas->setMethodSourceNameIndex(*index);
+  return index;
+}
+
+
+Local<BlockHashMap<String, Function>> Class::ensureAndGetConstructorSignatureIndex(
+    const Handle<Class>& clas) {
+  if (clas->constructorSignatureIndex()) {
+    return handle(clas->constructorSignatureIndex());
+  }
+  auto index = buildIndex<String, Function>(
+      handle(clas->constructors()),
+      mangleSignature,
+      allDefnFilter<Function>);
+  clas->setConstructorSignatureIndex(*index);
+  return index;
 }
 
 
