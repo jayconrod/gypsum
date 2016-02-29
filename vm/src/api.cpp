@@ -377,20 +377,21 @@ Global Package::findGlobal(const string& sourceName) const {
 }
 
 
-Function Package::findFunction(const Name& name) const {
+Function Package::findFunction(const Name& name, const string& signature) const {
   API_CHECK_SELF(Package);
   API_CHECK_ARG(name);
   auto self = unwrap<i::Package>(*this);
   auto vm = self->getVM();
   i::HandleScope handleScope(vm);
   i::AllowAllocationScope allowAlloc(vm->heap(), true);
+  auto mangled = i::mangleName(unwrap<i::Name>(name), signature);
   auto index = i::Package::ensureAndGetFunctionNameIndex(self);
-  auto function = index->getOrElse(*unwrap<i::Name>(name), nullptr);
+  auto function = index->getOrElse(*mangled, nullptr);
   return function ? wrap<Function, i::Function>(function) : Function();
 }
 
 
-Function Package::findFunction(const String& sourceName) const {
+Function Package::findFunction(const String& sourceName, const string& signature) const {
   API_CHECK_SELF(Package);
   API_CHECK_ARG(sourceName);
   auto self = unwrap<i::Package>(*this);
@@ -398,15 +399,16 @@ Function Package::findFunction(const String& sourceName) const {
   i::HandleScope handleScope(vm);
   i::AllowAllocationScope allowAlloc(vm->heap(), true);
   auto index = i::Package::ensureAndGetFunctionSourceNameIndex(self);
-  auto function = index->getOrElse(*unwrap<i::String>(sourceName), nullptr);
+  auto mangled = i::mangleSourceName(unwrap<i::String>(sourceName), signature);
+  auto function = index->getOrElse(*mangled, nullptr);
   return function ? wrap<Function, i::Function>(function) : Function();
 }
 
 
-Function Package::findFunction(const string& sourceName) const {
+Function Package::findFunction(const string& sourceName, const string& signature) const {
   API_CHECK_SELF(Package);
   String sourceNameStr(refVM(*this), sourceName);
-  return findFunction(sourceNameStr);
+  return findFunction(sourceNameStr, signature);
 }
 
 

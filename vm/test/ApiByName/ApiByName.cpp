@@ -64,37 +64,38 @@ int main(int argc, char* argv[]) {
 
   // Check that when we load a function that doesn't exist, we get a bad reference.
   {
-    auto function = package.findFunction(Name::fromStringForDefn(&vm, "bogus"));
+    auto function = package.findFunction(Name::fromStringForDefn(&vm, "bogus"), "(I)");
     ASSERT_FALSE(function);
   }
 
   // Check that we can load a function by name.
   {
-    auto function = package.findFunction(Name::fromStringForDefn(&vm, "pub-fn"));
+    auto function = package.findFunction(Name::fromStringForDefn(&vm, "pub-fn"), "");
     ASSERT_TRUE(function);
     ASSERT_EQ(12L, function.call().asI64());
   }
 
   // Check that we can load a static method by name.
   {
-    auto function =
-        package.findFunction(Name::fromStringForDefn(&vm, "PubClass.pub-static-method"));
+    auto function = package.findFunction(
+        Name::fromStringForDefn(&vm, "PubClass.pub-static-method"),
+        "");
     ASSERT_TRUE(function);
     ASSERT_EQ(34L, function.call().asI64());
   }
 
   // Check that we can load a public function by its source name.
   {
-    auto function = package.findFunction("pub-fn");
+    auto function = package.findFunction("pub-fn", "");
     ASSERT_TRUE(function);
     ASSERT_EQ(12L, function.call().asI64());
   }
 
   // Check that we can load a non-public function by its source name.
   {
-    auto function = package.findFunction("hidden-fn");
+    auto function = package.findFunction("hidden-fn", "");
     ASSERT_TRUE(function);
-    function = package.findFunction(Name::fromStringForDefn(&vm, "hidden-fn"));
+    function = package.findFunction(Name::fromStringForDefn(&vm, "hidden-fn"), "");
     ASSERT_TRUE(function);
   }
 

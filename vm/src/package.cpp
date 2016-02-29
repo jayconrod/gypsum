@@ -24,6 +24,7 @@
 #include "handle.h"
 #include "hash-table.h"
 #include "heap.h"
+#include "index.h"
 #include "name.h"
 #include "roots.h"
 #include "string.h"
@@ -356,56 +357,12 @@ void Package::ensureExports(const Handle<Package>& package) {
 }
 
 
-template <class K, class T, class GetKey, class Filter>
-static Local<BlockHashMap<K, T>> buildIndex(
-    const Handle<BlockArray<T>>& defns,
-    GetKey getKey,
-    Filter filter) {
-  auto index = BlockHashMap<K, T>::create(defns->getHeap());
-  HandleScope handleScope(defns->getVM());
-  for (length_t i = 0, n = defns->length(); i < n; i++) {
-    auto defn = handle(defns->get(i));
-    if (filter(defn)) {
-      auto key = getKey(defn);
-      if (key) {
-        BlockHashMap<K, T>::add(index, key, defn);
-      }
-    }
-  }
-  return index;
-}
-
-
-template <class T, class Filter>
-static Local<BlockHashMap<Name, T>> buildNameIndex(
-    const Handle<BlockArray<T>>& defns,
-    Filter filter) {
-  return buildIndex<Name, T>(defns, [](const Handle<T>& defn) { return handle(defn->name()); }, filter);
-}
-
-
-template <class T, class Filter>
-static Local<BlockHashMap<String, T>> buildSourceNameIndex(
-    const Handle<BlockArray<T>>& defns,
-    Filter filter) {
-  auto getKey = [](const Handle<T>& defn) {
-    return defn->sourceName() ? handle(defn->sourceName()) : Local<String>();
-  };
-  return buildIndex<String, T>(defns, getKey, filter);
-}
-
-
-static bool globalFilter(const Handle<Global>& global) {
-  return true;
-}
-
-
 Local<BlockHashMap<Name, Global>> Package::ensureAndGetGlobalNameIndex(
     const Handle<Package>& package) {
   if (package->globalNameIndex()) {
     return handle(package->globalNameIndex());
   }
-  auto index = buildNameIndex<Global>(handle(package->globals()), globalFilter);
+  auto index = buildNameIndex<Global>(handle(package->globals()), allDefnFilter<Global>);
   package->setGlobalNameIndex(*index);
   return index;
 }
@@ -416,14 +373,9 @@ Local<BlockHashMap<String, Global>> Package::ensureAndGetGlobalSourceNameIndex(
   if (package->globalSourceNameIndex()) {
     return handle(package->globalSourceNameIndex());
   }
-  auto index = buildSourceNameIndex<Global>(handle(package->globals()), globalFilter);
+  auto index = buildSourceNameIndex<Global>(handle(package->globals()), allDefnFilter<Global>);
   package->setGlobalSourceNameIndex(*index);
   return index;
-}
-
-
-static bool functionNameFilter(const Handle<Function>& function) {
-  return true;
 }
 
 
@@ -432,7 +384,11 @@ Local<BlockHashMap<Name, Function>> Package::ensureAndGetFunctionNameIndex(
   if (package->functionNameIndex()) {
     return handle(package->functionNameIndex());
   }
-  auto index = buildNameIndex<Function>(handle(package->functions()), functionNameFilter);
+  Local<Name> (*getKey)(const Handle<Function>&) = mangleFunctionName;
+  auto index = buildIndex<Name, Function>(
+      handle(package->functions()),
+      getKey,
+      allDefnFilter<Function>);
   package->setFunctionNameIndex(*index);
   return index;
 }
@@ -448,15 +404,12 @@ Local<BlockHashMap<String, Function>> Package::ensureAndGetFunctionSourceNameInd
   if (package->functionSourceNameIndex()) {
     return handle(package->functionSourceNameIndex());
   }
-  auto index = buildSourceNameIndex<Function>(
-      handle(package->functions()), functionSourceNameFilter);
+  auto index = buildIndex<String, Function>(
+      handle(package->functions()),
+      mangleFunctionSourceName,
+      functionSourceNameFilter);
   package->setFunctionSourceNameIndex(*index);
   return index;
-}
-
-
-static bool classFilter(const Handle<Class>& clas) {
-  return true;
 }
 
 
@@ -465,7 +418,7 @@ Local<BlockHashMap<Name, Class>> Package::ensureAndGetClassNameIndex(
   if (package->classNameIndex()) {
     return handle(package->classNameIndex());
   }
-  auto index = buildNameIndex<Class>(handle(package->classes()), classFilter);
+  auto index = buildNameIndex<Class>(handle(package->classes()), allDefnFilter<Class>);
   package->setClassNameIndex(*index);
   return index;
 }
@@ -476,7 +429,7 @@ Local<BlockHashMap<String, Class>> Package::ensureAndGetClassSourceNameIndex(
   if (package->classSourceNameIndex()) {
     return handle(package->classSourceNameIndex());
   }
-  auto index = buildSourceNameIndex<Class>(handle(package->classes()), classFilter);
+  auto index = buildSourceNameIndex<Class>(handle(package->classes()), allDefnFilter<Class>);
   package->setClassSourceNameIndex(*index);
   return index;
 }
@@ -1712,6 +1665,10 @@ Local<Class> DependencyLoader::readIdAndGetDefiningClass() {
 }
 
 
+static void mangleFunctionSignature(stringstream& str,
+                                    const Handle<Function>& function,
+                                    const Handle<Package>& package);
+
 static void mangleType(stringstream& str,
                        const Handle<Type>& type,
                        vector<Local<TypeParameter>>& variables,
@@ -1721,6 +1678,11 @@ static void mangleTypeParameter(stringstream& str,
                                 const Handle<TypeParameter>& typeParam,
                                 vector<Local<TypeParameter>>& variables,
                                 const Handle<Package>& package);
+
+
+Local<Name> mangleFunctionName(const Handle<Function>& function) {
+  return mangleFunctionName(function, handle(function->package()));
+}
 
 
 Local<Name> mangleFunctionName(const Handle<Function>& function,
@@ -1733,6 +1695,39 @@ Local<Name> mangleFunctionName(const Handle<Function>& function,
   auto components = handle(function->name()->components());
   auto lastComponent = handle(components->get(components->length() - 1));
   str << lastComponent->length() << lastComponent->toUtf8StlString();
+  mangleFunctionSignature(str, function, package);
+
+  // Build a new name using the mangled component.
+  auto mangledComponents = BlockArray<String>::create(heap, components->length());
+  for (length_t i = 0; i < components->length() - 1; i++) {
+    mangledComponents->set(i, components->get(i));
+  }
+  auto mangledComponent = String::fromUtf8String(heap, str.str());
+  mangledComponents->set(components->length() - 1, *mangledComponent);
+  auto mangledName = Name::create(heap, mangledComponents);
+
+  return handleScope.escape(*mangledName);
+}
+
+
+Local<String> mangleFunctionSourceName(const Handle<Function>& function) {
+  if (!function->sourceName())
+    return Local<String>();
+
+  HandleScope handleScope(function->getVM());
+  auto sourceName = handle(function->sourceName());
+  stringstream str;
+  str << sourceName->length() << sourceName->toUtf8StlString();
+  mangleFunctionSignature(str, function, handle(function->package()));
+  auto mangledSourceName = String::fromUtf8String(function->getHeap(), str.str());
+  return handleScope.escape(*mangledSourceName);
+}
+
+
+static void mangleFunctionSignature(
+    stringstream& str,
+    const Handle<Function>& function,
+    const Handle<Package>& package) {
   auto typeParams = handle(function->typeParameters());
   vector<Local<TypeParameter>> variables;
   if (typeParams->length() > 0) {
@@ -1746,25 +1741,16 @@ Local<Name> mangleFunctionName(const Handle<Function>& function,
     }
     str << ']';
   }
-  str << '(';
-  auto paramTypes = handle(function->parameterTypes());
-  for (length_t i = 0; i < paramTypes->length(); i++) {
-    if (i > 0)
-      str << ',';
-    mangleType(str, handle(paramTypes->get(i)), variables, package);
+  if (function->parameterTypes()->length() > 0) {
+    str << '(';
+    auto paramTypes = handle(function->parameterTypes());
+    for (length_t i = 0; i < paramTypes->length(); i++) {
+      if (i > 0)
+        str << ',';
+      mangleType(str, handle(paramTypes->get(i)), variables, package);
+    }
+    str << ')';
   }
-  str << ')';
-
-  // Build a new name using the mangled component.
-  auto mangledComponents = BlockArray<String>::create(heap, components->length());
-  for (length_t i = 0; i < components->length() - 1; i++) {
-    mangledComponents->set(i, components->get(i));
-  }
-  auto mangledComponent = String::fromUtf8String(heap, str.str());
-  mangledComponents->set(components->length() - 1, *mangledComponent);
-  auto mangledName = Name::create(heap, mangledComponents);
-
-  return handleScope.escape(*mangledName);
 }
 
 
@@ -1885,6 +1871,30 @@ void mangleTypeParameter(stringstream& str,
   mangleType(str, handle(typeParam->upperBound()), variables, package);
   str << '>';
   mangleType(str, handle(typeParam->lowerBound()), variables, package);
+}
+
+
+Local<Name> mangleName(const Handle<Name>& name, const string& signature) {
+  HandleScope handleScope(name->getVM());
+  auto heap = name->getHeap();
+  auto components = handle(name->components());
+  auto n = components->length();
+  auto mangledComponents = BlockArray<String>::create(heap, n);
+  for (length_t i = 0; i < n - 1; i++) {
+    mangledComponents->set(i, components->get(i));
+  }
+  auto lastComponent = handle(components->get(n - 1));
+  auto mangledComponent = mangleSourceName(lastComponent, signature);
+  mangledComponents->set(n - 1, *mangledComponent);
+  auto mangledName = Name::create(heap, mangledComponents);
+  return handleScope.escape(*mangledName);
+}
+
+
+Local<String> mangleSourceName(const Handle<String>& sourceName, const string& signature) {
+  stringstream str;
+  str << sourceName->length() << sourceName->toUtf8StlString() << signature;
+  return String::fromUtf8String(sourceName->getHeap(), str.str());
 }
 
 

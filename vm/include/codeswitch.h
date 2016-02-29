@@ -225,76 +225,89 @@ class Package final : public Reference {
   Function entryFunction() const;
 
   /**
-   * Finds and returns a global from the package by name.
+   * Finds and returns a global from the package.
    *
+   * @param name the full name of the global.
    * @return the named global from the package. If the package has no global by this name,
    *     and invalid reference is returned.
    */
   Global findGlobal(const Name& name) const;
 
   /**
-   * Finds and returns a public global from the package by its short name from source code.
-   * Static fields are not searched.
+   * Finds and returns a public global from the package. Static fields are not searched.
    *
+   * @param sourceName the short name of the global in source code.
    * @return the named global from the package. If the package has no global by this name,
    *     and invalid reference is returned.
    */
   Global findGlobal(const String& sourceName) const;
 
   /**
-   * Finds and returns a public global from the package by its short name from source code.
-   * Static fields are not searched.
+   * Finds and returns a public global from the package. Static fields are not searched.
    *
+   * @param sourceName the short name of the global in source code.
    * @return the named global from the package. If the package has no global by this name,
    *     and invalid reference is returned.
    */
   Global findGlobal(const std::string& sourceName) const;
 
   /**
-   * Finds and returns a function from the package by name.
+   * Finds and returns a function from the package.
    *
+   * @param name the full name of the function.
+   * @param signature the type signature of the function. See
+   *     {@link md_mangling function name mangling} for details.
    * @return the named function from the package. If the package has no function by this name,
    *     an invalid reference is returned.
    */
-  Function findFunction(const Name& name) const;
+  Function findFunction(const Name& name, const std::string& signature) const;
 
   /**
-   * Finds and returns a public function from the package by its short name from source code.
-   * Methods (static or otherwise) are not searched.
+   * Finds and returns a public function from the package. Methods (static or otherwise)
+   * are not searched.
    *
+   * @param sourceName the short name of the function from source code.
+   * @param signature the type signature of the function. See
+   *     {@link md_mangling function name mangling} for details.
    * @return the named function from the package. If the package has no function by this name,
    *     an invalid reference is returned.
    */
-  Function findFunction(const String& sourceName) const;
+  Function findFunction(const String& sourceName, const std::string& signature) const;
 
   /**
-   * Finds and returns a public function from the package by its short name from source code.
-   * Methods (static or otherwise) are not searched.
+   * Finds and returns a public function from the package. Methods (static or otherwise)
+   * are not searched.
    *
+   * @param sourceName the short name of the function from source code.
+   * @param signature the type signature of the function. See
+   *     {@link md_mangling function name mangling} for details.
    * @return the named function from the package. If the package has no function by this name,
    *     an invalid reference is returned.
    */
-  Function findFunction(const std::string& sourceName) const;
+  Function findFunction(const std::string& sourceName, const std::string& signature) const;
 
   /**
-   * Finds and returns a class from the package by name.
+   * Finds and returns a class from the package.
    *
+   * @param name the full name of the class.
    * @return the named class from the package. If the package has no class by this name,
    *     an invalid reference is returned.
    */
   Class findClass(const Name& name) const;
 
   /**
-   * Finds and returns a public class from the package by its short name from source code.
+   * Finds and returns a public class from the package.
    *
+   * @param sourceName the short name of the class from source code.
    * @return the named class from the package. If the package has no class by this name,
    *     an invalid reference is returned.
    */
   Class findClass(const String& sourceName) const;
 
   /**
-   * Finds and returns a public class from the package by its short name from source code.
+   * Finds and returns a public class from the package.
    *
+   * @param sourceName the short name of the class from source code.
    * @return the named class from the package. If the package has no class by this name,
    *     an invalid reference is returned.
    */
