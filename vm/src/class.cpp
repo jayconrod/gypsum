@@ -316,7 +316,12 @@ ostream& operator << (ostream& os, const Class* clas) {
      << "\n  package: " << brief(clas->package())
      << "\n  instance meta: " << brief(clas->instanceMeta())
      << "\n  element type: " << brief(clas->elementType())
-     << "\n  length field index: " << clas->lengthFieldIndex();
+     << "\n  length field index: " << clas->lengthFieldIndex()
+     << "\n  field name index: " << brief(clas->fieldNameIndex())
+     << "\n  field source name index: " << brief(clas->fieldSourceNameIndex())
+     << "\n  method name index: " << brief(clas->methodNameIndex())
+     << "\n  method source name index: " << brief(clas->methodSourceNameIndex())
+     << "\n  constructor signature index: " << brief(clas->constructorSignatureIndex());
   return os;
 }
 

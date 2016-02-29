@@ -74,15 +74,18 @@ def initClass(out, classData):
     else:
         out.write("    auto fields = new(heap, %d) BlockArray<Field>;\n" %
                   len(classData["fields"]))
+        out.write("    u32 fieldOffset = kWordSize;\n")
         for i, fieldData in enumerate(classData["fields"]):
             out.write("    auto field%dName = nameFromUtf8CString(heap, \"%s\");\n" %
                       (i, fieldData["name"]))
-            typeName = fieldData["type"]
+            out.write("    auto field%dType = %s;\n" % (i, getTypeFromName(fieldData["type"])))
+            out.write("    fieldOffset = align(fieldOffset, field%dType->alignment());\n" % i)
             flags = buildFlags(fieldData["flags"])
             out.write(("    auto field%d = new(heap) Field(field%dName, nullptr, " +
-                       "%s, %s);\n") %
-                      (i, i, flags, getTypeFromName(typeName)))
+                       "%s, field%dType, %d, fieldOffset);\n") %
+                      (i, i, flags, i, i))
             out.write("    fields->set(%d, field%d);\n" % (i, i))
+            out.write("    fieldOffset += field%dType->typeSize();\n" % i)
     if "elements" not in classData:
         out.write("    Type* elementType = nullptr;\n")
         out.write("    length_t lengthFieldIndex = kIndexNotSet;\n")

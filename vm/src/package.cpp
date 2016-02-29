@@ -84,7 +84,7 @@ class Loader {
                           Local<BlockArray<Type>>* parameterTypes,
                           Local<Class>* definingClass);
   void readClass(const Local<Class>& clas);
-  Local<Field> readField();
+  Local<Field> readField(u32 index, u32 offset);
   void readTypeParameter(const Local<TypeParameter>& typeParam);
   Local<Type> readType();
 
@@ -1021,9 +1021,11 @@ void Loader::readClass(const Local<Class>& clas) {
 
   auto fieldCount = readLengthVbn();
   auto fields = BlockArray<Field>::create(heap(), fieldCount);
+  u32 fieldOffset = kWordSize;
   for (length_t i = 0; i < fieldCount; i++) {
-    auto field = readField();
+    auto field = readField(i, fieldOffset);
     fields->set(i, *field);
+    fieldOffset = field->offset() + field->type()->typeSize();
   }
 
   auto constructorCount = readLengthVbn();
@@ -1072,12 +1074,13 @@ void Loader::readClass(const Local<Class>& clas) {
 }
 
 
-Local<Field> Loader::readField() {
+Local<Field> Loader::readField(u32 index, u32 offset) {
   auto name = readName();
   auto sourceName = readSourceName();
   auto flags = readValue<u32>();
   auto type = readType();
-  auto field = Field::create(heap(), name, sourceName, flags, type);
+  u32 alignedOffset = align(offset, type->alignment());
+  auto field = Field::create(heap(), name, sourceName, flags, type, index, alignedOffset);
   return field;
 }
 

@@ -31,19 +31,26 @@ void* Field::operator new (size_t, Heap* heap) {
 }
 
 
-Field::Field(Name* name, String* sourceName, u32 flags, Type* type)
+Field::Field(Name* name, String* sourceName, u32 flags, Type* type, u32 index, u32 offset)
     : Block(FIELD_BLOCK_TYPE),
       name_(this, name),
       sourceName_(this, sourceName),
       flags_(flags),
-      type_(this, type) { }
+      type_(this, type),
+      index_(index),
+      offset_(offset) { }
 
 
-Local<Field> Field::create(Heap* heap, const Handle<Name>& name,
-                           const Handle<String>& sourceName,
-                           u32 flags, const Handle<Type>& type) {
+Local<Field> Field::create(
+    Heap* heap,
+    const Handle<Name>& name,
+    const Handle<String>& sourceName,
+    u32 flags,
+    const Handle<Type>& type,
+    u32 index,
+    u32 offset) {
   RETRY_WITH_GC(heap, return Local<Field>(new(heap) Field(
-      *name, sourceName.getOrNull(), flags, *type)));
+      *name, sourceName.getOrNull(), flags, *type, index, offset)));
 }
 
 
@@ -51,7 +58,9 @@ ostream& operator << (ostream& os, const Field* field) {
   os << brief(field)
      << "\n  name: " << brief(field->name())
      << "\n  source name: " << brief(field->sourceName())
-     << "\n  type: " << brief(field->type());
+     << "\n  type: " << brief(field->type())
+     << "\n  index: " << field->index()
+     << "\n  offset: " << field->offset();
   return os;
 }
 
