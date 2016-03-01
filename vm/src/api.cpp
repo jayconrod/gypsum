@@ -485,29 +485,24 @@ Class::Class(Impl* impl)
 Function Class::findMethod(const Name& name) const {
   API_CHECK_SELF(Class);
   API_CHECK_ARG(name);
-  auto methods = unwrapRaw<i::Class>(*this)->methods();
-  for (auto method : *methods) {
-    if ((method->flags() & i::PRIVATE_FLAG) == 0 &&
-        method->name()->equals(unwrapRaw<i::Name>(name))) {
-      return wrap<Function, i::Function>(method);
-    }
-  }
-  return Function();
+  auto self = unwrap<i::Class>(*this);
+  i::HandleScope handleScope(self->getVM());
+  i::AllowAllocationScope allowAlloc(self->getHeap(), true);
+  auto index = i::Class::ensureAndGetMethodNameIndex(self);
+  auto method = index->getOrElse(*unwrap<i::Name>(name), nullptr);
+  return method ? wrap<Function, i::Function>(method) : Function();
 }
 
 
 Function Class::findMethod(const String& sourceName) const {
   API_CHECK_SELF(Class);
   API_CHECK_ARG(sourceName);
-  auto methods = unwrapRaw<i::Class>(*this)->methods();
-  for (auto method : *methods) {
-    if ((method->flags() & i::PUBLIC_FLAG) == i::PUBLIC_FLAG &&
-        method->sourceName() != nullptr &&
-        method->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
-      return wrap<Function, i::Function>(method);
-    }
-  }
-  return Function();
+  auto self = unwrap<i::Class>(*this);
+  i::HandleScope handleScope(self->getVM());
+  i::AllowAllocationScope allowAlloc(self->getHeap(), true);
+  auto index = i::Class::ensureAndGetMethodSourceNameIndex(self);
+  auto method = index->getOrElse(*unwrap<i::String>(sourceName), nullptr);
+  return method ? wrap<Function, i::Function>(method) : Function();
 }
 
 
@@ -521,31 +516,24 @@ Function Class::findMethod(const string& sourceName) const {
 Field Class::findField(const Name& name) const {
   API_CHECK_SELF(Class);
   API_CHECK_ARG(name);
-  auto fields = unwrapRaw<i::Class>(*this)->fields();
-  for (auto field : *fields) {
-    if ((field->flags() & i::PRIVATE_FLAG) == 0 &&
-        field->name()->equals(unwrapRaw<i::Name>(name))) {
-      return wrap<Field, i::Field>(field);
-    }
-  }
-  return Field();
+  auto self = unwrap<i::Class>(*this);
+  i::HandleScope handleScope(self->getVM());
+  i::AllowAllocationScope allowAlloc(self->getHeap(), true);
+  auto index = i::Class::ensureAndGetFieldNameIndex(self);
+  auto field = index->getOrElse(*unwrap<i::Name>(name), nullptr);
+  return field ? wrap<Field, i::Field>(field) : Field();
 }
 
 
 Field Class::findField(const String& sourceName) const {
   API_CHECK_SELF(Class);
   API_CHECK_ARG(sourceName);
-  auto fields = unwrapRaw<i::Class>(*this)->fields();
-  i::u32 mask = i::PUBLIC_FLAG | i::STATIC_FLAG;
-  i::u32 expectedFlags = i::PUBLIC_FLAG;
-  for (auto field : *fields) {
-    if ((field->flags() & mask) == expectedFlags &&
-        field->sourceName() != nullptr &&
-        field->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
-      return wrap<Field, i::Field>(field);
-    }
-  }
-  return Field();
+  auto self = unwrap<i::Class>(*this);
+  i::HandleScope handleScope(self->getVM());
+  i::AllowAllocationScope allowAlloc(self->getHeap(), true);
+  auto index = i::Class::ensureAndGetFieldSourceNameIndex(self);
+  auto field = index->getOrElse(*unwrap<i::String>(sourceName), nullptr);
+  return field ? wrap<Field, i::Field>(field) : Field();
 }
 
 

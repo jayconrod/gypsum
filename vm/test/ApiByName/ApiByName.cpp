@@ -152,10 +152,10 @@ int main(int argc, char* argv[]) {
     ASSERT_EQ(35L, fooObj.getField(field).asI64());
   }
 
-  // Check that we can't load a non-public field by its source name.
+  // Check that we can load non-public fields by name.
   {
     auto field = fooClass.findField("normal-var");
-    ASSERT_FALSE(field);
+    ASSERT_TRUE(field);
     field = fooClass.findField(Name::fromStringForDefn(&vm, "Foo.normal-var"));
     ASSERT_TRUE(field);
   }
@@ -167,10 +167,10 @@ int main(int argc, char* argv[]) {
     ASSERT_FALSE(field.isConstant());
   }
 
-  // Check that private variables cannot be loaded.
+  // Check that private variables can be loaded.
   {
     auto field = fooClass.findField(Name::fromStringForDefn(&vm, "Foo.priv-var"));
-    ASSERT_FALSE(field);
+    ASSERT_TRUE(field);
   }
 
   // Check that when we load a method that doesn't exist, we get a bad reference.
@@ -193,10 +193,10 @@ int main(int argc, char* argv[]) {
     ASSERT_EQ(12L, method.call(fooObj).asI64());
   }
 
-  // Check that we cannot load a non-public method by its source name.
+  // Check that we can load a non-public method by its source name.
   {
     auto method = fooClass.findMethod("normal-method");
-    ASSERT_FALSE(method);
+    ASSERT_TRUE(method);
   }
 
   // Check that we can load a public static method by its source name.
@@ -213,10 +213,10 @@ int main(int argc, char* argv[]) {
     ASSERT_EQ(56L, method.call(fooObj).asI64());
   }
 
-  // Check that we cannot load a private method by name.
+  // Check that we can load a private method by name.
   {
     auto method = fooClass.findMethod(Name::fromStringForDefn(&vm, "Foo.priv-method"));
-    ASSERT_FALSE(method);
+    ASSERT_TRUE(method);
   }
 
   return 0;
