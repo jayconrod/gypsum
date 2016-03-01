@@ -132,19 +132,13 @@ length_t Class::findFieldIndex(word_t offset) const {
     currentOffset += type->typeSize();
   }
   UNREACHABLE();
-  return 0;
+  return kLengthNotSet;
 }
 
 
 word_t Class::findFieldOffset(length_t index) const {
   ASSERT(index < fields()->length());
-  word_t currentOffset = kWordSize;
-  for (length_t i = 0; i < index; i++) {
-    auto size = block_cast<Field>(fields()->get(i))->type()->typeSize();
-    auto nextAlignment = block_cast<Field>(fields()->get(i + 1))->type()->alignment();
-    currentOffset = align(currentOffset + size, nextAlignment);
-  }
-  return currentOffset;
+  return fields()->get(index)->offset();
 }
 
 
