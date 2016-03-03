@@ -199,6 +199,14 @@ class Reference {
     return !isValid();
   }
 
+  /** Returns true if the two references point to the same object. */
+  bool operator == (const Reference& other) const;
+
+  /** Returns true if the two references point to different objects. */
+  bool operator != (const Reference& other) const {
+    return !(*this == other);
+  }
+
  protected:
   Impl* impl_;
 };
@@ -365,6 +373,19 @@ class Class final : public Reference {
   explicit Class(Impl* impl);
 
   /**
+   * Finds and returns a constructor.
+   *
+   * @param signature the type signature of the constructor. See
+   *     {@link md_mangling function name mangling} for details.
+   * @return the constructor. If the class has no constructor with this signature, an
+   *     invalid reference is returned.
+   */
+  Function findConstructor(const std::string& signature) const;
+
+  template <class... Args>
+  Object newInstance(const Function& constructor, Args&&... args);
+
+  /**
    * Finds and returns a method of the class by name.
    *
    * @return the named method from the class. If the class has no method by this name,
@@ -449,11 +470,20 @@ class CallBuilder final {
   class Impl;
 
   /**
-   * Constructs a new call builder
+   * Constructs a builder for a normal function call.
    *
    * @param function the function to be called. Must be a valid reference.
    */
   explicit CallBuilder(const Function& function);
+
+  /**
+   * Constructs a builder for a constructor call, which will create a new object.
+   *
+   * @param clas the class of the new object to be created. Must be a valid reference.
+   * @param constructor the constructor function to be called. Must be a valid reference.
+   */
+  CallBuilder(const Class& clas, const Function& constructor);
+
   ~CallBuilder();
 
   CallBuilder(CallBuilder&& builder) = delete;
@@ -921,6 +951,12 @@ class Value final {
 template <class... Args>
 Value Function::call(Args&&... args) {
   return CallBuilder(*this).args(args...).call();
+}
+
+
+template <class... Args>
+Object Class::newInstance(const Function& constructor, Args&&... args) {
+  return CallBuilder(*this, constructor).args(args...).call().asObject();
 }
 
 

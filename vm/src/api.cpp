@@ -188,8 +188,18 @@ class CallBuilder::Impl final {
     args_.reserve(function->parameterTypes()->length());
   }
 
+  Impl(const i::Handle<i::Class>& clas, const i::Handle<i::Function>& function)
+      : clas_(clas),
+        function_(function) {
+    API_CHECK(clas, "call builder does not reference a valid class");
+    API_CHECK(function, "call builder does not reference a valid function");
+    vm_ = i::VM::fromAddress(*function);
+    args_.reserve(function->parameterTypes()->length());
+  }
+
  private:
   i::VM* vm_;
+  i::Persistent<i::Class> clas_;
   i::Persistent<i::Function> function_;
   vector<Value> args_;
 
@@ -328,6 +338,11 @@ void Reference::clear() {
     handleStorage.destroyPersistent(reinterpret_cast<i::Block**>(impl_));
     impl_ = nullptr;
   }
+}
+
+
+bool Reference::operator == (const Reference& other) const {
+  return unwrapRaw<i::Block>(*this) == unwrapRaw<i::Block>(other);
 }
 
 
@@ -482,6 +497,18 @@ Class::Class(Impl* impl)
     : Reference(impl) { }
 
 
+Function Class::findConstructor(const string& signature) const {
+  API_CHECK_SELF(Class);
+  auto self = unwrap<i::Class>(*this);
+  i::HandleScope handleScope(self->getVM());
+  i::AllowAllocationScope allowAlloc(self->getHeap(), true);
+  auto index = i::Class::ensureAndGetConstructorSignatureIndex(self);
+  auto sigStr = i::String::fromUtf8String(self->getHeap(), signature);
+  auto ctor = index->getOrElse(*sigStr, nullptr);
+  return ctor ? wrap<Function, i::Function>(ctor) : Function();
+}
+
+
 Function Class::findMethod(const Name& name) const {
   API_CHECK_SELF(Class);
   API_CHECK_ARG(name);
@@ -562,8 +589,20 @@ CallBuilder::~CallBuilder() {
 
 
 CallBuilder::CallBuilder(const Function& function) {
-  API_CHECK(function.impl_, "not a valid function");
   impl_ = unique_ptr<CallBuilder::Impl>(new CallBuilder::Impl(unwrap<i::Function>(function)));
+}
+
+
+CallBuilder::CallBuilder(const Class& clas, const Function& constructor) {
+  impl_ = unique_ptr<CallBuilder::Impl>(new CallBuilder::Impl(
+      unwrap<i::Class>(clas), unwrap<i::Function>(constructor)));
+  auto iclass = unwrap<i::Class>(clas);
+  auto vm = iclass->getVM();
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAllocation(vm->heap(), true);
+  auto meta = i::Class::ensureAndGetInstanceMeta(iclass);
+  auto receiver = i::Object::create(vm->heap(), meta);
+  arg(wrap<Object, i::Object>(receiver));
 }
 
 
@@ -611,8 +650,13 @@ Value CallBuilder::call() {
     throw Exception(move(wrap<Object, i::Object>(exception.get())));
   }
 
-  // Wrap the result in a value.
-  return valueFromRaw(impl_->function_->returnType(), result);
+  // Return the result as a value. If this was a constructor call, return the receiver instead
+  // of the constructor's return value.
+  if (impl_->clas_) {
+    return impl_->args_[0];
+  } else {
+    return valueFromRaw(impl_->function_->returnType(), result);
+  }
 }
 
 

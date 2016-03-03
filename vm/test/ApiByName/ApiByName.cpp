@@ -219,5 +219,13 @@ int main(int argc, char* argv[]) {
     ASSERT_TRUE(method);
   }
 
+  // Check that we can create a new instance of a class.
+  {
+    auto ctor = fooClass.findConstructor("(C:3Foo,L)");
+    ASSERT_TRUE(ctor);
+    auto object = fooClass.newInstance(ctor, static_cast<int64_t>(12));
+    ASSERT_EQ(fooClass, object.clas());
+  }
+
   return 0;
 }
