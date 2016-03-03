@@ -476,7 +476,7 @@ class Field final : public Reference {
  *
  * `CallBuilder` can be used if you need more control over a function call than the
  * {@link Function#call} family of methods offers. Note that none of the `arg` methods
- * have any side effects outside the builder object until a `call` method is called.
+ * have any side effects outside the builder object until {@link #call} method is called.
  *
  * Objects of this class actually manage pointers to objects on the garbage collected heap.
  * Objects are in an "invalid" state if they are created with the default constructor or
@@ -507,13 +507,24 @@ class CallBuilder final {
   CallBuilder& operator = (const CallBuilder&) = delete;
   CallBuilder& operator = (CallBuilder&& builder) = delete;
 
+  /** Adds an argument to the argument list before {@link #call} is called. */
   CallBuilder& arg(Value&& value);
 
+  /** Adds no arguments to the argument list before {@link #call} is called. */
   CallBuilder& args();
 
+  /** Adds one or more arguments to the argument list before {@link #call} is called. */
   template <class... Args>
   CallBuilder& args(Value&& first, Args&&... rest);
 
+  /**
+   * Calls the function or constructor.
+   *
+   * @return if a constructor was called, the newly created object is returned. Otherwise, the
+   *     normal return value of the object is returned.
+   * @throws Error if the arguments don't match the type signature of the function, or if the
+   *     function throws an exception and doesn't catch it.
+   */
   Value call();
 
  private:
