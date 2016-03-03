@@ -184,7 +184,11 @@ Local<BlockHashMap<Name, Function>> Class::ensureAndGetMethodNameIndex(
   if (clas->methodNameIndex()) {
     return handle(clas->methodNameIndex());
   }
-  auto index = buildNameIndex<Function>(handle(clas->methods()), allDefnFilter<Function>);
+  Local<Name> (*getKey)(const Handle<Function>&) = mangleFunctionName;
+  auto index = buildIndex<Name, Function>(
+      handle(clas->methods()),
+      getKey,
+      allDefnFilter<Function>);
   clas->setMethodNameIndex(*index);
   return index;
 }
@@ -195,7 +199,10 @@ Local<BlockHashMap<String, Function>> Class::ensureAndGetMethodSourceNameIndex(
   if (clas->methodSourceNameIndex()) {
     return handle(clas->methodSourceNameIndex());
   }
-  auto index = buildSourceNameIndex<Function>(handle(clas->methods()), allDefnFilter<Function>);
+  auto index = buildIndex<String, Function>(
+      handle(clas->methods()),
+      mangleFunctionSourceName,
+      allDefnFilter<Function>);
   clas->setMethodSourceNameIndex(*index);
   return index;
 }

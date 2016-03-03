@@ -127,6 +127,7 @@ int main(int argc, char* argv[]) {
 
   auto fooClass = package.findClass("Foo");
   auto fooObj = package.findGlobal("foo").value().asObject();
+  string fooSig("(C:3Foo)");
 
   // Check that when we load a field that doesn't exist, we get a bad reference.
   {
@@ -175,47 +176,54 @@ int main(int argc, char* argv[]) {
 
   // Check that when we load a method that doesn't exist, we get a bad reference.
   {
-    auto method = fooClass.findMethod(Name::fromStringForDefn(&vm, "brak"));
+    auto method = fooClass.findMethod(Name::fromStringForDefn(&vm, "brak"), "()");
+    ASSERT_FALSE(method);
+  }
+
+  // Check that when we load a method with a bad signature, we get a bad reference.
+  {
+    auto method = fooClass.findMethod(Name::fromStringForDefn(&vm, "Foo.normal-method"), "");
     ASSERT_FALSE(method);
   }
 
   // Check that we can load a method by name.
   {
-    auto method = fooClass.findMethod(Name::fromStringForDefn(&vm, "Foo.normal-method"));
+    auto method =
+        fooClass.findMethod(Name::fromStringForDefn(&vm, "Foo.normal-method"), fooSig);
     ASSERT_TRUE(method);
     ASSERT_EQ(34L, method.call(fooObj).asI64());
   }
 
   // Check that we can load a public method by its source name.
   {
-    auto method = fooClass.findMethod("pub-method");
+    auto method = fooClass.findMethod("pub-method", fooSig);
     ASSERT_TRUE(method);
     ASSERT_EQ(12L, method.call(fooObj).asI64());
   }
 
   // Check that we can load a non-public method by its source name.
   {
-    auto method = fooClass.findMethod("normal-method");
+    auto method = fooClass.findMethod("normal-method", fooSig);
     ASSERT_TRUE(method);
   }
 
   // Check that we can load a public static method by its source name.
   {
-    auto method = fooClass.findMethod("static-method");
+    auto method = fooClass.findMethod("static-method", "");
     ASSERT_TRUE(method);
     ASSERT_EQ(123L, method.call().asI64());
   }
 
   // Check that we can load a protected method by name.
   {
-    auto method = fooClass.findMethod(Name::fromStringForDefn(&vm, "Foo.prot-method"));
+    auto method = fooClass.findMethod(Name::fromStringForDefn(&vm, "Foo.prot-method"), fooSig);
     ASSERT_TRUE(method);
     ASSERT_EQ(56L, method.call(fooObj).asI64());
   }
 
   // Check that we can load a private method by name.
   {
-    auto method = fooClass.findMethod(Name::fromStringForDefn(&vm, "Foo.priv-method"));
+    auto method = fooClass.findMethod(Name::fromStringForDefn(&vm, "Foo.priv-method"), fooSig);
     ASSERT_TRUE(method);
   }
 

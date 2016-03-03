@@ -509,34 +509,36 @@ Function Class::findConstructor(const string& signature) const {
 }
 
 
-Function Class::findMethod(const Name& name) const {
+Function Class::findMethod(const Name& name, const string& signature) const {
   API_CHECK_SELF(Class);
   API_CHECK_ARG(name);
   auto self = unwrap<i::Class>(*this);
   i::HandleScope handleScope(self->getVM());
   i::AllowAllocationScope allowAlloc(self->getHeap(), true);
+  auto mangled = i::mangleName(unwrap<i::Name>(name), signature);
   auto index = i::Class::ensureAndGetMethodNameIndex(self);
-  auto method = index->getOrElse(*unwrap<i::Name>(name), nullptr);
+  auto method = index->getOrElse(*mangled, nullptr);
   return method ? wrap<Function, i::Function>(method) : Function();
 }
 
 
-Function Class::findMethod(const String& sourceName) const {
+Function Class::findMethod(const String& sourceName, const string& signature) const {
   API_CHECK_SELF(Class);
   API_CHECK_ARG(sourceName);
   auto self = unwrap<i::Class>(*this);
   i::HandleScope handleScope(self->getVM());
   i::AllowAllocationScope allowAlloc(self->getHeap(), true);
+  auto mangled = i::mangleSourceName(unwrap<i::String>(sourceName), signature);
   auto index = i::Class::ensureAndGetMethodSourceNameIndex(self);
-  auto method = index->getOrElse(*unwrap<i::String>(sourceName), nullptr);
+  auto method = index->getOrElse(*mangled, nullptr);
   return method ? wrap<Function, i::Function>(method) : Function();
 }
 
 
-Function Class::findMethod(const string& sourceName) const {
+Function Class::findMethod(const string& sourceName, const string& signature) const {
   API_CHECK_SELF(Class);
   String sourceNameStr(refVM(*this), sourceName);
-  return findMethod(sourceNameStr);
+  return findMethod(sourceNameStr, signature);
 }
 
 

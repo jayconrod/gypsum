@@ -37,7 +37,8 @@ static void mangleTypeParameter(stringstream& str,
 
 
 Local<Name> mangleFunctionName(const Handle<Function>& function) {
-  return mangleFunctionName(function, handle(function->package()));
+  Local<Package> package(function->getVM(), function->package());
+  return mangleFunctionName(function, package);
 }
 
 
@@ -68,7 +69,8 @@ Local<Name> mangleFunctionName(const Handle<Function>& function,
 
 Local<String> mangleSignature(const Handle<Function>& function) {
   stringstream str;
-  mangleFunctionSignature(str, function, handle(function->package()));
+  Local<Package> package(function->getVM(), function->package());
+  mangleFunctionSignature(str, function, package);
   return String::fromUtf8String(function->getHeap(), str.str());
 }
 
@@ -81,7 +83,8 @@ Local<String> mangleFunctionSourceName(const Handle<Function>& function) {
   auto sourceName = handle(function->sourceName());
   stringstream str;
   str << sourceName->length() << sourceName->toUtf8StlString();
-  mangleFunctionSignature(str, function, handle(function->package()));
+  Local<Package> package(function->getVM(), function->package());
+  mangleFunctionSignature(str, function, package);
   auto mangledSourceName = String::fromUtf8String(function->getHeap(), str.str());
   return handleScope.escape(*mangledSourceName);
 }
@@ -161,7 +164,7 @@ static void mangleType(stringstream& str,
       auto clas = handle(type->asClass());
       if (clas->package() == nullptr) {
         str << "::";
-      } else if (clas->package() != *package) {
+      } else if (clas->package() != package.getOrNull()) {
         auto classPackageNameStr = Name::toString(heap, handle(clas->package()->name()));
         str << classPackageNameStr->length() << classPackageNameStr->toUtf8StlString() << ':';
       } else {

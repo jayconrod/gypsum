@@ -271,7 +271,7 @@ class Package final : public Reference {
   Function findFunction(const Name& name, const std::string& signature) const;
 
   /**
-   * Finds and returns a public function from the package. Methods (static or otherwise)
+   * Finds and returns a function from the package. Methods (static or otherwise)
    * are not searched.
    *
    * @param sourceName the short name of the function from source code.
@@ -283,7 +283,7 @@ class Package final : public Reference {
   Function findFunction(const String& sourceName, const std::string& signature) const;
 
   /**
-   * Finds and returns a public function from the package. Methods (static or otherwise)
+   * Finds and returns a function from the package. Methods (static or otherwise)
    * are not searched.
    *
    * @param sourceName the short name of the function from source code.
@@ -359,6 +359,14 @@ class Function final : public Reference {
   Function() = default;
   explicit Function(Impl* impl);
 
+  /**
+   * Calls the function with the given arguments.
+   *
+   * This method is a convenience method for {@link CallBuilder}, but this is not
+   * significantly less efficient. The arguments must be {@link Value}s, which can usually be
+   * built implicitly from whatever you want to pass. The arguments must match the type
+   * signature of the function or an {@link Error} will be thrown.
+   */
   template <class... Args>
   Value call(Args&&... args);
 
@@ -386,28 +394,37 @@ class Class final : public Reference {
   Object newInstance(const Function& constructor, Args&&... args);
 
   /**
-   * Finds and returns a method of the class by name.
+   * Finds and returns a method of the class.
    *
+   * @param name the full name of the method.
+   * @param signature the type signature of the method. See
+   *     {@link md_mangling function name mangling} for details.
    * @return the named method from the class. If the class has no method by this name,
    *     an invalid reference is returned.
    */
-  Function findMethod(const Name& name) const;
+  Function findMethod(const Name& name, const std::string& signature) const;
 
   /**
-   * Finds and returns a public method of the class by its short name from source code.
+   * Finds and returns a method of the class.
    *
+   * @param sourceName the short name of the method from source code.
+   * @param signature the type signature of the method. See
+   *     {@link md_mangling function name mangling} for details.
    * @return the named method from the class. If the class has no method by this name,
    *     an invalid reference is returned.
    */
-  Function findMethod(const String& sourceName) const;
+  Function findMethod(const String& sourceName, const std::string& signature) const;
 
   /**
-   * Finds and returns a public method of the class by its short name from source code.
+   * Finds and returns a method of the class.
    *
+   * @param sourceName the short name of the method from source code.
+   * @param signature the type signature of the method. See
+   *     {@link md_mangling function name mangling} for details.
    * @return the named method from the class. If the class has no method by this name,
    *     an invalid reference is returned.
    */
-  Function findMethod(const std::string& sourceName) const;
+  Function findMethod(const std::string& sourceName, const std::string& signature) const;
 
   /**
    * Finds and returns a field of the class by name.
