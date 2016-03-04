@@ -14,9 +14,6 @@
 #include "utils.h"
 
 namespace codeswitch {
-
-class VM;
-
 namespace internal {
 
 const int kReadable = 1;
