@@ -822,6 +822,48 @@ class Object: public Reference {
    */
   void setField(const std::string& fieldSourceName, const Value& value);
 
+  /**
+   * Looks up and calls a non-static method of this object. The type signature of the method is
+   * determined automatically from the arguments.
+   *
+   * @param name the full name of the method.
+   * @param args the arguments to pass to the method. The receiver (this object) is
+   *     passed implicitly.
+   * @return the value returned by the method.
+   * @throws Error if a method cannot be found with a type signature matching the arguments or
+   *     if the method throws an exception.
+   */
+  template <class... Args>
+  Value callMethod(const Name& name, Args&&... args);
+
+  /**
+   * Looks up and calls a non-static method of this object. The type signature of the method is
+   * determined automatically from the arguments.
+   *
+   * @param sourceName the short name of the method from source code.
+   * @param args the arguments to pass to the method. The receiver (this object) is
+   *     passed implicitly.
+   * @return the value returned by the method.
+   * @throws Error if a method cannot be found with a type signature matching the arguments or
+   *     if the method throws an exception.
+   */
+  template <class... Args>
+  Value callMethod(const String& sourceName, Args&&... args);
+
+  /**
+   * Looks up and calls a non-static method of this object. The type signature of the method is
+   * determined automatically from the arguments.
+   *
+   * @param sourceName the short name of the method from source code.
+   * @param args the arguments to pass to the method. The receiver (this object) is
+   *     passed implicitly.
+   * @return the value returned by the method.
+   * @throws Error if a method cannot be found with a type signature matching the arguments or
+   *     if the method throws an exception.
+   */
+  template <class... Args>
+  Value callMethod(const std::string& sourceName, Args&&... args);
+
   /** Returns whether this object has array elements. */
   bool hasElements() const;
 
@@ -1193,6 +1235,24 @@ Value Class::callMethod(const String& sourceName, Args&&... args) {
 template <class... Args>
 Value Class::callMethod(const std::string& sourceName, Args&&... args) {
   return CallBuilder(*this, sourceName).args(args...).call();
+}
+
+
+template <class... Args>
+Value Object::callMethod(const Name& name, Args&&... args) {
+  return CallBuilder(clas(), name).args(*this, args...).call();
+}
+
+
+template <class... Args>
+Value Object::callMethod(const String& sourceName, Args&&... args) {
+  return CallBuilder(clas(), sourceName).args(*this, args...).call();
+}
+
+
+template <class... Args>
+Value Object::callMethod(const std::string& sourceName, Args&&... args) {
+  return CallBuilder(clas(), sourceName).args(*this, args...).call();
 }
 
 

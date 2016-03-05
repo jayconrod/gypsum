@@ -252,14 +252,14 @@ int main(int argc, char* argv[]) {
     ASSERT_EQ(12L, package.callFunction("pub-fn").asI64());
   }
 
-  // Check that we can look up and call a method by name.
+  // Check that we can look up and call a method by name from a class.
   {
     auto foo = package.findGlobal("foo").value().asObject();
     auto clas = foo.clas();
     ASSERT_EQ(12L, clas.callMethod(Name::fromStringForDefn(&vm, "Foo.pub-method"), foo).asI64());
   }
 
-  // Check that we can look up and call a method by source name.
+  // Check that we can look up and call a method by source name from a class.
   {
     auto foo = package.findGlobal("foo").value().asObject();
     auto clas = foo.clas();
@@ -286,6 +286,19 @@ int main(int argc, char* argv[]) {
     } catch (Error& e) {
       // pass.
     }
+  }
+
+  // Check that we can look up and call a method by name from an object.
+  {
+    auto foo = package.findGlobal("foo").value().asObject();
+    ASSERT_EQ(12L, foo.callMethod(Name::fromStringForDefn(&vm, "Foo.pub-method")).asI64());
+  }
+
+  // Check that we can look up and call a method by source name from an object.
+  {
+    auto foo = package.findGlobal("foo").value().asObject();
+    ASSERT_EQ(12L, foo.callMethod(String(&vm, "pub-method")).asI64());
+    ASSERT_EQ(12L, foo.callMethod("pub-method").asI64());
   }
 
   return 0;
