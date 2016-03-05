@@ -4,14 +4,19 @@
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
 
+#include <iostream>
 #include <string>
 
 #include <codeswitch.h>
 
 #include "test.h"
 
+using std::cerr;
+using std::endl;
 using std::string;
 
+using codeswitch::CallBuilder;
+using codeswitch::Error;
 using codeswitch::Name;
 using codeswitch::String;
 using codeswitch::VM;
@@ -267,6 +272,20 @@ int main(int argc, char* argv[]) {
     auto clas = package.findClass("Foo");
     auto foo = clas.newInstance(static_cast<int64_t>(12));
     ASSERT_TRUE(foo);
+  }
+
+  // Check that an exception is thrown when calling a function that's not a constructor.
+  {
+    auto clas = package.findClass("Foo");
+    auto methodName = Name::fromStringForDefn(&vm, "Foo.pub-method");
+    auto method = package.findFunction(methodName, "(C:3Foo)");
+    try {
+      CallBuilder builder(clas, method);
+      cerr << "expected exception" << endl;
+      return 1;
+    } catch (Error& e) {
+      // pass.
+    }
   }
 
   return 0;

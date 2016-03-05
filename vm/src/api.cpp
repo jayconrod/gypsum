@@ -628,6 +628,7 @@ CallBuilder::CallBuilder(const Package& package, const string& sourceName)
 CallBuilder::CallBuilder(const Class& clas, const Function& constructor) {
   API_CHECK_ARG(clas);
   API_CHECK_ARG(constructor);
+  API_CHECK(constructor.isConstructor(), "`constructor` is not a constructor");
   auto iclass = unwrap<i::Class>(clas);
   auto vm = iclass->getVM();
   impl_ = unique_ptr<CallBuilder::Impl>(new CallBuilder::Impl(vm));
