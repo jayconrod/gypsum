@@ -26,13 +26,13 @@ class TestException: public std::exception {
 
 class TestBase {
  public:
-  explicit TestBase(const char* name);
+  explicit TestBase(const std::string& name);
   TestBase(const TestBase&) = delete;
   TestBase(TestBase&&) = delete;
   TestBase& operator = (const TestBase&) = delete;
   TestBase& operator = (TestBase&&) = delete;
 
-  const char* name() const { return name_; }
+  const std::string& name() const { return name_; }
 
   virtual void setUp() { }
   virtual void tearDown() { }
@@ -45,7 +45,7 @@ class TestBase {
   TestBase* next_;
   static TestBase* testHead_;
 
-  const char* name_;
+  std::string name_;
 };
 
 

@@ -8,6 +8,7 @@
 #define index_h
 
 #include <string>
+#include <vector>
 #include "array.h"
 #include "handle.h"
 #include "hash-table.h"
@@ -85,6 +86,9 @@ Local<String> mangleFunctionSourceName(const Handle<Function>& function);
 Local<Name> mangleName(const Handle<Name>& name, const std::string& signature);
 
 Local<String> mangleSourceName(const Handle<String>& sourceName, const std::string& signature);
+
+std::string buildSignature(const std::vector<Local<Type>>& types,
+                           const Handle<Package>& package);
 
 }
 }

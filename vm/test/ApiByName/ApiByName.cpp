@@ -231,8 +231,42 @@ int main(int argc, char* argv[]) {
   {
     auto ctor = fooClass.findConstructor("(C:3Foo,L)");
     ASSERT_TRUE(ctor);
-    auto object = fooClass.newInstance(ctor, static_cast<int64_t>(12));
+    auto object = ctor.newInstance(static_cast<int64_t>(12));
     ASSERT_EQ(fooClass, object.clas());
+  }
+
+  // Check that we can look up and call a function by name.
+  {
+    auto result = package.callFunction(Name::fromStringForDefn(&vm, "pub-fn")).asI64();
+    ASSERT_EQ(12L, result);
+  }
+
+  // Check that we can look up and call a function by source name.
+  {
+    ASSERT_EQ(12L, package.callFunction(String(&vm, "pub-fn")).asI64());
+    ASSERT_EQ(12L, package.callFunction("pub-fn").asI64());
+  }
+
+  // Check that we can look up and call a method by name.
+  {
+    auto foo = package.findGlobal("foo").value().asObject();
+    auto clas = foo.clas();
+    ASSERT_EQ(12L, clas.callMethod(Name::fromStringForDefn(&vm, "Foo.pub-method"), foo).asI64());
+  }
+
+  // Check that we can look up and call a method by source name.
+  {
+    auto foo = package.findGlobal("foo").value().asObject();
+    auto clas = foo.clas();
+    ASSERT_EQ(12L, clas.callMethod(String(&vm, "pub-method"), foo).asI64());
+    ASSERT_EQ(12L, clas.callMethod("pub-method", foo).asI64());
+  }
+
+  // Check that we can look up and call a constructor.
+  {
+    auto clas = package.findClass("Foo");
+    auto foo = clas.newInstance(static_cast<int64_t>(12));
+    ASSERT_TRUE(foo);
   }
 
   return 0;

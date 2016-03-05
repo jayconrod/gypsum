@@ -263,5 +263,23 @@ Local<String> mangleSourceName(const Handle<String>& sourceName, const string& s
   return String::fromUtf8String(sourceName->getHeap(), str.str());
 }
 
+
+string buildSignature(const vector<Local<Type>>& types, const Handle<Package>& package) {
+  if (types.empty()) {
+    return "";
+  }
+  stringstream str;
+  str << "(";
+  vector<Local<TypeParameter>> variables;
+  const char* delim = "";
+  for (auto& type : types) {
+    str << delim;
+    delim = ",";
+    mangleType(str, type, variables, package);
+  }
+  str << ")";
+  return str.str();
+}
+
 }
 }
