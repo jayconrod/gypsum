@@ -241,6 +241,30 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         classInfo = info.getClassInfo(irTrait)
         self.assertIs(irTrait, classInfo.irDefn)
 
+    def testDefineTraitFunction(self):
+        source = "trait Tr\n" + \
+                 "  def f = 12"
+        info = self.analyzeFromSource(source)
+        astDefn = info.ast.modules[0].definitions[0].members[0]
+        scopeId = info.getScope(info.ast.modules[0].definitions[0]).scopeId
+        this = self.makeVariable(Name(["Tr", "f", RECEIVER_SUFFIX]),
+                                 kind=PARAMETER, flags=frozenset([LET]))
+        expectedFunction = self.makeFunction("Tr.f", variables=[this], flags=frozenset([METHOD]))
+        expectedDefnInfo = DefnInfo(expectedFunction, scopeId, True)
+        self.assertEquals(expectedDefnInfo, info.getDefnInfo(astDefn))
+
+    def testDefineTraitTypeParameter(self):
+        source = "public trait Tr[static T]\n" + \
+                 "  def f(x: T) = 12"
+        info = self.analyzeFromSource(source)
+        Tr = info.package.findTrait(name="Tr")
+        T = info.package.findTypeParameter(name="Tr.T")
+        f = info.package.findFunction(name="Tr.f")
+        self.assertEquals([T], Tr.typeParameters)
+        self.assertEquals([T], f.typeParameters)
+        self.assertEquals(frozenset([PUBLIC, STATIC]), T.flags)
+        self.assertIs(Tr, T.clas)
+
     def testVarDefinedInBlock(self):
         info = self.analyzeFromSource("def f = {\n" +
                                       "  {\n" +
