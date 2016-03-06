@@ -682,6 +682,18 @@ class Scope(ast.NodeVisitor):
         self.info.setClassInfo(irDefn, classInfo)
         return irDefn, True
 
+    def createIrTraitDefn(self, astDefn):
+        """Convenience method for creating a trait definition."""
+        implicitTypeParams = self.getImplicitTypeParameters()
+        flags = getFlagsFromAstDefn(astDefn, None)
+        checkFlags(flags, frozenset([PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
+        name = self.makeName(astDefn.name)
+        irDefn = self.info.package.addTrait(name, sourceName=astDefn.name, astDefn=astDefn,
+                                            typeParameters=implicitTypeParams,
+                                            methods=[], flags=flags)
+        self.info.setClassInfo(irDefn, ClassInfo(irDefn))
+        return irDefn, True
+
     def makeMethod(self, function, clas):
         """Convenience method which turns a function into a method.
 
@@ -1108,6 +1120,8 @@ class GlobalScope(Scope):
                 self.info.package.entryFunction = irDefn.id
         elif isinstance(astDefn, ast.ClassDefinition):
             irDefn, shouldBind = self.createIrClassDefn(astDefn)
+        elif isinstance(astDefn, ast.TraitDefinition):
+            irDefn, shouldBind = self.createIrTraitDefn(astDefn)
         else:
             raise NotImplementedError
         return irDefn, shouldBind, True
@@ -1806,6 +1820,10 @@ class ScopeVisitor(ast.NodeVisitor):
         visitor = self.createChildVisitor(scope)
         visitor.visitChildren(node)
 
+    def visitTraitDefinition(self, node):
+        # TODO
+        self.visitChildren(node)
+
     def visitTypeParameter(self, node):
         if node.upperBound is not None:
             self.visit(node.upperBound)
@@ -1865,6 +1883,10 @@ class DeclarationVisitor(ScopeVisitor):
     def visitClassDefinition(self, node):
         self.scope.declare(node)
         super(DeclarationVisitor, self).visitClassDefinition(node)
+
+    def visitTraitDefinition(self, node):
+        self.scope.declare(node)
+        super(DeclarationVisitor, self).visitTraitDefinition(node)
 
     def visitPrimaryConstructorDefinition(self, node):
         self.scope.declare(node)

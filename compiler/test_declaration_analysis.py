@@ -229,6 +229,18 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         astDefn = ast.modules[0].definitions[0].members[0]
         self.assertEquals(DefnInfo(self.makeClass("D")), info.getDefnInfo(astDefn))
 
+    def testDefineGlobalTrait(self):
+        info = self.analyzeFromSource("public trait Tr")
+        astDefn = info.ast.modules[0].definitions[0]
+        defnInfo = info.getDefnInfo(astDefn)
+        irTrait = defnInfo.irDefn
+        self.assertEquals(Name(["Tr"]), irTrait.name)
+        self.assertEquals(frozenset([PUBLIC]), irTrait.flags)
+        self.assertEquals(GLOBAL_SCOPE_ID, defnInfo.scopeId)
+        self.assertTrue(info.getScope(GLOBAL_SCOPE_ID).isDefined("Tr"))
+        classInfo = info.getClassInfo(irTrait)
+        self.assertIs(irTrait, classInfo.irDefn)
+
     def testVarDefinedInBlock(self):
         info = self.analyzeFromSource("def f = {\n" +
                                       "  {\n" +
