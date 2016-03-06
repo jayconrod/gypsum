@@ -34,6 +34,7 @@ class Package(object):
         self.globals = []
         self.functions = []
         self.classes = []
+        self.traits = []
         self.typeParameters = []
         self.strings = []
         self.entryFunction = None
@@ -54,6 +55,8 @@ class Package(object):
             buf.write("%s\n\n" % f)
         for c in self.classes:
             buf.write("%s\n\n" % c)
+        for t in self.traits:
+            buf.write("%s\n\n" % t)
         for p in self.typeParameters:
             buf.write("%s\n\n" % p)
         buf.write("entry function: %s\n" % self.entryFunction)
@@ -86,6 +89,15 @@ class Package(object):
             self.findOrAddString(c.sourceName)
         self.classes.append(c)
         return c
+
+    def addTrait(self, name, *args, **kwargs):
+        id = ids.DefnId(self.id, ids.DefnId.TRAIT, len(self.traits))
+        self.addName(name)
+        t = Trait(name, id, *args, **kwargs)
+        if t.sourceName is not None:
+            self.findOrAddString(t.sourceName)
+        self.traits.append(t)
+        return t
 
     def addTypeParameter(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.TYPE_PARAMETER, len(self.typeParameters))
@@ -129,6 +141,9 @@ class Package(object):
         for c in self.classes:
             if flags.PUBLIC in c.flags:
                 self.exports[c.name] = c
+        for t in self.traits:
+            if flags.PUBLIC in t.flags:
+                self.exports[t.name] = t
         for p in self.typeParameters:
             if flags.PUBLIC in c.flags:
                 self.exports[p.name] = p
@@ -149,6 +164,8 @@ class Package(object):
             assert all(isinstance(f, Function) for f in dep.linkedFunctions)
             dep.linkedClasses = [depExports[c.name] for c in dep.externClasses]
             assert all(isinstance(c, Class) for c in dep.linkedClasses)
+            dep.linkedTraits = [depExports[t.name] for t in dep.externTraits]
+            assert all(isinstance(t, Trait) for t in dep.linkedTraits)
             dep.linkedTypeParameters = [depExports[p.name] for p in dep.externTypeParameters]
             assert all(isinstance(p, TypeParameter) for p in dep.linkedTypeParameters)
 
@@ -157,7 +174,11 @@ class Package(object):
                 assert flags.EXTERN in ty.clas.flags
                 depIndex = ty.clas.id.packageId.index
                 externIndex = ty.clas.id.externIndex
-                ty.clas = self.dependencies[depIndex].linkedClasses[externIndex]
+                if ty.clas.id.kind is ids.DefnId.CLASS:
+                    ty.clas = self.dependencies[depIndex].linkedClasses[externIndex]
+                else:
+                    assert ty.clas.id.kind is ids.DefnId.TRAIT
+                    ty.clas = self.dependencies[depIndex].linkedTraits[externIndex]
             else:
                 assert isinstance(ty, ir_types.VariableType)
                 depIndex = ty.typeParameter.id.packageId.index
@@ -190,6 +211,9 @@ class Package(object):
 
     def findClass(self, **kwargs):
         return next(self.find(self.classes, kwargs))
+
+    def findTrait(self, **kwargs):
+        return next(self.find(self.traits, kwargs))
 
     def findGlobal(self, **kwargs):
         return next(self.find(self.globals, kwargs))
@@ -342,6 +366,8 @@ class PackageDependency(object):
         self.linkedFunctions = None
         self.externClasses = []
         self.linkedClasses = None
+        self.externTraits = []
+        self.linkedTraits = None
         self.externTypeParameters = []
         self.linkedTypeParameters = None
         self.externMethods = []
@@ -382,6 +408,8 @@ class PackageDependency(object):
             buf.write("%s\n\n" % f)
         for c in self.externClasses:
             buf.write("%s\n\n" % c)
+        for t in self.externTraits:
+            bug.write("%s\n\n" % t)
         for p in self.externTypeParameters:
             buf.write("%s\n\n" % p)
         return buf.getvalue()
@@ -850,6 +878,49 @@ class Class(ParameterizedDefn):
         return flags.FINAL in self.flags
 
 
+class Trait(ParameterizedDefn):
+    """Represents a trait definition. A trait is like an interface from Java, but it allows
+    methods to be defined and inherited.
+
+    Attributes:
+        name (Name): the name of the trait.
+        id (DefnId): unique identifier for the trait.
+        sourceName (str?): name of the definition in source code.
+        astDefn (ast.Node?): the location in source code where the trait is defined.
+        typeParameters (list[TypeParameter]): a list of type parameters used in this
+            definition. Values with a `ClassType` for this trait must have type arguments that
+            correspond to these parameters. Note that this list should include not only the
+            parameters from the trait definition, but also any parameters defined in outer
+            scopes (which are "implicit" and should come first).
+        supertypes (list[ClassType]?): a list of types from which this trait is derived.
+            This list must contain at least one type. The first supertype must refer to an
+            actual class (not another trait). May be `None` before type declaration analysis
+            is complete.
+        methods (list[Function]): a list of functions that operate on instances of this trait.
+            Inherited methods may be added to this list during class flattening.
+        flags (frozenset[flag]): flags indicating how this trait is used. Valid flags are
+            `PUBLIC`, `PROTECTED`, `PRIVATE`.
+    """
+
+    def __init__(self, name, id, sourceName=None, astDefn=None, typeParameters=None,
+                 supertypes=None, methods=None, flags=None):
+        super(Trait, self).__init__(name, id, sourceName, astDefn)
+        self.typeParameters = typeParameters
+        self.supertypes = supertypes
+        self.methods = methods
+        self.flags = flags
+
+    def __repr__(self):
+        return reprFormat(self, "name", "typeParameters", "supertypes", "method", "flags")
+
+    def __str__(self):
+        buf = StringIO.StringIO()
+        buf.write("%s trait %s%s\n" % (" ".join(self.flags), self.name, self.id))
+        for method in self.methods:
+            buf.write("  method %s\n" % method.id)
+        return buf.getvalue()
+
+
 class TypeParameter(IrTopDefn):
     """Represents a range of possible types between an upper and lower bound.
 
@@ -1153,6 +1224,7 @@ __all__ = [
     "Global",
     "Function",
     "Class",
+    "Trait",
     "TypeParameter",
     "Variable",
     "Field",

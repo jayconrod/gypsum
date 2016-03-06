@@ -424,6 +424,7 @@ class ClassType(ObjectType,):
     def substituteForBaseClass(self, base):
         assert base is not builtins.getNothingClass()
         assert self.clas is not builtins.getNothingClass()
+        # TODO: this assumes the definition is a class, not a trait.
         supertypePath = self.clas.findTypePathToBaseClass(base)
         ty = self
         for sty in supertypePath:
