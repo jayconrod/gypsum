@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -197,6 +197,27 @@ class ArrayAccessorDefinition(Definition):
 
     def __repr__(self):
         return "ArrayAccessorDefinition(%s)" % repr(self.name)
+
+
+class TraitDefinition(Definition):
+    def __init__(self, attribs, name, typeParameters, supertypes, members, location):
+        super(TraitDefinition, self).__init__(attribs, location)
+        self.name = name
+        self.typeParameters = typeParameters
+        self.supertypes = supertypes
+        self.members = members
+        self.location = location
+
+    def __repr__(self):
+        return "TraitDefinition(%s, %s, %s, %s)" % \
+            (repr(self.name), repr(self.typeParameters),
+             repr(self.supertypes), repr(self.members))
+
+    def data(self):
+        return name
+
+    def children(self):
+        return self.attribs + self.typeParameters + self.supertypes + self.members
 
 
 class ImportStatement(Node):

@@ -191,6 +191,52 @@ class TestParser(unittest.TestCase):
                         classDefn(),
                         "class ::;")
 
+    def testTraitDefnSimple(self):
+        self.checkParse(astTraitDefinition([], "T", [], [], []),
+                        traitDefn(),
+                        "trait T;")
+
+    def testTraitWithAttribs(self):
+        self.checkParse(astTraitDefinition([astAttribute("public")], "T", [], [], []),
+                        traitDefn(),
+                        "public trait T;")
+
+    def testTraitWithTypeParameters(self):
+        self.checkParse(astTraitDefinition([], "Tr",
+                                           [astTypeParameter([], None, "S", None, None),
+                                            astTypeParameter([], None, "T", None, None)],
+                                           [], []),
+                        traitDefn(),
+                        "trait Tr[S, T];")
+
+    def testTraitWithSubtypes(self):
+        self.checkParse(astTraitDefinition([], "Tr", [],
+                                           [astClassType([], "Foo", [], set()),
+                                            astClassType([], "Bar", [], set())],
+                                           []),
+                        traitDefn(),
+                        "trait Tr <: Foo, Bar;")
+
+    def testTraitWithMembers(self):
+        self.checkParse(astTraitDefinition([], "Tr", [], [],
+                                           [astVariableDefinition([], "let", astVariablePattern("x", None), None),
+                                            astVariableDefinition([], "let", astVariablePattern("y", None), None)]),
+                        traitDefn(),
+                        "trait Tr { let x; let y; };")
+
+    def testFullTrait(self):
+        self.checkParse(astTraitDefinition([astAttribute("public"),
+                                            astAttribute("native")],
+                                           "Tr",
+                                           [astTypeParameter([], None, "S", None, None),
+                                            astTypeParameter([], None, "T", None, None)],
+                                           [astClassType([], "Foo", [], set()),
+                                            astClassType([], "Bar", [], set())],
+                                           [astVariableDefinition([], "let", astVariablePattern("x", None), None),
+                                            astVariableDefinition([], "let", astVariablePattern("y", None), None)]),
+                        traitDefn(),
+                        "public native trait Tr[S, T] <: Foo, Bar { let x; let y; };")
+
     def testTypeParametersEmpty(self):
         self.checkParse([], typeParameters(), "")
 
