@@ -132,7 +132,7 @@ int main(int argc, char* argv[]) {
 
   auto fooClass = package.findClass("Foo");
   auto fooObj = package.findGlobal("foo").value().asObject();
-  string fooSig("(C:3Foo)");
+  string fooSig("(C:Foo)");
 
   // Check that when we load a field that doesn't exist, we get a bad reference.
   {
@@ -234,7 +234,7 @@ int main(int argc, char* argv[]) {
 
   // Check that we can create a new instance of a class.
   {
-    auto ctor = fooClass.findConstructor("(C:3Foo,L)");
+    auto ctor = fooClass.findConstructor("(C:Foo,L)");
     ASSERT_TRUE(ctor);
     auto object = ctor.newInstance(static_cast<int64_t>(12));
     ASSERT_EQ(fooClass, object.clas());
@@ -278,7 +278,7 @@ int main(int argc, char* argv[]) {
   {
     auto clas = package.findClass("Foo");
     auto methodName = Name::fromStringForDefn(&vm, "Foo.pub-method");
-    auto method = package.findFunction(methodName, "(C:3Foo)");
+    auto method = package.findFunction(methodName, "(C:Foo)");
     try {
       CallBuilder builder(clas, method);
       cerr << "expected exception" << endl;

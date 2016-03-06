@@ -220,7 +220,7 @@ int main(int argc, char* argv[]) {
 
   // Check that we can call a function with string parameters.
   auto stringParamsName = Name::fromStringForDefn(String(&vm, "stringParams"));
-  auto stringParams = registered.findFunction(stringParamsName, "(C::6String,C::6String)");
+  auto stringParams = registered.findFunction(stringParamsName, "(C::String,C::String)");
   auto sresult = stringParams.call(String(&vm, "foo"), String(&vm, "bar")).asString();
   ASSERT_EQ(0, sresult.compare(String(&vm, "foobar")));
 
@@ -233,7 +233,7 @@ int main(int argc, char* argv[]) {
   // Check that we can call a function with many parameters. This will force some of the
   // parameters onto the stack.
   auto manyParametersName = Name::fromStringForDefn(String(&vm, "manyParameters"));
-  auto manyParametersSig = "(L,D,C::6String,L,D,C::6String,L,D,C::6String,L,D,C::6String,L,D,C::6String,L,D,C::6String,L,D,C::6String,L,D,C::6String)";
+  auto manyParametersSig = "(L,D,C::String,L,D,C::String,L,D,C::String,L,D,C::String,L,D,C::String,L,D,C::String,L,D,C::String,L,D,C::String)";
   auto manyParameters = registered.findFunction(manyParametersName, manyParametersSig);
   sresult = manyParameters.call(
       static_cast<int64_t>(1), 2., String(&vm, "3"),
@@ -250,10 +250,10 @@ int main(int argc, char* argv[]) {
 
   // Check that we can call a pair of functions which recurse between interpreted and native.
   auto recursiveNativeName = Name::fromStringForDefn(String(&vm, "recursiveNative"));
-  auto recursiveNativeSig = "(L,C::6String,C::6String,C::6String)";
+  auto recursiveNativeSig = "(L,C::String,C::String,C::String)";
   auto recursiveNative = registered.findFunction(recursiveNativeName, recursiveNativeSig);
   auto recursiveGypsumName = Name::fromStringForDefn(String(&vm, "recursiveGypsum"));
-  auto recursiveGypsumSig = "(L,C::6String,C::6String,C::6String)";
+  auto recursiveGypsumSig = "(L,C::String,C::String,C::String)";
   auto recursiveGypsum = registered.findFunction(recursiveGypsumName, recursiveGypsumSig);
   recursiveGypsumPtr = &recursiveGypsum;
   sresult = recursiveNative.call(

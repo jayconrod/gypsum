@@ -51,7 +51,7 @@ Local<Name> mangleFunctionName(const Handle<Function>& function,
   stringstream str;
   auto components = handle(function->name()->components());
   auto lastComponent = handle(components->get(components->length() - 1));
-  str << lastComponent->length() << lastComponent->toUtf8StlString();
+  str << lastComponent->toUtf8StlString();
   mangleFunctionSignature(str, function, package);
 
   // Build a new name using the mangled component.
@@ -82,7 +82,7 @@ Local<String> mangleFunctionSourceName(const Handle<Function>& function) {
   HandleScope handleScope(function->getVM());
   auto sourceName = handle(function->sourceName());
   stringstream str;
-  str << sourceName->length() << sourceName->toUtf8StlString();
+  str << sourceName->toUtf8StlString();
   Local<Package> package(function->getVM(), function->package());
   mangleFunctionSignature(str, function, package);
   auto mangledSourceName = String::fromUtf8String(function->getHeap(), str.str());
@@ -166,12 +166,12 @@ static void mangleType(stringstream& str,
         str << "::";
       } else if (clas->package() != package.getOrNull()) {
         auto classPackageNameStr = Name::toString(heap, handle(clas->package()->name()));
-        str << classPackageNameStr->length() << classPackageNameStr->toUtf8StlString() << ':';
+        str << classPackageNameStr->toUtf8StlString() << ':';
       } else {
         str << ':';
       }
       auto classNameStr = Name::toString(heap, handle(clas->name()));
-      str << classNameStr->length() << classNameStr->toUtf8StlString();
+      str << classNameStr->toUtf8StlString();
       if (type->typeArgumentCount() > 0) {
         str << '[';
         for (length_t i = 0; i < type->typeArgumentCount(); i++) {
@@ -259,7 +259,7 @@ Local<Name> mangleName(const Handle<Name>& name, const string& signature) {
 
 Local<String> mangleSourceName(const Handle<String>& sourceName, const string& signature) {
   stringstream str;
-  str << sourceName->length() << sourceName->toUtf8StlString() << signature;
+  str << sourceName->toUtf8StlString() << signature;
   return String::fromUtf8String(sourceName->getHeap(), str.str());
 }
 

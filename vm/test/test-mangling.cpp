@@ -41,7 +41,7 @@ TEST(TestMangleFunctionNameSimple) {
 
   auto mangledName = mangleFunctionName(function, package);
   auto actual = Name::toString(heap, mangledName)->toUtf8StlString();
-  string expected("foo.bar.3baz(U,Z,B,S,I,L,F,D)");
+  string expected("foo.bar.baz(U,Z,B,S,I,L,F,D)");
   ASSERT_EQ(expected, actual);
 }
 
@@ -95,7 +95,7 @@ TEST(TestMangleFunctionNameClasses) {
 
   auto mangledName = mangleFunctionName(function, package);
   auto actual = Name::toString(heap, mangledName)->toUtf8StlString();
-  string expected("4quux[s<C::6Object>C::7Nothing,<C::6Object>C::7Nothing](C:11local.Local[T0,T1?],C11foo.bar.baz:15foreign.Foreign[T1?,T0]?,C::6Object)");
+  string expected("quux[s<C::Object>C::Nothing,<C::Object>C::Nothing](C:local.Local[T0,T1?],Cfoo.bar.baz:foreign.Foreign[T1?,T0]?,C::Object)");
   ASSERT_EQ(expected, actual);
 }
 
@@ -134,6 +134,6 @@ TEST(MangleFunctionNameExistential) {
 
   auto mangledName = mangleFunctionName(function, package);
   auto actual = Name::toString(heap, mangledName)->toUtf8StlString();
-  string expected("3foo[<C::6Object>C::7Nothing](E[<C::6Object>C::7Nothing]C:1C[T0,T1])");
+  string expected("foo[<C::Object>C::Nothing](E[<C::Object>C::Nothing]C:C[T0,T1])");
   ASSERT_EQ(expected, actual);
 }
