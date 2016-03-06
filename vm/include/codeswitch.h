@@ -264,7 +264,7 @@ class Package final : public Reference {
    *
    * @param name the full name of the function.
    * @param signature the type signature of the function. See
-   *     {@link md_mangling function name mangling} for details.
+   *     {@link md_typesignatures function type signatures} for details.
    * @return the named function from the package. If the package has no function by this name,
    *     an invalid reference is returned.
    */
@@ -276,7 +276,7 @@ class Package final : public Reference {
    *
    * @param sourceName the short name of the function from source code.
    * @param signature the type signature of the function. See
-   *     {@link md_mangling function name mangling} for details.
+   *     {@link md_typesignatures function type signatures} for details.
    * @return the named function from the package. If the package has no function by this name,
    *     an invalid reference is returned.
    */
@@ -288,7 +288,7 @@ class Package final : public Reference {
    *
    * @param sourceName the short name of the function from source code.
    * @param signature the type signature of the function. See
-   *     {@link md_mangling function name mangling} for details.
+   *     {@link md_typesignatures function type signatures} for details.
    * @return the named function from the package. If the package has no function by this name,
    *     an invalid reference is returned.
    */
@@ -325,34 +325,37 @@ class Package final : public Reference {
    * Looks up and calls a function by name. The function signature used for the lookup is
    * determined automatically from the arguments.
    *
-   * @param the full name of the function.
+   * @param name the full name of the function.
+   * @param args the arguments to pass to the function.
    * @return the value returned by the function.
    * @throws Error if the function couldn't be found or if the function threw an exception.
    */
   template <class... Args>
-  Value callFunction(const Name& name, Args&&...);
+  Value callFunction(const Name& name, Args&&... args);
 
   /**
    * Looks up and calls a function by its short name from source code. The function signature
    * used for the lookup is determined automatically from the arguments.
    *
    * @param sourceName the short name of the function from source code.
+   * @param args the arguments to pass to the function.
    * @return the value returned by the function.
    * @throws Error if the function couldn't be found or if the function threw an exception.
    */
   template <class... Args>
-  Value callFunction(const String& sourceName, Args&&...);
+  Value callFunction(const String& sourceName, Args&&... args);
 
   /**
    * Looks up and calls a function by its short name from source code. The function signature
    * used for the lookup is determined automatically from the arguments.
    *
    * @param sourceName the short name of the function from source code.
+   * @param args the arguments to pass to the function.
    * @return the value returned by the function.
    * @throws Error if the function couldn't be found or if the function threw an exception.
    */
   template <class... Args>
-  Value callFunction(const std::string& sourceName, Args&&...);
+  Value callFunction(const std::string& sourceName, Args&&... args);
 };
 
 
@@ -438,7 +441,7 @@ class Class final : public Reference {
    * Finds and returns a constructor.
    *
    * @param signature the type signature of the constructor. See
-   *     {@link md_mangling function name mangling} for details.
+   *     {@link md_typesignatures function type signatures} for details.
    * @return the constructor. If the class has no constructor with this signature, an
    *     invalid reference is returned.
    */
@@ -449,7 +452,7 @@ class Class final : public Reference {
    *
    * @param name the full name of the method.
    * @param signature the type signature of the method. See
-   *     {@link md_mangling function name mangling} for details.
+   *     {@link md_typesignatures function type signatures} for details.
    * @return the named method from the class. If the class has no method by this name,
    *     an invalid reference is returned.
    */
@@ -460,7 +463,7 @@ class Class final : public Reference {
    *
    * @param sourceName the short name of the method from source code.
    * @param signature the type signature of the method. See
-   *     {@link md_mangling function name mangling} for details.
+   *     {@link md_typesignatures function type signatures} for details.
    * @return the named method from the class. If the class has no method by this name,
    *     an invalid reference is returned.
    */
@@ -471,7 +474,7 @@ class Class final : public Reference {
    *
    * @param sourceName the short name of the method from source code.
    * @param signature the type signature of the method. See
-   *     {@link md_mangling function name mangling} for details.
+   *     {@link md_typesignatures function type signatures} for details.
    * @return the named method from the class. If the class has no method by this name,
    *     an invalid reference is returned.
    */
@@ -654,7 +657,7 @@ class CallBuilder final {
    * are specified.
    *
    * @param clas the class of the receiver, used to find the method.
-   * @param name the short name of the method from source code.
+   * @param sourceName the short name of the method from source code.
    */
   CallBuilder(const Class& clas, const String& sourceName);
 
@@ -663,7 +666,7 @@ class CallBuilder final {
    * are specified.
    *
    * @param clas the class of the receiver, used to find the method.
-   * @param name the short name of the method from source code.
+   * @param sourceName the short name of the method from source code.
    */
   CallBuilder(const Class& clas, const std::string& sourceName);
 
