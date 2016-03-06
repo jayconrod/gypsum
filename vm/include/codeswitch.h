@@ -199,6 +199,14 @@ class Reference {
     return !isValid();
   }
 
+  /** Returns true if the two references point to the same object. */
+  bool operator == (const Reference& other) const;
+
+  /** Returns true if the two references point to different objects. */
+  bool operator != (const Reference& other) const {
+    return !(*this == other);
+  }
+
  protected:
   Impl* impl_;
 };
@@ -225,80 +233,129 @@ class Package final : public Reference {
   Function entryFunction() const;
 
   /**
-   * Finds and returns a global from the package by name.
+   * Finds and returns a global from the package.
    *
+   * @param name the full name of the global.
    * @return the named global from the package. If the package has no global by this name,
    *     and invalid reference is returned.
    */
   Global findGlobal(const Name& name) const;
 
   /**
-   * Finds and returns a public global from the package by its short name from source code.
-   * Static fields are not searched.
+   * Finds and returns a public global from the package. Static fields are not searched.
    *
+   * @param sourceName the short name of the global in source code.
    * @return the named global from the package. If the package has no global by this name,
    *     and invalid reference is returned.
    */
   Global findGlobal(const String& sourceName) const;
 
   /**
-   * Finds and returns a public global from the package by its short name from source code.
-   * Static fields are not searched.
+   * Finds and returns a public global from the package. Static fields are not searched.
    *
+   * @param sourceName the short name of the global in source code.
    * @return the named global from the package. If the package has no global by this name,
    *     and invalid reference is returned.
    */
   Global findGlobal(const std::string& sourceName) const;
 
   /**
-   * Finds and returns a function from the package by name.
+   * Finds and returns a function from the package.
    *
+   * @param name the full name of the function.
+   * @param signature the type signature of the function. See
+   *     {@link md_typesignatures function type signatures} for details.
    * @return the named function from the package. If the package has no function by this name,
    *     an invalid reference is returned.
    */
-  Function findFunction(const Name& name) const;
+  Function findFunction(const Name& name, const std::string& signature) const;
 
   /**
-   * Finds and returns a public function from the package by its short name from source code.
-   * Methods (static or otherwise) are not searched.
+   * Finds and returns a function from the package. Methods (static or otherwise)
+   * are not searched.
    *
+   * @param sourceName the short name of the function from source code.
+   * @param signature the type signature of the function. See
+   *     {@link md_typesignatures function type signatures} for details.
    * @return the named function from the package. If the package has no function by this name,
    *     an invalid reference is returned.
    */
-  Function findFunction(const String& sourceName) const;
+  Function findFunction(const String& sourceName, const std::string& signature) const;
 
   /**
-   * Finds and returns a public function from the package by its short name from source code.
-   * Methods (static or otherwise) are not searched.
+   * Finds and returns a function from the package. Methods (static or otherwise)
+   * are not searched.
    *
+   * @param sourceName the short name of the function from source code.
+   * @param signature the type signature of the function. See
+   *     {@link md_typesignatures function type signatures} for details.
    * @return the named function from the package. If the package has no function by this name,
    *     an invalid reference is returned.
    */
-  Function findFunction(const std::string& sourceName) const;
+  Function findFunction(const std::string& sourceName, const std::string& signature) const;
 
   /**
-   * Finds and returns a class from the package by name.
+   * Finds and returns a class from the package.
    *
+   * @param name the full name of the class.
    * @return the named class from the package. If the package has no class by this name,
    *     an invalid reference is returned.
    */
   Class findClass(const Name& name) const;
 
   /**
-   * Finds and returns a public class from the package by its short name from source code.
+   * Finds and returns a public class from the package.
    *
+   * @param sourceName the short name of the class from source code.
    * @return the named class from the package. If the package has no class by this name,
    *     an invalid reference is returned.
    */
   Class findClass(const String& sourceName) const;
 
   /**
-   * Finds and returns a public class from the package by its short name from source code.
+   * Finds and returns a public class from the package.
    *
+   * @param sourceName the short name of the class from source code.
    * @return the named class from the package. If the package has no class by this name,
    *     an invalid reference is returned.
    */
   Class findClass(const std::string& sourceName) const;
+
+  /**
+   * Looks up and calls a function by name. The function signature used for the lookup is
+   * determined automatically from the arguments.
+   *
+   * @param name the full name of the function.
+   * @param args the arguments to pass to the function.
+   * @return the value returned by the function.
+   * @throws Error if the function couldn't be found or if the function threw an exception.
+   */
+  template <class... Args>
+  Value callFunction(const Name& name, Args&&... args);
+
+  /**
+   * Looks up and calls a function by its short name from source code. The function signature
+   * used for the lookup is determined automatically from the arguments.
+   *
+   * @param sourceName the short name of the function from source code.
+   * @param args the arguments to pass to the function.
+   * @return the value returned by the function.
+   * @throws Error if the function couldn't be found or if the function threw an exception.
+   */
+  template <class... Args>
+  Value callFunction(const String& sourceName, Args&&... args);
+
+  /**
+   * Looks up and calls a function by its short name from source code. The function signature
+   * used for the lookup is determined automatically from the arguments.
+   *
+   * @param sourceName the short name of the function from source code.
+   * @param args the arguments to pass to the function.
+   * @return the value returned by the function.
+   * @throws Error if the function couldn't be found or if the function threw an exception.
+   */
+  template <class... Args>
+  Value callFunction(const std::string& sourceName, Args&&... args);
 };
 
 
@@ -338,114 +395,37 @@ class Function final : public Reference {
   Function() = default;
   explicit Function(Impl* impl);
 
-  /**
-   * Calls a function that returns `unit` (equivalent to `void`)
-   *
-   * @param args arguments to call the function with. These are type-checked.
-   * @throws Error if there is a type error with the arguments or return type or if the function
-   *   throws an exception.
-   */
-  template <class... Ts>
-  void call(Ts... args);
+  /** Returns true if this is a constructor. */
+  bool isConstructor() const;
 
   /**
-   * Calls a function that returns `boolean`
-   *
-   * @param args arguments to call the function with. These are type-checked.
-   * @return the result of the function call.
-   * @throws Error if there is a type error with the arguments or return type or if the function
-   *   throws an exception.
+   * Returns the class that defines this method or constructor. If this function is not a
+   * method or constructor, an invalid reference is returned.
    */
-  template <class... Ts>
-  bool callForBoolean(Ts... args);
+  Class clas() const;
 
   /**
-   * Calls a function that returns `i8`
+   * Calls the function with the given arguments.
    *
-   * @param args arguments to call the function with. These are type-checked.
-   * @return the result of the function call.
-   * @throws Error if there is a type error with the arguments or return type or if the function
-   *   throws an exception.
+   * This method is a convenience method for {@link CallBuilder}, but this is not
+   * significantly less efficient. The arguments must be {@link Value}s, which can usually be
+   * built implicitly from whatever you want to pass. The arguments must match the type
+   * signature of the function or an {@link Error} will be thrown.
    */
-  template <class... Ts>
-  int8_t callForI8(Ts... args);
+  template <class... Args>
+  Value call(Args&&... args);
 
   /**
-   * Calls a function that returns `i16`
+   * Creates a new object and call this function on it as a constructor. This may only be
+   * called on constructors.
    *
-   * @param args arguments to call the function with. These are type-checked.
-   * @return the result of the function call.
-   * @throws Error if there is a type error with the arguments or return type or if the function
-   *   throws an exception.
+   * @param args the arguments to pass the constructor, not including the new object.
+   * @return the newly created object.
+   * @throws Error if the arguments don't match the constructor's type signature or if the
+   *     constructor throws an exception.
    */
-  template <class... Ts>
-  int16_t callForI16(Ts... args);
-
-  /**
-   * Calls a function that returns `i32`
-   *
-   * @param args arguments to call the function with. These are type-checked.
-   * @return the result of the function call.
-   * @throws Error if there is a type error with the arguments or return type or if the function
-   *   throws an exception.
-   */
-  template <class... Ts>
-  int32_t callForI32(Ts... args);
-
-  /**
-   * Calls a function that returns `i64`
-   *
-   * @param args arguments to call the function with. These are type-checked.
-   * @return the result of the function call.
-   * @throws Error if there is a type error with the arguments or return type or if the function
-   *   throws an exception.
-   */
-  template <class... Ts>
-  int64_t callForI64(Ts... args);
-
-  /**
-   * Calls a function that returns `f32`
-   *
-   * @param args arguments to call the function with. These are type-checked.
-   * @return the result of the function call.
-   * @throws Error if there is a type error with the arguments or return type or if the function
-   *   throws an exception.
-   */
-  template <class... Ts>
-  float callForF32(Ts... args);
-
-  /**
-   * Calls a function that returns `f64`
-   *
-   * @param args arguments to call the function with. These are type-checked.
-   * @return the result of the function call.
-   * @throws Error if there is a type error with the arguments or return type or if the function
-   *   throws an exception.
-   */
-  template <class... Ts>
-  double callForF64(Ts... args);
-
-  /**
-   * Calls a function that returns `String`
-   *
-   * @param args arguments to call the function with. These are type-checked.
-   * @return the result of the function call.
-   * @throws Error if there is a type error with the arguments or return type or if the function
-   *   throws an exception.
-   */
-  template <class... Ts>
-  String callForString(Ts... args);
-
-  /**
-   * Calls a function that returns any object type
-   *
-   * @param args arguments to call the function with. These are type-checked.
-   * @return the result of the function call.
-   * @throws Error if there is a type error with the arguments or return type or if the function
-   *   throws an exception.
-   */
-  template <class... Ts>
-  Object callForObject(Ts... args);
+  template <class... Args>
+  Object newInstance(Args&&... args);
 
   friend class CallBuilder;
 };
@@ -458,28 +438,47 @@ class Class final : public Reference {
   explicit Class(Impl* impl);
 
   /**
-   * Finds and returns a method of the class by name.
+   * Finds and returns a constructor.
    *
-   * @return the named method from the class. If the class has no method by this name,
-   *     an invalid reference is returned.
+   * @param signature the type signature of the constructor. See
+   *     {@link md_typesignatures function type signatures} for details.
+   * @return the constructor. If the class has no constructor with this signature, an
+   *     invalid reference is returned.
    */
-  Function findMethod(const Name& name) const;
+  Function findConstructor(const std::string& signature) const;
 
   /**
-   * Finds and returns a public method of the class by its short name from source code.
+   * Finds and returns a method of the class.
    *
+   * @param name the full name of the method.
+   * @param signature the type signature of the method. See
+   *     {@link md_typesignatures function type signatures} for details.
    * @return the named method from the class. If the class has no method by this name,
    *     an invalid reference is returned.
    */
-  Function findMethod(const String& sourceName) const;
+  Function findMethod(const Name& name, const std::string& signature) const;
 
   /**
-   * Finds and returns a public method of the class by its short name from source code.
+   * Finds and returns a method of the class.
    *
+   * @param sourceName the short name of the method from source code.
+   * @param signature the type signature of the method. See
+   *     {@link md_typesignatures function type signatures} for details.
    * @return the named method from the class. If the class has no method by this name,
    *     an invalid reference is returned.
    */
-  Function findMethod(const std::string& sourceName) const;
+  Function findMethod(const String& sourceName, const std::string& signature) const;
+
+  /**
+   * Finds and returns a method of the class.
+   *
+   * @param sourceName the short name of the method from source code.
+   * @param signature the type signature of the method. See
+   *     {@link md_typesignatures function type signatures} for details.
+   * @return the named method from the class. If the class has no method by this name,
+   *     an invalid reference is returned.
+   */
+  Function findMethod(const std::string& sourceName, const std::string& signature) const;
 
   /**
    * Finds and returns a field of the class by name.
@@ -506,6 +505,59 @@ class Class final : public Reference {
    *     an invalid reference is returned.
    */
   Field findField(const std::string& sourceName) const;
+
+  /**
+   * Looks up a constructor and creates a new instance of the class by calling that constructor.
+   * The constructor type signature is determined automatically from the arguments.
+   *
+   * @param args the arguments to pass to the constructor (not including the new object).
+   * @return the new object.
+   * @throws Error if a constructor could not be found or if the constructor threw an exception.
+   */
+  template <class... Args>
+  Object newInstance(Args&&... args);
+
+  /**
+   * Looks up and calls a method of the class. The type signature of the method is determined
+   * automatically from the arguments.
+   *
+   * @param name the full name of the method.
+   * @param args the arguments to pass to the method, including the receiver if this is a
+   *     non-static method.
+   * @return the value returned by the method.
+   * @throws Error if a method cannot be found with a type signature matching the arguments or
+   *     if the method throws an exception.
+   */
+  template <class... Args>
+  Value callMethod(const Name& name, Args&&... args);
+
+  /**
+   * Looks up and calls a method of the class. The type signature of the method is determined
+   * automatically from the arguments.
+   *
+   * @param sourceName the short name of the method from source code.
+   * @param args the arguments to pass to the method, including the receiver if this is a
+   *     non-static method.
+   * @return the value returned by the method.
+   * @throws Error if a method cannot be found with a type signature matching the arguments or
+   *     if the method throws an exception.
+   */
+  template <class... Args>
+  Value callMethod(const String& sourceName, Args&&... args);
+
+  /**
+   * Looks up and calls a method of the class. The type signature of the method is determined
+   * automatically from the arguments.
+   *
+   * @param sourceName the short name of the method from source code.
+   * @param args the arguments to pass to the method, including the receiver if this is a
+   *     non-static method.
+   * @return the value returned by the method.
+   * @throws Error if a method cannot be found with a type signature matching the arguments or
+   *     if the method throws an exception.
+   */
+  template <class... Args>
+  Value callMethod(const std::string& sourceName, Args&&... args);
 };
 
 
@@ -531,7 +583,7 @@ class Field final : public Reference {
  *
  * `CallBuilder` can be used if you need more control over a function call than the
  * {@link Function#call} family of methods offers. Note that none of the `arg` methods
- * have any side effects outside the builder object until a `call` method is called.
+ * have any side effects outside the builder object until {@link #call} method is called.
  *
  * Objects of this class actually manage pointers to objects on the garbage collected heap.
  * Objects are in an "invalid" state if they are created with the default constructor or
@@ -542,146 +594,107 @@ class CallBuilder final {
   class Impl;
 
   /**
-   * Constructs a new call builder
+   * Constructs a builder for a normal function call.
    *
    * @param function the function to be called. Must be a valid reference.
    */
   explicit CallBuilder(const Function& function);
+
+  /**
+   * Constructs a builder for a normal function call. The function to call will be looked up
+   * after the arguments are specified.
+   *
+   * @param package the package the function will be looked up from.
+   * @param name the full name of the function to call.
+   */
+  CallBuilder(const Package& package, const Name& name);
+
+  /**
+   * Constructs a builder for a normal function call. The function to call will be looked up
+   * after the arguments are specified.
+   *
+   * @param package the package the function will be looked up from.
+   * @param sourceName the short name of the function from source code.
+   */
+  CallBuilder(const Package& package, const String& sourceName);
+
+  /**
+   * Constructs a builder for a normal function call. The function to call will be looked up
+   * after the arguments are specified.
+   *
+   * @param package the package the function will be looked up from.
+   * @param sourceName the short name of the function from source code.
+   */
+  CallBuilder(const Package& package, const std::string& sourceName);
+
+  /**
+   * Constructs a builder for a constructor call, which will create a new object.
+   *
+   * @param clas the class of the new object to be created. Must be a valid reference.
+   * @param constructor the constructor function to be called. Must be a valid reference.
+   */
+  CallBuilder(const Class& clas, const Function& constructor);
+
+  /**
+   * Constructs a builder for a constructor call, which will create a new object. The
+   * constructor to call will be looked up after the arguments are specified.
+   *
+   * @param clas the class the constructor will be looked up from.
+   */
+  explicit CallBuilder(const Class& clas);
+
+  /**
+   * Constructs a builder for a method call. The method will be looked up after the arguments
+   * are specified.
+   *
+   * @param clas the class of the receiver, used to find the method.
+   * @param name the full name of the method.
+   */
+  CallBuilder(const Class& clas, const Name& name);
+
+  /**
+   * Constructs a builder for a method call. The method will be looked up after the arguments
+   * are specified.
+   *
+   * @param clas the class of the receiver, used to find the method.
+   * @param sourceName the short name of the method from source code.
+   */
+  CallBuilder(const Class& clas, const String& sourceName);
+
+  /**
+   * Constructs a builder for a method call. The method will be looked up after the arguments
+   * are specified.
+   *
+   * @param clas the class of the receiver, used to find the method.
+   * @param sourceName the short name of the method from source code.
+   */
+  CallBuilder(const Class& clas, const std::string& sourceName);
+
   ~CallBuilder();
 
   CallBuilder(CallBuilder&& builder) = delete;
   CallBuilder& operator = (const CallBuilder&) = delete;
   CallBuilder& operator = (CallBuilder&& builder) = delete;
 
-  /** Adds a `unit` value to the argument list */
-  CallBuilder& argUnit();
+  /** Adds an argument to the argument list before {@link #call} is called. */
+  CallBuilder& arg(Value&& value);
 
-  /** Adds a `boolean` value to the argument list */
-  CallBuilder& arg(bool value);
+  /** Adds no arguments to the argument list before {@link #call} is called. */
+  CallBuilder& args();
 
-  /** Adds an `i8` value to the argument list */
-  CallBuilder& arg(int8_t value);
-
-  /** Adds an `i16` value to the argument list */
-  CallBuilder& arg(int16_t value);
-
-  /** Adds an `i32` value to the argument list */
-  CallBuilder& arg(int32_t value);
-
-  /** Adds an `i64` value to the argument list */
-  CallBuilder& arg(int64_t value);
-
-  /** Adds an `f32` value to the argument list */
-  CallBuilder& arg(float value);
-
-  /** Adds an `f64` value to the argument list */
-  CallBuilder& arg(double value);
-
-  /** Adds a {@link Object} value to the argument list */
-  CallBuilder& arg(const Object& value);
-
-  /** Signals no arguments are needed */
-  CallBuilder& args() { return *this; }
-
-  /** Adds several values to the argument list, starting with a `boolean` value */
-  template <class... Ts>
-  CallBuilder& args(bool value, Ts&&... rest);
-
-  /** Adds several values to the argument list, starting with an `i8` value */
-  template <class... Ts>
-  CallBuilder& args(int8_t value, Ts&&... rest);
-
-  /** Adds several values to the argument list, starting with an `i16` value */
-  template <class... Ts>
-  CallBuilder& args(int16_t value, Ts&&... rest);
-
-  /** Adds several values to the argument list, starting with an `i32` value */
-  template <class... Ts>
-  CallBuilder& args(int32_t value, Ts&&... rest);
-
-  /** Adds several values to the argument list, starting with an `i64` value */
-  template <class... Ts>
-  CallBuilder& args(int64_t value, Ts&&... rest);
-
-  /** Adds several values to the argument list, starting with an `f32` value */
-  template <class... Ts>
-  CallBuilder& args(float value, Ts&&... rest);
-
-  /** Adds several values to the argument list, starting with an `f64` value */
-  template <class... Ts>
-  CallBuilder& args(double value, Ts&&... rest);
-
-  /** Adds several values to the argument list, starting with an `Object` value */
-  template <class... Ts>
-  CallBuilder& args(const Object& value, Ts&&... rest);
-
-  /** Calls the function and clears the argument list. The result is ignored. */
-  void call();
+  /** Adds one or more arguments to the argument list before {@link #call} is called. */
+  template <class... Args>
+  CallBuilder& args(Value&& first, Args&&... rest);
 
   /**
-   * Calls the function and clears the argument list
+   * Calls the function or constructor.
    *
-   * @return the function's return value. The return type must be `boolean`.
+   * @return if a constructor was called, the newly created object is returned. Otherwise, the
+   *     normal return value of the object is returned.
+   * @throws Error if the arguments don't match the type signature of the function, or if the
+   *     function throws an exception and doesn't catch it.
    */
-  bool callForBoolean();
-
-  /**
-   * Calls the function and clears the argument list
-   *
-   * @return the function's return value. The return type must be `i8`.
-   */
-  int8_t callForI8();
-
-  /**
-   * Calls the function and clears the argument list
-   *
-   * @return the function's return value. The return type must be `i16`.
-   */
-  int16_t callForI16();
-
-  /**
-   * Calls the function and clears the argument list
-   *
-   * @return the function's return value. The return type must be `i32`.
-   */
-  int32_t callForI32();
-
-  /**
-   * Calls the function and clears the argument list
-   *
-   * @return the function's return value. The return type must be `i64`.
-   */
-  int64_t callForI64();
-
-  /**
-   * Calls the function and clears the argument list
-   *
-   * @return the function's return value. The return type must be `f32`.
-   */
-  float callForF32();
-
-  /**
-   * Calls the function and clears the argument list
-   *
-   * @return the function's return value. The return type must be `f64`.
-   */
-  double callForF64();
-
-  /**
-   * Calls the function and clears the argument list
-   *
-   * @return the function's return value. The return type must be `String`. If `null` is
-   *   returned, this will be an invalid reference.
-   */
-  String callForString();
-
-  /**
-   * Calls the function and clears the argument list
-   *
-   * @return the function's return value. The return type must be some object type. If `null`
-   *  is returned, this will be an invalid reference.
-   */
-  Object callForObject();
+  Value call();
 
  private:
   std::unique_ptr<Impl> impl_;
@@ -811,6 +824,48 @@ class Object: public Reference {
    * @param value the value to store in the field.
    */
   void setField(const std::string& fieldSourceName, const Value& value);
+
+  /**
+   * Looks up and calls a non-static method of this object. The type signature of the method is
+   * determined automatically from the arguments.
+   *
+   * @param name the full name of the method.
+   * @param args the arguments to pass to the method. The receiver (this object) is
+   *     passed implicitly.
+   * @return the value returned by the method.
+   * @throws Error if a method cannot be found with a type signature matching the arguments or
+   *     if the method throws an exception.
+   */
+  template <class... Args>
+  Value callMethod(const Name& name, Args&&... args);
+
+  /**
+   * Looks up and calls a non-static method of this object. The type signature of the method is
+   * determined automatically from the arguments.
+   *
+   * @param sourceName the short name of the method from source code.
+   * @param args the arguments to pass to the method. The receiver (this object) is
+   *     passed implicitly.
+   * @return the value returned by the method.
+   * @throws Error if a method cannot be found with a type signature matching the arguments or
+   *     if the method throws an exception.
+   */
+  template <class... Args>
+  Value callMethod(const String& sourceName, Args&&... args);
+
+  /**
+   * Looks up and calls a non-static method of this object. The type signature of the method is
+   * determined automatically from the arguments.
+   *
+   * @param sourceName the short name of the method from source code.
+   * @param args the arguments to pass to the method. The receiver (this object) is
+   *     passed implicitly.
+   * @return the value returned by the method.
+   * @throws Error if a method cannot be found with a type signature matching the arguments or
+   *     if the method throws an exception.
+   */
+  template <class... Args>
+  Value callMethod(const std::string& sourceName, Args&&... args);
 
   /** Returns whether this object has array elements. */
   bool hasElements() const;
@@ -1132,118 +1187,81 @@ class Value final {
 };
 
 
-template <class... Ts>
-void Function::call(Ts... args) {
-  CallBuilder(*this).args(args...).call();
+template <class... Args>
+Value Package::callFunction(const Name& name, Args&&... args) {
+  return CallBuilder(*this, name).args(args...).call();
 }
 
 
-template <class... Ts>
-bool Function::callForBoolean(Ts... args) {
-  return CallBuilder(*this).args(args...).callForBoolean();
+template <class... Args>
+Value Package::callFunction(const String& sourceName, Args&&... args) {
+  return CallBuilder(*this, sourceName).args(args...).call();
 }
 
 
-template <class... Ts>
-int8_t Function::callForI8(Ts... args) {
-  return CallBuilder(*this).args(args...).callForI8();
+template <class... Args>
+Value Package::callFunction(const std::string& sourceName, Args&&... args) {
+  return CallBuilder(*this, sourceName).args(args...).call();
 }
 
 
-template <class... Ts>
-int16_t Function::callForI16(Ts... args) {
-  return CallBuilder(*this).args(args...).callForI16();
+template <class... Args>
+Value Function::call(Args&&... args) {
+  return CallBuilder(*this).args(args...).call();
 }
 
 
-template <class... Ts>
-int32_t Function::callForI32(Ts... args) {
-  return CallBuilder(*this).args(args...).callForI32();
+template <class... Args>
+Object Function::newInstance(Args&&... args) {
+  return CallBuilder(clas(), *this).args(args...).call().asObject();
 }
 
 
-template <class... Ts>
-int64_t Function::callForI64(Ts... args) {
-  return CallBuilder(*this).args(args...).callForI64();
+template <class... Args>
+Object Class::newInstance(Args&&... args) {
+  return CallBuilder(*this).args(args...).call().asObject();
 }
 
 
-template <class... Ts>
-float Function::callForF32(Ts... args) {
-  return CallBuilder(*this).args(args...).callForF32();
+template <class... Args>
+Value Class::callMethod(const Name& name, Args&&... args) {
+  return CallBuilder(*this, name).args(args...).call();
 }
 
 
-template <class... Ts>
-double Function::callForF64(Ts... args) {
-  return CallBuilder(*this).args(args...).callForF64();
+template <class... Args>
+Value Class::callMethod(const String& sourceName, Args&&... args) {
+  return CallBuilder(*this, sourceName).args(args...).call();
 }
 
 
-template <class... Ts>
-String Function::callForString(Ts... args) {
-  return CallBuilder(*this).args(args...).callForString();
+template <class... Args>
+Value Class::callMethod(const std::string& sourceName, Args&&... args) {
+  return CallBuilder(*this, sourceName).args(args...).call();
 }
 
 
-template <class... Ts>
-Object Function::callForObject(Ts... args) {
-  return CallBuilder(*this).args(args...).callForObject();
+template <class... Args>
+Value Object::callMethod(const Name& name, Args&&... args) {
+  return CallBuilder(clas(), name).args(*this, args...).call();
 }
 
 
-template <class... Ts>
-CallBuilder& CallBuilder::args(bool value, Ts&&... rest) {
-  arg(value);
-  return args(rest...);
+template <class... Args>
+Value Object::callMethod(const String& sourceName, Args&&... args) {
+  return CallBuilder(clas(), sourceName).args(*this, args...).call();
 }
 
 
-template <class... Ts>
-CallBuilder& CallBuilder::args(int8_t value, Ts&&... rest) {
-  arg(value);
-  return args(rest...);
+template <class... Args>
+Value Object::callMethod(const std::string& sourceName, Args&&... args) {
+  return CallBuilder(clas(), sourceName).args(*this, args...).call();
 }
 
 
-template <class... Ts>
-CallBuilder& CallBuilder::args(int16_t value, Ts&&... rest) {
-  arg(value);
-  return args(rest...);
-}
-
-
-template <class... Ts>
-CallBuilder& CallBuilder::args(int32_t value, Ts&&... rest) {
-  arg(value);
-  return args(rest...);
-}
-
-
-template <class... Ts>
-CallBuilder& CallBuilder::args(int64_t value, Ts&&... rest) {
-  arg(value);
-  return args(rest...);
-}
-
-
-template <class... Ts>
-CallBuilder& CallBuilder::args(float value, Ts&&... rest) {
-  arg(value);
-  return args(rest...);
-}
-
-
-template <class... Ts>
-CallBuilder& CallBuilder::args(double value, Ts&&... rest) {
-  arg(value);
-  return args(rest...);
-}
-
-
-template <class... Ts>
-CallBuilder& CallBuilder::args(const Object& value, Ts&&... rest) {
-  arg(value);
+template <class... Args>
+CallBuilder& CallBuilder::args(Value&& first, Args&&... rest) {
+  arg(std::move(first));
   return args(rest...);
 }
 

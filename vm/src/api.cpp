@@ -21,6 +21,7 @@
 #include "handle.h"
 #include "hash-table.h"
 #include "heap.h"
+#include "index.h"
 #include "interpreter.h"
 #include "name.h"
 #include "object.h"
@@ -128,10 +129,13 @@ class Value::Impl final {
   }
 
 
-  static const Object& getValueRef(const Value& value) {
+  static Object& getValueRef(Value& value) {
     return value.ref_;
   }
 
+  static const Object& getValueRef(const Value& value) {
+    return value.ref_;
+  }
 
   static const uint8_t getValueTag(const Value& value) {
     return value.tag_;
@@ -159,85 +163,37 @@ static i::i64 rawFromValue(const Value& value, const i::Handle<i::Type>& type) {
 }
 
 
+static i::Local<i::Type> typeFromValue(i::VM* vm, const Value& value) {
+  auto form = static_cast<i::Type::Form>(Value::Impl::getValueTag(value));
+  if (i::Type::FIRST_PRIMITIVE_TYPE <= form && form <= i::Type::LAST_PRIMITIVE_TYPE) {
+    return handle(i::Type::primitiveTypeFromForm(vm->roots(), form));
+  } else {
+    const Object& obj = Value::Impl::getValueRef(value);
+    if (!obj) {
+      return handle(i::Type::nullType(vm->roots()));
+    } else {
+      i::Local<i::Object> iobj(const_cast<i::Object*>(unwrapRaw<i::Object>(obj)));
+      return i::Object::typeof(iobj);
+    }
+  }
+}
+
+
 class CallBuilder::Impl final {
  public:
-  explicit Impl(const i::Handle<i::Function>& function)
-      : function_(function) {
-    API_CHECK(function, "call builder does not reference a valid function");
-    vm_ = i::VM::fromAddress(*function);
-    args_.reserve(function->parameterTypes()->length());
-  }
-
-  void argUnit() {
-    args_.push_back(Value(i::Persistent<i::Type>(i::Type::unitType(vm_->roots())), 0));
-  }
-
-  void arg(bool value) {
-    args_.push_back(Value(i::Persistent<i::Type>(i::Type::booleanType(vm_->roots())), value));
-  }
-
-  void arg(int8_t value) {
-    args_.push_back(Value(i::Persistent<i::Type>(i::Type::i8Type(vm_->roots())), value));
-  }
-
-  void arg(int16_t value) {
-    args_.push_back(Value(i::Persistent<i::Type>(i::Type::i16Type(vm_->roots())), value));
-  }
-
-  void arg(int32_t value) {
-    args_.push_back(Value(i::Persistent<i::Type>(i::Type::i32Type(vm_->roots())), value));
-  }
-
-  void arg(int64_t value) {
-    args_.push_back(Value(i::Persistent<i::Type>(i::Type::i64Type(vm_->roots())), value));
-  }
-
-  void arg(float value) {
-    auto bits = i::f32ToBits(value);
-    args_.push_back(Value(i::Persistent<i::Type>(i::Type::f32Type(vm_->roots())), bits));
-  }
-
-  void arg(double value) {
-    auto bits = i::f64ToBits(value);
-    args_.push_back(Value(i::Persistent<i::Type>(i::Type::f64Type(vm_->roots())), bits));
-  }
-
-  void arg(const String& value);
-  void arg(const Object& value);
-
-  void callForAny();
-  bool callForBoolean();
-  int8_t callForI8();
-  int16_t callForI16();
-  int32_t callForI32();
-  int64_t callForI64();
-  float callForF32();
-  double callForF64();
-  String callForString();
-  Object callForObject();
+  explicit Impl(i::VM* vm)
+      : vm_(vm) { }
 
  private:
-  enum Tag { PRIMITIVE, OBJECT };
-
-  struct Value {
-    Value(i::Persistent<i::Type>&& type, i::u64 primitive)
-        : tag(PRIMITIVE), type(type), primitive(primitive) { }
-    Value(i::Persistent<i::Type>&& type, const i::Handle<i::Object>& object)
-        : tag(OBJECT), type(type), object(i::Persistent<i::Object>(object)) { }
-    Value(i::Persistent<i::Type>&& type, const i::Handle<i::String>& string)
-        : tag(OBJECT), type(type), object(i::Persistent<i::Object>(string)) { }
-
-    Tag tag;
-    i::Persistent<i::Type> type;
-    i::u64 primitive;
-    i::Persistent<i::Object> object;
-  };
-
-  i::i64 call();
-
   i::VM* vm_;
+  i::Persistent<i::Package> package_;
+  i::Persistent<i::Class> clas_;
   i::Persistent<i::Function> function_;
+  i::Persistent<i::Name> name_;
+  i::Persistent<i::String> sourceName_;
   vector<Value> args_;
+
+  friend class CallBuilder;
 };
 
 
@@ -375,6 +331,11 @@ void Reference::clear() {
 }
 
 
+bool Reference::operator == (const Reference& other) const {
+  return unwrapRaw<i::Block>(*this) == unwrapRaw<i::Block>(other);
+}
+
+
 Package::Package(Impl* impl)
     : Reference(impl) { }
 
@@ -422,20 +383,21 @@ Global Package::findGlobal(const string& sourceName) const {
 }
 
 
-Function Package::findFunction(const Name& name) const {
+Function Package::findFunction(const Name& name, const string& signature) const {
   API_CHECK_SELF(Package);
   API_CHECK_ARG(name);
   auto self = unwrap<i::Package>(*this);
   auto vm = self->getVM();
   i::HandleScope handleScope(vm);
   i::AllowAllocationScope allowAlloc(vm->heap(), true);
+  auto mangled = i::mangleName(unwrap<i::Name>(name), signature);
   auto index = i::Package::ensureAndGetFunctionNameIndex(self);
-  auto function = index->getOrElse(*unwrap<i::Name>(name), nullptr);
+  auto function = index->getOrElse(*mangled, nullptr);
   return function ? wrap<Function, i::Function>(function) : Function();
 }
 
 
-Function Package::findFunction(const String& sourceName) const {
+Function Package::findFunction(const String& sourceName, const string& signature) const {
   API_CHECK_SELF(Package);
   API_CHECK_ARG(sourceName);
   auto self = unwrap<i::Package>(*this);
@@ -443,15 +405,16 @@ Function Package::findFunction(const String& sourceName) const {
   i::HandleScope handleScope(vm);
   i::AllowAllocationScope allowAlloc(vm->heap(), true);
   auto index = i::Package::ensureAndGetFunctionSourceNameIndex(self);
-  auto function = index->getOrElse(*unwrap<i::String>(sourceName), nullptr);
+  auto mangled = i::mangleSourceName(unwrap<i::String>(sourceName), signature);
+  auto function = index->getOrElse(*mangled, nullptr);
   return function ? wrap<Function, i::Function>(function) : Function();
 }
 
 
-Function Package::findFunction(const string& sourceName) const {
+Function Package::findFunction(const string& sourceName, const string& signature) const {
   API_CHECK_SELF(Package);
   String sourceNameStr(refVM(*this), sourceName);
-  return findFunction(sourceNameStr);
+  return findFunction(sourceNameStr, signature);
 }
 
 
@@ -520,74 +483,89 @@ Function::Function(Impl* impl)
     : Reference(impl) { }
 
 
+bool Function::isConstructor() const {
+  API_CHECK_SELF(Function);
+  return (unwrapRaw<i::Function>(*this)->flags() & i::CONSTRUCTOR_FLAG) != 0;
+}
+
+
+Class Function::clas() const {
+  API_CHECK_SELF(Function);
+  auto clas = unwrapRaw<i::Function>(*this)->definingClass();
+  return clas ? wrap<Class, i::Class>(clas) : Class();
+}
+
+
 Class::Class(Impl* impl)
     : Reference(impl) { }
 
 
-Function Class::findMethod(const Name& name) const {
+Function Class::findConstructor(const string& signature) const {
+  API_CHECK_SELF(Class);
+  auto self = unwrap<i::Class>(*this);
+  i::HandleScope handleScope(self->getVM());
+  i::AllowAllocationScope allowAlloc(self->getHeap(), true);
+  auto index = i::Class::ensureAndGetConstructorSignatureIndex(self);
+  auto sigStr = i::String::fromUtf8String(self->getHeap(), signature);
+  auto ctor = index->getOrElse(*sigStr, nullptr);
+  return ctor ? wrap<Function, i::Function>(ctor) : Function();
+}
+
+
+Function Class::findMethod(const Name& name, const string& signature) const {
   API_CHECK_SELF(Class);
   API_CHECK_ARG(name);
-  auto methods = unwrapRaw<i::Class>(*this)->methods();
-  for (auto method : *methods) {
-    if ((method->flags() & i::PRIVATE_FLAG) == 0 &&
-        method->name()->equals(unwrapRaw<i::Name>(name))) {
-      return wrap<Function, i::Function>(method);
-    }
-  }
-  return Function();
+  auto self = unwrap<i::Class>(*this);
+  i::HandleScope handleScope(self->getVM());
+  i::AllowAllocationScope allowAlloc(self->getHeap(), true);
+  auto mangled = i::mangleName(unwrap<i::Name>(name), signature);
+  auto index = i::Class::ensureAndGetMethodNameIndex(self);
+  auto method = index->getOrElse(*mangled, nullptr);
+  return method ? wrap<Function, i::Function>(method) : Function();
 }
 
 
-Function Class::findMethod(const String& sourceName) const {
+Function Class::findMethod(const String& sourceName, const string& signature) const {
   API_CHECK_SELF(Class);
   API_CHECK_ARG(sourceName);
-  auto methods = unwrapRaw<i::Class>(*this)->methods();
-  for (auto method : *methods) {
-    if ((method->flags() & i::PUBLIC_FLAG) == i::PUBLIC_FLAG &&
-        method->sourceName() != nullptr &&
-        method->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
-      return wrap<Function, i::Function>(method);
-    }
-  }
-  return Function();
+  auto self = unwrap<i::Class>(*this);
+  i::HandleScope handleScope(self->getVM());
+  i::AllowAllocationScope allowAlloc(self->getHeap(), true);
+  auto mangled = i::mangleSourceName(unwrap<i::String>(sourceName), signature);
+  auto index = i::Class::ensureAndGetMethodSourceNameIndex(self);
+  auto method = index->getOrElse(*mangled, nullptr);
+  return method ? wrap<Function, i::Function>(method) : Function();
 }
 
 
-Function Class::findMethod(const string& sourceName) const {
+Function Class::findMethod(const string& sourceName, const string& signature) const {
   API_CHECK_SELF(Class);
   String sourceNameStr(refVM(*this), sourceName);
-  return findMethod(sourceNameStr);
+  return findMethod(sourceNameStr, signature);
 }
 
 
 Field Class::findField(const Name& name) const {
   API_CHECK_SELF(Class);
   API_CHECK_ARG(name);
-  auto fields = unwrapRaw<i::Class>(*this)->fields();
-  for (auto field : *fields) {
-    if ((field->flags() & i::PRIVATE_FLAG) == 0 &&
-        field->name()->equals(unwrapRaw<i::Name>(name))) {
-      return wrap<Field, i::Field>(field);
-    }
-  }
-  return Field();
+  auto self = unwrap<i::Class>(*this);
+  i::HandleScope handleScope(self->getVM());
+  i::AllowAllocationScope allowAlloc(self->getHeap(), true);
+  auto index = i::Class::ensureAndGetFieldNameIndex(self);
+  auto field = index->getOrElse(*unwrap<i::Name>(name), nullptr);
+  return field ? wrap<Field, i::Field>(field) : Field();
 }
 
 
 Field Class::findField(const String& sourceName) const {
   API_CHECK_SELF(Class);
   API_CHECK_ARG(sourceName);
-  auto fields = unwrapRaw<i::Class>(*this)->fields();
-  i::u32 mask = i::PUBLIC_FLAG | i::STATIC_FLAG;
-  i::u32 expectedFlags = i::PUBLIC_FLAG;
-  for (auto field : *fields) {
-    if ((field->flags() & mask) == expectedFlags &&
-        field->sourceName() != nullptr &&
-        field->sourceName()->equals(unwrapRaw<i::String>(sourceName))) {
-      return wrap<Field, i::Field>(field);
-    }
-  }
-  return Field();
+  auto self = unwrap<i::Class>(*this);
+  i::HandleScope handleScope(self->getVM());
+  i::AllowAllocationScope allowAlloc(self->getHeap(), true);
+  auto index = i::Class::ensureAndGetFieldSourceNameIndex(self);
+  auto field = index->getOrElse(*unwrap<i::String>(sourceName), nullptr);
+  return field ? wrap<Field, i::Field>(field) : Field();
 }
 
 
@@ -616,226 +594,189 @@ CallBuilder::~CallBuilder() {
 
 
 CallBuilder::CallBuilder(const Function& function) {
-  API_CHECK(function.impl_, "not a valid function");
-  impl_ = unique_ptr<CallBuilder::Impl>(new CallBuilder::Impl(unwrap<i::Function>(function)));
+  API_CHECK_ARG(function);
+  auto ifunction = unwrap<i::Function>(function);
+  impl_ = unique_ptr<CallBuilder::Impl>(new CallBuilder::Impl(ifunction->getVM()));
+  impl_->function_ = ifunction;
 }
 
 
-CallBuilder& CallBuilder::argUnit() {
-  impl_->argUnit();
+CallBuilder::CallBuilder(const Package& package, const Name& name) {
+  API_CHECK_ARG(package);
+  API_CHECK_ARG(name);
+  auto ipackage = unwrap<i::Package>(package);
+  impl_ = unique_ptr<CallBuilder::Impl>(new CallBuilder::Impl(ipackage->getVM()));
+  impl_->package_ = ipackage;
+  impl_->name_ = unwrap<i::Name>(name);
+}
+
+
+CallBuilder::CallBuilder(const Package& package, const String& sourceName) {
+  API_CHECK_ARG(package);
+  API_CHECK_ARG(sourceName);
+  auto ipackage = unwrap<i::Package>(package);
+  impl_ = unique_ptr<CallBuilder::Impl>(new CallBuilder::Impl(ipackage->getVM()));
+  impl_->package_ = ipackage;
+  impl_->sourceName_ = unwrap<i::String>(sourceName);
+}
+
+
+CallBuilder::CallBuilder(const Package& package, const string& sourceName)
+    : CallBuilder(package, String(refVM(package), sourceName)) { }
+
+
+CallBuilder::CallBuilder(const Class& clas, const Function& constructor) {
+  API_CHECK_ARG(clas);
+  API_CHECK_ARG(constructor);
+  API_CHECK(constructor.isConstructor(), "`constructor` is not a constructor");
+  auto iclass = unwrap<i::Class>(clas);
+  auto vm = iclass->getVM();
+  impl_ = unique_ptr<CallBuilder::Impl>(new CallBuilder::Impl(vm));
+  impl_->clas_ = iclass;
+  impl_->function_ = unwrap<i::Function>(constructor);
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAllocation(vm->heap(), true);
+  auto meta = i::Class::ensureAndGetInstanceMeta(iclass);
+  auto receiver = i::Object::create(vm->heap(), meta);
+  arg(wrap<Object, i::Object>(receiver));
+}
+
+
+CallBuilder::CallBuilder(const Class& clas) {
+  API_CHECK_ARG(clas);
+  auto iclass = unwrap<i::Class>(clas);
+  auto vm = iclass->getVM();
+  impl_ = unique_ptr<CallBuilder::Impl>(new CallBuilder::Impl(vm));
+  impl_->clas_ = iclass;
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAllocation(vm->heap(), true);
+  auto meta = i::Class::ensureAndGetInstanceMeta(iclass);
+  auto receiver = i::Object::create(vm->heap(), meta);
+  arg(wrap<Object, i::Object>(receiver));
+}
+
+
+CallBuilder::CallBuilder(const Class& clas, const Name& name) {
+  API_CHECK_ARG(clas);
+  API_CHECK_ARG(name);
+  auto iclass = unwrap<i::Class>(clas);
+  impl_ = unique_ptr<CallBuilder::Impl>(new CallBuilder::Impl(iclass->getVM()));
+  impl_->clas_ = iclass;
+  impl_->name_ = unwrap<i::Name>(name);
+}
+
+
+CallBuilder::CallBuilder(const Class& clas, const String& sourceName) {
+  API_CHECK_ARG(clas);
+  API_CHECK_ARG(sourceName);
+  auto iclass = unwrap<i::Class>(clas);
+  impl_ = unique_ptr<CallBuilder::Impl>(new CallBuilder::Impl(iclass->getVM()));
+  impl_->clas_ = iclass;
+  impl_->sourceName_ = unwrap<i::String>(sourceName);
+}
+
+
+CallBuilder::CallBuilder(const Class& clas, const string& sourceName)
+    : CallBuilder(clas, String(refVM(clas), sourceName)) { }
+
+
+CallBuilder& CallBuilder::arg(Value&& value) {
+  impl_->args_.push_back(value);
   return *this;
 }
 
 
-CallBuilder& CallBuilder::arg(bool value) {
-  impl_->arg(value);
+CallBuilder& CallBuilder::args() {
   return *this;
 }
 
 
-CallBuilder& CallBuilder::arg(int8_t value) {
-  impl_->arg(value);
-  return *this;
-}
+Value CallBuilder::call() {
+  auto isConstructor = impl_->clas_ && !impl_->name_ && !impl_->sourceName_;
 
-
-CallBuilder& CallBuilder::arg(int16_t value) {
-  impl_->arg(value);
-  return *this;
-}
-
-
-CallBuilder& CallBuilder::arg(int32_t value) {
-  impl_->arg(value);
-  return *this;
-}
-
-
-CallBuilder& CallBuilder::arg(int64_t value) {
-  impl_->arg(value);
-  return *this;
-}
-
-
-CallBuilder& CallBuilder::arg(float value) {
-  impl_->arg(value);
-  return *this;
-}
-
-
-CallBuilder& CallBuilder::arg(double value) {
-  impl_->arg(value);
-  return *this;
-}
-
-
-CallBuilder& CallBuilder::arg(const Object& value) {
-  impl_->arg(value);
-  return *this;
-}
-
-
-void CallBuilder::call() {
-  impl_->callForAny();
-}
-
-
-bool CallBuilder::callForBoolean() {
-  return impl_->callForBoolean();
-}
-
-
-int8_t CallBuilder::callForI8() {
-  return impl_->callForI8();
-}
-
-
-int16_t CallBuilder::callForI16() {
-  return impl_->callForI16();
-}
-
-
-int32_t CallBuilder::callForI32() {
-  return impl_->callForI32();
-}
-
-
-int64_t CallBuilder::callForI64() {
-  return impl_->callForI64();
-}
-
-
-float CallBuilder::callForF32() {
-  return impl_->callForF32();
-}
-
-
-double CallBuilder::callForF64() {
-  return impl_->callForF64();
-}
-
-
-String CallBuilder::callForString() {
-  return impl_->callForString();
-}
-
-
-Object CallBuilder::callForObject() {
-  return impl_->callForObject();
-}
-
-
-void CallBuilder::Impl::arg(const Object& value) {
-  API_CHECK(value, "not a valid Object reference");
-  i::Persistent<i::Type> type(i::Type::rootClassType(vm_->roots()));
-  args_.push_back(Value(move(type), unwrap<i::Object>(value)));
-}
-
-
-void CallBuilder::Impl::callForAny() {
-  call();
-}
-
-
-bool CallBuilder::Impl::callForBoolean() {
-  API_CHECK(function_->returnType()->form() == i::Type::BOOLEAN_TYPE,
-      "wrong function return type");
-  return static_cast<bool>(call());
-}
-
-
-int8_t CallBuilder::Impl::callForI8() {
-  API_CHECK(function_->returnType()->form() == i::Type::I8_TYPE,
-      "wrong function return type");
-  return static_cast<int8_t>(call());
-}
-
-
-int16_t CallBuilder::Impl::callForI16() {
-  API_CHECK(function_->returnType()->form() == i::Type::I16_TYPE,
-      "wrong function return type");
-  return static_cast<int16_t>(call());
-}
-
-
-int32_t CallBuilder::Impl::callForI32() {
-  API_CHECK(function_->returnType()->form() == i::Type::I32_TYPE,
-      "wrong function return type");
-  return static_cast<int32_t>(call());
-}
-
-
-int64_t CallBuilder::Impl::callForI64() {
-  API_CHECK(function_->returnType()->form() == i::Type::I64_TYPE,
-      "wrong function return type");
-  return static_cast<int64_t>(call());
-}
-
-
-float CallBuilder::Impl::callForF32() {
-  API_CHECK(function_->returnType()->form() == i::Type::F32_TYPE,
-      "wrong function return type");
-  return i::f32FromBits(static_cast<i::u32>(call()));
-}
-
-
-double CallBuilder::Impl::callForF64() {
-  API_CHECK(function_->returnType()->form() == i::Type::F64_TYPE,
-      "wrong function return type");
-  return i::f64FromBits(static_cast<i::u64>(call()));
-}
-
-
-String CallBuilder::Impl::callForString() {
-  API_CHECK(function_->returnType()->equals(
-          vm_->roots()->getBuiltinType(i::BUILTIN_STRING_CLASS_ID)),
-      "wrong function return type");
-  i::i64 stringPtrBits = call();
-  i::AllowAllocationScope allowAlloc(vm_->heap(), false);
-  i::String* rawString = reinterpret_cast<i::String*>(static_cast<i::word_t>(stringPtrBits));
-  return wrap<String, i::String>(rawString);
-}
-
-
-Object CallBuilder::Impl::callForObject() {
-  API_CHECK(function_->returnType()->isObject(), "wrong function return type");
-  i::i64 objPtrBits = call();
-  i::AllowAllocationScope allowAlloc(vm_->heap(), false);
-  i::Object* rawObject = reinterpret_cast<i::Object*>(static_cast<i::word_t>(objPtrBits));
-  return wrap<Object, i::Object>(rawObject);
-}
-
-
-i::i64 CallBuilder::Impl::call() {
-  // Check arguments.
-  i::HandleScope handleScope(vm_);
-  i::AllowAllocationScope allowAlloc(vm_->heap(), true);
-  API_CHECK(args_.size() == function_->parameterTypes()->length(), "wrong number of arguments");
-  for (i::length_t i = 0; i < args_.size(); i++) {
-    if (args_[i].tag == OBJECT) {
-      args_[i].type = i::Object::typeof(args_[i].object);
+  i::VM* vm = impl_->vm_;
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAlloc(vm->heap(), true);
+  if (impl_->function_) {
+    // If we know what function we're going to call, check that the arguments match the
+    // function's parameter types.
+    API_CHECK(impl_->function_->typeParameters()->length() == 0,
+        "function has type parameters and cannot be called");
+    API_CHECK(impl_->args_.size() == impl_->function_->parameterTypes()->length(),
+        "wrong number of arguments");
+    for (i::length_t i = 0; i < impl_->args_.size(); i++) {
+      auto argType = typeFromValue(vm, impl_->args_[i]);
+      auto paramType = handle(impl_->function_->parameterTypes()->get(i));
+      API_CHECK(i::Type::isSubtypeOf(argType, paramType), "type error");
     }
-    API_CHECK(i::Type::isSubtypeOf(args_[i].type, handle(function_->parameterTypes()->get(i))),
-        "type error");
+  } else {
+    // We don't know what function we're going to call. We need to look it up using the
+    // types of the arugments.
+    vector<i::Local<i::Type>> argTypes;
+    argTypes.reserve(impl_->args_.size());
+    for (i::length_t i = 0; i < impl_->args_.size(); i++) {
+      argTypes.emplace_back(typeFromValue(vm, impl_->args_[i]));
+    }
+    auto package = impl_->package_
+        ? impl_->package_
+        : i::Persistent<i::Package>(impl_->clas_->package());
+    auto signature = buildSignature(argTypes, package);
+    if (impl_->name_) {
+      // Look up function or method by full name.
+      auto mangledName = mangleName(impl_->name_, signature);
+      i::Local<i::BlockHashMap<i::Name, i::Function>> index;
+      if (impl_->package_) {
+        index = i::Package::ensureAndGetFunctionNameIndex(impl_->package_);
+      } else {
+        index = i::Class::ensureAndGetMethodNameIndex(impl_->clas_);
+      }
+      impl_->function_ = i::Local<i::Function>(vm, index->getOrElse(*mangledName, nullptr));
+    } else if (impl_->sourceName_) {
+      // Look up function or method by source name.
+      auto mangledSourceName = mangleSourceName(impl_->sourceName_, signature);
+      i::Local<i::BlockHashMap<i::String, i::Function>> index;
+      if (impl_->package_) {
+        index = i::Package::ensureAndGetFunctionSourceNameIndex(impl_->package_);
+      } else {
+        index = i::Class::ensureAndGetMethodSourceNameIndex(impl_->clas_);
+      }
+      impl_->function_ =
+          i::Local<i::Function>(vm, index->getOrElse(*mangledSourceName, nullptr));
+    } else {
+      // Look up constructor.
+      auto sigStr = i::String::fromUtf8String(vm->heap(), signature);
+      auto index = i::Class::ensureAndGetConstructorSignatureIndex(impl_->clas_);
+      impl_->function_ = i::Local<i::Function>(vm, index->getOrElse(*sigStr, nullptr));
+    }
+    API_CHECK(impl_->function_, "could not find function that matches argument types");
   }
 
   // Push arguments onto the stack.
-  i::AllowAllocationScope denyAlloc(vm_->heap(), false);
-  const i::Persistent<i::Stack>& stack = vm_->stack();
-  for (auto& arg : args_) {
-    if (arg.tag == OBJECT) {
-      stack->push(arg.object.getOrNull());
+  i::AllowAllocationScope denyAlloc(vm->heap(), false);
+  const i::Persistent<i::Stack>& stack = vm->stack();
+  for (auto& arg : impl_->args_) {
+    if (Value::Impl::getValueTag(arg) == i::Type::CLASS_TYPE) {
+      stack->push(unwrapRaw<i::Object>(Value::Impl::getValueRef(arg)));
     } else {
-      stack->push(arg.primitive);
+      stack->push(Value::Impl::getValueBits(arg));
     }
   }
 
   // Perform the call.
-  i::Interpreter interpreter(vm_, vm_->stack(), vm_->threadBindle());
+  i::Interpreter interpreter(vm, vm->stack(), vm->threadBindle());
+  i::i64 result;
   try {
-    return interpreter.call(function_);
+    result = interpreter.call(impl_->function_);
   } catch (i::Exception& exception) {
     throw Exception(move(wrap<Object, i::Object>(exception.get())));
+  }
+
+  // Return the result as a value. If this was a constructor call, return the receiver instead
+  // of the constructor's return value.
+  if (isConstructor) {
+    return impl_->args_[0];
+  } else {
+    return valueFromRaw(impl_->function_->returnType(), result);
   }
 }
 

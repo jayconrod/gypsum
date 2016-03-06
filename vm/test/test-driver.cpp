@@ -172,6 +172,9 @@ int main(int argc, char* argv[]) {
         if (WIFSIGNALED(status)) {
           cerr << '\n' << test->name()
                << ": error: terminated by signal " << WTERMSIG(status) << endl;
+        } else if (status == 1280) {
+          cerr << '\n' << test->name()
+               << ": error: unhandled exception" << endl;
         } else {
           cerr << '\n' << test->name()
                << ": unknown error code: " << status << endl;

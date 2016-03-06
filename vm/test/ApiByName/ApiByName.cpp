@@ -4,14 +4,19 @@
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
 
+#include <iostream>
 #include <string>
 
 #include <codeswitch.h>
 
 #include "test.h"
 
+using std::cerr;
+using std::endl;
 using std::string;
 
+using codeswitch::CallBuilder;
+using codeswitch::Error;
 using codeswitch::Name;
 using codeswitch::String;
 using codeswitch::VM;
@@ -64,37 +69,38 @@ int main(int argc, char* argv[]) {
 
   // Check that when we load a function that doesn't exist, we get a bad reference.
   {
-    auto function = package.findFunction(Name::fromStringForDefn(&vm, "bogus"));
+    auto function = package.findFunction(Name::fromStringForDefn(&vm, "bogus"), "(I)");
     ASSERT_FALSE(function);
   }
 
   // Check that we can load a function by name.
   {
-    auto function = package.findFunction(Name::fromStringForDefn(&vm, "pub-fn"));
+    auto function = package.findFunction(Name::fromStringForDefn(&vm, "pub-fn"), "");
     ASSERT_TRUE(function);
-    ASSERT_EQ(12L, function.callForI64());
+    ASSERT_EQ(12L, function.call().asI64());
   }
 
   // Check that we can load a static method by name.
   {
-    auto function =
-        package.findFunction(Name::fromStringForDefn(&vm, "PubClass.pub-static-method"));
+    auto function = package.findFunction(
+        Name::fromStringForDefn(&vm, "PubClass.pub-static-method"),
+        "");
     ASSERT_TRUE(function);
-    ASSERT_EQ(34L, function.callForI64());
+    ASSERT_EQ(34L, function.call().asI64());
   }
 
   // Check that we can load a public function by its source name.
   {
-    auto function = package.findFunction("pub-fn");
+    auto function = package.findFunction("pub-fn", "");
     ASSERT_TRUE(function);
-    ASSERT_EQ(12L, function.callForI64());
+    ASSERT_EQ(12L, function.call().asI64());
   }
 
   // Check that we can load a non-public function by its source name.
   {
-    auto function = package.findFunction("hidden-fn");
+    auto function = package.findFunction("hidden-fn", "");
     ASSERT_TRUE(function);
-    function = package.findFunction(Name::fromStringForDefn(&vm, "hidden-fn"));
+    function = package.findFunction(Name::fromStringForDefn(&vm, "hidden-fn"), "");
     ASSERT_TRUE(function);
   }
 
@@ -126,6 +132,7 @@ int main(int argc, char* argv[]) {
 
   auto fooClass = package.findClass("Foo");
   auto fooObj = package.findGlobal("foo").value().asObject();
+  string fooSig("(C:Foo)");
 
   // Check that when we load a field that doesn't exist, we get a bad reference.
   {
@@ -151,10 +158,10 @@ int main(int argc, char* argv[]) {
     ASSERT_EQ(35L, fooObj.getField(field).asI64());
   }
 
-  // Check that we can't load a non-public field by its source name.
+  // Check that we can load non-public fields by name.
   {
     auto field = fooClass.findField("normal-var");
-    ASSERT_FALSE(field);
+    ASSERT_TRUE(field);
     field = fooClass.findField(Name::fromStringForDefn(&vm, "Foo.normal-var"));
     ASSERT_TRUE(field);
   }
@@ -166,56 +173,132 @@ int main(int argc, char* argv[]) {
     ASSERT_FALSE(field.isConstant());
   }
 
-  // Check that private variables cannot be loaded.
+  // Check that private variables can be loaded.
   {
     auto field = fooClass.findField(Name::fromStringForDefn(&vm, "Foo.priv-var"));
-    ASSERT_FALSE(field);
+    ASSERT_TRUE(field);
   }
 
   // Check that when we load a method that doesn't exist, we get a bad reference.
   {
-    auto method = fooClass.findMethod(Name::fromStringForDefn(&vm, "brak"));
+    auto method = fooClass.findMethod(Name::fromStringForDefn(&vm, "brak"), "()");
+    ASSERT_FALSE(method);
+  }
+
+  // Check that when we load a method with a bad signature, we get a bad reference.
+  {
+    auto method = fooClass.findMethod(Name::fromStringForDefn(&vm, "Foo.normal-method"), "");
     ASSERT_FALSE(method);
   }
 
   // Check that we can load a method by name.
   {
-    auto method = fooClass.findMethod(Name::fromStringForDefn(&vm, "Foo.normal-method"));
+    auto method =
+        fooClass.findMethod(Name::fromStringForDefn(&vm, "Foo.normal-method"), fooSig);
     ASSERT_TRUE(method);
-    ASSERT_EQ(34L, method.callForI64(fooObj));
+    ASSERT_EQ(34L, method.call(fooObj).asI64());
   }
 
   // Check that we can load a public method by its source name.
   {
-    auto method = fooClass.findMethod("pub-method");
+    auto method = fooClass.findMethod("pub-method", fooSig);
     ASSERT_TRUE(method);
-    ASSERT_EQ(12L, method.callForI64(fooObj));
+    ASSERT_EQ(12L, method.call(fooObj).asI64());
   }
 
-  // Check that we cannot load a non-public method by its source name.
+  // Check that we can load a non-public method by its source name.
   {
-    auto method = fooClass.findMethod("normal-method");
-    ASSERT_FALSE(method);
+    auto method = fooClass.findMethod("normal-method", fooSig);
+    ASSERT_TRUE(method);
   }
 
   // Check that we can load a public static method by its source name.
   {
-    auto method = fooClass.findMethod("static-method");
+    auto method = fooClass.findMethod("static-method", "");
     ASSERT_TRUE(method);
-    ASSERT_EQ(123L, method.callForI64());
+    ASSERT_EQ(123L, method.call().asI64());
   }
 
   // Check that we can load a protected method by name.
   {
-    auto method = fooClass.findMethod(Name::fromStringForDefn(&vm, "Foo.prot-method"));
+    auto method = fooClass.findMethod(Name::fromStringForDefn(&vm, "Foo.prot-method"), fooSig);
     ASSERT_TRUE(method);
-    ASSERT_EQ(56L, method.callForI64(fooObj));
+    ASSERT_EQ(56L, method.call(fooObj).asI64());
   }
 
-  // Check that we cannot load a private method by name.
+  // Check that we can load a private method by name.
   {
-    auto method = fooClass.findMethod(Name::fromStringForDefn(&vm, "Foo.priv-method"));
-    ASSERT_FALSE(method);
+    auto method = fooClass.findMethod(Name::fromStringForDefn(&vm, "Foo.priv-method"), fooSig);
+    ASSERT_TRUE(method);
+  }
+
+  // Check that we can create a new instance of a class.
+  {
+    auto ctor = fooClass.findConstructor("(C:Foo,L)");
+    ASSERT_TRUE(ctor);
+    auto object = ctor.newInstance(static_cast<int64_t>(12));
+    ASSERT_EQ(fooClass, object.clas());
+  }
+
+  // Check that we can look up and call a function by name.
+  {
+    auto result = package.callFunction(Name::fromStringForDefn(&vm, "pub-fn")).asI64();
+    ASSERT_EQ(12L, result);
+  }
+
+  // Check that we can look up and call a function by source name.
+  {
+    ASSERT_EQ(12L, package.callFunction(String(&vm, "pub-fn")).asI64());
+    ASSERT_EQ(12L, package.callFunction("pub-fn").asI64());
+  }
+
+  // Check that we can look up and call a method by name from a class.
+  {
+    auto foo = package.findGlobal("foo").value().asObject();
+    auto clas = foo.clas();
+    ASSERT_EQ(12L, clas.callMethod(Name::fromStringForDefn(&vm, "Foo.pub-method"), foo).asI64());
+  }
+
+  // Check that we can look up and call a method by source name from a class.
+  {
+    auto foo = package.findGlobal("foo").value().asObject();
+    auto clas = foo.clas();
+    ASSERT_EQ(12L, clas.callMethod(String(&vm, "pub-method"), foo).asI64());
+    ASSERT_EQ(12L, clas.callMethod("pub-method", foo).asI64());
+  }
+
+  // Check that we can look up and call a constructor.
+  {
+    auto clas = package.findClass("Foo");
+    auto foo = clas.newInstance(static_cast<int64_t>(12));
+    ASSERT_TRUE(foo);
+  }
+
+  // Check that an exception is thrown when calling a function that's not a constructor.
+  {
+    auto clas = package.findClass("Foo");
+    auto methodName = Name::fromStringForDefn(&vm, "Foo.pub-method");
+    auto method = package.findFunction(methodName, "(C:Foo)");
+    try {
+      CallBuilder builder(clas, method);
+      cerr << "expected exception" << endl;
+      return 1;
+    } catch (Error& e) {
+      // pass.
+    }
+  }
+
+  // Check that we can look up and call a method by name from an object.
+  {
+    auto foo = package.findGlobal("foo").value().asObject();
+    ASSERT_EQ(12L, foo.callMethod(Name::fromStringForDefn(&vm, "Foo.pub-method")).asI64());
+  }
+
+  // Check that we can look up and call a method by source name from an object.
+  {
+    auto foo = package.findGlobal("foo").value().asObject();
+    ASSERT_EQ(12L, foo.callMethod(String(&vm, "pub-method")).asI64());
+    ASSERT_EQ(12L, foo.callMethod("pub-method").asI64());
   }
 
   return 0;

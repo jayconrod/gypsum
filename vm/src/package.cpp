@@ -24,6 +24,7 @@
 #include "handle.h"
 #include "hash-table.h"
 #include "heap.h"
+#include "index.h"
 #include "name.h"
 #include "roots.h"
 #include "string.h"
@@ -83,7 +84,7 @@ class Loader {
                           Local<BlockArray<Type>>* parameterTypes,
                           Local<Class>* definingClass);
   void readClass(const Local<Class>& clas);
-  Local<Field> readField();
+  Local<Field> readField(u32 index, u32 offset);
   void readTypeParameter(const Local<TypeParameter>& typeParam);
   Local<Type> readType();
 
@@ -356,56 +357,12 @@ void Package::ensureExports(const Handle<Package>& package) {
 }
 
 
-template <class K, class T, class GetKey, class Filter>
-static Local<BlockHashMap<K, T>> buildIndex(
-    const Handle<BlockArray<T>>& defns,
-    GetKey getKey,
-    Filter filter) {
-  auto index = BlockHashMap<K, T>::create(defns->getHeap());
-  HandleScope handleScope(defns->getVM());
-  for (length_t i = 0, n = defns->length(); i < n; i++) {
-    auto defn = handle(defns->get(i));
-    if (filter(defn)) {
-      auto key = getKey(defn);
-      if (key) {
-        BlockHashMap<K, T>::add(index, key, defn);
-      }
-    }
-  }
-  return index;
-}
-
-
-template <class T, class Filter>
-static Local<BlockHashMap<Name, T>> buildNameIndex(
-    const Handle<BlockArray<T>>& defns,
-    Filter filter) {
-  return buildIndex<Name, T>(defns, [](const Handle<T>& defn) { return handle(defn->name()); }, filter);
-}
-
-
-template <class T, class Filter>
-static Local<BlockHashMap<String, T>> buildSourceNameIndex(
-    const Handle<BlockArray<T>>& defns,
-    Filter filter) {
-  auto getKey = [](const Handle<T>& defn) {
-    return defn->sourceName() ? handle(defn->sourceName()) : Local<String>();
-  };
-  return buildIndex<String, T>(defns, getKey, filter);
-}
-
-
-static bool globalFilter(const Handle<Global>& global) {
-  return true;
-}
-
-
 Local<BlockHashMap<Name, Global>> Package::ensureAndGetGlobalNameIndex(
     const Handle<Package>& package) {
   if (package->globalNameIndex()) {
     return handle(package->globalNameIndex());
   }
-  auto index = buildNameIndex<Global>(handle(package->globals()), globalFilter);
+  auto index = buildNameIndex<Global>(handle(package->globals()), allDefnFilter<Global>);
   package->setGlobalNameIndex(*index);
   return index;
 }
@@ -416,14 +373,9 @@ Local<BlockHashMap<String, Global>> Package::ensureAndGetGlobalSourceNameIndex(
   if (package->globalSourceNameIndex()) {
     return handle(package->globalSourceNameIndex());
   }
-  auto index = buildSourceNameIndex<Global>(handle(package->globals()), globalFilter);
+  auto index = buildSourceNameIndex<Global>(handle(package->globals()), allDefnFilter<Global>);
   package->setGlobalSourceNameIndex(*index);
   return index;
-}
-
-
-static bool functionNameFilter(const Handle<Function>& function) {
-  return true;
 }
 
 
@@ -432,7 +384,11 @@ Local<BlockHashMap<Name, Function>> Package::ensureAndGetFunctionNameIndex(
   if (package->functionNameIndex()) {
     return handle(package->functionNameIndex());
   }
-  auto index = buildNameIndex<Function>(handle(package->functions()), functionNameFilter);
+  Local<Name> (*getKey)(const Handle<Function>&) = mangleFunctionName;
+  auto index = buildIndex<Name, Function>(
+      handle(package->functions()),
+      getKey,
+      allDefnFilter<Function>);
   package->setFunctionNameIndex(*index);
   return index;
 }
@@ -448,15 +404,12 @@ Local<BlockHashMap<String, Function>> Package::ensureAndGetFunctionSourceNameInd
   if (package->functionSourceNameIndex()) {
     return handle(package->functionSourceNameIndex());
   }
-  auto index = buildSourceNameIndex<Function>(
-      handle(package->functions()), functionSourceNameFilter);
+  auto index = buildIndex<String, Function>(
+      handle(package->functions()),
+      mangleFunctionSourceName,
+      functionSourceNameFilter);
   package->setFunctionSourceNameIndex(*index);
   return index;
-}
-
-
-static bool classFilter(const Handle<Class>& clas) {
-  return true;
 }
 
 
@@ -465,7 +418,7 @@ Local<BlockHashMap<Name, Class>> Package::ensureAndGetClassNameIndex(
   if (package->classNameIndex()) {
     return handle(package->classNameIndex());
   }
-  auto index = buildNameIndex<Class>(handle(package->classes()), classFilter);
+  auto index = buildNameIndex<Class>(handle(package->classes()), allDefnFilter<Class>);
   package->setClassNameIndex(*index);
   return index;
 }
@@ -476,7 +429,7 @@ Local<BlockHashMap<String, Class>> Package::ensureAndGetClassSourceNameIndex(
   if (package->classSourceNameIndex()) {
     return handle(package->classSourceNameIndex());
   }
-  auto index = buildSourceNameIndex<Class>(handle(package->classes()), classFilter);
+  auto index = buildSourceNameIndex<Class>(handle(package->classes()), allDefnFilter<Class>);
   package->setClassSourceNameIndex(*index);
   return index;
 }
@@ -1068,9 +1021,11 @@ void Loader::readClass(const Local<Class>& clas) {
 
   auto fieldCount = readLengthVbn();
   auto fields = BlockArray<Field>::create(heap(), fieldCount);
+  u32 fieldOffset = kWordSize;
   for (length_t i = 0; i < fieldCount; i++) {
-    auto field = readField();
+    auto field = readField(i, fieldOffset);
     fields->set(i, *field);
+    fieldOffset = field->offset() + field->type()->typeSize();
   }
 
   auto constructorCount = readLengthVbn();
@@ -1119,12 +1074,13 @@ void Loader::readClass(const Local<Class>& clas) {
 }
 
 
-Local<Field> Loader::readField() {
+Local<Field> Loader::readField(u32 index, u32 offset) {
   auto name = readName();
   auto sourceName = readSourceName();
   auto flags = readValue<u32>();
   auto type = readType();
-  auto field = Field::create(heap(), name, sourceName, flags, type);
+  u32 alignedOffset = align(offset, type->alignment());
+  auto field = Field::create(heap(), name, sourceName, flags, type, index, alignedOffset);
   return field;
 }
 
@@ -1710,183 +1666,6 @@ Local<Class> DependencyLoader::readIdAndGetDefiningClass() {
     throw Error("invalid option");
   }
 }
-
-
-static void mangleType(stringstream& str,
-                       const Handle<Type>& type,
-                       vector<Local<TypeParameter>>& variables,
-                       const Handle<Package>& package);
-
-static void mangleTypeParameter(stringstream& str,
-                                const Handle<TypeParameter>& typeParam,
-                                vector<Local<TypeParameter>>& variables,
-                                const Handle<Package>& package);
-
-
-Local<Name> mangleFunctionName(const Handle<Function>& function,
-                               const Handle<Package>& package) {
-  HandleScope handleScope(function->getVM());
-  auto heap = function->getHeap();
-
-  // Compute the last component of the function's mangled name.
-  stringstream str;
-  auto components = handle(function->name()->components());
-  auto lastComponent = handle(components->get(components->length() - 1));
-  str << lastComponent->length() << lastComponent->toUtf8StlString();
-  auto typeParams = handle(function->typeParameters());
-  vector<Local<TypeParameter>> variables;
-  if (typeParams->length() > 0) {
-    variables.reserve(typeParams->length());
-    str << '[';
-    for (length_t i = 0; i < typeParams->length(); i++) {
-      if (i > 0)
-        str << ',';
-      variables.push_back(handle(typeParams->get(i)));
-      mangleTypeParameter(str, variables.back(), variables, package);
-    }
-    str << ']';
-  }
-  str << '(';
-  auto paramTypes = handle(function->parameterTypes());
-  for (length_t i = 0; i < paramTypes->length(); i++) {
-    if (i > 0)
-      str << ',';
-    mangleType(str, handle(paramTypes->get(i)), variables, package);
-  }
-  str << ')';
-
-  // Build a new name using the mangled component.
-  auto mangledComponents = BlockArray<String>::create(heap, components->length());
-  for (length_t i = 0; i < components->length() - 1; i++) {
-    mangledComponents->set(i, components->get(i));
-  }
-  auto mangledComponent = String::fromUtf8String(heap, str.str());
-  mangledComponents->set(components->length() - 1, *mangledComponent);
-  auto mangledName = Name::create(heap, mangledComponents);
-
-  return handleScope.escape(*mangledName);
-}
-
-
-static void mangleType(stringstream& str,
-                       const Handle<Type>& type,
-                       vector<Local<TypeParameter>>& variables,
-                       const Handle<Package>& package) {
-  auto heap = type->getHeap();
-  switch (type->form()) {
-    case Type::UNIT_TYPE:
-      str << 'U';
-      break;
-
-    case Type::BOOLEAN_TYPE:
-      str << 'Z';
-      break;
-
-    case Type::I8_TYPE:
-      str << 'B';
-      break;
-
-    case Type::I16_TYPE:
-      str << 'S';
-      break;
-
-    case Type::I32_TYPE:
-      str << 'I';
-      break;
-
-    case Type::I64_TYPE:
-      str << 'L';
-      break;
-
-    case Type::F32_TYPE:
-      str << 'F';
-      break;
-
-    case Type::F64_TYPE:
-      str << 'D';
-      break;
-
-    case Type::CLASS_TYPE:
-    case Type::EXTERN_CLASS_TYPE: {
-      str << 'C';
-      auto clas = handle(type->asClass());
-      if (clas->package() == nullptr) {
-        str << "::";
-      } else if (clas->package() != *package) {
-        auto classPackageNameStr = Name::toString(heap, handle(clas->package()->name()));
-        str << classPackageNameStr->length() << classPackageNameStr->toUtf8StlString() << ':';
-      } else {
-        str << ':';
-      }
-      auto classNameStr = Name::toString(heap, handle(clas->name()));
-      str << classNameStr->length() << classNameStr->toUtf8StlString();
-      if (type->typeArgumentCount() > 0) {
-        str << '[';
-        for (length_t i = 0; i < type->typeArgumentCount(); i++) {
-          if (i > 0)
-            str << ',';
-          mangleType(str, handle(type->typeArgument(i)), variables, package);
-        }
-        str << ']';
-      }
-      if (type->isNullable())
-        str << '?';
-      break;
-    }
-
-    case Type::VARIABLE_TYPE:
-    case Type::EXTERN_VARIABLE_TYPE: {
-      str << 'T';
-      auto typeParameter = handle(type->asVariable());
-      length_t index = kLengthNotSet;
-      for (length_t i = 0; i < variables.size(); i++) {
-        if (*variables[i] == *typeParameter) {
-          index = i;
-          break;
-        }
-      }
-      ASSERT(index != kLengthNotSet);
-      str << index;
-      if (type->isNullable())
-        str << '?';
-      break;
-    }
-
-    case Type::EXISTENTIAL_TYPE: {
-      auto oldSize = variables.size();
-      str << "E[";
-      for (length_t i = 0; i < type->existentialVariableCount(); i++) {
-        if (i > 0)
-          str << ',';
-        variables.push_back(handle(type->existentialVariable(i)));
-        mangleTypeParameter(str, variables.back(), variables, package);
-      }
-      str << ']';
-      mangleType(str, handle(type->existentialInnerType()), variables, package);
-      variables.erase(variables.begin() + oldSize, variables.end());
-      break;
-    }
-
-    case Type::LABEL_TYPE:
-      UNREACHABLE();
-  }
-
-}
-
-
-void mangleTypeParameter(stringstream& str,
-                         const Handle<TypeParameter>& typeParam,
-                         vector<Local<TypeParameter>>& variables,
-                         const Handle<Package>& package) {
-  if ((STATIC_FLAG & typeParam->flags()) != 0) {
-    str << 's';
-  }
-  str << '<';
-  mangleType(str, handle(typeParam->upperBound()), variables, package);
-  str << '>';
-  mangleType(str, handle(typeParam->lowerBound()), variables, package);
-}
-
 
 }
 }

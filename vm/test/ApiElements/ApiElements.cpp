@@ -36,8 +36,8 @@ int main(int argc, char* argv[]) {
   // TODO: should be able to create objects and arrays from C++.
 
   // Check that we can get elements from a mutable array.
-  auto createMutI8Array = package.findFunction("create-mut-i8-array");
-  auto array = createMutI8Array.callForObject(static_cast<int32_t>(5));
+  auto createMutI8Array = package.findFunction("create-mut-i8-array", "(I)");
+  auto array = createMutI8Array.call(static_cast<int32_t>(5)).asObject();
   ASSERT_TRUE(array.hasElements());
   ASSERT_EQ(5, array.length());
   ASSERT_FALSE(array.elementsAreConstant());
@@ -55,8 +55,8 @@ int main(int argc, char* argv[]) {
   ASSERT_EQ(99, array.getElement(2).asI8());
 
   // Check that we can't set elements in an immutable array.
-  auto createI8Array = package.findFunction("create-i8-array");
-  array = createI8Array.callForObject(static_cast<int32_t>(5));
+  auto createI8Array = package.findFunction("create-i8-array", "(I)");
+  array = createI8Array.call(static_cast<int32_t>(5)).asObject();
   ASSERT_TRUE(array.hasElements());
   ASSERT_EQ(5, array.length());
   ASSERT_TRUE(array.elementsAreConstant());

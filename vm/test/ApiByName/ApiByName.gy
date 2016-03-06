@@ -15,7 +15,7 @@ def hidden-fn = 56
 
 class PrivClass
 
-public class Foo
+public class Foo(x: i64)
   public let pub-const = 12
   public var pub-var = 34
   var normal-var = 56
@@ -29,4 +29,4 @@ public class Foo
   public static def static-method = 123
 
 
-public let foo = Foo()
+public let foo = Foo(12i64)

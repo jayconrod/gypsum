@@ -12,6 +12,7 @@
 #include "flags.h"
 #include "function.h"
 #include "handle.h"
+#include "index.h"
 #include "package.h"
 #include "roots.h"
 #include "type.h"
@@ -22,16 +23,21 @@ namespace codeswitch {
 namespace internal {
 
 #define CLASS_POINTER_LIST(F) \
-  F(Class, name_)             \
-  F(Class, sourceName_)       \
-  F(Class, typeParameters_)   \
-  F(Class, supertype_)        \
-  F(Class, fields_)           \
-  F(Class, constructors_)     \
-  F(Class, methods_)          \
-  F(Class, package_)          \
-  F(Class, instanceMeta_)     \
-  F(Class, elementType_)      \
+  F(Class, name_) \
+  F(Class, sourceName_) \
+  F(Class, typeParameters_) \
+  F(Class, supertype_) \
+  F(Class, fields_) \
+  F(Class, constructors_) \
+  F(Class, methods_) \
+  F(Class, package_) \
+  F(Class, instanceMeta_) \
+  F(Class, elementType_) \
+  F(Class, fieldNameIndex_) \
+  F(Class, fieldSourceNameIndex_) \
+  F(Class, methodNameIndex_) \
+  F(Class, methodSourceNameIndex_) \
+  F(Class, constructorSignatureIndex_) \
 
 DEFINE_POINTER_MAP(Class, CLASS_POINTER_LIST)
 
@@ -126,19 +132,13 @@ length_t Class::findFieldIndex(word_t offset) const {
     currentOffset += type->typeSize();
   }
   UNREACHABLE();
-  return 0;
+  return kLengthNotSet;
 }
 
 
 word_t Class::findFieldOffset(length_t index) const {
   ASSERT(index < fields()->length());
-  word_t currentOffset = kWordSize;
-  for (length_t i = 0; i < index; i++) {
-    auto size = block_cast<Field>(fields()->get(i))->type()->typeSize();
-    auto nextAlignment = block_cast<Field>(fields()->get(i + 1))->type()->alignment();
-    currentOffset = align(currentOffset + size, nextAlignment);
-  }
-  return currentOffset;
+  return fields()->get(index)->offset();
 }
 
 
@@ -155,6 +155,70 @@ Class* Class::findFieldClass(length_t index) {
   }
   UNREACHABLE();
   return nullptr;
+}
+
+
+Local<BlockHashMap<Name, Field>> Class::ensureAndGetFieldNameIndex(const Handle<Class>& clas) {
+  if (clas->fieldNameIndex()) {
+    return handle(clas->fieldNameIndex());
+  }
+  auto index = buildNameIndex<Field>(handle(clas->fields()), allDefnFilter<Field>);
+  clas->setFieldNameIndex(*index);
+  return index;
+}
+
+
+Local<BlockHashMap<String, Field>> Class::ensureAndGetFieldSourceNameIndex(
+    const Handle<Class>& clas) {
+  if (clas->fieldSourceNameIndex()) {
+    return handle(clas->fieldSourceNameIndex());
+  }
+  auto index = buildSourceNameIndex<Field>(handle(clas->fields()), allDefnFilter<Field>);
+  clas->setFieldSourceNameIndex(*index);
+  return index;
+}
+
+
+Local<BlockHashMap<Name, Function>> Class::ensureAndGetMethodNameIndex(
+    const Handle<Class>& clas) {
+  if (clas->methodNameIndex()) {
+    return handle(clas->methodNameIndex());
+  }
+  Local<Name> (*getKey)(const Handle<Function>&) = mangleFunctionName;
+  auto index = buildIndex<Name, Function>(
+      handle(clas->methods()),
+      getKey,
+      allDefnFilter<Function>);
+  clas->setMethodNameIndex(*index);
+  return index;
+}
+
+
+Local<BlockHashMap<String, Function>> Class::ensureAndGetMethodSourceNameIndex(
+    const Handle<Class>& clas) {
+  if (clas->methodSourceNameIndex()) {
+    return handle(clas->methodSourceNameIndex());
+  }
+  auto index = buildIndex<String, Function>(
+      handle(clas->methods()),
+      mangleFunctionSourceName,
+      allDefnFilter<Function>);
+  clas->setMethodSourceNameIndex(*index);
+  return index;
+}
+
+
+Local<BlockHashMap<String, Function>> Class::ensureAndGetConstructorSignatureIndex(
+    const Handle<Class>& clas) {
+  if (clas->constructorSignatureIndex()) {
+    return handle(clas->constructorSignatureIndex());
+  }
+  auto index = buildIndex<String, Function>(
+      handle(clas->constructors()),
+      mangleSignature,
+      allDefnFilter<Function>);
+  clas->setConstructorSignatureIndex(*index);
+  return index;
 }
 
 
@@ -253,7 +317,12 @@ ostream& operator << (ostream& os, const Class* clas) {
      << "\n  package: " << brief(clas->package())
      << "\n  instance meta: " << brief(clas->instanceMeta())
      << "\n  element type: " << brief(clas->elementType())
-     << "\n  length field index: " << clas->lengthFieldIndex();
+     << "\n  length field index: " << clas->lengthFieldIndex()
+     << "\n  field name index: " << brief(clas->fieldNameIndex())
+     << "\n  field source name index: " << brief(clas->fieldSourceNameIndex())
+     << "\n  method name index: " << brief(clas->methodNameIndex())
+     << "\n  method source name index: " << brief(clas->methodSourceNameIndex())
+     << "\n  constructor signature index: " << brief(clas->constructorSignatureIndex());
   return os;
 }
 

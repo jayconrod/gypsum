@@ -7,8 +7,6 @@
 #ifndef vm_h
 #define vm_h
 
-#include "codeswitch.h"
-
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -21,6 +19,9 @@
 #include "utils.h"
 
 namespace codeswitch {
+
+class VM;
+
 namespace internal {
 
 class Block;

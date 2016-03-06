@@ -323,10 +323,6 @@ class PackageDependency: public Block {
 
 std::ostream& operator << (std::ostream& os, const PackageDependency* dep);
 
-
-Local<Name> mangleFunctionName(const Handle<Function>& function,
-                               const Handle<Package>& package);
-
 }
 }
 

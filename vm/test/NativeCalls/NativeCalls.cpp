@@ -111,9 +111,12 @@ static String recursiveNativeFunction(VM* vm, int64_t n, String a, String b, Str
   if (n == 0) {
     return result;
   } else {
-    return recursiveGypsumPtr->callForString(
-        n - 1, String(vm, "foo"), String(vm, "bar"),
-        result + "," + a + b);
+    return recursiveGypsumPtr->call(
+        n - 1,
+        String(vm, "foo"),
+        String(vm, "bar"),
+        result + "," + a + b)
+        .asString();
   }
 }
 
@@ -168,70 +171,71 @@ int main(int argc, char* argv[]) {
   auto sharedlibPath = programDir + "/NativeCalls.sharedlib-1.csp";
   auto sharedlib = vm.loadPackageFromFile(sharedlibPath,
       vector<NativeFunctionSearch>{SEARCH_LIBRARY_FUNCTIONS});
-  auto sharedlib_f = sharedlib.findFunction(fName);
-  auto result = sharedlib_f.callForI64();
+  auto sharedlib_f = sharedlib.findFunction(fName, "");
+  auto result = sharedlib_f.call().asI64();
   ASSERT_EQ(12, result);
 
   // Check that we can call a native function in a shared library through another function.
-  auto sharedlib_g = sharedlib.findFunction(gName);
-  result = sharedlib_g.callForI64();
+  auto sharedlib_g = sharedlib.findFunction(gName, "");
+  result = sharedlib_g.call().asI64();
   ASSERT_EQ(12, result);
 
   // Check that we can call a native function in a static library.
   auto staticlibPath = programDir + "/NativeCalls.staticlib-1.csp";
   auto staticlib = vm.loadPackageFromFile(staticlibPath,
       vector<NativeFunctionSearch>{SEARCH_LINKED_FUNCTIONS});
-  auto staticlib_f = staticlib.findFunction(fName);
-  result = staticlib_f.callForI64();
+  auto staticlib_f = staticlib.findFunction(fName, "");
+  result = staticlib_f.call().asI64();
   ASSERT_EQ(34, result);
 
   // Check that we can call a native function in a static library through another function.
-  auto staticlib_g = staticlib.findFunction(gName);
-  result = staticlib_g.callForI64();
+  auto staticlib_g = staticlib.findFunction(gName, "");
+  result = staticlib_g.call().asI64();
   ASSERT_EQ(34, result);
 
   // Check that we can call a native function registered with the VM.
   auto registeredPath = programDir + "/NativeCalls.registered-1.csp";
   auto registered = vm.loadPackageFromFile(registeredPath,
       vector<NativeFunctionSearch>{SEARCH_REGISTERED_FUNCTIONS});
-  auto registered_f = registered.findFunction(fName);
-  result = registered_f.callForI64();
+  auto registered_f = registered.findFunction(fName, "");
+  result = registered_f.call().asI64();
   ASSERT_EQ(56, result);
 
   // Check that we can call a native function registered with the VM through another function.
-  auto registered_g = registered.findFunction(gName);
-  result = registered_g.callForI64();
+  auto registered_g = registered.findFunction(gName, "");
+  result = registered_g.call().asI64();
   ASSERT_EQ(56, result);
 
   // Check that we can call a function with integer parameters.
   auto integerParamsName = Name::fromStringForDefn(String(&vm, "integerParams"));
-  auto integerParams = registered.findFunction(integerParamsName);
-  result = integerParams.callForI64(static_cast<int64_t>(12), static_cast<int64_t>(34));
+  auto integerParams = registered.findFunction(integerParamsName, "(L,L)");
+  result = integerParams.call(static_cast<int64_t>(12), static_cast<int64_t>(34)).asI64();
   ASSERT_EQ(46, result);
 
   // Check that we can call a function with floating point parameters.
   auto floatParamsName = Name::fromStringForDefn(String(&vm, "floatParams"));
-  auto floatParams = registered.findFunction(floatParamsName);
-  auto fresult = floatParams.callForF64(3.0, -1.0);
+  auto floatParams = registered.findFunction(floatParamsName, "(D,D)");
+  auto fresult = floatParams.call(3.0, -1.0).asF64();
   ASSERT_EQ(2.0, fresult);
 
   // Check that we can call a function with string parameters.
   auto stringParamsName = Name::fromStringForDefn(String(&vm, "stringParams"));
-  auto stringParams = registered.findFunction(stringParamsName);
-  auto sresult = stringParams.callForString(String(&vm, "foo"), String(&vm, "bar"));
+  auto stringParams = registered.findFunction(stringParamsName, "(C::String,C::String)");
+  auto sresult = stringParams.call(String(&vm, "foo"), String(&vm, "bar")).asString();
   ASSERT_EQ(0, sresult.compare(String(&vm, "foobar")));
 
   // Check that we can call a function that returns null.
   auto nullObjectName = Name::fromStringForDefn(String(&vm, "nullObject"));
-  auto nullObject = registered.findFunction(nullObjectName);
-  auto oresult = nullObject.callForObject();
+  auto nullObject = registered.findFunction(nullObjectName, "");
+  auto oresult = nullObject.call().asObject();
   ASSERT_FALSE(oresult.isValid());
 
   // Check that we can call a function with many parameters. This will force some of the
   // parameters onto the stack.
   auto manyParametersName = Name::fromStringForDefn(String(&vm, "manyParameters"));
-  auto manyParameters = registered.findFunction(manyParametersName);
-  sresult = manyParameters.callForString(
+  auto manyParametersSig = "(L,D,C::String,L,D,C::String,L,D,C::String,L,D,C::String,L,D,C::String,L,D,C::String,L,D,C::String,L,D,C::String)";
+  auto manyParameters = registered.findFunction(manyParametersName, manyParametersSig);
+  sresult = manyParameters.call(
       static_cast<int64_t>(1), 2., String(&vm, "3"),
       static_cast<int64_t>(4), 5., String(&vm, "6"),
       static_cast<int64_t>(7), 8., String(&vm, "9"),
@@ -239,34 +243,38 @@ int main(int argc, char* argv[]) {
       static_cast<int64_t>(13), 14., String(&vm, "15"),
       static_cast<int64_t>(16), 17., String(&vm, "18"),
       static_cast<int64_t>(19), 20., String(&vm, "21"),
-      static_cast<int64_t>(22), 23., String(&vm, "24"));
+      static_cast<int64_t>(22), 23., String(&vm, "24"))
+      .asString();
   ASSERT_EQ("1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24",
       sresult.toStdString());
 
   // Check that we can call a pair of functions which recurse between interpreted and native.
   auto recursiveNativeName = Name::fromStringForDefn(String(&vm, "recursiveNative"));
-  auto recursiveNative = registered.findFunction(recursiveNativeName);
+  auto recursiveNativeSig = "(L,C::String,C::String,C::String)";
+  auto recursiveNative = registered.findFunction(recursiveNativeName, recursiveNativeSig);
   auto recursiveGypsumName = Name::fromStringForDefn(String(&vm, "recursiveGypsum"));
-  auto recursiveGypsum = registered.findFunction(recursiveGypsumName);
+  auto recursiveGypsumSig = "(L,C::String,C::String,C::String)";
+  auto recursiveGypsum = registered.findFunction(recursiveGypsumName, recursiveGypsumSig);
   recursiveGypsumPtr = &recursiveGypsum;
-  sresult = recursiveNative.callForString(
-      static_cast<int64_t>(4), String(&vm, "baz"), String(&vm, "quux"), String(&vm, ""));
+  sresult = recursiveNative.call(
+      static_cast<int64_t>(4), String(&vm, "baz"), String(&vm, "quux"), String(&vm, ""))
+      .asString();
   ASSERT_EQ(",bazquux,foobar,bazquux,foobar", sresult.toStdString());
 
   // Check that we can catch an unhandled exception thrown from interpreted code.
   auto throwFunctionName = Name::fromStringForDefn(String(&vm, "throwFunction"));
-  auto throwFunction = registered.findFunction(throwFunctionName);
+  auto throwFunction = registered.findFunction(throwFunctionName, "");
   ASSERT_THROWS(Exception, throwFunction.call());
 
   // Check that we can catch an exception thrown from native code in interpreted code.
   auto catchFunctionName = Name::fromStringForDefn(String(&vm, "catchFunction"));
-  auto catchFunction = registered.findFunction(catchFunctionName);
-  ASSERT_TRUE(catchFunction.callForBoolean());
+  auto catchFunction = registered.findFunction(catchFunctionName, "");
+  ASSERT_TRUE(catchFunction.call().asBoolean());
 
   // Check that we can catch an unwrapped exception thrown from native code in interpreted code.
   auto catchFunctionLazyName = Name::fromStringForDefn(&vm, "catchFunctionLazy");
-  auto catchFunctionLazy = registered.findFunction(catchFunctionLazyName);
-  ASSERT_TRUE(catchFunctionLazy.callForBoolean());
+  auto catchFunctionLazy = registered.findFunction(catchFunctionLazyName, "");
+  ASSERT_TRUE(catchFunctionLazy.call().asBoolean());
 
   return 0;
 }
