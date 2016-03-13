@@ -5,7 +5,7 @@
 
 
 import ast
-from builtins import registerBuiltins
+from builtins import registerBuiltins, getNothingClass
 from bytecode import BUILTIN_ROOT_CLASS_ID
 from compile_info import NOT_HERITABLE
 from errors import InheritanceException
@@ -13,7 +13,7 @@ from graph import Graph
 from flags import *
 from ids import GLOBAL_SCOPE_ID
 import ir
-from ir_types import ClassType, ExistentialType, VariableType
+from ir_types import ClassType, ExistentialType, VariableType, getRootClassType
 from location import NoLoc
 from scope_analysis import ScopeVisitor
 from utils import each
@@ -49,6 +49,14 @@ def analyzeInheritance(info):
         subtypeGraph.addVertex(irTypeDefn.id)
         if isinstance(irTypeDefn, ir.ObjectTypeDefn):
             for supertype in irTypeDefn.supertypes:
+                if supertype.isNullable():
+                    raise InheritanceException(irTypeDefn.getLocation(),
+                                               "%s: cannot inherit nullable type" %
+                                               irTypeDefn.name)
+                if supertype.clas is getNothingClass():
+                    raise InheritanceException(irTypeDefn.getLocation(),
+                                               "%s: cannot inherit Nothing" %
+                                               irTypeDefn.name)
                 supertypeId = getIdForType(supertype)
                 if irTypeDefn.id is supertypeId:
                     raise InheritanceException(irTypeDefn.getLocation(),
@@ -104,12 +112,60 @@ def analyzeInheritance(info):
         # pre-order, but since each base has been processed earlier, we don't need to do a
         # full graph traversal to build this.
         inheritedTypes = []
+
+        # Check that we don't explicitly inherit from the same definition more than once.
+        explicitInheritedIds = set()
         for supertype in irDefn.supertypes:
+            if supertype.clas.id in explicitInheritedIds:
+                raise InheritanceException(irDefn.getLocation(),
+                                           "%s: inherited same definition more than once: %s" %
+                                           (irDefn.name, supertype.clas.name))
+            explicitInheritedIds.add(supertype.clas.id)
+
+        # Ensure that the first inherited type is from a class. This need not be explicit in
+        # source code. For classes, if the first supertype in source code is a trait, the
+        # real first supertype is the root type. For traits, the real first supertype will be
+        # the first supertype of the first inherited trait.
+        supertypes = []
+        assert len(irDefn.supertypes) > 0
+        if isinstance(irDefn.supertypes[0].clas, ir.Trait):
+            if isinstance(irDefn, ir.Class):
+                baseClassType = getRootClassType()
+            else:
+                baseClassType = irDefn.supertypes[0].clas.supertypes[0].substitute(
+                    irDefn.supertypes[0].clas.typeParameters,
+                    irDefn.supertypes[0].typeArguments)
+            supertypes = [baseClassType] + irDefn.supertypes
+        else:
+            baseClassType = irDefn.supertypes[0]
+            supertypes = irDefn.supertypes
+        assert isinstance(baseClassType.clas, ir.Class)
+
+        # Inherit supertypes.
+        isFirstSupertype = True
+        for supertype in supertypes:
             irSuperDefn = supertype.clas
+
+            # Perform some basic checks.
             if FINAL in irSuperDefn.flags:
                 raise InheritanceException(irDefn.getLocation(),
                                            "%s: cannot inherit from final class %s" %
                                            (irDefn.name, irSuperDefn.name))
+
+            if not isFirstSupertype and isinstance(irSuperDefn, ir.Class):
+                raise InheritanceException(irDefn.getLocation(),
+                                           "%s: only first supertype may be a class" %
+                                           irDefn.name)
+            irSuperClass = irSuperDefn \
+                           if isinstance(irSuperDefn, ir.Class) \
+                           else irSuperDefn.supertypes[0].clas
+            if not baseClassType.clas.isSubclassOf(irSuperClass):
+                raise InheritanceException(irDefn.getLocation(),
+                                           "%s: base class %s of supertype %s not a superclass of base class %s" %
+                                           (irDefn.name, irSuperClass.name,
+                                            supertype, baseClassType.clas.name))
+            isFirstSupertype = False
+
             if irSuperDefn.id in inheritedTypeMap:
                 # We have already inherited this type along a different path. We do not need
                 # to copy bindings.
@@ -139,10 +195,9 @@ def analyzeInheritance(info):
                     scope.bind(name, inheritedDefnInfo)
                     scope.define(name)
 
-                # Inherit the base definition's supertypes (ubertypes).
                 for ubertype in irSuperDefn.supertypes:
                     irUberDefn = ubertype.clas
-                    substitutedUbertype = supertype.substituteForBaseClass(irUberDefn)
+                    substitutedUbertype = supertype.substituteForBase(irUberDefn)
                     if irUberDefn.id in inheritedTypeMap:
                         # We have already inherited this definition along a different path.
                         if inheritedTypeMap[irUberDefn.id] != substitutedUbertype:

@@ -693,6 +693,9 @@ class ObjectTypeDefn(ParameterizedDefn):
         self.typeParameters = typeParameters
         self.supertypes = supertypes
 
+    def isTypeDefn(self):
+        return True
+
 
 class Class(ObjectTypeDefn):
     """Represents a class definition.
@@ -912,9 +915,6 @@ class Class(ObjectTypeDefn):
                 return i
         raise KeyError("field does not belong to this class")
 
-    def isTypeDefn(self):
-        return True
-
     def isFinal(self):
         return flags.FINAL in self.flags
 
@@ -951,7 +951,7 @@ class Trait(ObjectTypeDefn):
         self.flags = flags
 
     def __repr__(self):
-        return reprFormat(self, "name", "typeParameters", "supertypes", "method", "flags")
+        return reprFormat(self, "name", "typeParameters", "supertypes", "methods", "flags")
 
     def __str__(self):
         buf = StringIO.StringIO()
@@ -959,6 +959,13 @@ class Trait(ObjectTypeDefn):
         for method in self.methods:
             buf.write("  method %s\n" % method.id)
         return buf.getvalue()
+
+    def __eq__(self, other):
+        return self.name == other.name and \
+               self.typeParameters == other.typeParameters and \
+               self.supertypes == other.supertypes and \
+               self.methods == other.methods and \
+               self.flags == other.flags
 
 
 class TypeParameter(IrTopDefn):
@@ -1152,7 +1159,7 @@ def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes, importedTy
        (flags.STATIC in irFunction.flags or flags.METHOD in irFunction.flags):
         # Method call: type args are implied by receiver.
         if isinstance(receiverType, ir_types.ObjectType):
-            receiverType = receiverType.substituteForBaseClass(irFunction.definingClass)
+            receiverType = receiverType.substituteForBase(irFunction.definingClass)
         implicitTypeArgs = list(receiverType.getTypeArguments())
         allArgTypes = argTypes \
                       if flags.STATIC in irFunction.flags \

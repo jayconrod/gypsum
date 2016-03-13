@@ -75,8 +75,6 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         irCtor = irClass.constructors[0]
         self.assertTrue(irCtor.isConstructor())
         self.assertIs(astDefn, irCtor.astDefn)
-        classInfo = info.getClassInfo(irClass)
-        self.assertIs(irClass, classInfo.irDefn)
 
     def testDefineClassWithPrimaryAndSecondaryCtors(self):
         source = "class C()\n" + \
@@ -89,8 +87,6 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                       clas.constructors[0])
         self.assertIs(info.getDefnInfo(info.ast.modules[0].definitions[0].members[0]).irDefn,
                       clas.constructors[1])
-        classInfo = info.getClassInfo(clas)
-        self.assertIs(clas, classInfo.irDefn)
         self.assertIsNot(None, clas.initializer)
 
     def testDefineClassWithPrimaryCtor(self):
@@ -238,8 +234,6 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.assertEquals(frozenset([PUBLIC]), irTrait.flags)
         self.assertEquals(GLOBAL_SCOPE_ID, defnInfo.scopeId)
         self.assertTrue(info.getScope(GLOBAL_SCOPE_ID).isDefined("Tr"))
-        classInfo = info.getClassInfo(irTrait)
-        self.assertIs(irTrait, classInfo.irDefn)
 
     def testDefineTraitFunction(self):
         source = "trait Tr\n" + \

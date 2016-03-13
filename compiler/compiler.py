@@ -1666,7 +1666,7 @@ class CompileVisitor(ast.NodeVisitor):
             self.callFunction(irDefn)
         returnType = irDefn.returnType.substitute(irDefn.typeParameters, typeArgs)
         optionClass = self.info.getStdClass("Option", loc)
-        optionType = returnType.substituteForBaseClass(optionClass)
+        optionType = returnType.substituteForBase(optionClass)
         valueType = optionType.getTypeArguments()[0]
 
         # Check if it returned Some.

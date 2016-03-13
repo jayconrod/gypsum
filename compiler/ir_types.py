@@ -161,8 +161,8 @@ class Type(data.Data):
             # (even though there is), so this can fail.
             baseClass = left.clas.findCommonBaseClass(right.clas)
             while baseClass is not None:
-                left = left.substituteForBaseClass(baseClass)
-                right = right.substituteForBaseClass(baseClass)
+                left = left.substituteForBase(baseClass)
+                right = right.substituteForBase(baseClass)
 
                 # We need to combine the type arguments, according to the variance of the
                 # corresponding type parameters. This is not necessarily possible. If we get
@@ -359,11 +359,22 @@ class ObjectType(Type):
         returns `None`."""
         raise NotImplementedError()
 
-    def substituteForBaseClass(self, base):
-        """Returns a base type of the corresponding class with type arguments substituted
-        appropriately. For example, if we have class A[T] and class B <: A[C], then if we
-        call this method on B, we will get A[C]. Note that this goes in the reverse direction
-        from `substituteForInheritance`."""
+    def substituteForBase(self, base):
+        """Returns the `ClassType` for `base`, which is a supertype of this type, with type
+        arguments substituted appropriately.
+
+        For example, if we have class `A[T]` and class `B <: A[C]`, then if we call this method
+        on type `B` with `base` `A`, we will get `A[C]`. Note that this goes in the reverse
+        direction from `substituteForInheritance`.
+
+        This method may not be called until inheritance analysis is complete for the class
+        in the `ClassType` returned by `getBaseClassType`.
+
+        Arguments:
+            base (ObjectTypeDefn): a type definition which form a base for this type. So if
+                this is a `ClassType`, `base` must be a class or trait that `clas` is
+                derives from.
+        """
         raise NotImplementedError()
 
     def uninitializedType(self):
@@ -413,7 +424,7 @@ class ClassType(ObjectType,):
     def getBaseClassType(self):
         if len(self.clas.supertypes) == 0:
             return None
-        return self.substituteForBaseClass(self.clas.supertypes[0].clas)
+        return self.substituteForBase(self.clas.supertypes[0].clas)
 
     def substitute(self, parameters, replacements):
         return ClassType(self.clas,
@@ -421,15 +432,11 @@ class ClassType(ObjectType,):
                                for arg in self.typeArguments),
                          self.flags)
 
-    def substituteForBaseClass(self, base):
+    def substituteForBase(self, base):
         assert base is not builtins.getNothingClass()
         assert self.clas is not builtins.getNothingClass()
-        # TODO: this assumes the definition is a class, not a trait.
-        supertypePath = self.clas.findTypePathToBaseClass(base)
-        ty = self
-        for sty in supertypePath:
-            ty = sty.substitute(ty.clas.typeParameters, ty.typeArguments)
-        return ty
+        baseType = next(sty for sty in self.clas.supertypes if sty.clas is base)
+        return baseType.substitute(self.clas.typeParameters, self.typeArguments)
 
     def mayUseAsBound(self):
         return not self.isNullable()
@@ -486,8 +493,8 @@ class VariableType(ObjectType):
         else:
             return ()
 
-    def substituteForBaseClass(self, base):
-        return self.typeParameter.upperBound.substituteForBaseClass(base)
+    def substituteForBase(self, base):
+        return self.typeParameter.upperBound.substituteForBase(base)
 
     def mayUseAsBound(self):
         return not self.isNullable()
@@ -571,8 +578,8 @@ class ExistentialType(ObjectType):
         subTy = self.ty.substitute(parameters, replacements)
         return self if subTy == self.ty else ExistentialType(self.variables, subTy)
 
-    def substituteForBaseClass(self, base):
-        subTy = self.ty.substituteForBaseClass(base)
+    def substituteForBase(self, base):
+        subTy = self.ty.substituteForBase(base)
         return self if subTy == self.ty else ExistentialType(self.variables, subTy)
 
     def getTypeArguments(self):

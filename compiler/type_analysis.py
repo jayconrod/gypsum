@@ -214,7 +214,7 @@ class TypeVisitorBase(ast.NodeVisitor):
 
         flags = frozenset(map(astTypeFlagToIrTypeFlag, node.flags))
 
-        if isinstance(irDefn, ir.Class):
+        if isinstance(irDefn, ir.ObjectTypeDefn):
             explicitTypeParams = ir.getExplicitTypeParameters(irDefn)
             if len(node.typeArguments) != len(explicitTypeParams):
                 raise TypeException(node.location,
@@ -499,13 +499,6 @@ class DeclarationTypeVisitor(TypeVisitorBase):
             irClass.supertypes = [ir_t.getRootClassType()]
         else:
             irClass.supertypes = [self.visit(node.supertype)]
-            for supertype in irClass.supertypes:
-                if supertype.isNullable():
-                    raise TypeException(node.location,
-                                        "%s: supertype may not be nullable" % node.name)
-                if supertype == ir_t.getNothingClassType():
-                    raise TypeException(node.location,
-                                        "%s: Nothing cannot be a supertype" % node.name)
         irSuperclass = irClass.supertypes[0].clas
         if ARRAY in irSuperclass.flags and len(irClass.fields) > 0:
             raise TypeException(node.location,
@@ -528,17 +521,10 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         # TODO: when traits have fields, check that superclass is not array class
         for param in node.typeParameters:
             self.visit(param)
-        if len(irTrait.supertypes) == 0:
+        if len(node.supertypes) == 0:
             irTrait.supertypes = [ir_t.getRootClassType()]
         else:
             irTrait.supertypes = map(self.visit, node.supertypes)
-            for supertype in irTrait.supertypes:
-                if supertype.isNullable():
-                    raise TypeException(node.location,
-                                        "%s: supertype may not be nullable" % node.name)
-                if supertype == ir_t.getNothingClassType():
-                    raise TypeException(node.location,
-                                        "%s: Nothing cannot be a supertype" % node.name)
         for member in node.members:
             self.visit(member)
 
@@ -1810,7 +1796,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         if not returnType.isObject() or \
            not ir_t.getClassFromType(returnType).isSubclassOf(optionClass):
             raise TypeException(loc, "matcher must return std.Option")
-        returnType = returnType.substituteForBaseClass(optionClass)
+        returnType = returnType.substituteForBase(optionClass)
         returnTypeArg = returnType.typeArguments[0]
         n = len(subPatterns)
         if n == 1:
@@ -1820,7 +1806,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             if not returnTypeArg.isObject() or \
                not ir_t.getClassFromType(returnTypeArg).isSubclassOf(tupleClass):
                 raise TypeException(loc, "matcher must return `std.Option[std.Tuple%d]`" % n)
-            returnTypeArg = returnTypeArg.substituteForBaseClass(tupleClass)
+            returnTypeArg = returnTypeArg.substituteForBase(tupleClass)
             patternTypes = returnTypeArg.typeArguments
         for subPat, subExprType in zip(subPatterns, patternTypes):
             self.visit(subPat, subExprType, mode)
