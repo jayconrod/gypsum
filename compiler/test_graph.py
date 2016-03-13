@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014,2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -8,7 +8,7 @@ import unittest
 
 from graph import *
 
-class TestScope(unittest.TestCase):
+class TestGraph(unittest.TestCase):
     def testReverseEdges(self):
         G = Graph([1, 2], [(1, 2)])
         reversed = G.reverseEdges()
@@ -24,3 +24,9 @@ class TestScope(unittest.TestCase):
         expectedSCCGraph = Graph(expectedSCCs,
                                  [(b, c)])
         self.assertEquals(expectedSCCGraph, SCCGraph)
+
+    def testTopologicalSort(self):
+        G = Graph([1, 2, 3, 4, 5],
+                  [(1, 2), (2, 3), (2, 4), (3, 5), (4, 5)])
+        sort = G.topologicalSort()
+        self.assertTrue([1, 2, 3, 4, 5] == sort or [1, 2, 4, 3, 5] == sort)

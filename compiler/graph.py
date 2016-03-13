@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014,2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -130,20 +130,30 @@ class Graph(object):
 
     def topologicalSort(self):
         """Returns a list of vertices in topological order."""
-        # Collect a list of vertices with no incoming edges.
+        # Kahn's algorithm
+
+        # Count the incoming edges for each node.
         roots = set(self.vertices())
+        edgeCounts = {v: 0 for v in self.vertices()}
+        totalEdgeCount = 0
         for v in self.vertices():
             for w in self.neighbors(v):
-                roots.remove(w)
+                roots.discard(w)
+                edgeCounts[w] += 1
+                totalEdgeCount += 1
 
-        # Generate a list by performing a depth-first-search on each root.
-        colors = {v: WHITE for v in self.vertices()}
+        # Build the order.
         order = []
-        def visit(v):
+        while len(roots) > 0:
+            v = roots.pop()
+            assert edgeCounts[v] == 0
             order.append(v)
-        for root in roots:
-            self.depthFirstSearch(root, visit, colors)
-        assert len(order) == len(self.vertices())
+            for w in self.neighbors(v):
+                edgeCounts[w] -= 1
+                totalEdgeCount -= 1
+                if edgeCounts[w] == 0:
+                    roots.add(w)
+        assert totalEdgeCount == 0
         return order
 
     def depthFirstSearch(self, v, callback, colors=None):
