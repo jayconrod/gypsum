@@ -17,14 +17,26 @@ from flags import COVARIANT, CONTRAVARIANT, CONSTRUCTOR, INITIALIZER, PROTECTED,
 import scope_analysis
 
 
+def analyzeTypeDeclarations(info):
+    """Analyzes the AST and assigns types to definitions.
+
+    This is a very simple pass that essentially just translates AST types to IR types for
+    class and trait supertypes, function parameters, and type parameter bounds. This must be
+    done prior to inheritance analysis, and the subtype relation can't be used until that
+    is complete, so types can't really be checked at this point. This pass queues processed
+    type arguments to be bounds checked in full type analysis.
+    """
+    declarationVisitor = DeclarationTypeVisitor(info)
+    declarationVisitor.visit(info.ast)
+    info.typeCheckFunction = declarationVisitor.checkTypes
+
+
 def analyzeTypes(info):
     """Analyzes a syntax, determines a type for each node, and reports any inconsistencies."""
+    info.typeCheckFunction()
     # Establish type information for class supertypes, type parameter upper/lower bounds,
     # and function parameter types. This is needed for `Type.isSubtypeOf` and for typing
     # function calls in expressions.
-    declarationVisitor = DeclarationTypeVisitor(info)
-    declarationVisitor.visit(info.ast)
-    declarationVisitor.checkTypes()
 
     # Resolve all function overrides. This simplifies lookups later.
     resolveAllOverrides(info)
@@ -479,11 +491,6 @@ class DeclarationTypeVisitor(TypeVisitorBase):
 
     def visitClassDefinition(self, node):
         irClass = self.info.getDefnInfo(node).irDefn
-        irSuperclass = self.info.getClassInfo(irClass).superclassInfo.irDefn
-        if ARRAY in irSuperclass.flags and len(irClass.fields) > 0:
-            raise TypeException(node.location,
-                                "%s: cannot derive from array class and declare new fields" %
-                                node.name)
         for param in node.typeParameters:
             self.visit(param)
         if node.constructor is not None:
@@ -491,14 +498,19 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         if node.supertype is None:
             irClass.supertypes = [ir_t.getRootClassType()]
         else:
-            supertype = self.visit(node.supertype)
-            if supertype.isNullable():
-                raise TypeException(node.location,
-                                    "%s: supertype may not be nullable" % node.name)
-            if supertype == ir_t.getNothingClassType():
-                raise TypeException(node.location,
-                                    "%s: Nothing cannot be a supertype" % node.name)
-            irClass.supertypes = [supertype]
+            irClass.supertypes = [self.visit(node.supertype)]
+            for supertype in irClass.supertypes:
+                if supertype.isNullable():
+                    raise TypeException(node.location,
+                                        "%s: supertype may not be nullable" % node.name)
+                if supertype == ir_t.getNothingClassType():
+                    raise TypeException(node.location,
+                                        "%s: Nothing cannot be a supertype" % node.name)
+        irSuperclass = irClass.supertypes[0].clas
+        if ARRAY in irSuperclass.flags and len(irClass.fields) > 0:
+            raise TypeException(node.location,
+                                "%s: cannot derive from array class and declare new fields" %
+                                node.name)
         if node.superArgs is not None:
             for arg in node.superArgs:
                 self.visit(arg)
@@ -510,6 +522,25 @@ class DeclarationTypeVisitor(TypeVisitorBase):
             defaultCtor.parameterTypes = [self.getReceiverType()]
         self.setMethodReceiverType(irClass.initializer)
         irClass.initializer.parameterTypes = [self.getReceiverType()]
+
+    def visitTraitDefinition(self, node):
+        irTrait = self.info.getDefnInfo(node).irDefn
+        # TODO: when traits have fields, check that superclass is not array class
+        for param in node.typeParameters:
+            self.visit(param)
+        if len(irTrait.supertypes) == 0:
+            irTrait.supertypes = [ir_t.getRootClassType()]
+        else:
+            irTrait.supertypes = map(self.visit, node.supertypes)
+            for supertype in irTrait.supertypes:
+                if supertype.isNullable():
+                    raise TypeException(node.location,
+                                        "%s: supertype may not be nullable" % node.name)
+                if supertype == ir_t.getNothingClassType():
+                    raise TypeException(node.location,
+                                        "%s: Nothing cannot be a supertype" % node.name)
+        for member in node.members:
+            self.visit(member)
 
     def visitArrayElementsStatement(self, node):
         elementType = self.visit(node.elementType)

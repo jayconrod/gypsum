@@ -244,6 +244,20 @@ class Package(object):
             return all(matchItem(defn, k, v) for k, v in kwargs.iteritems())
         return (d for d in defns if matchAll(d))
 
+    def getDefn(self, id):
+        assert id.packageId is self.id
+        if id.kind is ids.DefnId.GLOBAL:
+            return self.globals[id.index]
+        elif id.kind is ids.DefnId.FUNCTION:
+            return self.functions[id.index]
+        elif id.kind is ids.DefnId.CLASS:
+            return self.classes[id.index]
+        elif id.kind is ids.DefnId.TRAIT:
+            return self.traits[id.index]
+        else:
+            assert id.kind is ids.DefnId.TYPE_PARAMETER
+            return self.typeParameters[id.index]
+
 
 class Name(object):
     """The name of a package or a definition within a package.
@@ -652,23 +666,52 @@ class Function(ParameterizedDefn):
                parameterTypesAreCompatible
 
 
-class Class(ParameterizedDefn):
+class ObjectTypeDefn(ParameterizedDefn):
+    """Represents a definition that creates an interface for interacting with objects.
+    Specifically, this is a class or trait.
+
+    Attributes:
+        name (Name): the name of the definition.
+        id (DefnId): unique identifier for the definition.
+        sourceName (str?): name of the definition in source code.
+        astDefn (ast.Node?): the node from the AST where this definition comes from.
+        typeParameters (list[TypeParameter]?): a list of type parameters used in this
+            definition. `ClassType`s for this definition must have type arguments that
+            correspond to these parameters. Note that this list should include not only the
+            parameters from the definition, but also any parameters defined in outer
+            scopes (which are "implicit" and should come first).
+        supertypes (list[ClassType]?): a complete list of types from which this definition is
+            derived. This list includes not only the direct base types of the definition, but
+            also the transitive closure types. The list may be `None` or incomplete until
+            inheritance analysis is finished. `Type.isSubtypeOf` may not be used until then.
+            `VariableType`s in this list must correspond to parameters in `typeParameters`.
+    """
+
+    def __init__(self, name, id, sourceName=None, astDefn=None, typeParameters=None,
+                 supertypes=None):
+        super(ObjectTypeDefn, self).__init__(name, id, sourceName, astDefn)
+        self.typeParameters = typeParameters
+        self.supertypes = supertypes
+
+
+class Class(ObjectTypeDefn):
     """Represents a class definition.
 
     Attributes:
-        name (Name): the name of the class.
-        id (DefnId): unique identifier for the class.
-        sourceName (str?): name of the definition in source code
-        astDefn (ast.Node?): the location in source code where the class is defined.
+        name (Name): the name of the definition.
+        id (DefnId): unique identifier for the definition.
+        sourceName (str?): name of the definition in source code.
+        astDefn (ast.Node?): the node from the AST where this definition comes from.
         typeParameters (list[TypeParameter]?): a list of type parameters used in this
-            definition. Values with a `ClassType` for this class must have type arguments that
+            definition. `ClassType`s for this definition must have type arguments that
             correspond to these parameters. Note that this list should include not only the
-            parameters from the class definition, but also any parameters defined in outer
-            scopes (which are "implicit" and should come first). This may be `None` before
-            declaration analysis is complete.
-        supertypes (list[ClassType]?): a list of types from which this class is derived,
-            including type arguments. The subtype relation uses this. This may be `None`
-            before type declaration analysis is complete.
+            parameters from the definition, but also any parameters defined in outer
+            scopes (which are "implicit" and should come first).
+        supertypes (list[ClassType]?): a complete list of types from which this definition is
+            derived. This list includes not only the direct base types of the definition, but
+            also the transitive closure types. The list may be `None` or incomplete until
+            inheritance analysis is finished. `Type.isSubtypeOf` may not be used until then.
+            `VariableType`s in this list must correspond to parameters in `typeParameters`.
         initializer (Function?): a function which initializes new instances of this class.
             Constructors call this after calling a superconstructor if they don't call another
             constructor. May be `None` before declaration analysis is complete or if there
@@ -691,9 +734,7 @@ class Class(ParameterizedDefn):
     def __init__(self, name, id, sourceName=None, astDefn=None, typeParameters=None,
                  supertypes=None, initializer=None, constructors=None, fields=None,
                  methods=None, elementType=None, flags=frozenset()):
-        super(Class, self).__init__(name, id, sourceName, astDefn)
-        self.typeParameters = typeParameters
-        self.supertypes = supertypes
+        super(Class, self).__init__(name, id, sourceName, astDefn, typeParameters, supertypes)
         self.initializer = initializer
         self.constructors = constructors
         self.fields = fields
@@ -878,24 +919,25 @@ class Class(ParameterizedDefn):
         return flags.FINAL in self.flags
 
 
-class Trait(ParameterizedDefn):
+class Trait(ObjectTypeDefn):
     """Represents a trait definition. A trait is like an interface from Java, but it allows
     methods to be defined and inherited.
 
     Attributes:
-        name (Name): the name of the trait.
-        id (DefnId): unique identifier for the trait.
+        name (Name): the name of the definition.
+        id (DefnId): unique identifier for the definition.
         sourceName (str?): name of the definition in source code.
-        astDefn (ast.Node?): the location in source code where the trait is defined.
-        typeParameters (list[TypeParameter]): a list of type parameters used in this
-            definition. Values with a `ClassType` for this trait must have type arguments that
+        astDefn (ast.Node?): the node from the AST where this definition comes from.
+        typeParameters (list[TypeParameter]?): a list of type parameters used in this
+            definition. `ClassType`s for this definition must have type arguments that
             correspond to these parameters. Note that this list should include not only the
-            parameters from the trait definition, but also any parameters defined in outer
+            parameters from the definition, but also any parameters defined in outer
             scopes (which are "implicit" and should come first).
-        supertypes (list[ClassType]?): a list of types from which this trait is derived.
-            This list must contain at least one type. The first supertype must refer to an
-            actual class (not another trait). May be `None` before type declaration analysis
-            is complete.
+        supertypes (list[ClassType]?): a complete list of types from which this definition is
+            derived. This list includes not only the direct base types of the definition, but
+            also the transitive closure types. The list may be `None` or incomplete until
+            inheritance analysis is finished. `Type.isSubtypeOf` may not be used until then.
+            `VariableType`s in this list must correspond to parameters in `typeParameters`.
         methods (list[Function]): a list of functions that operate on instances of this trait.
             Inherited methods may be added to this list during class flattening.
         flags (frozenset[flag]): flags indicating how this trait is used. Valid flags are
@@ -904,9 +946,7 @@ class Trait(ParameterizedDefn):
 
     def __init__(self, name, id, sourceName=None, astDefn=None, typeParameters=None,
                  supertypes=None, methods=None, flags=None):
-        super(Trait, self).__init__(name, id, sourceName, astDefn)
-        self.typeParameters = typeParameters
-        self.supertypes = supertypes
+        super(Trait, self).__init__(name, id, sourceName, astDefn, typeParameters, supertypes)
         self.methods = methods
         self.flags = flags
 

@@ -11,21 +11,22 @@ import re
 import sys
 
 import ast
-from tok import NEWLINE, SPACE, COMMENT
-from location import NoLoc
+from compile_info import CompileInfo, STD_NAME
+from compiler import compile
+from errors import CompileException
+from externalization import externalize
 from ids import AstId, TARGET_PACKAGE_ID
+from inheritance_analysis import analyzeInheritance
 from ir import Package, PackageVersion, PackageDependency, Name
-from lexer import *
 from layout import layout
+from lexer import *
+from location import NoLoc
+from package_loader import PackageLoader
 from parser import *
 from scope_analysis import *
-from type_analysis import *
-from externalization import externalize
-from compiler import compile
 from serialize import serialize
-from package_loader import PackageLoader
-from compile_info import CompileInfo, STD_NAME
-from errors import CompileException
+from tok import NEWLINE, SPACE, COMMENT
+from type_analysis import analyzeTypeDeclarations, analyzeTypes
 
 sys.setrecursionlimit(10000)
 
@@ -102,9 +103,10 @@ try:
     info = CompileInfo(astPackage, package, loader, isUsingStd=isUsingStd)
 
     analyzeDeclarations(info)
-    analyzeInheritance(info)
     if args.print_scope:
         sys.stderr.write("--print-scope not supported right now\n")
+    analyzeTypeDeclarations(info)
+    analyzeInheritance(info)
     analyzeTypes(info)
     if args.print_types:
         sys.stderr.write("--print-types not supported right now\n")
