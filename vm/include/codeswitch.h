@@ -1115,9 +1115,9 @@ class Error final {
 
 
 /**
- * Exception class for unhandled exceptions thrown from native code. It contains a reference
- * to the exception that was thrown. This also works in reverse: this can be thrown from
- * native functions and handled by interpreted code.
+ * Exception class for unhandled exceptions thrown from interpreted code. It contains a
+ * reference to the exception that was thrown. This also works in reverse: this can be thrown
+ * from native functions and handled by interpreted code.
  */
 class Exception final {
  public:
