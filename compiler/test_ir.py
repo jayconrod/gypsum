@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -22,8 +22,8 @@ class TestIr(utils_test.TestCaseWithDefinitions):
         super(TestIr, self).setUp()
         self.base = self.makeClass("Base", typeParameters=[], supertypes=[getRootClassType()])
         baseTy = ClassType(self.base)
-        self.A = self.makeClass("A", supertypes=[baseTy])
-        self.B = self.makeClass("B", supertypes=[baseTy])
+        self.A = self.makeClass("A", supertypes=[baseTy] + self.base.supertypes)
+        self.B = self.makeClass("B", supertypes=[baseTy] + self.base.supertypes)
         self.T = self.makeTypeParameter("T", upperBound=getRootClassType(),
                                         lowerBound=getNothingClassType(),
                                         flags=frozenset([STATIC]))
@@ -87,6 +87,7 @@ class TestIr(utils_test.TestCaseWithDefinitions):
                                parameterTypes=[rt, ClassType(self.base)],
                                flags=frozenset([METHOD]),
                                definingClass=self.base)
+        import pdb; pdb.set_trace()
         self.assertTrue(f2.mayOverride(f1))
         self.assertFalse(f1.mayOverride(f2))
 
@@ -102,26 +103,6 @@ class TestIr(utils_test.TestCaseWithDefinitions):
                                flags=frozenset([METHOD]))
         self.assertFalse(f2.mayOverride(f1))
         self.assertFalse(f1.mayOverride(f2))
-
-    def testFindPathToBaseClassMissing(self):
-        A = self.makeClass("A", supertypes=[getRootClassType()])
-        B = self.makeClass("B", supertypes=[getRootClassType()])
-        self.assertEquals(None, A.findClassPathToBaseClass(B))
-
-    def testFindPathToBaseClassSelf(self):
-        A = self.makeClass("A", supertypes=[getRootClassType()])
-        self.assertEquals([], A.findClassPathToBaseClass(A))
-
-    def testFindPathToBaseClassShort(self):
-        A = self.makeClass("A", supertypes=[getRootClassType()])
-        B = self.makeClass("B", supertypes=[ClassType(A)])
-        self.assertEquals([A], B.findClassPathToBaseClass(A))
-
-    def testFindPathToBaseClassLong(self):
-        A = self.makeClass("A", supertypes=[getRootClassType()])
-        B = self.makeClass("B", supertypes=[ClassType(A)])
-        C = self.makeClass("C", supertypes=[ClassType(B)])
-        self.assertEquals([B, A], C.findClassPathToBaseClass(A))
 
     def testMangleFunctionNameSimple(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)

@@ -1794,7 +1794,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         # T1, ..., Tn are the expression types.
         optionClass = self.info.getStdClass("Option", loc)
         if not returnType.isObject() or \
-           not ir_t.getClassFromType(returnType).isSubclassOf(optionClass):
+           not ir_t.getClassFromType(returnType).isDerivedFrom(optionClass):
             raise TypeException(loc, "matcher must return std.Option")
         returnType = returnType.substituteForBase(optionClass)
         returnTypeArg = returnType.typeArguments[0]
@@ -1804,7 +1804,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         else:
             tupleClass = self.info.getTupleClass(n, loc)
             if not returnTypeArg.isObject() or \
-               not ir_t.getClassFromType(returnTypeArg).isSubclassOf(tupleClass):
+               not ir_t.getClassFromType(returnTypeArg).isDerivedFrom(tupleClass):
                 raise TypeException(loc, "matcher must return `std.Option[std.Tuple%d]`" % n)
             returnTypeArg = returnTypeArg.substituteForBase(tupleClass)
             patternTypes = returnTypeArg.typeArguments
@@ -2032,7 +2032,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         elif isinstance(irDefn, ir.Field):
             ty = irDefn.type
             if receiverIsExplicit and isinstance(receiverType, ir_t.ClassType):
-                fieldClass = self.findBaseClassForField(receiverType.clas, irDefn)
+                fieldClass = self.findBaseForField(receiverType.clas, irDefn)
                 ty = ty.substituteForInheritance(receiverType.clas, fieldClass)
                 ty = ty.substitute(receiverType.clas.typeParameters, receiverType.typeArguments)
             return ty
@@ -2046,10 +2046,10 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             assert isinstance(irDefn, ir.Class)
             return receiverType
 
-    def findBaseClassForField(self, receiverClass, field):
+    def findBaseForField(self, receiverClass, field):
         # At this point, classes haven't been flattened yet, so we have to search up the
-        # inheritance chain for the first class that contains the field.
-        for clas in receiverClass.superclasses():
+        # inheritance graph for the first class or trait that contains the field.
+        for clas in receiverClass.bases():
             if any(True for f in clas.fields if f is field):
                 return clas
         assert False, "field is not defined in this class or any superclass"

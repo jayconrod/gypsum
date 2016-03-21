@@ -159,7 +159,7 @@ def analyzeInheritance(info):
             irSuperClass = irSuperDefn \
                            if isinstance(irSuperDefn, ir.Class) \
                            else irSuperDefn.supertypes[0].clas
-            if not baseClassType.clas.isSubclassOf(irSuperClass):
+            if not baseClassType.clas.isDerivedFrom(irSuperClass):
                 raise InheritanceException(irDefn.getLocation(),
                                            "%s: base class %s of supertype %s not a superclass of base class %s" %
                                            (irDefn.name, irSuperClass.name,

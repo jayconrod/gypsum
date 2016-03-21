@@ -696,6 +696,83 @@ class ObjectTypeDefn(ParameterizedDefn):
     def isTypeDefn(self):
         return True
 
+    def superclass(self):
+        """Returns the `Class` which is the first base of this definition.
+
+        `None` is returned if this definition has no bases.
+        """
+        assert self is not builtins.getNothingClass()
+        if len(self.supertypes) == 0:
+            return None
+        else:
+            return self.supertypes[0].clas
+
+    def bases(self):
+        """Returns a generator of definitions this definition is based on.
+
+        The generator iterates over bases in depth-first pre-order. This definition is
+        included (it is returned first).
+        """
+        assert self is not builtins.getNothingClass()
+        yield self
+        clas = self
+        for supertype in self.supertypes:
+            yield supertype.clas
+
+    def findDistanceToBaseClass(self, base):
+        """Returns the distance to `base` on the inheritance graph.
+
+        Arguments:
+            base (Class): a superclass of this class.
+
+        Returns:
+            (int): 0 if `self` is `base`, 1 if `base` is the direct superclass, 2 if it is
+            the superclass of the direct superclass, and so on.
+        """
+        # This method is only used by builtins, and there are only builtin classes. It doesn't
+        # really work for traits. If we want to use it for traits, we should store more
+        # information with supertypes so we don't have to do a full depth-first-search of
+        # the inheritance graph on every call.
+        distance = 0
+        clas = self
+        while clas is not None and clas is not base:
+            distance += 1
+            clas = clas.superclass()
+        assert clas is base
+        return distance
+
+    def isDerivedFrom(self, other):
+        if self is other or self is builtins.getNothingClass():
+            return True
+        elif other is builtins.getNothingClass():
+            return False
+        else:
+            return other in self.bases()
+
+    def findMethodBySourceName(self, name):
+        """Searches the method list.
+
+        Arguments:
+            name (str): the source name of the method. Methods without source names will not
+                be considered.
+
+        Returns:
+            (Function, int)?: returns a pair of the method and the method index for the first
+                matching method. If no match was found, `None` is returned.
+        """
+        assert isinstance(name, str)
+        for i, m in enumerate(self.methods):
+            if m.sourceName == name:
+                return m, i
+        return None
+
+    def getMethodIndex(self, method):
+        for i, m in enumerate(m for m in self.methods if flags.STATIC not in m.flags):
+            if m is method:
+                return i
+        raise KeyError("method does not belong to this class")
+
+
 
 class Class(ObjectTypeDefn):
     """Represents a class definition.
@@ -776,70 +853,6 @@ class Class(ObjectTypeDefn):
                self.elementType == other.elementType and \
                self.flags == other.flags
 
-    def superclass(self):
-        assert self is not builtins.getNothingClass()
-        if len(self.supertypes) == 0:
-            return None
-        else:
-            return self.supertypes[0].clas
-
-    def superclasses(self):
-        """Returns a generator of superclasses in depth-first order, including this class."""
-        assert self is not builtins.getNothingClass()
-        yield self
-        clas = self
-        while len(clas.supertypes) > 0:
-            clas = clas.supertypes[0].clas
-            yield clas
-
-    def findTypePathToBaseClass(self, base):
-        """Returns a list of supertypes (ClassTypes), which represent a path through the class
-        DAG from this class to the given base class. The path does not include a type for this
-        class, but it does include the supertype for the base. If the given class is not a
-        base, returns None. This class must not be Nothing, since there is no well-defined
-        path in that case."""
-        assert self is not builtins.getNothingClass()
-        path = []
-        indexStack = [0]
-        assert self.id is not None
-        visited = set([self.id])
-
-        while len(indexStack) > 0:
-            index = indexStack[-1]
-            indexStack[-1] += 1
-            clas = path[-1].clas if len(path) > 0 else self
-            if clas is base:
-                return path
-            elif index == len(clas.supertypes):
-                if len(path) > 0:
-                    path.pop()
-                indexStack.pop()
-            elif clas.supertypes[index].clas.id not in visited:
-                supertype = clas.supertypes[index]
-                assert supertype.clas.id is not None
-                visited.add(supertype.clas.id)
-                path.append(supertype)
-                indexStack.append(0)
-        return None
-
-    def findClassPathToBaseClass(self, base):
-        path = self.findTypePathToBaseClass(base)
-        if path is None:
-            return path
-        else:
-            return [sty.clas for sty in path]
-
-    def findDistanceToBaseClass(self, base):
-        return len(self.findClassPathToBaseClass(base))
-
-    def isSubclassOf(self, other):
-        if self is other or self is builtins.getNothingClass():
-            return True
-        elif other is builtins.getNothingClass():
-            return False
-        else:
-            return other in self.superclasses()
-
     def findCommonBaseClass(self, other):
         """Returns a class which (a) is a superclass of both classes, and (b) has no subclasses
         which are superclasses of both classes."""
@@ -850,8 +863,8 @@ class Class(ObjectTypeDefn):
         if other is builtins.getNothingClass():
             return self
 
-        selfBases = list(self.superclasses())
-        otherBases = list(other.superclasses())
+        selfBases = list(self.bases())
+        otherBases = list(other.bases())
         if selfBases[-1] is not otherBases[-1]:
             return None
 
@@ -862,52 +875,17 @@ class Class(ObjectTypeDefn):
             i -= 1
         return selfBases[i + 1]
 
-    def getConstructor(self, argTypes):
-        # TODO: support constructor overloading
-        assert len(self.constructors) <= 1
-        if len(self.constructors) > 0:
-            return self.constructors[0]
-        else:
-            return None
-
-    def findMethodByShortName(self, name):
-        assert isinstance(name, str)
-        for m in self.methods:
-            if m.name.short() == name:
-                return m
-        return None
-
-    def getMethodDict(self):
-        methodDict = {}
-        for i, m in enumerate(self.methods):
-            if m.name not in methodDict:
-                methodDict[m.name] = []
-            methodDict[m.name].append((i, m))
-        return methodDict
-
-    def getField(self, name):
-        for f in self.fields:
-            if f.name.short() == name:
-                return f
-        return None
-
-    def getMethod(self, name):
-        for m in self.methods:
-            if m.name.short() == name:
-                return m
+    def findFieldBySourceName(self, name):
+        for i, f in enumerate(self.fields):
+            if name == f.sourceName:
+                return f, i
         return None
 
     def getMember(self, name):
-        method = self.getMethod(name)
+        method = self.findMethodBySourceName(name)[0]
         if method is not None:
             return method
-        return self.getField(name)
-
-    def getMethodIndex(self, method):
-        for i, m in enumerate(m for m in self.methods if flags.STATIC not in m.flags):
-            if m is method:
-                return i
-        raise KeyError("method does not belong to this class")
+        return self.findFieldBySourceName(name)[0]
 
     def getFieldIndex(self, field):
         for i, f in enumerate(self.fields):

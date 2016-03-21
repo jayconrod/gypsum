@@ -240,12 +240,17 @@ class Type(data.Data):
         raise NotImplementedError()
 
     def substituteForInheritance(self, clas, base):
-        assert clas.isSubclassOf(base)
-        supertypePath = clas.findTypePathToBaseClass(base)
-        ty = self
-        for sty in reversed(supertypePath):
-            ty = ty.substitute(sty.clas.typeParameters, sty.typeArguments)
-        return ty
+        """Substitutes the type of something that was inherited from a class or trait.
+
+        Replaces references to type parameters in the base definition using type arguments from
+        the deriving definition.
+        """
+        assert clas.isDerivedFrom(base)
+        if clas is base:
+            return self
+        else:
+            supertype = next(sty for sty in clas.supertypes if sty.clas is base)
+            return self.substitute(base.typeParameters, sty.typeArguments)
 
     def getTypeArguments(self):
         raise NotImplementedError()

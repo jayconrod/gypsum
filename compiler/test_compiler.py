@@ -715,7 +715,7 @@ class TestCompiler(TestCaseWithDefinitions):
     def testConcatStrings(self):
         package = self.compileFromSource("def f = \"foo\" + \"bar\"")
         stringClass = getStringClass()
-        concatMethod = stringClass.findMethodByShortName("+")
+        concatMethod = stringClass.findMethodBySourceName("+")[0]
         concatMethodIndex = stringClass.getMethodIndex(concatMethod)
         fooIndex = package.findString("foo")
         barIndex = package.findString("bar")
@@ -729,7 +729,7 @@ class TestCompiler(TestCaseWithDefinitions):
     def testCompareStrings(self):
         package = self.compileFromSource("def f = \"foo\" == \"bar\"")
         stringClass = getStringClass()
-        eqMethod = stringClass.findMethodByShortName("==")
+        eqMethod = stringClass.findMethodBySourceName("==")[0]
         eqMethodIndex = stringClass.getMethodIndex(eqMethod)
         fooIndex = package.findString("foo")
         barIndex = package.findString("bar")
@@ -1327,8 +1327,7 @@ class TestCompiler(TestCaseWithDefinitions):
                  "    case foo.bar => 12\n" + \
                  "    case _ => 34"
         package = self.compileFromSource(source, packageLoader=loader)
-        eqMethod = stringClass.getMethod("==")
-        eqMethodIndex = stringClass.getMethodIndex(eqMethod)
+        eqMethod, eqMethodIndex = stringClass.findMethodBySourceName("==")
         self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
                                ldlocal(0),
@@ -1360,9 +1359,9 @@ class TestCompiler(TestCaseWithDefinitions):
         stringType = getStringType()
         tryMatch = package.findFunction(name="Some.try-match")
         some = package.findClass(name="Some")
-        isDefined = some.findMethodByShortName("is-defined")
+        isDefined = some.findMethodBySourceName("is-defined")[0]
         isDefinedIndex = some.getMethodIndex(isDefined)
-        get = some.findMethodByShortName("get")
+        get = some.findMethodBySourceName("get")[0]
         getIndex = some.getMethodIndex(get)
         noIndex = package.findString("no")
         self.checkFunction(package,
@@ -1417,9 +1416,9 @@ class TestCompiler(TestCaseWithDefinitions):
         package = self.compileFromSource(source, name=STD_NAME)
         Matcher = package.findFunction(name="Matcher")
         Option = package.findClass(name="Option")
-        isDefined = Option.findMethodByShortName("is-defined")
+        isDefined = Option.findMethodBySourceName("is-defined")[0]
         isDefinedIndex = Option.getMethodIndex(isDefined)
-        get = Option.findMethodByShortName("get")
+        get = Option.findMethodBySourceName("get")[0]
         getIndex = Option.getMethodIndex(get)
         Tuple2 = package.findClass(name="Tuple2")
         self.checkFunction(package,
@@ -1478,12 +1477,12 @@ class TestCompiler(TestCaseWithDefinitions):
                  "      case _ => 34"
         package = self.compileFromSource(source, name=STD_NAME)
         Foo = package.findClass(name="Foo")
-        Matcher = Foo.findMethodByShortName("Matcher")
+        Matcher = Foo.findMethodBySourceName("Matcher")[0]
         MatcherIndex = Foo.getMethodIndex(Matcher)
         Some = package.findClass(name="Some")
-        isDefined = Some.findMethodByShortName("is-defined")
+        isDefined = Some.findMethodBySourceName("is-defined")[0]
         isDefinedIndex = Some.getMethodIndex(isDefined)
-        get = Some.findMethodByShortName("get")
+        get = Some.findMethodBySourceName("get")[0]
         getIndex = Some.getMethodIndex(get)
         self.checkFunction(package,
                            self.makeSimpleFunction("Foo.f", I64Type, [[
@@ -1536,9 +1535,9 @@ class TestCompiler(TestCaseWithDefinitions):
         package = self.compileFromSource(source, name=STD_NAME)
         matcher = package.findFunction(name="~")
         Some = package.findClass(name="Some")
-        isDefined = Some.findMethodByShortName("is-defined")
+        isDefined = Some.findMethodBySourceName("is-defined")[0]
         isDefinedIndex = Some.getMethodIndex(isDefined)
-        get = Some.findMethodByShortName("get")
+        get = Some.findMethodBySourceName("get")[0]
         getIndex = Some.getMethodIndex(get)
         objectType = getRootClassType()
         stringType = getStringType()
@@ -1595,9 +1594,9 @@ class TestCompiler(TestCaseWithDefinitions):
         Bar = package.findClass(name="Bar")
         matcher = package.findFunction(name="::.try-match")
         Some = package.findClass(name="Some")
-        isDefined = Some.findMethodByShortName("is-defined")
+        isDefined = Some.findMethodBySourceName("is-defined")[0]
         isDefinedIndex = Some.getMethodIndex(isDefined)
-        get = Some.findMethodByShortName("get")
+        get = Some.findMethodBySourceName("get")[0]
         getIndex = Some.getMethodIndex(get)
         Tuple = package.findClass(name="Tuple2")
         objectType = getRootClassType()
@@ -3643,7 +3642,7 @@ class TestCompiler(TestCaseWithDefinitions):
         f = package.findFunction(name="f")
         Foo = package.findClass(name="Foo")
         FooType = ClassType(Foo, (getRootClassType(),))
-        toString = Foo.findMethodByShortName("to-string")
+        toString = Foo.findMethodBySourceName("to-string")[0]
         toStringIndex = Foo.getMethodIndex(toString)
         expected = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
@@ -3666,7 +3665,7 @@ class TestCompiler(TestCaseWithDefinitions):
         f = package.findFunction(name="f")
         Foo = package.findClass(name="Foo")
         FooType = ClassType(Foo, (getRootClassType(),))
-        toString = Foo.findMethodByShortName("to-string")
+        toString = Foo.findMethodBySourceName("to-string")[0]
         toStringIndex = Foo.getMethodIndex(toString)
         expected = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),

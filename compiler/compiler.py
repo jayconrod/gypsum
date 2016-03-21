@@ -1507,17 +1507,18 @@ class CompileVisitor(ast.NodeVisitor):
 
     def buildCallNamedMethod(self, receiverType, name, mode):
         receiverClass = getClassFromType(receiverType)
-        method = receiverClass.getMethod(name)
-        self.callMethod(method)
+        method, index = receiverClass.findMethodBySourceName(name)
+        self.callMethod(method, index)
         self.dropForEffect(mode)
 
-    def callMethod(self, method):
+    def callMethod(self, method, index=None):
         if method.insts is not None:
             self.addBuiltinInstructions(method.insts)
         elif method.isFinal():
             self.callFunction(method)
         else:
-            index = method.definingClass.getMethodIndex(method)
+            if index is None:
+                index = method.definingClass.getMethodIndex(method)
             self.callv(len(method.parameterTypes), index)
 
     HAVE_RECEIVER = "HAVE_RECEIVER"
