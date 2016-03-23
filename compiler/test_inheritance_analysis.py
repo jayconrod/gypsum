@@ -69,12 +69,6 @@ class TestInheritanceAnalysis(unittest.TestCase):
         bazScope = info.getScope(bazClass)
         self.assertTrue(bazScope.isBound("x"))
 
-    @unittest.skip("not implemented")
-    def testInheritFromLocalTypeInForeignClass(self):
-        # TODO: test foreign type inheriting from local class
-        # when we support other packages depending on package being compiled
-        self.fail()
-
     def testInheritForeignTypeInForeignTypeInSamePackage(self):
         package = Package(name=Name(["foo"]))
         barClass = package.addClass(Name(["Bar"]), typeParameters=[],
@@ -113,6 +107,55 @@ class TestInheritanceAnalysis(unittest.TestCase):
         info = self.analyzeFromSource("class Foo <: Exception")
         clas = info.package.findClass(name="Foo")
         self.assertEquals([getExceptionClassType(), getRootClassType()], clas.supertypes)
+
+    def testClassInheritFromTraitWithHigherClass(self):
+        source = "trait Tr\n" + \
+                 "class Foo <: Tr"
+        info = self.analyzeFromSource(source)
+        Tr = info.package.findTrait(name="Tr")
+        Foo = info.package.findClass(name="Foo")
+        self.assertEquals([getRootClassType(), ClassType(Tr)], Foo.supertypes)
+
+    def testClassInheritFromTraitWithSameClass(self):
+        source = "trait Tr <: Foo\n" + \
+                 "class Foo <: Tr"
+        self.assertRaises(InheritanceException, self.analyzeFromSource, source)
+
+    def testClassInheritFromTraitWithUnrelatedClass(self):
+        source = "class Bar\n" + \
+                 "trait Tr <: Bar\n" + \
+                 "class Foo <: Tr"
+        self.assertRaises(InheritanceException, self.analyzeFromSource, source)
+
+    def testClassInheritTraitMultipleTimesDirectly(self):
+        source = "trait Tr\n" + \
+                 "class Foo <: Tr, Tr"
+        self.assertRaises(InheritanceException, self.analyzeFromSource, source)
+
+    def testClassInheritTraitMultipleTimesIndirectlySameType(self):
+        source = "trait Foo\n" + \
+                 "trait Bar <: Foo\n" + \
+                 "class Baz <: Foo, Bar"
+        info = self.analyzeFromSource(source)
+        Foo = info.package.findTrait(name="Foo")
+        Bar = info.package.findTrait(name="Bar")
+        Baz = info.package.findClass(name="Baz")
+        self.assertEquals([getRootClassType(), ClassType(Foo), ClassType(Bar)], Baz.supertypes)
+
+    def testClassInheritTraitMultipleTimesIndirectlyConflictingTypes(self):
+        source = "trait Foo[static T]\n" + \
+                 "trait Bar <: Foo[String]\n" + \
+                 "class Baz <: Foo[Object], Bar"
+        self.assertRaises(InheritanceException, self.analyzeFromSource, source)
+
+    def testClassInheritNullableTrait(self):
+        source = "trait Tr\n" + \
+                 "class C <: Tr?"
+        self.assertRaises(InheritanceException, self.analyzeFromSource, source)
+
+    def testClassInheritNothingTrait(self):
+        source = "class C <: Object, Nothing"
+        self.assertRaises(InheritanceException, self.analyzeFromSource, source)
 
     def testTraitNoSupertypes(self):
         info = self.analyzeFromSource("trait Foo")

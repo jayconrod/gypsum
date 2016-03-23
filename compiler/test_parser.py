@@ -118,57 +118,75 @@ class TestParser(unittest.TestCase):
                         "def +;")
 
     def testClassDefnSimple(self):
-        self.checkParse(astClassDefinition([], "C", [], None, None, None, []),
+        self.checkParse(astClassDefinition([], "C", [], None, None, None, None, []),
                         classDefn(),
                         "class C;")
 
     def testClassDefnSimpleWithBody(self):
         ctorast = astFunctionDefinition([], "this", [], [], None,
                                         astLiteralExpression(astIntegerLiteral(12, 64)))
-        ast = astClassDefinition([], "C", [], None, None, None, [ctorast])
+        ast = astClassDefinition([], "C", [], None, None, None, None, [ctorast])
         self.checkParse(ast, classDefn(), "class C { def this = 12; };")
 
     def testClassDefnWithAttribs(self):
         self.checkParse(astClassDefinition([astAttribute("public")], "C", [],
-                                           None, None, None, []),
+                                           None, None, None, None, []),
                         classDefn(),
                         "public class C;")
 
     def testSubclass(self):
-        ast = astClassDefinition([], "Sub", [], None, astClassType([], "Base", [], set()), None, [])
+        ast = astClassDefinition([], "Sub", [], None, astClassType([], "Base", [], set()), None, None, [])
         self.checkParse(ast, classDefn(), "class Sub <: Base;")
 
     def testSubclassWithTypeArgs(self):
         ast = astClassDefinition([], "Sub", [], None,
                                  astClassType([], "Base", [astClassType([], "X", [], set()),
                                                            astClassType([], "Y", [], set())], set()),
-                                 None, [])
+                                 None, None, [])
         self.checkParse(ast, classDefn(), "class Sub <: Base[X, Y];")
 
     def testSubclassWithSuperArgs(self):
         ast = astClassDefinition([], "Sub", [], None,
                                  astClassType([], "Base", [], set()),
-                                 [astVariableExpression("x"), astVariableExpression("y")], [])
+                                 [astVariableExpression("x"), astVariableExpression("y")],
+                                 None, [])
         self.checkParse(ast, classDefn(), "class Sub <: Base(x, y);")
+
+    def testSubclassWithTrait(self):
+        ast = astClassDefinition([], "Sub", [], None,
+                                 astClassType([], "Base", [], set()),
+                                 [astVariableExpression("x"), astVariableExpression("y")],
+                                 [astClassType([], "Tr", [], set())],
+                                 [])
+        self.checkParse(ast, classDefn(), "class Sub <: Base(x, y), Tr;")
+
+    def testSubclassWithTraits(self):
+        ast = astClassDefinition([], "Sub", [], None,
+                                 astClassType([], "Base", [], set()),
+                                 [astVariableExpression("x"), astVariableExpression("y")],
+                                 [astClassType([], "Tr1", [], set()),
+                                  astClassType([], "Tr2", [], set())],
+                                 [])
+        self.checkParse(ast, classDefn(), "class Sub <: Base(x, y), Tr1, Tr2;")
 
     def testClassWithNullaryCtor(self):
         ast = astClassDefinition([], "C", [],
                                  astPrimaryConstructorDefinition([], []),
-                                 None, None, [])
+                                 None, None, None, [])
         self.checkParse(ast, classDefn(), "class C();")
 
     def testClassWithUnaryCtor(self):
         ast = astClassDefinition([], "C", [],
                                  astPrimaryConstructorDefinition([],
                                                                  [astParameter([], None, astVariablePattern("x", astI32Type()))]),
-                                 None, None, [])
+                                 None, None, None, [])
         self.checkParse(ast, classDefn(), "class C(x: i32);")
 
     def testClassWithUnaryCtorWithVarParam(self):
         ast = astClassDefinition([], "C", [],
                                  astPrimaryConstructorDefinition([],
                                                                  [astParameter([], "var", astVariablePattern("x", astI32Type()))]),
-                                 None, None, [])
+                                 None, None, None, [])
         self.checkParse(ast, classDefn(), "class C(var x: i32);")
 
     def testClassWithBinaryCtor(self):
@@ -176,28 +194,28 @@ class TestParser(unittest.TestCase):
                                  astPrimaryConstructorDefinition([],
                                                                  [astParameter([], None, astVariablePattern("x", astI32Type())),
                                                                   astParameter([], None, astVariablePattern("y", astI32Type()))]),
-                                 None, None, [])
+                                 None, None, None, [])
         self.checkParse(ast, classDefn(), "class C(x: i32, y: i32);")
 
     def testClassWithCtorWithAttribs(self):
         self.checkParse(astClassDefinition([], "C", [],
                                            astPrimaryConstructorDefinition([astAttribute("public")], []),
-                                           None, None, []),
+                                           None, None, None, []),
                         classDefn(),
                         "class C public ();")
 
     def testOperatorClassDefn(self):
-        self.checkParse(astClassDefinition([], "::", [], None, None, None, []),
+        self.checkParse(astClassDefinition([], "::", [], None, None, None, None, []),
                         classDefn(),
                         "class ::;")
 
     def testTraitDefnSimple(self):
-        self.checkParse(astTraitDefinition([], "T", [], [], []),
+        self.checkParse(astTraitDefinition([], "T", [], None, []),
                         traitDefn(),
                         "trait T;")
 
     def testTraitWithAttribs(self):
-        self.checkParse(astTraitDefinition([astAttribute("public")], "T", [], [], []),
+        self.checkParse(astTraitDefinition([astAttribute("public")], "T", [], None, []),
                         traitDefn(),
                         "public trait T;")
 
@@ -205,7 +223,7 @@ class TestParser(unittest.TestCase):
         self.checkParse(astTraitDefinition([], "Tr",
                                            [astTypeParameter([], None, "S", None, None),
                                             astTypeParameter([], None, "T", None, None)],
-                                           [], []),
+                                           None, []),
                         traitDefn(),
                         "trait Tr[S, T];")
 
@@ -218,7 +236,7 @@ class TestParser(unittest.TestCase):
                         "trait Tr <: Foo, Bar;")
 
     def testTraitWithMembers(self):
-        self.checkParse(astTraitDefinition([], "Tr", [], [],
+        self.checkParse(astTraitDefinition([], "Tr", [], None,
                                            [astVariableDefinition([], "let", astVariablePattern("x", None), None),
                                             astVariableDefinition([], "let", astVariablePattern("y", None), None)]),
                         traitDefn(),
@@ -326,7 +344,7 @@ class TestParser(unittest.TestCase):
                         "arrayelements unit, public get, protected set, private length;")
 
     def testClassWithArrayElements(self):
-        self.checkParse(astClassDefinition([], "Foo", [], None, None, None,
+        self.checkParse(astClassDefinition([], "Foo", [], None, None, None, None,
                                            [astArrayElementsStatement([],
                                                                       astUnitType(),
                                                                       astArrayAccessorDefinition([], "get"),
@@ -375,7 +393,7 @@ class TestParser(unittest.TestCase):
         self.checkParseError(importStmt(), "import foo.bar[_];")
 
     def testImportInClass(self):
-        self.checkParse(astClassDefinition([], "C", [], None, None, None,
+        self.checkParse(astClassDefinition([], "C", [], None, None, None, None,
                                            [astImportStatement([astScopePrefixComponent("foo", None)],
                                                                None)]),
                         classDefn(),

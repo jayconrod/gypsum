@@ -126,19 +126,20 @@ class FunctionDefinition(Definition):
 
 class ClassDefinition(Definition):
     def __init__(self, attribs, name, typeParameters, constructor,
-                 supertype, superArgs, members, location):
+                 superclass, superArgs, supertraits, members, location):
         super(ClassDefinition, self).__init__(attribs, location)
         self.name = name
         self.typeParameters = typeParameters
         self.constructor = constructor
-        self.supertype = supertype
+        self.superclass = superclass
         self.superArgs = superArgs
+        self.supertraits = supertraits
         self.members = members
 
     def __repr__(self):
-        return "ClassDefinition(%s, %s, %s, %s, %s, %s)" % \
+        return "ClassDefinition(%s, %s, %s, %s, %s, %s, %s)" % \
             (repr(self.name), repr(self.typeParameters), repr(self.constructor),
-             repr(self.supertype), repr(self.superArgs),
+             repr(self.superclass), repr(self.superArgs), repr(self.supertraits),
              repr(self.members))
 
     def data(self):
@@ -148,10 +149,12 @@ class ClassDefinition(Definition):
         children = self.attribs + self.typeParameters
         if self.constructor is not None:
             children.append(self.constructor)
-        if self.supertype is not None:
-            children.append(self.supertype)
+        if self.superclass is not None:
+            children.append(self.superclass)
         if self.superArgs is not None:
             children.extend(self.superArgs)
+        if self.supertraits is not None:
+            children.extend(self.supertraits)
         children.extend(self.members)
         return children
 
@@ -217,7 +220,13 @@ class TraitDefinition(Definition):
         return name
 
     def children(self):
-        return self.attribs + self.typeParameters + self.supertypes + self.members
+        children = []
+        children.extend(self.attribs)
+        children.extend(self.typeParameters)
+        if self.supertypes is not None:
+            children.extend(self.supertypes)
+        children.extend(self.members)
+        return children
 
 
 class ImportStatement(Node):

@@ -495,18 +495,18 @@ class DeclarationTypeVisitor(TypeVisitorBase):
             self.visit(param)
         if node.constructor is not None:
             self.visit(node.constructor)
-        if node.supertype is None:
+        if node.superclass is None:
             irClass.supertypes = [ir_t.getRootClassType()]
+            assert node.supertraits is None
         else:
-            irClass.supertypes = [self.visit(node.supertype)]
+            irClass.supertypes = [self.visit(node.superclass)]
+            if node.supertraits is not None:
+                irClass.supertypes.extend(self.visit(ty) for ty in node.supertraits)
         irSuperclass = irClass.supertypes[0].clas
         if ARRAY in irSuperclass.flags and len(irClass.fields) > 0:
             raise TypeException(node.location,
                                 "%s: cannot derive from array class and declare new fields" %
                                 node.name)
-        if node.superArgs is not None:
-            for arg in node.superArgs:
-                self.visit(arg)
         for member in node.members:
             self.visit(member)
         if not node.hasConstructors():
@@ -521,7 +521,7 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         # TODO: when traits have fields, check that superclass is not array class
         for param in node.typeParameters:
             self.visit(param)
-        if len(node.supertypes) == 0:
+        if node.supertypes is None:
             irTrait.supertypes = [ir_t.getRootClassType()]
         else:
             irTrait.supertypes = map(self.visit, node.supertypes)
@@ -745,6 +745,11 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             irDefaultCtor.variables[0].type = thisType
             irDefaultCtor.returnType = ir_t.UnitType
 
+        if node.superArgs is not None and \
+           not instanceof(self.info.getType(node.superclass).clas, ir.Class):
+            raise TypeException(node.superclass.location,
+                                "%s: super-constructor arguments cannot be applies to trait %s" %
+                                (irClass.name, node.superclass.name))
         hasPrimaryOrDefaultCtor = node.constructor is not None or \
                                   not node.hasConstructors()
         if node.superArgs is not None and not hasPrimaryOrDefaultCtor:

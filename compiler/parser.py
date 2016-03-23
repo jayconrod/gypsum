@@ -65,11 +65,21 @@ def functionDefn():
 
 
 def classDefn():
+    def processArgs(parsed, _):
+        return ct.untangle(parsed)[1] if parsed is not None else None
+    superclassArgs = ct.Opt(keyword("(") + ct.RepSep(maybeBinopExpr(), keyword(",")) + keyword(")")) ^ processArgs
+    def processSupertraits(parsed, _):
+        return ct.untangle(parsed)[1] if parsed is not None else None
+    supertraits = ct.Opt(keyword(",") + ct.Rep1Sep(ty(), keyword(","))) ^ processSupertraits
+    def processSupertypes(parsed, _):
+        return tuple(ct.untangle(parsed)[1:]) if parsed is not None else (None, None, None)
+    supertypes = ct.Opt(keyword("<:") + ty() + superclassArgs + supertraits) ^ processSupertypes
+
     def process(parsed, loc):
-        [ats, _, name, tps, ctor, sty, sargs, ms, _] = ct.untangle(parsed)
-        return ast.ClassDefinition(ats, name, tps, ctor, sty, sargs, ms, loc)
+        [ats, _, name, tps, ctor, scl, sargs, strs, ms, _] = ct.untangle(parsed)
+        return ast.ClassDefinition(ats, name, tps, ctor, scl, sargs, strs, ms, loc)
     return attribs() + keyword("class") + ct.Commit(identifier + typeParameters() +
-           constructor() + superclass() + classBody() + semi) ^ process
+           constructor() + supertypes + classBody() + semi) ^ process
 
 
 def constructor():
@@ -94,17 +104,18 @@ def superclass():
 
 
 def traitDefn():
+    def processSupertypes(parsed, _):
+        return ct.untangle(parsed)[1] if parsed else None
+    traitSupertypes = ct.Opt(keyword("<:") + supertypes()) ^ processSupertypes
     def process(parsed, loc):
         [ats, _, name, tps, sts, ms, _] = ct.untangle(parsed)
         return ast.TraitDefinition(ats, name, tps, sts, ms, loc)
     return attribs() + keyword("trait") + ct.Commit(identifier + typeParameters() +
-           supertypes() + classBody() + semi) ^ process
+           traitSupertypes + classBody() + semi) ^ process
 
 
 def supertypes():
-    def process(parsed, _):
-        return ct.untangle(parsed)[1] if parsed else []
-    return ct.Opt(keyword("<:") + ct.Rep1Sep(classType(), keyword(","))) ^ process
+    return ct.Rep1Sep(classType(), keyword(","))
 
 
 def classBody():
