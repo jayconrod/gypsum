@@ -211,6 +211,10 @@ def analyzeInheritance(info):
 
         irDefn.supertypes = inheritedTypes
 
+        # Inherit array flag.
+        if isinstance(irDefn, ir.Class) and ARRAY in irSuperClass.flags:
+            irDefn.flags |= irSuperClass.flags & frozenset([ARRAY, ARRAY_FINAL])
+
 
 def getIdForType(ty):
     if isinstance(ty, ClassType):

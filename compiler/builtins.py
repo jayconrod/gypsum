@@ -132,11 +132,13 @@ def _initialize():
         nameComponents = []
         if namePrefix is not None:
             nameComponents.append(namePrefix)
-        nameComponents.append(functionData.get("name", ir.CONSTRUCTOR_SUFFIX))
+        sourceName = functionData.get("name", ir.CONSTRUCTOR_SUFFIX)
+        nameComponents.append(sourceName)
         name = ir.Name(nameComponents)
         id = getattr(bytecode, functionData["id"])
         flags = buildFlags(functionData["flags"])
         function = ir.Function(name, id,
+                               sourceName=sourceName,
                                returnType=buildType(functionData["returnType"]),
                                typeParameters=[],
                                parameterTypes=map(buildType, functionData["parameterTypes"]),
@@ -159,12 +161,13 @@ def _initialize():
         name = ir.Name([clas.name.short(), fieldData["name"]])
         ty = buildType(fieldData["type"])
         flags = buildFlags(fieldData["flags"])
-        return ir.Field(name, type=ty, flags=flags, index=index)
+        return ir.Field(name, sourceName=fieldData["name"], type=ty, flags=flags, index=index)
 
     def declareClass(classData):
         name = ir.Name([classData["name"]])
         flags = buildFlags(classData["flags"])
-        clas = ir.Class(name, None, typeParameters=[], flags=flags)
+        clas = ir.Class(name, None, sourceName=classData["name"],
+                        typeParameters=[], flags=flags)
         _builtinClasses.append(clas)
         _builtinClassNameMap[classData["name"]] = clas
 

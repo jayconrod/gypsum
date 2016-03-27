@@ -161,8 +161,14 @@ class Type(data.Data):
             else:
                 return AnyType
 
-        # Equivalent types.
+        # Basic rules for all types.
         if left.isEquivalent(right):
+            return left
+        if left is AnyType or right is AnyType:
+            return AnyType
+        if left is NoType:
+            return right
+        if right is NoType:
             return left
 
         # Primitive types.
@@ -317,7 +323,7 @@ class Type(data.Data):
             return self
         else:
             supertype = next(sty for sty in clas.supertypes if sty.clas is base)
-            return self.substitute(base.typeParameters, sty.typeArguments)
+            return self.substitute(base.typeParameters, supertype.typeArguments)
 
     def getTypeArguments(self):
         raise NotImplementedError()

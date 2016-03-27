@@ -9,6 +9,7 @@ import unittest
 from compile_info import *
 from errors import *
 from ids import *
+from inheritance_analysis import *
 from ir import *
 from ir_types import *
 from layout import layout
@@ -39,6 +40,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         package = Package(TARGET_PACKAGE_ID, name=name)
         info = CompileInfo(ast, package=package, packageLoader=packageLoader, isUsingStd=False)
         analyzeDeclarations(info)
+        analyzeTypeDeclarations(info)
         analyzeInheritance(info)
         analyzeTypes(info)
         return info
@@ -1536,11 +1538,11 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         fooClass = info.package.findClass(name="Foo")
         self.assertEquals([ClassType(getRootClass(), ())], fooClass.supertypes)
         barClass = info.package.findClass(name="Bar")
-        self.assertEquals([ClassType(fooClass, ())], barClass.supertypes)
+        self.assertEquals([ClassType(fooClass, ())] + fooClass.supertypes, barClass.supertypes)
 
     def testNullableSupertype(self):
         source = "class Foo <: Object?"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
+        self.assertRaises(InheritanceException, self.analyzeFromSource, source)
 
     def testNullableBounds(self):
         upperSource = "class Foo[static T <: Object?]"
@@ -1550,11 +1552,11 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testPrimitiveBounds(self):
         source = "class Foo[static T <: i64]"
-        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testExistentialBounds(self):
         source = "class Foo[static T <: forsome [X] X]"
-        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testCallWithSubtype(self):
         source = "class Foo\n" + \
@@ -2349,4 +2351,4 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testSubclassNothing(self):
         source = "class Foo <: Nothing"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
+        self.assertRaises(InheritanceException, self.analyzeFromSource, source)

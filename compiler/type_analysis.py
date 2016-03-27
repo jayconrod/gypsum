@@ -746,7 +746,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             irDefaultCtor.returnType = ir_t.UnitType
 
         if node.superArgs is not None and \
-           not instanceof(self.info.getType(node.superclass).clas, ir.Class):
+           not isinstance(self.info.getType(node.superclass).clas, ir.Class):
             raise TypeException(node.superclass.location,
                                 "%s: super-constructor arguments cannot be applies to trait %s" %
                                 (irClass.name, node.superclass.name))
@@ -2262,4 +2262,4 @@ class VarianceScope(object):
             assert flag is ir_t.INVARIANT
             return 0
 
-__all__ = ["analyzeTypes", "patternMustMatch"]
+__all__ = ["analyzeTypeDeclarations", "analyzeTypes", "patternMustMatch"]
