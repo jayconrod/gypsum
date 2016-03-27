@@ -17,6 +17,7 @@ from type_analysis import *
 from externalization import externalize
 from compiler import *
 from ids import *
+from inheritance_analysis import analyzeInheritance
 from ir import *
 from ir_types import *
 import ir_instructions
@@ -50,6 +51,7 @@ class TestCompiler(TestCaseWithDefinitions):
         package = Package(id=TARGET_PACKAGE_ID, name=name)
         info = CompileInfo(ast, package, packageLoader, isUsingStd=False)
         analyzeDeclarations(info)
+        analyzeTypeDeclarations(info)
         analyzeInheritance(info)
         analyzeTypes(info)
         convertClosures(info)

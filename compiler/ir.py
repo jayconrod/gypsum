@@ -546,10 +546,10 @@ class Function(ParameterizedDefn):
         flags (frozenset[flag]): a flags indicating how this function is used. Valid flags are
             `ABSTRACT`, `EXTERN`, `PUBLIC`, `PROTECTED`, `PRIVATE`, `STATIC`, `CONSTRUCTOR`,
             `METHOD`.
-        definingClass (Class?): the class this method (static or not) was defined in (as
-            opposed to any other class that inherits the method). For non-static methods, this
-            could be derived from the receiver type, but there's no easy way to get it for
-            static methods.
+        definingClass (ObjectTypeDefn?): the class or trait this method (static or not) was
+            defined in (as opposed to any other class that inherits the method). For
+            non-static methods, this could be derived from the receiver type, but there's
+            no easy way to get it for static methods.
         override (Function?): the method in a superclass that this method overrides. This should
             be set if and only if the `OVERRIDE` flag is set. This is only valid for non-static,
             non-constructor methods.

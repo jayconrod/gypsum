@@ -1507,19 +1507,26 @@ class CompileVisitor(ast.NodeVisitor):
 
     def buildCallNamedMethod(self, receiverType, name, mode):
         receiverClass = getClassFromType(receiverType)
-        method, index = receiverClass.findMethodBySourceName(name)
-        self.callMethod(method, index)
+        method, _ = receiverClass.findMethodBySourceName(name)
+        self.callMethod(method)
         self.dropForEffect(mode)
 
-    def callMethod(self, method, index=None):
+    def callMethod(self, method):
         if method.insts is not None:
             self.addBuiltinInstructions(method.insts)
         elif method.isFinal():
             self.callFunction(method)
         else:
-            if index is None:
-                index = method.definingClass.getMethodIndex(method)
-            self.callv(len(method.parameterTypes), index)
+            index = method.definingClass.getMethodIndex(method)
+            argCount = len(method.parameterTypes)
+            if isinstance(method.definingClass, Class):
+                self.callv(argCount, index)
+            else:
+                assert isinstance(method.definingClass, Trait)
+                if method.definingClass.isForeign():
+                    self.callvtf(argCount, method.definingClass, index)
+                else:
+                    self.callvt(argCount, method.definingClass, index)
 
     HAVE_RECEIVER = "HAVE_RECEIVER"
 
@@ -1610,16 +1617,7 @@ class CompileVisitor(ast.NodeVisitor):
             # Compile the arguments and call the method.
             compileArgs()
             compileTypeArgs()
-            if irDefn.insts is not None:
-                self.addBuiltinInstructions(irDefn.insts)
-            elif irDefn.isFinal():
-                # Calls to final methods can be made directly. This includes constructors and
-                # primitive methods which can't be called virtually.
-                self.callFunction(irDefn)
-            else:
-                index = irDefn.definingClass.getMethodIndex(irDefn)
-                argCount = len(argExprs)
-                self.callv(argCount + 1, index)
+            self.callMethod(irDefn)
 
             if isinstance(receiver, LValue):
                 self.buildAssignment(receiver, mode)

@@ -57,6 +57,8 @@
 - {name: "callg", iops: 1, push: 1, pop: ~, term: false}
 - {name: "callgf", iops: 2, push: 1, pop: ~, term: false}
 - {name: "callv", iops: 2, push: 1, pop: ~, term: false}
+- {name: "callvt", iops: 3, push: 1, pop: ~, term: false}
+- {name: "callvtf", iops: 4, push: 1, pop: ~, term: false}
 - {name: "eqp", iops: 0, push: 1, pop: 2, term: false}
 - {name: "nep", iops: 0, push: 1, pop: 2, term: false}
 - {name: "addi8", iops: 0, push: 1, pop: 2, term: false}
