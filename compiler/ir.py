@@ -749,6 +749,26 @@ class ObjectTypeDefn(ParameterizedDefn):
         else:
             return other in self.bases()
 
+    def findBaseType(self, base):
+        """Searches this definition's supertypes for a type of the same definition as `base`.
+
+        This method may only be called after inheritance analysis has been performed.
+
+        Arguments:
+            base (ObjectTypeDefn): the class or trait of the type being searched for.
+
+        Returns:
+            ClassType?: returns the base type if this definition is derived from `base`. If
+                `base` is `self`, returns the same as `ClassType.forReceiver(self)`. Returns
+                `None` otherwise.
+        """
+        if self is base:
+            return ir_types.ClassType.forReceiver(self)
+        for sty in self.supertypes:
+            if sty.clas is base:
+                return sty
+        return None
+
     def findMethodBySourceName(self, name):
         """Searches the method list.
 

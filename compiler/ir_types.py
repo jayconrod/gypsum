@@ -43,7 +43,75 @@ class Type(data.Data):
         return ty
 
     def isSubtypeOf(self, other):
-        return self.lub(other).isEquivalent(other)
+        left = self
+        right = other
+
+        # Basic rules that apply to all types.
+        if left.isEquivalent(right):
+            return True
+        if left is AnyType or right is NoType:
+            return False
+        if right is AnyType or left is NoType:
+            return True
+
+        # Primitive types.
+        if left.isPrimitive() or right.isPrimitive():
+            return False
+        assert left.isObject() and right.isObject()
+
+        # Existential types.
+        if isinstance(left, ExistentialType) or isinstance(right, ExistentialType):
+            leftInnerType = left.ty if isinstance(left, ExistentialType) else left
+            rightInnerType = right.ty if isinstance(right, ExistentialType) else right
+            return leftInnerType.isSubtypeOf(rightInnerType)
+
+        # A nullable type cannot be a subtype of a non-nullable type. Note that existential
+        # types cannot be nullable (but their inner types can).
+        if left.isNullable() and not right.isNullable():
+            return False
+
+        # Variable types.
+        if isinstance(left, VariableType) and isinstance(right, VariableType):
+            # If both are variable types, try to find a common bound.
+            leftBound = left
+            rightFirstBound = right
+            while isinstance(leftBound, VariableType):
+                rightBound = rightFirstBound
+                while isinstance(rightBound, VariableType):
+                    if leftBound.typeParameter is rightBound.typeParameter and \
+                       (rightBound.isNullable() or not leftBound.isNullable()):
+                        return True
+                    rightBound = rightBound.lowerBound()
+                leftBound = leftBound.upperBound()
+        while isinstance(left, VariableType):
+            left = left.upperBound()
+        while isinstance(right, VariableType):
+            right = right.lowerBound()
+
+        # Class types.
+        assert isinstance(left, ClassType) and isinstance(right, ClassType)
+
+        # Special cases for `Nothing`.
+        if left.clas is builtins.getNothingClass():
+            return True
+        if right.clas is builtins.getNothingClass():
+            return False
+
+        # Check that left is derived from right, and substitute for the same definition.
+        leftBase = left.clas.findBaseType(right.clas)
+        if leftBase is None:
+            return False
+        left = leftBase.substitute(left.clas.typeParameters, left.typeArguments)
+
+        # Compare type arguments, based on variance.
+        for lty, rty, tp in \
+                zip(left.typeArguments, right.typeArguments, left.clas.typeParameters):
+            variance = tp.variance()
+            if (variance is flags.COVARIANT and not lty.isSubtypeOf(rty)) or \
+               (variance is flags.CONTRAVARIANT and not rty.isSubtypeOf(lty)) or \
+               (variance is INVARIANT and not lty.isEquivalent(rty)):
+                return False
+        return True
 
     def isDisjoint(self, other):
         lub = self.lub(other)
@@ -84,122 +152,121 @@ class Type(data.Data):
         # The correct answer is A[B lub C] = A[A[B lub C]] = A[A[A[B lub C]]] ...
         # Since we have no way to correctly express the least upper bound in that case, we
         # settle for returning a close upper bound: A[Object].
+        left = self
+        right = other
 
-        if (self, other) in stack:
-            if self.isObject() and other.isObject():
+        if (left, right) in stack:
+            if left.isObject() and right.isObject():
                 return getRootClassType()
             else:
                 return AnyType
 
-        # Basic rules that apply to all types.
-        if self.isEquivalent(other):
-            return self
-        if self is AnyType or other is AnyType:
-            return self
-        if self is NoType:
-            return other
-        if other is NoType:
-            return self
+        # Equivalent types.
+        if left.isEquivalent(right):
+            return left
 
-        # Rules for existential types (always recursive)
-        if isinstance(self, ExistentialType) or isinstance(other, ExistentialType):
-            stack.append((self, other))
+        # Primitive types.
+        if left.isPrimitive() or right.isPrimitive():
+            return AnyType
+
+        # Existential types (always recursive).
+        if isinstance(left, ExistentialType) or isinstance(right, ExistentialType):
+            stack.append((left, right))
 
             # At this point, we consider both types to be existential. Note that any type
             # can be trivially closed with an existential. For example:
             #   String == forsome [X] String
 
             # We get the lub of the inner types.
-            selfInnerType = self.ty if isinstance(self, ExistentialType) else self
-            otherInnerType = other.ty if isinstance(other, ExistentialType) else other
-            innerLubType = selfInnerType.lubRec_(otherInnerType, stack)
+            leftInnerType = left.ty if isinstance(left, ExistentialType) else left
+            rightInnerType = right.ty if isinstance(right, ExistentialType) else right
+            innerLubType = leftInnerType.lubRec_(rightInnerType, stack)
             stack.pop()
 
             # Find which variables are still being used in the lub. If some of the variables
-            # from `self` and `other` are still present, return an existential with those.
+            # from `left` and `right` are still present, return an existential with those.
             # Note that unused variables can be removed from an existential type. For example:
             #   forsome [X] Option[String] == Option[String]
             # We must be careful the returned type has variables in a deterministic order.
             # Technically, the order shouldn't matter, but it's infeasible to test whether two
             # types are equivalent with arbitrary ordered variables, since they cannot easily
             # be sorted.
-            selfVariables = self.variables if isinstance(self, ExistentialType) else ()
-            otherVariables = other.variables if isinstance(other, ExistentialType) else ()
-            return ExistentialType.close(selfVariables + otherVariables, innerLubType)
+            leftVariables = left.variables if isinstance(left, ExistentialType) else ()
+            rightVariables = right.variables if isinstance(right, ExistentialType) else ()
+            return ExistentialType.close(leftVariables + rightVariables, innerLubType)
 
-        # Rules below apply only to object types.
-        if self.isObject() and other.isObject():
-            # If either side is nullable, the result is nullable.
-            if self.isNullable() or other.isNullable():
-                combinedFlags = frozenset([NULLABLE_TYPE_FLAG])
-            else:
-                combinedFlags = frozenset()
+        # If either side is nullable, the result is nullable.
+        if self.isNullable() or other.isNullable():
+            combinedFlags = frozenset([NULLABLE_TYPE_FLAG])
+        else:
+            combinedFlags = frozenset()
 
-            # If both types are variables with a common variable bound, return that.
-            if isinstance(self, VariableType) and isinstance(other, VariableType):
-                sharedBound = self.typeParameter.findCommonUpperBound(other.typeParameter)
-                if sharedBound is not None:
-                    return VariableType(sharedBound, combinedFlags)
+        # Rules for subtypes.
+        leftWithFlags = left.withFlags(combinedFlags)
+        rightWithFlags = right.withFlags(combinedFlags)
+        if leftWithFlags.isSubtypeOf(rightWithFlags):
+            return rightWithFlags
+        if rightWithFlags.isSubtypeOf(leftWithFlags):
+            return leftWithFlags
 
-            # If either type is Nothing, return the other one.
-            if isinstance(self, ClassType) and self.clas is builtins.getNothingClass():
-                return other.withFlags(combinedFlags)
-            if isinstance(other, ClassType) and other.clas is builtins.getNothingClass():
-                return self.withFlags(combinedFlags)
+        # Variable types.
+        if isinstance(left, VariableType) and isinstance(right, VariableType):
+            sharedBound = left.typeParameter.findCommonUpperBound(right.typeParameter)
+            if sharedBound is not None:
+                return VariableType(sharedBound, combinedFlags)
 
-            # Since there is no common bound, the result will be a class type, so we peel back
-            # the bounds until both sides are class types.
-            left = self
-            while isinstance(left, VariableType):
-                left = left.typeParameter.upperBound
-            right = other
-            while isinstance(right, VariableType):
-                right = right.typeParameter.upperBound
-            assert isinstance(left, ClassType) and isinstance(right, ClassType)
+        # TODO: beyond this point, we can't find an accurate least upper bound because of the
+        # presence of multiple shared traits. We will find a common base class instead, which
+        # may be less specific. When union types are supported, we should just return
+        # left | right.
+        while isinstance(left, VariableType):
+            left = left.upperBound()
+        while isinstance(right, VariableType):
+            right = right.upperBound()
+        assert isinstance(left, ClassType) and isinstance(right, ClassType)
 
-            # Find a common base class. We don't assume that there is a single root class
-            # (even though there is), so this can fail.
-            baseClass = left.clas.findCommonBaseClass(right.clas)
-            while baseClass is not None:
-                left = left.substituteForBase(baseClass)
-                right = right.substituteForBase(baseClass)
+        # Find a common base class. We don't assume that there is a single root class
+        # (even though there is), so this can fail.
+        baseClass = left.clas.findCommonBaseClass(right.clas)
+        while baseClass is not None:
+            left = left.substituteForBase(baseClass)
+            right = right.substituteForBase(baseClass)
 
-                # We need to combine the type arguments, according to the variance of the
-                # corresponding type parameters. This is not necessarily possible. If we get
-                # stuck, we'll try again with the superclass.
-                leftArgs = left.typeArguments
-                rightArgs = right.typeArguments
+            # We need to combine the type arguments, according to the variance of the
+            # corresponding type parameters. This is not necessarily possible. If we get
+            # stuck, we'll try again with the superclass.
+            leftArgs = left.typeArguments
+            rightArgs = right.typeArguments
 
-                combinedArgs = []
-                combineSuccess = True
-                for param, leftArg, rightArg in zip(baseClass.typeParameters,
-                                                    leftArgs, rightArgs):
-                    variance = param.variance()
-                    if variance is INVARIANT:
-                        if leftArg == rightArg:
-                            combined = leftArg
-                        else:
-                            combined = AnyType
+            combinedArgs = []
+            combineSuccess = True
+            for param, leftArg, rightArg in zip(baseClass.typeParameters,
+                                                leftArgs, rightArgs):
+                variance = param.variance()
+                if variance is INVARIANT:
+                    if leftArg == rightArg:
+                        combined = leftArg
                     else:
-                        stack.append((self, other))
-                        if variance is flags.COVARIANT:
-                            combined = leftArg.lubRec_(rightArg, stack)
-                        else:
-                            assert variance is flags.CONTRAVARIANT
-                            combined = leftArg.glbRec_(rightArg, stack)
-                        stack.pop()
-                    if combined is AnyType:
-                        combineSuccess = False
-                        break
-                    combinedArgs.append(combined)
+                        combined = AnyType
+                else:
+                    stack.append((self, other))
+                    if variance is flags.COVARIANT:
+                        combined = leftArg.lubRec_(rightArg, stack)
+                    else:
+                        assert variance is flags.CONTRAVARIANT
+                        combined = leftArg.glbRec_(rightArg, stack)
+                    stack.pop()
+                if combined is AnyType:
+                    combineSuccess = False
+                    break
+                combinedArgs.append(combined)
 
-                if combineSuccess:
-                    return ClassType(baseClass, tuple(combinedArgs), combinedFlags)
+            if combineSuccess:
+                return ClassType(baseClass, tuple(combinedArgs), combinedFlags)
 
-                baseClass = baseClass.superclass()
+            baseClass = baseClass.superclass()
 
-            # If we get here, then we ran out of superclasses. Fall through.
-
+        # If we get here, then we ran out of superclasses. Fall through.
         return AnyType
 
     def glb(self, ty):
@@ -370,7 +437,8 @@ class ObjectType(Type):
 
         For example, if we have class `A[T]` and class `B <: A[C]`, then if we call this method
         on type `B` with `base` `A`, we will get `A[C]`. Note that this goes in the reverse
-        direction from `substituteForInheritance`.
+        direction from `substituteForInheritance`. If `self` is a `ClassType`, and `base` is
+        the definition `self` refers to, `self` is returned without substitution.
 
         This method may not be called until inheritance analysis is complete for the class
         in the `ClassType` returned by `getBaseClassType`.
@@ -440,6 +508,8 @@ class ClassType(ObjectType,):
     def substituteForBase(self, base):
         assert base is not builtins.getNothingClass()
         assert self.clas is not builtins.getNothingClass()
+        if self.clas is base:
+            return self
         baseType = next(sty for sty in self.clas.supertypes if sty.clas is base)
         return baseType.substitute(self.clas.typeParameters, self.typeArguments)
 
@@ -507,6 +577,17 @@ class VariableType(ObjectType):
     def findVariables(self):
         return set([self.typeParameter.id])
 
+    def upperBound(self):
+        upperBound = self.typeParameter.upperBound
+        return upperBound.withFlag(NULLABLE_TYPE_FLAG) \
+               if self.isNullable() and not upperBound.isNullable() \
+               else upperBound
+
+    def lowerBound(self):
+        lowerBound = self.typeParameter.lowerBound
+        return lowerBound.withFlag(NULLABLE_TYPE_FLAG) \
+               if self.isNullable() and not lowerBound.isNullable() \
+               else lowerBound
 
 class ExistentialType(ObjectType):
     propertyNames = Type.propertyNames + ("variables", "ty")

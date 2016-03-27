@@ -87,7 +87,6 @@ class TestIr(utils_test.TestCaseWithDefinitions):
                                parameterTypes=[rt, ClassType(self.base)],
                                flags=frozenset([METHOD]),
                                definingClass=self.base)
-        import pdb; pdb.set_trace()
         self.assertTrue(f2.mayOverride(f1))
         self.assertFalse(f1.mayOverride(f2))
 

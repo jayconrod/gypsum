@@ -23,10 +23,14 @@ class TestIrTypes(TestCaseWithDefinitions):
     def setUp(self):
         super(TestIrTypes, self).setUp()
         self.A = self.makeClass("A", typeParameters=[], supertypes=[getRootClassType()])
-        self.B = self.makeClass("B", typeParameters=[], supertypes=[ClassType(self.A)])
-        self.C = self.makeClass("C", typeParameters=[], supertypes=[ClassType(self.B)])
-        self.X = self.makeTypeParameter("X")
-        self.Y = self.makeTypeParameter("Y")
+        self.B = self.makeClass("B", typeParameters=[],
+                                supertypes=[ClassType(self.A)] + self.A.supertypes)
+        self.C = self.makeClass("C", typeParameters=[],
+                                supertypes=[ClassType(self.B)] + self.B.supertypes)
+        self.X = self.makeTypeParameter("X", upperBound=getRootClassType(),
+                                        lowerBound=getNothingClassType())
+        self.Y = self.makeTypeParameter("Y", upperBound=getRootClassType(),
+                                        lowerBound=getNothingClassType())
         self.P = self.makeClass("P", typeParameters=[self.X, self.Y],
                                 supertypes=[getRootClassType()])
 
@@ -46,6 +50,10 @@ class TestIrTypes(TestCaseWithDefinitions):
         self.assertTrue(ClassType(self.B).isSubtypeOf(ClassType(self.A)))
         self.assertFalse(ClassType(self.A).isSubtypeOf(ClassType(self.B)))
 
+    def testSubtypeNull(self):
+        ATy = ClassType(self.A, (), frozenset([NULLABLE_TYPE_FLAG]))
+        self.assertTrue(getNullType().isSubtypeOf(ATy))
+
     def testSubtypeParameterSelf(self):
         T = self.makeTypeParameter("T", upperBound=ClassType(self.A),
                                    lowerBound=ClassType(self.B))
@@ -59,7 +67,6 @@ class TestIrTypes(TestCaseWithDefinitions):
                                    lowerBound=ClassType(self.C))
         self.assertFalse(VariableType(S).isSubtypeOf(VariableType(T)))
 
-    @unittest.skip("need a general way to do lub on subtype graph")
     def testSubtypeParametersNonOverlapping(self):
         T = self.makeTypeParameter("T", upperBound=ClassType(self.A),
                                    lowerBound=ClassType(self.B))
@@ -68,31 +75,40 @@ class TestIrTypes(TestCaseWithDefinitions):
         self.assertTrue(VariableType(S).isSubtypeOf(VariableType(T)))
 
     def testSubtypeParametersTransitiveUpper(self):
-        U = self.makeTypeParameter("U")
-        T = self.makeTypeParameter("T", upperBound=VariableType(U))
-        S = self.makeTypeParameter("S", upperBound=VariableType(T))
+        U = self.makeTypeParameter("U", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        T = self.makeTypeParameter("T", upperBound=VariableType(U),
+                                   lowerBound=getNothingClassType())
+        S = self.makeTypeParameter("S", upperBound=VariableType(T),
+                                   lowerBound=getNothingClassType())
         self.assertTrue(VariableType(S).isSubtypeOf(VariableType(U)))
 
-    @unittest.skip("TypeParameter.findCommonUpperBound needs to return U for this to work")
-    def testSubtypeParametersTransitivieLower(self):
-        # U, T <: U, S <: T
+    def testSubtypeParametersTransitiveLower(self):
+        # U, T >: U, S >: T
         # So S <: U
-        U = self.makeTypeParameter("U")
-        T = self.makeTypeParameter("T", lowerBound=VariableType(U))
-        S = self.makeTypeParameter("S", lowerBound=VariableType(T))
+        U = self.makeTypeParameter("U", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        T = self.makeTypeParameter("T", upperBound=getRootClassType(),
+                                   lowerBound=VariableType(U))
+        S = self.makeTypeParameter("S", upperBound=getRootClassType(),
+                                   lowerBound=VariableType(T))
         self.assertTrue(VariableType(U).isSubtypeOf(VariableType(S)))
 
-    @unittest.skip("TypeParameter.findCommonUpperBound needs to return T for this to work")
     def testSubtypeParametersTransitiveMiddle(self):
         # M, S <: M, M <: T, so S <: T
-        M = self.makeTypeParameter("M")
-        S = self.makeTypeParameter("S", upperBound=VariableType(M))
-        T = self.makeTypeParameter("T", lowerBound=VariableType(M))
+        M = self.makeTypeParameter("M", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        S = self.makeTypeParameter("S", upperBound=VariableType(M),
+                                   lowerBound=getNothingClassType())
+        T = self.makeTypeParameter("T", upperBound=getRootClassType(),
+                                   lowerBound=VariableType(M))
         self.assertTrue(VariableType(S).isSubtypeOf(VariableType(T)))
 
     def testSubtypeClassWithParametersSelf(self):
-        T = self.makeTypeParameter("T")
-        S = self.makeTypeParameter("S")
+        T = self.makeTypeParameter("T", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        S = self.makeTypeParameter("S", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
         A = self.makeClass("A", typeParameters=[T], supertypes=[getRootClassType()])
         X = self.makeClass("X", typeParameters=[], supertypes=[getRootClassType()])
         Y = self.makeClass("Y", typeParameters=[], supertypes=[getRootClassType()])
@@ -106,7 +122,8 @@ class TestIrTypes(TestCaseWithDefinitions):
         self.assertFalse(AXty.isSubtypeOf(AYty))
 
     def testSubtypeClassWithParametersSubclass(self):
-        T = self.makeTypeParameter("T")
+        T = self.makeTypeParameter("T", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
         A = self.makeClass("A", typeParameters=[T], supertypes=[getRootClassType()])
         X = self.makeClass("X", supertypes=[getRootClassType()])
         Y = self.makeClass("Y", supertypes=[getRootClassType()])
@@ -118,7 +135,8 @@ class TestIrTypes(TestCaseWithDefinitions):
         self.assertFalse(Bty.isSubtypeOf(AYty))
 
     def testSubtypeClassWithParametersSuperclass(self):
-        T = self.makeTypeParameter("T")
+        T = self.makeTypeParameter("T", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
         A = self.makeClass("A", typeParameters=[], supertypes=[getRootClassType()])
         Aty = ClassType(A)
         B = self.makeClass("B", typeParameters=[T], supertypes=[Aty])
@@ -128,10 +146,12 @@ class TestIrTypes(TestCaseWithDefinitions):
 
     def testSubtypeWithCovariantParameter(self):
         # Source[A] <: Source[B] with class Source[+T] and A <: B
-        T = self.makeTypeParameter("T", flags=frozenset([COVARIANT]))
+        T = self.makeTypeParameter("T", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType(),
+                                   flags=frozenset([COVARIANT]))
         B = self.makeClass("B", typeParameters=[], supertypes=[getRootClassType()])
         Bty = ClassType(B)
-        A = self.makeClass("A", typeParameters=[], supertypes=[Bty])
+        A = self.makeClass("A", typeParameters=[], supertypes=[Bty] + B.supertypes)
         Aty = ClassType(A)
         Source = self.makeClass("Source", typeParameters=[T], supertypes=[getRootClassType()])
         SourceAty = ClassType(Source, (Aty,))
@@ -141,7 +161,9 @@ class TestIrTypes(TestCaseWithDefinitions):
 
     def testSubtypeWithContravariantParameter(self):
         # Sink[A] <: Sink[B] with class Sink[-T] and B <: A
-        T = self.makeTypeParameter("T", flags=frozenset([CONTRAVARIANT]))
+        T = self.makeTypeParameter("T", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType(),
+                                   flags=frozenset([CONTRAVARIANT]))
         A = self.makeClass("A", typeParameters=[], supertypes=[getRootClassType()])
         Aty = ClassType(A)
         B = self.makeClass("B", typeParameters=[], supertypes=[Aty])
@@ -153,7 +175,9 @@ class TestIrTypes(TestCaseWithDefinitions):
         self.assertFalse(SinkBty.isSubtypeOf(SinkAty))
 
     def testSubtypeNothingAndVariable(self):
-        T = self.makeTypeParameter("T")
+        T = self.makeTypeParameter("T",
+                                   upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
         Tty = VariableType(T)
         self.assertTrue(getNothingClassType().isSubtypeOf(Tty))
 
@@ -236,14 +260,19 @@ class TestIrTypes(TestCaseWithDefinitions):
         self.assertEquals(ClassType(self.P, (a, b)),
                           p.substitute(self.P.typeParameters, [a, b]))
 
-    def testSubstituteForBaseClass(self):
+    def testSubstituteForBase(self):
         T = self.makeTypeParameter("T")
         A = self.makeClass("A", typeParameters=[T], supertypes=[getRootClassType()])
         U = self.makeTypeParameter("U")
         B = self.makeClass("B", typeParameters=[U],
-                           supertypes=[ClassType(A, (VariableType(U),))])
+                           supertypes=[ClassType(A, (VariableType(U),)), getRootClassType()])
         C = self.makeClass("C", supertypes=[getRootClassType()])
-        D = self.makeClass("D", supertypes=[ClassType(B, (ClassType(C),))])
+        D = self.makeClass("D",
+                           supertypes=[
+                               ClassType(B, (ClassType(C),)),
+                               ClassType(A, (ClassType(C),)),
+                               getRootClassType()
+                           ])
         V = self.makeTypeParameter("V", upperBound=ClassType(D))
         self.assertEquals(ClassType(A, (ClassType(C),)),
                           VariableType(V).substituteForBase(A))
