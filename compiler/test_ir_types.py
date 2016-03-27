@@ -248,6 +248,28 @@ class TestIrTypes(TestCaseWithDefinitions):
         eCYType = ExistentialType((Y,), ClassType(C, (VariableType(Y),)))
         self.assertEquals(AType, eBXType.lub(eCYType))
 
+    def testLubSubTrait(self):
+        A = self.makeTrait("A", typeParameters=[], supertypes=[getRootClassType()])
+        ATy = ClassType(A)
+        B = self.makeTrait("B", typeParameters=[], supertypes=[ATy, getRootClassType()])
+        BTy = ClassType(B)
+        self.assertEquals(ATy, ATy.lub(BTy))
+        self.assertEquals(ATy, BTy.lub(ATy))
+
+    def testLubClassesSharedTraits(self):
+        # TODO: when union types are supported the correct result here is C1 | C2.
+        Tr1 = self.makeTrait("Tr1", typeParameters=[], supertypes=[getRootClassType()])
+        Tr1Type = ClassType(Tr1)
+        Tr2 = self.makeTrait("Tr2", typeParameters=[], supertypes=[getRootClassType()])
+        Tr2Type = ClassType(Tr2)
+        C1 = self.makeClass("C1", typeParameters=[],
+                            supertypes=[getRootClassType(), Tr1Type, Tr2Type])
+        C1Type = ClassType(C1)
+        C2 = self.makeClass("C2", typeParameters=[],
+                            supertypes=[getRootClassType(), Tr1Type, Tr2Type])
+        C2Type = ClassType(C2)
+        self.assertEquals(getRootClassType(), C1Type.lub(C2Type))
+
     def testSubstitute(self):
         T = self.makeTypeParameter("T", upperBound=ClassType(self.A),
                                    lowerBound=ClassType(self.B))
