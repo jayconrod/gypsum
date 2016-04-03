@@ -150,6 +150,7 @@ def _initialize():
         function = buildFunction(functionData, clas.name.short())
         assert flags.METHOD in function.flags
         function.definingClass = clas
+        function.overridenBy = {}
         return function
 
     def buildConstructor(functionData, clas):

@@ -666,57 +666,6 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "def g = Foo.f"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
-    def testStaticMethodDoesNotOverrideStatic(self):
-        source = "class Foo\n" + \
-                 "  static def f = 12\n" + \
-                 "class Bar <: Foo\n" + \
-                 "  static def f = 34"
-        info = self.analyzeFromSource(source)
-        barScope = info.getScope(info.ast.modules[0].definitions[1])
-        fNameInfo = barScope.lookupFromExternal("f", NoLoc)
-        fNameInfo.resolveOverrides()
-        self.assertEquals({}, fNameInfo.overrides)
-
-    def testStaticMethodDoesNotOverrideNormal(self):
-        source = "class Foo\n" + \
-                 "  def f = 12\n" + \
-                 "class Bar <: Foo\n" + \
-                 "  static def f = 12"
-        info = self.analyzeFromSource(source)
-        barScope = info.getScope(info.ast.modules[0].definitions[1])
-        fNameInfo = barScope.lookupFromExternal("f", NoLoc)
-        fNameInfo.resolveOverrides()
-        self.assertEquals({}, fNameInfo.overrides)
-
-    def testNormalMethodDoesNotOverrideStatic(self):
-        source = "class Foo\n" + \
-                 "  static def f = 12\n" + \
-                 "class Bar <: Foo\n" + \
-                 "  def f = 12"
-        info = self.analyzeFromSource(source)
-        barScope = info.getScope(info.ast.modules[0].definitions[1])
-        fNameInfo = barScope.lookupFromExternal("f", NoLoc)
-        fNameInfo.resolveOverrides()
-        self.assertEquals({}, fNameInfo.overrides)
-
-    def testOverrideMethodByItself(self):
-        source = "class Foo\n" + \
-                 "  override def f = 12"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
-
-    def testOverrideMethodInSameClass(self):
-        source = "class Foo\n" + \
-                 "  def f(arg: String) = 12\n" + \
-                 "  override def f(arg: Object) = 12"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
-
-    def testOverrideMethodWithOverloadInInheritedClass(self):
-        source = "class Foo\n" + \
-                 "  def f(arg: Object) = 12\n" + \
-                 "class Bar <: Foo\n" + \
-                 "  override def f(arg: String) = 12"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
-
     def testForeignClassWithOverrideMethod(self):
         fooPackage = Package(name=Name(["foo"]))
         clas = fooPackage.addClass(name=Name(["Bar"]), typeParameters=[],
@@ -1641,7 +1590,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         A = info.package.findClass(name="A")
         toString = A.findMethodBySourceName("to-string")[0]
         self.assertIs(A, toString.definingClass)
-        self.assertIs(toString.override, getRootClass().findMethodBySourceName("to-string")[0])
+        self.assertEquals([getRootClass().findMethodBySourceName("to-string")[0].id],
+                          [o.id for o in toString.overrides])
 
     def testOverrideCovariantParameters(self):
         source = "class A\n" + \
@@ -1654,7 +1604,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         fooClass = info.package.findClass(name="Foo")
         barClass = info.package.findClass(name="Bar")
         self.assertEquals(len(fooClass.methods), len(barClass.methods))
-        self.assertIs(fooClass.methods[-1], barClass.methods[-1].override)
+        self.assertEquals([fooClass.methods[-1].id],
+                          [o.id for o in barClass.methods[-1].overrides])
 
     def testOverrideContravariantReturn(self):
         source = "class A\n" + \
@@ -1668,29 +1619,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source)
         fooClass = info.package.findClass(name="Foo")
         barClass = info.package.findClass(name="Bar")
-        self.assertIs(fooClass.methods[-1], barClass.methods[-1].override)
-
-    def testOverrideGrandParent(self):
-        source = "abstract class A\n" + \
-                 "  override abstract def to-string: String\n" + \
-                 "class B <: A\n" + \
-                 "  override def to-string = \"B\""
-        info = self.analyzeFromSource(source)
-        Object = getRootClass()
-        ObjectToString = Object.findMethodBySourceName("to-string")[0]
-        A = info.package.findClass(name="A")
-        AToString = info.package.findFunction(name="A.to-string", clas=A)
-        B = info.package.findClass(name="B")
-        BToString = info.package.findFunction(name="B.to-string", clas=B)
-        self.assertIs(ObjectToString, AToString.override)
-        self.assertIs(AToString, BToString.override)
-
-    def testOverrideFinal(self):
-        source = "class A\n" + \
-                 "  final def f = 12\n" + \
-                 "class B <: A\n" + \
-                 "  def f = 34"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
+        self.assertEquals([fooClass.methods[-1].id],
+                          [o.id for o in barClass.methods[-1].overrides])
 
     def testAmbiguousOverloadWithoutCall(self):
         source = "def f = 12\n" + \
@@ -1705,42 +1635,17 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.analyzeFromSource(source)
         # pass if no error
 
-    def testAmbiguousOverload(self):
+    def testAmbiguousOverloadGlobal(self):
         source = "def f = 12\n" + \
                  "def f = 34\n" + \
                  "var x = f"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
-    def testAmbiguousOverride(self):
+    def testAmbiguousOverloadMethods(self):
         source = "class Foo\n" + \
                  "  def f = 12\n" + \
                  "  def f = 34\n" + \
-                 "class Bar <: Foo\n" + \
-                 "  def f = 56"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
-
-    @unittest.skip("compiler bug")
-    def testBrokenOverride(self):
-        # This test exposes a bug in the compiler. Before we resolve overloads/overrides, we
-        # call ensureParamTypeInfoForDefn, which only processes the body of possible target
-        # functions. Maybe we should call ensureTypeInfo. Or we should require functions
-        # with the `override` keyword to have explicit types. Or we should assume `override`
-        # functions have the same type if not specified.
-        source = "class A\n" + \
-                 "class B <: A\n" + \
-                 "def test(d: D) = d.f\n" + \
-                 "class C\n" + \
-                 "  def f: B = B\n" + \
-                 "class D\n" + \
-                 "  def f = A"
-        self.analyzeFromSource(source)
-
-    def testAmbiguousOverload(self):
-        source = "class Foo\n" + \
-                 "  def f = 12\n" + \
-                 "class Bar <: Foo\n" + \
-                 "  def f = 34\n" + \
-                 "  def f = 56"
+                 "def g(foo: Foo) = foo.f"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testSimpleOverload(self):
@@ -1908,7 +1813,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         abstractApply = info.package.findFunction(name="Function.apply", flag=ABSTRACT)
         AppendString = info.package.findClass(name="AppendString")
         concreteApply = info.package.findFunction(name="AppendString.apply", clas=AppendString)
-        self.assertIs(abstractApply, concreteApply.override)
+        self.assertEquals([abstractApply.id], [o.id for o in concreteApply.overrides])
 
     def testTypeParameterWithReversedBounds(self):
         source = "class A[static T <: Nothing >: Object]"
@@ -2110,22 +2015,6 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  final arrayelements T, get, set, length"
         self.analyzeFromSource(source)
         # pass if no exception is raised
-
-    def testDerivedArrayClassHasArrayFlag(self):
-        source = "class Array\n" + \
-                 "  arrayelements Object, get, set, length\n" + \
-                 "class Derived <: Array"
-        info = self.analyzeFromSource(source)
-        Derived = info.package.findClass(name="Derived")
-        self.assertTrue(ARRAY in Derived.flags)
-
-    def testDerivedFinalArrayClassHasFinalArrayFlag(self):
-        source = "class Array\n" + \
-                 "  final arrayelements Object, get, set, length\n" + \
-                 "class Derived <: Array"
-        info = self.analyzeFromSource(source)
-        Derived = info.package.findClass(name="Derived")
-        self.assertTrue(ARRAY_FINAL in Derived.flags)
 
     def testDerivedArrayClassWithFields(self):
         source = "class Array\n" + \
@@ -2352,3 +2241,13 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testSubclassNothing(self):
         source = "class Foo <: Nothing"
         self.assertRaises(InheritanceException, self.analyzeFromSource, source)
+
+    def testBrokenOverride(self):
+        source = "class A\n" + \
+                 "class B <: A\n" + \
+                 "def test(d: D) = d.f\n" + \
+                 "class C\n" + \
+                 "  def f: B = B()\n" + \
+                 "class D\n" + \
+                 "  def f = A()"
+        self.analyzeFromSource(source)

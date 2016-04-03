@@ -276,8 +276,11 @@ class DefnInfo(data.Data):
     def isMethod(self):
         return isinstance(self.irDefn, Function) and self.irDefn.isMethod()
 
+    def isHeritable(self):
+        return self.inheritanceDepth != NOT_HERITABLE
+
     def inherit(self, scopeId):
-        assert self.inheritanceDepth != NOT_HERITABLE and self.isVisible
+        assert self.isHeritable() and self.isVisible
         return DefnInfo(self.irDefn, scopeId, self.isVisible,
                         self.inheritedScopeId, self.inheritanceDepth + 1)
 

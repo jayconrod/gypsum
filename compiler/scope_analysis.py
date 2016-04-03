@@ -216,12 +216,11 @@ class NameInfo(object):
         # list will contain just one element.
         self.overloads = []
 
-        # A map from function ids of overriden functions to ids of the overriding functions.
-        # Only defined after `resolveOverrides` is called and only if `isOverloaded` is true.
-        self.overrides = None
-
     def addOverload(self, defnInfo):
         self.overloads.append(defnInfo)
+
+    def isHeritable(self):
+        return all(isHeritable(o.irDefn) for o in self.overloads)
 
     def isOverloadable(self, otherDefnInfo):
         return isinstance(otherDefnInfo.irDefn, ir.Function) and \
@@ -270,94 +269,6 @@ class NameInfo(object):
         ctorNameInfo = classScope.getDefinition(ir.CONSTRUCTOR_SUFFIX)
         assert ctorNameInfo is not None
         return ctorNameInfo
-
-    def shouldResolveOverrides(self):
-        return self.overrides is None and \
-            (self.isOverloaded() or \
-             (isinstance(self.overloads[0].irDefn, ir.Function) and \
-              OVERRIDE in self.overloads[0].irDefn.flags))
-
-    def resolveOverrides(self):
-        """Decides which definitions are overloads and which are overrides.
-
-        Called during or after type analysis so we know the return and parameter types of each
-        definition. Compares each definition to other definitions. Function A is considered to
-        override function B if all of the following are true:
-
-        - A and B have the same number of parameters
-        - Each parameter type of A is a supertype of the corresponding parameter type of B
-        - The return type of A is a subtype of the return type of B
-        - The inheritance depth of A is strictly less than B
-        - There is no other function A' with inheritance depth between A and B that satisfies
-          the above criteria.
-
-        The overriding function (A) will have its `override` attribute set to point to the
-        overriden function (B). `overrides` will have an entry added."""
-        if not self.shouldResolveOverrides():
-            return
-        self.overrides = {}
-
-        # Sort overloads by depth to simplify the loop and avoid the last condition
-        # mentioned above.
-        overloadsByDepth = sorted(self.overloads,
-                                  key=lambda defnInfo: defnInfo.inheritanceDepth)
-
-        # Compare each function with each other function with greater depth.
-        for (aIndex, aDefnInfo) in enumerate(overloadsByDepth):
-            aIrDefn = aDefnInfo.irDefn
-            aDepth = aDefnInfo.inheritanceDepth
-            overrideIndex = None
-            for (bIndex, bDefnInfo) in enumerate(overloadsByDepth[aIndex + 1:]):
-                bDepth = bDefnInfo.inheritanceDepth
-                bIndex += aIndex + 1
-                assert aDepth <= bDepth
-                if aDepth == bDepth:
-                    continue
-
-                bIrDefn = bDefnInfo.irDefn
-                assert isinstance(aIrDefn, ir.Function) and isinstance(bIrDefn, ir.Function)
-                if aIrDefn.mayOverride(bIrDefn):
-                    # Check that nothing else is already overriding this function.
-                    if bIrDefn.id in self.overrides:
-                        raise TypeException(aIrDefn.getLocation(),
-                                            "%s: multiple definitions may override" %
-                                            self.name)
-                    if bIrDefn.isFinal():
-                        raise TypeException(aIrDefn.getLocation(),
-                                            "%s: can't override final method" % self.name)
-
-                    if OVERRIDE not in aIrDefn.flags:
-                        raise TypeException(aIrDefn.getLocation(),
-                                            ("%s: can't override method in superclass " +
-                                                "without override attribute") % self.name)
-
-                    aIrDefn.override = bIrDefn
-                    self.overrides[bIrDefn.id] = aIrDefn.id
-                    overrideIndex = bIndex
-                    break
-
-            # If we found an override, check that there aren't other functions we could
-            # override.
-            if overrideIndex is not None:
-                overrideDepth = overloadsByDepth[overrideIndex].inheritanceDepth
-                for bDefnInfo in overloadsByDepth[overrideIndex + 1:]:
-                    bDepth = bDefnInfo.inheritanceDepth
-                    if bDepth > overrideDepth:
-                        break
-                    if aIrDefn.mayOverride(bDefnInfo.irDefn):
-                        raise TypeException(aIrDefn.getLocation(),
-                                            "may override multiple definitions: %s" %
-                                            self.name)
-
-            # If we did not find an override, check that no override was expected.
-            if overrideIndex is None and OVERRIDE in aIrDefn.flags:
-                raise TypeException(aIrDefn.getLocation(),
-                                    "%s: has override attribute but doesn't override anything" %
-                                    self.name)
-
-        # Delete overriden functions from the overloads list. They will not be visible anymore
-        # in lookups.
-        self.overloads = filter(lambda o: o.irDefn.id not in self.overrides, self.overloads)
 
 
 class Scope(ast.NodeVisitor):
@@ -598,6 +509,7 @@ class Scope(ast.NodeVisitor):
         """
         function.flags |= frozenset([METHOD])
         function.definingClass = clas
+        function.overridenBy = {}
         thisName = function.name.withSuffix(ir.RECEIVER_SUFFIX)
         this = ir.Variable(thisName, sourceName="this", astDefn=function.astDefn,
                            kind=ir.PARAMETER, flags=frozenset([LET]))
@@ -796,14 +708,6 @@ class Scope(ast.NodeVisitor):
         useInfo = UseInfo(defnInfo, self.scopeId, useKind)
         self.info.setUseInfo(useAstId, useInfo)
         return useInfo
-
-    def resolveOverrides(self):
-        """For bindings with multiple definitions, resolves which definitions are overloads and
-        which are overriden (and by which others).
-
-        All of the overloaded definitions must have type information before this is called.
-        This only needs to be performed in scopes that support overrides."""
-        pass
 
     def isLocal(self):
         """Returns true if values defined in the parent scope are accessible in this scope."""
@@ -1445,10 +1349,6 @@ class ClassScope(Scope):
             irScopeDefn.methods.append(irDefn)
         return irDefn, shouldBind, isVisible
 
-    def resolveOverrides(self):
-        for nameInfo in self.bindings.values():
-            nameInfo.resolveOverrides()
-
     def canImport(self, defnInfo):
         if not super(ClassScope, self).canImport(defnInfo):
             return False
@@ -1522,14 +1422,7 @@ class TraitScope(Scope):
                     raise ScopeException(astDefn.location,
                                          "%s: native method must not have body")
             else:
-                if ABSTRACT not in flags and NATIVE not in flags:
-                    raise ScopeException(astDefn.location,
-                                         "%s: non-abstract method must have body" %
-                                         astDefn.name)
-            if ABSTRACT in flags and ABSTRACT not in irScopeDefn.flags:
-                raise ScopeException(astDefn.location,
-                                     "%s: abstract function not allowed in non-abstract class" %
-                                     astDefn.name)
+               flags |= frozenset([ABSTRACT])
 
             if astDefn.name == "this":
                 raise ScopeException(astDefn.location,
@@ -1569,10 +1462,6 @@ class TraitScope(Scope):
             irScopeDefn.typeParameters.append(irDefn)
             isVisible = False
         return irDefn, shouldBind, isVisible
-
-    def resolveOverrides(self):
-        for nameInfo in self.bindings.values():
-            nameInfo.resolveOverrides()
 
     def canImport(self, defnInfo):
         if not super(TraitScope, self).canImport(defnInfo):

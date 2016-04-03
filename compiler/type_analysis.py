@@ -33,13 +33,9 @@ def analyzeTypeDeclarations(info):
 
 def analyzeTypes(info):
     """Analyzes a syntax, determines a type for each node, and reports any inconsistencies."""
-    info.typeCheckFunction()
     # Establish type information for class supertypes, type parameter upper/lower bounds,
     # and function parameter types. This is needed for `Type.isSubtypeOf` and for typing
     # function calls in expressions.
-
-    # Resolve all function overrides. This simplifies lookups later.
-    resolveAllOverrides(info)
 
     # Add type annotations for AST nodes which need them, and add type information to
     # the package.
@@ -49,14 +45,15 @@ def analyzeTypes(info):
     # Check that each overriding function has a return type which is a subtype of the
     # overriden function. The return type is not used to make override decisions, so this needs
     # to be done after overrides are resolved.
-    for func in info.package.functions:
-        if func.override is not None:
-            overridenReturnType = func.override.returnType.substituteForInheritance(
-                func.definingClass, func.override.definingClass)
-            if not func.returnType.isSubtypeOf(overridenReturnType):
-                raise TypeException(func.getLocation(),
-                                    "%s: return type is not subtype of overriden function" %
-                                    func.name)
+    for function in info.package.functions:
+        if function.overrides is not None:
+            for override in function.overrides:
+                overridenReturnType = override.returnType.substituteForInheritance(
+                    function.definingClass, override.definingClass)
+                if not function.returnType.isSubtypeOf(overridenReturnType):
+                    raise TypeException(function.getLocation(),
+                                        "%s: return type is not subtype of overriden function" %
+                                        function.name)
 
 
 def patternMustMatch(pat, ty, info):

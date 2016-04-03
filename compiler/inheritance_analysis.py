@@ -43,6 +43,33 @@ def analyzeInheritance(info):
     # the package being compiled, but nodes from supertypes outside the package may also end
     # up there. Since cyclic package dependencies are not allowed, we don't worry about
     # subtype cycles across packages.
+    subtypeGraph = buildSubtypeGraph(info)
+    if subtypeGraph.isCyclic():
+        # TODO: need to report an error for each cycle and say what types are in the cycle
+        raise InheritanceException(NoLoc, "inheritance cycle detected")
+
+    # Build full type lists for each definition. We process each class and trait in
+    # topological order, so all supertype definitions are processed first.
+    inheritanceGraph = buildInheritanceGraph(info)
+    bases = buildFullTypeLists(info, inheritanceGraph)
+
+    # Perform some type checks on type arguments for inherited types. These checks were
+    # deferred from type declaration analysis. After these checks are performed, we can use
+    # `Type.isSubtypeOf`.
+    if info.typeCheckFunction is not None:
+        info.typeCheckFunction()
+
+    # Resolve overrides and copy inherited definitions into classes and traits from bases.
+    copyInheritedDefinitions(info, inheritanceGraph, bases)
+
+
+def buildSubtypeGraph(info):
+    """Builds a directed graph of definitions and their subtype relations.
+
+    Each class, trait, and type parameter defined in the package being compiled is a node in
+    this graph. Edges go from classes and traits to their base classes and traits. Type
+    parameters also have edges from their lower bounds and to their upper bounds.
+    """
     subtypeGraph = Graph()
 
     def addTypeDefn(irTypeDefn):
@@ -83,25 +110,45 @@ def analyzeInheritance(info):
     each(addTypeDefn, info.package.traits)
     each(addTypeDefn, info.package.typeParameters)
 
-    if subtypeGraph.isCyclic():
-        # TODO: need to report an error for each cycle and say what types are in the cycle
-        raise InheritanceException(NoLoc, "inheritance cycle detected")
+    return subtypeGraph
 
-    # Copy inherited definitions into class and trait scopes, and build full type lists.
-    # We process each class and trait in topological order, so all supertype defintions
-    # are processed first.
+
+def buildInheritanceGraph(info):
+    """Builds a graph of definitions for inheritance.
+
+    Each class and trait defined in the package being compiled has a node in this graph. There
+    are also nodes for classes and traits in other packages that definitions in the package
+    being compiled inherit. Edges go from base definitions to inheriting definitions (this
+    is the opposite direction compared to the subtype graph.
+    """
     inheritanceGraph = Graph()
     for irDefn in info.package.classes + info.package.traits:
         inheritanceGraph.addVertex(irDefn.id)
         for supertype in irDefn.supertypes:
             inheritanceGraph.addEdge(getIdForType(supertype), irDefn.id)
-    topologicalIds = inheritanceGraph.topologicalSort()
+    return inheritanceGraph
 
+
+def buildFullTypeLists(info, inheritanceGraph):
+    """Builds full `supertypes` lists for each class and trait in the package being compiled.
+
+    Each class and trait has a `supertypes` list, which contains exactly one type for each
+    definition it inherits from, transitively. The types are ordered by visiting definitions
+    in depth-first pre-order from left to right. This list is used in `Type.isSubtypeOf` among
+    other things.
+
+    Returns:
+        ({DefnId: [DefnId]}): a list of direct base definitions for each class or trait.
+        Redundant inheritances are removed. For example, if Foo inherits Bar and Baz, but
+        Bar already inherits Baz, the list for Foo will just contain Bar.
+    """
+    topologicalIds = inheritanceGraph.topologicalSort()
+    bases = {}
     for id in topologicalIds:
         if not id.isLocal():
             continue
         irDefn = info.package.getDefn(id)
-        scope = info.getScope(id)
+        bases[id] = []
 
         # This maps class and trait ids to inherited types. It's possible to inherit a class or
         # trait through multiple paths (diamond inheritance). This is used to make sure the
@@ -113,7 +160,7 @@ def analyzeInheritance(info):
         # full graph traversal to build this.
         inheritedTypes = []
 
-        # Check that we don't explicitly inherit from the same definition more than once.
+        # Check that we don't explicitly inherit the same definition more than once.
         explicitInheritedIds = set()
         for supertype in irDefn.supertypes:
             if supertype.clas.id in explicitInheritedIds:
@@ -177,24 +224,11 @@ def analyzeInheritance(info):
                 # We have not inherited this type yet.
                 inheritedTypeMap[irSuperDefn.id] = supertype
                 inheritedTypes.append(supertype)
+                bases[id].append(irSuperDefn.id)
 
-                # Copy bindings from the base definition's scope. This will include any bindings
-                # that definition inherited, so we only need to do this with direct bases.
-                superscope = info.getScope(irSuperDefn.id)
-                for name, defnInfo in superscope.iterBindings():
-                    if defnInfo.inheritanceDepth == NOT_HERITABLE:
-                        continue
-                    inheritedDefnInfo = defnInfo.inherit(scope.scopeId)
-                    if scope.isBound(name) and \
-                       not scope.getDefinition(name).isOverloadable(inheritedDefnInfo):
-                        irBoundDefn = scope.getDefinition(name).getDefnInfo().irDefn
-                        raise InheritanceException(irBoundDefn.getLocation(),
-                                                   "%s: conflicts with inherited definition %s" %
-                                                   (irBoundDefn.name,
-                                                    inheritedDefnInfo.irDefn.name))
-                    scope.bind(name, inheritedDefnInfo)
-                    scope.define(name)
-
+                # Inherit types from the supertype ("ubertypes"). We don't need to do this
+                # recursively we processed the supertype in a previous iteration. Its supertypes
+                # list already contains everything it inherits from.
                 for ubertype in irSuperDefn.supertypes:
                     irUberDefn = ubertype.clas
                     substitutedUbertype = supertype.substituteForBase(irUberDefn)
@@ -211,9 +245,88 @@ def analyzeInheritance(info):
 
         irDefn.supertypes = inheritedTypes
 
-        # Inherit array flag.
-        if isinstance(irDefn, ir.Class) and ARRAY in irSuperClass.flags:
-            irDefn.flags |= irSuperClass.flags & frozenset([ARRAY, ARRAY_FINAL])
+    return bases
+
+
+def copyInheritedDefinitions(info, inheritanceGraph, bases):
+    """Resolves overrides and copies inherited definitions from bases to classes and traits.
+
+    A method may override methods in inherited scopes if it has the same name and compatible
+    types. Overriden methods are not inherited, so we resolve this first. We build the
+    `overrides` list for functions here. Note that overriding methods must have the
+    `override` attribute, and overriden methods must not be `final`. Note also that return
+    types are not known until after type definition analysis, so return type compatibility
+    is checked there.
+
+    After overrides are resolved, we inherit bindings from direct bases. This is done in
+    topological order and we use `bases` which has redundant bases removed so we don't
+    inherit the same definition more than once.
+
+    For classes specifically, we also copy the ARRAY and ARRAY_FINAL flags from base classes.
+    """
+    topologicalIds = inheritanceGraph.topologicalSort()
+    for id in topologicalIds:
+        if not id.isLocal():
+            continue
+        scope = info.getScope(id)
+        superScopes = [info.getScope(baseId) for baseId in bases[id]]
+        overridenIds = set()
+
+        for name, defnInfo in scope.iterBindings():
+            if name == "this":
+                continue
+            irDefn = defnInfo.irDefn
+            overrides = []
+            for superScope in superScopes:
+                nameInfo = superScope.getDefinition(name)
+                if nameInfo is None or not nameInfo.isHeritable():
+                    continue
+                if not nameInfo.isOverloadable(defnInfo):
+                    raise InheritanceException(irDefn.astDefn.location,
+                                               "%s: cannot overload definition in base" % name)
+                if isinstance(irDefn, ir.Function) and \
+                   not irDefn.isConstructor() and \
+                   not STATIC in irDefn.flags:
+                    for superDefnInfo in nameInfo.overloads:
+                        assert superDefnInfo.isHeritable()
+                        superIrDefn = superDefnInfo.irDefn
+                        if irDefn.mayOverride(superIrDefn):
+                            if superIrDefn.isFinal():
+                                raise InheritanceException(irDefn.astDefn.location,
+                                                           "%s: cannot override a final method" %
+                                                           name)
+                            if id in superIrDefn.overridenBy:
+                                raise InheritanceException(irDefn.astDefn.location,
+                                                           "%s: multiple methods in this class override the same base method" %
+                                                           name)
+                            overrides.append(superIrDefn)
+                            overridenIds.add(superIrDefn.id)
+                            superIrDefn.overridenBy[id] = irDefn
+            if OVERRIDE in irDefn.flags and len(overrides) == 0:
+                raise InheritanceException(irDefn.astDefn.location,
+                                           "%s: doesn't actually override anything" % name)
+            if OVERRIDE not in irDefn.flags and len(overrides) > 0:
+                raise InheritanceException(irDefn.astDefn.location,
+                                           "%s: overrides methods without `override` attribute" %
+                                           name)
+            if len(overrides) > 0:
+                irDefn.overrides = overrides
+
+        for superScope in superScopes:
+            for name, defnInfo in superScope.iterBindings():
+                if not defnInfo.isHeritable() or \
+                   (isinstance(defnInfo.irDefn, ir.IrTopDefn) and \
+                    defnInfo.irDefn.id in overridenIds):
+                    continue
+                scope.bind(name, defnInfo.inherit(scope.scopeId))
+
+        irScopeDefn = scope.getIrDefn()
+        if isinstance(irScopeDefn, ir.Class):
+            superclass = irScopeDefn.superclass()
+            if ARRAY in superclass.flags:
+                irScopeDefn.flags |= frozenset([ARRAY])
+            if ARRAY_FINAL in superclass.flags:
+                irScopeDefn.flags |= frozenset([ARRAY_FINAL])
 
 
 def getIdForType(ty):

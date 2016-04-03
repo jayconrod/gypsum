@@ -550,9 +550,12 @@ class Function(ParameterizedDefn):
             defined in (as opposed to any other class that inherits the method). For
             non-static methods, this could be derived from the receiver type, but there's
             no easy way to get it for static methods.
-        override (Function?): the method in a superclass that this method overrides. This should
-            be set if and only if the `OVERRIDE` flag is set. This is only valid for non-static,
-            non-constructor methods.
+        overrides ([Function]?): methods in inherited traits or a base class that this
+            method overrides. This should be set if and only if the `OVERRIDE` flag is set.
+            It must not be empty. This is only valid for non-static, non-constructor methods.
+        overridenBy ({DefnId, Function}?): a map from class and trait ids to methods. Each
+            entry describes an overriding function in a subclass or subtrait. This should only
+            be set for non-constructor, non-static methods.
         insts (list[Instruction]?): a list of instructions to insert instead of calling this
             function. This is set for some (not all) builtin functions. For instance, the `+`
             method of `i64` has a list containing an `addi64` instruction.
@@ -563,8 +566,8 @@ class Function(ParameterizedDefn):
 
     def __init__(self, name, id, sourceName=None, astDefn=None, returnType=None,
                  typeParameters=None, parameterTypes=None, variables=None, blocks=None,
-                 flags=frozenset(), definingClass=None, override=None, insts=None,
-                 compileHint=None):
+                 flags=frozenset(), definingClass=None, overrides=None, overridenBy=None,
+                 insts=None, compileHint=None):
         super(Function, self).__init__(name, id, sourceName, astDefn)
         self.returnType = returnType
         self.typeParameters = typeParameters
@@ -574,7 +577,8 @@ class Function(ParameterizedDefn):
         self.flags = flags
         self.definingClass = definingClass
         self.insts = insts
-        self.override = override
+        self.overrides = overrides
+        self.overridenBy = overridenBy
         self.compileHint = compileHint
 
     def __repr__(self):

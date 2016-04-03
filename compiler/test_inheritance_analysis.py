@@ -6,6 +6,7 @@
 
 import unittest
 
+from builtins import getRootClass
 from compile_info import CompileInfo
 import ids
 from ir import Package, PackageDependency, Name, CONSTRUCTOR_SUFFIX
@@ -337,17 +338,194 @@ class TestInheritanceAnalysis(unittest.TestCase):
         source = "class Foo\n" + \
                  "  def f = 12\n" + \
                  "class Bar <: Foo\n" + \
-                 "  def f = 34"
+                 "  override def f = 34"
         info = self.analyzeFromSource(source)
         scope = info.getScope(info.ast.modules[0].definitions[1])
-        self.assertEquals(2, len(scope.getDefinition("f").overloads))
+        self.assertEquals(1, len(scope.getDefinition("f").overloads))
+
+    def testOverrideBuiltinWithoutAttrib(self):
+        source = "class Foo\n" + \
+                 "  def typeof = 12"
+        self.assertRaises(InheritanceException, self.analyzeFromSource, source)
 
     def testOverrideBuiltin(self):
         source = "class Foo\n" + \
-                 "  def typeof = 12"
+                 "  override def to-string = \"Foo\""
         info = self.analyzeFromSource(source)
         scope = info.getScope(info.ast.modules[0].definitions[0])
-        self.assertEquals(2, len(scope.getDefinition("typeof").overloads))
+        self.assertEquals(1, len(scope.getDefinition("to-string").overloads))
+        overrides = scope.getDefinition("to-string").overloads[0].irDefn.overrides
+        self.assertEquals([getRootClass().findMethodBySourceName("to-string")[0].id],
+                          [o.id for o in overrides])
+
+    def testMultipleMethodsOverrideSameMethod(self):
+        source = "class A\n" + \
+                 "class B <: A\n" + \
+                 "abstract class Foo\n" + \
+                 "  abstract def f(b: B): unit\n" + \
+                 "class Bar <: Foo\n" + \
+                 "  override def f(a: A) = {}\n" + \
+                 "  override def f(o: Object) = {}"
+        self.assertRaises(InheritanceException, self.analyzeFromSource, source)
+
+    def testSameMethodOverridesMultipleMethodsInSameClass(self):
+        source = "class A\n" + \
+                 "class B\n" + \
+                 "abstract class Foo\n" + \
+                 "  abstract def f(a: A): unit\n" + \
+                 "  abstract def f(b: B): unit\n" + \
+                 "class Bar <: Foo\n" + \
+                 "  override def f(o: Object) = {}"
+        info = self.analyzeFromSource(source)
+        FoofA = info.package.findFunction(name="Foo.f",
+                                          pred=lambda f: f.variables[-1].sourceName == "a")
+        FoofB = info.package.findFunction(name="Foo.f",
+                                          pred=lambda f: f.variables[-1].sourceName == "b")
+        Bar = info.package.findClass(name="Bar")
+        Barf = info.package.findFunction(name="Bar.f")
+        self.assertEquals([FoofA.id, FoofB.id], [o.id for o in Barf.overrides])
+        self.assertEquals(Barf.id, FoofA.overridenBy[Bar.id].id)
+        self.assertEquals(Barf.id, FoofB.overridenBy[Bar.id].id)
+
+    def testSameMethodOverridesMultipleMethodsInDifferentClasses(self):
+        source = "class A\n" + \
+                 "class B <: A\n" + \
+                 "abstract class Foo\n" + \
+                 "  abstract def f(a: A): unit\n" + \
+                 "abstract class Bar <: Foo\n" + \
+                 "  abstract def f(b: B): unit\n" + \
+                 "class Baz <: Bar\n" + \
+                 "  override def f(o: Object) = {}"
+        info = self.analyzeFromSource(source)
+        Foof = info.package.findFunction(name="Foo.f")
+        Barf = info.package.findFunction(name="Bar.f")
+        Bazf = info.package.findFunction(name="Baz.f")
+        Baz = info.package.findClass(name="Baz")
+        self.assertEquals([Barf.id, Foof.id], [o.id for o in Bazf.overrides])
+        self.assertEquals(Bazf.id, Foof.overridenBy[Baz.id].id)
+        self.assertEquals(Bazf.id, Barf.overridenBy[Baz.id].id)
+
+    def testSameMethodOverridesMultipleMethodsInDifferentTraits(self):
+        source = "trait Tr1\n" + \
+                 "  def f: unit\n" + \
+                 "trait Tr2\n" + \
+                 "  def f: unit\n" + \
+                 "class Foo <: Tr1, Tr2\n" + \
+                 "  override def f = {}"
+        info = self.analyzeFromSource(source)
+        Tr1f = info.package.findFunction(name="Tr1.f")
+        Tr2f = info.package.findFunction(name="Tr2.f")
+        Foof = info.package.findFunction(name="Foo.f")
+        Foo = info.package.findClass(name="Foo")
+        self.assertEquals([Tr1f.id, Tr2f.id], [o.id for o in Foof.overrides])
+        self.assertEquals(Foof.id, Tr1f.overridenBy[Foo.id].id)
+        self.assertEquals(Foof.id, Tr2f.overridenBy[Foo.id].id)
+
+    def testMethodsCannotOverrideStaticMethodsWithOverride(self):
+        source = "class Foo\n" + \
+                 "  static def f = {}\n" + \
+                 "class Bar <: Foo\n" + \
+                 "  override def f = {}"
+        self.assertRaises(InheritanceException, self.analyzeFromSource, source)
+
+    def testMethodsCannotOverrideStaticMethodsWithoutOverride(self):
+        source = "class Foo\n" + \
+                 "  static def f = {}\n" + \
+                 "class Bar <: Foo\n" + \
+                 "  def f = {}"
+        info = self.analyzeFromSource(source)
+        Barf = info.package.findFunction(name="Bar.f")
+        self.assertIsNone(Barf.overrides)
+
+    def testMethodCannotOverrideFinalMethod(self):
+        source = "class Foo\n" + \
+                 "  final def f = {}\n" + \
+                 "class Bar <: Foo\n" + \
+                 "  override def f = {}"
+        self.assertRaises(InheritanceException, self.analyzeFromSource, source)
+
+    def testOverrideGrandParent(self):
+        source = "abstract class Foo\n" + \
+                 "  abstract def f: unit\n" + \
+                 "abstract class Bar <: Foo\n" + \
+                 "class Baz <: Bar\n" + \
+                 "  override def f = {}"
+        info = self.analyzeFromSource(source)
+        Foof = info.package.findFunction(name="Foo.f")
+        Bazf = info.package.findFunction(name="Baz.f")
+        Baz = info.package.findClass(name="Baz")
+        self.assertEquals([Foof.id], [o.id for o in Bazf.overrides])
+        self.assertEquals(Bazf.id, Foof.overridenBy[Baz.id].id)
+
+    def testMethodOverridesNothing(self):
+        source = "class Foo\n" + \
+                 "  override def f = {}"
+        self.assertRaises(InheritanceException, self.analyzeFromSource, source)
+
+    def testMethodOverridesIncompatible(self):
+        source = "class Foo\n" + \
+                 "  def f = {}\n" + \
+                 "class Bar <: Foo\n" + \
+                 "  override def f(o: Object) = o"
+        self.assertRaises(InheritanceException, self.analyzeFromSource, source)
+
+    def testMethodOverridesInSameClass(self):
+        source = "class Foo\n" + \
+                 "  def f = {}\n" + \
+                 "  override def f = {}"
+        self.assertRaises(InheritanceException, self.analyzeFromSource, source)
+
+    def testOverrideMethodWithOverloadInBaseClass(self):
+        source = "class Foo\n" + \
+                 "  def f = {}\n" + \
+                 "  def f(o: Object) = {}\n" + \
+                 "class Bar <: Foo\n" + \
+                 "  override def f = {}"
+        info = self.analyzeFromSource(source)
+        Foof = info.package.findFunction(name="Foo.f",
+                                         pred=lambda f: len(f.parameterTypes) == 1)
+        Barf = info.package.findFunction(name="Bar.f")
+        Bar = info.package.findClass(name="Bar")
+        self.assertEquals([Foof.id], [o.id for o in Barf.overrides])
+        self.assertEquals(Barf.id, Foof.overridenBy[Bar.id].id)
+
+    def testStaticMethodDoesNotOverrideStatic(self):
+        source = "class Foo\n" + \
+                 "  static def f = 12\n" + \
+                 "class Bar <: Foo\n" + \
+                 "  static def f = 34"
+        info = self.analyzeFromSource(source)
+        Foof = info.package.findFunction(name="Foo.f")
+        Barf = info.package.findFunction(name="Bar.f")
+        self.assertIsNone(Barf.overrides)
+        self.assertIsNone(Foof.overridenBy)
+
+    def testStaticMethodDoesNotOverrideNormal(self):
+        source = "class Foo\n" + \
+                 "  def f = 12\n" + \
+                 "class Bar <: Foo\n" + \
+                 "  static def f = 12"
+        info = self.analyzeFromSource(source)
+        Foof = info.package.findFunction(name="Foo.f")
+        Barf = info.package.findFunction(name="Bar.f")
+        self.assertIsNone(Barf.overrides)
+        self.assertEquals({}, Foof.overridenBy)
+
+    def testDerivedArrayClassHasArrayFlag(self):
+        source = "class Array\n" + \
+                 "  arrayelements Object, get, set, length\n" + \
+                 "class Derived <: Array"
+        info = self.analyzeFromSource(source)
+        Derived = info.package.findClass(name="Derived")
+        self.assertIn(ARRAY, Derived.flags)
+
+    def testDerivedFinalArrayClassHasFinalArrayFlag(self):
+        source = "class Array\n" + \
+                 "  final arrayelements Object, get, set, length\n" + \
+                 "class Derived <: Array"
+        info = self.analyzeFromSource(source)
+        Derived = info.package.findClass(name="Derived")
+        self.assertTrue(ARRAY_FINAL in Derived.flags)
 
     def testConstructorsNotHeritable(self):
         source = "class A[static S](value: S)\n" + \

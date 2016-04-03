@@ -259,6 +259,17 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.assertEquals(frozenset([PUBLIC, STATIC]), T.flags)
         self.assertIs(Tr, T.clas)
 
+    def testDefineAbstractTrait(self):
+        source = "abstract trait Tr"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
+    def testTraitMethodWithoutBodyIsAbstract(self):
+        source = "trait Tr\n" + \
+                 "  def f: unit"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="Tr.f")
+        self.assertIn(ABSTRACT, f.flags)
+
     def testVarDefinedInBlock(self):
         info = self.analyzeFromSource("def f = {\n" +
                                       "  {\n" +
