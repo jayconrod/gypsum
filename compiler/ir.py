@@ -829,6 +829,8 @@ class Class(ObjectTypeDefn):
         methods (list[Function]?): a list of functions that operate on instances of this class.
             This may be `None` before declaration analysis is complete. Inherited methods may
             be added to this list during class flattening
+        traits ({DefnId: [Function]}?): a method list for each trait this class inherits,
+            directly or indirectly. This is set during class flattening.
         elementType (Type?): if this is an array class, this is the type of the elements. `None`
             for non-array classes. The `ARRAY` flag must be set if this is not `None`.
         flags (frozenset[flag]): flags indicating how this class is used. Valid flags are
@@ -837,18 +839,19 @@ class Class(ObjectTypeDefn):
 
     def __init__(self, name, id, sourceName=None, astDefn=None, typeParameters=None,
                  supertypes=None, initializer=None, constructors=None, fields=None,
-                 methods=None, elementType=None, flags=frozenset()):
+                 methods=None, traits=None, elementType=None, flags=frozenset()):
         super(Class, self).__init__(name, id, sourceName, astDefn, typeParameters, supertypes)
         self.initializer = initializer
         self.constructors = constructors
         self.fields = fields
         self.methods = methods
+        self.traits = traits
         self.elementType = elementType
         self.flags = flags
 
     def __repr__(self):
         return reprFormat(self, "name", "typeParameters", "supertypes", "initializer",
-                          "constructors", "fields", "methods", "elementType", "flags")
+                          "constructors", "fields", "methods", "traits", "elementType", "flags")
 
     def __str__(self):
         buf = StringIO.StringIO()
@@ -862,6 +865,11 @@ class Class(ObjectTypeDefn):
             buf.write("  constructor %s\n" % ctor.id)
         for method in self.methods:
             buf.write("  method %s\n" % method.id)
+        if self.traits is not None:
+            for id, methods in self.traits:
+                buf.write("  trait %s\n" % id)
+                for method in methods:
+                    buf.write("    method %s\n" % method.id)
         if self.elementType is not None:
             buf.write("  arrayelements %s\n" % str(self.elementType))
         return buf.getvalue()
@@ -874,6 +882,7 @@ class Class(ObjectTypeDefn):
                self.constructors == other.constructors and \
                self.fields == other.fields and \
                self.methods == other.methods and \
+               self.traits == other.traits and \
                self.elementType == other.elementType and \
                self.flags == other.flags
 

@@ -7,27 +7,28 @@
 import unittest
 import sys
 
-import ast
-from lexer import *
-from layout import layout
-from parser import *
+from builtins import *
+from bytecode import *
 from compile_info import *
-from scope_analysis import *
-from type_analysis import *
-from externalization import externalize
+from compile_info import CompileInfo
 from compiler import *
+from errors import *
+from externalization import externalize
+from flags import LET, PUBLIC, METHOD
+from flatten_classes import flattenClasses
 from ids import *
 from inheritance_analysis import analyzeInheritance
 from ir import *
-from ir_types import *
-import ir_instructions
 from ir_instructions import *
-from bytecode import *
-from flags import LET, PUBLIC, METHOD
-from compile_info import CompileInfo
-from builtins import *
-from errors import *
+from ir_types import *
+from layout import layout
+from lexer import *
+from parser import *
+from scope_analysis import *
+from type_analysis import *
 from utils_test import FakePackageLoader, OPTION_SOURCE, TestCaseWithDefinitions, TUPLE_SOURCE
+import ast
+import ir_instructions
 
 
 class TestCompiler(TestCaseWithDefinitions):

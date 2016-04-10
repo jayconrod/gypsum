@@ -786,6 +786,19 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             each(lambda ty: self.checkPublicType(ty, node.name, node.location),
                  irClass.supertypes)
 
+    def visitTraitDefinition(self, node):
+        irTrait = self.info.getDefnInfo(node).irDefn
+        thisType = ir_t.ClassType.forReceiver(irTrait)
+
+        each(self.visit, node.typeParameters)
+        each(self.visit, node.members)
+
+        if self.isExternallyVisible(irTrait):
+            for tp in irTrait.typeParameters:
+                self.checkPublicTypeParameter(tp, node.name, node.location)
+            for sty in irTrait.supertypes:
+                self.chechPublicType(sty, node.name, node.location)
+
     def visitPrimaryConstructorDefinition(self, node):
         self.handleFunctionCommon(node, None, None)
 

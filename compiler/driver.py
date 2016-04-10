@@ -15,6 +15,7 @@ from compile_info import CompileInfo, STD_NAME
 from compiler import compile
 from errors import CompileException
 from externalization import externalize
+from flatten_classes import flattenClasses
 from ids import AstId, TARGET_PACKAGE_ID
 from inheritance_analysis import analyzeInheritance
 from ir import Package, PackageVersion, PackageDependency, Name

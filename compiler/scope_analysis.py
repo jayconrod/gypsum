@@ -13,7 +13,7 @@
 import ast
 from compile_info import ContextInfo, ClosureInfo, DefnInfo, UseInfo, ImportInfo, USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, NORMAL_MODE, STD_MODE, NOSTD_MODE, CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, NOT_HERITABLE
 from data import Data
-from errors import TypeException, ScopeException
+from errors import InheritanceException, ScopeException, TypeException
 from flags import *
 from graph import Graph
 from ids import AstId, DefnId, PackageId, ScopeId, BUILTIN_SCOPE_ID, GLOBAL_SCOPE_ID, PACKAGE_SCOPE_ID
@@ -21,7 +21,7 @@ import ir
 from ir_types import getRootClassType, ClassType, UnitType, I32Type
 from location import Location, NoLoc
 from builtins import registerBuiltins, getBuiltinClasses
-from utils import Counter
+from utils import Counter, each
 from bytecode import BUILTIN_ROOT_CLASS_ID
 
 
@@ -143,55 +143,6 @@ def convertClosures(info):
     # particular order.
     for scope in info.scopes.values():
         scope.finish()
-
-
-def flattenClasses(info):
-    """Copies inherited definitions from base classes to derived classes.
-
-    Until this point, IR classes have only contained definitions defined inside them. Inherited
-    definitions have been made available for the purpose of scope and type analysis through
-    Scope objects. In order for the compiler to determine accurate object sizes and vtable
-    indices, we need to actually copy these inherited definitions into derived classes."""
-
-    # We cannot re-use the inheritance graph we built during inheritance analysis, since we may
-    # have created new classes (especially contexts and closures) since then.
-    allClasses = getBuiltinClasses(includePrimitives=False) + info.package.classes
-    inheritanceGraph = Graph(clas.id for clas in allClasses)
-    for clas in allClasses:
-        for sty in clas.supertypes:
-            # Edges point from base classes to derived classes. So the root class is a "source"
-            # and leaf classes are "sinks".
-            inheritanceGraph.addEdge(sty.clas.id, clas.id)
-
-    topologicalClassIds = inheritanceGraph.topologicalSort()
-    for id in topologicalClassIds:
-        # TODO: this should already be done for builtin classes.
-        if id.isBuiltin():
-            continue
-        irClass = info.package.classes[id.index]
-        if len(irClass.supertypes) != 1:
-            raise NotImplementedError()
-        irSuperclass = irClass.supertypes[0].clas
-        irClass.fields = irSuperclass.fields + irClass.fields
-        methods = list(irSuperclass.methods)
-        for ownMethod in irClass.methods:
-            if ownMethod.override is not None:
-                foundOverride = False
-                for i, inheritedMethod in enumerate(irSuperclass.methods):
-                    if ownMethod.override is inheritedMethod:
-                        foundOverride = True
-                        methods[i] = ownMethod
-                        break
-                assert foundOverride
-            else:
-                methods.append(ownMethod)
-        irClass.methods = methods
-        if ABSTRACT not in irClass.flags:
-            for m in methods:
-                if ABSTRACT in m.flags:
-                    raise ScopeException(irClass.getLocation(),
-                                         "must override inherited abstract method `%s` in concrete class `%s`" %
-                                         (m.name, irClass.name))
 
 
 def isHeritable(irDefn):
