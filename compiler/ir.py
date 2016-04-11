@@ -785,7 +785,7 @@ class ObjectTypeDefn(ParameterizedDefn):
                 matching method. If no match was found, `None` is returned.
         """
         assert isinstance(name, str)
-        for i, m in enumerate(self.methods):
+        for i, m in enumerate(m for m in self.methods if flags.STATIC not in m.flags):
             if m.sourceName == name:
                 return m, i
         return None
@@ -795,7 +795,6 @@ class ObjectTypeDefn(ParameterizedDefn):
             if m is method:
                 return i
         raise KeyError("method does not belong to this class")
-
 
 
 class Class(ObjectTypeDefn):
