@@ -327,6 +327,11 @@ class CallInfo(data.Data):
     propertyNames = [
         # [Type]: A list of type arguments to be passed to the callee.
         "typeArguments",
+
+        # Type?: The type of the receiver. This is only specified for non-static method calls.
+        # TODO: this may be `None` for calls to closure functions, since they are regular
+        # functions during type analysis. Closure conversion should add this.
+        "receiverType",
     ]
 
 

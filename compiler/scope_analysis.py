@@ -1584,6 +1584,8 @@ class PackageScope(Scope):
                                  if PUBLIC in f.flags and METHOD not in f.flags)
             exportedClasses = [c for c in package.classes if PUBLIC in c.flags]
             exportedDefns.extend(exportedClasses)
+            exportedTraits = [tr for tr in package.traits if PUBLIC in tr.flags]
+            exportedDefns.extend(exportedTraits)
             for defn in exportedDefns:
                 defnInfo = DefnInfo(defn, scopeId, True)
                 self.bind(defn.name.short(), defnInfo)
@@ -1591,6 +1593,9 @@ class PackageScope(Scope):
             for clas in exportedClasses:
                 scope = ExternClassScope(ScopeId(clas.name), self, info, clas)
                 self.info.setScope(clas.id, scope)
+            for trait in exportedTraits:
+                scope = ExternTraitScope(ScopeId(trait.name), self, info, trait)
+                self.info.setScope(trait.id, scope)
 
         packageBindings = {}
         for name in packageNames:
@@ -1666,6 +1671,17 @@ class ExternClassScope(Scope):
 
     def requiresCapture(self):
         return True
+
+
+class ExternTraitScope(Scope):
+    def __init__(self, scopeId, parent, info, trait):
+        super(ExternTraitScope, self).__init__(trait.name.components, None,
+                                               scopeId, parent, info)
+        for method in trait.methods:
+            if PUBLIC in method.flags:
+                defnInfo = DefnInfo(method, self.scopeId, isVisible=True)
+                self.bind(method.name.short(), defnInfo)
+                self.define(method.name.short())
 
 
 class ScopeVisitor(ast.NodeVisitor):

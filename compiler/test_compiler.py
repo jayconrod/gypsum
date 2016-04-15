@@ -3888,6 +3888,88 @@ class TestCompiler(TestCaseWithDefinitions):
                              ], [
                                ret()]]))
 
+    def testCallTraitMethodOnSameTrait(self):
+        source = "trait Tr\n" + \
+                 "  def m = {}\n" + \
+                 "def f(tr: Tr) = tr.m"
+        package = self.compileFromSource(source)
+        Tr = package.findTrait(name="Tr")
+        TrType = ClassType(Tr)
+        m = package.findFunction(name="Tr.m")
+        mIndex = Tr.getMethodIndex(m)
+        self.checkFunction(package,
+                           self.makeSimpleFunction(Name(["f"]), UnitType, [[
+                                 ldlocal(0),
+                                 callvt(1, Tr, mIndex),
+                                 ret(),
+                               ]],
+                               variables=[self.makeVariable(Name(["f", "tr"]),
+                                                            type=TrType, kind=PARAMETER,
+                                                            flags=frozenset([LET]))]))
+
+    def testCallTraitMethodOnSameForeignTrait(self):
+        fooPackage = Package(name=Name(["foo"]))
+        Tr = fooPackage.addTrait(Name(["Tr"]), typeParameters=[],
+                                 supertypes=[getRootClassType()],
+                                 flags=frozenset([PUBLIC]))
+        TrType = ClassType(Tr)
+        m = fooPackage.addFunction(Name(["Tr", "m"]), returnType=UnitType,
+                                   typeParameters=[], parameterTypes=[TrType],
+                                   flags=frozenset([PUBLIC, METHOD]), definingClass=Tr)
+        Tr.methods = [m]
+        loader = FakePackageLoader([fooPackage])
+
+        source = "def f(tr: foo.Tr) = tr.m"
+        package = self.compileFromSource(source, packageLoader=loader)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", UnitType, [[
+                               ldlocal(0),
+                               callvtf(1, Tr, 0),
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable(Name(["f", "tr"]),
+                                                          type=TrType, kind=PARAMETER,
+                                                          flags=frozenset([LET]))]))
+
+    def testCallTraitMethodInheritedFromTrait(self):
+        source = "trait Tr1\n" + \
+                 "  def m = {}\n" + \
+                 "trait Tr2 <: Tr1\n" + \
+                 "def f(tr: Tr2) = tr.m"
+        package = self.compileFromSource(source)
+        Tr1 = package.findTrait(name="Tr1")
+        Tr2 = package.findTrait(name="Tr2")
+        Tr2Type = ClassType(Tr2)
+        _, mIndex = Tr1.findMethodBySourceName("m")
+        self.checkFunction(package,
+                           self.makeSimpleFunction(Name(["f"]), UnitType, [[
+                               ldlocal(0),
+                               callvt(1, Tr1, mIndex),
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable(Name(["f", "tr"]),
+                                                          type=Tr2Type, kind=PARAMETER,
+                                                          flags=frozenset([LET]))]))
+
+    def testCallClassMethodInheritedFromTrait(self):
+        source = "trait Tr\n" + \
+                 "  def m = {}\n" + \
+                 "class C <: Tr\n" + \
+                 "def f(c: C) = c.m"
+        package = self.compileFromSource(source)
+        C = package.findClass(name="C")
+        CType = ClassType(C)
+        _, mIndex = C.findMethodBySourceName("m")
+        self.checkFunction(package,
+                           self.makeSimpleFunction(Name(["f"]), UnitType, [[
+                               ldlocal(0),
+                               callv(1, mIndex),
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable(Name(["f", "c"]),
+                                                          type=CType, kind=PARAMETER,
+                                                          flags=frozenset([LET]))]))
+
     # Regression tests
     def testPrimaryCtorCallsSuperCtorWithTypeArgs(self):
         source = "class Foo[static T]\n" + \

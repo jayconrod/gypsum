@@ -1405,7 +1405,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, receiverType,
                                                             None, None, loc)
         self.checkCallAllowed(defnInfo.irDefn, True, USE_AS_VALUE, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
         scope.use(defnInfo, useAstId, USE_AS_VALUE, loc)
         return self.getDefnType(receiverType, False, defnInfo.irDefn, allTypeArgs)
 
@@ -1465,7 +1465,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                                                 typeArgs, None, loc)
 
         self.checkCallAllowed(defnInfo.irDefn, False, USE_AS_PROPERTY, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
         self.scope().use(defnInfo, useAstId, USE_AS_PROPERTY, loc)
         return self.getDefnType(receiverType, True, defnInfo.irDefn, allTypeArgs)
 
@@ -1526,7 +1526,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             raise TypeException(loc, "%s: cannot access without receiver" % name)
 
         self.checkCallAllowed(defnInfo.irDefn, receiverIsReceiver, useKind, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
         self.scope().use(defnInfo, useAstId, useKind, loc)
         ty = self.getDefnType(receiverType, True, defnInfo.irDefn, allTypeArgs)
         ty = self.upcastExistentialVars(ty, existentialVars, isLvalue, name, loc)
@@ -1569,7 +1569,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                                                 typeArgs, argTypes, loc)
         irDefn = defnInfo.irDefn
         self.checkCallAllowed(irDefn, True, useKind, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
         self.scope().use(defnInfo, useAstId, useKind, loc)
         return self.getDefnType(receiverType, False, irDefn, allTypeArgs)
 
@@ -1653,7 +1653,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
         # Record information and return the resulting type.
         self.checkCallAllowed(defnInfo.irDefn, False, useKind, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
         self.scope().use(defnInfo, useAstId, useKind, loc)
         ty = self.getDefnType(receiverType, False, defnInfo.irDefn, allTypeArgs)
         ty = self.upcastExistentialVars(ty, existentialVars, False, name, loc)
@@ -1695,7 +1695,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, objectType,
                                                             None, argTypes, loc)
         self.checkCallAllowed(defnInfo.irDefn, False, USE_AS_CONSTRUCTOR, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, None))
         self.scope().use(defnInfo, useAstId, USE_AS_CONSTRUCTOR, loc)
 
     def handleDestructure(self, nameInfo, receiverType, receiverIsExplicit,
@@ -1752,7 +1752,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, receiverType,
                                                                 typeArgs, [exprType], loc)
             self.checkCallAllowed(defnInfo.irDefn, False, useKind, loc)
-            self.info.setCallInfo(matcherAstId, CallInfo(allTypeArgs))
+            self.info.setCallInfo(matcherAstId, CallInfo(allTypeArgs, receiverType))
             self.scope().use(defnInfo, matcherAstId, useKind, loc)
             irDefn = defnInfo.irDefn
             self.ensureTypeInfoForDefn(irDefn)
