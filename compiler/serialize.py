@@ -45,10 +45,10 @@ def deserialize(fileName):
         raise IOError(exn)
 
 
-HEADER_FORMAT = "<Ihhqiiiiiiii"
+HEADER_FORMAT = "<Ihhqiiiiiiiii"
 MAGIC = 0x676b7073
 MAJOR_VERSION = 0
-MINOR_VERSION = 19
+MINOR_VERSION = 20
 
 FLAG_FORMAT = "<i"
 
@@ -70,6 +70,8 @@ class Serializer(object):
             self.writeFunction(f)
         for c in self.package.classes:
             self.writeClass(c)
+        for t in self.package.traits:
+            self.writeTrait(t)
         for p in self.package.typeParameters:
             self.writeTypeParameter(p)
         for d in self.package.dependencies:
@@ -91,6 +93,7 @@ class Serializer(object):
                                        len(self.package.globals),
                                        len(self.package.functions),
                                        len(self.package.classes),
+                                       len(self.package.traits),
                                        len(self.package.typeParameters),
                                        len(self.package.dependencies),
                                        entryFunctionIndex,
@@ -172,7 +175,7 @@ class Serializer(object):
         self.writeOption(self.writeStringIndex, clas.sourceName)
         self.writeFlags(clas.flags)
         self.writeTypeParameterList(clas.typeParameters)
-        self.writeType(clas.supertypes[0])
+        self.writeList(self.writeType, clas.supertypes)
         self.writeList(self.writeField, clas.fields)
         if clas.isForeign():
             self.writeForeignMethodList(clas.constructors)
@@ -180,6 +183,7 @@ class Serializer(object):
         else:
             self.writeMethodList(clas.constructors)
             self.writeMethodList(clas.methods)
+            self.writeTraitMethodLists(clas.traits)
         self.writeOption(self.writeType, clas.elementType)
 
     def writeField(self, field):
@@ -187,6 +191,17 @@ class Serializer(object):
         self.writeOption(self.writeStringIndex, field.sourceName)
         self.writeFlags(field.flags)
         self.writeType(field.type)
+
+    def writeTrait(self, trait):
+        self.writeName(trait.name)
+        self.writeOption(self.writeStringIndex, trait.sourceName)
+        self.writeFlags(trait.flags)
+        self.writeTypeParameterList(trait.typeParameters)
+        self.writeList(self.writeType, trait.supertypes)
+        if trait.isForeign():
+            self.writeForeignMethodList(trait.methods)
+        else:
+            self.writeMethodList(trait.methods)
 
     def writeTypeParameter(self, typeParameter):
         self.writeName(typeParameter.name)
@@ -200,6 +215,7 @@ class Serializer(object):
         self.writeVbn(len(dependency.externGlobals))
         self.writeVbn(len(dependency.externFunctions))
         self.writeVbn(len(dependency.externClasses))
+        self.writeVbn(len(dependency.externTraits))
         self.writeVbn(len(dependency.externMethods))
         self.writeVbn(len(dependency.externTypeParameters))
 
@@ -210,6 +226,8 @@ class Serializer(object):
             self.writeFunction(f)
         for c in dependency.externClasses:
             self.writeClass(c)
+        for t in dependency.externTraits:
+            self.writeTrait(t)
         for m in dependency.externMethods:
             self.writeFunction(m)
         for p in dependency.externTypeParameters:
@@ -236,18 +254,22 @@ class Serializer(object):
         elif type is ir_types.F64Type:
             form = 7
         elif isinstance(type, ir_types.ClassType):
-            form = 8
             clas = type.clas
             packageIndex = clas.id.getPackageIndex()
             defnIndex = clas.id.getDefnIndex()
+            if isinstance(clas, ir.Class):
+                form = 8
+            else:
+                assert isinstance(clas, ir.Trait)
+                form = 9
         elif isinstance(type, ir_types.VariableType):
-            form = 9
+            form = 10
             param = type.typeParameter
             packageIndex = param.id.getPackageIndex()
             defnIndex = param.id.getDefnIndex()
         else:
             assert isinstance(type, ir_types.ExistentialType)
-            form = 10
+            form = 11
             self.writeVbn(form)
             self.writeTypeParameterList(type.variables)
             self.writeType(type.ty)
@@ -285,6 +307,16 @@ class Serializer(object):
 
     def writeMethodList(self, list):
         self.writeList(self.writeMethodId, list)
+
+    def writeTraitMethodLists(self, traits):
+        self.writeVbn(len(traits))
+        for traitId, methods in traits.iteritems():
+            self.writeVbn(traitId.getPackageIndex())
+            index = traitId.getDefnIndex()
+            if traitId.getPackageIndex() == ids.BUILTIN_PACKAGE_INDEX:
+                index = ~index
+            self.writeVbn(index)
+            self.writeMethodList(methods)
 
     def writeMethodId(self, method):
         self.writeVbn(method.id.getPackageIndex())
@@ -389,19 +421,22 @@ class Deserializer(object):
         classCount = headers[7]
         self.package.classes = self.createEmptyClassList(classCount, self.package.id)
 
-        typeParamCount = headers[8]
+        traitCount = headers[8]
+        self.package.traits = self.createEmptyTraitList(traitCount, self.package.id)
+
+        typeParamCount = headers[9]
         self.package.typeParameters = self.createEmptyTypeParameterList(typeParamCount,
                                                                         self.package.id)
 
-        depCount = headers[9]
+        depCount = headers[10]
         self.package.dependencies = [None] * depCount
 
-        entryFunctionIndex = headers[10]
+        entryFunctionIndex = headers[11]
         if entryFunctionIndex != -1:
             if entryFunctionIndex < 0 or entryFunctionIndex >= len(self.package.functions):
                 raise IOError("invalid entry function index")
             self.package.entryFunction = self.package.functions[entryFunctionIndex]
-        initFunctionIndex = headers[11]
+        initFunctionIndex = headers[12]
         if initFunctionIndex != -1:
             if initFunctionIndex < 0 or initFunctionIndex >= len(self.package.functions):
                 raise IOError("invalid init function index")
@@ -424,9 +459,13 @@ class Deserializer(object):
 
     def createEmptyClassList(self, count, packageId):
         cids = (ids.DefnId(packageId, ids.DefnId.CLASS, i) for i in xrange(count))
-        classes = list(ir.Class(None, id)
-                       for id in cids)
+        classes = list(ir.Class(None, id) for id in cids)
         return classes
+
+    def createEmptyTraitList(self, count, packageId):
+        tids = (ids.DefnId(packageId, ids.DefnId.TRAIT, i) for i in xrange(count))
+        traits = list(ir.Trait(None, id) for id in tids)
+        return traits
 
     def createEmptyTypeParameterList(self, count, packageId):
         tids = (ids.DefnId(packageId, ids.DefnId.TYPE_PARAMETER, i) for i in xrange(count))
@@ -485,10 +524,11 @@ class Deserializer(object):
         clas.flags = self.readFlags()
         assert flags.EXTERN not in clas.flags
         clas.typeParameters = self.readList(self.readId, self.package.typeParameters)
-        clas.supertypes = [self.readType()]
+        clas.supertypes = self.readList(self.readType)
         clas.fields = self.readFields()
         clas.constructors = self.readList(self.readMethodId)
         clas.methods = self.readList(self.readMethodId)
+        clas.traits = self.readTraitMethodLists()
         clas.elementType = self.readOption(self.readType)
 
     def readForeignClass(self, clas, dep):
@@ -497,10 +537,11 @@ class Deserializer(object):
         clas.flags = self.readFlags()
         assert flags.EXTERN in clas.flags
         clas.typeParameters = self.readList(self.readId, dep.externTypeParameters)
-        clas.supertypes = [self.readType()]
+        clas.supertypes = self.readList(self.readType)
         clas.fields = self.readFields()
         clas.constructors = self.readList(self.readId, dep.externMethods)
         clas.methods = self.readList(self.readId, dep.externMethods)
+        clas.traits = None   # not needed for linking
         clas.elementType = self.readOption(self.readType)
 
     def readFields(self):
@@ -519,6 +560,44 @@ class Deserializer(object):
         field = ir.Field(name, sourceName=sourceName, type=ty, flags=flags, index=index)
         return field
 
+    def readTraitMethodLists(self):
+        n = self.readVbn()
+        if n < 0:
+            raise IOError("invalid list length")
+        traits = {}
+        for i in xrange(n):
+            packageIndex = self.readVbn()
+            traitIndex = self.readVbn()
+            if packageIndex == ids.BUILTIN_PACKAGE_INDEX:
+                traitIndex = ~traitIndex
+                traitId = builtins.getBuiltinTraitById(traitIndex).id
+            elif packageIndex == ids.LOCAL_PACKAGE_INDEX:
+                traitId = self.package.traits[traitIndex].id
+            else:
+                traitId = self.package.dependencies[packageIndex].externTraits[traitIndex]
+            if traitId in traits:
+                raise IOError("same trait implemented multiple times")
+            traits[traitId] = self.readList(self.readMethodId)
+        return traits
+
+    def readTrait(self, trait):
+        trait.name = self.readName()
+        trait.sourceName = self.readOption(self.readStringIndex)
+        trait.flags = self.readFlags()
+        assert flags.EXTERN not in trait.flags
+        trait.typeParameters = self.readList(self.readId, self.package.typeParameters)
+        trait.supertypes = self.readList(self.readType)
+        trait.methods = self.readList(self.readMethodId)
+
+    def readForeignTrait(self, trait, dep):
+        trait.name = self.readName()
+        trait.sourceName = self.readOption(self.readStringIndex)
+        trait.flags = self.readFlags()
+        assert flags.EXTERN in trait.flags
+        trait.typeParameters = self.readList(self.readId, dep.externTypeParameters)
+        trait.supertypes = self.readList(self.readType)
+        trait.methods = self.readList(self.readId, dep.externMethods)
+
     def readTypeParameter(self, param):
         param.name = self.readName()
         param.sourceName = self.readOption(self.readStringIndex)
@@ -536,6 +615,8 @@ class Deserializer(object):
         dep.externFunctions = self.createEmptyFunctionList(functionCount, packageId)
         classCount = self.readVbn()
         dep.externClasses = self.createEmptyClassList(classCount, packageId)
+        traitCount = self.readVbn()
+        dep.externTraits = self.createEmptyTraitList(traitCount, packageId)
         methodCount = self.readVbn()
         dep.externMethods = self.createEmptyFunctionList(methodCount, packageId)
         typeParameterCount = self.readVbn()
@@ -550,6 +631,8 @@ class Deserializer(object):
             self.readForeignFunction(f, dep)
         for c in dep.externClasses:
             self.readForeignClass(c, dep)
+        for t in dep.externTraits:
+            self.readForeignTrait(t, dep)
         for m in dep.externMethods:
             self.readForeignFunction(m, dep)
         for p in dep.externTypeParameters:
@@ -603,6 +686,21 @@ class Deserializer(object):
             packageIndex = self.readVbn()
             defnIndex = self.readVbn()
             isExtern = False
+            if packageIndex == ids.BUILTIN_PACKAGE_INDEX:
+                trait = builtins.getBuiltinTraitById(defnIndex)
+            elif packageIndex == ids.LOCAL_PACKAGE_INDEX:
+                trait = self.package.traits[defnIndex]
+            else:
+                trait = self.package.dependencies[packageIndex].externTraits[defnIndex]
+                isExtern = True
+            typeArgs = tuple(self.readList(self.readType))
+            ty = ir_types.ClassType(trait, typeArgs, flags)
+            if isExtern:
+                self.package.externTypes.append(ty)
+        elif form == 10:
+            packageIndex = self.readVbn()
+            defnIndex = self.readVbn()
+            isExtern = False
             if packageIndex == ids.LOCAL_PACKAGE_INDEX:
                 param = self.package.typeParameters[defnIndex]
             else:
@@ -611,7 +709,7 @@ class Deserializer(object):
             ty = ir_types.VariableType(param, flags)
             if isExtern:
                 self.package.externTypes.append(ty)
-        elif form == 10:
+        elif form == 11:
             if flagBits != 0:
                 raise IOError("flags must not be set for existential type")
             variables = self.readList(self.readId, self.package.typeParameters)
