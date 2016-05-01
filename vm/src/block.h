@@ -30,6 +30,7 @@ V(Global, GLOBAL)                                                              \
 V(Function, FUNCTION)                                                          \
 V(Class, CLASS)                                                                \
 V(Field, FIELD)                                                                \
+V(Trait, TRAIT)                                                                \
 V(TypeParameter, TYPE_PARAMETER)                                               \
 V(I8Array, I8_ARRAY)                                                           \
 V(I32Array, I32_ARRAY)                                                         \

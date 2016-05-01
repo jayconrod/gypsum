@@ -18,6 +18,7 @@
 #include "stack.h"
 #include "string.h"
 #include "thread-bindle.h"
+#include "trait.h"
 #include "type.h"
 #include "type-parameter.h"
 
@@ -84,6 +85,11 @@ void Roots::initialize(Heap* heap) {
   fieldMeta->hasPointers_ = true;
   fieldMeta->objectPointerMap().setWord(0, Field::kPointerMap);
   basicRoots_[FIELD_META_ROOT_INDEX] = fieldMeta;
+
+  auto traitMeta = new(heap, 0, sizeof(Trait), 0) Meta(TRAIT_BLOCK_TYPE);
+  traitMeta->hasPointers_ = true;
+  traitMeta->objectPointerMap().setWord(0, Trait::kPointerMap);
+  basicRoots_[TRAIT_META_ROOT_INDEX] = traitMeta;
 
   auto typeParameterMeta =
       new(heap, 0, sizeof(TypeParameter), 0) Meta(TYPE_PARAMETER_BLOCK_TYPE);
@@ -220,6 +226,7 @@ Meta* Roots::getMetaForBlockType(int type) {
     case FUNCTION_BLOCK_TYPE: return functionMeta();
     case CLASS_BLOCK_TYPE: return classMeta();
     case FIELD_BLOCK_TYPE: return fieldMeta();
+    case TRAIT_BLOCK_TYPE: return traitMeta();
     case TYPE_PARAMETER_BLOCK_TYPE: return typeParameterMeta();
     case I8_ARRAY_BLOCK_TYPE: return i8ArrayMeta();
     case I32_ARRAY_BLOCK_TYPE: return i32ArrayMeta();
