@@ -50,6 +50,7 @@ class Roots {
     F(Meta, classMeta, CLASS_META)                                    \
     F(Meta, fieldMeta, FIELD_META)                                    \
     F(Meta, traitMeta, TRAIT_META)                                    \
+    F(Meta, traitTableMeta, TRAIT_TABLE_META)                         \
     F(Meta, typeParameterMeta, TYPE_PARAMETER_META)                   \
     F(Meta, i8ArrayMeta, I8_ARRAY_META)                               \
     F(Meta, i32ArrayMeta, I32_ARRAY_META)                             \
