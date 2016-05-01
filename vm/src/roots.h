@@ -27,6 +27,7 @@ class Name;
 class String;
 template <class T>
 class TaggedArray;
+class TraitTable;
 class Type;
 
 
@@ -73,6 +74,7 @@ class Roots {
     F(Meta, blockHashMapTableMeta, BLOCK_HASH_MAP_TABLE_META)         \
     F(Meta, blockHashMapMeta, BLOCK_HASH_MAP_META)                    \
     F(Meta, threadBindleMeta, THREAD_BINDLE_META)                     \
+    F(TraitTable, emptyTraitTable, EMPTY_TRAIT_TABLE)                 \
 
   #define DEFINE_BASIC_GETTER(type, name, NAME)                       \
   type* name() const {                                                \

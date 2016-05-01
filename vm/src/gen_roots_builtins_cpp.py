@@ -65,9 +65,10 @@ def initClass(out, classData):
     out.write("    auto typeParameters = reinterpret_cast<BlockArray<TypeParameter>*>(" +
               "emptyBlockArray());\n")
     if classData["supertype"] is None:
-        out.write("    Type* supertype = nullptr;\n")
+        out.write("    auto supertypes = reinterpret_cast<BlockArray<Type>*>(emptyBlockArray());\n")
     else:
-        out.write("    auto supertype = %s;\n" % getTypeFromName(classData["supertype"]))
+        out.write("    auto supertypes = new(heap, 1) BlockArray<Type>;\n")
+        out.write("    supertypes->set(0, %s);\n" % getTypeFromName(classData["supertype"]))
     out.write("    u32 flags = " + buildFlags(classData["flags"]) + ";\n")
     if len(classData["fields"]) == 0:
         out.write("    auto fields = reinterpret_cast<BlockArray<Field>*>(emptyBlockArray());\n")
@@ -113,8 +114,9 @@ def initClass(out, classData):
                   len(allMethodIds))
         for i, id in enumerate(allMethodIds):
             out.write("    methods->set(%d, getBuiltinFunction(%s));\n" % (i, id))
-    out.write("    ::new(clas) Class(name, nullptr, flags, typeParameters, supertype, " +
-              "fields, constructors, methods, nullptr, nullptr, elementType, " +
+    out.write("    auto traits = emptyTraitTable();\n")
+    out.write("    ::new(clas) Class(name, nullptr, flags, typeParameters, supertypes, " +
+              "fields, constructors, methods, traits, nullptr, nullptr, elementType, " +
               "lengthFieldIndex);\n")
     if classData.get("isOpaque"):
         out.write("    builtinMetas_.push_back(nullptr);\n  }")

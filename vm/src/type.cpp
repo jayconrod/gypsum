@@ -619,7 +619,7 @@ Local<Type> Type::substituteForBaseClass(const Handle<Type>& type,
   while (currentType->asClass() != *clas) {
     auto bindings = currentType->getTypeArgumentBindings();
     Local<Class> currentClass(currentType->asClass());
-    currentType = Type::substitute(handle(currentClass->supertype()), bindings);
+    currentType = Type::substitute(handle(currentClass->baseClassType()), bindings);
   }
   return currentType;
 }
@@ -635,8 +635,8 @@ Local<Type> Type::substituteForInheritance(const Handle<Type>& type,
   vector<Local<Type>> supertypes;
   Local<Class> clas(receiverClass);
   while (*clas != *baseClass) {
-    supertypes.push_back(handle(clas->supertype()));
-    clas = handle(clas->supertype()->asClass());
+    supertypes.push_back(handle(clas->baseClassType()));
+    clas = handle(clas->baseClass());
   }
 
   // Perform a substitution for each type in reverse.

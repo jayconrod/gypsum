@@ -1017,7 +1017,9 @@ void Loader::readClass(const Local<Class>& clas) {
     typeParameters->set(i, *typeParam);
   }
 
+  auto supertypes = BlockArray<Type>::create(heap(), 1);
   auto supertype = readType();
+  supertypes->set(0, *supertype);
 
   auto fieldCount = readLengthVbn();
   auto fields = BlockArray<Field>::create(heap(), fieldCount);
@@ -1064,7 +1066,7 @@ void Loader::readClass(const Local<Class>& clas) {
   clas->setSourceName(sourceName.getOrNull());
   clas->setFlags(flags);
   clas->setTypeParameters(*typeParameters);
-  clas->setSupertype(*supertype);
+  clas->setSupertypes(*supertypes);
   clas->setFields(*fields);
   clas->setConstructors(*constructors);
   clas->setMethods(*methods);
