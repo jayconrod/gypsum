@@ -96,7 +96,7 @@ Persistent<Package> VM::loadPackage(const Handle<Name>& name,
     const vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
   auto dep = PackageDependency::create(heap(), name,
       Persistent<PackageVersion>(), Persistent<PackageVersion>(),
-      0, 0, 0, 0, 0);
+      0, 0, 0, 0, 0, 0);
   return loadPackage(dep, nativeFunctionSearchOrder);
 }
 

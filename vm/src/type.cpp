@@ -794,6 +794,10 @@ void ExternTypeInfo::linkType() {
     auto linkedClass = dep->linkedClasses()->get(externIndex_);
     type->elements_[0].set(type, linkedClass);
     type->form_ = Type::CLASS_TYPE;
+  } else if (type->form() == Type::EXTERN_TRAIT_TYPE) {
+    auto linkedTrait = dep->linkedTraits()->get(externIndex_);
+    type->elements_[0].set(type, linkedTrait);
+    type->form_ = Type::TRAIT_TYPE;
   } else {
     ASSERT(type->form() == Type::EXTERN_VARIABLE_TYPE);
     auto linkedTypeParameter = dep->linkedTypeParameters()->get(externIndex_);

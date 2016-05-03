@@ -28,6 +28,7 @@
 #include "name.h"
 #include "roots.h"
 #include "string.h"
+#include "trait.h"
 #include "type.h"
 #include "type-parameter.h"
 
@@ -44,6 +45,7 @@ namespace internal {
   F(Package, globals_) \
   F(Package, functions_) \
   F(Package, classes_) \
+  F(Package, traits_) \
   F(Package, typeParameters_) \
   F(Package, exports_) \
   F(Package, externTypes_) \
@@ -53,6 +55,8 @@ namespace internal {
   F(Package, functionSourceNameIndex_) \
   F(Package, classNameIndex_) \
   F(Package, classSourceNameIndex_) \
+  F(Package, traitNameIndex_) \
+  F(Package, traitSourceNameIndex_)
 
 DEFINE_POINTER_MAP(Package, PACKAGE_POINTER_LIST)
 
@@ -182,6 +186,7 @@ Package::Package(VM* vm)
       globals_(this, reinterpret_cast<BlockArray<Global>*>(vm->roots()->emptyBlockArray())),
       functions_(this, reinterpret_cast<BlockArray<Function>*>(vm->roots()->emptyBlockArray())),
       classes_(this, reinterpret_cast<BlockArray<Class>*>(vm->roots()->emptyBlockArray())),
+      traits_(this, reinterpret_cast<BlockArray<Trait>*>(vm->roots()->emptyBlockArray())),
       typeParameters_(this,
                       reinterpret_cast<BlockArray<TypeParameter>*>(
                           vm->roots()->emptyBlockArray())),
@@ -249,17 +254,17 @@ Local<Package> Package::loadFromStream(
 
 
 String* Package::getString(length_t index) const {
-  return block_cast<String>(strings()->get(index));
+  return strings()->get(index);
 }
 
 
 Global* Package::getGlobal(length_t index) const {
-  return block_cast<Global>(globals()->get(index));
+  return globals()->get(index);
 }
 
 
 Function* Package::getFunction(length_t index) const {
-  return block_cast<Function>(functions()->get(index));
+  return functions()->get(index);
 }
 
 
@@ -277,7 +282,12 @@ Function* Package::getFunction(DefnId id) const {
 
 
 Class* Package::getClass(length_t index) const {
-  return block_cast<Class>(classes()->get(index));
+  return classes()->get(index);
+}
+
+
+Trait* Package::getTrait(length_t index) const {
+  return traits()->get(index);
 }
 
 
@@ -340,6 +350,16 @@ void Package::ensureExports(const Handle<Package>& package) {
       auto name = handle(clas->name());
       ASSERT(!exports->contains(*name));
       ExportMap::add(exports, name, clas);
+    }
+  }
+
+  auto traits = handle(package->traits());
+  for (length_t i = 0; i < traits->length(); i++) {
+    auto trait = handle(traits->get(i));
+    if ((trait->flags() & PUBLIC_FLAG) != 0) {
+      auto name = handle(trait->name());
+      ASSERT(!exports->contains(*name));
+      ExportMap::add(exports, name, trait);
     }
   }
 
@@ -431,6 +451,28 @@ Local<BlockHashMap<String, Class>> Package::ensureAndGetClassSourceNameIndex(
   }
   auto index = buildSourceNameIndex<Class>(handle(package->classes()), allDefnFilter<Class>);
   package->setClassSourceNameIndex(*index);
+  return index;
+}
+
+
+Local<BlockHashMap<Name, Trait>> Package::ensureAndGetTraitNameIndex(
+    const Handle<Package>& package) {
+  if (package->traitNameIndex()) {
+    return handle(package->traitNameIndex());
+  }
+  auto index = buildNameIndex<Trait>(handle(package->traits()), allDefnFilter<Trait>);
+  package->setTraitNameIndex(*index);
+  return index;
+}
+
+
+Local<BlockHashMap<String, Trait>> Package::ensureAndGetTraitSourceNameIndex(
+    const Handle<Package>& package) {
+  if (package->traitSourceNameIndex()) {
+    return handle(package->traitSourceNameIndex());
+  }
+  auto index = buildSourceNameIndex<Trait>(handle(package->traits()), allDefnFilter<Trait>);
+  package->setTraitSourceNameIndex(*index);
   return index;
 }
 
@@ -577,6 +619,23 @@ void Package::link(const Handle<Package>& package) {
     }
     dependency->setLinkedClasses(*linkedClasses);
 
+    ASSERT(dependency->linkedTraits() == nullptr);
+    auto externTraits = handle(dependency->externTraits());
+    auto traitCount = externTraits->length();
+    auto linkedTraits = BlockArray<Trait>::create(heap, traitCount);
+    {
+      AllowAllocationScope noAllocation(heap, false);
+      for (length_t j = 0; j < classCount; j++) {
+        auto externTrait = externTraits->get(j);
+        auto name = externTrait->name();
+        auto linkedTrait = depExports->getOrElse(name, nullptr);
+        if (!linkedTrait || !isa<Trait>(linkedTrait)) {
+          throw Error("link error");
+        }
+        linkedTraits->set(j, block_cast<Trait>(linkedTrait));
+      }
+    }
+
     ASSERT(dependency->linkedTypeParameters() == nullptr);
     auto externTypeParameters = handle(dependency->externTypeParameters());
     auto typeParameterCount = externTypeParameters->length();
@@ -613,6 +672,7 @@ ostream& operator << (ostream& os, const Package* pkg) {
      << "\n  functions: " << brief(pkg->functions())
      << "\n  globals: " << brief(pkg->globals())
      << "\n  classes: " << brief(pkg->classes())
+     << "\n  traits: " << brief(pkg->traits())
      << "\n  type parameters: " << brief(pkg->typeParameters())
      << "\n  entry function index: " << pkg->entryFunctionIndex()
      << "\n  init function index: " << pkg->initFunctionIndex()
@@ -624,6 +684,8 @@ ostream& operator << (ostream& os, const Package* pkg) {
      << "\n  function source name index: " << brief(pkg->functionSourceNameIndex())
      << "\n  class name index: " << brief(pkg->classNameIndex())
      << "\n  class source name index: " << brief(pkg->classSourceNameIndex())
+     << "\n  trait name index: " << brief(pkg->traitNameIndex())
+     << "\n  trait source name index: " << brief(pkg->traitSourceNameIndex())
      << "\n  nativeLibrary: " << pkg->nativeLibrary()
      << "\n  encodedNativeFunctionSearchOrder: " << pkg->encodedNativeFunctionSearchOrder();
   return os;
@@ -720,6 +782,8 @@ ostream& operator << (ostream& os, const PackageVersion* version) {
   F(PackageDependency, linkedFunctions_)      \
   F(PackageDependency, externClasses_)        \
   F(PackageDependency, linkedClasses_)        \
+  F(PackageDependency, externTraits_)         \
+  F(PackageDependency, linkedTraits_)         \
   F(PackageDependency, externTypeParameters_) \
   F(PackageDependency, linkedTypeParameters_) \
   F(PackageDependency, externMethods_)        \
@@ -738,6 +802,8 @@ PackageDependency::PackageDependency(Name* name,
                                      BlockArray<Function>* linkedFunctions,
                                      BlockArray<Class>* externClasses,
                                      BlockArray<Class>* linkedClasses,
+                                     BlockArray<Trait>* externTraits,
+                                     BlockArray<Trait>* linkedTraits,
                                      BlockArray<TypeParameter>* externTypeParameters,
                                      BlockArray<TypeParameter>* linkedTypeParameters,
                                      BlockArray<Function>* externMethods)
@@ -751,6 +817,8 @@ PackageDependency::PackageDependency(Name* name,
       linkedFunctions_(this, linkedFunctions),
       externClasses_(this, externClasses),
       linkedClasses_(this, linkedClasses),
+      externTraits_(this, externTraits),
+      linkedTraits_(this, linkedTraits),
       externTypeParameters_(this, externTypeParameters),
       linkedTypeParameters_(this, linkedTypeParameters),
       externMethods_(this, externMethods) {
@@ -759,6 +827,7 @@ PackageDependency::PackageDependency(Name* name,
   ASSERT(linkedGlobals == nullptr || externGlobals->length() == linkedGlobals->length());
   ASSERT(linkedFunctions == nullptr || externFunctions->length() == linkedFunctions->length());
   ASSERT(linkedClasses == nullptr || externClasses->length() == linkedClasses->length());
+  ASSERT(linkedTraits == nullptr || externTraits->length() == linkedTraits->length());
   ASSERT(linkedTypeParameters == nullptr ||
          externTypeParameters->length() == linkedTypeParameters->length());
 }
@@ -775,6 +844,8 @@ Local<PackageDependency> PackageDependency::create(
     const Handle<BlockArray<Function>>& linkedFunctions,
     const Handle<BlockArray<Class>>& externClasses,
     const Handle<BlockArray<Class>>& linkedClasses,
+    const Handle<BlockArray<Trait>>& externTraits,
+    const Handle<BlockArray<Trait>>& linkedTraits,
     const Handle<BlockArray<TypeParameter>>& externTypeParameters,
     const Handle<BlockArray<TypeParameter>>& linkedTypeParameters,
     const Handle<BlockArray<Function>>& externMethods) {
@@ -783,6 +854,7 @@ Local<PackageDependency> PackageDependency::create(
       *externGlobals, linkedGlobals.getOrNull(),
       *externFunctions, linkedFunctions.getOrNull(),
       *externClasses, linkedClasses.getOrNull(),
+      *externTraits, linkedTraits.getOrNull(),
       *externTypeParameters, linkedTypeParameters.getOrNull(),
       *externMethods)));
 }
@@ -795,11 +867,13 @@ Local<PackageDependency> PackageDependency::create(Heap* heap,
                                                    length_t globalCount,
                                                    length_t functionCount,
                                                    length_t classCount,
+                                                   length_t traitCount,
                                                    length_t typeParameterCount,
                                                    length_t methodCount) {
   auto externGlobals = BlockArray<Global>::create(heap, globalCount);
   auto externFunctions = BlockArray<Function>::create(heap, functionCount);
   auto externClasses = BlockArray<Class>::create(heap, classCount);
+  auto externTraits = BlockArray<Trait>::create(heap, traitCount);
   auto externTypeParameters = BlockArray<TypeParameter>::create(heap, typeParameterCount);
   auto externMethods = BlockArray<Function>::create(heap, methodCount);
   RETRY_WITH_GC(heap, return Local<PackageDependency>(new(heap) PackageDependency(
@@ -807,6 +881,7 @@ Local<PackageDependency> PackageDependency::create(Heap* heap,
       *externGlobals, nullptr,
       *externFunctions, nullptr,
       *externClasses, nullptr,
+      *externTraits, nullptr,
       *externTypeParameters, nullptr,
       *externMethods)));
 }
@@ -887,6 +962,12 @@ void PackageDependency::setLinkedClasses(BlockArray<Class>* linkedClasses) {
 }
 
 
+void PackageDependency::setLinkedTraits(BlockArray<Trait>* linkedTraits) {
+  ASSERT(externTraits_.get()->length() == linkedTraits->length());
+  linkedTraits_.set(this, linkedTraits);
+}
+
+
 void PackageDependency::setLinkedTypeParameters(
     BlockArray<TypeParameter>* linkedTypeParameters) {
   ASSERT(externTypeParameters_.get()->length() == linkedTypeParameters->length());
@@ -914,6 +995,8 @@ ostream& operator << (ostream& os, const PackageDependency* dep) {
      << "\n  linkedfunctions: " << brief(dep->linkedFunctions())
      << "\n  externClasses: " << brief(dep->externClasses())
      << "\n  linkedClasses: " << brief(dep->linkedClasses())
+     << "\n  externTraits: " << brief(dep->externTraits())
+     << "\n  linkedTraits: " << brief(dep->linkedTraits())
      << "\n  externTypeParameters: " << brief(dep->externTypeParameters())
      << "\n  linkedTypeParameters: " << brief(dep->linkedTypeParameters())
      << "\n  externMethods: " << brief(dep->externMethods());
@@ -1525,7 +1608,7 @@ Local<PackageDependency> PackageLoader::readDependencyHeader() {
 
   auto dep = PackageDependency::create(heap(), name, minVersion, maxVersion,
                                        globalCount, functionCount,
-                                       classCount, typeParameterCount,
+                                       classCount, kLengthNotSet, typeParameterCount,
                                        methodCount);
 
   // We need to pre-allocate methods, classes, type parameters so that other definitions

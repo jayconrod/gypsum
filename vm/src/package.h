@@ -30,6 +30,7 @@ class Name;
 class PackageDependency;
 class PackageVersion;
 class String;
+class Trait;
 class TypeParameter;
 
 typedef BlockHashMap<Name, Block> ExportMap;
@@ -78,6 +79,9 @@ class Package: public Object {
   BlockArray<Class>* classes() const { return classes_.get(); }
   void setClasses(BlockArray<Class>* newClasses) { classes_.set(this, newClasses); }
   Class* getClass(length_t index) const;
+  BlockArray<Trait>* traits() const { return traits_.get(); }
+  void setTraits(BlockArray<Trait>* newTraits) { traits_.set(this, newTraits); }
+  Trait* getTrait(length_t index) const;
   BlockArray<TypeParameter>* typeParameters() const { return typeParameters_.get(); }
   void setTypeParameters(BlockArray<TypeParameter>* newTypeParameters) {
     typeParameters_.set(this, newTypeParameters);
@@ -142,6 +146,21 @@ class Package: public Object {
   static Local<BlockHashMap<String, Class>> ensureAndGetClassSourceNameIndex(
       const Handle<Package>& package);
 
+  BlockHashMap<Name, Trait>* traitNameIndex() const { return traitNameIndex_.get(); }
+  void setTraitNameIndex(BlockHashMap<Name, Trait>* index) {
+    traitNameIndex_.set(this, index);
+  }
+  static Local<BlockHashMap<Name, Trait>> ensureAndGetTraitNameIndex(
+      const Handle<Package>& package);
+  BlockHashMap<String, Trait>* traitSourceNameIndex() const {
+    return traitSourceNameIndex_.get();
+  }
+  void setTraitSourceNameIndex(BlockHashMap<String, Trait>* index) {
+    traitSourceNameIndex_.set(this, index);
+  }
+  static Local<BlockHashMap<String, Trait>> ensureAndGetTraitSourceNameIndex(
+      const Handle<Package>& package);
+
   NativeLibrary nativeLibrary() const { return nativeLibrary_; }
   void setNativeLibrary(NativeLibrary nativeLibrary) { nativeLibrary_ = nativeLibrary; }
   u32 encodedNativeFunctionSearchOrder() const { return encodedNativeFunctionSearchOrder_; }
@@ -176,6 +195,7 @@ class Package: public Object {
   Ptr<BlockArray<Global>> globals_;
   Ptr<BlockArray<Function>> functions_;
   Ptr<BlockArray<Class>> classes_;
+  Ptr<BlockArray<Trait>> traits_;
   Ptr<BlockArray<TypeParameter>> typeParameters_;
   length_t entryFunctionIndex_;
   length_t initFunctionIndex_;
@@ -187,6 +207,8 @@ class Package: public Object {
   Ptr<BlockHashMap<String, Function>> functionSourceNameIndex_;
   Ptr<BlockHashMap<Name, Class>> classNameIndex_;
   Ptr<BlockHashMap<String, Class>> classSourceNameIndex_;
+  Ptr<BlockHashMap<Name, Trait>> traitNameIndex_;
+  Ptr<BlockHashMap<String, Trait>> traitSourceNameIndex_;
   NativeLibrary nativeLibrary_;
   u32 encodedNativeFunctionSearchOrder_;
   // Update PACKAGE_POINTER_LIST if pointers change.
@@ -238,6 +260,8 @@ class PackageDependency: public Block {
                     BlockArray<Function>* linkedFunctions,
                     BlockArray<Class>* externClasses,
                     BlockArray<Class>* linkedClasses,
+                    BlockArray<Trait>* externTraits,
+                    BlockArray<Trait>* linkedTraits,
                     BlockArray<TypeParameter>* externTypeParameters,
                     BlockArray<TypeParameter>* linkedTypeParameters,
                     BlockArray<Function>* externMethods);
@@ -252,6 +276,8 @@ class PackageDependency: public Block {
       const Handle<BlockArray<Function>>& linkedFunctions,
       const Handle<BlockArray<Class>>& externClasses,
       const Handle<BlockArray<Class>>& linkedClasses,
+      const Handle<BlockArray<Trait>>& externTraits,
+      const Handle<BlockArray<Trait>>& linkedTraits,
       const Handle<BlockArray<TypeParameter>>& externTypeParameters,
       const Handle<BlockArray<TypeParameter>>& linkedTypeParameters,
       const Handle<BlockArray<Function>>& externMethods);
@@ -262,6 +288,7 @@ class PackageDependency: public Block {
                                          length_t globalCount,
                                          length_t functionCount,
                                          length_t classCount,
+                                         length_t traitCount,
                                          length_t typeParameterCount,
                                          length_t methodCount);
 
@@ -285,6 +312,9 @@ class PackageDependency: public Block {
   BlockArray<Class>* externClasses() const { return externClasses_.get(); }
   BlockArray<Class>* linkedClasses() const { return linkedClasses_.get(); }
   void setLinkedClasses(BlockArray<Class>* linkedClasses);
+  BlockArray<Trait>* externTraits() const { return externTraits_.get(); }
+  BlockArray<Trait>* linkedTraits() const { return linkedTraits_.get(); }
+  void setLinkedTraits(BlockArray<Trait>* linkedTraits);
   BlockArray<TypeParameter>* externTypeParameters() const {
     return externTypeParameters_.get();
   }
@@ -315,6 +345,8 @@ class PackageDependency: public Block {
   Ptr<BlockArray<Function>> linkedFunctions_;
   Ptr<BlockArray<Class>> externClasses_;
   Ptr<BlockArray<Class>> linkedClasses_;
+  Ptr<BlockArray<Trait>> externTraits_;
+  Ptr<BlockArray<Trait>> linkedTraits_;
   Ptr<BlockArray<TypeParameter>> externTypeParameters_;
   Ptr<BlockArray<TypeParameter>> linkedTypeParameters_;
   Ptr<BlockArray<Function>> externMethods_;
