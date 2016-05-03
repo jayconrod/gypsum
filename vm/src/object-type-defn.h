@@ -1,0 +1,28 @@
+// Copyright 2016 Jay Conrod. All rights reserved.
+
+// This file is part of CodeSwitch. Use of this source code is governed by
+// the 3-clause BSD license that can be found in the LICENSE.txt file.
+
+
+#ifndef object_type_defn_h
+#define object_type_defn_h
+
+#include "block.h"
+
+namespace codeswitch {
+namespace internal {
+
+/**
+ * Base class for `Class` and `Trait`. Garbage collected objects can't have virtual methods,
+ * so this doesn't do anything useful.
+ */
+class ObjectTypeDefn: public Block {
+ public:
+  explicit ObjectTypeDefn(MetaWord mw)
+      : Block(mw) { }
+};
+
+}
+}
+
+#endif

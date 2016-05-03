@@ -72,6 +72,29 @@ Type::Type(Class* clas, const vector<Local<Type>>& typeArgs, Flags flags)
 }
 
 
+Type::Type(Trait* trait, Flags flags)
+    : Object(TYPE_BLOCK_TYPE),
+      form_(TRAIT_TYPE),
+      flags_(flags) {
+  ASSERT(length_ == 1);
+  // This trait may not be initialized yet, so we can't check its parameter count.
+  elements_[0].set(this, trait);
+}
+
+
+Type::Type(Trait* trait, const vector<Local<Type>>& typeArgs, Flags flags)
+    : Object(TYPE_BLOCK_TYPE),
+      form_(TRAIT_TYPE),
+      flags_(flags) {
+  ASSERT(length_ == 1 + typeArgs.size());
+  // This trait may not be initialzied yet, so we can't check its parameter count.
+  elements_[0].set(this, trait);
+  for (length_t i = 0; i < typeArgs.size(); i++) {
+    elements_[i + 1].set(this, *typeArgs[i]);
+  }
+}
+
+
 Type::Type(TypeParameter* param, Flags flags)
     : Object(TYPE_BLOCK_TYPE),
       form_(VARIABLE_TYPE),
@@ -123,6 +146,20 @@ Local<Type> Type::create(Heap* heap,
 }
 
 
+Local<Type> Type::create(Heap* heap, const Handle<Trait>& trait, Flags flags) {
+  RETRY_WITH_GC(heap, return Local<Type>(new(heap, 1) Type(*trait, flags)));
+}
+
+
+Local<Type> Type::create(Heap* heap,
+                         const Handle<Trait>& trait,
+                         const vector<Local<Type>>& typeArgs,
+                         Flags flags) {
+  RETRY_WITH_GC(heap, return Local<Type>(
+      new(heap, 1 + typeArgs.size()) Type(*trait, typeArgs, flags)));
+}
+
+
 Local<Type> Type::create(Heap* heap, const Handle<TypeParameter>& param, Flags flags) {
   RETRY_WITH_GC(heap, return Local<Type>(new(heap, 1) Type(*param, flags)));
 }
@@ -142,6 +179,16 @@ Local<Type> Type::createExtern(Heap* heap,
                                Flags flags) {
   auto type = create(heap, clas, typeArgs, flags);
   type->form_ = EXTERN_CLASS_TYPE;
+  return type;
+}
+
+
+Local<Type> Type::createExtern(Heap* heap,
+                               const Handle<Trait>& trait,
+                               const vector<Local<Type>>& typeArgs,
+                               Flags flags) {
+  auto type = create(heap, trait, typeArgs, flags);
+  type->form_ = EXTERN_TRAIT_TYPE;
   return type;
 }
 
@@ -279,15 +326,14 @@ Type* Type::typeArgument(length_t index) const {
 
 
 Type::BindingList Type::getTypeArgumentBindings() const {
-  ASSERT(isClass());
-  Local<Class> clas(asClass());
-  ASSERT(typeArgumentCount() == clas->typeParameterCount());
-  BindingList bindings;
+  ASSERT(isClass() || isTrait());
+  auto typeParams = isClass() ? asClass()->typeParameters() : asTrait()->typeParameters();
   auto count = typeArgumentCount();
+  ASSERT(count == typeParams->length());
+  BindingList bindings;
   bindings.reserve(count);
   for (length_t i = 0; i < count; i++) {
-    Binding binding(handle(clas->typeParameter(i)), handle(typeArgument(i)));
-    bindings.push_back(binding);
+    bindings.push_back(Binding(handle(typeParams->get(i)), handle(typeArgument(i))));
   }
   return bindings;
 }
@@ -332,6 +378,28 @@ bool Type::isClass() const {
 Class* Type::asClass() const {
   ASSERT(isClass() && length() > 0);
   return block_cast<Class>(elements_[0].get());
+}
+
+
+bool Type::isTrait() const {
+  return form() == TRAIT_TYPE || form() == EXTERN_TRAIT_TYPE;
+}
+
+
+Trait* Type::asTrait() const {
+  ASSERT(isTrait() && length() > 0);
+  return block_cast<Trait>(elements_[0].get());
+}
+
+
+bool Type::isClassOrTrait() const {
+  return isClass() || isTrait();
+}
+
+
+ObjectTypeDefn* Type::asClassOrTrait() const {
+  ASSERT(isClassOrTrait() && length() > 0);
+  return reinterpret_cast<ObjectTypeDefn*>(elements_[0].get());
 }
 
 
@@ -446,103 +514,129 @@ word_t Type::alignment() const {
 }
 
 
-bool Type::isSubtypeOf(Local<Type> left, Local<Type> right) {
-  if (left->equals(*right))
-    return true;
-  if (left->isPrimitive() || right->isPrimitive())
+bool Type::isEquivalent(const Handle<Type>& left, const Handle<Type>& right) {
+  // For everything except for existential types, "equivalent" means "equals".
+  if (!left->isExistential() || !right->isExistential())
+    return left->equals(*right);
+
+  // Existential types must be the same length.
+  if (left->existentialVariableCount() != right->existentialVariableCount())
     return false;
-  return isSubtypeOfWithVariance(left, right, BIVARIANT);
+
+  auto n = left->existentialVariableCount();
+  auto leftInnerType = handle(left->existentialInnerType());
+  auto rightInnerType = handle(right->existentialInnerType());
+
+  // If both existential types have the same variables and their inner types are equivalent,
+  // then they are equivalent.
+  bool sameVariables = true;
+  for (length_t i = 0; i < n && sameVariables; i++) {
+    sameVariables &= left->existentialVariable(i) == right->existentialVariable(i);
+  }
+  if (sameVariables) {
+    return isEquivalent(leftInnerType, rightInnerType);
+  }
+
+  // If all variables have the same bounds, we can substitute one of the inner types, then
+  // test for equivalence.
+  bool sameBounds = true;
+  for (length_t i = 0; i < n && sameBounds; i++) {
+    auto leftVar = left->existentialVariable(i);
+    auto rightVar = right->existentialVariable(i);
+    sameBounds &= leftVar->upperBound()->equals(rightVar->upperBound()) &&
+                  leftVar->lowerBound()->equals(rightVar->lowerBound());
+  }
+  if (!sameBounds)
+    return false;
+  BindingList bindings;
+  for (length_t i = 0; i < n; i++) {
+    bindings.push_back(Binding(handle(right->existentialVariable(i)),
+                               create(left->getHeap(), handle(left->existentialVariable(i)))));
+  }
+  rightInnerType = substitute(rightInnerType, bindings);
+  return isEquivalent(leftInnerType, rightInnerType);
 }
 
 
-bool Type::isSubtypeOfWithVariance(Local<Type> left, Local<Type> right, Variance variance) {
+bool Type::isSubtypeOf(Local<Type> left, Local<Type> right) {
+  // Equivalence rule.
+  if (isEquivalent(left, right))
+    return true;
+
+  // Primitive types.
+  if (left->isPrimitive() || right->isPrimitive())
+    return false;
   ASSERT(left->isObject() && right->isObject());
 
-  if (left->isVariable() &&
-      right->isVariable() &&
-      left->asVariable()->hasCommonBound(right->asVariable())) {
-    return true;
-  }
-
+  // Existential types.
   if (left->isExistential() || right->isExistential()) {
     auto leftInnerType =
         left->isExistential() ? handle(left->existentialInnerType()) : left;
     auto rightInnerType =
         right->isExistential() ? handle(right->existentialInnerType()) : right;
-
-    if (left->isExistential() && right->isExistential()) {
-      auto count = left->existentialVariableCount();
-      auto boundsAreEquivalent = count == right->existentialVariableCount();
-      for (length_t i = 0; boundsAreEquivalent && i < count; i++) {
-        boundsAreEquivalent &=
-            left->existentialVariable(i)->isEquivalent(right->existentialVariable(i));
-      }
-      if (boundsAreEquivalent) {
-        BindingList bindings;
-        for (length_t i = 0; i < count; i++) {
-          bindings.push_back(Binding(
-              handle(left->existentialVariable(i)),
-              create(left->getHeap(), handle(right->existentialVariable(i)))));
-        }
-        leftInnerType = substitute(leftInnerType, bindings);
-      }
-    }
-
-    return isSubtypeOfWithVariance(leftInnerType, rightInnerType, variance);
+    return isSubtypeOf(leftInnerType, rightInnerType);
   }
 
+  // A nullable type cannot be a subtype of a non-nullable type. Note that existential types
+  // cannot be nullable (but their inner types can).
+  if (left->isNullable() && !right->isNullable())
+    return false;
+
+  // Variable types.
+  if (left->isVariable() &&
+      right->isVariable() &&
+      left->asVariable()->hasCommonBound(right->asVariable())) {
+    return true;
+  }
   while (left->isVariable()) {
     left = handle(left->asVariable()->upperBound());
   }
   while (right->isVariable()) {
-    right = handle(right->asVariable()->lowerBound());
+    right = handle(right->asVariable()->upperBound());
   }
-  ASSERT(left->isClass() && right->isClass());
+  ASSERT(left->isClassOrTrait());
+  ASSERT(right->isClassOrTrait());
 
-  if (left->isNullable() && !right->isNullable())
-    return false;
-
-  auto leftClass = handle(left->asClass());
-  auto rightClass = handle(right->asClass());
-
-  if (*leftClass == left->getVM()->roots()->getBuiltinClass(BUILTIN_NOTHING_CLASS_ID))
+  // Special cases for `Nothing`.
+  auto nothing = left->getVM()->roots()->getBuiltinClass(BUILTIN_NOTHING_CLASS_ID);
+  if (left->asClassOrTrait() == nothing)
     return true;
-
-  if (!leftClass->isSubclassOf(*rightClass))
+  if (right->asClassOrTrait() == nothing)
     return false;
 
-  auto leftEquiv = substituteForBaseClass(left, rightClass);
-  ASSERT(leftEquiv->typeArgumentCount() == right->typeArgumentCount());
-  for (length_t i = 0; i < leftEquiv->typeArgumentCount(); i++) {
-    auto la = handle(leftEquiv->typeArgument(i));
-    auto ra = handle(right->typeArgument(i));
+  // Check that left is derived from right, and substitute for the same definition.
+  auto rightClassOrTrait = right->asClassOrTrait();
+  Local<Type> leftBase;
+  auto supertypes = handle(left->isClass()
+      ? left->asClass()->supertypes()
+      : left->asTrait()->supertypes());
+  for (length_t i = 0; i < supertypes->length() && !leftBase; i++) {
+    auto sty = supertypes->get(i);
+    ASSERT(sty->isClass() || sty->isTrait());
+    if (sty->asClassOrTrait() == rightClassOrTrait)
+      leftBase = handle(sty);
+  }
+  if (!leftBase)
+    return false;
+  left = substitute(leftBase, left->getTypeArgumentBindings());
 
-    auto paramVariance = leftEquiv->asClass()->typeParameter(i)->variance();
-    u32 argVariance;
-    if (variance == INVARIANT) {
-      argVariance = INVARIANT;
-    } else if (variance & COVARIANT) {
-      argVariance = paramVariance;
-    } else {
-      ASSERT(variance & CONTRAVARIANT);
-      if (paramVariance == CONTRAVARIANT) {
-        argVariance = COVARIANT;
-      } else if (paramVariance == COVARIANT) {
-        argVariance = CONTRAVARIANT;
-      } else {
-        ASSERT(paramVariance == INVARIANT);
-        argVariance = INVARIANT;
-      }
-    }
-
-    if (argVariance == COVARIANT) {
-      if (!isSubtypeOfWithVariance(la, ra, argVariance))
+  // Compare type arguments, based on variance.
+  auto typeParams = handle(left->isClass()
+      ? left->asClass()->typeParameters()
+      : left->asTrait()->typeParameters());
+  length_t n = left->typeArgumentCount();
+  for (length_t i = 0; i < n; i++) {
+    auto leftArg = handle(left->typeArgument(i));
+    auto rightArg = handle(right->typeArgument(i));
+    auto variance = typeParams->get(i)->variance();
+    if (variance == COVARIANT) {
+      if (!isSubtypeOf(leftArg, rightArg))
         return false;
-    } else if (argVariance == CONTRAVARIANT) {
-      if (!isSubtypeOfWithVariance(ra, la, argVariance))
+    } else if (variance == CONTRAVARIANT) {
+      if (!isSubtypeOf(rightArg, leftArg))
         return false;
     } else {
-      if (!la->equals(*ra))
+      if (!isEquivalent(leftArg, rightArg))
         return false;
     }
   }
@@ -557,6 +651,15 @@ bool Type::equals(Type* other) const {
     return true;
   } else if (isClass()) {
     if (asClass() != other->asClass())
+      return false;
+    ASSERT(typeArgumentCount() == other->typeArgumentCount());
+    for (length_t i = 0; i < typeArgumentCount(); i++) {
+      if (!typeArgument(i)->equals(other->typeArgument(i)))
+        return false;
+    }
+    return true;
+  } else if (isTrait()) {
+    if (asTrait() != other->asTrait())
       return false;
     ASSERT(typeArgumentCount() == other->typeArgumentCount());
     for (length_t i = 0; i < typeArgumentCount(); i++) {
@@ -588,7 +691,7 @@ Local<Type> Type::substitute(const Handle<Type>& type, const BindingList& bindin
         return binding.second;
       }
     }
-  } else if (type->isClass()) {
+  } else if (type->isClass() || type->isTrait()) {
     vector<Local<Type>> newTypeArgs;
     newTypeArgs.reserve(type->typeArgumentCount());
     bool changed = false;
@@ -600,53 +703,43 @@ Local<Type> Type::substitute(const Handle<Type>& type, const BindingList& bindin
     }
     if (!changed)
       return type;
-    return create(type->getHeap(), handle(type->asClass()), newTypeArgs);
+    if (type->isClass()) {
+      return create(type->getHeap(), handle(type->asClass()), newTypeArgs);
+    } else {
+      return create(type->getHeap(), handle(type->asTrait()), newTypeArgs);
+    }
   }
   return type;
 }
 
 
-Local<Type> Type::substituteForBaseClass(const Handle<Type>& type,
-                                         const Handle<Class>& clas) {
-  ASSERT(type->isObject());
-  Local<Type> currentType(type);
-  while (currentType->isVariable()) {
-    currentType = handle(currentType->asVariable()->upperBound());
-  }
-  ASSERT(currentType->isClass());
-  ASSERT(currentType->asClass()->isSubclassOf(*clas));
-
-  while (currentType->asClass() != *clas) {
-    auto bindings = currentType->getTypeArgumentBindings();
-    Local<Class> currentClass(currentType->asClass());
-    currentType = Type::substitute(handle(currentClass->baseClassType()), bindings);
-  }
-  return currentType;
-}
-
-
 Local<Type> Type::substituteForInheritance(const Handle<Type>& type,
-                                           const Handle<Class>& receiverClass,
-                                           const Handle<Class>& baseClass) {
-  ASSERT(receiverClass->isSubclassOf(*baseClass));
+                                           Local<ObjectTypeDefn> receiverDefn,
+                                           Local<ObjectTypeDefn> baseDefn) {
+  if (*receiverDefn == *baseDefn)
+    return type;
 
-  // Build a list of supertypes on the path from receiverClass to base. We will need to iterate
-  // over this in reverse. Note that this does not include receiverClass.
-  vector<Local<Type>> supertypes;
-  Local<Class> clas(receiverClass);
-  while (*clas != *baseClass) {
-    supertypes.push_back(handle(clas->baseClassType()));
-    clas = handle(clas->baseClass());
+  auto supertypes = handle(isa<Class>(*receiverDefn)
+      ? block_cast<Class>(*receiverDefn)->supertypes()
+      : block_cast<Trait>(*receiverDefn)->supertypes());
+  Local<Type> supertype;
+  for (length_t i = 0; i < supertypes->length() && !supertype; i++) {
+    if (supertypes->get(i)->asClassOrTrait() == *baseDefn)
+      supertype = handle(supertypes->get(i));
   }
+  ASSERT(!supertype.isEmpty());
 
-  // Perform a substitution for each type in reverse.
-  Local<Type> substituted(type);
-  for (auto it = supertypes.rbegin(); it != supertypes.rend(); it++) {
-    auto supertype = *it;
-    BindingList bindings = supertype->getTypeArgumentBindings();
-    substituted = substitute(substituted, bindings);
+  auto typeParams = handle(isa<Class>(*baseDefn)
+      ? block_cast<Class>(*baseDefn)->typeParameters()
+      : block_cast<Trait>(*baseDefn)->typeParameters());
+  auto count = typeParams->length();
+  ASSERT(count == supertype->typeArgumentCount());
+  BindingList bindings;
+  bindings.reserve(count);
+  for (length_t i = 0; i < count; i++) {
+    bindings.push_back(Binding(handle(typeParams->get(i)), handle(supertype->typeArgument(i))));
   }
-  return substituted;
+  return substitute(type, bindings);
 }
 
 

@@ -15,11 +15,13 @@
 #include "handle.h"
 #include "object.h"
 #include "tagged.h"
+#include "trait.h"
 #include "utils.h"
 
 namespace codeswitch {
 namespace internal {
 
+class ObjectTypeDefn;
 class Roots;
 class TypeParameter;
 
@@ -46,11 +48,13 @@ class Type: public Object {
 
     // Object forms
     CLASS_TYPE,
+    TRAIT_TYPE,
     VARIABLE_TYPE,
     EXISTENTIAL_TYPE,
 
     // Pseudo forms (still object forms)
     EXTERN_CLASS_TYPE,
+    EXTERN_TRAIT_TYPE,
     EXTERN_VARIABLE_TYPE,
 
     // Special forms
@@ -80,6 +84,8 @@ class Type: public Object {
   explicit Type(Form primitive, Flags flags = NO_FLAGS);
   explicit Type(Class* clas, Flags flags = NO_FLAGS);
   Type(Class* clas, const std::vector<Local<Type>>& typeArgs, Flags flags = NO_FLAGS);
+  explicit Type(Trait* trait, Flags flags = NO_FLAGS);
+  Type(Trait* trait, const std::vector<Local<Type>>& typeArgs, Flags flags = NO_FLAGS);
   explicit Type(TypeParameter* param, Flags flags = NO_FLAGS);
   Type(const std::vector<Local<TypeParameter>>& variables, Type* type);
   Type(Type* type, Flags flags);
@@ -87,6 +93,11 @@ class Type: public Object {
   static Local<Type> create(Heap* heap, const Handle<Class>& clas, Flags fags = NO_FLAGS);
   static Local<Type> create(Heap* heap,
                             const Handle<Class>& clas,
+                            const std::vector<Local<Type>>& typeArgs,
+                            Flags flags = NO_FLAGS);
+  static Local<Type> create(Heap* heap, const Handle<Trait>& trait, Flags flags = NO_FLAGS);
+  static Local<Type> create(Heap* heap,
+                            const Handle<Trait>& trait,
                             const std::vector<Local<Type>>& typeArgs,
                             Flags flags = NO_FLAGS);
   static Local<Type> create(Heap* heap,
@@ -97,6 +108,10 @@ class Type: public Object {
                             const Handle<Type>& type);
   static Local<Type> createExtern(Heap* heap,
                                   const Handle<Class>& clas,
+                                  const std::vector<Local<Type>>& typeArgs,
+                                  Flags flags = NO_FLAGS);
+  static Local<Type> createExtern(Heap* heap,
+                                  const Handle<Trait>& trait,
                                   const std::vector<Local<Type>>& typeArgs,
                                   Flags flags = NO_FLAGS);
   static Local<Type> createExtern(Heap* heap,
@@ -136,6 +151,10 @@ class Type: public Object {
   bool isLabel() const;
   bool isClass() const;
   Class* asClass() const;
+  bool isTrait() const;
+  Trait* asTrait() const;
+  bool isClassOrTrait() const;
+  ObjectTypeDefn* asClassOrTrait() const;
   bool isVariable() const;
   TypeParameter* asVariable() const;
   bool isExistential() const;
@@ -156,26 +175,24 @@ class Type: public Object {
   word_t typeSize() const;
   word_t alignment() const;
 
+  static bool isEquivalent(const Handle<Type>& left, const Handle<Type>& right);
   static bool isSubtypeOf(Local<Type> left, Local<Type> right);
-  static bool isSubtypeOfWithVariance(Local<Type> left, Local<Type> right, Variance variance);
   bool equals(Type* other) const;
   static Local<Type> substitute(const Handle<Type>& type, const BindingList& bindings);
-  static Local<Type> substituteForBaseClass(const Handle<Type>& type,
-                                            const Handle<Class>& baseClass);
   static Local<Type> substituteForInheritance(const Handle<Type>& type,
-                                              const Handle<Class>& receiverClass,
-                                              const Handle<Class>& baseClass);
+                                              Local<ObjectTypeDefn> receiverDefn,
+                                              Local<ObjectTypeDefn> baseDefn);
 
  private:
-  friend class Roots;
-  friend class ExternTypeInfo;
-
   static const word_t kPointerMap = 0;
 
   length_t length_;
   Form form_ : 4;
   Flags flags_ : 28;
   Ptr<Block> elements_[0];
+
+  friend class Roots;
+  friend class ExternTypeInfo;
 };
 
 std::ostream& operator << (std::ostream& os, const Type* type);

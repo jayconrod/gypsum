@@ -64,7 +64,7 @@ Class::Class(Name* name,
              Meta* instanceMeta,
              Type* elementType,
              length_t lengthFieldIndex)
-    : Block(CLASS_BLOCK_TYPE),
+    : ObjectTypeDefn(CLASS_BLOCK_TYPE),
       name_(this, name),
       sourceName_(this, sourceName),
       flags_(flags),

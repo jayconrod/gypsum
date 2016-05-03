@@ -10,6 +10,7 @@
 #include <iostream>
 #include "block.h"
 #include "hash-table.h"
+#include "object-type-defn.h"
 #include "ptr.h"
 #include "utils.h"
 
@@ -27,7 +28,7 @@ class Package;
 class String;
 class TypeParameter;
 
-class Trait: public Block {
+class Trait: public ObjectTypeDefn {
  public:
   static const BlockType kBlockType = TRAIT_BLOCK_TYPE;
 

@@ -10,6 +10,7 @@
 #include <iostream>
 #include "block.h"
 #include "hash-table.h"
+#include "object-type-defn.h"
 #include "utils.h"
 
 namespace codeswitch {
@@ -30,7 +31,7 @@ class TraitTable;
 class Type;
 class TypeParameter;
 
-class Class: public Block {
+class Class: public ObjectTypeDefn {
  public:
   static const BlockType kBlockType = CLASS_BLOCK_TYPE;
 

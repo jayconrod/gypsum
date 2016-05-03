@@ -43,7 +43,7 @@ Trait::Trait(Name* name,
              BlockArray<Type>* supertypes,
              BlockArray<Function>* methods,
              Package* package)
-    : Block(TRAIT_BLOCK_TYPE),
+    : ObjectTypeDefn(TRAIT_BLOCK_TYPE),
       name_(this, name),
       sourceName_(this, sourceName),
       flags_(flags),
