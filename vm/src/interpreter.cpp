@@ -777,6 +777,54 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
+      case CALLVT: {
+        auto argCount = readVbn();
+        auto traitIndex = toLength(readVbn());
+        auto methodIndex = toLength(readVbn());
+        ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
+        auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
+        CHECK_NON_NULL(receiver);
+        DefnId traitId;
+        if (traitIndex < 0) {
+          traitId.packageId = kBuiltinPackageId;
+          traitId.defnIndex = ~traitIndex;
+        } else {
+          traitId.packageId = kLocalPackageId;
+          traitId.defnIndex = traitIndex;
+        }
+        Persistent<Function> callee(
+            receiver->clas()->traits()->find(traitId)->value->get(methodIndex));
+        if (callee->hasBuiltinId()) {
+          handleBuiltin(callee->builtinId());
+        } else if (callee->isNative()) {
+          handleNative(callee);
+        } else {
+          enter(callee);
+        }
+        break;
+      }
+
+      case CALLVTF: {
+        auto argCount = readVbn();
+        auto depIndex = static_cast<id_t>(toLength(readVbn()));
+        auto traitIndex = toLength(readVbn());
+        auto methodIndex = toLength(readVbn());
+        ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
+        auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
+        CHECK_NON_NULL(receiver);
+        DefnId traitId{depIndex, traitIndex};
+        Persistent<Function> callee(
+            receiver->clas()->traits()->find(traitId)->value->get(methodIndex));
+        if (callee->hasBuiltinId()) {
+          handleBuiltin(callee->builtinId());
+        } else if (callee->isNative()) {
+          handleNative(callee);
+        } else {
+          enter(callee);
+        }
+        break;
+      }
+
       case EQP: eq<Block*>(); break;
       case NEP: ne<Block*>(); break;
 

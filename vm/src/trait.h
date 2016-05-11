@@ -113,6 +113,9 @@ struct TraitTableElement {
   TraitTableElement()
       : key{kEmptyPackageId, kIndexNotSet},
         value(nullptr) { }
+  TraitTableElement(DefnId key)
+      : key(key),
+        value(nullptr) { }
   TraitTableElement(DefnId key, BlockArray<Function>* value)
       : key(key),
         value(value) { }

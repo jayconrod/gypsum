@@ -420,10 +420,13 @@ bool Type::isExistential() const {
 
 
 Class* Type::effectiveClass() const {
-  ASSERT(isClass() || isVariable());
+  ASSERT(isClass() || isTrait() || isVariable());
   auto ty = this;
-  while (!ty->isClass()) {
+  while (ty->isVariable()) {
     ty = ty->asVariable()->upperBound();
+  }
+  while (ty->isTrait()) {
+    ty = ty->asTrait()->supertypes()->get(0);
   }
   return ty->asClass();
 }

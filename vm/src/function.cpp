@@ -854,6 +854,51 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
+        case CALLVT: {
+          auto argCount = readVbn(bytecode, &pcOffset);
+          auto traitIndex = readVbn(bytecode, &pcOffset);
+          auto methodIndex = readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          word_t slot = currentMap.size() - argCount;
+          auto clas = handle(currentMap.typeMap[slot]->effectiveClass());
+          DefnId traitId;
+          if (traitIndex < 0) {
+            traitId.packageId = kBuiltinPackageId;
+            traitId.defnIndex = ~traitIndex;
+          } else {
+            traitId.packageId = kLocalPackageId;
+            traitId.defnIndex = traitIndex;
+          }
+          TraitTableElement elem(traitId);
+          auto callee = handle(clas->traits()->find(elem)->value->get(methodIndex));
+
+          auto returnType = currentMap.substituteReturnType(callee);
+          currentMap.pop(callee->parameterTypes()->length());
+          currentMap.popTypeArgs();
+          currentMap.push(returnType);
+          break;
+        }
+
+        case CALLVTF: {
+          auto argCount = readVbn(bytecode, &pcOffset);
+          auto depIndex = static_cast<id_t>(readVbn(bytecode, &pcOffset));
+          auto externIndex = static_cast<length_t>(readVbn(bytecode, &pcOffset));
+          auto methodIndex = readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          word_t slot = currentMap.size() - argCount;
+          auto clas = handle(currentMap.typeMap[slot]->effectiveClass());
+          DefnId traitId{depIndex, externIndex};
+          auto callee = handle(clas->traits()->find(traitId)->value->get(methodIndex));
+
+          auto returnType = currentMap.substituteReturnType(callee);
+          currentMap.pop(callee->parameterTypes()->length());
+          currentMap.popTypeArgs();
+          currentMap.push(returnType);
+          break;
+        }
+
         case ADDI8:
         case SUBI8:
         case MULI8:
