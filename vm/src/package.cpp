@@ -88,6 +88,7 @@ class Loader {
                           Local<BlockArray<Type>>* parameterTypes,
                           Local<Class>* definingClass);
   void readClass(const Local<Class>& clas);
+  void readTrait(const Local<Trait>& trait);
   Local<Field> readField(u32 index, u32 offset);
   void readTypeParameter(const Local<TypeParameter>& typeParam);
   Local<Type> readType();
@@ -113,6 +114,7 @@ class Loader {
   virtual Local<TypeParameter> getTypeParameter(length_t index) const = 0;
   virtual Local<Function> readIdAndGetMethod() = 0;
   virtual Local<Class> readIdAndGetDefiningClass() = 0;
+  virtual Local<TraitTable> readTraitTable() = 0;
 
   Local<Package> package_;
   vector<Local<ExternTypeInfo>> externTypes_;
@@ -139,6 +141,7 @@ class PackageLoader: public Loader {
   virtual Local<TypeParameter> getTypeParameter(length_t index) const;
   virtual Local<Function> readIdAndGetMethod();
   virtual Local<Class> readIdAndGetDefiningClass();
+  virtual Local<TraitTable> readTraitTable();
 
  private:
   static const u32 kMagic = 0x676b7073;
@@ -171,6 +174,7 @@ class DependencyLoader: public Loader {
   virtual Local<TypeParameter> getTypeParameter(length_t index) const;
   virtual Local<Function> readIdAndGetMethod();
   virtual Local<Class> readIdAndGetDefiningClass();
+  virtual Local<TraitTable> readTraitTable();
 
  private:
   Local<PackageDependency> dep_;
@@ -1100,9 +1104,12 @@ void Loader::readClass(const Local<Class>& clas) {
     typeParameters->set(i, *typeParam);
   }
 
-  auto supertypes = BlockArray<Type>::create(heap(), 1);
-  auto supertype = readType();
-  supertypes->set(0, *supertype);
+  auto supertypeCount = readLengthVbn();
+  auto supertypes = BlockArray<Type>::create(heap(), supertypeCount);
+  for (length_t i = 0; i < supertypeCount; i++) {
+    auto supertype = readType();
+    supertypes->set(i, *supertype);
+  }
 
   auto fieldCount = readLengthVbn();
   auto fields = BlockArray<Field>::create(heap(), fieldCount);
@@ -1126,6 +1133,8 @@ void Loader::readClass(const Local<Class>& clas) {
     auto method = readIdAndGetMethod();
     methods->set(i, *method);
   }
+
+  auto traits = readTraitTable();
 
   auto elementTypeOpt = readLengthVbn();
   Local<Type> elementType;
@@ -1153,9 +1162,47 @@ void Loader::readClass(const Local<Class>& clas) {
   clas->setFields(*fields);
   clas->setConstructors(*constructors);
   clas->setMethods(*methods);
+  clas->setTraits(traits.getOrNull());
   clas->setElementType(elementType.getOrNull());
   clas->setLengthFieldIndex(lengthFieldIndex);
   clas->setPackage(*package_);
+}
+
+
+void Loader::readTrait(const Local<Trait>& trait) {
+  auto name = readName();
+  auto sourceName = readSourceName();
+  auto flags = readValue<u32>();
+
+  auto typeParamCount = readLengthVbn();
+  auto typeParams = BlockArray<TypeParameter>::create(heap(), typeParamCount);
+  for (length_t i = 0; i < typeParamCount; i++) {
+    auto index = readLengthVbn();
+    auto typeParam = getTypeParameter(index);
+    typeParams->set(i, *typeParam);
+  }
+
+  auto supertypeCount = readLengthVbn();
+  auto supertypes = BlockArray<Type>::create(heap(), supertypeCount);
+  for (length_t i = 0; i < supertypeCount; i++) {
+    auto supertype = readType();
+    supertypes->set(i, *supertype);
+  }
+
+  auto methodCount = readLengthVbn();
+  auto methods = BlockArray<Function>::create(heap(), methodCount);
+  for (length_t i = 0; i < methodCount; i++) {
+    auto method = readIdAndGetMethod();
+    methods->set(i, *method);
+  }
+
+  trait->setName(*name);
+  trait->setSourceName(sourceName.getOrNull());
+  trait->setFlags(flags);
+  trait->setTypeParameters(*typeParams);
+  trait->setSupertypes(*supertypes);
+  trait->setMethods(*methods);
+  trait->setPackage(*package_);
 }
 
 
@@ -1461,6 +1508,16 @@ Local<Package> PackageLoader::load() {
     }
     package_->setClasses(*classArray);
 
+    auto traitCount = readLength();
+    auto traitArray = BlockArray<Trait>::create(heap(), traitCount);
+    for (length_t i = 0; i < traitCount; i++) {
+      // We pre-allocate traits so Types can refer to them.
+      auto trait = Trait::create(heap());
+      trait->setPackage(*package_);
+      traitArray->set(i, *trait);
+    }
+    package_->setTraits(*traitArray);
+
     auto typeParameterCount = readLength();
     auto typeParametersArray =
         BlockArray<TypeParameter>::create(heap(), typeParameterCount);
@@ -1515,6 +1572,10 @@ Local<Package> PackageLoader::load() {
     for (length_t i = 0; i < classCount; i++) {
       auto clas = handle(classArray->get(i));
       readClass(clas);
+    }
+    for (length_t i = 0; i < traitCount; i++) {
+      auto trait = handle(traitArray->get(i));
+      readTrait(trait);
     }
     for (length_t i = 0; i < typeParameterCount; i++) {
       auto param = handle(typeParametersArray->get(i));
@@ -1591,6 +1652,33 @@ Local<Class> PackageLoader::readIdAndGetDefiningClass() {
 }
 
 
+Local<TraitTable> PackageLoader::readTraitTable() {
+  auto traitCount = readLengthVbn();
+  auto capacity = recommendHashTableCapacity(traitCount);
+  auto traitTable = TraitTable::create(heap(), capacity);
+  for (length_t i = 0; i < traitCount; i++) {
+    DefnId traitId = readDefnIdVbns();
+    if ((traitId.packageId < 0 &&
+         traitId.packageId != kLocalPackageId &&
+         traitId.packageId != kBuiltinPackageId) ||
+        traitId.packageId >= static_cast<id_t>(package_->dependencies()->length()) ||
+        traitId.defnIndex < 0 ||
+        traitId.defnIndex >= package_->traits()->length()) {
+      throw Error("invalid trait id");
+    }
+
+    auto methodCount = readLengthVbn();
+    auto methods = BlockArray<Function>::create(heap(), methodCount);
+    for (length_t j = 0; j < methodCount; j++) {
+      auto method = readIdAndGetMethod();
+      methods->set(j, *method);
+    }
+    traitTable->add(TraitTableElement(traitId, *methods));
+  }
+  return traitTable;
+}
+
+
 Local<PackageDependency> PackageLoader::readDependencyHeader() {
   auto depStr = readString();
   Local<Name> name;
@@ -1603,21 +1691,28 @@ Local<PackageDependency> PackageLoader::readDependencyHeader() {
   auto globalCount = readLengthVbn();
   auto functionCount = readLengthVbn();
   auto classCount = readLengthVbn();
+  auto traitCount = readLengthVbn();
   auto methodCount = readLengthVbn();
   auto typeParameterCount = readLengthVbn();
 
   auto dep = PackageDependency::create(heap(), name, minVersion, maxVersion,
                                        globalCount, functionCount,
-                                       classCount, kLengthNotSet, typeParameterCount,
-                                       methodCount);
+                                       classCount, traitCount,
+                                       typeParameterCount, methodCount);
 
-  // We need to pre-allocate methods, classes, type parameters so that other definitions
+  // We need to pre-allocate methods, classes, traits, type parameters so that other definitions
   // and types can refer to them. Normally, functions can't be preallocated since they have
   // variable size, but these are extern and don't have code.
   auto externClasses = handle(dep->externClasses());
   for (length_t i = 0; i < classCount; i++) {
     auto c = Class::create(heap());
     externClasses->set(i, *c);
+  }
+
+  auto externTraits = handle(dep->externTraits());
+  for (length_t i = 0; i < traitCount; i++) {
+    auto t = Trait::create(heap());
+    externTraits->set(i, *t);
   }
 
   auto externMethods = handle(dep->externMethods());
@@ -1701,6 +1796,14 @@ void DependencyLoader::readDependencyBody() {
       throw Error("dependency class is not extern");
   }
 
+  auto traits = handle(dep_->externTraits());
+  for (length_t i = 0; i < traits->length(); i++) {
+    auto t = handle(traits->get(i));
+    readTrait(t);
+    if ((t->flags() & EXTERN_FLAG) == 0)
+      throw Error("dependency trait is not extern");
+  }
+
   auto methods = handle(dep_->externMethods());
   for (length_t i = 0; i < methods->length(); i++) {
     auto m = handle(methods->get(i));
@@ -1750,6 +1853,11 @@ Local<Class> DependencyLoader::readIdAndGetDefiningClass() {
   } else {
     throw Error("invalid option");
   }
+}
+
+
+Local<TraitTable> DependencyLoader::readTraitTable() {
+  return Local<TraitTable>();
 }
 
 }

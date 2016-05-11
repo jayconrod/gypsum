@@ -106,19 +106,6 @@ class Trait: public ObjectTypeDefn {
 std::ostream& operator << (std::ostream& os, const Trait* trait);
 
 
-struct TraitId {
-  id_t packageId;
-  length_t traitIndex;
-
-  bool operator == (const TraitId& other) const {
-    return packageId == other.packageId && traitIndex == other.traitIndex;
-  }
-  bool operator != (const TraitId& other) const {
-    return !(*this == other);
-  }
-};
-
-
 struct TraitTableElement {
   static const id_t kEmptyPackageId = kBuiltinPackageId - 1;
   static const id_t kDeadPackageId = kEmptyPackageId - 1;
@@ -126,7 +113,7 @@ struct TraitTableElement {
   TraitTableElement()
       : key{kEmptyPackageId, kIndexNotSet},
         value(nullptr) { }
-  TraitTableElement(TraitId key, BlockArray<Function>* value)
+  TraitTableElement(DefnId key, BlockArray<Function>* value)
       : key(key),
         value(value) { }
   TraitTableElement(const TraitTableElement&) = delete;
@@ -158,10 +145,10 @@ struct TraitTableElement {
     return isLive() && key == other.key;
   }
   u32 hashCode() const {
-    return hashMix(key.packageId) ^ hashMix(key.traitIndex);
+    return hashMix(key.packageId) ^ hashMix(key.defnIndex);
   }
 
-  TraitId key;
+  DefnId key;
   BlockArray<Function>* value;
 };
 

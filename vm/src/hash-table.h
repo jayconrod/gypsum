@@ -137,6 +137,18 @@ std::ostream& operator << (std::ostream& os, const HashTable<E>* table) {
 }
 
 
+inline length_t recommendHashTableCapacity(length_t length) {
+  ASSERT(length >= 0);
+  if (length == 0) {
+    return 1;
+  } else if (length < 4) {
+    return 4;
+  } else {
+    return roundUpToPowerOf2(length * 4 / 3);
+  }
+}
+
+
 template <class Table>
 class HashMap: public Block {
  public:

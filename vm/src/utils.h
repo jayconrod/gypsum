@@ -56,9 +56,17 @@ const id_t kIdNotSet = -1;
 
 const id_t kLocalPackageId = -1;
 const id_t kBuiltinPackageId = -2;
+
 struct DefnId {
   id_t packageId;
   length_t defnIndex;
+
+  bool operator == (const DefnId& other) const {
+    return packageId == other.packageId && defnIndex == other.defnIndex;
+  }
+  bool operator != (const DefnId& other) const {
+    return !(*this == other);
+  }
 };
 
 const int KB = 1024;
