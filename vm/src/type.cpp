@@ -595,7 +595,7 @@ bool Type::isSubtypeOf(Local<Type> left, Local<Type> right) {
     left = handle(left->asVariable()->upperBound());
   }
   while (right->isVariable()) {
-    right = handle(right->asVariable()->upperBound());
+    right = handle(right->asVariable()->lowerBound());
   }
   ASSERT(left->isClassOrTrait());
   ASSERT(right->isClassOrTrait());
@@ -608,20 +608,22 @@ bool Type::isSubtypeOf(Local<Type> left, Local<Type> right) {
     return false;
 
   // Check that left is derived from right, and substitute for the same definition.
-  auto rightClassOrTrait = right->asClassOrTrait();
-  Local<Type> leftBase;
-  auto supertypes = handle(left->isClass()
-      ? left->asClass()->supertypes()
-      : left->asTrait()->supertypes());
-  for (length_t i = 0; i < supertypes->length() && !leftBase; i++) {
-    auto sty = supertypes->get(i);
-    ASSERT(sty->isClass() || sty->isTrait());
-    if (sty->asClassOrTrait() == rightClassOrTrait)
-      leftBase = handle(sty);
+  if (left->asClassOrTrait() != right->asClassOrTrait()) {
+    auto rightClassOrTrait = right->asClassOrTrait();
+    Local<Type> leftBase;
+    auto supertypes = handle(left->isClass()
+        ? left->asClass()->supertypes()
+        : left->asTrait()->supertypes());
+    for (length_t i = 0; i < supertypes->length() && !leftBase; i++) {
+      auto sty = supertypes->get(i);
+      ASSERT(sty->isClass() || sty->isTrait());
+      if (sty->asClassOrTrait() == rightClassOrTrait)
+        leftBase = handle(sty);
+    }
+    if (!leftBase)
+      return false;
+    left = substitute(leftBase, left->getTypeArgumentBindings());
   }
-  if (!leftBase)
-    return false;
-  left = substitute(leftBase, left->getTypeArgumentBindings());
 
   // Compare type arguments, based on variance.
   auto typeParams = handle(left->isClass()

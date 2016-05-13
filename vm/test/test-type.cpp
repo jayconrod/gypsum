@@ -20,6 +20,35 @@
 using namespace std;
 using namespace codeswitch::internal;
 
+static void setClassSupertype(const Handle<Class>& clas, const Handle<Type>& type) {
+  ASSERT(type->isClass());
+  auto superclass = handle(type->asClass());
+  auto ubertypes = handle(superclass->supertypes());
+  auto supertypes = BlockArray<Type>::create(clas->getHeap(), ubertypes->length() + 1);
+  supertypes->set(0, *type);
+
+  Type::BindingList bindings;
+  for (length_t i = 0; i < superclass->typeParameters()->length(); i++) {
+    bindings.push_back(Type::Binding(handle(superclass->typeParameters()->get(i)),
+                                     handle(type->typeArgument(i))));
+  }
+  for (length_t i = 0; i < ubertypes->length(); i++) {
+    auto uty = handle(ubertypes->get(i));
+    auto sty = Type::substitute(uty, bindings);
+    supertypes->set(i + 1, *sty);
+  }
+
+  clas->setSupertypes(*supertypes);
+}
+
+
+static void setClassSupertypeToRoot(const Handle<Class>& clas) {
+  auto supertypes = BlockArray<Type>::create(clas->getHeap(), 1);
+  supertypes->set(0, Type::rootClassType(clas->getVM()->roots()));
+  clas->setSupertypes(*supertypes);
+}
+
+
 TEST(CreateWithFlags) {
   TEST_PROLOGUE
 
@@ -150,15 +179,15 @@ TEST(SubtypeParametersOverlapping) {
   auto emptyTypeParameters = handle(reinterpret_cast<BlockArray<TypeParameter>*>(
       vm.roots()->emptyBlockArray()));
   auto A = Class::create(heap);
-  A->setSupertype(Type::rootClassType(vm.roots()));
+  setClassSupertypeToRoot(A);
   A->setTypeParameters(*emptyTypeParameters);
   auto AType = Type::create(heap, A);
   auto B = Class::create(heap);
-  B->setSupertype(*AType);
+  setClassSupertype(B, AType);
   B->setTypeParameters(*emptyTypeParameters);
   auto BType = Type::create(heap, B);
   auto C = Class::create(heap);
-  C->setSupertype(*BType);
+  setClassSupertype(C, BType);
   C->setTypeParameters(*emptyTypeParameters);
   auto CType = Type::create(heap, C);
 
@@ -176,15 +205,15 @@ TEST(SubtypeParametersNonOverlapping) {
   auto emptyTypeParameters = handle(reinterpret_cast<BlockArray<TypeParameter>*>(
       vm.roots()->emptyBlockArray()));
   auto A = Class::create(heap);
-  A->setSupertype(Type::rootClassType(vm.roots()));
+  setClassSupertypeToRoot(A);
   A->setTypeParameters(*emptyTypeParameters);
   auto AType = Type::create(heap, A);
   auto B = Class::create(heap);
-  B->setSupertype(*AType);
+  setClassSupertype(B, AType);
   B->setTypeParameters(*emptyTypeParameters);
   auto BType = Type::create(heap, B);
   auto C = Class::create(heap);
-  C->setSupertype(*BType);
+  setClassSupertype(C, BType);
   C->setTypeParameters(*emptyTypeParameters);
   auto CType = Type::create(heap, C);
 
@@ -255,7 +284,7 @@ TEST(SubtypeClassWithParametersSelf) {
   auto SType = Type::create(heap, S);
 
   auto A = Class::create(heap);
-  A->setSupertype(*rootType);
+  setClassSupertypeToRoot(A);
   auto ATypeParameters = BlockArray<TypeParameter>::create(heap, 1);
   ATypeParameters->set(0, *T);
   A->setTypeParameters(*ATypeParameters);
@@ -263,11 +292,11 @@ TEST(SubtypeClassWithParametersSelf) {
   auto emptyTypeParameters = handle(reinterpret_cast<BlockArray<TypeParameter>*>(
       vm.roots()->emptyBlockArray()));
   auto X = Class::create(heap);
-  X->setSupertype(*rootType);
+  setClassSupertypeToRoot(X);
   X->setTypeParameters(*emptyTypeParameters);
   auto XType = Type::create(heap, X);
   auto Y = Class::create(heap);
-  Y->setSupertype(*rootType);
+  setClassSupertypeToRoot(Y);
   Y->setTypeParameters(*emptyTypeParameters);
   auto YType = Type::create(heap, Y);
 
@@ -292,7 +321,7 @@ TEST(SubtypeSubclassWithParameters) {
   auto T = TypeParameter::create(heap, NAME("T"), STR("T"), 0, rootType, nothingType);
 
   auto A = Class::create(heap);
-  A->setSupertype(*rootType);
+  setClassSupertypeToRoot(A);
   auto ATypeParameters = BlockArray<TypeParameter>::create(heap, 1);
   ATypeParameters->set(0, *T);
   A->setTypeParameters(*ATypeParameters);
@@ -300,18 +329,18 @@ TEST(SubtypeSubclassWithParameters) {
   auto emptyTypeParameters = handle(reinterpret_cast<BlockArray<TypeParameter>*>(
       vm.roots()->emptyBlockArray()));
   auto X = Class::create(heap);
-  X->setSupertype(*rootType);
+  setClassSupertypeToRoot(X);
   X->setTypeParameters(*emptyTypeParameters);
   auto XType = Type::create(heap, X);
 
   auto Y = Class::create(heap);
-  Y->setSupertype(*rootType);
+  setClassSupertypeToRoot(Y);
   Y->setTypeParameters(*emptyTypeParameters);
   auto YType = Type::create(heap, Y);
 
   auto B = Class::create(heap);
   auto AXType = Type::create(heap, A, vector<Local<Type>>{XType});
-  B->setSupertype(*AXType);
+  setClassSupertype(B, AXType);
   B->setTypeParameters(*emptyTypeParameters);
   auto BType = Type::create(heap, B);
 
@@ -332,18 +361,18 @@ TEST(SubtypeSuperclassWithParameters) {
   auto emptyTypeParameters = handle(reinterpret_cast<BlockArray<TypeParameter>*>(
       vm.roots()->emptyBlockArray()));
   A->setTypeParameters(*emptyTypeParameters);
-  A->setSupertype(*rootType);
+  setClassSupertypeToRoot(A);
   auto AType = Type::create(heap, A);
 
   auto B = Class::create(heap);
   auto BTypeParameters = BlockArray<TypeParameter>::create(heap, 1);
   BTypeParameters->set(0, *T);
   B->setTypeParameters(*BTypeParameters);
-  B->setSupertype(*AType);
+  setClassSupertype(B, AType);
 
   auto X = Class::create(heap);
   X->setTypeParameters(*emptyTypeParameters);
-  X->setSupertype(*rootType);
+  setClassSupertypeToRoot(X);
   auto XType = Type::create(heap, X);
 
   auto BXType = Type::create(heap, B, vector<Local<Type>>{XType});
@@ -363,19 +392,19 @@ TEST(SubtypeClassWithCovariantParameter) {
   auto emptyTypeParameters = handle(reinterpret_cast<BlockArray<TypeParameter>*>(
       vm.roots()->emptyBlockArray()));
   B->setTypeParameters(*emptyTypeParameters);
-  B->setSupertype(*rootType);
+  setClassSupertypeToRoot(B);
   auto BType = Type::create(heap, B);
 
   auto A = Class::create(heap);
   A->setTypeParameters(*emptyTypeParameters);
-  A->setSupertype(*BType);
+  setClassSupertype(A, BType);
   auto AType = Type::create(heap, A);
 
   auto Source = Class::create(heap);
   auto sourceTypeParameters = BlockArray<TypeParameter>::create(heap, 1);
   sourceTypeParameters->set(0, *T);
   Source->setTypeParameters(*sourceTypeParameters);
-  Source->setSupertype(*rootType);
+  setClassSupertypeToRoot(Source);
 
   auto SourceAType = Type::create(heap, Source, vector<Local<Type>>{AType});
   auto SourceBType = Type::create(heap, Source, vector<Local<Type>>{BType});
@@ -396,19 +425,19 @@ TEST(SubtypeClassWithContravariantParameter) {
   auto emptyTypeParameters = handle(reinterpret_cast<BlockArray<TypeParameter>*>(
       vm.roots()->emptyBlockArray()));
   A->setTypeParameters(*emptyTypeParameters);
-  A->setSupertype(*rootType);
+  setClassSupertypeToRoot(A);
   auto AType = Type::create(heap, A);
 
   auto B = Class::create(heap);
   B->setTypeParameters(*emptyTypeParameters);
-  B->setSupertype(*AType);
+  setClassSupertype(B, AType);
   auto BType = Type::create(heap, B);
 
   auto Sink = Class::create(heap);
   auto sinkTypeParameters = BlockArray<TypeParameter>::create(heap, 1);
   sinkTypeParameters->set(0, *T);
   Sink->setTypeParameters(*sinkTypeParameters);
-  Sink->setSupertype(*rootType);
+  setClassSupertypeToRoot(Sink);
 
   auto SinkAType = Type::create(heap, Sink, vector<Local<Type>>{AType});
   auto SinkBType = Type::create(heap, Sink, vector<Local<Type>>{BType});
@@ -447,7 +476,7 @@ TEST(SubtypeLeftExistential) {
   auto fooTypeParameters = BlockArray<TypeParameter>::create(heap, 1);
   fooTypeParameters->set(0, *T);
   Foo->setTypeParameters(*fooTypeParameters);
-  Foo->setSupertype(Type::rootClassType(roots));
+  setClassSupertypeToRoot(Foo);
 
   auto X = TypeParameter::create(heap, NAME("X"), STR("X"), 0, rootType, nothingType);
   auto XType = Type::create(heap, X);
@@ -514,57 +543,6 @@ TEST(SubstituteClassWithTypeParameter) {
 }
 
 
-TEST(SubstituteForBaseClass) {
-  TEST_PROLOGUE
-
-  // class A[T]
-  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), 0,
-                                 handle(Type::rootClassType(vm.roots())),
-                                 handle(Type::nothingType(vm.roots())));
-  auto ATypeParams = BlockArray<TypeParameter>::create(heap, 1);
-  ATypeParams->set(0, *T);
-  auto A = Class::create(heap);
-  A->setTypeParameters(*ATypeParams);
-  A->setSupertype(Type::rootClassType(vm.roots()));
-
-  // class B[U] <: A[U]
-  auto U = TypeParameter::create(heap, NAME("U"), STR("U"), 0,
-                                 handle(Type::rootClassType(vm.roots())),
-                                 handle(Type::nothingType(vm.roots())));
-  auto BTypeParams = BlockArray<TypeParameter>::create(heap, 1);
-  BTypeParams->set(0, *U);
-  auto B = Class::create(heap);
-  B->setTypeParameters(*BTypeParams);
-  vector<Local<Type>> BSupertypeArgs { Type::create(heap, U) };
-  auto BSupertype = Type::create(heap, A, BSupertypeArgs);
-  B->setSupertype(*BSupertype);
-
-  // class C
-  auto C = Class::create(heap);
-  auto emptyTypeParams = handle(reinterpret_cast<BlockArray<TypeParameter>*>(
-      vm.roots()->emptyBlockArray()));
-  C->setTypeParameters(*emptyTypeParams);
-
-  // class D <: B[C]
-  auto D = Class::create(heap);
-  D->setTypeParameters(*emptyTypeParams);
-  vector<Local<Type>> DSupertypeArgs { Type::create(heap, C) };
-  auto DSupertype = Type::create(heap, B, DSupertypeArgs);
-  D->setSupertype(*DSupertype);
-
-  // V <: D
-  auto V = TypeParameter::create(heap, NAME("V"), STR("V"), 0,
-                                 Type::create(heap, D),
-                                 handle(Type::nothingType(vm.roots())));
-  auto VType = Type::create(heap, V);
-
-  vector<Local<Type>> expectedTypeArgs { Type::create(heap, C) };
-  auto expected = Type::create(heap, A, expectedTypeArgs);
-  auto actual = Type::substituteForBaseClass(VType, A);
-  ASSERT_TRUE(expected->equals(*actual));
-}
-
-
 TEST(SubstituteForInheritance) {
   TEST_PROLOGUE
 
@@ -588,7 +566,7 @@ TEST(SubstituteForInheritance) {
   auto ATypeParams = BlockArray<TypeParameter>::create(heap, 1);
   ATypeParams->set(0, *S);
   A->setTypeParameters(*ATypeParams);
-  A->setSupertype(Type::rootClassType(vm.roots()));
+  setClassSupertypeToRoot(A);
 
   // class B[T] <: A[T]
   auto B = Class::create(heap);
@@ -596,7 +574,7 @@ TEST(SubstituteForInheritance) {
   BTypeParams->set(0, *T);
   B->setTypeParameters(*BTypeParams);
   auto ATType = Type::create(heap, A, vector<Local<Type>>{TType});
-  B->setSupertype(*ATType);
+  setClassSupertype(B, ATType);
 
   // class C[U] <: B[U]
   auto C = Class::create(heap);
@@ -604,7 +582,7 @@ TEST(SubstituteForInheritance) {
   CTypeParams->set(0, *U);
   C->setTypeParameters(*CTypeParams);
   auto BUType = Type::create(heap, B, vector<Local<Type>>{UType});
-  C->setSupertype(*BUType);
+  setClassSupertype(C, BUType);
 
   // If we load x out of C, it should have type U.
   auto fieldType = Type::substituteForInheritance(SType, C, A);

@@ -629,7 +629,7 @@ void Package::link(const Handle<Package>& package) {
     auto linkedTraits = BlockArray<Trait>::create(heap, traitCount);
     {
       AllowAllocationScope noAllocation(heap, false);
-      for (length_t j = 0; j < classCount; j++) {
+      for (length_t j = 0; j < traitCount; j++) {
         auto externTrait = externTraits->get(j);
         auto name = externTrait->name();
         auto linkedTrait = depExports->getOrElse(name, nullptr);
@@ -1478,7 +1478,7 @@ Local<Package> PackageLoader::load() {
       throw Error("package file is corrupt");
     auto majorVersion = readValue<u16>();
     auto minorVersion = readValue<u16>();
-    if (majorVersion != 0 || minorVersion != 19)
+    if (majorVersion != 0 || minorVersion != 20)
       throw Error("package file has wrong format version");
 
     package_ = handleScope.escape(*Package::create(heap()));

@@ -163,7 +163,7 @@ Class* Class::findFieldClass(length_t index) {
   ASSERT(index < fields()->length());
   auto clas = this;
   while (true) {
-    auto base = baseClass();
+    auto base = clas->baseClass();
     if (!base)
       return clas;
     if (index >= base->fields()->length())
