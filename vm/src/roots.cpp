@@ -149,6 +149,9 @@ void Roots::initialize(Heap* heap) {
   auto emptyBlockArray = new(heap, 0) BlockArray<Block>;
   basicRoots_[EMPTY_BLOCK_ARRAY_ROOT_INDEX] = emptyBlockArray;
 
+  auto emptyTraitTable = new(heap, 1) TraitTable;
+  basicRoots_[EMPTY_TRAIT_TABLE_ROOT_INDEX] = emptyTraitTable;
+
   initializeBuiltins(heap);
 
   auto labelType = new(heap, 0) Type(Type::LABEL_TYPE);
@@ -217,9 +220,6 @@ void Roots::initialize(Heap* heap) {
   threadBindleMeta->hasPointers_ = true;
   threadBindleMeta->objectPointerMap().setWord(0, ThreadBindle::kPointerMap);
   basicRoots_[THREAD_BINDLE_META_ROOT_INDEX] = threadBindleMeta;
-
-  auto emptyTraitTable = new(heap, 1) TraitTable;
-  basicRoots_[EMPTY_TRAIT_TABLE_ROOT_INDEX] = emptyTraitTable;
 }
 
 
