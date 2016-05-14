@@ -312,13 +312,13 @@ Type* Type::nullType(Roots* roots) {
 
 
 length_t Type::typeArgumentCount() const {
-  ASSERT(isClass());
+  ASSERT(isClassOrTrait());
   return length() - 1;
 }
 
 
 Type* Type::typeArgument(length_t index) const {
-  ASSERT(isClass());
+  ASSERT(isClassOrTrait());
   auto typeArgIndex = index + 1;
   ASSERT(typeArgIndex < length());
   return block_cast<Type>(elements_[typeArgIndex].get());

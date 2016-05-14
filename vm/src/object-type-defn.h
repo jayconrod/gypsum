@@ -12,6 +12,10 @@
 namespace codeswitch {
 namespace internal {
 
+template <class T> class BlockArray;
+class Type;
+class TypeParameter;
+
 /**
  * Base class for `Class` and `Trait`. Garbage collected objects can't have virtual methods,
  * so this doesn't do anything useful.
@@ -20,6 +24,11 @@ class ObjectTypeDefn: public Block {
  public:
   explicit ObjectTypeDefn(MetaWord mw)
       : Block(mw) { }
+
+  BlockArray<Type>* supertypes() const;
+  void setSupertypes(BlockArray<Type>* newSupertypes);
+  BlockArray<TypeParameter>* typeParameters() const;
+  void setTypeParameters(BlockArray<TypeParameter>* newTypeParameters);
 };
 
 }
