@@ -1,7 +1,4 @@
-#!/usr/bin/env python2.7
-# -*- mode: python; -*-
-
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
