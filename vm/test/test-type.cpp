@@ -474,6 +474,76 @@ TEST(SubtypeClassTrait) {
 }
 
 
+TEST(SubtypeTraitClass) {
+  TEST_PROLOGUE
+
+  auto C = Class::create(heap);
+  auto emptyTypeParameters = handle(reinterpret_cast<BlockArray<TypeParameter>*>(
+      vm.roots()->emptyBlockArray()));
+  C->setTypeParameters(*emptyTypeParameters);
+  setSupertypeToRoot(C);
+  auto CType = Type::create(heap, C);
+
+  auto T = Trait::create(heap);
+  T->setTypeParameters(*emptyTypeParameters);
+  auto supertypes = BlockArray<Type>::create(heap, 2);
+  supertypes->set(0, C->supertypes()->get(0));
+  supertypes->set(1, *CType);
+  T->setSupertypes(*supertypes);
+  auto TType = Type::create(heap, T);
+
+  ASSERT_TRUE(Type::isSubtypeOf(TType, CType));
+  ASSERT_FALSE(Type::isSubtypeOf(CType, TType));
+}
+
+
+TEST(SubtypeTraitTrait) {
+  TEST_PROLOGUE
+
+  auto T1 = Trait::create(heap);
+  auto emptyTypeParameters = handle(reinterpret_cast<BlockArray<TypeParameter>*>(
+      vm.roots()->emptyBlockArray()));
+  T1->setTypeParameters(*emptyTypeParameters);
+  setSupertypeToRoot(T1);
+  auto T1Type = Type::create(heap, T1);
+
+  auto T2 = Trait::create(heap);
+  T2->setTypeParameters(*emptyTypeParameters);
+  auto supertypes = BlockArray<Type>::create(heap, 2);
+  supertypes->set(0, T1->supertypes()->get(0));
+  supertypes->set(1, *T1Type);
+  T2->setSupertypes(*supertypes);
+  auto T2Type = Type::create(heap, T2);
+
+  ASSERT_TRUE(Type::isSubtypeOf(T2Type, T1Type));
+  ASSERT_FALSE(Type::isSubtypeOf(T1Type, T2Type));
+}
+
+
+TEST(SubtypeTypeParameterTrait) {
+  TEST_PROLOGUE
+
+  auto T = Trait::create(heap);
+  auto emptyTypeParameters = handle(reinterpret_cast<BlockArray<TypeParameter>*>(
+      vm.roots()->emptyBlockArray()));
+  T->setTypeParameters(*emptyTypeParameters);
+  setSupertypeToRoot(T);
+  auto TType = Type::create(heap, T);
+
+  auto A = TypeParameter::create(heap, NAME("A"), STR("A"), 0,
+                                 TType, handle(Type::nothingType(roots)));
+  auto AType = Type::create(heap, A);
+  ASSERT_TRUE(Type::isSubtypeOf(AType, TType));
+  ASSERT_FALSE(Type::isSubtypeOf(TType, AType));
+
+  auto B = TypeParameter::create(heap, NAME("B"), STR("B"), 0,
+                                 handle(Type::rootClassType(roots)), TType);
+  auto BType = Type::create(heap, B);
+  ASSERT_TRUE(Type::isSubtypeOf(TType, BType));
+  ASSERT_FALSE(Type::isSubtypeOf(BType, TType));
+}
+
+
 TEST(SubtypeEquivalentExistentials) {
   TEST_PROLOGUE
 

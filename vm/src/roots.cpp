@@ -257,10 +257,35 @@ Meta* Roots::getMetaForBlockType(int type) {
 }
 
 
+bool Roots::isValidBuiltinClassId(BuiltinId id) const {
+  auto index = builtinIdToIndex(id);
+  return 0 <= index && index < builtinClasses_.size();
+}
+
+
+bool Roots::isValidBuiltinTraitId(BuiltinId id) const {
+  return false;
+}
+
+
+bool Roots::isValidBuiltinFunctionId(BuiltinId id) const {
+  auto index = builtinIdToIndex(id);
+  return 0 <= index && index < builtinFunctions_.size();
+}
+
+
 Class* Roots::getBuiltinClass(BuiltinId id) const {
+  ASSERT(isValidBuiltinClassId(id));
   auto index = builtinIdToIndex(id);
   ASSERT(index < builtinClasses_.size());
   return builtinClasses_[index];
+}
+
+
+Trait* Roots::getBuiltinTrait(BuiltinId id) const {
+  ASSERT(isValidBuiltinTraitId(id));
+  UNREACHABLE();
+  return nullptr;
 }
 
 
@@ -286,6 +311,7 @@ Name* Roots::getBuiltinName(BuiltinId id) const {
 
 
 Function* Roots::getBuiltinFunction(BuiltinId id) const {
+  ASSERT(isValidBuiltinFunctionId(id));
   auto index = builtinIdToIndex(id);
   ASSERT(index < builtinFunctions_.size());
   return builtinFunctions_[index];

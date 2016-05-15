@@ -855,23 +855,18 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         }
 
         case CALLVT: {
-          auto argCount = readVbn(bytecode, &pcOffset);
+          readVbn(bytecode, &pcOffset);  // argCount
           auto traitIndex = readVbn(bytecode, &pcOffset);
           auto methodIndex = readVbn(bytecode, &pcOffset);
           currentMap.pcOffset = pcOffset;
           maps.push_back(currentMap);
-          word_t slot = currentMap.size() - argCount;
-          auto clas = handle(currentMap.typeMap[slot]->effectiveClass());
-          DefnId traitId;
+          Local<Trait> trait;
           if (traitIndex < 0) {
-            traitId.packageId = kBuiltinPackageId;
-            traitId.defnIndex = ~traitIndex;
+            trait = handle(roots->getBuiltinTrait(static_cast<BuiltinId>(traitIndex)));
           } else {
-            traitId.packageId = kLocalPackageId;
-            traitId.defnIndex = traitIndex;
+            trait = handle(package->getTrait(traitIndex));
           }
-          TraitTableElement elem(traitId);
-          auto callee = handle(clas->traits()->find(elem)->value->get(methodIndex));
+          auto callee = handle(trait->methods()->get(methodIndex));
 
           auto returnType = currentMap.substituteReturnType(callee);
           currentMap.pop(callee->parameterTypes()->length());
@@ -881,16 +876,14 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         }
 
         case CALLVTF: {
-          auto argCount = readVbn(bytecode, &pcOffset);
+          readVbn(bytecode, &pcOffset);  // argCount
           auto depIndex = static_cast<id_t>(readVbn(bytecode, &pcOffset));
           auto externIndex = static_cast<length_t>(readVbn(bytecode, &pcOffset));
           auto methodIndex = readVbn(bytecode, &pcOffset);
           currentMap.pcOffset = pcOffset;
           maps.push_back(currentMap);
-          word_t slot = currentMap.size() - argCount;
-          auto clas = handle(currentMap.typeMap[slot]->effectiveClass());
-          DefnId traitId{depIndex, externIndex};
-          auto callee = handle(clas->traits()->find(traitId)->value->get(methodIndex));
+          auto callee = handle(package->dependencies()->get(depIndex)
+              ->linkedTraits()->get(externIndex)->methods()->get(methodIndex));
 
           auto returnType = currentMap.substituteReturnType(callee);
           currentMap.pop(callee->parameterTypes()->length());

@@ -1254,6 +1254,9 @@ Local<Type> Loader::readType() {
     Local<Class> clas;
     bool isExtern = false;
     if (depIndex == kBuiltinPackageIndex) {
+      if (!roots()->isValidBuiltinClassId(static_cast<BuiltinId>(defnIndex))) {
+        throw Error("invalid builtin class id");
+      }
       clas = handle(roots()->getBuiltinClass(static_cast<BuiltinId>(defnIndex)));
     } else if (depIndex == kLocalPackageIndex) {
       if (defnIndex < 0 || defnIndex >= package_->classes()->length()) {
@@ -1293,6 +1296,52 @@ Local<Type> Loader::readType() {
       externTypes_.push_back(info);
     } else {
       ty = Type::create(heap(), clas, typeArgs, flags);
+    }
+
+    return ty;
+  } else if (form == Type::TRAIT_TYPE) {
+    auto depIndex = readVbn();
+    auto defnIndex = readVbn();
+
+    Local<Trait> trait;
+    bool isExtern = false;
+    if (depIndex == kBuiltinPackageIndex) {
+      if (!roots()->isValidBuiltinTraitId(static_cast<BuiltinId>(defnIndex))) {
+        throw Error("invalid builtin trait id");
+      }
+      trait = handle(roots()->getBuiltinTrait(static_cast<BuiltinId>(defnIndex)));
+    } else if (depIndex == kLocalPackageIndex) {
+      if (defnIndex < 0 || defnIndex >= package_->traits()->length()) {
+        throw Error("invalid definition index");
+      }
+      trait = handle(package_->traits()->get(defnIndex));
+    } else {
+      if (depIndex < 0 || depIndex >= package_->dependencies()->length()) {
+        throw Error("invalid package index");
+      }
+      auto dep = handle(package_->dependencies()->get(depIndex));
+      if (defnIndex < 0 || defnIndex >= dep->externTraits()->length()) {
+        throw Error("invalid extern trait index");
+      }
+      trait = handle(dep->externTraits()->get(defnIndex));
+      isExtern = true;
+    }
+
+    auto typeArgCount = readLengthVbn();
+    vector<Local<Type>> typeArgs;
+    typeArgs.reserve(typeArgCount);
+    for (length_t i = 0; i < typeArgCount; i++) {
+      auto typeArg = readType();
+      typeArgs.push_back(typeArg);
+    }
+
+    Local<Type> ty;
+    if (isExtern) {
+      ty = Type::createExtern(heap(), trait, typeArgs, flags);
+      auto info = ExternTypeInfo::create(heap(), ty, package_, depIndex, defnIndex);
+      externTypes_.push_back(info);
+    } else {
+      ty = Type::create(heap(), trait, typeArgs, flags);
     }
 
     return ty;

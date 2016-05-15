@@ -27,6 +27,7 @@ class Name;
 class String;
 template <class T>
 class TaggedArray;
+class Trait;
 class TraitTable;
 class Type;
 
@@ -85,7 +86,11 @@ class Roots {
 
   Meta* getMetaForBlockType(int type);
 
+  bool isValidBuiltinClassId(BuiltinId id) const;
+  bool isValidBuiltinTraitId(BuiltinId id) const;
+  bool isValidBuiltinFunctionId(BuiltinId id) const;
   Class* getBuiltinClass(BuiltinId id) const;
+  Trait* getBuiltinTrait(BuiltinId id) const;
   Meta* getBuiltinMeta(BuiltinId id) const;
   Type* getBuiltinType(BuiltinId id) const;
   Name* getBuiltinName(BuiltinId id) const;
