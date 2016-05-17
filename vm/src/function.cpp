@@ -16,6 +16,7 @@
 #include "field.h"
 #include "global.h"
 #include "name.h"
+#include "object-type-defn.h"
 #include "package.h"
 #include "roots.h"
 #include "string.h"
@@ -60,7 +61,7 @@ Function::Function(Name* name,
                    BlockArray<TypeParameter>* typeParameters,
                    Type* returnType,
                    BlockArray<Type>* parameterTypes,
-                   Class* definingClass,
+                   ObjectTypeDefn* definingClass,
                    word_t localsSize,
                    const vector<u8>& instructions,
                    LengthArray* blockOffsets,
@@ -101,7 +102,7 @@ Local<Function> Function::create(Heap* heap,
                                  const Handle<BlockArray<TypeParameter>>& typeParameters,
                                  const Handle<Type>& returnType,
                                  const Handle<BlockArray<Type>>& parameterTypes,
-                                 const Handle<Class>& definingClass,
+                                 const Handle<ObjectTypeDefn>& definingClass,
                                  word_t localsSize,
                                  const vector<u8>& instructions,
                                  const Handle<LengthArray>& blockOffsets,

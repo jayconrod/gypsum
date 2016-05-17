@@ -21,6 +21,7 @@ namespace internal {
 
 class Bitmap;
 class Class;
+class ObjectTypeDefn;
 class Name;
 class Package;
 class StackPointerMap;
@@ -37,7 +38,7 @@ class Function: public Block {
            BlockArray<TypeParameter>* typeParameters,
            Type* returnType,
            BlockArray<Type>* parameterTypes,
-           Class* definingClass,
+           ObjectTypeDefn* definingClass,
            word_t localsSize,
            const std::vector<u8>& instructions,
            LengthArray* blockOffsets,
@@ -52,7 +53,7 @@ class Function: public Block {
                                 const Handle<BlockArray<TypeParameter>>& typeParameters,
                                 const Handle<Type>& returnType,
                                 const Handle<BlockArray<Type>>& parameterTypes,
-                                const Handle<Class>& definingClass,
+                                const Handle<ObjectTypeDefn>& definingClass,
                                 word_t localsSize,
                                 const std::vector<u8>& instructions,
                                 const Handle<LengthArray>& blockOffsets,
@@ -91,8 +92,8 @@ class Function: public Block {
   word_t parametersSize() const;
   ptrdiff_t parameterOffset(length_t index) const;
 
-  Class* definingClass() const { return definingClass_.get(); }
-  void setDefiningClass(Class* newDefiningClass) {
+  ObjectTypeDefn* definingClass() const { return definingClass_.get(); }
+  void setDefiningClass(ObjectTypeDefn* newDefiningClass) {
     definingClass_.set(this, newDefiningClass);
   }
 
@@ -131,7 +132,7 @@ class Function: public Block {
   Ptr<BlockArray<TypeParameter>> typeParameters_;
   Ptr<Type> returnType_;
   Ptr<BlockArray<Type>> parameterTypes_;
-  Ptr<Class> definingClass_;
+  Ptr<ObjectTypeDefn> definingClass_;
   word_t localsSize_;
   length_t instructionsSize_;
   Ptr<LengthArray> blockOffsets_;

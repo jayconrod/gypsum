@@ -86,7 +86,7 @@ class Loader {
                           Local<BlockArray<TypeParameter>>* typeParameters,
                           Local<Type>* returnType,
                           Local<BlockArray<Type>>* parameterTypes,
-                          Local<Class>* definingClass);
+                          Local<ObjectTypeDefn>* definingClass);
   void readClass(const Local<Class>& clas);
   void readTrait(const Local<Trait>& trait);
   Local<Field> readField(u32 index, u32 offset);
@@ -96,6 +96,7 @@ class Loader {
   template <typename T>
   T readValue();
   Local<Name> readName();
+  Local<ObjectTypeDefn> readDefiningClass();
   Local<String> readSourceName();
   Local<String> readStringId();
   length_t readLength();
@@ -113,7 +114,6 @@ class Loader {
 
   virtual Local<TypeParameter> getTypeParameter(length_t index) const = 0;
   virtual Local<Function> readIdAndGetMethod() = 0;
-  virtual Local<Class> readIdAndGetDefiningClass() = 0;
   virtual Local<TraitTable> readTraitTable() = 0;
 
   Local<Package> package_;
@@ -140,7 +140,6 @@ class PackageLoader: public Loader {
  protected:
   virtual Local<TypeParameter> getTypeParameter(length_t index) const;
   virtual Local<Function> readIdAndGetMethod();
-  virtual Local<Class> readIdAndGetDefiningClass();
   virtual Local<TraitTable> readTraitTable();
 
  private:
@@ -173,7 +172,6 @@ class DependencyLoader: public Loader {
 
   virtual Local<TypeParameter> getTypeParameter(length_t index) const;
   virtual Local<Function> readIdAndGetMethod();
-  virtual Local<Class> readIdAndGetDefiningClass();
   virtual Local<TraitTable> readTraitTable();
 
  private:
@@ -1032,7 +1030,7 @@ Local<Function> Loader::readFunction() {
   Local<BlockArray<TypeParameter>> typeParameters;
   Local<Type> returnType;
   Local<BlockArray<Type>> parameterTypes;
-  Local<Class> definingClass;
+  Local<ObjectTypeDefn> definingClass;
   readFunctionHeader(
       &name, &sourceName, &flags, &typeParameters,
       &returnType, &parameterTypes, &definingClass);
@@ -1067,7 +1065,7 @@ void Loader::readFunctionHeader(Local<Name>* name,
                                 Local<BlockArray<TypeParameter>>* typeParameters,
                                 Local<Type>* returnType,
                                 Local<BlockArray<Type>>* parameterTypes,
-                                Local<Class>* definingClass) {
+                                Local<ObjectTypeDefn>* definingClass) {
   *name = readName();
   *sourceName = readSourceName();
   *flags = readValue<u32>();
@@ -1087,7 +1085,11 @@ void Loader::readFunctionHeader(Local<Name>* name,
     (*parameterTypes)->set(i, *readType());
   }
 
-  *definingClass = readIdAndGetDefiningClass();
+  if ((EXTERN_FLAG & *flags) == 0) {
+    *definingClass = readDefiningClass();
+  } else {
+    definingClass->clear();
+  }
 }
 
 
@@ -1413,6 +1415,28 @@ Local<Name> Loader::readName() {
 }
 
 
+Local<ObjectTypeDefn> Loader::readDefiningClass() {
+  auto code = readVbn();
+  if (code == 0) {
+    return Local<ObjectTypeDefn>();
+  } else if (code == 1) {
+    auto index = readLengthVbn();
+    if (index < 0 || index >= package_->classes()->length()) {
+      throw Error("defining class index out of bounds");
+    }
+    return handle(package_->classes()->get(index));
+  } else if (code == 2) {
+    auto index = readLengthVbn();
+    if (index < 0 || index >= package_->traits()->length()) {
+      throw Error("defining trait index out of bounds");
+    }
+    return handle(package_->traits()->get(index));
+  } else {
+    throw Error("invalid defining class code");
+  }
+}
+
+
 Local<String> Loader::readSourceName() {
   return readOption<Local<String>>([this]() { return readStringId(); }, Local<String>());
 }
@@ -1685,22 +1709,6 @@ Local<Function> PackageLoader::readIdAndGetMethod() {
 }
 
 
-Local<Class> PackageLoader::readIdAndGetDefiningClass() {
-  auto opt = readLengthVbn();
-  if (opt == 0) {
-    return Local<Class>();
-  } else if (opt == 1) {
-    auto index = readLengthVbn();
-    if (index >= package_->classes()->length()) {
-      throw Error("invalid index for defining class");
-    }
-    return handle(package_->classes()->get(index));
-  } else {
-    throw Error("invalid option");
-  }
-}
-
-
 Local<TraitTable> PackageLoader::readTraitTable() {
   auto traitCount = readLengthVbn();
   auto capacity = recommendHashTableCapacity(traitCount);
@@ -1801,7 +1809,7 @@ void DependencyLoader::readExternFunction(const Handle<Function>& func) {
   Local<BlockArray<TypeParameter>> typeParameters;
   Local<Type> returnType;
   Local<BlockArray<Type>> parameterTypes;
-  Local<Class> definingClass;
+  Local<ObjectTypeDefn> definingClass;
 
   readFunctionHeader(
       &name, &sourceName, &flags, &typeParameters,
@@ -1886,22 +1894,6 @@ Local<Function> DependencyLoader::readIdAndGetMethod() {
     throw Error("invalid method index");
   }
   return handle(dep_->externMethods()->get(index));
-}
-
-
-Local<Class> DependencyLoader::readIdAndGetDefiningClass() {
-  auto opt = readLengthVbn();
-  if (opt == 0) {
-    return Local<Class>();
-  } else if (opt == 1) {
-    auto index = readLengthVbn();
-    if (index >= dep_->externClasses()->length()) {
-      throw Error("invalid defining class");
-    }
-    return handle(dep_->externClasses()->get(index));
-  } else {
-    throw Error("invalid option");
-  }
 }
 
 

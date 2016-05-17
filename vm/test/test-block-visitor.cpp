@@ -13,6 +13,7 @@
 #include "bytecode.h"
 #include "function.h"
 #include "name.h"
+#include "object-type-defn.h"
 #include "package.h"
 #include "string.h"
 #include "roots.h"
@@ -149,8 +150,8 @@ static Local<Package> createTestPackage(Heap* heap) {
       reinterpret_cast<BlockArray<TypeParameter>*>(roots->emptyBlockArray()));
   auto function = Function::create(heap, NAME("foo"), STR("foo"),
                                    0, emptyTypeParameters, returnType, parameterTypes,
-                                   Local<Class>(), 2 * kWordSize, instList, blockOffsetList,
-                                   package, nullptr);
+                                   Local<ObjectTypeDefn>(), 2 * kWordSize, instList,
+                                   blockOffsetList, package, nullptr);
   functions->set(0, *function);
   package->setFunctions(*functions);
   package->setEntryFunctionIndex(0);

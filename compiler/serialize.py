@@ -133,7 +133,8 @@ class Serializer(object):
         self.writeVbn(len(function.parameterTypes))
         for ty in function.parameterTypes:
             self.writeType(ty)
-        self.writeOption(self.writeClassId, function.definingClass)
+        if flags.EXTERN not in function.flags:
+            self.writeDefiningClassId(function.definingClass)
 
         assert function.blocks is not None or \
                0 < len(frozenset([flags.ABSTRACT, flags.EXTERN, flags.NATIVE]) & function.flags)
@@ -328,8 +329,16 @@ class Serializer(object):
     def writeForeignMethodList(self, list):
         self.writeList(self.writeVbn, [m.id.index for m in list])
 
-    def writeClassId(self, clas):
-        self.writeVbn(clas.id.getDefnIndex())
+    def writeDefiningClassId(self, classOrTrait):
+        if classOrTrait is None:
+            self.writeVbn(0)
+        elif isinstance(classOrTrait, ir.Class):
+            self.writeVbn(1)
+            self.writeVbn(classOrTrait.id.getDefnIndex())
+        else:
+            assert isinstance(classOrTrait, ir.Trait)
+            self.writeVbn(2)
+            self.writeVbn(classOrTrait.id.getDefnIndex())
 
     def writeList(self, writer, list):
         self.writeVbn(len(list))
@@ -392,6 +401,8 @@ class Deserializer(object):
             self.readFunction(func)
         for clas in self.package.classes:
             self.readClass(clas)
+        for trait in self.package.traits:
+            self.readTrait(trait)
         for param in self.package.typeParameters:
             self.readTypeParameter(param)
         for dep in self.package.dependencies:
@@ -496,7 +507,7 @@ class Deserializer(object):
         function.typeParameters = self.readList(self.readId, self.package.typeParameters)
         function.returnType = self.readType()
         function.parameterTypes = self.readList(self.readType)
-        function.definingClass = self.readOption(self.readId, self.package.classes)
+        function.definingClass = self.readDefiningClassId()
         if frozenset([flags.ABSTRACT, flags.NATIVE]).isdisjoint(function.flags):
             localsSize = self.readVbn()
             instructionsSize = self.readVbn()
@@ -512,7 +523,6 @@ class Deserializer(object):
         function.typeParameters = self.readList(self.readId, dep.externTypeParameters)
         function.returnType = self.readType()
         function.parameterTypes = self.readList(self.readType)
-        function.definingClass = self.readOption(self.readId, self.package.classes)
 
     def decodeInstructions(self, instructionsBuffer, blockOffsets):
         # TODO: implement if we ever actually need this.
@@ -727,6 +737,17 @@ class Deserializer(object):
         readComponent = lambda: self.readId(self.package.strings)
         components = self.readList(readComponent)
         return ir.Name(components)
+
+    def readDefiningClassId(self):
+        n = self.readVbn()
+        if n == 0:
+            return None
+        elif n == 1:
+            return self.readId(self.package.classes)
+        elif n == 2:
+            return self.readId(self.package.traits)
+        else:
+            raise IOError("invalid defining class id")
 
     def readFlags(self):
         size = struct.calcsize(FLAG_FORMAT)

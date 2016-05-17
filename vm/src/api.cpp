@@ -492,7 +492,9 @@ bool Function::isConstructor() const {
 Class Function::clas() const {
   API_CHECK_SELF(Function);
   auto clas = unwrapRaw<i::Function>(*this)->definingClass();
-  return clas ? wrap<Class, i::Class>(clas) : Class();
+  return (clas && i::isa<i::Class>(clas))
+      ? wrap<Class, i::Class>(reinterpret_cast<i::Class*>(clas))
+      : Class();
 }
 
 
