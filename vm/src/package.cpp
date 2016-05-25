@@ -99,6 +99,11 @@ class Loader {
   Local<ObjectTypeDefn> readDefiningClass();
   Local<String> readSourceName();
   Local<String> readStringId();
+
+  template <typename T>
+  Local<BlockArray<T>> readBlockList(Local<T> (Loader::*reader)());
+  template <typename T, typename Reader>
+  Local<BlockArray<T>> readBlockList(Reader reader);
   length_t readLength();
   vector<u8> readData(word_t size);
   DefnId readDefnIdVbns();
@@ -111,13 +116,14 @@ class Loader {
   T readOption(function<T()> reader, T noValue);
 
   DependencyLoader createDependencyLoader(const Handle<PackageDependency>& dep);
+  void moveExternTypesFrom(Loader* loader);
 
   virtual Local<TypeParameter> getTypeParameter(length_t index) const = 0;
   virtual Local<Function> readIdAndGetMethod() = 0;
   virtual Local<TraitTable> readTraitTable() = 0;
 
   Local<Package> package_;
-  vector<Local<ExternTypeInfo>> externTypes_;
+  vector<Persistent<ExternTypeInfo>> externTypes_;
 
  private:
   VM* vm_;
@@ -1070,20 +1076,13 @@ void Loader::readFunctionHeader(Local<Name>* name,
   *sourceName = readSourceName();
   *flags = readValue<u32>();
 
-  auto typeParameterCount = readLengthVbn();
-  *typeParameters = BlockArray<TypeParameter>::create(heap(), typeParameterCount);
-  for (length_t i = 0; i < typeParameterCount; i++) {
+  *typeParameters = readBlockList<TypeParameter>([this]() {
     auto index = readLengthVbn();
-    auto param = getTypeParameter(index);
-    (*typeParameters)->set(i, *param);
-  }
+    return getTypeParameter(index);
+  });
 
   *returnType = readType();
-  auto parameterCount = readLengthVbn();
-  *parameterTypes = BlockArray<Type>::create(heap(), parameterCount);
-  for (length_t i = 0; i < parameterCount; i++) {
-    (*parameterTypes)->set(i, *readType());
-  }
+  *parameterTypes = readBlockList<Type>(&Loader::readType);
 
   if ((EXTERN_FLAG & *flags) == 0) {
     *definingClass = readDefiningClass();
@@ -1098,20 +1097,12 @@ void Loader::readClass(const Local<Class>& clas) {
   auto sourceName = readSourceName();
   auto flags = readValue<u32>();
 
-  auto typeParamCount = readLengthVbn();
-  auto typeParameters = BlockArray<TypeParameter>::create(heap(), typeParamCount);
-  for (length_t i = 0; i < typeParamCount; i++) {
+  auto typeParameters = readBlockList<TypeParameter>([this]() {
     auto index = readLengthVbn();
-    auto typeParam = getTypeParameter(index);
-    typeParameters->set(i, *typeParam);
-  }
+    return getTypeParameter(index);
+  });
 
-  auto supertypeCount = readLengthVbn();
-  auto supertypes = BlockArray<Type>::create(heap(), supertypeCount);
-  for (length_t i = 0; i < supertypeCount; i++) {
-    auto supertype = readType();
-    supertypes->set(i, *supertype);
-  }
+  auto supertypes = readBlockList<Type>(&Loader::readType);
 
   auto fieldCount = readLengthVbn();
   auto fields = BlockArray<Field>::create(heap(), fieldCount);
@@ -1122,19 +1113,8 @@ void Loader::readClass(const Local<Class>& clas) {
     fieldOffset = field->offset() + field->type()->typeSize();
   }
 
-  auto constructorCount = readLengthVbn();
-  auto constructors = BlockArray<Function>::create(heap(), constructorCount);
-  for (length_t i = 0; i < constructorCount; i++) {
-    auto method = readIdAndGetMethod();
-    constructors->set(i, *method);
-  }
-
-  auto methodCount = readLengthVbn();
-  auto methods = BlockArray<Function>::create(heap(), methodCount);
-  for (length_t i = 0; i < methodCount; i++) {
-    auto method = readIdAndGetMethod();
-    methods->set(i, *method);
-  }
+  auto constructors = readBlockList<Function>([this]() { return readIdAndGetMethod(); });
+  auto methods = readBlockList<Function>([this]() { return readIdAndGetMethod(); });
 
   auto traits = readTraitTable();
 
@@ -1176,27 +1156,13 @@ void Loader::readTrait(const Local<Trait>& trait) {
   auto sourceName = readSourceName();
   auto flags = readValue<u32>();
 
-  auto typeParamCount = readLengthVbn();
-  auto typeParams = BlockArray<TypeParameter>::create(heap(), typeParamCount);
-  for (length_t i = 0; i < typeParamCount; i++) {
+  auto typeParams = readBlockList<TypeParameter>([this]() {
     auto index = readLengthVbn();
-    auto typeParam = getTypeParameter(index);
-    typeParams->set(i, *typeParam);
-  }
+    return getTypeParameter(index);
+  });
 
-  auto supertypeCount = readLengthVbn();
-  auto supertypes = BlockArray<Type>::create(heap(), supertypeCount);
-  for (length_t i = 0; i < supertypeCount; i++) {
-    auto supertype = readType();
-    supertypes->set(i, *supertype);
-  }
-
-  auto methodCount = readLengthVbn();
-  auto methods = BlockArray<Function>::create(heap(), methodCount);
-  for (length_t i = 0; i < methodCount; i++) {
-    auto method = readIdAndGetMethod();
-    methods->set(i, *method);
-  }
+  auto supertypes = readBlockList<Type>(&Loader::readType);
+  auto methods = readBlockList<Function>([this]() { return readIdAndGetMethod(); });
 
   trait->setName(*name);
   trait->setSourceName(sourceName.getOrNull());
@@ -1405,12 +1371,7 @@ T Loader::readValue() {
 
 
 Local<Name> Loader::readName() {
-  auto length = readLengthVbn();
-  auto components = BlockArray<String>::create(heap(), length);
-  for (length_t i = 0; i < length; i++) {
-    auto component = readStringId();
-    components->set(i, *component);
-  }
+  auto components = readBlockList<String>(&Loader::readStringId);
   return Name::create(heap(), components);
 }
 
@@ -1448,6 +1409,25 @@ Local<String> Loader::readStringId() {
     throw Error("string index out of bounds");
   }
   return handle(package_->strings()->get(index));
+}
+
+
+template <typename T>
+Local<BlockArray<T>> Loader::readBlockList(Local<T> (Loader::*reader)(void)) {
+  return readBlockList<T>([this, reader]() { return (this->*reader)(); });
+}
+
+
+template <typename T, typename Reader>
+Local<BlockArray<T>> Loader::readBlockList(Reader reader) {
+  HandleScope handleScope(vm_);
+  auto length = readLengthVbn();
+  auto array = BlockArray<T>::create(heap(), length);
+  for (length_t i = 0; i < length; i++) {
+    auto elem = reader();
+    array->set(i, *elem);
+  }
+  return handleScope.escape(*array);
 }
 
 
@@ -1539,6 +1519,12 @@ T Loader::readOption(function<T()> reader, T noValue) {
 
 DependencyLoader Loader::createDependencyLoader(const Handle<PackageDependency>& dep) {
   return DependencyLoader(vm_, stream_, package_, dep);
+}
+
+
+void Loader::moveExternTypesFrom(Loader* loader) {
+  move(loader->externTypes_.begin(), loader->externTypes_.end(),
+       back_inserter(externTypes_));
 }
 
 
@@ -1659,6 +1645,7 @@ Local<Package> PackageLoader::load() {
       auto dep = handle(depArray->get(i));
       DependencyLoader loader = createDependencyLoader(dep);
       loader.readDependencyBody();
+      moveExternTypesFrom(&loader);
     }
 
     auto externTypesArray = BlockArray<ExternTypeInfo>::create(heap(), externTypes_.size());
