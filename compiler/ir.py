@@ -19,7 +19,7 @@ import StringIO
 class Package(object):
     def __init__(self, id=None, name=None, version=None):
         if id is None:
-            id = ids.PackageId()
+            id = ids.PackageId(name=name)
         if name is None:
             name = Name(["default"])
         if version is None:
@@ -40,7 +40,6 @@ class Package(object):
         self.entryFunction = None
         self.initFunction = None
         self.exports = None
-        self.externTypes = None
 
     def __str__(self):
         buf = StringIO.StringIO()
@@ -145,7 +144,7 @@ class Package(object):
             if flags.PUBLIC in t.flags:
                 self.exports[t.name] = t
         for p in self.typeParameters:
-            if flags.PUBLIC in c.flags:
+            if flags.PUBLIC in p.flags:
                 self.exports[p.name] = p
 
         return self.exports
@@ -168,23 +167,6 @@ class Package(object):
             assert all(isinstance(t, Trait) for t in dep.linkedTraits)
             dep.linkedTypeParameters = [depExports[p.name] for p in dep.externTypeParameters]
             assert all(isinstance(p, TypeParameter) for p in dep.linkedTypeParameters)
-
-        for ty in self.externTypes:
-            if isinstance(ty, ir_types.ClassType):
-                assert flags.EXTERN in ty.clas.flags
-                depIndex = ty.clas.id.packageId.index
-                externIndex = ty.clas.id.externIndex
-                if ty.clas.id.kind is ids.DefnId.CLASS:
-                    ty.clas = self.dependencies[depIndex].linkedClasses[externIndex]
-                else:
-                    assert ty.clas.id.kind is ids.DefnId.TRAIT
-                    ty.clas = self.dependencies[depIndex].linkedTraits[externIndex]
-            else:
-                assert isinstance(ty, ir_types.VariableType)
-                depIndex = ty.typeParameter.id.packageId.index
-                externIndex = ty.typeParameter.id.externIndex
-                ty.typeParameter = self.dependencies[depIndex].linkedTypeParameters[externIndex]
-        self.externTypes = None
 
     def addName(self, name):
         assert isinstance(name, Name)
@@ -1213,7 +1195,8 @@ def mangleFunctionName(function, package):
         elif isinstance(ty, ir_types.ClassType):
             nameStr = str(ty.clas.name)
             if ty.clas.isForeign():
-                packageStr = str(package.dependencies[ty.clas.id.packageId.index].name)
+                assert ty.clas.id.packageId.name is not None
+                packageStr = str(ty.clas.id.packageId.name)
                 prefixStr = "%d%s:%d%s" % (len(packageStr), packageStr, len(nameStr), nameStr)
             elif ty.clas.isLocal():
                 prefixStr = ":%d%s" % (len(nameStr), nameStr)

@@ -35,10 +35,10 @@ def serialize(package, fileName):
             outFile.close()
 
 
-def deserialize(fileName):
+def deserialize(fileName, packageLoader):
     try:
         with open(fileName, "rb") as inFile:
-            deserializer = Deserializer(inFile)
+            deserializer = Deserializer(inFile, packageLoader)
             deserializer.deserialize()
             return deserializer.package
     except (ValueError, IndexError) as exn:
@@ -64,6 +64,8 @@ class Serializer(object):
             self.writeDependencyHeader(d)
         for s in self.package.strings:
             self.writeString(s)
+        for d in self.package.dependencies:
+            self.writeDependency(d)
         for g in self.package.globals:
             self.writeGlobal(g)
         for f in self.package.functions:
@@ -74,8 +76,6 @@ class Serializer(object):
             self.writeTrait(t)
         for p in self.package.typeParameters:
             self.writeTypeParameter(p)
-        for d in self.package.dependencies:
-            self.writeDependency(d)
 
     def writeHeader(self):
         entryFunctionIndex = self.package.entryFunction.index \
@@ -272,7 +272,7 @@ class Serializer(object):
             assert isinstance(type, ir_types.ExistentialType)
             form = 11
             self.writeVbn(form)
-            self.writeTypeParameterList(type.variables)
+            self.writeList(self.writeExistentialTypeParameterId, type.variables)
             self.writeType(type.ty)
             return
         flags = 0
@@ -329,6 +329,14 @@ class Serializer(object):
     def writeForeignMethodList(self, list):
         self.writeList(self.writeVbn, [m.id.index for m in list])
 
+    def writeExistentialTypeParameterId(self, param):
+        self.writeVbn(param.id.getPackageIndex())
+        index = param.id.getDefnIndex()
+        if param.id.getPackageIndex() == ids.BUILTIN_PACKAGE_INDEX:
+            # Builtin type parameters don't exist yet, but maybe they will some day.
+            index = ~index
+        self.writeVbn(index)
+
     def writeDefiningClassId(self, classOrTrait):
         if classOrTrait is None:
             self.writeVbn(0)
@@ -382,10 +390,11 @@ class Serializer(object):
 
 
 class Deserializer(object):
-    def __init__(self, inFile):
+    def __init__(self, inFile, packageLoader):
         self.inFile = inFile
+        self.packageLoader = packageLoader
         self.package = ir.Package()
-        self.package.externTypes = []
+        self.isLinked = False
         self.entryFunctionIndex = None
         self.initFunctionIndex = None
 
@@ -395,6 +404,10 @@ class Deserializer(object):
             self.package.dependencies[i] = self.readDependencyHeader(i)
         for i in xrange(len(self.package.strings)):
             self.package.strings[i] = self.readString()
+        for dep in self.package.dependencies:
+            self.readDependency(dep)
+        self.package.link()
+        self.isLinked = True
         for gbl in self.package.globals:
             self.readGlobal(gbl)
         for func in self.package.functions:
@@ -405,8 +418,6 @@ class Deserializer(object):
             self.readTrait(trait)
         for param in self.package.typeParameters:
             self.readTypeParameter(param)
-        for dep in self.package.dependencies:
-            self.readDependency(dep)
 
     def readHeader(self):
         headerSize = struct.calcsize(HEADER_FORMAT)
@@ -457,6 +468,7 @@ class Deserializer(object):
         self.package.name = ir.Name.fromString(nameStr, isPackageName=True)
         versionStr = self.readString()
         self.package.version = ir.PackageVersion.fromString(versionStr)
+        self.package.id.name = self.package.name
 
     def createEmptyGlobalList(self, count, packageId):
         gids = (ids.DefnId(packageId, ids.DefnId.GLOBAL, i) for i in xrange(count))
@@ -499,59 +511,39 @@ class Deserializer(object):
         globl.flags = self.readFlags()
         globl.type = self.readType()
 
-    def readFunction(self, function):
+    def readFunction(self, function, dep=None):
         function.name = self.readName()
         function.sourceName = self.readOption(self.readStringIndex)
         function.flags = self.readFlags()
-        assert flags.EXTERN not in function.flags
-        function.typeParameters = self.readList(self.readId, self.package.typeParameters)
+        assert (flags.EXTERN in function.flags) == (dep is not None)
+        function.typeParameters = self.readList(self.readTypeParameterId, dep)
         function.returnType = self.readType()
         function.parameterTypes = self.readList(self.readType)
-        function.definingClass = self.readDefiningClassId()
-        if frozenset([flags.ABSTRACT, flags.NATIVE]).isdisjoint(function.flags):
-            localsSize = self.readVbn()
-            instructionsSize = self.readVbn()
-            instructionsBuffer = self.inFile.read(instructionsSize)
-            blockOffsets = self.readList(self.readVbn)
-            function.blocks = self.decodeInstructions(instructionsBuffer, blockOffsets)
-
-    def readForeignFunction(self, function, dep):
-        function.name = self.readName()
-        function.sourceName = self.readOption(self.readStringIndex)
-        function.flags = self.readFlags()
-        assert flags.EXTERN in function.flags
-        function.typeParameters = self.readList(self.readId, dep.externTypeParameters)
-        function.returnType = self.readType()
-        function.parameterTypes = self.readList(self.readType)
+        if flags.EXTERN not in function.flags:
+            function.definingClass = self.readDefiningClassId()
+            if frozenset([flags.ABSTRACT, flags.NATIVE]).isdisjoint(function.flags):
+                localsSize = self.readVbn()
+                instructionsSize = self.readVbn()
+                instructionsBuffer = self.inFile.read(instructionsSize)
+                blockOffsets = self.readList(self.readVbn)
+                function.blocks = self.decodeInstructions(instructionsBuffer, blockOffsets)
 
     def decodeInstructions(self, instructionsBuffer, blockOffsets):
         # TODO: implement if we ever actually need this.
         return None
 
-    def readClass(self, clas):
+    def readClass(self, clas, dep=None):
         clas.name = self.readName()
         clas.sourceName = self.readOption(self.readStringIndex)
         clas.flags = self.readFlags()
-        assert flags.EXTERN not in clas.flags
-        clas.typeParameters = self.readList(self.readId, self.package.typeParameters)
+        assert (flags.EXTERN in clas.flags) == (dep is not None)
+        clas.typeParameters = self.readList(self.readTypeParameterId, dep)
         clas.supertypes = self.readList(self.readType)
         clas.fields = self.readFields()
-        clas.constructors = self.readList(self.readMethodId)
-        clas.methods = self.readList(self.readMethodId)
-        clas.traits = self.readTraitMethodLists()
-        clas.elementType = self.readOption(self.readType)
-
-    def readForeignClass(self, clas, dep):
-        clas.name = self.readName()
-        clas.sourceName = self.readOption(self.readStringIndex)
-        clas.flags = self.readFlags()
-        assert flags.EXTERN in clas.flags
-        clas.typeParameters = self.readList(self.readId, dep.externTypeParameters)
-        clas.supertypes = self.readList(self.readType)
-        clas.fields = self.readFields()
-        clas.constructors = self.readList(self.readId, dep.externMethods)
-        clas.methods = self.readList(self.readId, dep.externMethods)
-        clas.traits = None   # not needed for linking
+        clas.constructors = self.readList(self.readMethodId, dep)
+        clas.methods = self.readList(self.readMethodId, dep)
+        if flags.EXTERN not in clas.flags:
+            clas.traits = self.readTraitMethodLists()
         clas.elementType = self.readOption(self.readType)
 
     def readFields(self):
@@ -590,23 +582,14 @@ class Deserializer(object):
             traits[traitId] = self.readList(self.readMethodId)
         return traits
 
-    def readTrait(self, trait):
+    def readTrait(self, trait, dep=None):
         trait.name = self.readName()
         trait.sourceName = self.readOption(self.readStringIndex)
         trait.flags = self.readFlags()
-        assert flags.EXTERN not in trait.flags
-        trait.typeParameters = self.readList(self.readId, self.package.typeParameters)
+        assert (flags.EXTERN in trait.flags) == (dep is not None)
+        trait.typeParameters = self.readList(self.readTypeParameterId, dep)
         trait.supertypes = self.readList(self.readType)
-        trait.methods = self.readList(self.readMethodId)
-
-    def readForeignTrait(self, trait, dep):
-        trait.name = self.readName()
-        trait.sourceName = self.readOption(self.readStringIndex)
-        trait.flags = self.readFlags()
-        assert flags.EXTERN in trait.flags
-        trait.typeParameters = self.readList(self.readId, dep.externTypeParameters)
-        trait.supertypes = self.readList(self.readType)
-        trait.methods = self.readList(self.readId, dep.externMethods)
+        trait.methods = self.readList(self.readMethodId, dep)
 
     def readTypeParameter(self, param):
         param.name = self.readName()
@@ -618,7 +601,9 @@ class Deserializer(object):
     def readDependencyHeader(self, index):
         depStr = self.readString()
         dep = ir.PackageDependency.fromString(depStr)
-        packageId = ids.PackageId(index)
+        # TODO: pass in version when that's supported
+        dep.package = self.packageLoader.loadPackage(dep.name)
+        packageId = ids.PackageId(index, dep.name)
         globalCount = self.readVbn()
         dep.externGlobals = self.createEmptyGlobalList(globalCount, packageId)
         functionCount = self.readVbn()
@@ -637,14 +622,15 @@ class Deserializer(object):
     def readDependency(self, dep):
         for g in dep.externGlobals:
             self.readGlobal(g)
+            assert flags.EXTERN in g.flags
         for f in dep.externFunctions:
-            self.readForeignFunction(f, dep)
+            self.readFunction(f, dep)
         for c in dep.externClasses:
-            self.readForeignClass(c, dep)
+            self.readClass(c, dep)
         for t in dep.externTraits:
-            self.readForeignTrait(t, dep)
+            self.readTrait(t, dep)
         for m in dep.externMethods:
-            self.readForeignFunction(m, dep)
+            self.readFunction(m, dep)
         for p in dep.externTypeParameters:
             self.readTypeParameter(p)
 
@@ -678,51 +664,49 @@ class Deserializer(object):
         elif form == 7:
             ty = ir_types.F64Type
         elif form == 8:
+            # CLASS_TYPE
             packageIndex = self.readVbn()
             defnIndex = self.readVbn()
-            isExtern = False
             if packageIndex == ids.BUILTIN_PACKAGE_INDEX:
                 clas = builtins.getBuiltinClassById(defnIndex)
             elif packageIndex == ids.LOCAL_PACKAGE_INDEX:
                 clas = self.package.classes[defnIndex]
+            elif self.isLinked:
+                clas = self.package.dependencies[packageIndex].linkedClasses[defnIndex]
             else:
                 clas = self.package.dependencies[packageIndex].externClasses[defnIndex]
-                isExtern = True
             typeArgs = tuple(self.readList(self.readType))
             ty = ir_types.ClassType(clas, typeArgs, flags)
-            if isExtern:
-                self.package.externTypes.append(ty)
         elif form == 9:
+            # TRAIT_TYPE
             packageIndex = self.readVbn()
             defnIndex = self.readVbn()
-            isExtern = False
             if packageIndex == ids.BUILTIN_PACKAGE_INDEX:
                 trait = builtins.getBuiltinTraitById(defnIndex)
             elif packageIndex == ids.LOCAL_PACKAGE_INDEX:
                 trait = self.package.traits[defnIndex]
+            elif self.isLinked:
+                trait = self.package.dependencies[packageIndex].linkedTraits[defnIndex]
             else:
                 trait = self.package.dependencies[packageIndex].externTraits[defnIndex]
-                isExtern = True
             typeArgs = tuple(self.readList(self.readType))
             ty = ir_types.ClassType(trait, typeArgs, flags)
-            if isExtern:
-                self.package.externTypes.append(ty)
         elif form == 10:
+            # VARIABLE_TYPE
             packageIndex = self.readVbn()
             defnIndex = self.readVbn()
-            isExtern = False
             if packageIndex == ids.LOCAL_PACKAGE_INDEX:
                 param = self.package.typeParameters[defnIndex]
+            elif self.isLinked:
+                param = self.package.dependencies[packageIndex].linkedTypeParameters[defnIndex]
             else:
                 param = self.package.dependencies[packageIndex].externTypeParameters[defnIndex]
-                isExtern = True
             ty = ir_types.VariableType(param, flags)
-            if isExtern:
-                self.package.externTypes.append(ty)
         elif form == 11:
+            # EXISTENTIAL_TYPE
             if flagBits != 0:
                 raise IOError("flags must not be set for existential type")
-            variables = self.readList(self.readId, self.package.typeParameters)
+            variables = self.readList(self.readExistentialTypeParameterId)
             innerType = self.readType()
             ty = ir_types.ExistentialType(variables, innerType)
         else:
@@ -773,16 +757,39 @@ class Deserializer(object):
         else:
             raise IOError("invalid option")
 
-    def readMethodId(self):
-        packageIndex = self.readVbn()
-        methodIndex = self.readVbn()
-        if packageIndex == ids.BUILTIN_PACKAGE_INDEX:
-            method = builtins.getBuiltinFunctionById(methodIndex)
-        elif packageIndex == ids.LOCAL_PACKAGE_INDEX:
-            method = self.package.functions[methodIndex]
+    def readMethodId(self, dep=None):
+        if dep is not None:
+            methods = dep.externMethods
         else:
-            method = self.package.dependencies[packageIndex].externFunctions[methodIndex]
-        return method
+            packageIndex = self.readVbn()
+            if packageIndex == ids.BUILTIN_PACKAGE_INDEX:
+                methodIndex = self.readVbn()
+                return builtins.getBuiltinFunctionById(methodIndex)
+            elif packageIndex == ids.LOCAL_PACKAGE_INDEX:
+                methods = self.package.functions
+            else:
+                methods = self.package.dependencies[packageIndex].externFunctions
+        methodIndex = self.readVbn()
+        return methods[methodIndex]
+
+    def readTypeParameterId(self, dep=None):
+        index = self.readVbn()
+        return self.package.typeParameters[index] \
+               if dep is None \
+               else dep.externTypeParameters[index]
+
+    def readExistentialTypeParameterId(self):
+        packageIndex = self.readVbn()
+        paramIndex = self.readVbn()
+        if packageIndex == ids.BUILTIN_PACKAGE_INDEX:
+            paramIndex = ~paramIndex
+            return builtins.getBuiltinTypeParameterById(paramIndex)
+        elif packageIndex == ids.LOCAL_PACKAGE_INDEX:
+            return self.package.typeParameters[paramIndex]
+        elif self.isLinked:
+            return self.package.dependencies[packageIndex].linkedTypeParameters[paramIndex]
+        else:
+            return self.package.dependencies[packageIndex].externTypeParameters[paramIndex]
 
     def readId(self, collection):
         index = self.readVbn()

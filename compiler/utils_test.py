@@ -9,6 +9,7 @@ import unittest
 from ids import DefnId, TARGET_PACKAGE_ID
 from ir import Class, Global, Field, Function, IrTopDefn, LOCAL, Name, Package, PackagePrefix, Trait, TypeParameter, Variable
 from ir_types import getNothingClassType, getRootClassType
+from location import NoLoc
 from package_loader import BasePackageLoader
 from utils import Counter, reprFormat
 
@@ -106,7 +107,7 @@ class FakePackageLoader(BasePackageLoader):
     def isPackage(self, name):
         return name in self.packageNames
 
-    def loadPackage(self, name, loc):
+    def loadPackage(self, name, loc=NoLoc):
         assert name in self.packageNames
         if name not in self.packages:
             self.packages[name] = Package(name=name)
