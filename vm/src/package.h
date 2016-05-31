@@ -20,7 +20,6 @@ namespace internal {
 
 template <class T>
 class BlockArray;
-class ExternTypeInfo;
 class Function;
 class Global;
 template <class K, class V>
@@ -43,17 +42,15 @@ class Package: public Object {
   explicit Package(VM* vm);
   static Local<Package> create(Heap* heap);
 
-  static Local<Package> loadFromFile(VM* vm,
+  static std::vector<Persistent<Package>> load(
+      VM* vm,
       const std::string& fileName,
       const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder
           = std::vector<NativeFunctionSearch>());
-  static Local<Package> loadFromBytes(VM* vm,
-      const u8* bytes,
-      word_t size,
-      const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder
-          = std::vector<NativeFunctionSearch>());
-  static Local<Package> loadFromStream(VM* vm,
+  static std::vector<Persistent<Package>> load(
+      VM* vm,
       std::istream& stream,
+      const std::string& dirName,
       const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder
           = std::vector<NativeFunctionSearch>());
 
@@ -95,11 +92,6 @@ class Package: public Object {
   ExportMap* exports() const { return exports_.get(); }
   void setExports(ExportMap* exports) { exports_.set(this, exports); }
   static void ensureExports(const Handle<Package>& package);
-
-  BlockArray<ExternTypeInfo>* externTypes() const { return externTypes_.get(); }
-  void setExternTypes(BlockArray<ExternTypeInfo>* externTypes) {
-    externTypes_.set(this, externTypes);
-  }
 
   BlockHashMap<Name, Global>* globalNameIndex() const { return globalNameIndex_.get(); }
   void setGlobalNameIndex(BlockHashMap<Name, Global>* index) {
@@ -200,7 +192,6 @@ class Package: public Object {
   length_t entryFunctionIndex_;
   length_t initFunctionIndex_;
   Ptr<ExportMap> exports_;
-  Ptr<BlockArray<ExternTypeInfo>> externTypes_;
   Ptr<BlockHashMap<Name, Global>> globalNameIndex_;
   Ptr<BlockHashMap<String, Global>> globalSourceNameIndex_;
   Ptr<BlockHashMap<Name, Function>> functionNameIndex_;

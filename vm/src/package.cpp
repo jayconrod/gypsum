@@ -48,7 +48,6 @@ namespace internal {
   F(Package, traits_) \
   F(Package, typeParameters_) \
   F(Package, exports_) \
-  F(Package, externTypes_) \
   F(Package, globalNameIndex_)  \
   F(Package, globalSourceNameIndex_) \
   F(Package, functionNameIndex_) \
@@ -65,16 +64,30 @@ DEFINE_POINTER_MAP(Package, PACKAGE_POINTER_LIST)
 
 class DependencyLoader;
 
+/** State used by multiple {@link Loader} objects loading a set of dependent packages. */
+struct LoadState {
+  LoadState(VM* vm, const vector<NativeFunctionSearch>* nativeFunctionSearchOrder)
+      : vm(vm),
+        nativeFunctionSearchOrder(nativeFunctionSearchOrder) { }
+
+  VM* vm;
+  vector<Persistent<Package>> packages;
+  const vector<NativeFunctionSearch>* nativeFunctionSearchOrder;
+};
+
+
 class Loader {
  public:
-  Loader(VM* vm, istream& stream)
-      : vm_(vm), stream_(stream) {}
+  Loader(LoadState* loadState, istream& stream, Persistent<Package> package)
+      : loadState_(loadState),
+        stream_(stream),
+        package_(package) {}
   virtual ~Loader() {}
 
  protected:
-  VM* vm() const { return vm_; }
-  Heap* heap() const { return vm_->heap(); }
-  Roots* roots() const { return vm_->roots(); }
+  VM* vm() const { return loadState_->vm; }
+  Heap* heap() const { return vm()->heap(); }
+  Roots* roots() const { return vm()->roots(); }
   Local<Package> package() const { return package_; }
 
   Local<String> readString();
@@ -104,6 +117,10 @@ class Loader {
   Local<BlockArray<T>> readBlockList(Local<T> (Loader::*reader)());
   template <typename T, typename Reader>
   Local<BlockArray<T>> readBlockList(Reader reader);
+  template <typename T>
+  Local<T> readOption(Local<T> (Loader::*reader)());
+  template <typename T, typename Reader>
+  Local<T> readOption(Reader reader);
   length_t readLength();
   vector<u8> readData(word_t size);
   DefnId readDefnIdVbns();
@@ -112,36 +129,31 @@ class Loader {
   length_t readLengthVbn();
   id_t readIdVbn();
 
-  template <class T>
-  T readOption(function<T()> reader, T noValue);
-
   DependencyLoader createDependencyLoader(const Handle<PackageDependency>& dep);
-  void moveExternTypesFrom(Loader* loader);
 
   virtual Local<TypeParameter> getTypeParameter(length_t index) const = 0;
   virtual Local<Function> readIdAndGetMethod() = 0;
   virtual Local<TraitTable> readTraitTable() = 0;
 
-  Local<Package> package_;
-  vector<Persistent<ExternTypeInfo>> externTypes_;
-
- private:
-  VM* vm_;
+ protected:
+  LoadState* loadState_;
   istream& stream_;
+  Persistent<Package> package_;
+  bool isLinked_ = false;
 };
 
 
 class PackageLoader: public Loader {
  public:
-  PackageLoader(VM* vm,
-      istream& stream,
-      const string& dirName,
-      const vector<NativeFunctionSearch>& nativeFunctionSearchOrder)
-      : Loader(vm, stream),
-        dirName_(dirName),
-        nativeFunctionSearchOrder_(nativeFunctionSearchOrder) { }
+  PackageLoader(LoadState* loadState,
+                istream& stream,
+                const string& dirName)
+      : Loader(loadState, stream, Package::create(loadState->vm->heap())),
+        dirName_(dirName) {
+    loadState_->packages.push_back(package());
+  }
 
-  Local<Package> load();
+  Persistent<Package> load();
 
  protected:
   virtual Local<TypeParameter> getTypeParameter(length_t index) const;
@@ -155,20 +167,17 @@ class PackageLoader: public Loader {
   void loadNativeLibrary();
 
   string dirName_;
-  vector<NativeFunctionSearch> nativeFunctionSearchOrder_;
 };
 
 
 class DependencyLoader: public Loader {
  public:
-  DependencyLoader(VM* vm,
+  DependencyLoader(LoadState* loadState,
                    istream& stream,
                    const Handle<Package>& package,
                    const Handle<PackageDependency>& dep)
-      : Loader(vm, stream),
-        dep_(dep) {
-    package_ = package;
-  }
+      : Loader(loadState, stream, package),
+        dep_(dep) { }
 
  public:
   void readDependencyBody();
@@ -209,55 +218,40 @@ Local<Package> Package::create(Heap* heap) {
 }
 
 
-Local<Package> Package::loadFromFile(
+vector<Persistent<Package>> Package::load(
     VM* vm,
     const string& fileName,
     const vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
-  // Find the parent directory.
-  string dirName = pathDirName(fileName);
-
-  // Open the package file.
+  auto dirName = pathDirName(fileName);
   ifstream file(fileName.c_str(), ios::binary);
   if (!file.good())
     throw Error("could not open package file");
   file.exceptions(ios::failbit | ios::badbit | ios::eofbit);
 
-  // Load it.
-  PackageLoader loader(vm, file, dirName, nativeFunctionSearchOrder);
-  auto package = loader.load();
+  auto packages = load(vm, file, dirName, nativeFunctionSearchOrder);
 
-  // Check that there's no garbage at the end of the file.
   auto pos = file.tellg();
   file.seekg(0, ios::end);
   if (pos != file.tellg())
     throw Error("garbage found at end of file");
-  return package;
+
+  return packages;
 }
 
 
-Local<Package> Package::loadFromBytes(
-    VM* vm,
-    const u8* bytes,
-    word_t size,
-    const vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
-  stringstream stream(string(reinterpret_cast<const char*>(bytes), size));
-  stream.exceptions(ios::failbit | ios::badbit | ios::eofbit);
-  auto package = loadFromStream(vm, stream, nativeFunctionSearchOrder);
-  auto pos = stream.tellg();
-  stream.seekg(0, ios::end);
-  if (pos != stream.tellg())
-    throw Error("garbage found at end of bytes");
-  return package;
-}
-
-
-
-Local<Package> Package::loadFromStream(
+vector<Persistent<Package>> Package::load(
     VM* vm,
     istream& stream,
+    const string& dirName,
     const vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
-  PackageLoader loader(vm, stream, "" /* dirName */, nativeFunctionSearchOrder);
-  return loader.load();
+  AllowAllocationScope allowAllocation(vm->heap(), true);
+  HandleScope handleScope(vm);
+
+  LoadState loadState(vm, &nativeFunctionSearchOrder);
+  PackageLoader loader(&loadState, stream, dirName);
+  loader.load();
+
+  return loadState.packages;
 }
 
 
@@ -662,12 +656,6 @@ void Package::link(const Handle<Package>& package) {
     }
     dependency->setLinkedTypeParameters(*linkedTypeParameters);
   }
-
-  auto externTypes = handle(package->externTypes());
-  for (length_t i = 0; i < externTypes->length(); i++) {
-    externTypes->get(i)->linkType();
-  }
-  package->setExternTypes(nullptr);
 }
 
 
@@ -685,7 +673,6 @@ ostream& operator << (ostream& os, const Package* pkg) {
      << "\n  entry function index: " << pkg->entryFunctionIndex()
      << "\n  init function index: " << pkg->initFunctionIndex()
      << "\n  exports: " << brief(pkg->exports())
-     << "\n  externTypes: " << brief(pkg->externTypes())
      << "\n  global name index: " << brief(pkg->globalNameIndex())
      << "\n  global source name index: " << brief(pkg->globalSourceNameIndex())
      << "\n  function name index: " << brief(pkg->functionNameIndex())
@@ -1118,11 +1105,9 @@ void Loader::readClass(const Local<Class>& clas) {
 
   auto traits = readTraitTable();
 
-  auto elementTypeOpt = readLengthVbn();
-  Local<Type> elementType;
+  auto elementType = readOption<Type>(&Loader::readType);
   length_t lengthFieldIndex = kIndexNotSet;
-  if (elementTypeOpt == 1) {
-    elementType = readType();
+  if (elementType) {
     for (length_t i = 0; i < fields->length(); i++) {
       if ((fields->get(i)->flags() & ARRAY_FLAG) != 0) {
         lengthFieldIndex = i;
@@ -1132,8 +1117,6 @@ void Loader::readClass(const Local<Class>& clas) {
     if (lengthFieldIndex == kIndexNotSet) {
       throw Error("no length field found in array");
     }
-  } else if (elementTypeOpt != 0) {
-    throw Error("invalid option");
   }
 
   clas->setName(*name);
@@ -1200,9 +1183,6 @@ void Loader::readTypeParameter(const Local<TypeParameter>& param) {
 
 
 Local<Type> Loader::readType() {
-  const i64 kBuiltinPackageIndex = -2;
-  const i64 kLocalPackageIndex = -1;
-
   auto bits = readWordVbn();
   auto form = static_cast<Type::Form>(bits & 0xf);
   auto flags = static_cast<Type::Flags>(bits >> 4);
@@ -1220,13 +1200,12 @@ Local<Type> Loader::readType() {
     auto defnIndex = readVbn();
 
     Local<Class> clas;
-    bool isExtern = false;
-    if (depIndex == kBuiltinPackageIndex) {
+    if (depIndex == kBuiltinPackageId) {
       if (!roots()->isValidBuiltinClassId(static_cast<BuiltinId>(defnIndex))) {
         throw Error("invalid builtin class id");
       }
       clas = handle(roots()->getBuiltinClass(static_cast<BuiltinId>(defnIndex)));
-    } else if (depIndex == kLocalPackageIndex) {
+    } else if (depIndex == kLocalPackageId) {
       if (defnIndex < 0 || defnIndex >= package_->classes()->length()) {
         throw Error("invalid definition index");
       }
@@ -1239,8 +1218,9 @@ Local<Type> Loader::readType() {
       if (defnIndex < 0 || defnIndex >= dep->externClasses()->length()) {
         throw Error("invalid extern class index");
       }
-      clas = handle(dep->externClasses()->get(defnIndex));
-      isExtern = true;
+      clas = handle(isLinked_ ?
+          dep->linkedClasses()->get(defnIndex) :
+          dep->externClasses()->get(defnIndex));
     }
 
     auto typeArgCount = readLengthVbn();
@@ -1257,28 +1237,18 @@ Local<Type> Loader::readType() {
       typeArgs.push_back(typeArg);
     }
 
-    Local<Type> ty;
-    if (isExtern) {
-      ty = Type::createExtern(heap(), clas, typeArgs, flags);
-      auto info = ExternTypeInfo::create(heap(), ty, package_, depIndex, defnIndex);
-      externTypes_.push_back(info);
-    } else {
-      ty = Type::create(heap(), clas, typeArgs, flags);
-    }
-
-    return ty;
+    return Type::create(heap(), clas, typeArgs, flags);
   } else if (form == Type::TRAIT_TYPE) {
     auto depIndex = readVbn();
     auto defnIndex = readVbn();
 
     Local<Trait> trait;
-    bool isExtern = false;
-    if (depIndex == kBuiltinPackageIndex) {
+    if (depIndex == kBuiltinPackageId) {
       if (!roots()->isValidBuiltinTraitId(static_cast<BuiltinId>(defnIndex))) {
         throw Error("invalid builtin trait id");
       }
       trait = handle(roots()->getBuiltinTrait(static_cast<BuiltinId>(defnIndex)));
-    } else if (depIndex == kLocalPackageIndex) {
+    } else if (depIndex == kLocalPackageId) {
       if (defnIndex < 0 || defnIndex >= package_->traits()->length()) {
         throw Error("invalid definition index");
       }
@@ -1291,8 +1261,9 @@ Local<Type> Loader::readType() {
       if (defnIndex < 0 || defnIndex >= dep->externTraits()->length()) {
         throw Error("invalid extern trait index");
       }
-      trait = handle(dep->externTraits()->get(defnIndex));
-      isExtern = true;
+      trait = handle(isLinked_ ?
+          dep->linkedTraits()->get(defnIndex) :
+          dep->externTraits()->get(defnIndex));
     }
 
     auto typeArgCount = readLengthVbn();
@@ -1303,23 +1274,13 @@ Local<Type> Loader::readType() {
       typeArgs.push_back(typeArg);
     }
 
-    Local<Type> ty;
-    if (isExtern) {
-      ty = Type::createExtern(heap(), trait, typeArgs, flags);
-      auto info = ExternTypeInfo::create(heap(), ty, package_, depIndex, defnIndex);
-      externTypes_.push_back(info);
-    } else {
-      ty = Type::create(heap(), trait, typeArgs, flags);
-    }
-
-    return ty;
+    return Type::create(heap(), trait, typeArgs, flags);
   } else if (form == Type::VARIABLE_TYPE) {
     auto depIndex = readVbn();
     auto defnIndex = readVbn();
 
     Local<TypeParameter> param;
-    bool isExtern = false;
-    if (depIndex == kLocalPackageIndex) {
+    if (depIndex == kLocalPackageId) {
       if (defnIndex < 0 || defnIndex >= package_->typeParameters()->length()) {
         throw Error("invalid definition index");
       }
@@ -1332,32 +1293,43 @@ Local<Type> Loader::readType() {
       if (defnIndex < 0 || defnIndex >= dep->externTypeParameters()->length()) {
         throw Error("invalid definition index");
       }
-      param = handle(dep->externTypeParameters()->get(defnIndex));
-      isExtern = true;
+      param = handle(isLinked_ ?
+          dep->linkedTypeParameters()->get(defnIndex) :
+          dep->externTypeParameters()->get(defnIndex));
     }
 
-    Local<Type> ty;
-    if (isExtern) {
-      ty = Type::createExtern(heap(), param, flags);
-      auto info = ExternTypeInfo::create(heap(), ty, package_, depIndex, defnIndex);
-      externTypes_.push_back(info);
-    } else {
-      ty = Type::create(heap(), param, flags);
-    }
-
-    return ty;
+    return Type::create(heap(), param, flags);
   } else {
     ASSERT(form == Type::EXISTENTIAL_TYPE);
     auto length = readLengthVbn();
     vector<Local<TypeParameter>> variables;
     variables.reserve(length);
     for (length_t i = 0; i < length; i++) {
-      auto index = readLengthVbn();
-      variables.push_back(getTypeParameter(index));
+      auto depIndex = readVbn();
+      auto defnIndex = readVbn();
+
+      Local<TypeParameter> param;
+      if (depIndex == kLocalPackageId) {
+        if (defnIndex < 0 || defnIndex >= package_->typeParameters()->length()) {
+          throw Error("invalid definition index");
+        }
+        param = handle(package_->typeParameters()->get(defnIndex));
+      } else {
+        if (depIndex < 0 || depIndex >= package_->dependencies()->length()) {
+          throw Error("invalid package index");
+        }
+        auto dep = handle(package_->dependencies()->get(depIndex));
+        if (defnIndex < 0 || defnIndex >= dep->externTypeParameters()->length()) {
+          throw Error("invalid definition index");
+        }
+        param = handle(isLinked_ ?
+            dep->linkedTypeParameters()->get(defnIndex) :
+            dep->externTypeParameters()->get(defnIndex));
+      }
+      variables.push_back(param);
     }
     auto innerType = readType();
-    auto ty = Type::create(heap(), variables, innerType);
-    return ty;
+    return Type::create(heap(), variables, innerType);
   }
 }
 
@@ -1399,7 +1371,7 @@ Local<ObjectTypeDefn> Loader::readDefiningClass() {
 
 
 Local<String> Loader::readSourceName() {
-  return readOption<Local<String>>([this]() { return readStringId(); }, Local<String>());
+  return readOption<String>(&Loader::readStringId);
 }
 
 
@@ -1420,7 +1392,7 @@ Local<BlockArray<T>> Loader::readBlockList(Local<T> (Loader::*reader)(void)) {
 
 template <typename T, typename Reader>
 Local<BlockArray<T>> Loader::readBlockList(Reader reader) {
-  HandleScope handleScope(vm_);
+  HandleScope handleScope(vm());
   auto length = readLengthVbn();
   auto array = BlockArray<T>::create(heap(), length);
   for (length_t i = 0; i < length; i++) {
@@ -1428,6 +1400,25 @@ Local<BlockArray<T>> Loader::readBlockList(Reader reader) {
     array->set(i, *elem);
   }
   return handleScope.escape(*array);
+}
+
+
+template <typename T>
+Local<T> Loader::readOption(Local<T> (Loader::*reader)(void)) {
+  return readOption<T>([this, reader]() { return (this->*reader)(); });
+}
+
+
+template <typename T, typename Reader>
+Local<T> Loader::readOption(Reader reader) {
+  auto code = readVbn();
+  if (code == 0) {
+    return Local<T>();
+  } else if (code == 1) {
+    return reader();
+  } else {
+    throw Error("invalid option code");
+  }
 }
 
 
@@ -1504,31 +1495,12 @@ id_t Loader::readIdVbn() {
 }
 
 
-template <class T>
-T Loader::readOption(function<T()> reader, T noValue) {
-  i64 n = readVbn();
-  if (n == 0) {
-    return noValue;
-  } else if (n == 1) {
-    return reader();
-  } else {
-    throw Error("invalid option");
-  }
-}
-
-
 DependencyLoader Loader::createDependencyLoader(const Handle<PackageDependency>& dep) {
-  return DependencyLoader(vm_, stream_, package_, dep);
+  return DependencyLoader(loadState_, stream_, package_, dep);
 }
 
 
-void Loader::moveExternTypesFrom(Loader* loader) {
-  move(loader->externTypes_.begin(), loader->externTypes_.end(),
-       back_inserter(externTypes_));
-}
-
-
-Local<Package> PackageLoader::load() {
+Persistent<Package> PackageLoader::load() {
   AllowAllocationScope allowAllocation(heap(), true);
   HandleScope handleScope(vm());
   try {
@@ -1539,8 +1511,6 @@ Local<Package> PackageLoader::load() {
     auto minorVersion = readValue<u16>();
     if (majorVersion != 0 || minorVersion != 20)
       throw Error("package file has wrong format version");
-
-    package_ = handleScope.escape(*Package::create(heap()));
 
     auto flags = readValue<u64>();
     package_->setFlags(flags);
@@ -1618,43 +1588,77 @@ Local<Package> PackageLoader::load() {
       auto string = readString();
       stringArray->set(i, *string);
     }
+
+    for (length_t i = 0; i < depCount; i++) {
+      auto dep = handle(depArray->get(i));
+      DependencyLoader loader = createDependencyLoader(dep);
+      loader.readDependencyBody();
+    }
+
+    for (length_t i = 0; i < depCount; i++) {
+      auto dep = handle(depArray->get(i));
+      auto depName = handle(dep->name());
+      Persistent<Package> depPackage = vm()->findPackage(depName);
+      if (depPackage && !dep->isSatisfiedBy(*depPackage)) {
+        throw Error("package depends on loaded package with wrong version");
+      }
+      if (!depPackage) {
+        for (auto& loadingPackage : loadState_->packages) {
+          if (depName->equals(loadingPackage->name())) {
+            throw Error("circular package dependency");
+          }
+        }
+        auto fileName = vm()->searchForPackage(dep);
+        if (fileName.empty()) {
+          throw Error("missing package dependency");
+        }
+        auto dirName = pathDirName(fileName);
+        ifstream file(fileName.c_str(), ios::binary);
+        file.exceptions(ios::failbit | ios::badbit | ios::eofbit);
+        PackageLoader loader(loadState_, file, dirName);
+        depPackage = loader.load();
+        auto pos = file.tellg();
+        file.seekg(0, ios::end);
+        if (pos != file.tellg()) {
+          throw Error("garbage at end of package file");
+        }
+        if (!dep->isSatisfiedBy(*depPackage)) {
+          throw Error("invalid package dependency");
+        }
+      }
+      dep->setPackage(*depPackage);
+    }
+    Package::link(package_);
+    isLinked_ = true;
+
     for (length_t i = 0; i < globalCount; i++) {
       auto global = readGlobal();
       globalArray->set(i, *global);
     }
+
     bool hasNativeFunctions = false;
     for (length_t i = 0; i < functionCount; i++) {
       auto function = readFunction();
       functionArray->set(i, *function);
       hasNativeFunctions |= (NATIVE_FLAG & function->flags()) != 0;
     }
+
     for (length_t i = 0; i < classCount; i++) {
       auto clas = handle(classArray->get(i));
       readClass(clas);
     }
+
     for (length_t i = 0; i < traitCount; i++) {
       auto trait = handle(traitArray->get(i));
       readTrait(trait);
     }
+
     for (length_t i = 0; i < typeParameterCount; i++) {
       auto param = handle(typeParametersArray->get(i));
       readTypeParameter(param);
     }
 
-    for (length_t i = 0; i < depCount; i++) {
-      auto dep = handle(depArray->get(i));
-      DependencyLoader loader = createDependencyLoader(dep);
-      loader.readDependencyBody();
-      moveExternTypesFrom(&loader);
-    }
-
-    auto externTypesArray = BlockArray<ExternTypeInfo>::create(heap(), externTypes_.size());
-    for (length_t i = 0; i < externTypes_.size(); i++) {
-      externTypesArray->set(i, *externTypes_[i]);
-    }
-    package_->setExternTypes(*externTypesArray);
-
-    package_->setNativeFunctionSearchOrder(nativeFunctionSearchOrder_);
+    package_->setNativeFunctionSearchOrder(*loadState_->nativeFunctionSearchOrder);
     if (hasNativeFunctions && package_->mayLoadFunctionsFromNativeLibrary()) {
       loadNativeLibrary();
     }

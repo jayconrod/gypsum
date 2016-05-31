@@ -90,7 +90,7 @@ class PackageLoader(BasePackageLoader):
         if info.package is not None:
             return info.package
         fileName = self.packageInfoByName[name].fileName
-        package = serialize.deserialize(fileName)
+        package = serialize.deserialize(fileName, self)
         info.package = package
         self.packageInfoById[package.id] = info
 

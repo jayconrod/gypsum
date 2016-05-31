@@ -118,33 +118,25 @@ Persistent<Package> VM::loadPackage(const Handle<PackageDependency>& dependency,
 
 Persistent<Package> VM::loadPackage(const string& fileName,
     const vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
-  HandleScope handleScope(this);
-  Persistent<Package> package;
-  if (nativeFunctionSearchOrder.empty()) {
-    package = Package::loadFromFile(this, fileName, nativeFunctionSearchOrder_);
-  } else {
-    package = Package::loadFromFile(this, fileName, nativeFunctionSearchOrder);
+  vector<Persistent<Package>> loadedPackages =
+      Package::load(this, fileName, nativeFunctionSearchOrder);
+  ASSERT(!loadedPackages.empty());
+  for (auto i = loadedPackages.rbegin(), e = loadedPackages.rend(); i != e; i++) {
+    initializePackage(*i);
   }
-  loadPackageDependenciesAndInitialize(package);
-  return package;
+  return loadedPackages.front();
 }
 
 
-void VM::addPackage(const Handle<Package>& package) {
-  loadPackageDependenciesAndInitialize(package);
-}
-
-
-NativeFunction VM::loadRegisteredFunction(Name* packageName, Name* functionName) {
-  return loadRegisteredFunction(packageName->toStlString(), functionName->toStlString());
-}
-
-
-NativeFunction VM::loadRegisteredFunction(const std::string& packageName,
-    const std::string& functionName) {
-  pair<string, string> key(packageName, functionName);
-  auto it = registeredNativeFunctions_.find(key);
-  return it == registeredNativeFunctions_.end() ? nullptr : it->second;
+Persistent<Package> VM::loadPackage(istream& stream,
+    const vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
+  vector<Persistent<Package>> loadedPackages =
+      Package::load(this, stream, "" /* dirName */, nativeFunctionSearchOrder);
+  ASSERT(!loadedPackages.empty());
+  for (auto i = loadedPackages.rbegin(), e = loadedPackages.rend(); i != e; i++) {
+    initializePackage(*i);
+  }
+  return loadedPackages.front();
 }
 
 
@@ -207,93 +199,29 @@ string VM::searchForPackage(const Handle<PackageDependency>& dependency) {
 }
 
 
-void VM::loadPackageDependenciesAndInitialize(const Handle<Package>& package) {
-  struct LoadState {
-    Local<Package> package;
-    length_t currentDepIndex;
+NativeFunction VM::loadRegisteredFunction(Name* packageName, Name* functionName) {
+  return loadRegisteredFunction(packageName->toStlString(), functionName->toStlString());
+}
 
-    explicit LoadState(const Handle<Package>& package)
-        : package(package), currentDepIndex(0) { }
-  };
 
-  // Load the dependencies in depth-first order, using an explicit stack, `loadingPackages`.
-  // Packages are popped from this stack and pushed onto `loadedPackages` when all their
-  // dependencies have been satisfied.
-  HandleScope handleScope(this);
-  vector<LoadState> loadingPackages{LoadState(package)};
-  vector<Local<Package>> loadedPackages;
-  while (!loadingPackages.empty()) {
-    auto& last = loadingPackages.back();
-    if (last.currentDepIndex == last.package->dependencies()->length()) {
-      loadedPackages.push_back(last.package);
-      loadingPackages.pop_back();
-    } else {
-      auto index = last.currentDepIndex++;
-      auto dep = handle(last.package->dependencies()->get(index));
+NativeFunction VM::loadRegisteredFunction(const std::string& packageName,
+    const std::string& functionName) {
+  pair<string, string> key(packageName, functionName);
+  auto it = registeredNativeFunctions_.find(key);
+  return it == registeredNativeFunctions_.end() ? nullptr : it->second;
+}
 
-      // Check if this package is already loaded.
-      auto depPackage = findPackage(handle(dep->name()));
 
-      // If not, check if we have already started loading the package, and its dependencies
-      // are satisfied.
-      if (!depPackage) {
-        for (auto& loaded : loadedPackages) {
-          if (dep->name()->equals(loaded->name())) {
-            depPackage = loaded;
-            break;
-          }
-        }
-      }
-
-      // If we did find a package, make sure it's a suitable version. We don't allow loading
-      // multiple versions of the same package.
-      if (depPackage && !dep->isSatisfiedBy(*depPackage)) {
-        throw Error("package is already loaded with bad version");
-      }
-
-      // If not, check if we are still trying to satisfy the dependencies. This indicates a
-      // circular dependency, which is not allowed.
-      if (!depPackage) {
-        for (auto& state : loadingPackages) {
-          if (dep->isSatisfiedBy(*state.package)) {
-            throw Error("circular package dependency");
-          }
-        }
-
-        // Search the file system for the package and load it.
-        auto depFileName = searchForPackage(dep);
-        if (depFileName.empty()) {
-          throw Error("could not find package: " + dep->name()->toStlString());
-        }
-
-        depPackage = Package::loadFromFile(this, depFileName, nativeFunctionSearchOrder_);
-        loadingPackages.push_back(LoadState(depPackage));
-      }
-
-      dep->setPackage(*depPackage);
+void VM::initializePackage(const Handle<Package>& package) {
+  if (package->initFunctionIndex() != kIndexNotSet) {
+    Interpreter interpreter(this, stack_, threadBindle_);
+    Persistent<Function> init(package->initFunction());
+    if (init->parameterTypes()->length() > 0) {
+      throw Error("init function has arguments");
     }
+    interpreter.call(init);
   }
-
-  // Initialize all the packages we loaded (if they need to be initialized). Note that we
-  // appended packages to `loadedPackages` in post-order, so dependencies will be initialized
-  // before their dependents.
-  Interpreter interpreter(this, stack_, threadBindle_);
-  for (auto& package : loadedPackages) {
-    Package::link(package);
-    if (package->initFunctionIndex() != kIndexNotSet) {
-      Persistent<Function> init(package->initFunction());
-      if (init->parameterTypes()->length() > 0) {
-        throw Error("init function has arguments");
-      }
-      interpreter.call(init);
-    }
-  }
-
-  // Insert all the loaded packages into the main package list. We don't do this until all of
-  // the initializers have run, since one of them could throw an exception.
-  for (auto& package : loadedPackages) {
-    packages_.push_back(Persistent<Package>(package));
-  }
+  packages_.push_back(package);
 }
 
 }

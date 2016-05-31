@@ -67,7 +67,6 @@ class Roots {
     F(Type, labelType, LABEL_TYPE)                                    \
     F(Type, nullType, NULL_TYPE)                                      \
     F(Meta, typeMeta, TYPE_META)                                      \
-    F(Meta, externTypeInfoMeta, EXTERN_TYPE_INFO_META)                \
     F(Meta, stringMeta, STRING_META)                                  \
     F(String, emptyString, EMPTY_STRING)                              \
     F(String, trueString, TRUE_STRING)                                \

@@ -64,7 +64,9 @@ class VM {
       const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder);
   Persistent<Package> loadPackage(const std::string& fileName,
       const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder);
-  void addPackage(const Handle<Package>& package);
+  Persistent<Package> loadPackage(std::istream& stream,
+      const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder);
+  std::string searchForPackage(const Handle<PackageDependency>& dependency);
   const std::vector<Persistent<Package>>& packages() { return packages_; }
 
   bool shouldVerifyHeap() const { return shouldVerifyHeap_; }
@@ -80,8 +82,7 @@ class VM {
   }
 
  private:
-  std::string searchForPackage(const Handle<PackageDependency>& dependency);
-  void loadPackageDependenciesAndInitialize(const Handle<Package>& package);
+  void initializePackage(const Handle<Package>& package);
 
   ::codeswitch::VM* apiPtr_;
   std::unique_ptr<Heap> heap_;
@@ -91,6 +92,7 @@ class VM {
   Persistent<ThreadBindle> threadBindle_;
   std::vector<std::string> packageSearchPaths_;
   std::vector<Persistent<Package>> packages_;
+  std::vector<Persistent<Package>> loadingPackages_;
   std::vector<NativeFunctionSearch> nativeFunctionSearchOrder_;
   std::unordered_map<NativeFunctionKey, NativeFunction, HashNativeFunctionKey>
       registeredNativeFunctions_;

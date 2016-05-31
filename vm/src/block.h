@@ -42,7 +42,6 @@ V(BlockHashMapTable, BLOCK_HASH_MAP_TABLE)                                     \
 V(BlockHashMap, BLOCK_HASH_MAP)                                                \
 V(Object, OBJECT)                                                              \
 V(Type, TYPE)                                                                  \
-V(ExternTypeInfo, EXTERN_TYPE_INFO)                                            \
 V(String, STRING)                                                              \
 V(ThreadBindle, THREAD_BINDLE)                                                 \
 

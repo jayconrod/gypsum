@@ -29,6 +29,9 @@ with open(outFileName, "w") as outFile:
 
 #include "test.h"
 
+#include <sstream>
+#include <string>
+#include <vector>
 #include "codeswitch.h"
 
 #include "function.h"
@@ -39,29 +42,30 @@ with open(outFileName, "w") as outFile:
 #include "utils.h"
 #include "vm.h"
 
+using codeswitch::NativeFunctionSearch;
 using codeswitch::VMOptions;
+using std::ios;
+using std::string;
+using std::stringstream;
 using std::vector;
 
 using namespace codeswitch::internal;
 
 TEST({testName}) {{
   u8 bytes[] = {{ {bytes} }};
+  stringstream stream(string(reinterpret_cast<const char*>(bytes), sizeof(bytes)));
+  stream.exceptions(ios::failbit | ios::badbit | ios::eofbit);
+
   VMOptions vmOptions;
   for (auto& path : split(getenv("CS_PACKAGE_PATH"), ':'))
     vmOptions.packageSearchPaths.push_back(path);
-  VM vm(vmOptions);;
-  AllowAllocationScope allowAllocation(vm.heap(), true);
-  HandleScope handleScope(&vm);
-  auto package = Package::loadFromBytes(&vm, bytes, sizeof(bytes));
-  vm.addPackage(package);
+  VM vm(vmOptions);
+  auto package = vm.loadPackage(stream, vector<NativeFunctionSearch>());
 
-  Local<Stack> stack(vm.stack());
+  Persistent<Stack> stack(vm.stack());
   Interpreter interpreter(&vm, stack, vm.threadBindle());
-  Local<Function> init(&vm, package->initFunction());
-  Local<Function> entry(&vm, package->entryFunction());
+  Persistent<Function> entry(&vm, package->entryFunction());
   try {{
-    if (init)
-      interpreter.call(init);
     if (!entry)
       throw TestException("main function not found");
     interpreter.call(entry);
