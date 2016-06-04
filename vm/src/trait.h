@@ -12,6 +12,7 @@
 #include "hash-table.h"
 #include "object-type-defn.h"
 #include "ptr.h"
+#include "tagged.h"
 #include "utils.h"
 
 namespace codeswitch {
@@ -59,6 +60,8 @@ class Trait: public ObjectTypeDefn {
   u32 flags() const { return flags_; }
   void setFlags(u32 flags) { flags_ = flags; }
 
+  u32 hashCode() const;
+
   BlockArray<TypeParameter>* typeParameters() const { return typeParameters_.get(); }
   void setTypeParameters(BlockArray<TypeParameter>* typeParameters) {
     typeParameters_.set(this, typeParameters);
@@ -94,6 +97,7 @@ class Trait: public ObjectTypeDefn {
   Ptr<Name> name_;
   Ptr<String> sourceName_;
   u32 flags_;
+  mutable u32 hashCode_ = kHashNotSet;
   Ptr<BlockArray<TypeParameter>> typeParameters_;
   Ptr<BlockArray<Type>> supertypes_;
   Ptr<BlockArray<Function>> methods_;
@@ -107,34 +111,28 @@ std::ostream& operator << (std::ostream& os, const Trait* trait);
 
 
 struct TraitTableElement {
-  static const id_t kEmptyPackageId = kBuiltinPackageId - 1;
-  static const id_t kDeadPackageId = kEmptyPackageId - 1;
+  static const word_t kEmpty = 1;
+  static const word_t kDead = 2;
 
   TraitTableElement()
-      : key{kEmptyPackageId, kIndexNotSet},
+      : key(kEmpty),
         value(nullptr) { }
-  TraitTableElement(DefnId key)
-      : key(key),
+  TraitTableElement(Trait* trait)
+      : key(trait),
         value(nullptr) { }
-  TraitTableElement(DefnId key, BlockArray<Function>* value)
-      : key(key),
+  TraitTableElement(Trait* trait, BlockArray<Function>* value)
+      : key(trait),
         value(value) { }
   TraitTableElement(const TraitTableElement&) = delete;
   TraitTableElement& operator = (const TraitTableElement&) = delete;
   TraitTableElement(TraitTableElement&&) = delete;
   TraitTableElement&& operator = (TraitTableElement&&) = delete;
 
-  bool isEmpty() const { return key.packageId == kEmptyPackageId; }
-  void setEmpty() {
-    key.packageId = kEmptyPackageId;
-    value = nullptr;
-  }
-  bool isDead() const { return key.packageId == kDeadPackageId; }
-  void setDead() {
-    key.packageId = kDeadPackageId;
-    value = nullptr;
-  }
-  bool isLive() const { return !isEmpty() && !isDead(); }
+  bool isEmpty() const { return key.isNumber() && key.getNumber() == kEmpty; }
+  void setEmpty() { return key.setNumber(kEmpty); }
+  bool isDead() const { return key.isNumber() && key.getNumber() == kDead; }
+  void setDead() { return key.setNumber(kDead); }
+  bool isLive() const { return key.isPointer(); }
 
   void set(const HashTable<TraitTableElement>* table, const TraitTableElement& elem);
 
@@ -148,10 +146,10 @@ struct TraitTableElement {
     return isLive() && key == other.key;
   }
   u32 hashCode() const {
-    return hashMix(key.packageId) ^ hashMix(key.defnIndex);
+    return key.getPointer()->hashCode();
   }
 
-  DefnId key;
+  Tagged<Trait> key;
   BlockArray<Function>* value;
 };
 
@@ -167,7 +165,7 @@ class TraitTable: public HashTable<TraitTableElement> {
 
  private:
   friend class Roots;
-  static const word_t kElementPointerMap = 2;
+  static const word_t kElementPointerMap = 3;
 };
 
 }

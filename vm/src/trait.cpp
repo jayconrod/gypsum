@@ -72,6 +72,21 @@ Local<Trait> Trait::create(Heap* heap,
 }
 
 
+u32 Trait::hashCode() const {
+  if (hashCode_ != kHashNotSet) {
+    return hashCode_;
+  }
+  // Hack: initialize hash code using the address of the trait. The hash code will not
+  // change after being initialized. This is neither deterministic, nor random. We do this
+  // because neither package nor name may be set at this point.
+  hashCode_ = hashMix(static_cast<u32>(reinterpret_cast<word_t>(this)));
+  if (hashCode_ == kHashNotSet) {
+    hashCode_ += 1;
+  }
+  return hashCode_;
+}
+
+
 Local<BlockHashMap<Name, Function>> Trait::ensureAndGetMethodNameIndex(
     const Handle<Trait>& trait) {
   if (trait->methodNameIndex()) {
@@ -118,6 +133,8 @@ ostream& operator << (ostream& os, const Trait* trait) {
 void TraitTableElement::set(const HashTable<TraitTableElement>* table,
                             const TraitTableElement& elem) {
   key = elem.key;
+  table->getHeap()->recordWrite(
+      reinterpret_cast<Trait**>(&key), reinterpret_cast<Trait*>(elem.key.getPointer()));
   value = elem.value;
   table->getHeap()->recordWrite(&value, elem.value);
 }

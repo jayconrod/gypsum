@@ -336,9 +336,7 @@ void Package::ensureExports(const Handle<Package>& package) {
   auto functions = handle(package->functions());
   for (length_t i = 0; i < functions->length(); i++) {
     auto function = handle(functions->get(i));
-    if ((function->flags() & PUBLIC_FLAG) != 0 &&
-        ((function->flags() & METHOD_FLAG) == 0 ||
-         (function->flags() & (STATIC_FLAG | METHOD_FLAG)) != 0)) {
+    if ((function->flags() & PUBLIC_FLAG) != 0) {
       auto mangledName = mangleFunctionName(function, package);
       ASSERT(!exports->contains(*mangledName));
       ExportMap::add(exports, mangledName, function);
@@ -637,6 +635,7 @@ void Package::link(const Handle<Package>& package) {
         linkedTraits->set(j, block_cast<Trait>(linkedTrait));
       }
     }
+    dependency->setLinkedTraits(*linkedTraits);
 
     ASSERT(dependency->linkedTypeParameters() == nullptr);
     auto externTypeParameters = handle(dependency->externTypeParameters());
@@ -1130,7 +1129,6 @@ void Loader::readClass(const Local<Class>& clas) {
   clas->setTraits(traits.getOrNull());
   clas->setElementType(elementType.getOrNull());
   clas->setLengthFieldIndex(lengthFieldIndex);
-  clas->setPackage(*package_);
 }
 
 
@@ -1153,7 +1151,6 @@ void Loader::readTrait(const Local<Trait>& trait) {
   trait->setTypeParameters(*typeParams);
   trait->setSupertypes(*supertypes);
   trait->setMethods(*methods);
-  trait->setPackage(*package_);
 }
 
 
@@ -1597,36 +1594,16 @@ Persistent<Package> PackageLoader::load() {
 
     for (length_t i = 0; i < depCount; i++) {
       auto dep = handle(depArray->get(i));
-      auto depName = handle(dep->name());
-      Persistent<Package> depPackage = vm()->findPackage(depName);
-      if (depPackage && !dep->isSatisfiedBy(*depPackage)) {
-        throw Error("package depends on loaded package with wrong version");
-      }
-      if (!depPackage) {
-        for (auto& loadingPackage : loadState_->packages) {
-          if (depName->equals(loadingPackage->name())) {
-            throw Error("circular package dependency");
-          }
-        }
-        auto fileName = vm()->searchForPackage(dep);
-        if (fileName.empty()) {
-          throw Error("missing package dependency");
-        }
-        auto dirName = pathDirName(fileName);
-        ifstream file(fileName.c_str(), ios::binary);
-        file.exceptions(ios::failbit | ios::badbit | ios::eofbit);
-        PackageLoader loader(loadState_, file, dirName);
-        depPackage = loader.load();
-        auto pos = file.tellg();
-        file.seekg(0, ios::end);
-        if (pos != file.tellg()) {
-          throw Error("garbage at end of package file");
-        }
-        if (!dep->isSatisfiedBy(*depPackage)) {
-          throw Error("invalid package dependency");
-        }
-      }
+      auto depPackage = loadDependency(dep);
       dep->setPackage(*depPackage);
+      auto depClasses = handle(dep->externClasses());
+      for (length_t j = 0; j < depClasses->length(); j++) {
+        depClasses->get(j)->setPackage(*depPackage);
+      }
+      auto depTraits = handle(dep->externTraits());
+      for (length_t j = 0; j < depTraits->length(); j++) {
+        depTraits->get(j)->setPackage(*depPackage);
+      }
     }
     Package::link(package_);
     isLinked_ = true;
@@ -1705,14 +1682,25 @@ Local<TraitTable> PackageLoader::readTraitTable() {
   auto capacity = recommendHashTableCapacity(traitCount);
   auto traitTable = TraitTable::create(heap(), capacity);
   for (length_t i = 0; i < traitCount; i++) {
-    DefnId traitId = readDefnIdVbns();
-    if ((traitId.packageId < 0 &&
-         traitId.packageId != kLocalPackageId &&
-         traitId.packageId != kBuiltinPackageId) ||
-        traitId.packageId >= static_cast<id_t>(package_->dependencies()->length()) ||
-        traitId.defnIndex < 0 ||
-        traitId.defnIndex >= package_->traits()->length()) {
-      throw Error("invalid trait id");
+    Local<Trait> trait;
+    auto packageId = readIdVbn();
+    auto defnIndex = readLengthVbn();
+    if (packageId == kBuiltinPackageId) {
+      trait = handle(vm()->roots()->getBuiltinTrait(indexToBuiltinId(defnIndex)));
+    } else {
+      Local<BlockArray<Trait>> traits;
+      if (packageId == kLocalPackageId) {
+        traits = handle(package()->traits());
+      } else if (0 <= packageId &&
+                 static_cast<length_t>(packageId) < package()->dependencies()->length()) {
+        traits = handle(package()->dependencies()->get(packageId)->linkedTraits());
+      } else {
+        throw Error("invalid package id");
+      }
+      if (defnIndex >= traits->length()) {
+        throw Error("invalid trait index");
+      }
+      trait = handle(traits->get(defnIndex));
     }
 
     auto methodCount = readLengthVbn();

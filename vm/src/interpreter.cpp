@@ -784,16 +784,14 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
         auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
         CHECK_NON_NULL(receiver);
-        DefnId traitId;
+        Trait* trait;
         if (traitIndex < 0) {
-          traitId.packageId = kBuiltinPackageId;
-          traitId.defnIndex = ~traitIndex;
+          trait = vm_->roots()->getBuiltinTrait(static_cast<BuiltinId>(traitIndex));
         } else {
-          traitId.packageId = kLocalPackageId;
-          traitId.defnIndex = traitIndex;
+          trait = function_->package()->getTrait(traitIndex);
         }
         Persistent<Function> callee(
-            receiver->clas()->traits()->find(traitId)->value->get(methodIndex));
+            receiver->clas()->traits()->find(trait)->value->get(methodIndex));
         if (callee->hasBuiltinId()) {
           handleBuiltin(callee->builtinId());
         } else if (callee->isNative()) {
@@ -812,9 +810,10 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
         auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
         CHECK_NON_NULL(receiver);
-        DefnId traitId{depIndex, traitIndex};
+        auto trait = function_->package()->dependencies()->get(depIndex)
+            ->linkedTraits()->get(traitIndex);
         Persistent<Function> callee(
-            receiver->clas()->traits()->find(traitId)->value->get(methodIndex));
+            receiver->clas()->traits()->find(trait)->value->get(methodIndex));
         if (callee->hasBuiltinId()) {
           handleBuiltin(callee->builtinId());
         } else if (callee->isNative()) {
