@@ -8,7 +8,7 @@ import std.MutableI8Array,
     MutableArrayList,
     utf8-to-string
 
-public abstract class InputStream
+public trait InputStream
   public abstract def close: unit
   public abstract def is-closed: boolean
   public abstract def read(buffer: MutableI8Array, offset: i32, count: i32): i32
