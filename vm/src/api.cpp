@@ -34,6 +34,7 @@
 #include "vm.h"
 
 using std::copy_n;
+using std::istream;
 using std::move;
 using std::string;
 using std::unique_ptr;
@@ -262,6 +263,20 @@ Package VM::loadPackageFromFile(const string& fileName,
   i::Persistent<i::Package> package;
   try {
     package = impl_->vm.loadPackage(fileName, nativeFunctionSearchOrder);
+  } catch (i::Error& error) {
+    throw Error(new Error::Impl(error.message()));
+  }
+
+  return wrap<Package, i::Package>(package);
+}
+
+
+Package VM::loadPackageFromStream(istream& stream,
+    const vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
+  checkNativeFunctionSearchOrder(nativeFunctionSearchOrder);
+  i::Persistent<i::Package> package;
+  try {
+    package = impl_->vm.loadPackage(stream, nativeFunctionSearchOrder);
   } catch (i::Error& error) {
     throw Error(new Error::Impl(error.message()));
   }

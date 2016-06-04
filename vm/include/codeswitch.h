@@ -7,6 +7,7 @@
 #ifndef codeswitch_h
 #define codeswitch_h
 
+#include <iostream>
 #include <memory>
 #include <string>
 #include <tuple>
@@ -146,6 +147,28 @@ class VM final {
    */
   Package loadPackageFromFile(const std::string& fileName,
       const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder
+          = std::vector<NativeFunctionSearch>());
+
+  /**
+   * Loads a package from a stream.
+   *
+   * The VM will load this package file directly and will not search the package directories.
+   *
+   * If the package has dependencies that haven't been loaded yet, they will be loaded
+   * automatically from the package directories. If any loaded package has an initialization
+   * function, it will be executed.
+   *
+   * @param stream the input stream the package will be loaded from. The VM may not load the
+   *     entire stream.
+   * @param nativeFunctionSearchOrder overrides the native function search order for this
+   *     package only. If this is empty, the default VM order is used. This does not affect
+   *     packages that this package depends on which get loaded at the same time.
+   * @return the loaded package. This will always be a valid reference.
+   * @throws Error if a problem was encountered when loading the package or one of
+   *   its dependencies.
+   */
+  Package loadPackageFromStream(std::istream& stream,
+      const std::vector<NativeFunctionSearch>& nativeFunctionSearchorder
           = std::vector<NativeFunctionSearch>());
 
  private:
