@@ -156,7 +156,7 @@ class Package(object):
             depExports = dep.package.ensureExports()
             dep.linkedGlobals = [depExports[g.name] for g in dep.externGlobals]
             assert all(isinstance(g, Global) for g in dep.linkedGlobals)
-            dep.linkedFunctions = [depExports[mangleFunctionName(f.name, self)]
+            dep.linkedFunctions = [depExports[mangleFunctionName(f, self)]
                                    for f in dep.externFunctions]
             assert all(isinstance(f, Function) for f in dep.linkedFunctions)
             dep.linkedClasses = [depExports[c.name] for c in dep.externClasses]
@@ -1191,6 +1191,11 @@ def mangleFunctionName(function, package):
         elif ty is ir_types.F64Type:
             return "D"
         elif isinstance(ty, ir_types.ClassType):
+            if isinstance(ty.clas, Class):
+                code = "C"
+            else:
+                assert isinstance(ty.clas, Trait)
+                code = "T"
             nameStr = str(ty.clas.name)
             if ty.clas.isForeign():
                 assert ty.clas.id.packageId.name is not None
@@ -1207,11 +1212,11 @@ def mangleFunctionName(function, package):
                 typeArgParts = [mangleType(a, variables) for a in ty.typeArguments]
                 typeArgStr = "[" + ",".join(typeArgParts) + "]"
             flagStr = "?" if ty.isNullable() else ""
-            return "C" + prefixStr + typeArgStr + flagStr
+            return code + prefixStr + typeArgStr + flagStr
         elif isinstance(ty, ir_types.VariableType):
             i = indexSame(variables, ty.typeParameter)
             assert i >= 0
-            return "T%d%s" % (i, "?" if ty.isNullable() else "")
+            return "V%d%s" % (i, "?" if ty.isNullable() else "")
         else:
             assert isinstance(ty, ir_types.ExistentialType)
             allVars = variables + list(ty.variables)
