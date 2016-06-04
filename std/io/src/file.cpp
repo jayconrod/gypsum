@@ -5,6 +5,7 @@
 // found in the LICENSE.txt file.
 
 #include <string>
+#include <cstdint>
 #include <sys/stat.h>
 #include <codeswitch.h>
 
@@ -47,4 +48,13 @@ bool std__io___File__is_directory(VM* vm, Object self) {
   struct stat st;
   int ret = stat(path.c_str(), &st);
   return ret == 0 && S_ISDIR(st.st_mode);
+}
+
+
+extern "C" __attribute__((visibility("default")))
+int64_t std__io___File__size(VM* vm, Object self) {
+  auto path = getPath(vm, self);
+  struct stat st;
+  int ret = stat(path.c_str(), &st);
+  return ret == 0 ? static_cast<int64_t>(st.st_size) : 0;
 }
