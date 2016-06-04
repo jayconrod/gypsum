@@ -118,25 +118,33 @@ Persistent<Package> VM::loadPackage(const Handle<PackageDependency>& dependency,
 
 Persistent<Package> VM::loadPackage(const string& fileName,
     const vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
+  const vector<NativeFunctionSearch>& effectiveNativeFunctionSearchOrder =
+      nativeFunctionSearchOrder.empty()
+      ? nativeFunctionSearchOrder_
+      : nativeFunctionSearchOrder;
   vector<Persistent<Package>> loadedPackages =
-      Package::load(this, fileName, nativeFunctionSearchOrder);
+      Package::load(this, fileName, effectiveNativeFunctionSearchOrder);
   ASSERT(!loadedPackages.empty());
-  for (auto i = loadedPackages.rbegin(), e = loadedPackages.rend(); i != e; i++) {
+  for (auto i = loadedPackages.begin(), e = loadedPackages.end(); i != e; i++) {
     initializePackage(*i);
   }
-  return loadedPackages.front();
+  return loadedPackages.back();
 }
 
 
 Persistent<Package> VM::loadPackage(istream& stream,
     const vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
+  const vector<NativeFunctionSearch>& effectiveNativeFunctionSearchOrder =
+      nativeFunctionSearchOrder.empty()
+      ? nativeFunctionSearchOrder_
+      : nativeFunctionSearchOrder;
   vector<Persistent<Package>> loadedPackages =
-      Package::load(this, stream, "" /* dirName */, nativeFunctionSearchOrder);
+      Package::load(this, stream, "" /* dirName */, effectiveNativeFunctionSearchOrder);
   ASSERT(!loadedPackages.empty());
-  for (auto i = loadedPackages.rbegin(), e = loadedPackages.rend(); i != e; i++) {
+  for (auto i = loadedPackages.begin(), e = loadedPackages.end(); i != e; i++) {
     initializePackage(*i);
   }
-  return loadedPackages.front();
+  return loadedPackages.back();
 }
 
 

@@ -72,6 +72,7 @@ struct LoadState {
 
   VM* vm;
   vector<Persistent<Package>> packages;
+  vector<Persistent<Package>> loadingPackages;
   const vector<NativeFunctionSearch>* nativeFunctionSearchOrder;
 };
 
@@ -150,7 +151,7 @@ class PackageLoader: public Loader {
                 const string& dirName)
       : Loader(loadState, stream, Package::create(loadState->vm->heap())),
         dirName_(dirName) {
-    loadState_->packages.push_back(package());
+    loadState_->loadingPackages.push_back(package());
   }
 
   Persistent<Package> load();
@@ -162,6 +163,8 @@ class PackageLoader: public Loader {
 
  private:
   static const u32 kMagic = 0x676b7073;
+
+  Persistent<Package> loadDependency(const Handle<PackageDependency>& dep);
 
   Local<PackageDependency> readDependencyHeader();
   void loadNativeLibrary();
@@ -591,7 +594,7 @@ void Package::link(const Handle<Package>& package) {
     {
       for (length_t j = 0; j < functionCount; j++) {
         auto externFunction = handle(externFunctions->get(j));
-        auto mangledName = mangleFunctionName(externFunction, package);
+        auto mangledName = mangleFunctionName(externFunction, handle(dependency->package()));
         Local<Block> linkedFunction(vm, depExports->getOrElse(*mangledName, nullptr));
         if (!linkedFunction || !isa<Function>(*linkedFunction)) {
           throw Error("link error");
@@ -1643,6 +1646,10 @@ Persistent<Package> PackageLoader::load() {
     throw Error("error reading package");
   }
 
+  loadState_->packages.push_back(package_);
+  ASSERT(*loadState_->loadingPackages.back() == *package_);
+  loadState_->loadingPackages.pop_back();
+
   return package_;
 }
 
@@ -1709,9 +1716,54 @@ Local<TraitTable> PackageLoader::readTraitTable() {
       auto method = readIdAndGetMethod();
       methods->set(j, *method);
     }
-    traitTable->add(TraitTableElement(traitId, *methods));
+    traitTable->add(TraitTableElement(*trait, *methods));
   }
   return traitTable;
+}
+
+
+Persistent<Package> PackageLoader::loadDependency(const Handle<PackageDependency>& dep) {
+  auto depName = handle(dep->name());
+  Persistent<Package> depPackage = vm()->findPackage(depName);
+  if (depPackage && !dep->isSatisfiedBy(*depPackage)) {
+    throw Error("package depends on loaded package with wrong version");
+  }
+  if (!depPackage) {
+    for (auto& loadingPackage : loadState_->loadingPackages) {
+      if (depName->equals(loadingPackage->name())) {
+        throw Error("circular package dependency");
+      }
+    }
+    for (auto& loadedPackage : loadState_->packages) {
+      if (depName->equals(loadedPackage->name())) {
+        depPackage = loadedPackage;
+        break;
+      }
+    }
+    if (depPackage && !dep->isSatisfiedBy(*depPackage)) {
+      throw Error("package depends on loaded package with wrong version");
+    }
+    if (!depPackage) {
+      auto fileName = vm()->searchForPackage(dep);
+      if (fileName.empty()) {
+        throw Error("missing package dependency");
+      }
+      auto dirName = pathDirName(fileName);
+      ifstream file(fileName.c_str(), ios::binary);
+      file.exceptions(ios::failbit | ios::badbit | ios::eofbit);
+      PackageLoader loader(loadState_, file, dirName);
+      depPackage = loader.load();
+      auto pos = file.tellg();
+      file.seekg(0, ios::end);
+      if (pos != file.tellg()) {
+        throw Error("garbage at end of package file");
+      }
+      if (!dep->isSatisfiedBy(*depPackage)) {
+        throw Error("invalid package dependency");
+      }
+    }
+  }
+  return depPackage;
 }
 
 
