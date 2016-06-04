@@ -32,27 +32,36 @@ with open(outFileName, "w") as outFile:
 #include <sstream>
 #include <string>
 #include <vector>
+#include <cstdint>
 #include "codeswitch.h"
 
-#include "function.h"
-#include "handle.h"
-#include "interpreter.h"
-#include "package.h"
-#include "stack.h"
-#include "utils.h"
-#include "vm.h"
-
-using codeswitch::NativeFunctionSearch;
+using codeswitch::Error;
+using codeswitch::VM;
 using codeswitch::VMOptions;
 using std::ios;
 using std::string;
 using std::stringstream;
 using std::vector;
 
-using namespace codeswitch::internal;
+
+static vector<string> split(const string& str, char delim) {{
+  vector<string> pieces;
+  size_t begin = 0;
+  auto end = str.find(delim);
+  while (end != string::npos) {{
+    auto len = end - begin;
+    pieces.push_back(str.substr(begin, len));
+    begin = end + 1;
+    end = str.find(delim, begin);
+  }}
+  auto len = str.size() - begin;
+  pieces.push_back(str.substr(begin, len));
+  return pieces;
+}}
+
 
 TEST({testName}) {{
-  u8 bytes[] = {{ {bytes} }};
+  uint8_t bytes[] = {{ {bytes} }};
   stringstream stream(string(reinterpret_cast<const char*>(bytes), sizeof(bytes)));
   stream.exceptions(ios::failbit | ios::badbit | ios::eofbit);
 
@@ -60,16 +69,13 @@ TEST({testName}) {{
   for (auto& path : split(getenv("CS_PACKAGE_PATH"), ':'))
     vmOptions.packageSearchPaths.push_back(path);
   VM vm(vmOptions);
-  auto package = vm.loadPackage(stream, vector<NativeFunctionSearch>());
-
-  Persistent<Stack> stack(vm.stack());
-  Interpreter interpreter(&vm, stack, vm.threadBindle());
-  Persistent<Function> entry(&vm, package->entryFunction());
+  auto package = vm.loadPackageFromStream(stream);
+  auto function = package.entryFunction();
+  if (!function)
+    throw TestException("main function not found");
   try {{
-    if (!entry)
-      throw TestException("main function not found");
-    interpreter.call(entry);
-  }} catch (Error exn) {{
+    function.call();
+  }} catch (Error& exn) {{
     // Test will throw an exception on failure.
     throw TestException(exn.message());
   }}
