@@ -1189,6 +1189,7 @@ class Value final {
   Value(const Object& o);
   Value(Object&& o);
 
+  void asUnit() const;
   bool asBoolean() const;
   int8_t asI8() const;
   int16_t asI16() const;

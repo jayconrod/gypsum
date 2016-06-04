@@ -101,7 +101,9 @@ static VM* refVM(const Reference& ref) {
 
 
 static Value valueFromRaw(i::Type* type, i::i64 bits) {
-  if (type->isBoolean()) {
+  if (type->isUnit()) {
+    return Value();
+  } else if (type->isBoolean()) {
     return Value(static_cast<bool>(bits));
   } else if (type->isI8()) {
     return Value(static_cast<int8_t>(bits));
@@ -1192,6 +1194,11 @@ const Object& Exception::get() const {
 }
 
 
+Value::Value()
+    : bits_(0),
+      tag_(i::Type::UNIT_TYPE) { }
+
+
 Value::Value(bool b)
     : bits_(static_cast<uint64_t>(b)),
       tag_(i::Type::BOOLEAN_TYPE) { }
@@ -1237,6 +1244,11 @@ Value::Value(Object&& o)
     : bits_(0),
       ref_(move(o)),
       tag_(i::Type::CLASS_TYPE) { }
+
+
+void Value::asUnit() const {
+  API_CHECK(tag_ == i::Type::UNIT_TYPE, "value is not unit");
+}
 
 
 bool Value::asBoolean() const {

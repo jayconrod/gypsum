@@ -442,6 +442,11 @@ bool Type::isObject() const {
 }
 
 
+bool Type::isUnit() const {
+  return form() == UNIT_TYPE;
+}
+
+
 bool Type::isBoolean() const {
   return form() == BOOLEAN_TYPE;
 }

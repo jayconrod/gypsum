@@ -161,6 +161,7 @@ class Type: public Object {
   Class* effectiveClass() const;
   bool isRootClass() const;
   bool isObject() const;
+  bool isUnit() const;
   bool isBoolean() const;
   bool isI8() const;
   bool isI16() const;
