@@ -133,9 +133,7 @@ class Package(object):
             if flags.PUBLIC in g.flags:
                 self.exports[g.name] = g
         for f in self.functions:
-            if flags.PUBLIC in f.flags and \
-               (flags.METHOD not in f.flags or \
-                len(frozenset([flags.STATIC, flags.CONSTRUCTOR]) & f.flags) > 0):
+            if flags.PUBLIC in f.flags:
                 self.exports[mangleFunctionName(f, self)] = f
         for c in self.classes:
             if flags.PUBLIC in c.flags:
