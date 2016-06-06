@@ -95,7 +95,7 @@ clean:
 
 
 # Include Makefiles from other projects.
-include $(VM_DIR)/Makefile
 include $(COMPILER_DIR)/Makefile
-include $(EXAMPLE_DIR)/Makefile
 include $(STD_DIR)/Makefile
+include $(VM_DIR)/Makefile
+include $(EXAMPLE_DIR)/Makefile

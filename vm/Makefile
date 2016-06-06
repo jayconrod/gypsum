@@ -88,7 +88,7 @@ build-vm: $(PROGRAMS)
 
 check: check-vm
 
-check-vm: $(TEST_DRIVER) $(TEST_PROGRAMS)
+check-vm: $(TEST_DRIVER) $(TEST_PROGRAMS) $(STD_PACKAGE) $(STD_IO_PACKAGE) $(STD_IO_NATIVE_LIB)
 	@CS_PACKAGE_PATH="$(OUT_DIR)" $(TEST_DRIVER)
 
 doc: doc-vm-api
@@ -152,6 +152,8 @@ $(OUT_DIR)/roots-builtins.o: $(LIB_SRC_DIR)/array.h $(GEN_DIR)/builtins.h $(LIB_
 $(LIB): $(LIB_OBJECTS) $(LIB_AS_OBJECTS)
 
 $(TEST_DRIVER): $(TEST_OBJECTS) $(TEST_DRIVER_OBJ) $(LIB)
+
+$(TEST_CSP_PACKAGES): $(STD_PACKAGE) $(STD_IO_PACKAGE)
 
 $(OBJECTS): $(filter %.h,$(GEN))
 ifeq ($(use_pch),yes)
