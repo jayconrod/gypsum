@@ -28,7 +28,7 @@ $(STD_IO_NATIVE_LIB): $(STD_IO_NATIVE_OBJECTS)
 $(STD_IO_NATIVE_OBJECTS):
 	@mkdir -p $(dir $@)
 	@$(CXX_DEPENDS) $(CXXFLAGS) $(DEFINES) $(INCLUDES) -MT $@ $(filter %.cpp,$^) >$(call deps,$(filter %.cpp,$^))
-	$(CXX_COMPILE) $(CXXFLAGS) $(DEFINES) $(INCLUDES) $(LIB_PREFIX_INCLUDE) $(filter %.cpp,$^) -o $@
+	$(CXX_COMPILE) $(CXXFLAGS) $(DEFINES) $(INCLUDES) $(filter %.cpp,$^) -o $@
 
 $(foreach src,$(filter %.cpp,$(STD_IO_NATIVE_SOURCES)),\
   $(eval $(call objects,$(src)): $(src) $(CS_HEADER)))
