@@ -27,6 +27,7 @@ class Name;
 class Object;
 class Package;
 class String;
+class Trait;
 class Value;
 
 /** Used to specify where native functions should be loaded from. */
@@ -345,6 +346,33 @@ class Package final : public Reference {
   Class findClass(const std::string& sourceName) const;
 
   /**
+   * Finds and returns a trait from the package.
+   *
+   * @param name the full name of the trait.
+   * @return the named trait from the package. If the package has no trait by this name,
+   *     an invalid reference is returned.
+   */
+  Trait findTrait(const Name& name) const;
+
+  /**
+   * Finds and returns a public trait from the package.
+   *
+   * @param sourceName the short name of the trait from source code.
+   * @return the named trait from the package. If the package has no trait by this name,
+   *     an invalid reference is returned.
+   */
+  Trait findTrait(const String& sourceName) const;
+
+  /**
+   * Finds and returns a public trait from the package.
+   *
+   * @param sourceName the short name of the trait from source code.
+   * @return the named trait from the package. If the package has no trait by this name,
+   *     an invalid reference is returned.
+   */
+  Trait findTrait(const std::string& sourceName) const;
+
+  /**
    * Looks up and calls a function by name. The function signature used for the lookup is
    * determined automatically from the arguments.
    *
@@ -584,6 +612,89 @@ class Class final : public Reference {
 };
 
 
+/** A trait definition. */
+class Trait final : public Reference {
+ public:
+  Trait() = default;
+  explicit Trait(Impl* impl);
+
+  /**
+   * Finds and returns a method of the trait.
+   *
+   * @param name the full name of the method.
+   * @param signature the type signature of the method. See
+   *     {@link md_typesignatures function type signatures} for details.
+   * @return the named method from the trait. If the trait has no method by this name,
+   *     an invalid reference is returned.
+   */
+  Function findMethod(const Name& name, const std::string& signature) const;
+
+  /**
+   * Finds and returns a method of the trait.
+   *
+   * @param sourceName the short name of the method from source code.
+   * @param signature the type signature of the method. See
+   *     {@link md_typesignatures function type signatures} for details.
+   * @return the named method from the trait. If the trait has no method by this name,
+   *     an invalid reference is returned.
+   */
+  Function findMethod(const String& sourceName, const std::string& signature) const;
+
+  /**
+   * Finds and returns a method of the trait.
+   *
+   * @param sourceName the short name of the method from source code.
+   * @param signature the type signature of the method. See
+   *     {@link md_typesignatures function type signatures} for details.
+   * @return the named method from the trait. If the trait has no method by this name,
+   *     an invalid reference is returned.
+   */
+  Function findMethod(const std::string& sourceName, const std::string& signature) const;
+
+  /**
+   * Looks up and calls a method of the trait. The type signature of the method is determined
+   * automatically from the arguments.
+   *
+   * @param name the full name of the method.
+   * @param args the arguments to pass to the method, including the receiver if this is a
+   *     non-static method.
+   * @return the value returned by the method.
+   * @throws Error if a method cannot be found with a type signature matching the arguments or
+   *     if the method throws an exception.
+   */
+  template <class... Args>
+  Value callMethod(const Name& name, Args&&... args);
+
+  /**
+   * Looks up and calls a method of the trait. The type signature of the method is determined
+   * automatically from the arguments.
+   *
+   * @param sourceName the short name of the method from source code.
+   * @param args the arguments to pass to the method, including the receiver if this is a
+   *     non-static method.
+   * @return the value returned by the method.
+   * @throws Error if a method cannot be found with a type signature matching the arguments or
+   *     if the method throws an exception.
+   */
+  template <class... Args>
+  Value callMethod(const String& sourceName, Args&&... args);
+
+  /**
+   * Looks up and calls a method of the trait. The type signature of the method is determined
+   * automatically from the arguments.
+   *
+   * @param sourceName the short name of the method from source code.
+   * @param args the arguments to pass to the method, including the receiver if this is a
+   *     non-static method.
+   * @return the value returned by the method.
+   * @throws Error if a method cannot be found with a type signature matching the arguments or
+   *     if the method throws an exception.
+   */
+  template <class... Args>
+  Value callMethod(const std::string& sourceName, Args&&... args);
+};
+
+
 /**
  * Represents a field within an object. Can be passed to {@link Object} methods to load
  * and store values in those field.
@@ -692,6 +803,33 @@ class CallBuilder final {
    * @param sourceName the short name of the method from source code.
    */
   CallBuilder(const Class& clas, const std::string& sourceName);
+
+  /**
+   * Constructs a builder for a method call. The method will be looked up after the arguments
+   * are specified.
+   *
+   * @param trait a trait of the receiver, used to find the method.
+   * @param name the full name of the method.
+   */
+  CallBuilder(const Trait& trait, const Name& name);
+
+  /**
+   * Constructs a builder for a method call. The method will be looked up after the arguments
+   * are specified.
+   *
+   * @param trait a trait of the receiver, used to find the method.
+   * @param sourceName the short name of the method from source code.
+   */
+  CallBuilder(const Trait& trait, const String& sourceName);
+
+  /**
+   * Constructs a builder for a method call. The method will be looked up after the arguments
+   * are specified.
+   *
+   * @param trait a trait of the receiver, used to find the method.
+   * @param sourceName the short name of the method from source code.
+   */
+  CallBuilder(const Trait& trait, const std::string& sourceName);
 
   ~CallBuilder();
 
@@ -805,6 +943,9 @@ class Object: public Reference {
 
   /** Returns whether this object is an instance of the given class. */
   bool isInstanceOf(const Class& clas) const;
+
+  /** Returns whether this object is an instance of the given trait. */
+  bool isInstanceOf(const Trait& trait) const;
 
   /** Returns the class this object is an instance of. */
   Class clas() const;
@@ -1261,6 +1402,24 @@ Value Class::callMethod(const String& sourceName, Args&&... args) {
 
 template <class... Args>
 Value Class::callMethod(const std::string& sourceName, Args&&... args) {
+  return CallBuilder(*this, sourceName).args(args...).call();
+}
+
+
+template <class... Args>
+Value Trait::callMethod(const Name& name, Args&&... args) {
+  return CallBuilder(*this, name).args(args...).call();
+}
+
+
+template <class... Args>
+Value Trait::callMethod(const String& sourceName, Args&&... args) {
+  return CallBuilder(*this, sourceName).args(args...).call();
+}
+
+
+template <class... Args>
+Value Trait::callMethod(const std::string& sourceName, Args&&... args) {
   return CallBuilder(*this, sourceName).args(args...).call();
 }
 

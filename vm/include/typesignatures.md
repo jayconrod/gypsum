@@ -35,7 +35,7 @@ functions:
     // Type signature "(Cstd:Option[C::String])"
     def f(opt: Option[String]): unit
 
-    // Type signature: "[s<C::Object>C::Nothing,s<C::Object>C::Nothing](T0,T1)"
+    // Type signature: "[s<C::Object>C::Nothing,s<C::Object>C::Nothing](V0,V1)"
     def f[static S, static T](x: S, y: T): unit
 
 ### Type parameters and parameter types
@@ -81,10 +81,11 @@ Type        | Code
 `f32`       | F
 `f64`       | D
 class       | C
-variable    | T
+trait       | T
+variable    | V
 existential | E
 
-If the type is a primitive (not a class, variable, or existential)
+If the type is a primitive (not a class, trait, variable, or existential)
 then, the code describes the entire type. Otherwise, more information
 follows the type.
 
@@ -124,13 +125,13 @@ everything else.
     def f(s: String?): unit
 
 Variable types (those that refer to variables introduced by type
-parameters or existential types) are encoded by a 'T' followed by a
+parameters or existential types) are encoded by a 'V' followed by a
 zero-based index. So a variable type referring to the first type
-parameter is `T0`, the second type paramter is `T1`, and so on. As
+parameter is `V0`, the second type paramter is `V1`, and so on. As
 with class types, a nullable type is written with a question mark
 after it.
 
-    // Type signature: "[s<C::Object>C::Nothing](T0?)"
+    // Type signature: "[s<C::Object>C::Nothing](V0?)"
     def f[static X](x: X?): unit
 
 Existential types comprise a set of type variables and an inner
