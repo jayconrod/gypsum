@@ -137,7 +137,7 @@ class TestIr(utils_test.TestCaseWithDefinitions):
 
         f = package.addFunction(ir.Name(["quux"]), typeParameters=[X, Y],
                                 parameterTypes=[LocalType, ForeignType, BuiltinType])
-        expected = "4quux[s<C::6Object>C::7Nothing,<C::6Object>C::7Nothing](C:11local.Local[T0,T1?],C11foo.bar.baz:15foreign.Foreign[T1?,T0]?,C::6Object)"
+        expected = "4quux[s<C::6Object>C::7Nothing,<C::6Object>C::7Nothing](C:11local.Local[V0,V1?],C11foo.bar.baz:15foreign.Foreign[V1?,V0]?,C::6Object)"
         self.assertEquals(expected, ir.mangleFunctionName(f, package))
 
     def testMangleFunctionNameExistential(self):
@@ -156,7 +156,7 @@ class TestIr(utils_test.TestCaseWithDefinitions):
         eXType = ExistentialType((X,), ClassType(C, (PType, XType)))
         f = package.addFunction(ir.Name(["foo"]), typeParameters=[P],
                                 parameterTypes=[eXType])
-        expected = "3foo[<C::6Object>C::7Nothing](E[<C::6Object>C::7Nothing]C:1C[T0,T1])"
+        expected = "3foo[<C::6Object>C::7Nothing](E[<C::6Object>C::7Nothing]C:1C[V0,V1])"
         self.assertEquals(expected, ir.mangleFunctionName(f, package))
 
 
