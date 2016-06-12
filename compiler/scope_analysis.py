@@ -327,7 +327,9 @@ class NameInfo(object):
 
     def isOverloadable(self, otherDefnInfo):
         return isinstance(otherDefnInfo.irDefn, ir.Function) and \
-               isinstance(self.overloads[0].irDefn, ir.Function)
+               isinstance(self.overloads[0].irDefn, ir.Function) and \
+               not NATIVE in otherDefnInfo.irDefn.flags and \
+               not NATIVE in self.overloads[0].irDefn.flags
 
     def isOverloaded(self):
         return len(self.overloads) > 1

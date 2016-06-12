@@ -316,6 +316,11 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
     def testNativeFunctionMustNotHaveBody(self):
         self.assertRaises(ScopeException, self.analyzeFromSource, "native def f = 12")
 
+    def testNativeFunctionCannotOverload(self):
+        source = "native def f(x: i32): unit\n" + \
+                 "native def f(x: i64): unit"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
     def testFunctionMayNotBeAbstract(self):
         self.assertRaises(ScopeException, self.analyzeFromSource, "abstract def f: i64 = 12")
         self.assertRaises(ScopeException, self.analyzeFromSource, "abstract def f: i64")
