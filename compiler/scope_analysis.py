@@ -1299,6 +1299,7 @@ class FunctionScope(Scope):
         if closureInfo.irClosureClass:
             return
         irDefn = self.getIrDefn()
+        assert NATIVE not in irDefn.flags
 
         # Create a closure class to hold this method and its contexts.
         implicitTypeParams = self.getImplicitTypeParameters()
