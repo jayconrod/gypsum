@@ -1606,3 +1606,8 @@
   returnType: String
   parameterTypes: []
   flags: [PUBLIC]
+- name: gc
+  id: BUILTIN_GC_FUNCTION_ID
+  returnType: unit
+  parameterTypes: []
+  flags: [PUBLIC]
