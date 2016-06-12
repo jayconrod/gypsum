@@ -20,6 +20,7 @@
 #include "field.h"
 #include "flags.h"
 #include "function.h"
+#include "gc.h"
 #include "global.h"
 #include "handle.h"
 #include "name.h"
@@ -1145,6 +1146,16 @@ void Interpreter::handleBuiltin(BuiltinId id) {
       break;
     }
 
+    case BUILTIN_GC_FUNCTION_ID: {
+      {
+        GCSafeScope gcSafe(this);
+        GC gc(vm_->heap());
+        gc.collectGarbage();
+      }
+      push<word_t>(0);
+      break;
+    }
+
     default:
       UNIMPLEMENTED();
   }
@@ -1193,7 +1204,7 @@ void Interpreter::enter(const Handle<Function>& callee) {
 
   stack_->align(kWordSize);
   stack_->push(static_cast<word_t>(pcOffset_));
-  stack_->push(function_ ? *function_ : nullptr);
+  stack_->push(*callee);
   stack_->push(stack_->fp());
   stack_->setFp(stack_->sp());
   stack_->setSp(stack_->sp() - callee->localsSize());
@@ -1207,11 +1218,10 @@ void Interpreter::leave() {
   auto parametersSize = function_->parametersSize();
   auto fp = stack_->fp();
   pcOffset_ = toLength(mem<word_t>(fp, kCallerPcOffsetOffset));
-  auto caller = mem<Function*>(fp, kFunctionOffset);
-  function_ = caller ? Persistent<Function>(caller) : Persistent<Function>();
   stack_->setSp(fp + kFrameControlSize + parametersSize);
   fp = mem<Address>(fp);
   stack_->setFp(fp);
+  function_.set(mem<Function*>(fp, kFunctionOffset));
 }
 
 
@@ -1226,15 +1236,10 @@ void Interpreter::doThrow(Block* exception) {
     Handler handler = handlers_.back();
     handlers_.pop_back();
     Address fp = handler.fpOffset + stack_->base();
-    stack_->push(static_cast<word_t>(pcOffset_));
-    for (auto frame : **stack_) {
-      if (frame.fp() == fp)
-        break;
-      function_.set(frame.function());
-    }
     stack_->setFramePointerOffset(handler.fpOffset);
     stack_->setStackPointerOffset(handler.spOffset);
     pcOffset_ = handler.pcOffset;
+    function_.set(mem<Function*>(fp, kFunctionOffset));
     push(exception);
   }
   try {

@@ -1184,7 +1184,8 @@ word_t StackPointerMap::searchLocalsRegion(length_t pc) {
   word_t begin = 0;
   word_t end = entryCount();
   word_t middle = begin + (end - begin) / 2;
-  ASSERT(end != 0);
+  if (end == 0)
+    return kNotSet;
   while (pc != pcOffset(middle) && middle < end) {
     if (pc < pcOffset(middle))
       end = middle;
