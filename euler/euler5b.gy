@@ -1,0 +1,13 @@
+def is-divisible(n: i64, max-factor: i64) =
+  var i = 2
+  while (i <= max-factor)
+    if (n % i != 0)
+      return false
+    i += 1
+  true
+
+def main =
+  var n = 1
+  while (!is-divisible(n, 20))
+    n += 1
+  print(n.to-string + "\n")

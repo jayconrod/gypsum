@@ -1,0 +1,11 @@
+def main =
+  var n = 600851475143
+  var factor = 2
+  var largest-factor = 0
+  while (n > 1)
+    if (n % factor == 0)
+      n /= factor
+      largest-factor = factor
+    else
+      factor += 1
+  print(factor.to-string + "\n")

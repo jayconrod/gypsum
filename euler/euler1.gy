@@ -1,0 +1,9 @@
+def main =
+  let n = 1000
+  var i = 1
+  var sum = 0
+  while (i < n)
+    if (i % 3 == 0 || i % 5 == 0)
+      sum += i
+    i += 1
+  print(sum.to-string + "\n")

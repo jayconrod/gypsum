@@ -1,0 +1,21 @@
+def is-palindrome(n: i64) =
+  let chars = n.to-string
+  var i = 0i32
+  while (i < chars.length / 2i32)
+    if (chars.get(i) != chars.get(chars.length - i - 1i32))
+      return false
+    i += 1i32
+  true
+
+def main =
+  var a = 100
+  var largest-product = 0
+  while (a < 1000)
+    var b = a
+    while (b < 1000)
+      let product = a * b
+      if (is-palindrome(product) && product > largest-product)
+        largest-product = product
+      b += 1
+    a += 1
+  print(largest-product.to-string + "\n")

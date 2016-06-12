@@ -1,0 +1,20 @@
+class Fib
+  private var a = 0
+  private var b = 1
+
+  def next =
+    let value = a
+    b = a + b
+    a = b - a
+    value
+
+def main =
+  let limit = 4000000
+  let fib = Fib()
+  var n = fib.next
+  var sum = 0
+  while (n < limit)
+    if (n % 2 == 0)
+      sum += n
+    n = fib.next
+  print(sum.to-string + "\n")
