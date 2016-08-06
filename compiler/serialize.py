@@ -527,6 +527,10 @@ class Deserializer(object):
                 instructionsBuffer = self.inFile.read(instructionsSize)
                 blockOffsets = self.readList(self.readVbn)
                 function.blocks = self.decodeInstructions(instructionsBuffer, blockOffsets)
+        if flags.METHOD in function.flags and \
+           flags.CONSTRUCTOR not in function.flags and \
+           flags.STATIC not in function.flags:
+            function.overridenBy = {}
 
     def decodeInstructions(self, instructionsBuffer, blockOffsets):
         # TODO: implement if we ever actually need this.

@@ -531,8 +531,8 @@ class Function(ParameterizedDefn):
             non-static methods, this could be derived from the receiver type, but there's
             no easy way to get it for static methods.
         overrides ([Function]?): methods in inherited traits or a base class that this
-            method overrides. This should be set if and only if the `OVERRIDE` flag is set.
-            It must not be empty. This is only valid for non-static, non-constructor methods.
+            method overrides. This must be set if the `METHOD` and `OVERRIDE` flags are set and
+            the `STATIC`, `CONSTRUCTOR`, and `EXTERN` flags are not set. It must not be empty.
         overridenBy ({DefnId, Function}?): a map from class and trait ids to methods. Each
             entry describes an overriding function in a subclass or subtrait. This should only
             be set for non-constructor, non-static methods.
@@ -1118,10 +1118,33 @@ class Field(IrDefinition):
 
 # Miscellaneous functions for dealing with arguments and parameters.
 def getExplicitTypeParameterCount(irDefn):
-    if hasattr(irDefn, "astDefn") and \
-       hasattr(irDefn.astDefn, "typeParameters"):
-        return len(irDefn.astDefn.typeParameters)
+    """Returns the number of type parameters declared by this definition.
+
+    A definition's type parameter list include parameters from both the enclosing definitions
+    and the definition itself. For example, a method's type parameter list includes parameters
+    from its defining class. "Implicit" type parameters come from an enclosing definition and
+    are at the beginning of the list; "explicit" type parameters come from the definition
+    itself and are at the end of the list.
+
+    Arguments:
+        irDefn (ParameterizedDefn): a definition with type parameters.
+
+    Returns:
+        (int): the number of type parameters declared by this definition.
+    """
+    if isinstance(irDefn, Function):
+        if irDefn.definingClass is not None:
+            return len(irDefn.typeParameters) - len(irDefn.definingClass.typeParameters)
+        elif irDefn.astDefn is not None:
+            # Local functions may still have implicit type parameters. We peek at the AST,
+            # to count the explicit type parameters, which is kind of a hack. Works as long
+            # as we can't import local functions from other packages, since we wouldn't
+            # have an AST.
+            return len(irDefn.astDefn.typeParameters)
+        else:
+            return len(irDefn.typeParameters)
     else:
+        # TODO: implement for classes and traits after nesting is supported.
         return len(irDefn.typeParameters)
 
 

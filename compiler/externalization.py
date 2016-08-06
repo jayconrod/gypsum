@@ -32,11 +32,13 @@ def externalize(info):
         elif isinstance(defn, ir.IrTopDefn):
             externalizer.externalizeDefn(defn)
 
-    for ty in info.typeInfo.itervalues():
-        externalizer.externalizeType(ty)
+    def externalizeInheritedMethods(objDefn):
+        each(externalizer.externalizeDefn, objDefn.methods)
+    each(externalizeInheritedMethods, info.package.classes)
+    each(externalizeInheritedMethods, info.package.traits)
 
-    for defn in info.stdExternInfo.itervalues():
-        externalizer.externalizeDefn(defn)
+    each(externalizer.externalizeType, info.typeInfo.itervalues())
+    each(externalizer.externalizeDefn, info.stdExternInfo.itervalues())
 
 
 class Externalizer(object):
