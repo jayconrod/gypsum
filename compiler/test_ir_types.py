@@ -181,6 +181,57 @@ class TestIrTypes(TestCaseWithDefinitions):
         Tty = VariableType(T)
         self.assertTrue(getNothingClassType().isSubtypeOf(Tty))
 
+    def testSubtypeRightExistential(self):
+        # class C[T]
+        # C[Object] <: forsome [X] C[X]
+        T = self.makeTypeParameter("T",
+                                   upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        C = self.makeClass("C", typeParameters=[T], supertypes=[getRootClassType()])
+        Cty = ClassType(C, (getRootClassType(),))
+        X = self.makeTypeParameter("X",
+                                   upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        eXty = ExistentialType([X], ClassType(C, (VariableType(X),)))
+        self.assertTrue(Cty.isSubtypeOf(eXty))
+
+    def testSubtypeRightExistentialContradiction(self):
+        # class A[T]
+        # class B[U, V]
+        # B[A[String], A[Object]] </: forsome [X <: forsome [Y] A[Y]] B[X, X]
+        # At the time this was written, existentials could not be used as bounds. That
+        # restriction might be relaxed in the future, and the implementation does not
+        # completely rely on it. So it's nice to test that implementation.
+        T = self.makeTypeParameter("T", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        A = self.makeClass("A", typeParameters=[T], supertypes=[getRootClassType()])
+        U = self.makeTypeParameter("U", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        V = self.makeTypeParameter("V", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        B = self.makeClass("B", typeParameters=[U, V], supertypes=[getRootClassType()])
+        Y = self.makeTypeParameter("Y", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        X = self.makeTypeParameter("X", upperBound=ExistentialType([Y], ClassType(A, (VariableType(Y),))),
+                                   lowerBound=getNothingClassType())
+        leftType = ClassType(B, (ClassType(A, (getStringType(),)), ClassType(A, (getRootClassType(),))))
+        rightType = ExistentialType([X], ClassType(B, (VariableType(X), VariableType(X))))
+        self.assertFalse(leftType.isSubtypeOf(rightType))
+
+    def testSubtypeRightExistentialFailUpperBound(self):
+        X = self.makeTypeParameter("X", upperBound=getStringType(),
+                                   lowerBound=getNothingClassType())
+        eXType = ExistentialType([X], VariableType(X))
+        self.assertTrue(getStringType().isSubtypeOf(eXType))
+        self.assertFalse(getRootClassType().isSubtypeOf(eXType))
+
+    def testSubtypeRightExistentialFailLowerBound(self):
+        X = self.makeTypeParameter("X", upperBound=getRootClassType(),
+                                   lowerBound=getRootClassType())
+        eXType = ExistentialType([X], VariableType(X))
+        self.assertFalse(getStringType().isSubtypeOf(eXType))
+        self.assertTrue(getRootClassType().isSubtypeOf(eXType))
+
     def testEquivalentExistentials(self):
         X = self.makeTypeParameter("X", upperBound=getRootClassType(),
                                    lowerBound=getNothingClassType())
@@ -190,6 +241,8 @@ class TestIrTypes(TestCaseWithDefinitions):
         eY = ExistentialType((Y,), VariableType(Y))
         self.assertTrue(eX.isSubtypeOf(eY))
         self.assertTrue(eY.isSubtypeOf(eX))
+        self.assertTrue(eX.isEquivalent(eY))
+        self.assertTrue(eY.isEquivalent(eX))
 
     def testJointExistentials(self):
         S = self.makeTypeParameter("S", upperBound=getRootClassType(),

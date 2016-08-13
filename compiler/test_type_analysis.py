@@ -1520,6 +1520,20 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(ClassType(barClass, ()), info.getType(astCall.arguments[0]))
         self.assertEquals(ClassType(fooClass, ()), info.getType(astCall))
 
+    def testCallWithExistentialSubtype(self):
+        source = "class Box[static T]\n" + \
+                 "def f(box: forsome [X] Box[X]) = {}\n" + \
+                 "def g = f(Box[Object]())"
+        info = self.analyzeFromSource(source)
+        Box = info.package.findClass(name="Box")
+        X = info.package.findTypeParameter(name=Name(["f", EXISTENTIAL_SUFFIX, "X"]))
+        f = info.package.findFunction(name="f")
+        self.assertEquals(ExistentialType([X], ClassType(Box, (VariableType(X),))),
+                          f.parameterTypes[0])
+        argType = info.getType(info.ast.modules[0].definitions[2].body.arguments[0])
+        self.assertEquals(ClassType(Box, (getRootClassType(),)), argType)
+        self.assertTrue(argType.isSubtypeOf(f.parameterTypes[0]))
+
     def testFunctionReturnBodyWithSubtype(self):
         source = "class Foo\n" + \
                  "class Bar <: Foo\n" + \

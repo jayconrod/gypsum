@@ -43,11 +43,14 @@ class Type(data.Data):
         return ty
 
     def isSubtypeOf(self, other):
+        return self.isSubtypeOf_(other, SubstitutionEnvironment())
+
+    def isSubtypeOf_(self, other, subEnv):
         left = self
         right = other
 
         # Basic rules that apply to all types.
-        if left.isEquivalent(right):
+        if left.isEquivalent_(right, subEnv):
             return True
         if left is AnyType or right is NoType:
             return False
@@ -60,10 +63,13 @@ class Type(data.Data):
         assert left.isObject() and right.isObject()
 
         # Existential types.
-        if isinstance(left, ExistentialType) or isinstance(right, ExistentialType):
-            leftInnerType = left.ty if isinstance(left, ExistentialType) else left
-            rightInnerType = right.ty if isinstance(right, ExistentialType) else right
-            return leftInnerType.isSubtypeOf(rightInnerType)
+        if isinstance(right, ExistentialType):
+            utils.each(subEnv.addVariable, right.variables)
+            return left.isSubtypeOf_(right.ty, subEnv)
+        if subEnv.isExistentialVar(right):
+            return subEnv.trySubstitute(left, right)
+        if isinstance(left, ExistentialType):
+            return left.ty.isSubtypeOf_(right, subEnv)
 
         # A nullable type cannot be a subtype of a non-nullable type. Note that existential
         # types cannot be nullable (but their inner types can).
@@ -107,9 +113,9 @@ class Type(data.Data):
         for lty, rty, tp in \
                 zip(left.typeArguments, right.typeArguments, left.clas.typeParameters):
             variance = tp.variance()
-            if (variance is flags.COVARIANT and not lty.isSubtypeOf(rty)) or \
-               (variance is flags.CONTRAVARIANT and not rty.isSubtypeOf(lty)) or \
-               (variance is INVARIANT and not lty.isEquivalent(rty)):
+            if (variance is flags.COVARIANT and not lty.isSubtypeOf_(rty, subEnv)) or \
+               (variance is flags.CONTRAVARIANT and not rty.isSubtypeOf_(lty, subEnv)) or \
+               (variance is INVARIANT and not lty.isEquivalent_(rty, subEnv)):
                 return False
         return True
 
@@ -134,6 +140,26 @@ class Type(data.Data):
 
         This is a slightly more relaxed relation than == because two types may have different
         forms but contain the same values."""
+        return self.isEquivalent_(other, SubstitutionEnvironment())
+
+    def isEquivalent_(self, other, subEnv):
+        if subEnv.isExistentialVar(self):
+            return subEnv.trySubstitute(other, self)
+        if subEnv.isExistentialVar(other):
+            return subEnv.trySubstitute(self, other)
+        if isinstance(self, ExistentialType):
+            if not isinstance(other, ExistentialType) or \
+               len(self.variables) != len(other.variables):
+                return False
+            if all(s.id is t.id for s, t in zip(self.variables, other.variables)) and \
+               self.ty.isEquivalent(other.ty):
+                return True
+            if any(not s.isEquivalent(t) for s, t in zip(self.variables, other.variables)):
+                return False
+            subArgs = [VariableType(v) for v in self.variables]
+            otherSubType = other.ty.substitute(other.variables, subArgs)
+            return self.ty.isEquivalent_(otherSubType, subEnv)
+
         return self == other
 
     def lub(self, other):
@@ -595,6 +621,7 @@ class VariableType(ObjectType):
                if self.isNullable() and not lowerBound.isNullable() \
                else lowerBound
 
+
 class ExistentialType(ObjectType):
     propertyNames = Type.propertyNames + ("variables", "ty")
     width = bytecode.WORD
@@ -741,6 +768,53 @@ def changeVariance(old, new):
         else:
             assert new is INVARIANT
             return INVARIANT
+
+
+class SubstitutionEnvironment(object):
+    """Provides an environment for existential substitution in isSubtypeOf, isEquivalent,
+    and lub.
+
+    In isSubtypeOf, if the right-side type (the alleged supertype) is an existential type,
+    the left-side type is a subtype if there is some type instance of that existential type
+    that is a supertype of the left-side type. A type instance of an existential type is any
+    legal substitution.
+
+    This environment keeps track of what substitutions have been made and ensures later
+    substitutions don't contradict earlier substitutions.
+
+    Attributes:
+        substitutionTypes ({DefnId: Type?}): a map of substitutions. Keys are `DefnId`s from
+            existential type parameters. Values are `None` for type parameters that have not
+            been referenced yet. Otherwise, values are the types most recently substituted.
+            These types move up the lattice monotonically (we take the lub for each
+            substitution of the same variable).
+    """
+
+    def __init__(self):
+        self.substitutionTypes = {}
+
+    def addVariable(self, var):
+        if var.id not in self.substitutionTypes:
+            self.substitutionTypes[var.id] = None
+
+    def isExistentialVar(self, vty):
+        return isinstance(vty, VariableType) and vty.typeParameter.id in self.substitutionTypes
+
+    def trySubstitute(self, ty, vty):
+        assert self.isExistentialVar(vty)
+        tp = vty.typeParameter
+        if self.substitutionTypes[tp.id] is None:
+            if not tp.lowerBound.isSubtypeOf_(ty, self):
+                return False
+            combinedType = ty
+        else:
+            combinedType = self.substitutionTypes[tp.id].lub(ty)
+        if combinedType.isSubtypeOf_(tp.upperBound, self):
+            self.substitutionTypes[tp.id] = combinedType
+            return True
+        else:
+            return False
+
 
 __all__ = ["BIVARIANT","INVARIANT", "UnitType", "BooleanType", "I8Type",
            "I16Type", "I32Type", "I64Type", "F32Type", "F64Type",
