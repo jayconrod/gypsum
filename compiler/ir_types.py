@@ -5,6 +5,7 @@
 
 
 import copy
+import StringIO
 
 import builtins
 import bytecode
@@ -50,7 +51,7 @@ class Type(data.Data):
         right = other
 
         # Basic rules that apply to all types.
-        if left.isEquivalent_(right, subEnv):
+        if left.isEquivalent(right):
             return True
         if left is AnyType or right is NoType:
             return False
@@ -112,11 +113,19 @@ class Type(data.Data):
         # Compare type arguments, based on variance.
         for lty, rty, tp in \
                 zip(left.typeArguments, right.typeArguments, left.clas.typeParameters):
+            # This could be more compact, but it's better for debugging to have the cases split.
             variance = tp.variance()
-            if (variance is flags.COVARIANT and not lty.isSubtypeOf_(rty, subEnv)) or \
-               (variance is flags.CONTRAVARIANT and not rty.isSubtypeOf_(lty, subEnv)) or \
-               (variance is INVARIANT and not lty.isEquivalent_(rty, subEnv)):
-                return False
+            if variance is flags.COVARIANT:
+                if not lty.isSubtypeOf_(rty, subEnv.copy()):
+                    return False
+            elif variance is flags.CONTRAVARIANT:
+                if not rty.isSubtypeOf_(lty, subEnv.copy()):
+                    return False
+            else:
+                assert variance is INVARIANT
+                if not (subEnv.isExistentialVar(rty) and subEnv.trySubstitute(lty, rty)) and \
+                   not lty.isEquivalent(rty):
+                    return False
         return True
 
     def isDisjoint(self, other):
@@ -140,13 +149,6 @@ class Type(data.Data):
 
         This is a slightly more relaxed relation than == because two types may have different
         forms but contain the same values."""
-        return self.isEquivalent_(other, SubstitutionEnvironment())
-
-    def isEquivalent_(self, other, subEnv):
-        if subEnv.isExistentialVar(self):
-            return subEnv.trySubstitute(other, self)
-        if subEnv.isExistentialVar(other):
-            return subEnv.trySubstitute(self, other)
         if isinstance(self, ExistentialType):
             if not isinstance(other, ExistentialType) or \
                len(self.variables) != len(other.variables):
@@ -158,7 +160,7 @@ class Type(data.Data):
                 return False
             subArgs = [VariableType(v) for v in self.variables]
             otherSubType = other.ty.substitute(other.variables, subArgs)
-            return self.ty.isEquivalent_(otherSubType, subEnv)
+            return self.ty.isEquivalent(otherSubType)
 
         return self == other
 
@@ -166,9 +168,9 @@ class Type(data.Data):
         """Computes the least upper bound of two types on the type lattice. Note that since
         AnyType is not a valid type, this function returns AnyType to indicate that the
         two types couldn't be combined."""
-        return self.lubRec_(other, [])
+        return self.lubRec_(other, [], SubstitutionEnvironment())
 
-    def lubRec_(self, other, stack):
+    def lubRec_(self, other, stack, subEnv):
         # We need to be able to detect infinite recursion in order to ensure termination.
         # Consider the case below:
         #   class A[+T]
@@ -205,14 +207,22 @@ class Type(data.Data):
         if isinstance(left, ExistentialType) or isinstance(right, ExistentialType):
             stack.append((left, right))
 
-            # At this point, we consider both types to be existential. Note that any type
-            # can be trivially closed with an existential. For example:
-            #   String == forsome [X] String
+            # Add the type parameters from both existential types to the substitution
+            # environment. These will be treated a little differently than normal
+            # type parameters.
+            if isinstance(left, ExistentialType):
+                leftInnerType = left.ty
+                utils.each(subEnv.addVariable, left.variables)
+            else:
+                leftInnerType = left
+            if isinstance(right, ExistentialType):
+                rightInnerType = right.ty
+                utils.each(subEnv.addVariable, right.variables)
+            else:
+                rightInnerType = right
 
-            # We get the lub of the inner types.
-            leftInnerType = left.ty if isinstance(left, ExistentialType) else left
-            rightInnerType = right.ty if isinstance(right, ExistentialType) else right
-            innerLubType = leftInnerType.lubRec_(rightInnerType, stack)
+            # Find the lub of the inner types.
+            innerLubType = leftInnerType.lubRec_(rightInnerType, stack, subEnv)
             stack.pop()
 
             # Find which variables are still being used in the lub. If some of the variables
@@ -223,9 +233,7 @@ class Type(data.Data):
             # Technically, the order shouldn't matter, but it's infeasible to test whether two
             # types are equivalent with arbitrary ordered variables, since they cannot easily
             # be sorted.
-            leftVariables = left.variables if isinstance(left, ExistentialType) else ()
-            rightVariables = right.variables if isinstance(right, ExistentialType) else ()
-            return ExistentialType.close(leftVariables + rightVariables, innerLubType)
+            return ExistentialType.close(subEnv.getVariables(), innerLubType)
 
         # If either side is nullable, the result is nullable.
         if self.isNullable() or other.isNullable():
@@ -236,9 +244,9 @@ class Type(data.Data):
         # Rules for subtypes.
         leftWithFlags = left.withFlags(combinedFlags)
         rightWithFlags = right.withFlags(combinedFlags)
-        if leftWithFlags.isSubtypeOf(rightWithFlags):
+        if leftWithFlags.isSubtypeOf_(rightWithFlags, subEnv.copy()):
             return rightWithFlags
-        if rightWithFlags.isSubtypeOf(leftWithFlags):
+        if rightWithFlags.isSubtypeOf_(leftWithFlags, subEnv.copy()):
             return leftWithFlags
 
         # Variable types.
@@ -278,12 +286,18 @@ class Type(data.Data):
                 if variance is INVARIANT:
                     if leftArg == rightArg:
                         combined = leftArg
+                    elif subEnv.isExistentialVar(leftArg) and \
+                         subEnv.trySubstitute(rightArg, leftArg):
+                        combined = leftArg
+                    elif subEnv.isExistentialVar(rightArg) and \
+                         subEnv.trySubstitute(leftArg, rightArg):
+                        combined = rightArg
                     else:
                         combined = AnyType
                 else:
                     stack.append((self, other))
                     if variance is flags.COVARIANT:
-                        combined = leftArg.lubRec_(rightArg, stack)
+                        combined = leftArg.lubRec_(rightArg, stack, subEnv.copy())
                     else:
                         assert variance is flags.CONTRAVARIANT
                         combined = leftArg.glbRec_(rightArg, stack)
@@ -674,19 +688,6 @@ class ExistentialType(ObjectType):
             self.ty == other.ty and \
             self.flags == other.flags
 
-    def isEquivalent(self, other):
-        if self.__class__ is not other.__class__ or \
-           len(self.variables) != len(other.variables):
-            return False
-        if all(s.id is t.id for s, t in zip(self.variables, other.variables)) and \
-           self.ty.isEquivalent(other.ty):
-            return True
-        if any(not s.isEquivalent(t) for s, t in zip(self.variables, other.variables)):
-            return False
-        subArgs = [VariableType(v) for v in self.variables]
-        otherSubType = other.ty.substitute(other.variables, subArgs)
-        return self.ty.isEquivalent(otherSubType)
-
     def getBaseClassType(self):
         innerBaseType = self.ty.getBaseClassType()
         if innerBaseType is None:
@@ -783,6 +784,8 @@ class SubstitutionEnvironment(object):
     substitutions don't contradict earlier substitutions.
 
     Attributes:
+        variables: ([TypeParameter]): a list of type parameters added to this environment
+            in the order they were added. Duplicates are not included.
         substitutionTypes ({DefnId: Type?}): a map of substitutions. Keys are `DefnId`s from
             existential type parameters. Values are `None` for type parameters that have not
             been referenced yet. Otherwise, values are the types most recently substituted.
@@ -791,11 +794,37 @@ class SubstitutionEnvironment(object):
     """
 
     def __init__(self):
+        self.variables = []
         self.substitutionTypes = {}
+
+    def __repr__(self):
+        buf = StringIO.StringIO()
+        buf.write("SubstitutionEnvironment([")
+        sep = ""
+        for v in self.variables:
+            buf.write(sep)
+            sep = ", "
+            buf.write(str(v.name))
+            buf.write(": ")
+            buf.write(str(self.substitutionTypes[v.id]))
+        buf.write("])")
+        s = buf.getvalue()
+        buf.close()
+        return s
+
+    def copy(self):
+        subEnv = SubstitutionEnvironment()
+        subEnv.variables = list(self.variables)
+        subEnv.substitutionTypes = dict(self.substitutionTypes)
+        return subEnv
 
     def addVariable(self, var):
         if var.id not in self.substitutionTypes:
+            self.variables.append(var)
             self.substitutionTypes[var.id] = None
+
+    def getVariables(self):
+        return self.variables
 
     def isExistentialVar(self, vty):
         return isinstance(vty, VariableType) and vty.typeParameter.id in self.substitutionTypes

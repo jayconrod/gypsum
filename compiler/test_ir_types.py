@@ -283,6 +283,10 @@ class TestIrTypes(TestCaseWithDefinitions):
         self.assertFalse(eXType.isEquivalent(eYType))
 
     def testExistentialDifferentBoundsLub(self):
+        # class A
+        # class B[S]
+        # class C[T]
+        # A == forsome[X] B[X] lub forsome [Y] C[Y]
         A = self.makeClass("A", typeParameters=[], supertypes=[getRootClassType()])
         AType = ClassType(A)
         S = self.makeTypeParameter("S", upperBound=getRootClassType(),
@@ -300,6 +304,25 @@ class TestIrTypes(TestCaseWithDefinitions):
         eBXType = ExistentialType((X,), ClassType(B, (VariableType(X),)))
         eCYType = ExistentialType((Y,), ClassType(C, (VariableType(Y),)))
         self.assertEquals(AType, eBXType.lub(eCYType))
+
+    def testExistentialCombineParametersLub(self):
+        # class C[S, T]
+        # forsome [X, Y] C[X, Y] == forsome [X] C[X, String] lub forsome [Y] C[Object, Y]
+        S = self.makeTypeParameter("S", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        T = self.makeTypeParameter("T", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        C = self.makeClass("C", typeParameters=[S, T], supertypes=[getRootClassType()])
+        X = self.makeTypeParameter("X", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        XType = VariableType(X)
+        eXType = ExistentialType((X,), ClassType(C, (XType, getStringType())))
+        Y = self.makeTypeParameter("Y", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        YType = VariableType(Y)
+        eYType = ExistentialType((Y,), ClassType(C, (getRootClassType(), YType)))
+        eXYType = ExistentialType((X, Y), ClassType(C, (XType, YType)))
+        self.assertEquals(eXYType, eXType.lub(eYType))
 
     def testLubSubTrait(self):
         A = self.makeTrait("A", typeParameters=[], supertypes=[getRootClassType()])
