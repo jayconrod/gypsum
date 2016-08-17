@@ -833,12 +833,12 @@ class SubstitutionEnvironment(object):
         assert self.isExistentialVar(vty)
         tp = vty.typeParameter
         if self.substitutionTypes[tp.id] is None:
-            if not tp.lowerBound.isSubtypeOf_(ty, self):
+            if not tp.lowerBound.isSubtypeOf_(ty, self.copy()):
                 return False
             combinedType = ty
         else:
             combinedType = self.substitutionTypes[tp.id].lub(ty)
-        if combinedType.isSubtypeOf_(tp.upperBound, self):
+        if combinedType.isSubtypeOf_(tp.upperBound, self.copy()):
             self.substitutionTypes[tp.id] = combinedType
             return True
         else:

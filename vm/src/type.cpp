@@ -566,7 +566,12 @@ bool Type::isEquivalent(const Handle<Type>& left, const Handle<Type>& right) {
 }
 
 
-bool Type::isSubtypeOf(Local<Type> left, Local<Type> right) {
+bool Type::isSubtypeOf(const Handle<Type>& left, const Handle<Type>& right) {
+  return isSubtypeOf(left, right, SubstitutionEnvironment());
+}
+
+
+bool Type::isSubtypeOf(Local<Type> left, Local<Type> right, SubstitutionEnvironment subEnv) {
   // Equivalence rule.
   if (isEquivalent(left, right))
     return true;
@@ -577,12 +582,17 @@ bool Type::isSubtypeOf(Local<Type> left, Local<Type> right) {
   ASSERT(left->isObject() && right->isObject());
 
   // Existential types.
-  if (left->isExistential() || right->isExistential()) {
-    auto leftInnerType =
-        left->isExistential() ? handle(left->existentialInnerType()) : left;
-    auto rightInnerType =
-        right->isExistential() ? handle(right->existentialInnerType()) : right;
-    return isSubtypeOf(leftInnerType, rightInnerType);
+  if (right->isExistential()) {
+    for (length_t i = 0; i < right->existentialVariableCount(); i++) {
+      subEnv.addVariable(handle(right->existentialVariable(i)));
+    }
+    return isSubtypeOf(left, handle(right->existentialInnerType()), move(subEnv));
+  }
+  if (subEnv.isExistentialVar(right)) {
+    return subEnv.trySubstitute(left, right);
+  }
+  if (left->isExistential()) {
+    return isSubtypeOf(handle(left->existentialInnerType()), right, move(subEnv));
   }
 
   // A nullable type cannot be a subtype of a non-nullable type. Note that existential types
@@ -640,17 +650,30 @@ bool Type::isSubtypeOf(Local<Type> left, Local<Type> right) {
     auto rightArg = handle(right->typeArgument(i));
     auto variance = typeParams->get(i)->variance();
     if (variance == COVARIANT) {
-      if (!isSubtypeOf(leftArg, rightArg))
+      if (!isSubtypeOf(leftArg, rightArg, subEnv))
         return false;
     } else if (variance == CONTRAVARIANT) {
-      if (!isSubtypeOf(rightArg, leftArg))
+      if (!isSubtypeOf(rightArg, leftArg, subEnv))
         return false;
     } else {
-      if (!isEquivalent(leftArg, rightArg))
+      if (!(subEnv.isExistentialVar(rightArg) && subEnv.trySubstitute(leftArg, rightArg)) &&
+          !isEquivalent(leftArg, rightArg)) {
         return false;
+      }
     }
   }
   return true;
+}
+
+
+Local<Type> Type::lub(const Handle<Type>& left, const Handle<Type>& right) {
+  return lub(left, right, SubstitutionEnvironment());
+}
+
+
+Local<Type> Type::lub(Local<Type> left, Local<Type> right, SubstitutionEnvironment subEnv) {
+  UNREACHABLE();
+  return Local<Type>();
 }
 
 
@@ -750,6 +773,52 @@ Local<Type> Type::substituteForInheritance(const Handle<Type>& type,
     bindings.push_back(Binding(handle(typeParams->get(i)), handle(supertype->typeArgument(i))));
   }
   return substitute(type, bindings);
+}
+
+
+void Type::SubstitutionEnvironment::addVariable(const Handle<TypeParameter>& var) {
+  if (indexOf(*var) < 0) {
+    substitutionTypes_.push_back(make_pair(Local<TypeParameter>(var), Local<Type>()));
+  }
+}
+
+
+bool Type::SubstitutionEnvironment::isExistentialVar(const Handle<Type>& type) const {
+  return type->isVariable() && indexOf(type->asVariable()) >= 0;
+}
+
+
+bool Type::SubstitutionEnvironment::trySubstitute(
+    const Handle<Type>& type,
+    const Handle<Type>& varType) {
+  ASSERT(varType->isVariable());
+  auto tp = handle(varType->asVariable());
+  auto index = indexOf(*tp);
+  ASSERT(index >= 0);
+  Local<Type> combinedType;
+  if (substitutionTypes_[index].second.isEmpty()) {
+    if (!isSubtypeOf(handle(tp->lowerBound()), type, *this)) {
+      return false;
+    }
+    combinedType = type;
+  } else {
+    combinedType = Type::lub(substitutionTypes_[index].second, type);
+  }
+  if (Type::isSubtypeOf(combinedType, handle(tp->upperBound()), *this)) {
+    substitutionTypes_[index].second = combinedType;
+    return true;
+  } else {
+    return false;
+  }
+}
+
+
+int Type::SubstitutionEnvironment::indexOf(TypeParameter* param) const {
+  for (size_t i = 0; i < substitutionTypes_.size(); i++) {
+    if (*substitutionTypes_[i].first == param)
+      return static_cast<int>(i);
+  }
+  return -1;
 }
 
 

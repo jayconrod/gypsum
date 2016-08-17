@@ -598,6 +598,100 @@ TEST(SubtypeRightExistential) {
 }
 
 
+TEST(SubtypeRightParameterExistential) {
+  // class C[T]
+  // C[Object] <: forsome [X] C[X]
+
+  TEST_PROLOGUE
+
+  auto rootType = handle(Type::rootClassType(roots));
+  auto nothingType = handle(Type::nothingType(roots));
+
+  auto Foo = Class::create(heap);
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), NO_FLAGS, rootType, nothingType);
+  auto fooTypeParameters = BlockArray<TypeParameter>::create(heap, 1);
+  fooTypeParameters->set(0, *T);
+  Foo->setTypeParameters(*fooTypeParameters);
+  setSupertypeToRoot(Foo);
+
+  auto FooObjectType = Type::create(heap, Foo, vector<Local<Type>>{rootType});
+
+  auto X = TypeParameter::create(heap, NAME("X"), STR("X"), NO_FLAGS, rootType, nothingType);
+  auto XType = Type::create(heap, X);
+  auto FooXType = Type::create(heap, Foo, vector<Local<Type>>{XType});
+  auto eFooXType = Type::create(heap, vector<Local<TypeParameter>>{X}, FooXType);
+
+  ASSERT_TRUE(Type::isSubtypeOf(FooObjectType, eFooXType));
+}
+
+
+TEST(SubtypeRightExistentialFailUpperBound) {
+  // String <: forsome [X <: String] X
+  // Object </: forsome [X <: String] X
+
+  TEST_PROLOGUE
+
+  auto rootType = handle(Type::rootClassType(roots));
+  auto nothingType = handle(Type::nothingType(roots));
+  auto stringType = handle(roots->getBuiltinType(BUILTIN_STRING_CLASS_ID));
+
+  auto X = TypeParameter::create(heap, NAME("X"), STR("X"), NO_FLAGS, stringType, nothingType);
+  auto XType = Type::create(heap, X);
+  auto eXType = Type::create(heap, vector<Local<TypeParameter>>{X}, XType);
+
+  ASSERT_TRUE(Type::isSubtypeOf(stringType, eXType));
+  ASSERT_FALSE(Type::isSubtypeOf(rootType, eXType));
+}
+
+
+TEST(SubtypeRightExistentialFailLowerBound) {
+  // String </: forsome [X >: Object] X
+  // Object <: forsome [X >: Object] X
+
+  TEST_PROLOGUE
+
+  auto rootType = handle(Type::rootClassType(roots));
+  auto stringType = handle(roots->getBuiltinType(BUILTIN_STRING_CLASS_ID));
+
+  auto X = TypeParameter::create(heap, NAME("X"), STR("X"), NO_FLAGS, rootType, rootType);
+  auto XType = Type::create(heap, X);
+  auto eXType = Type::create(heap, vector<Local<TypeParameter>>{X}, XType);
+
+  ASSERT_FALSE(Type::isSubtypeOf(stringType, eXType));
+  ASSERT_TRUE(Type::isSubtypeOf(rootType, eXType));
+}
+
+
+TEST(SubtypeRightExistentialSubstituteMultiple) {
+  // class C[S, T]
+  // C[String, Object] <: forsome [X] C[X, X]
+
+  TEST_PROLOGUE
+
+  auto rootType = handle(Type::rootClassType(roots));
+  auto nothingType = handle(Type::nothingType(roots));
+  auto stringType = handle(roots->getBuiltinType(BUILTIN_STRING_CLASS_ID));
+
+  auto C = Class::create(heap);
+  auto S = TypeParameter::create(heap, NAME("S"), STR("S"), 0, rootType, nothingType);
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), 0, rootType, nothingType);
+  auto CTypeParameters = BlockArray<TypeParameter>::create(heap, 2);
+  CTypeParameters->set(0, *S);
+  CTypeParameters->set(1, *T);
+  C->setTypeParameters(*CTypeParameters);
+  setSupertypeToRoot(C);
+
+  auto X = TypeParameter::create(heap, NAME("X"), STR("X"), 0, rootType, nothingType);
+  auto XType = Type::create(heap, X);
+
+  auto CType = Type::create(heap, C, vector<Local<Type>>{stringType, rootType});
+  auto CXType = Type::create(heap, C, vector<Local<Type>>{XType, XType});
+  auto eCXType = Type::create(heap, vector<Local<TypeParameter>>{X}, CXType);
+
+  ASSERT_TRUE(Type::isSubtypeOf(CType, eCXType));
+}
+
+
 TEST(SubstituteTypeParameter) {
   TEST_PROLOGUE
 

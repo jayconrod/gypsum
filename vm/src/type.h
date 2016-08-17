@@ -8,6 +8,7 @@
 #define type_h
 
 #include <iostream>
+#include <utility>
 #include <vector>
 #include "bytecode.h"
 #include "class.h"
@@ -177,14 +178,32 @@ class Type: public Object {
   word_t alignment() const;
 
   static bool isEquivalent(const Handle<Type>& left, const Handle<Type>& right);
-  static bool isSubtypeOf(Local<Type> left, Local<Type> right);
+  static bool isSubtypeOf(const Handle<Type>& left, const Handle<Type>& right);
   bool equals(Type* other) const;
+  static Local<Type> lub(const Handle<Type>& left, const Handle<Type>& right);
   static Local<Type> substitute(const Handle<Type>& type, const BindingList& bindings);
   static Local<Type> substituteForInheritance(const Handle<Type>& type,
                                               Local<ObjectTypeDefn> receiverDefn,
                                               Local<ObjectTypeDefn> baseDefn);
 
  private:
+  class SubstitutionEnvironment {
+   public:
+    void addVariable(const Handle<TypeParameter>& var);
+    bool isExistentialVar(const Handle<Type>& type) const;
+    bool trySubstitute(const Handle<Type>& type, const Handle<Type>& varType);
+
+   private:
+    // TODO: this is an inefficient representation, but we can't use type parameters as keys
+    // in an unordered_map, since there's nothing to identify them, other than their address,
+    // which can change.
+    int indexOf(TypeParameter* param) const;
+
+    std::vector<std::pair<Local<TypeParameter>, Local<Type>>> substitutionTypes_;
+  };
+  static bool isSubtypeOf(Local<Type> left, Local<Type> right, SubstitutionEnvironment subEnv);
+  static Local<Type> lub(Local<Type> left, Local<Type> right, SubstitutionEnvironment subEnv);
+
   static const word_t kPointerMap = 0;
 
   length_t length_;

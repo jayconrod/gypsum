@@ -232,6 +232,21 @@ class TestIrTypes(TestCaseWithDefinitions):
         self.assertFalse(getStringType().isSubtypeOf(eXType))
         self.assertTrue(getRootClassType().isSubtypeOf(eXType))
 
+    def testSubtypeRightExistentialSubstituteMultiple(self):
+        # class C[S, T]
+        # C[String, Object] <: forsome [X] C[X, X]
+        S = self.makeTypeParameter("S", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        T = self.makeTypeParameter("T", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        C = self.makeClass("C", typeParameters=[S, T], supertypes=[getRootClassType()])
+        X = self.makeTypeParameter("X", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        XType = VariableType(X)
+        CType = ClassType(C, (getStringType(), getRootClassType()))
+        eCXType = ExistentialType((X,), ClassType(C, (XType, XType)))
+        self.assertTrue(CType.isSubtypeOf(eCXType))
+
     def testEquivalentExistentials(self):
         X = self.makeTypeParameter("X", upperBound=getRootClassType(),
                                    lowerBound=getNothingClassType())
