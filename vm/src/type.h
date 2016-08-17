@@ -177,11 +177,66 @@ class Type: public Object {
   word_t typeSize() const;
   word_t alignment() const;
 
-  static bool isEquivalent(const Handle<Type>& left, const Handle<Type>& right);
-  static bool isSubtypeOf(const Handle<Type>& left, const Handle<Type>& right);
+  /** Returns whether two types are exactly the same. */
   bool equals(Type* other) const;
+
+  /**
+   * Returns whether two types contain the same values. Types may be equivalent but not
+   * equal. For example, Object and forsome [X] X are equivalent, because every value that
+   * is a member of one is also a member of the other.
+   */
+  static bool isEquivalent(const Handle<Type>& left, const Handle<Type>& right);
+
+  /**
+   * Returns whether `left` is a subtype of `right`. This is true if all the values in `left`
+   * are contained in `right`.
+   */
+  static bool isSubtypeOf(const Handle<Type>& left, const Handle<Type>& right);
+
+  /**
+   * Returns the least upper bound of `left` and `right`: the smallest type that is a supertype
+   * of both.
+   *
+   * This method is actually just an approximation of the least upper bound, since least upper
+   * bound is not defined in all cases. There are situations (involving parameterized classes)
+   * where the least upper bound may be infinitely complicated and cannot be expressed.
+   */
   static Local<Type> lub(const Handle<Type>& left, const Handle<Type>& right);
+
+  /**
+   * Returns the greatest lower bound of `left` and `right`: the largest type that is a
+   * subtype of both.
+   *
+   * This method is even more of an approximation than {@link #lub}. Because of the way class
+   * inheritance fans out, it returns `Nothing` in most cases unless the two types are
+   * equal or if there's some subtype relation between them.
+   */
+  static Local<Type> glb(Local<Type> left, Local<Type> right);
+
+  /**
+   * Replaces all variable types within `type` which refer to the type parameters in `bindings`
+   * using the corresponding types in `bindings`. This is frequently used when applying
+   * type arguments, for example, in a parameterized method call.
+   */
   static Local<Type> substitute(const Handle<Type>& type, const BindingList& bindings);
+
+  /**
+   * Replaces parts of a type from an inherited definition using arguments applied to a
+   * base definition.
+   *
+   * This method calls {@link #substitute} using a `bindings` list generated from `receiverDefn`
+   * and `baseDefn`. The type parameters in the list are those of `baseDefn`. The type
+   * arguments are from the type for `baseDefn` in `receiverDefn`'s supertypes list.
+   *
+   * For example, suppose we have a class `Box[X]` with a field of type `X` and a subclass
+   * `IntBox <: Box[Integer]`. If we load the field from an `IntBox`, we will call this
+   * method in order to substitute `Integer` for `X` so that the type of the field is `Integer`.
+   *
+   * @param type the type to perform substitution on.
+   * @param receiverDefn the inherited class or trait.
+   * @param baseDefn the base class or trait. Must be in the `supertypes` list
+   *     of `receiverDefn`.
+   */
   static Local<Type> substituteForInheritance(const Handle<Type>& type,
                                               Local<ObjectTypeDefn> receiverDefn,
                                               Local<ObjectTypeDefn> baseDefn);

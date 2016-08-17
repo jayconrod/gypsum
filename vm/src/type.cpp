@@ -522,6 +522,45 @@ word_t Type::alignment() const {
 }
 
 
+bool Type::equals(Type* other) const {
+  if (form() != other->form() || flags() != other->flags())
+    return false;
+  if (isPrimitive()) {
+    return true;
+  } else if (isClass()) {
+    if (asClass() != other->asClass())
+      return false;
+    ASSERT(typeArgumentCount() == other->typeArgumentCount());
+    for (length_t i = 0; i < typeArgumentCount(); i++) {
+      if (!typeArgument(i)->equals(other->typeArgument(i)))
+        return false;
+    }
+    return true;
+  } else if (isTrait()) {
+    if (asTrait() != other->asTrait())
+      return false;
+    ASSERT(typeArgumentCount() == other->typeArgumentCount());
+    for (length_t i = 0; i < typeArgumentCount(); i++) {
+      if (!typeArgument(i)->equals(other->typeArgument(i)))
+        return false;
+    }
+    return true;
+  } else if (isVariable()) {
+    return asVariable() == other->asVariable();
+  } else {
+    ASSERT(isExistential());
+    auto count = existentialVariableCount();
+    if (count != other->existentialVariableCount())
+      return false;
+    for (length_t i = 0; i < count; i++) {
+      if (existentialVariable(i) != other->existentialVariable(i))
+        return false;
+    }
+    return existentialInnerType()->equals(other->existentialInnerType());
+  }
+}
+
+
 bool Type::isEquivalent(const Handle<Type>& left, const Handle<Type>& right) {
   // For everything except for existential types, "equivalent" means "equals".
   if (!left->isExistential() || !right->isExistential())
@@ -677,42 +716,9 @@ Local<Type> Type::lub(Local<Type> left, Local<Type> right, SubstitutionEnvironme
 }
 
 
-bool Type::equals(Type* other) const {
-  if (form() != other->form() || flags() != other->flags())
-    return false;
-  if (isPrimitive()) {
-    return true;
-  } else if (isClass()) {
-    if (asClass() != other->asClass())
-      return false;
-    ASSERT(typeArgumentCount() == other->typeArgumentCount());
-    for (length_t i = 0; i < typeArgumentCount(); i++) {
-      if (!typeArgument(i)->equals(other->typeArgument(i)))
-        return false;
-    }
-    return true;
-  } else if (isTrait()) {
-    if (asTrait() != other->asTrait())
-      return false;
-    ASSERT(typeArgumentCount() == other->typeArgumentCount());
-    for (length_t i = 0; i < typeArgumentCount(); i++) {
-      if (!typeArgument(i)->equals(other->typeArgument(i)))
-        return false;
-    }
-    return true;
-  } else if (isVariable()) {
-    return asVariable() == other->asVariable();
-  } else {
-    ASSERT(isExistential());
-    auto count = existentialVariableCount();
-    if (count != other->existentialVariableCount())
-      return false;
-    for (length_t i = 0; i < count; i++) {
-      if (existentialVariable(i) != other->existentialVariable(i))
-        return false;
-    }
-    return existentialInnerType()->equals(other->existentialInnerType());
-  }
+Local<Type> Type::glb(Local<Type> left, Local<Type> right) {
+  UNREACHABLE();
+  return Local<Type>();
 }
 
 
