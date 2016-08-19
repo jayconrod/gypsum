@@ -717,6 +717,24 @@ Local<Type> Type::lub(Local<Type> left, Local<Type> right, SubstitutionEnvironme
 
 
 Local<Type> Type::glb(Local<Type> left, Local<Type> right) {
+  if (left->equals(*right)) {
+    return left;
+  }
+  if (Type::isSubtypeOf(left, right)) {
+    return left;
+  }
+  if (Type::isSubtypeOf(right, left)) {
+    return right;
+  }
+  if (left->isObject() && right->isObject()) {
+    // TODO: this is a very crude approximation. When there are intersection types,
+    // return one of those.
+    auto roots = left->getVM()->roots();
+    return handle(left->isNullable() && right->isNullable()
+        ? Type::nullType(roots)
+        : Type::nothingType(roots));
+  }
+
   UNREACHABLE();
   return Local<Type>();
 }

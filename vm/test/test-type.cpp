@@ -692,6 +692,42 @@ TEST(SubtypeRightExistentialSubstituteMultiple) {
 }
 
 
+TEST(TypeGlbSame) {
+  TEST_PROLOGUE
+
+  auto i32Type = handle(Type::i32Type(roots));
+  auto result = Type::glb(i32Type, i32Type);
+  ASSERT_TRUE(i32Type->equals(*result));
+}
+
+
+TEST(TypeGlbSubtype) {
+  TEST_PROLOGUE
+
+  auto objectType = handle(Type::rootClassType(roots));
+  auto stringType = handle(roots->getBuiltinType(BUILTIN_STRING_CLASS_ID));
+  ASSERT_TRUE(stringType->equals(*Type::glb(objectType, stringType)));
+  ASSERT_TRUE(stringType->equals(*Type::glb(stringType, objectType)));
+}
+
+
+TEST(TestGlbObjectTypes) {
+  TEST_PROLOGUE
+
+  auto stringType = handle(roots->getBuiltinType(BUILTIN_STRING_CLASS_ID));
+  auto packageType = handle(roots->getBuiltinType(BUILTIN_PACKAGE_CLASS_ID));
+  auto result = Type::glb(stringType, packageType);
+  auto nothingType = handle(Type::nothingType(roots));
+  ASSERT_TRUE(nothingType->equals(*result));
+
+  auto nullableStringType = Type::createWithFlags(heap, stringType, Type::NULLABLE_FLAG);
+  auto nullablePackageType = Type::createWithFlags(heap, packageType, Type::NULLABLE_FLAG);
+  result = Type::glb(nullableStringType, nullablePackageType);
+  auto nullType = handle(Type::nullType(roots));
+  ASSERT_TRUE(nullType->equals(*result));
+}
+
+
 TEST(SubstituteTypeParameter) {
   TEST_PROLOGUE
 
