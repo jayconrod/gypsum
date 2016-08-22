@@ -149,9 +149,8 @@ class Type(data.Data):
 
         This is a slightly more relaxed relation than == because two types may have different
         forms but contain the same values."""
-        if isinstance(self, ExistentialType):
-            if not isinstance(other, ExistentialType) or \
-               len(self.variables) != len(other.variables):
+        if isinstance(self, ExistentialType) and isinstance(other, ExistentialType):
+            if len(self.variables) != len(other.variables):
                 return False
             if all(s.id is t.id for s, t in zip(self.variables, other.variables)) and \
                self.ty.isEquivalent(other.ty):
@@ -240,10 +239,10 @@ class Type(data.Data):
             combinedFlags = frozenset([NULLABLE_TYPE_FLAG])
         else:
             combinedFlags = frozenset()
-
-        # Rules for subtypes.
         leftWithFlags = left.withFlags(combinedFlags)
         rightWithFlags = right.withFlags(combinedFlags)
+
+        # Rules for subtypes.
         if leftWithFlags.isSubtypeOf_(rightWithFlags, subEnv.copy()):
             return rightWithFlags
         if rightWithFlags.isSubtypeOf_(leftWithFlags, subEnv.copy()):
