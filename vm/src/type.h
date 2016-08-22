@@ -59,7 +59,9 @@ class Type: public Object {
     EXTERN_VARIABLE_TYPE,
 
     // Special forms
-    LABEL_TYPE,
+    LABEL_TYPE,  // label produced by "label" and used by "branchl" instructions
+    ANY_TYPE,  // top of the type lattice
+    NO_TYPE,  // bottom of the type lattice
 
     // Other symbols
     FIRST_PRIMITIVE_TYPE = UNIT_TYPE,
@@ -87,6 +89,9 @@ class Type: public Object {
   Type(Class* clas, const std::vector<Local<Type>>& typeArgs, Flags flags = NO_FLAGS);
   explicit Type(Trait* trait, Flags flags = NO_FLAGS);
   Type(Trait* trait, const std::vector<Local<Type>>& typeArgs, Flags flags = NO_FLAGS);
+  Type(ObjectTypeDefn* classOrTrait,
+       const std::vector<Local<Type>>& typeArgs,
+       Flags flags = NO_FLAGS);
   explicit Type(TypeParameter* param, Flags flags = NO_FLAGS);
   Type(const std::vector<Local<TypeParameter>>& variables, Type* type);
   Type(Type* type, Flags flags);
@@ -102,11 +107,18 @@ class Type: public Object {
                             const std::vector<Local<Type>>& typeArgs,
                             Flags flags = NO_FLAGS);
   static Local<Type> create(Heap* heap,
+                            const Handle<ObjectTypeDefn>& classOrTrait,
+                            const std::vector<Local<Type>>& typeArgs,
+                            Flags flags = NO_FLAGS);
+  static Local<Type> create(Heap* heap,
                             const Handle<TypeParameter>& param,
                             Flags flags = NO_FLAGS);
   static Local<Type> create(Heap* heap,
                             const std::vector<Local<TypeParameter>>& variables,
                             const Handle<Type>& type);
+  static Local<Type> closeExistential(Heap* heap,
+                                      std::vector<Local<TypeParameter>> typeParameters,
+                                      const Handle<Type>& type);
   static Local<Type> createExtern(Heap* heap,
                                   const Handle<Class>& clas,
                                   const std::vector<Local<Type>>& typeArgs,
@@ -133,6 +145,8 @@ class Type: public Object {
   static Type* f64Type(Roots* roots);
   static Type* wordType(Roots* roots);
   static Type* labelType(Roots* roots);
+  static Type* anyType(Roots* roots);
+  static Type* noType(Roots* roots);
   static Type* rootClassType(Roots* roots);
   static Type* nothingType(Roots* roots);
   static Type* nullType(Roots* roots);
@@ -144,6 +158,7 @@ class Type: public Object {
   length_t existentialVariableCount() const;
   TypeParameter* existentialVariable(length_t index) const;
   Type* existentialInnerType() const;
+  std::vector<Local<TypeParameter>> findVariables() const;
 
   Form form() const { return form_; }
   Flags flags() const { return flags_; }
@@ -172,6 +187,8 @@ class Type: public Object {
   bool isF32() const;
   bool isF64() const;
   bool isFloat() const;
+  bool isAnyType() const;
+  bool isNoType() const;
   bool isNullable() const;
 
   word_t typeSize() const;
@@ -241,10 +258,26 @@ class Type: public Object {
                                               Local<ObjectTypeDefn> receiverDefn,
                                               Local<ObjectTypeDefn> baseDefn);
 
+  /**
+   * Returns a class or trait type of the given class or trait.
+   *
+   * The type arguments are determined by substituting the type arguments from this type,
+   * which must be an object type. For example, suppose we have a class `Foo[T]` with a
+   * subclass `Bar <: Foo[String]` and there is some type parameter `X <: Bar`. If we
+   * substitute the variable type `X` for the base `Foo`, the result will be `Foo[String]`.
+   *
+   * @param type the type to substitute (`X` in the example above). Must be an object type.
+   * @param baseDefn the base class or trait. Must be a base of `type`.
+   * @return a substituted class or trait type of `baseDefn`.
+   */
+  static Local<Type> substituteForBase(const Handle<Type>& type,
+                                       const Handle<ObjectTypeDefn>& baseDefn);
+
  private:
   class SubstitutionEnvironment {
    public:
     void addVariable(const Handle<TypeParameter>& var);
+    std::vector<Local<TypeParameter>> variables() const;
     bool isExistentialVar(const Handle<Type>& type) const;
     bool trySubstitute(const Handle<Type>& type, const Handle<Type>& varType);
 
@@ -256,14 +289,19 @@ class Type: public Object {
 
     std::vector<std::pair<Local<TypeParameter>, Local<Type>>> substitutionTypes_;
   };
+  void findVariables(std::vector<Local<TypeParameter>>* variables) const;
   static bool isSubtypeOf(Local<Type> left, Local<Type> right, SubstitutionEnvironment subEnv);
-  static Local<Type> lub(Local<Type> left, Local<Type> right, SubstitutionEnvironment subEnv);
+  static Local<Type> lub(
+      Local<Type> left,
+      Local<Type> right,
+      SubstitutionEnvironment subEnv,
+      std::vector<std::pair<Local<Type>, Local<Type>>>* stack);
 
   static const word_t kPointerMap = 0;
 
   length_t length_;
-  Form form_ : 4;
-  Flags flags_ : 28;
+  Form form_ : 8;
+  Flags flags_ : 24;
   Ptr<Block> elements_[0];
 
   friend class Roots;

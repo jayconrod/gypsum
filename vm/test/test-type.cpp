@@ -66,6 +66,34 @@ TEST(CreateWithFlags) {
 }
 
 
+TEST(CloseExistential) {
+  TEST_PROLOGUE
+
+  auto rootType = handle(Type::rootClassType(roots));
+  auto nothingType = handle(Type::nothingType(roots));
+
+  auto S = TypeParameter::create(heap, NAME("S"), STR("S"), NO_FLAGS, rootType, nothingType);
+  auto SType = Type::create(heap, S);
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), NO_FLAGS, rootType, nothingType);
+  auto TType = Type::create(heap, T);
+  auto U = TypeParameter::create(heap, NAME("U"), STR("U"), NO_FLAGS, rootType, nothingType);
+  auto C = Class::create(heap);
+  setSupertypeToRoot(C);
+  auto CTypeParameters = BlockArray<TypeParameter>::create(heap, 2);
+  CTypeParameters->set(0, *S);
+  CTypeParameters->set(1, *T);
+  C->setTypeParameters(*CTypeParameters);
+
+  auto CType = Type::create(heap, C, vector<Local<Type>>{SType, TType});
+  auto eCType = Type::closeExistential(heap, vector<Local<TypeParameter>>{T, U}, CType);
+  auto expected = Type::create(heap, vector<Local<TypeParameter>>{T}, CType);
+  ASSERT_TRUE(expected->equals(*eCType));
+
+  eCType = Type::closeExistential(heap, vector<Local<TypeParameter>>{U}, CType);
+  ASSERT_TRUE(CType->equals(*eCType));
+}
+
+
 TEST(PrimitiveTypeEquals) {
   VM vm;
 
@@ -123,6 +151,21 @@ TEST(VariableTypeEquals) {
   ASSERT_TRUE(SType->equals(*SType));
   ASSERT_TRUE(TType->equals(*TType));
   ASSERT_FALSE(SType->equals(*TType));
+}
+
+
+TEST(SubtypeAnyNoType) {
+  TEST_PROLOGUE
+
+  auto i32Type = handle(Type::i32Type(roots));
+  auto anyType = handle(Type::anyType(roots));
+  auto noType = handle(Type::noType(roots));
+  ASSERT_TRUE(Type::isSubtypeOf(i32Type, anyType));
+  ASSERT_FALSE(Type::isSubtypeOf(i32Type, noType));
+  ASSERT_FALSE(Type::isSubtypeOf(anyType, i32Type));
+  ASSERT_TRUE(Type::isSubtypeOf(noType, i32Type));
+  ASSERT_FALSE(Type::isSubtypeOf(anyType, noType));
+  ASSERT_TRUE(Type::isSubtypeOf(noType, anyType));
 }
 
 
@@ -690,6 +733,192 @@ TEST(SubtypeRightExistentialSubstituteMultiple) {
 
   ASSERT_TRUE(Type::isSubtypeOf(CType, eCXType));
 }
+
+
+TEST(TypeLubEquivalent) {
+  TEST_PROLOGUE
+
+  auto rootType = handle(Type::rootClassType(roots));
+  auto nothingType = handle(Type::nothingType(roots));
+
+  auto result = Type::lub(rootType, rootType);
+  ASSERT_TRUE(rootType->equals(*result));
+
+  auto X = TypeParameter::create(heap, NAME("X"), STR("X"), 0, rootType, nothingType);
+  auto XType = Type::create(heap, X);
+  auto eXType = Type::create(heap, vector<Local<TypeParameter>>{X}, XType);
+  auto Y = TypeParameter::create(heap, NAME("Y"), STR("Y"), 0, rootType, nothingType);
+  auto YType = Type::create(heap, Y);
+  auto eYType = Type::create(heap, vector<Local<TypeParameter>>{Y}, YType);
+  ASSERT_TRUE(eXType->equals(*Type::lub(eXType, eYType)));
+}
+
+
+TEST(TypeLubExistentialNoVariables) {
+  TEST_PROLOGUE
+
+  // class A[S]
+  // class B[T]
+  // forsome [X] A[X] lub forsome [Y] B[Y]
+  //   => Object
+
+  auto rootType = handle(Type::rootClassType(roots));
+  auto nothingType = handle(Type::nothingType(roots));
+
+  auto S = TypeParameter::create(heap, NAME("S"), STR("S"), NO_FLAGS, rootType, nothingType);
+  auto A = Class::create(heap);
+  setSupertypeToRoot(A);
+  auto ATypeParameters = BlockArray<TypeParameter>::create(heap, 1);
+  ATypeParameters->set(0, *S);
+  A->setTypeParameters(*ATypeParameters);
+
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), NO_FLAGS, rootType, nothingType);
+  auto B = Class::create(heap);
+  setSupertypeToRoot(B);
+  auto BTypeParameters = BlockArray<TypeParameter>::create(heap, 1);
+  BTypeParameters->set(0, *T);
+  B->setTypeParameters(*BTypeParameters);
+
+  auto X = TypeParameter::create(heap, NAME("X"), STR("X"), NO_FLAGS, rootType, nothingType);
+  auto XType = Type::create(heap, X);
+  auto AXType = Type::create(heap, A, vector<Local<Type>>{XType});
+  auto eAXType = Type::create(heap, vector<Local<TypeParameter>>{X}, AXType);
+
+  auto Y = TypeParameter::create(heap, NAME("Y"), STR("Y"), NO_FLAGS, rootType, nothingType);
+  auto YType = Type::create(heap, Y);
+  auto BYType = Type::create(heap, B, vector<Local<Type>>{YType});
+  auto eBYType = Type::create(heap, vector<Local<TypeParameter>>{Y}, BYType);
+
+  auto lubType = Type::lub(eAXType, eBYType);
+  ASSERT_TRUE(rootType->equals(*lubType));
+}
+
+
+TEST(TypeLubSubtype) {
+  TEST_PROLOGUE
+
+  auto rootType = handle(Type::rootClassType(roots));
+  auto stringType = handle(roots->getBuiltinType(BUILTIN_STRING_CLASS_ID));
+  ASSERT_TRUE(rootType->equals(*Type::lub(rootType, stringType)));
+  ASSERT_TRUE(rootType->equals(*Type::lub(stringType, rootType)));
+}
+
+
+TEST(TypeLubSubtypeNullable) {
+  TEST_PROLOGUE
+
+  auto rootType = handle(Type::rootClassType(roots));
+  auto nullRootType = Type::createWithFlags(heap, rootType, Type::NULLABLE_FLAG);
+  auto stringType = handle(roots->getBuiltinType(BUILTIN_STRING_CLASS_ID));
+  auto nullStringType = Type::createWithFlags(heap, stringType, Type::NULLABLE_FLAG);
+
+  ASSERT_TRUE(nullRootType->equals(*Type::lub(rootType, nullStringType)));
+  ASSERT_TRUE(nullRootType->equals(*Type::lub(nullStringType, rootType)));
+  ASSERT_TRUE(nullRootType->equals(*Type::lub(nullRootType, stringType)));
+  ASSERT_TRUE(nullRootType->equals(*Type::lub(stringType, nullRootType)));
+  ASSERT_TRUE(nullRootType->equals(*Type::lub(nullRootType, nullStringType)));
+  ASSERT_TRUE(nullRootType->equals(*Type::lub(nullStringType, nullRootType)));
+}
+
+
+TEST(TypeLubVariableSharedBound) {
+  TEST_PROLOGUE
+
+  auto rootType = handle(Type::rootClassType(roots));
+  auto nothingType = handle(Type::nothingType(roots));
+
+  auto S = TypeParameter::create(heap, NAME("S"), STR("S"), NO_FLAGS, rootType, nothingType);
+  auto SType = Type::create(heap, S);
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), NO_FLAGS, SType, nothingType);
+  auto TType = Type::create(heap, T);
+
+  ASSERT_TRUE(SType->equals(*Type::lub(SType, TType)));
+  ASSERT_TRUE(SType->equals(*Type::lub(TType, SType)));
+}
+
+
+TEST(TypeLubCovariantArgumentLub) {
+  TEST_PROLOGUE
+
+  // class A[+T]
+  // A[String] lub A[Package]?
+  //   => A[Object]?
+  auto rootType = handle(Type::rootClassType(roots));
+  auto nothingType = handle(Type::nothingType(roots));
+
+  auto A = Class::create(heap);
+  auto T =
+      TypeParameter::create(heap, NAME("T"), STR("T"), COVARIANT_FLAG, rootType, nothingType);
+  auto TTypeParameters = BlockArray<TypeParameter>::create(heap, 1);
+  TTypeParameters->set(0, *T);
+  A->setTypeParameters(*TTypeParameters);
+
+  auto stringType = handle(roots->getBuiltinType(BUILTIN_STRING_CLASS_ID));
+  auto AStringType = Type::create(heap, A, vector<Local<Type>>{stringType});
+  auto packageType = handle(roots->getBuiltinType(BUILTIN_PACKAGE_CLASS_ID));
+  auto APackageType =
+      Type::create(heap, A, vector<Local<Type>>{packageType}, Type::NULLABLE_FLAG);
+
+  auto expected = Type::create(heap, A, vector<Local<Type>>{rootType}, Type::NULLABLE_FLAG);
+  ASSERT_TRUE(expected->equals(*Type::lub(AStringType, APackageType)));
+  ASSERT_TRUE(expected->equals(*Type::lub(APackageType, AStringType)));
+}
+
+
+TEST(TypeLubContravariantArgumentLub) {
+  TEST_PROLOGUE
+
+  // class A[-T]
+  // A[String] lub A[Package]?
+  //   => A[Nothing]?
+  auto rootType = handle(Type::rootClassType(roots));
+  auto nothingType = handle(Type::nothingType(roots));
+
+  auto A = Class::create(heap);
+  auto T = TypeParameter::create(
+      heap, NAME("T"), STR("T"), CONTRAVARIANT_FLAG, rootType, nothingType);
+  auto TTypeParameters = BlockArray<TypeParameter>::create(heap, 1);
+  TTypeParameters->set(0, *T);
+  A->setTypeParameters(*TTypeParameters);
+
+  auto stringType = handle(roots->getBuiltinType(BUILTIN_STRING_CLASS_ID));
+  auto AStringType = Type::create(heap, A, vector<Local<Type>>{stringType});
+  auto packageType = handle(roots->getBuiltinType(BUILTIN_PACKAGE_CLASS_ID));
+  auto APackageType =
+      Type::create(heap, A, vector<Local<Type>>{packageType}, Type::NULLABLE_FLAG);
+
+  auto expected = Type::create(heap, A, vector<Local<Type>>{nothingType}, Type::NULLABLE_FLAG);
+  ASSERT_TRUE(expected->equals(*Type::lub(AStringType, APackageType)));
+  ASSERT_TRUE(expected->equals(*Type::lub(APackageType, AStringType)));
+}
+
+
+TEST(TypeLubInvariantArgument) {
+  TEST_PROLOGUE
+
+  // class A[T]
+  // A[String] lub A[Package]?
+  //   => Object?
+  auto rootType = handle(Type::rootClassType(roots));
+  auto nothingType = handle(Type::nothingType(roots));
+
+  auto A = Class::create(heap);
+  setSupertypeToRoot(A);
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), NO_FLAGS, rootType, nothingType);
+  auto TTypeParameters = BlockArray<TypeParameter>::create(heap, 1);
+  TTypeParameters->set(0, *T);
+  A->setTypeParameters(*TTypeParameters);
+
+  auto stringType = handle(roots->getBuiltinType(BUILTIN_STRING_CLASS_ID));
+  auto AStringType = Type::create(heap, A, vector<Local<Type>>{stringType});
+  auto packageType = handle(roots->getBuiltinType(BUILTIN_PACKAGE_CLASS_ID));
+  auto APackageType =
+      Type::create(heap, A, vector<Local<Type>>{packageType}, Type::NULLABLE_FLAG);
+
+  auto expected = Type::createWithFlags(heap, rootType, Type::NULLABLE_FLAG);
+  ASSERT_TRUE(expected->equals(*Type::lub(AStringType, APackageType)));
+}
+
 
 
 TEST(TypeGlbSame) {

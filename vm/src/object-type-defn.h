@@ -7,6 +7,7 @@
 #ifndef object_type_defn_h
 #define object_type_defn_h
 
+#include <vector>
 #include "block.h"
 
 namespace codeswitch {
@@ -29,6 +30,11 @@ class ObjectTypeDefn: public Block {
   void setSupertypes(BlockArray<Type>* newSupertypes);
   BlockArray<TypeParameter>* typeParameters() const;
   void setTypeParameters(BlockArray<TypeParameter>* newTypeParameters);
+
+  ObjectTypeDefn* findCommonBase(ObjectTypeDefn* other);
+
+ private:
+  std::vector<ObjectTypeDefn*> bases();
 };
 
 }

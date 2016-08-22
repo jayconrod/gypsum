@@ -12,6 +12,8 @@
 #include "type.h"
 #include "type-parameter.h"
 
+using std::vector;
+
 namespace codeswitch {
 namespace internal {
 
@@ -44,6 +46,51 @@ void ObjectTypeDefn::setTypeParameters(BlockArray<TypeParameter>* newTypeParamet
   } else {
     block_cast<Trait>(this)->setTypeParameters(newTypeParameters);
   }
+}
+
+
+ObjectTypeDefn* ObjectTypeDefn::findCommonBase(ObjectTypeDefn* other) {
+  // TODO: This implementation doesn't fully consider traits. It only finds bases within
+  // the class tree. This matches what the compiler does. A proper implementation would find
+  // common base definitions in the supertype lists and return the first one.
+  auto roots = getVM()->roots();
+
+  if (this == other) {
+    return this;
+  }
+  auto nothingClass = roots->getBuiltinClass(BUILTIN_NOTHING_CLASS_ID);
+  if (this == nothingClass) {
+    return other;
+  }
+  if (other == nothingClass) {
+    return this;
+  }
+
+  vector<ObjectTypeDefn*> selfBases = bases();
+  vector<ObjectTypeDefn*> otherBases = other->bases();
+  auto si = selfBases.size() - 1;
+  auto oi = otherBases.size() - 1;
+  if (selfBases[si] != otherBases[oi]) {
+    return nullptr;
+  }
+
+  while (si > 0 && oi > 0 && selfBases[si] == otherBases[oi]) {
+    si--;
+    oi--;
+  }
+  return selfBases[si + 1];
+}
+
+
+vector<ObjectTypeDefn*> ObjectTypeDefn::bases() {
+  vector<ObjectTypeDefn*> bases;
+  bases.push_back(this);
+  auto clas = this;
+  while (!clas->supertypes()->isEmpty()) {
+    clas = clas->supertypes()->get(0)->asClass();
+    bases.push_back(clas);
+  }
+  return bases;
 }
 
 }

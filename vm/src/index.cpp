@@ -248,6 +248,8 @@ static void mangleType(stringstream& str,
     }
 
     case Type::LABEL_TYPE:
+    case Type::ANY_TYPE:
+    case Type::NO_TYPE:
       UNREACHABLE();
   }
 

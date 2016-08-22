@@ -65,6 +65,8 @@ class Roots {
     F(TaggedArray<Block>, emptyTaggedArray, EMPTY_TAGGED_ARRAY)       \
     F(BlockArray<Block>, emptyBlockArray, EMPTY_BLOCK_ARRAY)          \
     F(Type, labelType, LABEL_TYPE)                                    \
+    F(Type, anyType, ANY_TYPE)                                        \
+    F(Type, noType, NO_TYPE)                                          \
     F(Type, nullType, NULL_TYPE)                                      \
     F(Meta, typeMeta, TYPE_META)                                      \
     F(Meta, stringMeta, STRING_META)                                  \
