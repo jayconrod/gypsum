@@ -691,11 +691,30 @@ bool Type::isEquivalent(const Handle<Type>& left, const Handle<Type>& right) {
 
 
 bool Type::isSubtypeOf(const Handle<Type>& left, const Handle<Type>& right) {
-  return isSubtypeOf(left, right, SubstitutionEnvironment());
+  SubstitutionEnvironment subEnv;
+  return isSubtypeOf(left, right, &subEnv);
 }
 
 
-bool Type::isSubtypeOf(Local<Type> left, Local<Type> right, SubstitutionEnvironment subEnv) {
+bool Type::isSubtypeOf(
+    const Handle<Type>& left,
+    const Handle<Type>& right,
+    SubstitutionEnvironment* subEnv) {
+  subEnv->beginTransaction();
+  auto result = isSubtypeOfRules(left, right, subEnv);
+  if (result) {
+    subEnv->commitTransaction();
+  } else {
+    subEnv->rollbackTransaction();
+  }
+  return result;
+}
+
+
+bool Type::isSubtypeOfRules(
+    Local<Type> left,
+    Local<Type> right,
+    SubstitutionEnvironment* subEnv) {
   // Equivalence rule.
   if (isEquivalent(left, right))
     return true;
@@ -714,15 +733,15 @@ bool Type::isSubtypeOf(Local<Type> left, Local<Type> right, SubstitutionEnvironm
   // Existential types.
   if (right->isExistential()) {
     for (length_t i = 0; i < right->existentialVariableCount(); i++) {
-      subEnv.addVariable(handle(right->existentialVariable(i)));
+      subEnv->addVariable(handle(right->existentialVariable(i)));
     }
-    return isSubtypeOf(left, handle(right->existentialInnerType()), move(subEnv));
+    return isSubtypeOf(left, handle(right->existentialInnerType()), subEnv);
   }
-  if (subEnv.isExistentialVar(right)) {
-    return subEnv.trySubstitute(left, right);
+  if (subEnv->isExistentialVar(right)) {
+    return subEnv->trySubstitute(left, right);
   }
   if (left->isExistential()) {
-    return isSubtypeOf(handle(left->existentialInnerType()), right, move(subEnv));
+    return isSubtypeOf(handle(left->existentialInnerType()), right, subEnv);
   }
 
   // A nullable type cannot be a subtype of a non-nullable type. Note that existential types
@@ -786,7 +805,7 @@ bool Type::isSubtypeOf(Local<Type> left, Local<Type> right, SubstitutionEnvironm
       if (!isSubtypeOf(rightArg, leftArg, subEnv))
         return false;
     } else {
-      if (!(subEnv.isExistentialVar(rightArg) && subEnv.trySubstitute(leftArg, rightArg)) &&
+      if (!(subEnv->isExistentialVar(rightArg) && subEnv->trySubstitute(leftArg, rightArg)) &&
           !isEquivalent(leftArg, rightArg)) {
         return false;
       }
@@ -797,15 +816,32 @@ bool Type::isSubtypeOf(Local<Type> left, Local<Type> right, SubstitutionEnvironm
 
 
 Local<Type> Type::lub(const Handle<Type>& left, const Handle<Type>& right) {
+  SubstitutionEnvironment subEnv;
   vector<pair<Local<Type>, Local<Type>>> stack;
-  return lub(left, right, SubstitutionEnvironment(), &stack);
+  return lub(left, right, &subEnv, &stack);
 }
 
 
 Local<Type> Type::lub(
+    const Handle<Type>& left,
+    const Handle<Type>& right,
+    SubstitutionEnvironment* subEnv,
+    vector<pair<Local<Type>, Local<Type>>>* stack) {
+  subEnv->beginTransaction();
+  auto result = lubRules(left, right, subEnv, stack);
+  if (!result->isAnyType()) {
+    subEnv->commitTransaction();
+  } else {
+    subEnv->rollbackTransaction();
+  }
+  return result;
+}
+
+
+Local<Type> Type::lubRules(
     Local<Type> left,
     Local<Type> right,
-    SubstitutionEnvironment subEnv,
+    SubstitutionEnvironment* subEnv,
     vector<pair<Local<Type>, Local<Type>>>* stack) {
   auto origLeft = left;
   auto origRight = right;
@@ -862,7 +898,7 @@ Local<Type> Type::lub(
     if (left->isExistential()) {
       leftInnerType = handle(left->existentialInnerType());
       for (length_t i = 0; i < left->existentialVariableCount(); i++) {
-        subEnv.addVariable(handle(left->existentialVariable(i)));
+        subEnv->addVariable(handle(left->existentialVariable(i)));
       }
     } else {
       leftInnerType = left;
@@ -870,19 +906,19 @@ Local<Type> Type::lub(
     if (right->isExistential()) {
       rightInnerType = handle(right->existentialInnerType());
       for (length_t i = 0; i < right->existentialVariableCount(); i++) {
-        subEnv.addVariable(handle(right->existentialVariable(i)));
+        subEnv->addVariable(handle(right->existentialVariable(i)));
       }
     } else {
       rightInnerType = right;
     }
 
     // Find the lub of the inner types.
-    auto innerLubType = lub(leftInnerType, rightInnerType, move(subEnv), stack);
+    auto innerLubType = lub(leftInnerType, rightInnerType, subEnv, stack);
     stack->pop_back();
 
     // Return an existential type with any variables that are still used in the lub type.
     // If no variables are used, we will just return the bare type.
-    return closeExistential(heap, subEnv.variables(), innerLubType);
+    return closeExistential(heap, subEnv->variables(), innerLubType);
   }
 
   // If either side is nullable, the result is nullable.
@@ -949,11 +985,11 @@ Local<Type> Type::lub(
       if (variance == INVARIANT) {
         if (leftArg->equals(*rightArg)) {
           combined = leftArg;
-        } else if (subEnv.isExistentialVar(leftArg) &&
-                   subEnv.trySubstitute(rightArg, leftArg)) {
+        } else if (subEnv->isExistentialVar(leftArg) &&
+                   subEnv->trySubstitute(rightArg, leftArg)) {
           combined = leftArg;
-        } else if (subEnv.isExistentialVar(rightArg) &&
-                   subEnv.trySubstitute(leftArg, rightArg)) {
+        } else if (subEnv->isExistentialVar(rightArg) &&
+                   subEnv->trySubstitute(leftArg, rightArg)) {
           combined = rightArg;
         } else {
           break;
@@ -1121,25 +1157,48 @@ Local<Type> Type::substituteForBase(const Handle<Type>& type,
   }
 }
 
+
+void Type::SubstitutionEnvironment::beginTransaction() {
+  transactionStack_.push_back(substitutions_.size());
+}
+
+
+void Type::SubstitutionEnvironment::commitTransaction() {
+  transactionStack_.pop_back();
+}
+
+
+void Type::SubstitutionEnvironment::rollbackTransaction() {
+  auto index = transactionStack_.back();
+  transactionStack_.pop_back();
+  transactionStack_.erase(transactionStack_.begin() + index, transactionStack_.end());
+}
+
+
 void Type::SubstitutionEnvironment::addVariable(const Handle<TypeParameter>& var) {
-  if (indexOf(*var) < 0) {
-    substitutionTypes_.push_back(make_pair(Local<TypeParameter>(var), Local<Type>()));
+  if (!haveVariable(*var)) {
+    substitutions_.push_back(make_pair(Local<TypeParameter>(var), Local<Type>()));
   }
 }
 
 
 vector<Local<TypeParameter>> Type::SubstitutionEnvironment::variables() const {
   vector<Local<TypeParameter>> variables;
-  variables.reserve(substitutionTypes_.size());
-  for (auto& p : substitutionTypes_) {
-    variables.push_back(p.first);
+  for (auto& p : substitutions_) {
+    auto haveVariable = false;
+    for (auto& v : variables) {
+      haveVariable |= *v == *p.first;
+    }
+    if (!haveVariable) {
+      variables.push_back(p.first);
+    }
   }
   return variables;
 }
 
 
 bool Type::SubstitutionEnvironment::isExistentialVar(const Handle<Type>& type) const {
-  return type->isVariable() && indexOf(type->asVariable()) >= 0;
+  return type->isVariable() && haveVariable(type->asVariable());
 }
 
 
@@ -1151,16 +1210,15 @@ bool Type::SubstitutionEnvironment::trySubstitute(
   auto index = indexOf(*tp);
   ASSERT(index >= 0);
   Local<Type> combinedType;
-  if (substitutionTypes_[index].second.isEmpty()) {
-    if (!isSubtypeOf(handle(tp->lowerBound()), type, *this)) {
-      return false;
-    }
+  if (substitutions_[index].second.isEmpty()) {
     combinedType = type;
   } else {
-    combinedType = Type::lub(substitutionTypes_[index].second, type);
+    vector<pair<Local<Type>, Local<Type>>> stack;
+    combinedType = Type::lub(substitutions_[index].second, type, this, &stack);
   }
-  if (Type::isSubtypeOf(combinedType, handle(tp->upperBound()), *this)) {
-    substitutionTypes_[index].second = combinedType;
+  if (Type::isSubtypeOf(combinedType, handle(tp->upperBound()), this) &&
+      Type::isSubtypeOf(handle(tp->lowerBound()), combinedType, this)) {
+    substitutions_[index].second = combinedType;
     return true;
   } else {
     return false;
@@ -1168,9 +1226,14 @@ bool Type::SubstitutionEnvironment::trySubstitute(
 }
 
 
+bool Type::SubstitutionEnvironment::haveVariable(TypeParameter* param) const {
+  return indexOf(param) >= 0;
+}
+
+
 int Type::SubstitutionEnvironment::indexOf(TypeParameter* param) const {
-  for (size_t i = 0; i < substitutionTypes_.size(); i++) {
-    if (*substitutionTypes_[i].first == param)
+  for (size_t i = 0; i < substitutions_.size(); i++) {
+    if (*substitutions_[i].first == param)
       return static_cast<int>(i);
   }
   return -1;

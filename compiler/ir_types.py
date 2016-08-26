@@ -47,6 +47,15 @@ class Type(data.Data):
         return self.isSubtypeOf_(other, SubstitutionEnvironment())
 
     def isSubtypeOf_(self, other, subEnv):
+        subEnv.beginTransaction()
+        result = self.isSubtypeOfRules_(other, subEnv)
+        if result:
+            subEnv.commitTransaction()
+        else:
+            subEnv.rollbackTransaction()
+        return result
+
+    def isSubtypeOfRules_(self, other, subEnv):
         left = self
         right = other
 
@@ -116,10 +125,10 @@ class Type(data.Data):
             # This could be more compact, but it's better for debugging to have the cases split.
             variance = tp.variance()
             if variance is flags.COVARIANT:
-                if not lty.isSubtypeOf_(rty, subEnv.copy()):
+                if not lty.isSubtypeOf_(rty, subEnv):
                     return False
             elif variance is flags.CONTRAVARIANT:
-                if not rty.isSubtypeOf_(lty, subEnv.copy()):
+                if not rty.isSubtypeOf_(lty, subEnv):
                     return False
             else:
                 assert variance is INVARIANT
@@ -167,9 +176,18 @@ class Type(data.Data):
         """Computes the least upper bound of two types on the type lattice. Note that since
         AnyType is not a valid type, this function returns AnyType to indicate that the
         two types couldn't be combined."""
-        return self.lubRec_(other, [], SubstitutionEnvironment())
+        return self.lub_(other, [], SubstitutionEnvironment())
 
-    def lubRec_(self, other, stack, subEnv):
+    def lub_(self, other, stack, subEnv):
+        subEnv.beginTransaction()
+        result = self.lubRules_(other, stack, subEnv)
+        if result is not AnyType:
+            subEnv.commitTransaction()
+        else:
+            subEnv.rollbackTransaction()
+        return result
+
+    def lubRules_(self, other, stack, subEnv):
         # We need to be able to detect infinite recursion in order to ensure termination.
         # Consider the case below:
         #   class A[+T]
@@ -221,7 +239,7 @@ class Type(data.Data):
                 rightInnerType = right
 
             # Find the lub of the inner types.
-            innerLubType = leftInnerType.lubRec_(rightInnerType, stack, subEnv)
+            innerLubType = leftInnerType.lub_(rightInnerType, stack, subEnv)
             stack.pop()
 
             # Find which variables are still being used in the lub. If some of the variables
@@ -243,9 +261,9 @@ class Type(data.Data):
         rightWithFlags = right.withFlags(combinedFlags)
 
         # Rules for subtypes.
-        if leftWithFlags.isSubtypeOf_(rightWithFlags, subEnv.copy()):
+        if leftWithFlags.isSubtypeOf_(rightWithFlags, subEnv):
             return rightWithFlags
-        if rightWithFlags.isSubtypeOf_(leftWithFlags, subEnv.copy()):
+        if rightWithFlags.isSubtypeOf_(leftWithFlags, subEnv):
             return leftWithFlags
 
         # Variable types.
@@ -296,10 +314,10 @@ class Type(data.Data):
                 else:
                     stack.append((self, other))
                     if variance is flags.COVARIANT:
-                        combined = leftArg.lubRec_(rightArg, stack, subEnv.copy())
+                        combined = leftArg.lub_(rightArg, stack, subEnv)
                     else:
                         assert variance is flags.CONTRAVARIANT
-                        combined = leftArg.glbRec_(rightArg, stack)
+                        combined = leftArg.glb_(rightArg, stack)
                     stack.pop()
                 if combined is AnyType:
                     combineSuccess = False
@@ -318,9 +336,9 @@ class Type(data.Data):
         """Computes the greatest lower bound of two types on the type lattice. Note that since
         this is not a true lattice with a bottom, there may be no shared lower bound (e.g.,
         for i64 and String). This function returns None in that case."""
-        return self.glbRec_(ty, [])
+        return self.glb_(ty, [])
 
-    def glbRec_(self, ty, stack):
+    def glb_(self, ty, stack):
         if (self, ty) in stack:
             if self.isObject() and ty.isObject():
                 return getNothingClassType()
@@ -781,67 +799,72 @@ class SubstitutionEnvironment(object):
 
     This environment keeps track of what substitutions have been made and ensures later
     substitutions don't contradict earlier substitutions.
-
-    Attributes:
-        variables: ([TypeParameter]): a list of type parameters added to this environment
-            in the order they were added. Duplicates are not included.
-        substitutionTypes ({DefnId: Type?}): a map of substitutions. Keys are `DefnId`s from
-            existential type parameters. Values are `None` for type parameters that have not
-            been referenced yet. Otherwise, values are the types most recently substituted.
-            These types move up the lattice monotonically (we take the lub for each
-            substitution of the same variable).
     """
 
     def __init__(self):
-        self.variables = []
-        self.substitutionTypes = {}
+        self.substitutions = []
+        self.transactionStack = []
 
     def __repr__(self):
-        buf = StringIO.StringIO()
-        buf.write("SubstitutionEnvironment([")
-        sep = ""
-        for v in self.variables:
-            buf.write(sep)
-            sep = ", "
-            buf.write(str(v.name))
-            buf.write(": ")
-            buf.write(str(self.substitutionTypes[v.id]))
-        buf.write("])")
-        s = buf.getvalue()
-        buf.close()
-        return s
+        ids = set()
+        substitutionStrings = []
+        for var, ty in reversed(self.substitutions):
+            if var.id not in ids:
+                ids.add(var.id)
+                substitutionStrings.append(str(var.name) + ": " + str(ty))
+        return "SubstitutionEnvironment([" + ", ".join(reversed(substitutionStrings)) + "])"
 
-    def copy(self):
-        subEnv = SubstitutionEnvironment()
-        subEnv.variables = list(self.variables)
-        subEnv.substitutionTypes = dict(self.substitutionTypes)
-        return subEnv
+    def beginTransaction(self):
+        self.transactionStack.append(len(self.substitutions))
+
+    def commitTransaction(self):
+        self.transactionStack.pop()
+
+    def rollbackTransaction(self):
+        index = self.transactionStack.pop()
+        del self.substitutions[index:]
 
     def addVariable(self, var):
-        if var.id not in self.substitutionTypes:
-            self.variables.append(var)
-            self.substitutionTypes[var.id] = None
+        if not self.haveVariable_(var):
+            self.substitutions.append((var, None))
 
     def getVariables(self):
-        return self.variables
+        ids = set()
+        variables = []
+        for v, _ in self.substitutions:
+            if v.id not in ids:
+                ids.add(v.id)
+                variables.append(v)
+        return variables
 
     def isExistentialVar(self, vty):
-        return isinstance(vty, VariableType) and vty.typeParameter.id in self.substitutionTypes
+        return isinstance(vty, VariableType) and self.haveVariable_(vty.typeParameter)
 
     def trySubstitute(self, ty, vty):
         assert self.isExistentialVar(vty)
         tp = vty.typeParameter
-        if self.substitutionTypes[tp.id] is None:
-            if not tp.lowerBound.isSubtypeOf_(ty, self.copy()):
-                return False
+        index = self.indexOf_(tp)
+        if self.substitutions[index][1] is None:
             combinedType = ty
         else:
-            combinedType = self.substitutionTypes[tp.id].lub(ty)
-        if combinedType.isSubtypeOf_(tp.upperBound, self.copy()):
-            self.substitutionTypes[tp.id] = combinedType
+            combinedType = self.substitutions[index][1].lub_(ty, [], self)
+        if combinedType.isSubtypeOf_(tp.upperBound, self) and \
+           tp.lowerBound.isSubtypeOf_(combinedType, self):
+            self.substitutions.append((tp, combinedType))
             return True
         else:
             return False
+
+    def haveVariable_(self, var):
+        return self.indexOf_(var) >= 0
+
+    def indexOf_(self, var):
+        i = len(self.substitutions) - 1
+        while i >= 0:
+            if self.substitutions[i][0] is var:
+                break
+            i -= 1
+        return i
 
 
 __all__ = ["BIVARIANT","INVARIANT", "UnitType", "BooleanType", "I8Type",

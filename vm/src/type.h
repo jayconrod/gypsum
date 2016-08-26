@@ -276,25 +276,43 @@ class Type: public Object {
  private:
   class SubstitutionEnvironment {
    public:
+    void beginTransaction();
+    void commitTransaction();
+    void rollbackTransaction();
+
     void addVariable(const Handle<TypeParameter>& var);
     std::vector<Local<TypeParameter>> variables() const;
     bool isExistentialVar(const Handle<Type>& type) const;
     bool trySubstitute(const Handle<Type>& type, const Handle<Type>& varType);
 
    private:
+    bool haveVariable(TypeParameter* param) const;
+    int indexOf(TypeParameter* param) const;
+
     // TODO: this is an inefficient representation, but we can't use type parameters as keys
     // in an unordered_map, since there's nothing to identify them, other than their address,
     // which can change.
-    int indexOf(TypeParameter* param) const;
-
-    std::vector<std::pair<Local<TypeParameter>, Local<Type>>> substitutionTypes_;
+    std::vector<std::pair<Local<TypeParameter>, Local<Type>>> substitutions_;
+    std::vector<size_t> transactionStack_;
   };
   void findVariables(std::vector<Local<TypeParameter>>* variables) const;
-  static bool isSubtypeOf(Local<Type> left, Local<Type> right, SubstitutionEnvironment subEnv);
-  static Local<Type> lub(
+  static bool isSubtypeOf(
+      const Handle<Type>& left,
+      const Handle<Type>& right,
+      SubstitutionEnvironment* subEnv);
+  static bool isSubtypeOfRules(
       Local<Type> left,
       Local<Type> right,
-      SubstitutionEnvironment subEnv,
+      SubstitutionEnvironment* subEnv);
+  static Local<Type> lub(
+      const Handle<Type>& left,
+      const Handle<Type>& right,
+      SubstitutionEnvironment* subEnv,
+      std::vector<std::pair<Local<Type>, Local<Type>>>* stack);
+  static Local<Type> lubRules(
+      Local<Type> left,
+      Local<Type> right,
+      SubstitutionEnvironment* subEnv,
       std::vector<std::pair<Local<Type>, Local<Type>>>* stack);
 
   static const word_t kPointerMap = 0;
