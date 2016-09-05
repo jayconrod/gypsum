@@ -15,7 +15,7 @@ from compiler import *
 from errors import *
 from externalization import externalize
 from flags import LET, PUBLIC, METHOD
-from flatten_classes import flattenClasses
+from flatten import flattenTypeDefinitions
 from ids import *
 from inheritance_analysis import analyzeInheritance
 from ir import *
@@ -56,7 +56,7 @@ class TestCompiler(TestCaseWithDefinitions):
         analyzeInheritance(info)
         analyzeTypes(info)
         convertClosures(info)
-        flattenClasses(info)
+        flattenTypeDefinitions(info)
         externalize(info)
         compile(info)
         return info.package

@@ -9,7 +9,7 @@ import unittest
 from builtins import *
 from compile_info import CompileInfo
 from errors import *
-from flatten_classes import flattenClasses
+from flatten import flattenTypeDefinitions
 from ids import *
 from inheritance_analysis import *
 from ir import *
@@ -21,7 +21,7 @@ from scope_analysis import *
 from type_analysis import *
 from utils_test import FakePackageLoader
 
-class TestFlattenClasses(unittest.TestCase):
+class TestFlatten(unittest.TestCase):
     def setUp(self):
         self.rootMethodNames = [m.name.short() for m in getRootClass().methods]
 
@@ -38,7 +38,7 @@ class TestFlattenClasses(unittest.TestCase):
         analyzeInheritance(info)
         analyzeTypes(info)
         convertClosures(info)
-        flattenClasses(info)
+        flattenTypeDefinitions(info)
         return info
 
     def checkMethodNames(self, expected, irDefn):
@@ -92,7 +92,7 @@ class TestFlattenClasses(unittest.TestCase):
         info = self.analyzeFromSource(source)
         C = info.package.findClass(name="C")
         self.checkMethodNames(self.rootMethodNames + ["f", "g"], C)
-        self.checkTraitMethodNames({"Tr": ["f"]}, C, info.package)
+        self.checkTraitMethodNames({"Tr": self.rootMethodNames + ["f"]}, C, info.package)
 
     def testTraitOverrideBaseClassMethod(self):
         source = "trait Tr\n" + \
@@ -101,10 +101,11 @@ class TestFlattenClasses(unittest.TestCase):
         info = self.analyzeFromSource(source)
         C = info.package.findClass(name="C")
         self.checkMethodNames(self.rootMethodNames, C)
-        self.checkTraitMethodNames({"Tr": ["to-string"]}, C, info.package)
+        self.checkTraitMethodNames({"Tr": self.rootMethodNames}, C, info.package)
         Tr = info.package.findTrait(name="Tr")
         toString = info.package.findFunction(name="Tr.to-string")
-        self.assertIs(toString, C.traits[Tr.id][0])
+        CTrToString = next(m for m in C.traits[Tr.id] if m.sourceName == "to-string")
+        self.assertIs(toString, CTrToString)
 
     def testTraitAndClassOverrideBaseClassMethod(self):
         source = "trait Tr\n" + \
@@ -114,11 +115,12 @@ class TestFlattenClasses(unittest.TestCase):
         info = self.analyzeFromSource(source)
         C = info.package.findClass(name="C")
         self.checkMethodNames(self.rootMethodNames, C)
-        self.checkTraitMethodNames({"Tr": ["to-string"]}, C, info.package)
+        self.checkTraitMethodNames({"Tr": self.rootMethodNames}, C, info.package)
         Tr = info.package.findTrait(name="Tr")
         toString = info.package.findFunction(name="C.to-string")
         self.assertTrue(any(m.id is toString.id for m in C.methods))
-        self.assertIs(toString, C.traits[Tr.id][0])
+        CTrToString = next(m for m in C.traits[Tr.id] if m.sourceName == "to-string")
+        self.assertIs(toString, CTrToString)
 
     def testTraitAndBaseClassOverrideHigherBaseClassMethod(self):
         source = "class Base\n" + \
@@ -131,7 +133,8 @@ class TestFlattenClasses(unittest.TestCase):
         Tr = info.package.findTrait(name="Tr")
         toString = info.package.findFunction(name="Tr.to-string")
         self.assertTrue(any(m.id is toString.id for m in C.methods))
-        self.assertIs(toString, C.traits[Tr.id][0])
+        CTrToString = next(m for m in C.traits[Tr.id] if m.sourceName == "to-string")
+        self.assertIs(toString, CTrToString)
 
     def testTraitInheritedThroughMultiplePaths(self):
         source = "trait Tr1\n" + \
