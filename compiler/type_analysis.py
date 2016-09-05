@@ -1206,9 +1206,6 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                not exprTy.isSubtypeOf(patTy):
                 raise TypeException(loc, nameStr + "expression doesn't match declared type")
             elif mode is COMPILE_FOR_MATCH and \
-                 exprTy.isDisjoint(patTy):
-                raise TypeException(loc, nameStr + "expression cannot match declared type")
-            elif mode is COMPILE_FOR_MATCH and \
                  not isDestructure and \
                  not exprTy.isSubtypeOf(patTy) and \
                  not typeCanBeTested(patTy):

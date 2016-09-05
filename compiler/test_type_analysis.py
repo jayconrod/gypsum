@@ -890,10 +890,6 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "def f(x: i64) = match (x) { case y if x => y; }"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
-    def testMatchExprVarDisjoint(self):
-        source = "def f(x: i64) = match (x) { case y: String => y; }"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
-
     def testMatchExprVarUntestable(self):
         source = "class Foo[static T]\n" + \
                  "def f(x: Object) =\n" + \
@@ -2264,4 +2260,15 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  def f: B = B()\n" + \
                  "class D\n" + \
                  "  def f = A()"
+        self.analyzeFromSource(source)
+
+    def testMatchErasedSubclass(self):
+        source = OPTION_SOURCE + \
+                 "class A[static +T]\n" + \
+                 "class B[static +T] <: A[T]\n" + \
+                 "  static def try-match(obj: Object) = None\n" + \
+                 "def f[static T](a: A[T]) =\n" + \
+                 "  match(a)\n" + \
+                 "    case _: B[_] => 1\n" + \
+                 "    case _ => 2"
         self.analyzeFromSource(source)
