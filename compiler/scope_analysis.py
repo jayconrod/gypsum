@@ -700,7 +700,7 @@ class Scope(ast.NodeVisitor):
         isStatic = False
         isGlobal = False
         while True:
-            if not self.isLocal():
+            if not current.isLocal():
                 isStatic |= STATIC in self.getIrDefn().flags
             current = current.parent
             isWithin |= current.scopeId is id

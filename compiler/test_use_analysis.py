@@ -338,3 +338,10 @@ class TestUseAnalysis(TestCaseWithDefinitions):
     def testUseTypeParameterAsVariable(self):
         source = "def f[static T] = T"
         self.assertRaises(TypeException, self.analyzeFromSourceWithTypes, source)
+
+    def testUseFieldInStaticMatchCase(self):
+        source = "class Foo(x: i64)\n" + \
+                 "  static def f(obj: Object) =\n" + \
+                 "    match (obj)\n" + \
+                 "      case _ => x"
+        self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
