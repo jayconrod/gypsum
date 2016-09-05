@@ -334,3 +334,7 @@ class TestUseAnalysis(TestCaseWithDefinitions):
         S = info.package.findTypeParameter(name="f.S")
         use = info.getUseInfo(info.ast.modules[0].definitions[1].typeParameters[0].upperBound.typeArguments[0])
         self.assertIs(S, use.defnInfo.irDefn)
+
+    def testUseTypeParameterAsVariable(self):
+        source = "def f[static T] = T"
+        self.assertRaises(TypeException, self.analyzeFromSourceWithTypes, source)

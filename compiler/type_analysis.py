@@ -1853,11 +1853,15 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         Classes and package prefixes cannot be used as values. If the `NameInfo` references
         one of those, a `TypeException` will be raised.
         """
-        if nameInfo.isClass():
-            raise TypeException(loc, "%s: class can't be used as value" % nameInfo.name)
-        if nameInfo.isPackagePrefix():
-            raise TypeException(loc, "%s: package prefix can't be used as value" %
-                                nameInfo.name)
+        if nameInfo.isFunction():
+            return
+        assert not nameInfo.isOverloaded()
+        irDefn = nameInfo.getDefnInfo().irDefn
+        if not (isinstance(irDefn, ir.Global) or \
+            isinstance(irDefn, ir.Variable) or \
+            isinstance(irDefn, ir.Field) or \
+            isinstance(irDefn, ir.Package)):
+            raise TypeException(loc, "%s: definition can't be used as a value" % nameInfo.name)
 
     def chooseConstructorFromNameInfo(self, nameInfo, typeArgs, argTypes, loc):
         """Determines which constructor should be used from a `NameInfo` that refers to a class.
