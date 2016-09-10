@@ -1169,9 +1169,11 @@ void Type::SubstitutionEnvironment::commitTransaction() {
 
 
 void Type::SubstitutionEnvironment::rollbackTransaction() {
+  ASSERT(!transactionStack_.empty());
   auto index = transactionStack_.back();
+  ASSERT(index <= substitutions_.size());
   transactionStack_.pop_back();
-  transactionStack_.erase(transactionStack_.begin() + index, transactionStack_.end());
+  substitutions_.erase(substitutions_.begin() + index, substitutions_.end());
 }
 
 

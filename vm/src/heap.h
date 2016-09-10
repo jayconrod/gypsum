@@ -123,11 +123,11 @@ class Heap {
     }
     iterator& operator ++ ();
    private:
-    iterator(const std::vector<std::unique_ptr<Chunk>>::iterator& it,
-             const std::vector<std::unique_ptr<Chunk>>::iterator& end)
+    iterator(std::vector<std::unique_ptr<Chunk>>::iterator&& it,
+             std::vector<std::unique_ptr<Chunk>>::iterator&& end)
         : it_(it), end_(end) { }
 
-        std::vector<std::unique_ptr<Chunk>>::iterator it_, end_;
+    std::vector<std::unique_ptr<Chunk>>::iterator it_, end_;
 
     friend class Heap;
   };

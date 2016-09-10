@@ -75,11 +75,10 @@ bool Heap::iterator::operator == (const iterator& other) const {
 
 
 Heap::iterator& Heap::iterator::operator ++ () {
-  while (it_ != end_) {
+  ASSERT(it_ != end_);
+  do {
     it_++;
-    if (*it_)
-      break;
-  }
+  } while (it_ != end_ && !*it_);
   return *this;
 }
 
