@@ -1107,6 +1107,44 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(ClassType(Foo), info.getType(matchCase.pattern.left))
         self.assertEquals(ClassType(Bar), info.getType(matchCase.pattern.right))
 
+    def testMatchExprTestStaticAndDynamic(self):
+        source = OPTION_SOURCE + \
+                 "class Box[static +T]\n" + \
+                 "class FullBox[static +T](value: T) <: Box[T]\n" + \
+                 "  static def try-match(box: Box[T]): Option[T] =\n" + \
+                 "    match (box)\n" + \
+                 "      case full-box: FullBox[T] => Some[T](full-box.value)\n" + \
+                 "      case _ => None"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        T = info.package.findClass(name="FullBox").typeParameters[0]
+        TType = VariableType(T)
+        Some = info.package.findClass(name="Some")
+        SomeTType = ClassType(Some, (TType,))
+        tryMatch = info.package.findFunction(name="FullBox.try-match")
+        caseType = info.getType(tryMatch.astDefn.body.statements[0].matcher.cases[0].expression)
+        self.assertEquals(SomeTType, caseType)
+
+    def testMatchExprTestStaticAndDynamicOption(self):
+        source = OPTION_SOURCE + \
+                 "class Foo[static F]\n" + \
+                 "class Bar[static B] <: Foo[Option[B]]\n" + \
+                 "def f(foo: Foo[Option[String]]) =\n" + \
+                 "  match (foo)\n" + \
+                 "    case bar: Bar[String] => true\n" + \
+                 "    case _ => false"
+        self.analyzeFromSource(source, name=STD_NAME)
+        # pass if no exception is raised
+
+    def testMatchExprTestStaticAndDynamicTwoParams(self):
+        source = OPTION_SOURCE + \
+                 "class Foo[static F]\n" + \
+                 "class Bar[static B1, static B2] <: Foo[B1]\n" + \
+                 "def f(foo: Foo[String]) =\n" + \
+                 "  match (foo)\n" + \
+                 "    case bar: Bar[String, String] => true\n" + \
+                 "    case _ => false"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     def testMatchExprWithDisjointType(self):
         source = "def f(x: String) =\n" + \
                  "  match (x)\n" + \

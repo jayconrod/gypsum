@@ -105,31 +105,93 @@ def resolveAllOverrides(info):
         scope.resolveOverrides()
 
 
-def typeCanBeTested(ty, existentialVarIds=None):
-    """Returns whether a type can be tested at runtime, for example with a `cast` or `castcbr`
+def typeCanBeTested(testType, staticType, existentialVarIds=None):
+    """Returns whether a type can be tested at run-time, for example with a `cast` or `castcbr`
     instruction.
 
-    Type declaration must be complete before this is called."""
+    In general, class types without static type arguments may be tested. If the type arguments
+    for static parameters are unbounded existential variables, that may be tested (since it
+    indicates those arguments may be anything). Additionally, if `staticType` is a class type
+    of a superclass or supertrait of `testType`, static type arguments that can be inferred
+    from `staticType` don't need to be tested.
+
+    Inheritance analysis must be complete before this is called.
+
+    Arguments:
+        testType (Type): the type we are trying to test dynamically.
+        staticType (Type): the statically known type of the thing we are trying to test.
+            `testType` should be a subtype of this (otherwise the test would always fail).
+
+    Returns:
+        (bool): whether or not the type can be tested at run-time.
+    """
     if existentialVarIds is None:
         existentialVarIds = frozenset()
 
-    if isinstance(ty, ir_t.ClassType):
-        for tp, ta in zip(ty.clas.typeParameters, ty.typeArguments):
+    if isinstance(testType, ir_t.ClassType):
+        if isinstance(staticType, ir_t.ClassType):
+            baseTypeArgs = extractTypeArgsForSubtype(testType.clas, staticType)
+            if baseTypeArgs is not None and \
+               ir_t.ClassType(testType.clas, baseTypeArgs, testType.flags) == testType:
+                return True
+        rootType = ir_t.getRootClassType()
+        for tp, ta in zip(testType.clas.typeParameters, testType.typeArguments):
             staticArgCanBeTested = STATIC in tp.flags and \
                                    isinstance(ta, ir_t.VariableType) and \
                                    ta.typeParameter.id in existentialVarIds
             dynamicArgCanBeTested = STATIC not in tp.flags and \
-                                    typeCanBeTested(ta, existentialVarIds)
+                                    typeCanBeTested(ta, rootType, existentialVarIds)
             if not staticArgCanBeTested and not dynamicArgCanBeTested:
                 return False
         return True
-    elif isinstance(ty, ir_t.VariableType):
-        return STATIC not in ty.typeParameter.flags
-    elif isinstance(ty, ir_t.ExistentialType):
-        return typeCanBeTested(ty.ty, existentialVarIds | frozenset(v.id for v in ty.variables))
+    elif isinstance(testType, ir_t.VariableType):
+        return STATIC not in testType.typeParameter.flags
+    elif isinstance(testType, ir_t.ExistentialType):
+        return typeCanBeTested(testType.ty, staticType,
+                               existentialVarIds | frozenset(v.id for v in testType.variables))
     else:
         # Primitive types cannot be tested.
         return False
+
+
+def extractTypeArgsForSubtype(clas, supertype):
+    """Extracts type arguments for a subtype of `supertype` based on `clas`.
+
+    Arguments:
+        clas (ObjectTypeDefn): the class or trait we are extracting type arguments for.
+        supertype (ClassType): a class type. `clas` should be derived from the class or trait
+            this is based on, or `None` will be returned.
+
+    Returns:
+        (tuple(Type)?): A tuple of type arguments for `clas`. Once applied, the resulting type
+        will be a subtype of `supertype`. If this is not possible, `None` is returned.
+    """
+    def extract(base, sup):
+        if isinstance(base, ir_t.VariableType):
+            tpid = base.typeParameter.id
+            if tpid in typeMap:
+                if typeMap[tpid] is not None and typeMap[tpid] != sup:
+                    return False
+                typeMap[tpid] = sup
+            return True
+        elif isinstance(base, ir_t.ClassType):
+            if not isinstance(sup, ir_t.ClassType) or base.clas is not sup.clas:
+                return False
+            return all(extract(ba, sa) for ba, sa in zip(base.typeArguments, sup.typeArguments))
+        elif isinstance(base, ir_t.ExistentialType):
+            if not isinstance(sup, ir_t.ExistentialType) or \
+               any(bp is not sp for bp, sp in zip(base.typeParameters, sup.typeParameters)):
+                return False
+            return extract(base.ty, sup.ty)
+        else:
+            return base == sup
+
+    baseType = clas.findBaseType(supertype.clas)
+    if baseType is None:
+        return None
+    typeMap = {p.id: None for p in clas.typeParameters}
+    extract(baseType, supertype)
+    return tuple(typeMap[p.id] for p in clas.typeParameters)
 
 
 class TypeVisitorBase(ast.NodeVisitor):
@@ -1208,7 +1270,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             elif mode is COMPILE_FOR_MATCH and \
                  not isDestructure and \
                  not exprTy.isSubtypeOf(patTy) and \
-                 not typeCanBeTested(patTy):
+                 not typeCanBeTested(patTy, exprTy):
                 raise TypeException(loc, nameStr + "type cannot be tested at runtime")
             else:
                 return patTy

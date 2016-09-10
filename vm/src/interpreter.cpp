@@ -126,6 +126,18 @@ Block* Interpreter::pop<Block*>() {
 }
 
 
+template <>
+Object* Interpreter::pop<Object*>() {
+  return reinterpret_cast<Object*>(pop<Block*>());
+}
+
+
+template <>
+Type* Interpreter::pop<Type*>() {
+  return reinterpret_cast<Type*>(pop<Block*>());
+}
+
+
 class Interpreter::GCSafeScope {
  public:
   explicit GCSafeScope(Interpreter* interpreter)
@@ -677,55 +689,22 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       case CAST:
         break;
 
-      case CASTC:
-        try {
-          GCSafeScope gcSafe(this);
-          HandleScope handleScope(vm_);
-          auto type = handle(mem<Type*>(stack_->sp() + kPrepareForGCSize));
-          auto object = handle(mem<Object*>(stack_->sp() + kPrepareForGCSize + kSlotSize));
-          auto nullOk = *object != nullptr || type->isNullable();
-          bool isSubtype;
-          if (!nullOk) {
-            isSubtype = false;
-          } else {
-            auto objectType = Object::typeof(object);
-            isSubtype = Type::isSubtypeOf(objectType, type);
-          }
-          if (!isSubtype) {
-            doThrow(threadBindle_->takeCastException());
-            break;
-          }
-        } catch (AllocationError& e) {
-          doThrow(threadBindle_->takeOutOfMemoryException());
-          break;
+      case CASTC: {
+        auto type = pop<Type*>();
+        auto object = mem<Object*>(stack_->sp());  // object stays on stack
+        if (!isSubtypeOf(object, type)) {
+          doThrow(threadBindle_->takeCastException());
         }
-        pop<Block*>();
-        // object stays on top of the stack.
         break;
+      }
 
       case CASTCBR: {
         auto trueBlockIndex = toLength(readVbn());
         auto falseBlockIndex = toLength(readVbn());
-        auto isSubtype = false;
-        try {
-          GCSafeScope gcSafe(this);
-          HandleScope handleScope(vm_);
-          auto type = handle(mem<Type*>(stack_->sp(), kPrepareForGCSize));
-          auto object = handle(mem<Object*>(stack_->sp(), kPrepareForGCSize + kSlotSize));
-          auto nullOk = *object != nullptr || type->isNullable();
-          if (!nullOk) {
-            isSubtype = false;
-          } else {
-            auto objectType = Object::typeof(object);
-            isSubtype = Type::isSubtypeOf(objectType, type);
-          }
-        } catch (AllocationError& e) {
-          doThrow(threadBindle_->takeOutOfMemoryException());
-          break;
-        }
-        pop<Block*>();
-        // object stays on top of the stack.
-        pcOffset_ = function_->blockOffset(isSubtype ? trueBlockIndex : falseBlockIndex);
+        auto type = pop<Type*>();
+        auto object = mem<Object*>(stack_->sp());  // object stays on stack
+        auto blockIndex = isSubtypeOf(object, type) ? trueBlockIndex : falseBlockIndex;
+        pcOffset_ = function_->blockOffset(blockIndex);
         break;
       }
 
@@ -1348,6 +1327,36 @@ void Interpreter::store(Block* block, word_t offset, Type* type) {
       mem<i64>(block, offset) = pop<i64>();
     }
   }
+}
+
+
+bool Interpreter::isSubtypeOf(Object* object, Type* type) {
+  if (!type->isObject()) {
+    return false;
+  }
+  while (type->isExistential()) {
+    type = type->existentialInnerType();
+  }
+  if (!type->isClassOrTrait()) {
+    return false;
+  }
+  auto typeDefn = type->asClassOrTrait();
+
+  if (object == nullptr && !type->isNullable()) {
+    return false;
+  }
+
+  auto clas = object->clas();
+  if (clas == typeDefn) {
+    return true;
+  }
+  auto supertypes = clas->supertypes();
+  for (length_t i = 0, n = supertypes->length(); i < n; i++) {
+    if (supertypes->get(i)->asClassOrTrait() == typeDefn) {
+      return true;
+    }
+  }
+  return false;
 }
 
 

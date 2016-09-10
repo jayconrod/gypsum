@@ -769,8 +769,6 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         }
 
         case CASTC: {
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
           auto type = currentMap.popTypeArg();
           currentMap.pop();
           currentMap.pop();
@@ -781,8 +779,6 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         case CASTCBR: {
           i64 trueBlockIndex = readVbn(bytecode, &pcOffset);
           i64 falseBlockIndex = readVbn(bytecode, &pcOffset);
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
           auto type = currentMap.popTypeArg();
           currentMap.pop();
           currentMap.pcOffset = function->blockOffset(falseBlockIndex);

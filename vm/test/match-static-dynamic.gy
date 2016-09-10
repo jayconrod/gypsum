@@ -1,0 +1,21 @@
+// Copyright 2016 Jay Conrod. All rights reserved.
+
+// This file is part of CodeSwitch. Use of this source code is governed by
+// the 3-clause BSD license that can be found in the LICENSE.txt file.
+
+
+import std.Option, Some, None
+
+
+class Box[static T]
+class FullBox[static T](value: T) <: Box[T]
+  static def try-match(box: Box[T]): Option[T] =
+    match (box)
+      case full-box: FullBox[T] => Some[T](full-box.value)
+      case _ => None
+
+def main =
+  let box = FullBox[String]("foo")
+  match (box)
+    case FullBox[String](s) if s == "foo" => {}
+    case _ => throw Exception()
