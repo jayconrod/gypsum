@@ -312,12 +312,15 @@ def copyInheritedDefinitions(info, inheritanceGraph, bases):
             if len(overrides) > 0:
                 irDefn.overrides = overrides
 
+        inheritedIds = set()
         for superScope in superScopes:
             for name, defnInfo in superScope.iterBindings():
-                if not defnInfo.isHeritable() or \
-                   (isinstance(defnInfo.irDefn, ir.IrTopDefn) and \
-                    defnInfo.irDefn.id in overridenIds):
+                if (not defnInfo.isHeritable() or
+                    (isinstance(defnInfo.irDefn, ir.IrTopDefn) and
+                     (defnInfo.irDefn.id in inheritedIds or
+                      defnInfo.irDefn.id in overridenIds))):
                     continue
+                inheritedIds.add(defnInfo.irDefn.id)
                 scope.bind(name, defnInfo.inherit(scope.scopeId))
 
         irScopeDefn = scope.getIrDefn()

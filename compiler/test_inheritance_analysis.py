@@ -584,3 +584,10 @@ class TestInheritanceAnalysis(unittest.TestCase):
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         bazScope = info.getScope(info.ast.modules[0].definitions[1])
         self.assertTrue(bazScope.isBound("x"))
+
+    def testMethodInheritedOnceAlongMultiplePaths(self):
+        source = "trait Foo\n" + \
+                 "class Bar <: Object, Foo"
+        info = self.analyzeFromSource(source)
+        scope = info.getScope(info.ast.modules[0].definitions[1])
+        self.assertEquals(1, len([b for b in scope.iterBindings() if b[0] == "to-string"]))
