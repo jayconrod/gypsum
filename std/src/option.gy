@@ -1,12 +1,13 @@
-// Copyright 2015, Jay Conrod. All rights reserved.
+// Copyright 2015-2016, Jay Conrod. All rights reserved.
 //
 // This file is part of the Gypsum standard library. Use of this
 // source code is governed by the 3-clause BSD license that can be
 // found in the LICENSE.txt file.
 
-public abstract class Option[static +T]
+public abstract class Option[static +T] <: Iter[T]
   public abstract def is-defined: boolean
   public abstract def get: T
+  public final override def iter: Iterator[T] = OptionIterator[T](this)
 
 
 public class Some[static +T](value: T) <: Option[T]
@@ -29,3 +30,16 @@ class None-class <: Option[Nothing]
 
 
 public let None: Option[Nothing] = None-class()
+
+
+class OptionIterator[static T](private opt: Option[T]) <: Iterator[T]
+  private var has-next- = opt.is-defined
+
+  public override def has-next = has-next-
+
+  public override def next =
+    if (has-next-)
+      has-next- = false
+      opt.get
+    else
+      throw NoSuchElementException()
