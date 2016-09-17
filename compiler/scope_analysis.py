@@ -583,9 +583,11 @@ class Scope(ast.NodeVisitor):
             return None
         return nameInfo
 
-    def isBound(self, name):
-        """Returns true if a symbol is defined in this scope."""
-        return self.getDefinition(name) is not None
+    def isBound(self, name, irDefn=None):
+        """Returns whether a symbol and definition is bound in this scope."""
+        return (name in self.bindings and
+                (irDefn is None or
+                 any(d.irDefn is irDefn for d in self.bindings[name].overloads)))
 
     def isShadow(self, name):
         """Returns true if a symbol is defined in an outer scope."""

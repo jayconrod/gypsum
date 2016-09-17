@@ -591,3 +591,15 @@ class TestInheritanceAnalysis(unittest.TestCase):
         info = self.analyzeFromSource(source)
         scope = info.getScope(info.ast.modules[0].definitions[1])
         self.assertEquals(1, len([b for b in scope.iterBindings() if b[0] == "to-string"]))
+
+    def testMethodOverridenOnceAlongMultiplePaths(self):
+        source = "trait Foo\n" + \
+                 "class Bar <: Object, Foo\n" + \
+                 "  public override def to-string = \"Bar\""
+        info = self.analyzeFromSource(source)
+        ObjectToString = getRootClass().findMethodBySourceName("to-string")[0]
+        Bar = info.package.findClass(name="Bar")
+        BarToString = info.package.findFunction(name="Bar.to-string")
+        self.assertEquals(1, len(BarToString.overrides))
+        self.assertIs(ObjectToString, BarToString.overrides[0])
+        self.assertIs(BarToString, ObjectToString.overridenBy[Bar.id])
