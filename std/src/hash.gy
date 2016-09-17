@@ -6,3 +6,47 @@
 
 public trait Hash[static -T] <: Eq[T]
   public abstract def hash: i32
+
+
+// This class is based on the implementation of MurmurHash3, retrieved from
+// https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
+// The original code was written by Austin Appleby and placed in the public domain.
+public class HashBuilder(seed: i32)
+  public def this = {}
+
+  private var h = seed
+  private var len = 0i32
+
+  public def finish: i32 =
+    h ^= len
+    h = fmix32(h)
+    h
+
+  public def hash(b: boolean) = hash(if (b) 1i32 else 0i32)
+  public def hash(n: i8) = hash(n.to-i32)
+  public def hash(n: i16) = hash(n.to-i32)
+  public def hash(n: i64) = hash(n.to-i32).hash((n >> 32).to-i32)
+  public def hash(n: f32) = hash(n.to-i32)
+  public def hash(n: f64) = hash(n.to-i64)
+
+  public def hash(n: i32): HashBuilder =
+    var k = n * 0xcc9e2d51i32
+    k = rotl32(k, 15i32)
+    k *= 0x1b873593i32
+
+    h ^= k
+    h = rotl32(h, 13i32)
+    h = h * 5i32 + 0xe6546b64i32
+
+    len += 4i32
+    this
+
+  private static def rotl32(x: i32, r: i32): i32 = x << r | x >>> (32i32 - r)
+
+  private static def fmix32(var h: i32): i32 =
+    h ^= h >> 16i32
+    h *= 0x85ebca6bi32
+    h ^= h >> 13i32
+    h *= 0xc2b2ae35i32
+    h ^= h >> 16i32
+    h
