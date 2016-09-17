@@ -1,0 +1,35 @@
+// Copyright 2016, Jay Conrod. All rights reserved.
+//
+// This file is part of the Gypsum standard library. Use of this
+// source code is governed by the 3-clause BSD license that can be
+// found in the LICENSE.txt file.
+
+public trait Function0[static +R]
+  public def call: R
+
+public trait Function1[static +R, static -P1]
+  public def call(p1: P1): R
+
+public trait Function2[static +R, static -P1, static -P2]
+  public def call(p1: P1, p2: P2): R
+
+public trait Function3[static +R, static -P1, static -P2, static -P3]
+  public def call(p1: P1, p2: P2, p3: P3): R
+
+public trait Function4[static +R, static -P1, static -P2, static -P3, static -P4]
+  public def call(p1: P1, p2: P2, p3: P3, p4: P4): R
+
+public trait Function5[static +R, static -P1, static -P2, static -P3, static -P4, static -P5]
+  public def call(p1: P1, p2: P2, p3: P3, p4: P4, p5: P5): R
+
+public trait Function6[static +R, static -P1, static -P2, static -P3, static -P4, static -P5, static -P6]
+  public def call(p1: P1, p2: P2, p3: P3, p4: P4, p5: P5, p6: P6): R
+
+public trait Function7[static +R, static -P1, static -P2, static -P3, static -P4, static -P5, static -P6, static -P7]
+  public def call(p1: P1, p2: P2, p3: P3, p4: P4, p5: P5, p6: P6, p7: P7): R
+
+public trait Function8[static +R, static -P1, static -P2, static -P3, static -P4, static -P5, static -P6, static -P7, static -P8]
+  public def call(p1: P1, p2: P2, p3: P3, p4: P4, p5: P5, p6: P6, p7: P7, p8: P8): R
+
+public trait Function9[static +R, static -P1, static -P2, static -P3, static -P4, static -P5, static -P6, static -P7, static -P8, static -P9]
+  public def call(p1: P1, p2: P2, p3: P3, p4: P4, p5: P5, p6: P6, p7: P7, p8: P8, p9: P9): R
