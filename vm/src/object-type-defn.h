@@ -30,6 +30,8 @@ class ObjectTypeDefn: public Block {
   void setSupertypes(BlockArray<Type>* newSupertypes);
   BlockArray<TypeParameter>* typeParameters() const;
   void setTypeParameters(BlockArray<TypeParameter>* newTypeParameters);
+  TypeParameter* typeParameter(length_t index) const;
+  length_t typeParameterCount() const;
 
   ObjectTypeDefn* findCommonBase(ObjectTypeDefn* other);
 

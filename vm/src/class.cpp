@@ -111,16 +111,6 @@ Local<Class> Class::create(Heap* heap) {
 }
 
 
-TypeParameter* Class::typeParameter(length_t index) const {
-  return typeParameters()->get(index);
-}
-
-
-length_t Class::typeParameterCount() const {
-  return typeParameters()->length();
-}
-
-
 Type* Class::baseClassType() const {
   auto types = supertypes();
   return types->isEmpty() ? nullptr : types->get(0);

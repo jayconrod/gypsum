@@ -187,6 +187,38 @@ class tycdf(Instruction):
         return self.popCount_
 
 
+class tyts(Instruction):
+    def __init__(self, trait):
+        assert isinstance(trait, ir.Trait) and (trait.isLocal() or trait.isBuiltin())
+        super(tyts, self).__init__(trait.id.index)
+
+
+class tytsf(Instruction):
+    def __init__(self, trait):
+        assert isinstance(trait, ir.Trait) and trait.isForeign()
+        super(tytsf, self).__init__(trait.id.packageId.index, trait.id.externIndex)
+
+
+class tytd(Instruction):
+    def __init__(self, trait):
+        assert isinstance(trait, ir.Trait) and (trait.isLocal() or trait.isBuiltin())
+        super(tytd, self).__init__(trait.id.index)
+        self.popCount_ = len(trait.typeParameters)
+
+    def popCount(self):
+        return self.popCount_
+
+
+class tytdf(Instruction):
+    def __init__(self, trait):
+        assert isinstance(trait, ir.Trait) and trait.isForeign()
+        super(tytdf, self).__init__(trait.id.packageId.index, trait.id.externIndex)
+        self.popCount_ = len(trait.typeParameters)
+
+    def popCount(self):
+        return self.popCount_
+
+
 class tyvs(Instruction):
     def __init__(self, param):
         assert isinstance(param, ir.TypeParameter) and (param.isLocal() or param.isBuiltin())

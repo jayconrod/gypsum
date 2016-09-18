@@ -1002,6 +1002,67 @@ class TestCompiler(TestCaseWithDefinitions):
                                         self.makeVariable("f.y", type=yType,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
+    def testMatchExprWithLocalTraitType(self):
+        source = "trait Foo\n" + \
+                 "def f(x: Object) =\n" + \
+                 "  match (x)\n" + \
+                 "    case y: Foo => 12\n" + \
+                 "    case _ => 34"
+        package = self.compileFromSource(source)
+        Foo = package.findTrait(name="Foo")
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               ldlocal(0),
+                               tytd(Foo),
+                               castcbr(1, 2),
+                             ], [
+                               stlocal(-1),
+                               i64(12),
+                               branch(3),
+                             ], [
+                               drop(),
+                               i64(34),
+                               branch(3),
+                             ], [
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.x", type=getRootClassType(),
+                                                          kind=PARAMETER, flags=frozenset([LET])),
+                                        self.makeVariable("f.y", type=ClassType(Foo),
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testMatchExprWithForeignTraitType(self):
+        foo = Package(name=Name(["foo"]))
+        Foo = foo.addTrait(Name(["Foo"]), typeParameters=[], supertypes=[getRootClassType()],
+                           methods=[], flags=frozenset([PUBLIC]))
+        loader = FakePackageLoader([foo])
+
+        source = "def f(x: Object) =\n" + \
+                 "  match (x)\n" + \
+                 "    case y: foo.Foo => 12\n" + \
+                 "    case _ => 34"
+        package = self.compileFromSource(source, packageLoader=loader)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               ldlocal(0),
+                               tytdf(Foo),
+                               castcbr(1, 2),
+                             ], [
+                               stlocal(-1),
+                               i64(12),
+                               branch(3),
+                             ], [
+                               drop(),
+                               i64(34),
+                               branch(3),
+                             ], [
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.x", type=getRootClassType(),
+                                                          kind=PARAMETER, flags=frozenset([LET])),
+                                        self.makeVariable("f.y", type=ClassType(Foo),
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
     def testMatchExprWithVarWithExistentialType(self):
         source = "class Foo[static T]\n" + \
                  "def f(x: Object) =\n" + \
@@ -3554,6 +3615,44 @@ class TestCompiler(TestCaseWithDefinitions):
                                                   kind=PARAMETER, flags=frozenset([LET]))],
                      parameterTypes=[Cty])
         self.assertEquals(expected, f)
+
+    def testCallWithStaticLocalTraitTypeArgument(self):
+        source = "trait Foo\n" + \
+                 "def id[static T](x: T) = x\n" + \
+                 "def f(o: Foo) = id[Foo](o)"
+        package = self.compileFromSource(source)
+        id = package.findFunction(name="id")
+        Foo = package.findTrait(name="Foo")
+        FooType = ClassType.forReceiver(Foo)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", FooType, [[
+                               ldlocal(0),
+                               tyts(Foo),
+                               callg(id),
+                               ret()]],
+                             variables=[self.makeVariable("f.o", type=FooType,
+                                        kind=PARAMETER, flags=frozenset([LET]))]))
+
+    def testCallWithStaticForeignTraitTypeArgument(self):
+        foo = Package(name=Name(["foo"]))
+        Foo = foo.addTrait(Name(["Foo"]), typeParameters=[],
+                           supertypes=[getRootClassType()], methods=[],
+                           flags=frozenset([PUBLIC]))
+        loader = FakePackageLoader([foo])
+
+        source = "def id[static T](x: T) = x\n" + \
+                 "def f(o: foo.Foo) = id[foo.Foo](o)"
+        package = self.compileFromSource(source, packageLoader=loader)
+        id = package.findFunction(name="id")
+        FooType = ClassType.forReceiver(Foo)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", FooType, [[
+                               ldlocal(0),
+                               tytsf(Foo),
+                               callg(id),
+                               ret()]],
+                             variables=[self.makeVariable("f.o", type=FooType,
+                                        kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testCallWithStaticVariableTypeArgument(self):
         source = "def id-outer[static TO](x: TO) = id-inner[TO](x)\n" + \

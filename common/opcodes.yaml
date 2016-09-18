@@ -44,6 +44,10 @@
 - {name: "tycsf", iops: 2, push: 0, pop: 0, term: false}
 - {name: "tycd", iops: 1, push: 1, pop: ~, term: false}
 - {name: "tycdf", iops: 2, push: 1, pop: ~, term: false}
+- {name: "tyts", iops: 1, push: 0, pop: 0, term: false}
+- {name: "tytsf", iops: 2, push: 0, pop: 0, term: false}
+- {name: "tytd", iops: 1, push: 1, pop: ~, term: false}
+- {name: "tytdf", iops: 2, push: 1, pop: ~, term: false}
 - {name: "tyvs", iops: 1, push: 0, pop: 0, term: false}
 - {name: "tyvd", iops: 1, push: 1, pop: 0, term: false}
 - {name: "tyvdf", iops: 2, push: 1, pop: 0, term: false}

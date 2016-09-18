@@ -49,6 +49,16 @@ void ObjectTypeDefn::setTypeParameters(BlockArray<TypeParameter>* newTypeParamet
 }
 
 
+TypeParameter* ObjectTypeDefn::typeParameter(length_t index) const {
+  return typeParameters()->get(index);
+}
+
+
+length_t ObjectTypeDefn::typeParameterCount() const {
+  return typeParameters()->length();
+}
+
+
 ObjectTypeDefn* ObjectTypeDefn::findCommonBase(ObjectTypeDefn* other) {
   // TODO: This implementation doesn't fully consider traits. It only finds bases within
   // the class tree. This matches what the compiler does. A proper implementation would find

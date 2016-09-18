@@ -672,6 +672,70 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
+        case TYTS: {
+          i64 traitId = readVbn(bytecode, &pcOffset);
+          Local<Trait> trait;
+          if (isBuiltinId(traitId)) {
+            trait = handle(roots->getBuiltinTrait(static_cast<BuiltinId>(traitId)));
+          } else {
+            trait = handle(package->getTrait(traitId));
+          }
+          vector<Local<Type>> typeArgs;
+          currentMap.popTypeArgs(trait->typeParameterCount(), &typeArgs);
+          auto type = Type::create(heap, trait, typeArgs);
+          currentMap.pushTypeArg(type);
+          break;
+        }
+
+        case TYTSF: {
+          auto depIndex = readVbn(bytecode, &pcOffset);
+          auto externIndex = readVbn(bytecode, &pcOffset);
+          auto trait = handle(package->dependencies()->get(depIndex)
+              ->linkedTraits()->get(externIndex));
+          vector<Local<Type>> typeArgs;
+          currentMap.popTypeArgs(trait->typeParameterCount(), &typeArgs);
+          auto type = Type::create(heap, trait, typeArgs);
+          currentMap.pushTypeArg(type);
+          break;
+        }
+
+        case TYTD: {
+          i64 traitId = readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          Local<Trait> trait;
+          if (isBuiltinId(traitId)) {
+            trait = handle(roots->getBuiltinTrait(static_cast<BuiltinId>(traitId)));
+          } else {
+            trait = handle(package->getTrait(traitId));
+          }
+          vector<Local<Type>> typeArgs;
+          currentMap.popTypeArgs(trait->typeParameterCount(), &typeArgs);
+          currentMap.pop(trait->typeParameterCount());
+          auto type = Type::create(heap, trait, typeArgs);
+          currentMap.pushTypeArg(type);
+          auto valueType = handle(roots->getBuiltinType(BUILTIN_TYPE_CLASS_ID));
+          currentMap.push(valueType);
+          break;
+        }
+
+        case TYTDF: {
+          auto depIndex = readVbn(bytecode, &pcOffset);
+          auto externIndex = readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          auto trait = handle(package->dependencies()->get(depIndex)
+              ->linkedTraits()->get(externIndex));
+          vector<Local<Type>> typeArgs;
+          currentMap.popTypeArgs(trait->typeParameterCount(), &typeArgs);
+          currentMap.pop(trait->typeParameterCount());
+          auto type = Type::create(heap, trait, typeArgs);
+          currentMap.pushTypeArg(type);
+          auto valueType = handle(roots->getBuiltinType(BUILTIN_TYPE_CLASS_ID));
+          currentMap.push(valueType);
+          break;
+        }
+
         case TYVS: {
           auto typeParamId = readVbn(bytecode, &pcOffset);
           ASSERT(!isBuiltinId(typeParamId));

@@ -542,11 +542,13 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       }
 
       case TYCS:
+      case TYTS:
       case TYVS:
         readVbn();
         break;
 
       case TYCSF:
+      case TYTSF:
         readVbn();
         readVbn();
         break;
@@ -598,6 +600,62 @@ i64 Interpreter::call(const Handle<Function>& callee) {
             typeArgs.push_back(arg);
           }
           type = *Type::create(vm_->heap(), clas, typeArgs);
+        } catch (AllocationError& e) {
+          doThrow(threadBindle_->takeOutOfMemoryException());
+          break;
+        }
+        stack_->setSp(stack_->sp() + count * kSlotSize);
+        push<Block*>(type);
+        break;
+      }
+
+      case TYTD: {
+        auto traitId = readVbn();
+        Type* type = nullptr;
+        auto count = kLengthNotSet;
+        try {
+          GCSafeScope gcSafe(this);
+          HandleScope handleScope(vm_);
+          auto trait = handle(isBuiltinId(traitId)
+              ? vm_->roots()->getBuiltinTrait(traitId)
+              : function_->package()->getTrait(traitId));
+          count = trait->typeParameterCount();
+          vector<Local<Type>> typeArgs;
+          typeArgs.reserve(count);
+          for (length_t i = 0; i < count; i++) {
+            size_t offset = kPrepareForGCSize + (count - i - 1) * kSlotSize;
+            auto arg = handle(mem<Type*>(stack_->sp(), offset));
+            typeArgs.push_back(arg);
+          }
+          type = *Type::create(vm_->heap(), trait, typeArgs);
+        } catch (AllocationError& e) {
+          doThrow(threadBindle_->takeOutOfMemoryException());
+          break;
+        }
+        stack_->setSp(stack_->sp() + count * kSlotSize);
+        push<Block*>(type);
+        break;
+      }
+
+      case TYTDF: {
+        auto depIndex = readVbn();
+        auto externIndex = readVbn();
+        Type* type = nullptr;
+        auto count = kLengthNotSet;
+        try {
+          GCSafeScope gcSafe(this);
+          HandleScope handleScope(vm_);
+          auto trait = handle(function_->package()->dependencies()->get(depIndex)
+              ->linkedTraits()->get(externIndex));
+          count = trait->typeParameterCount();
+          vector<Local<Type>> typeArgs;
+          typeArgs.reserve(count);
+          for (length_t i = 0; i < count; i++) {
+            size_t offset = kPrepareForGCSize + (count - i - 1) * kSlotSize;
+            auto arg = handle(mem<Type*>(stack_->sp(), offset));
+            typeArgs.push_back(arg);
+          }
+          type = *Type::create(vm_->heap(), trait, typeArgs);
         } catch (AllocationError& e) {
           doThrow(threadBindle_->takeOutOfMemoryException());
           break;

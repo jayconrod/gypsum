@@ -1768,10 +1768,17 @@ class CompileVisitor(ast.NodeVisitor):
             assert len(ty.clas.typeParameters) == len(ty.typeArguments)
             for param, arg in zip(ty.clas.typeParameters, ty.typeArguments):
                 self.buildType(arg, loc)
-            if ty.clas.isForeign():
-                self.tycdf(ty.clas)
+            if isinstance(ty.clas, Class):
+                if ty.clas.isForeign():
+                    self.tycdf(ty.clas)
+                else:
+                    self.tycd(ty.clas)
             else:
-                self.tycd(ty.clas)
+                assert isinstance(ty.clas, Trait)
+                if ty.clas.isForeign():
+                    self.tytdf(ty.clas)
+                else:
+                    self.tytd(ty.clas)
             if ty.isNullable():
                 self.tyflagd(1)
         elif isinstance(ty, VariableType):
@@ -1799,10 +1806,17 @@ class CompileVisitor(ast.NodeVisitor):
         if isinstance(ty, ClassType):
             for arg in ty.typeArguments:
                 self.buildStaticTypeArgument(arg)
-            if ty.clas.isForeign():
-                self.tycsf(ty.clas)
+            if isinstance(ty.clas, Class):
+                if ty.clas.isForeign():
+                    self.tycsf(ty.clas)
+                else:
+                    self.tycs(ty.clas)
             else:
-                self.tycs(ty.clas)
+                assert isinstance(ty.clas, Trait)
+                if ty.clas.isForeign():
+                    self.tytsf(ty.clas)
+                else:
+                    self.tyts(ty.clas)
             if ty.isNullable():
                 self.tyflags(1)
         elif isinstance(ty, VariableType):

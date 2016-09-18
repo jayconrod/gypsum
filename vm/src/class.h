@@ -83,8 +83,6 @@ class Class: public ObjectTypeDefn {
   void setTypeParameters(BlockArray<TypeParameter>* newTypeParameters) {
     typeParameters_.set(this, newTypeParameters);
   }
-  TypeParameter* typeParameter(length_t index) const;
-  length_t typeParameterCount() const;
 
   BlockArray<Type>* supertypes() const { return supertypes_.get(); }
   void setSupertypes(BlockArray<Type>* newSupertypes) { supertypes_.set(this, newSupertypes); }
