@@ -4,14 +4,14 @@
 // source code is governed by the 3-clause BSD license that can be
 // found in the LICENSE.txt file.
 
-import std.MutableI8Array,
-    MutableArrayList,
+import std.I8Array,
+    List,
     utf8-to-string
 
 public trait InputStream
   public abstract def close: unit
   public abstract def is-closed: boolean
-  public abstract def read(buffer: MutableI8Array, offset: i32, count: i32): i32
+  public abstract def read(buffer: I8Array, offset: i32, count: i32): i32
 
 
 public final class FileInputStream <: InputStream
@@ -32,7 +32,7 @@ public final class FileInputStream <: InputStream
 
   public override def is-closed = fd < 0i32
 
-  public override def read(buffer: MutableI8Array, offset: i32, count: i32): i32 =
+  public override def read(buffer: I8Array, offset: i32, count: i32): i32 =
     if (is-closed)
       throw StreamClosedException()
     read-fd(fd, buffer, offset, count)
@@ -41,17 +41,17 @@ public final class FileInputStream <: InputStream
 
   private static native def close-fd(fd: i32): unit
 
-  private static native def read-fd(fd: i32, buffer: MutableI8Array, offset: i32, count: i32): i32
+  private static native def read-fd(fd: i32, buffer: I8Array, offset: i32, count: i32): i32
 
 
-class Chunk(buffer: MutableI8Array, length: i32)
+class Chunk(buffer: I8Array, length: i32)
 
-public def read-stream(stream: InputStream): MutableI8Array =
-  let chunks = MutableArrayList[Chunk]()
+public def read-stream(stream: InputStream): I8Array =
+  let chunks = List[Chunk]()
   var total-length = 0i32
   var done = false
   while (!done)
-    let buffer = new(8192i32) MutableI8Array()
+    let buffer = new(8192i32) I8Array()
     let length = stream.read(buffer, 0i32, buffer.length)
     if (length == 0i32)
       done = true
@@ -61,7 +61,7 @@ public def read-stream(stream: InputStream): MutableI8Array =
       total-length += length
       // TODO: check for overflow
       {}
-  let full-buffer = new(total-length) MutableI8Array()
+  let full-buffer = new(total-length) I8Array()
   var chunk-index = 0i32
   var buffer-index = 0i32
   while (chunk-index < chunks.length)
@@ -78,7 +78,7 @@ public def read-stream-as-string(stream: InputStream): String =
   let utf8-bytes = read-stream(stream)
   utf8-to-string(utf8-bytes)
 
-public def read-file(file-name: String): MutableI8Array =
+public def read-file(file-name: String): I8Array =
   let stream = FileInputStream(file-name)
   try
     read-stream(stream)

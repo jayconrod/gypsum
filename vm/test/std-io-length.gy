@@ -4,12 +4,12 @@
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
 
-import std.MutableI8Array
+import std.I8Array
 import std.io.File, FileInputStream, InputStream
 
 def read-stream(stream: InputStream): i64 =
   var total-length = 0i64
-  let buffer = new(4096i32) MutableI8Array()
+  let buffer = new(4096i32) I8Array()
   var done = false
   while (!done)
     let length = stream.read(buffer, 0i32, buffer.length)
