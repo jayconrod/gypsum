@@ -213,6 +213,13 @@ class TestUseAnalysis(TestCaseWithDefinitions):
                  "  static def f = x"
         self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
 
+    def testUseFieldPropertyFromStaticMethod(self):
+        source = "class Foo(x: i32)\n" + \
+                 "class Bar\n" + \
+                 "  let foo = Foo(12i32)\n" + \
+                 "  static def f = foo.x"
+        self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
+
     def testUseMethodFromStaticMethod(self):
         source = "class Foo\n" + \
                  "  def f = 12\n" + \

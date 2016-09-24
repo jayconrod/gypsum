@@ -1533,9 +1533,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, receiverType,
                                                                 typeArgs, None, loc)
 
-        self.checkCallAllowed(defnInfo.irDefn, False, USE_AS_PROPERTY, loc)
+        self.checkCallAllowed(defnInfo.irDefn, False, USE_AS_VALUE, loc)
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
-        self.scope().use(defnInfo, useAstId, USE_AS_PROPERTY, loc)
+        self.scope().use(defnInfo, useAstId, USE_AS_VALUE, loc)
         return self.getDefnType(receiverType, True, defnInfo.irDefn, allTypeArgs)
 
     def handlePropertyCall(self, name, receiverScope, receiverType,
