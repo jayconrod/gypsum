@@ -194,6 +194,20 @@ def extractTypeArgsForSubtype(clas, supertype):
     return tuple(typeMap[p.id] for p in clas.typeParameters)
 
 
+def checkTypeArgumentBounds(typeArgs, typeParams, locs):
+    """Checks if type arguments are in bounds for the given type parameters.
+
+    This function performs substitution on the bounds of the type parameters before performing
+    the bounds check. `TypeException` is raised for any type argument not in bounds.
+    """
+    assert len(typeArgs) == len(typeParams) and len(typeArgs) == len(locs)
+    for ta, tp, loc in zip(typeArgs, typeParams, locs):
+        upperBound = tp.upperBound.substitute(typeParams, typeArgs)
+        lowerBound = tp.lowerBound.substitute(typeParams, typeArgs)
+        if not ta.isSubtypeOf(upperBound) or not lowerBound.isSubtypeOf(ta):
+            raise TypeException(loc, "%s: type argument out of bounds" % tp.sourceName)
+
+
 class TypeVisitorBase(ast.NodeVisitor):
     """Provides common functionality for type visitors, namely the visitor functions for the
     various ast.Type subclasses."""
@@ -449,7 +463,7 @@ class TypeVisitorBase(ast.NodeVisitor):
             (tuple(ir.Type), tuple(ir.TypeParameter)): A list of explicit type arguments
             compiled from `nodes`, and a list of introduced parameters for an existential
             type."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def introduceExistentialTypeParameter(self, param, node):
         """Introduces an existential type parameter based on a class type parameter.
@@ -519,10 +533,8 @@ class DeclarationTypeVisitor(TypeVisitorBase):
                 raise TypeException(loc,
                                     "%s: lower bound is not subtype of upper bound" % tp.name)
 
-        for ta, tp, loc in self.typeArgsToCheck:
-            if not ta.isSubtypeOf(tp.upperBound) or \
-               not tp.lowerBound.isSubtypeOf(ta):
-                raise TypeException(loc, "%s: type argument is not in bounds" % tp.name)
+        for typeArgs, typeParams, locs in self.typeArgsToCheck:
+            checkTypeArgumentBounds(typeArgs, typeParams, locs)
 
     def visitPackage(self, node):
         self.visitChildren(node)
@@ -705,8 +717,8 @@ class DeclarationTypeVisitor(TypeVisitorBase):
                 introducedTypeParams.append(introducedTypeParam)
             else:
                 arg = self.visit(node)
-                self.typeArgsToCheck.append((arg, param, node.location))
             typeArgs.append(arg)
+        self.typeArgsToCheck.append((typeArgs, typeParams, [n.location for n in nodes]))
         return tuple(typeArgs), tuple(introducedTypeParams)
 
     def setMethodReceiverType(self, irFunction):
@@ -1277,24 +1289,22 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         else:
             return exprTy
 
-    def handleClassTypeArgs(self, irClass, typeArgs):
+    def handleClassTypeArgs(self, irClass, astTypeArgs):
         typeParams = ir.getExplicitTypeParameters(irClass)
-        assert len(typeParams) == len(typeArgs)
-        types = []
+        assert len(typeParams) == len(astTypeArgs)
+        irTypeArgs = []
         introducedTypeParams = []
-        for tp, ta in zip(typeParams, typeArgs):
-            if isinstance(ta, ast.BlankType):
-                tp, ty = self.introduceExistentialTypeParameter(tp, ta)
+        for tp, ata in zip(typeParams, astTypeArgs):
+            if isinstance(ata, ast.BlankType):
+                tp, ty = self.introduceExistentialTypeParameter(tp, ata)
                 introducedTypeParams.append(tp)
             else:
                 with VarianceScope.forArgument(self, tp.variance()):
-                    ty = self.visit(ta)
-                if not (tp.lowerBound.isSubtypeOf(ty) and
-                        ty.isSubtypeOf(tp.upperBound)):
-                    raise TypeException(ta.location,
-                                        "%s: type argument is not in bounds" % tp.name)
-            types.append(ty)
-        return tuple(types), tuple(introducedTypeParams)
+                    ty = self.visit(ata)
+            irTypeArgs.append(ty)
+
+        checkTypeArgumentBounds(irTypeArgs, typeParams, [n.location for n in astTypeArgs])
+        return tuple(irTypeArgs), tuple(introducedTypeParams)
 
     def handleFunctionCommon(self, node, astReturnType, astBody):
         defnInfo = self.info.getDefnInfo(node)
@@ -1902,8 +1912,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             raise TypeException(loc,
                                 "wrong number of type arguments: expected %d but have %d" %
                                 (len(explicitTypeParams), len(typeArgs)))
-        if not all(tp.contains(ta) for tp, ta in zip(explicitTypeParams, typeArgs)):
-            raise TypeException(loc, "type error in type arguments for class")
+        checkTypeArgumentBounds(typeArgs, explicitTypeParams, [loc] * len(typeArgs))
         implicitTypeParams = ir.getImplicitTypeParameters(irClass)
         implicitTypeArgs = [ir.VariableType(tp) for tp in implicitTypeParams]
         allTypeArgs = tuple(implicitTypeArgs + typeArgs)

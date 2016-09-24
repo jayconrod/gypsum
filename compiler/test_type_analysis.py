@@ -2310,3 +2310,17 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "    case _: B[_] => 1\n" + \
                  "    case _ => 2"
         self.analyzeFromSource(source)
+
+    def testFieldWithBoundedTypeArguments(self):
+        source = "trait Hash[static -T]\n" + \
+                 "class HashTable[static K <: Hash[K]]\n" + \
+                 "class HashSet[static K <: Hash[K]]\n" + \
+                 "  let table = HashTable[K]()"
+        self.analyzeFromSource(source)
+
+    def testMethodWithBoundedTypeArguments(self):
+        source = "trait Hash[static -T]\n" + \
+                 "class HashTable[static K <: Hash[K]]\n" + \
+                 "abstract class HashSet[static K <: Hash[K]]\n" + \
+                 "  abstract def new-table: HashTable[K]"
+        self.analyzeFromSource(source)

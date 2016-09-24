@@ -1010,9 +1010,6 @@ class TypeParameter(IrTopDefn):
     def isTypeDefn(self):
         return True
 
-    def contains(self, ty):
-        return ty.isSubtypeOf(self.upperBound) and self.lowerBound.isSubtypeOf(ty)
-
     def variance(self):
         if flags.COVARIANT in self.flags:
             return flags.COVARIANT
