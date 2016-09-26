@@ -7,8 +7,9 @@
 import unittest
 
 from ids import DefnId, TARGET_PACKAGE_ID
-from ir import Class, Global, Field, Function, IrTopDefn, LOCAL, Name, Package, PackagePrefix, TypeParameter, Variable
+from ir import Class, Global, Field, Function, IrTopDefn, LOCAL, Name, Package, PackagePrefix, Trait, TypeParameter, Variable
 from ir_types import getNothingClassType, getRootClassType
+from location import NoLoc
 from package_loader import BasePackageLoader
 from utils import Counter, reprFormat
 
@@ -35,12 +36,14 @@ class TestCaseWithDefinitions(unittest.TestCase):
         self.globalCounter = Counter()
         self.functionCounter = Counter()
         self.classCounter = Counter()
+        self.traitCounter = Counter()
         self.typeParameterCounter = Counter()
 
     def tearDown(self):
         self.globalCounter = None
         self.functionCounter = None
         self.classCounter = None
+        self.traitCounter = None
         self.typeParameterCounter = None
 
     def makeGlobal(self, name, **args):
@@ -57,6 +60,11 @@ class TestCaseWithDefinitions(unittest.TestCase):
         name = self.makeName(name)
         id = DefnId(TARGET_PACKAGE_ID, DefnId.CLASS, self.classCounter())
         return TestClass(self, name, id, **args)
+
+    def makeTrait(self, name, **args):
+        name = self.makeName(name)
+        id = DefnId(TARGET_PACKAGE_ID, DefnId.TRAIT, self.traitCounter())
+        return TestTrait(self, name, id, **args)
 
     def makeTypeParameter(self, name, **args):
         name = self.makeName(name)
@@ -99,7 +107,7 @@ class FakePackageLoader(BasePackageLoader):
     def isPackage(self, name):
         return name in self.packageNames
 
-    def loadPackage(self, name, loc):
+    def loadPackage(self, name, loc=NoLoc):
         assert name in self.packageNames
         if name not in self.packages:
             self.packages[name] = Package(name=name)
@@ -181,6 +189,9 @@ class TestFunction(TestDefn, Function):
     pass
 
 class TestClass(TestDefn, Class):
+    pass
+
+class TestTrait(TestDefn, Trait):
     pass
 
 class TestTypeParameter(TestDefn, TypeParameter):

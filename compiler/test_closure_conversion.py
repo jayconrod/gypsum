@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -6,18 +6,19 @@
 
 import unittest
 
-from lexer import *
+from builtins import *
+from compile_info import CompileInfo
+from errors import *
+from flags import LET
+from ids import *
+from inheritance_analysis import analyzeInheritance
+from ir import *
+from ir_types import *
 from layout import layout
+from lexer import *
 from parser import *
 from scope_analysis import *
 from type_analysis import *
-from ids import *
-from ir import *
-from compile_info import CompileInfo
-from ir_types import *
-from errors import *
-from builtins import *
-from flags import LET
 from utils_test import FakePackageLoader, TestCaseWithDefinitions
 
 
@@ -31,6 +32,7 @@ class TestClosureConversion(TestCaseWithDefinitions):
         packageLoader = FakePackageLoader([])
         info = CompileInfo(ast, package, packageLoader, isUsingStd=False)
         analyzeDeclarations(info)
+        analyzeTypeDeclarations(info)
         analyzeInheritance(info)
         analyzeTypes(info)
         convertClosures(info)

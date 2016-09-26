@@ -25,3 +25,5 @@ public final class File
   public native def is-file: boolean
 
   public native def is-directory: boolean
+
+  public native def size: i64

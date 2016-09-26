@@ -8,8 +8,8 @@ from functools import partial
 
 import ast
 from bytecode import W8, W16, W32, W64, BUILTIN_TYPE_CLASS_ID, BUILTIN_TYPE_CTOR_ID, instInfoByCode, BUILTIN_MATCH_EXCEPTION_CLASS_ID, BUILTIN_MATCH_EXCEPTION_CTOR_ID, BUILTIN_STRING_EQ_OP_ID
-from ir import IrTopDefn, Class, Field, Function, Global, LOCAL, Package, PACKAGE_INIT_NAME, RECEIVER_SUFFIX, Variable
-from ir_types import Type, NoType, UnitType, BooleanType, I8Type, I16Type, I32Type, I64Type, F32Type, F64Type, ClassType, VariableType, ExistentialType, NULLABLE_TYPE_FLAG, getExceptionClassType, getClassFromType, getStringType, getRootClassType
+from ir import IrTopDefn, Class, Field, Function, Global, LOCAL, Package, PACKAGE_INIT_NAME, RECEIVER_SUFFIX, Trait, Variable
+from ir_types import Type, NoType, UnitType, BooleanType, I8Type, I16Type, I32Type, I64Type, F32Type, F64Type, ObjectType, ClassType, VariableType, ExistentialType, NULLABLE_TYPE_FLAG, getExceptionClassType, getClassFromType, getStringType, getRootClassType
 import ir_instructions
 from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PACKAGE_INITIALIZER_HINT, ARRAY_ELEMENT_GET_HINT, ARRAY_ELEMENT_SET_HINT, ARRAY_ELEMENT_LENGTH_HINT, DefnInfo, NORMAL_MODE, STD_MODE, NOSTD_MODE
 from flags import ABSTRACT, STATIC, LET, ARRAY, NATIVE
@@ -463,7 +463,7 @@ class CompileVisitor(ast.NodeVisitor):
         assert mode is COMPILE_FOR_MATCH
 
         irDefn = self.info.getUseInfo(pat).defnInfo.irDefn
-        typeArgs = self.info.getCallInfo(pat).typeArguments
+        callInfo = self.info.getCallInfo(pat)
 
         # Compile the prefix. Note that the matcher may be explicitly referenced in the last
         # prefix component, so we don't compile that here.
@@ -475,8 +475,8 @@ class CompileVisitor(ast.NodeVisitor):
             hasPrefix = len(pat.prefix) > 0
 
         # The rest is the same as other destructures.
-        self.buildDestructure(irDefn, hasPrefix, typeArgs, pat.patterns,
-                              failBlock, pat.location)
+        self.buildDestructure(irDefn, callInfo.receiverType, hasPrefix, callInfo.typeArguments,
+                              pat.patterns, failBlock, pat.location)
 
     def visitUnaryPattern(self, pat, mode, ty=None, failBlock=None):
         if mode is COMPILE_FOR_UNINITIALIZED:
@@ -489,8 +489,9 @@ class CompileVisitor(ast.NodeVisitor):
             self.buildLoadOrNullaryCall(pat, COMPILE_FOR_VALUE)
 
         irDefn = self.info.getUseInfo(pat.matcherId).defnInfo.irDefn
-        typeArgs = self.info.getCallInfo(pat.matcherId).typeArguments
-        self.buildDestructure(irDefn, False, typeArgs, [pat.pattern], failBlock, pat.location)
+        callInfo = self.info.getCallInfo(pat.matcherId)
+        self.buildDestructure(irDefn, callInfo.receiverType, False, callInfo.typeArguments,
+                              [pat.pattern], failBlock, pat.location)
 
     def visitBinaryPattern(self, pat, mode, ty=None, failBlock=None):
         if mode is COMPILE_FOR_UNINITIALIZED:
@@ -504,9 +505,10 @@ class CompileVisitor(ast.NodeVisitor):
             self.buildLoadOrNullaryCall(pat, COMPILE_FOR_VALUE)
 
         irDefn = self.info.getUseInfo(pat.matcherId).defnInfo.irDefn
-        typeArgs = self.info.getCallInfo(pat.matcherId).typeArguments
+        callInfo = self.info.getCallInfo(pat.matcherId)
         subPatterns = [pat.left, pat.right]
-        self.buildDestructure(irDefn, False, typeArgs, subPatterns, failBlock, pat.location)
+        self.buildDestructure(irDefn, callInfo.receiverType, False, callInfo.typeArguments,
+                              subPatterns, failBlock, pat.location)
 
     def visitLiteralExpression(self, expr, mode):
         self.buildLiteral(expr.literal)
@@ -1308,7 +1310,7 @@ class CompileVisitor(ast.NodeVisitor):
                 if not receiverIsExplicit:
                     self.loadImplicitReceiver(irDefn)
                 self.buildStaticTypeArguments(callInfo.typeArguments)
-                self.callMethod(irDefn)
+                self.callMethod(irDefn, callInfo.receiverType)
             else:
                 assert not receiverIsExplicit
                 self.buildStaticTypeArguments(callInfo.typeArguments)
@@ -1507,18 +1509,47 @@ class CompileVisitor(ast.NodeVisitor):
 
     def buildCallNamedMethod(self, receiverType, name, mode):
         receiverClass = getClassFromType(receiverType)
-        method = receiverClass.getMethod(name)
-        self.callMethod(method)
+        method, _ = receiverClass.findMethodBySourceName(name)
+        self.callMethod(method, receiverType)
         self.dropForEffect(mode)
 
-    def callMethod(self, method):
+    def callMethod(self, method, receiverType):
+        """Builds a call to a non-static method.
+
+        If the method has instructions specified (nearly all primitive methods), those are
+        inlined directly. If the method is final, it is called statically. If the method is
+        defined in a class or the receiver type is a class, it will be called virtually.
+        Otherwise, it will be called through its defining trait.
+
+        Args:
+            method (Function): the method to call.
+            receiverType (Type?): the type of the receiver.
+        """
+        # TODO: receiverType may be None because calls to regular functions (which don't have
+        # receiver types) can be converted into method calls during closure conversion.
+        # Closure conversion should set receiver types. This won't affect code generation.
+
         if method.insts is not None:
             self.addBuiltinInstructions(method.insts)
         elif method.isFinal():
             self.callFunction(method)
         else:
-            index = method.definingClass.getMethodIndex(method)
-            self.callv(len(method.parameterTypes), index)
+            argCount = len(method.parameterTypes)
+            methodClass = method.definingClass
+            if isinstance(methodClass, Trait) and receiverType is not None:
+                if not isinstance(receiverType, ClassType):
+                    receiverType = receiverType.getBaseClassType()
+                if isinstance(receiverType.clas, Class):
+                    methodClass = receiverType.clas
+            index = methodClass.getMethodIndex(method)
+            if isinstance(methodClass, Class):
+                self.callv(argCount, index)
+            else:
+                assert isinstance(methodClass, Trait)
+                if methodClass.isForeign():
+                    self.callvtf(argCount, methodClass, index)
+                else:
+                    self.callvt(argCount, methodClass, index)
 
     HAVE_RECEIVER = "HAVE_RECEIVER"
 
@@ -1609,16 +1640,7 @@ class CompileVisitor(ast.NodeVisitor):
             # Compile the arguments and call the method.
             compileArgs()
             compileTypeArgs()
-            if irDefn.insts is not None:
-                self.addBuiltinInstructions(irDefn.insts)
-            elif irDefn.isFinal():
-                # Calls to final methods can be made directly. This includes constructors and
-                # primitive methods which can't be called virtually.
-                self.callFunction(irDefn)
-            else:
-                index = irDefn.definingClass.getMethodIndex(irDefn)
-                argCount = len(argExprs)
-                self.callv(argCount + 1, index)
+            self.callMethod(irDefn, callInfo.receiverType)
 
             if isinstance(receiver, LValue):
                 self.buildAssignment(receiver, mode)
@@ -1633,7 +1655,8 @@ class CompileVisitor(ast.NodeVisitor):
         else:
             self.callg(function)
 
-    def buildDestructure(self, irDefn, hasPrefix, typeArgs, subPatterns, failBlock, loc):
+    def buildDestructure(self, irDefn, receiverType, hasPrefix, typeArgs,
+                         subPatterns, failBlock, loc):
         """Generates code to destructure a value into sub-patterns with a matcher function.
 
         The value to be destructured should already be on the stack. If the matcher has an
@@ -1645,6 +1668,8 @@ class CompileVisitor(ast.NodeVisitor):
         Args:
             irDefn: the matcher function or method. If `hasPrefix` is true, and a receiver is
                 required, it should be loaded on the stack.
+            receiverType: the type of the receiver if the matcher function is a non-static
+                method. `None` otherwise.
             hasPrefix: `True` if there was an explicit prefix before the matcher. This is
                 used to determine if an implicit receiver needs to be loaded.
             typeArgs: a list of `Type` arguments passed to the matcher.
@@ -1659,14 +1684,14 @@ class CompileVisitor(ast.NodeVisitor):
                 self.loadImplicitReceiver(irDefn)
             self.dupi(1)
             self.buildStaticTypeArguments(typeArgs)
-            self.callMethod(irDefn)
+            self.callMethod(irDefn, receiverType)
         else:
             self.dup()
             self.buildStaticTypeArguments(typeArgs)
             self.callFunction(irDefn)
         returnType = irDefn.returnType.substitute(irDefn.typeParameters, typeArgs)
         optionClass = self.info.getStdClass("Option", loc)
-        optionType = returnType.substituteForBaseClass(optionClass)
+        optionType = returnType.substituteForBase(optionClass)
         valueType = optionType.getTypeArguments()[0]
 
         # Check if it returned Some.
@@ -1743,10 +1768,17 @@ class CompileVisitor(ast.NodeVisitor):
             assert len(ty.clas.typeParameters) == len(ty.typeArguments)
             for param, arg in zip(ty.clas.typeParameters, ty.typeArguments):
                 self.buildType(arg, loc)
-            if ty.clas.isForeign():
-                self.tycdf(ty.clas)
+            if isinstance(ty.clas, Class):
+                if ty.clas.isForeign():
+                    self.tycdf(ty.clas)
+                else:
+                    self.tycd(ty.clas)
             else:
-                self.tycd(ty.clas)
+                assert isinstance(ty.clas, Trait)
+                if ty.clas.isForeign():
+                    self.tytdf(ty.clas)
+                else:
+                    self.tytd(ty.clas)
             if ty.isNullable():
                 self.tyflagd(1)
         elif isinstance(ty, VariableType):
@@ -1774,10 +1806,17 @@ class CompileVisitor(ast.NodeVisitor):
         if isinstance(ty, ClassType):
             for arg in ty.typeArguments:
                 self.buildStaticTypeArgument(arg)
-            if ty.clas.isForeign():
-                self.tycsf(ty.clas)
+            if isinstance(ty.clas, Class):
+                if ty.clas.isForeign():
+                    self.tycsf(ty.clas)
+                else:
+                    self.tycs(ty.clas)
             else:
-                self.tycs(ty.clas)
+                assert isinstance(ty.clas, Trait)
+                if ty.clas.isForeign():
+                    self.tytsf(ty.clas)
+                else:
+                    self.tyts(ty.clas)
             if ty.isNullable():
                 self.tyflags(1)
         elif isinstance(ty, VariableType):

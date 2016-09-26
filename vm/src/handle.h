@@ -152,7 +152,7 @@ class HandleStorage {
     iterator& operator ++ ();
 
    private:
-    iterator(const std::deque<Block*>::iterator it,
+    iterator(std::deque<Block*>::iterator&& it,
              bool isLocal,
              HandleStorage* storage);
     void advance();

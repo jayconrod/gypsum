@@ -19,7 +19,7 @@ import StringIO
 class Package(object):
     def __init__(self, id=None, name=None, version=None):
         if id is None:
-            id = ids.PackageId()
+            id = ids.PackageId(name=name)
         if name is None:
             name = Name(["default"])
         if version is None:
@@ -34,12 +34,12 @@ class Package(object):
         self.globals = []
         self.functions = []
         self.classes = []
+        self.traits = []
         self.typeParameters = []
         self.strings = []
         self.entryFunction = None
         self.initFunction = None
         self.exports = None
-        self.externTypes = None
 
     def __str__(self):
         buf = StringIO.StringIO()
@@ -54,6 +54,8 @@ class Package(object):
             buf.write("%s\n\n" % f)
         for c in self.classes:
             buf.write("%s\n\n" % c)
+        for t in self.traits:
+            buf.write("%s\n\n" % t)
         for p in self.typeParameters:
             buf.write("%s\n\n" % p)
         buf.write("entry function: %s\n" % self.entryFunction)
@@ -86,6 +88,15 @@ class Package(object):
             self.findOrAddString(c.sourceName)
         self.classes.append(c)
         return c
+
+    def addTrait(self, name, *args, **kwargs):
+        id = ids.DefnId(self.id, ids.DefnId.TRAIT, len(self.traits))
+        self.addName(name)
+        t = Trait(name, id, *args, **kwargs)
+        if t.sourceName is not None:
+            self.findOrAddString(t.sourceName)
+        self.traits.append(t)
+        return t
 
     def addTypeParameter(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.TYPE_PARAMETER, len(self.typeParameters))
@@ -122,15 +133,16 @@ class Package(object):
             if flags.PUBLIC in g.flags:
                 self.exports[g.name] = g
         for f in self.functions:
-            if flags.PUBLIC in f.flags and \
-               (flags.METHOD not in f.flags or \
-                len(frozenset([flags.STATIC, flags.CONSTRUCTOR]) & f.flags) > 0):
+            if flags.PUBLIC in f.flags:
                 self.exports[mangleFunctionName(f, self)] = f
         for c in self.classes:
             if flags.PUBLIC in c.flags:
                 self.exports[c.name] = c
+        for t in self.traits:
+            if flags.PUBLIC in t.flags:
+                self.exports[t.name] = t
         for p in self.typeParameters:
-            if flags.PUBLIC in c.flags:
+            if flags.PUBLIC in p.flags:
                 self.exports[p.name] = p
 
         return self.exports
@@ -144,26 +156,15 @@ class Package(object):
             depExports = dep.package.ensureExports()
             dep.linkedGlobals = [depExports[g.name] for g in dep.externGlobals]
             assert all(isinstance(g, Global) for g in dep.linkedGlobals)
-            dep.linkedFunctions = [depExports[mangleFunctionName(f.name, self)]
+            dep.linkedFunctions = [depExports[mangleFunctionName(f, self)]
                                    for f in dep.externFunctions]
             assert all(isinstance(f, Function) for f in dep.linkedFunctions)
             dep.linkedClasses = [depExports[c.name] for c in dep.externClasses]
             assert all(isinstance(c, Class) for c in dep.linkedClasses)
+            dep.linkedTraits = [depExports[t.name] for t in dep.externTraits]
+            assert all(isinstance(t, Trait) for t in dep.linkedTraits)
             dep.linkedTypeParameters = [depExports[p.name] for p in dep.externTypeParameters]
             assert all(isinstance(p, TypeParameter) for p in dep.linkedTypeParameters)
-
-        for ty in self.externTypes:
-            if isinstance(ty, ir_types.ClassType):
-                assert flags.EXTERN in ty.clas.flags
-                depIndex = ty.clas.id.packageId.index
-                externIndex = ty.clas.id.externIndex
-                ty.clas = self.dependencies[depIndex].linkedClasses[externIndex]
-            else:
-                assert isinstance(ty, ir_types.VariableType)
-                depIndex = ty.typeParameter.id.packageId.index
-                externIndex = ty.typeParameter.id.externIndex
-                ty.typeParameter = self.dependencies[depIndex].linkedTypeParameters[externIndex]
-        self.externTypes = None
 
     def addName(self, name):
         assert isinstance(name, Name)
@@ -190,6 +191,9 @@ class Package(object):
 
     def findClass(self, **kwargs):
         return next(self.find(self.classes, kwargs))
+
+    def findTrait(self, **kwargs):
+        return next(self.find(self.traits, kwargs))
 
     def findGlobal(self, **kwargs):
         return next(self.find(self.globals, kwargs))
@@ -219,6 +223,20 @@ class Package(object):
         def matchAll(defn):
             return all(matchItem(defn, k, v) for k, v in kwargs.iteritems())
         return (d for d in defns if matchAll(d))
+
+    def getDefn(self, id):
+        assert id.packageId is self.id
+        if id.kind is ids.DefnId.GLOBAL:
+            return self.globals[id.index]
+        elif id.kind is ids.DefnId.FUNCTION:
+            return self.functions[id.index]
+        elif id.kind is ids.DefnId.CLASS:
+            return self.classes[id.index]
+        elif id.kind is ids.DefnId.TRAIT:
+            return self.traits[id.index]
+        else:
+            assert id.kind is ids.DefnId.TYPE_PARAMETER
+            return self.typeParameters[id.index]
 
 
 class Name(object):
@@ -342,6 +360,8 @@ class PackageDependency(object):
         self.linkedFunctions = None
         self.externClasses = []
         self.linkedClasses = None
+        self.externTraits = []
+        self.linkedTraits = None
         self.externTypeParameters = []
         self.linkedTypeParameters = None
         self.externMethods = []
@@ -382,6 +402,8 @@ class PackageDependency(object):
             buf.write("%s\n\n" % f)
         for c in self.externClasses:
             buf.write("%s\n\n" % c)
+        for t in self.externTraits:
+            bug.write("%s\n\n" % t)
         for p in self.externTypeParameters:
             buf.write("%s\n\n" % p)
         return buf.getvalue()
@@ -504,13 +526,16 @@ class Function(ParameterizedDefn):
         flags (frozenset[flag]): a flags indicating how this function is used. Valid flags are
             `ABSTRACT`, `EXTERN`, `PUBLIC`, `PROTECTED`, `PRIVATE`, `STATIC`, `CONSTRUCTOR`,
             `METHOD`.
-        definingClass (Class?): the class this method (static or not) was defined in (as
-            opposed to any other class that inherits the method). For non-static methods, this
-            could be derived from the receiver type, but there's no easy way to get it for
-            static methods.
-        override (Function?): the method in a superclass that this method overrides. This should
-            be set if and only if the `OVERRIDE` flag is set. This is only valid for non-static,
-            non-constructor methods.
+        definingClass (ObjectTypeDefn?): the class or trait this method (static or not) was
+            defined in (as opposed to any other class that inherits the method). For
+            non-static methods, this could be derived from the receiver type, but there's
+            no easy way to get it for static methods.
+        overrides ([Function]?): methods in inherited traits or a base class that this
+            method overrides. This must be set if the `METHOD` and `OVERRIDE` flags are set and
+            the `STATIC`, `CONSTRUCTOR`, and `EXTERN` flags are not set. It must not be empty.
+        overridenBy ({DefnId, Function}?): a map from class and trait ids to methods. Each
+            entry describes an overriding function in a subclass or subtrait. This should only
+            be set for non-constructor, non-static methods.
         insts (list[Instruction]?): a list of instructions to insert instead of calling this
             function. This is set for some (not all) builtin functions. For instance, the `+`
             method of `i64` has a list containing an `addi64` instruction.
@@ -521,8 +546,8 @@ class Function(ParameterizedDefn):
 
     def __init__(self, name, id, sourceName=None, astDefn=None, returnType=None,
                  typeParameters=None, parameterTypes=None, variables=None, blocks=None,
-                 flags=frozenset(), definingClass=None, override=None, insts=None,
-                 compileHint=None):
+                 flags=frozenset(), definingClass=None, overrides=None, overridenBy=None,
+                 insts=None, compileHint=None):
         super(Function, self).__init__(name, id, sourceName, astDefn)
         self.returnType = returnType
         self.typeParameters = typeParameters
@@ -532,7 +557,8 @@ class Function(ParameterizedDefn):
         self.flags = flags
         self.definingClass = definingClass
         self.insts = insts
-        self.override = override
+        self.overrides = overrides
+        self.overridenBy = overridenBy
         self.compileHint = compileHint
 
     def __repr__(self):
@@ -624,23 +650,151 @@ class Function(ParameterizedDefn):
                parameterTypesAreCompatible
 
 
-class Class(ParameterizedDefn):
+class ObjectTypeDefn(ParameterizedDefn):
+    """Represents a definition that creates an interface for interacting with objects.
+    Specifically, this is a class or trait.
+
+    Attributes:
+        name (Name): the name of the definition.
+        id (DefnId): unique identifier for the definition.
+        sourceName (str?): name of the definition in source code.
+        astDefn (ast.Node?): the node from the AST where this definition comes from.
+        typeParameters (list[TypeParameter]?): a list of type parameters used in this
+            definition. `ClassType`s for this definition must have type arguments that
+            correspond to these parameters. Note that this list should include not only the
+            parameters from the definition, but also any parameters defined in outer
+            scopes (which are "implicit" and should come first).
+        supertypes (list[ClassType]?): a complete list of types from which this definition is
+            derived. This list includes not only the direct base types of the definition, but
+            also the transitive closure types. The list may be `None` or incomplete until
+            inheritance analysis is finished. `Type.isSubtypeOf` may not be used until then.
+            `VariableType`s in this list must correspond to parameters in `typeParameters`.
+    """
+
+    def __init__(self, name, id, sourceName=None, astDefn=None, typeParameters=None,
+                 supertypes=None):
+        super(ObjectTypeDefn, self).__init__(name, id, sourceName, astDefn)
+        self.typeParameters = typeParameters
+        self.supertypes = supertypes
+
+    def isTypeDefn(self):
+        return True
+
+    def superclass(self):
+        """Returns the `Class` which is the first base of this definition.
+
+        `None` is returned if this definition has no bases.
+        """
+        assert self is not builtins.getNothingClass()
+        if len(self.supertypes) == 0:
+            return None
+        else:
+            return self.supertypes[0].clas
+
+    def bases(self):
+        """Returns a generator of definitions this definition is based on.
+
+        The generator iterates over bases in depth-first pre-order. This definition is
+        included (it is returned first).
+        """
+        assert self is not builtins.getNothingClass()
+        yield self
+        clas = self
+        for supertype in self.supertypes:
+            yield supertype.clas
+
+    def findDistanceToBaseClass(self, base):
+        """Returns the distance to `base` on the inheritance graph.
+
+        Arguments:
+            base (Class): a superclass of this class.
+
+        Returns:
+            (int): 0 if `self` is `base`, 1 if `base` is the direct superclass, 2 if it is
+            the superclass of the direct superclass, and so on.
+        """
+        # This method is only used by builtins, and there are only builtin classes. It doesn't
+        # really work for traits. If we want to use it for traits, we should store more
+        # information with supertypes so we don't have to do a full depth-first-search of
+        # the inheritance graph on every call.
+        distance = 0
+        clas = self
+        while clas is not None and clas is not base:
+            distance += 1
+            clas = clas.superclass()
+        assert clas is base
+        return distance
+
+    def isDerivedFrom(self, other):
+        if self is other or self is builtins.getNothingClass():
+            return True
+        elif other is builtins.getNothingClass():
+            return False
+        else:
+            return other in self.bases()
+
+    def findBaseType(self, base):
+        """Searches this definition's supertypes for a type of the same definition as `base`.
+
+        This method may only be called after inheritance analysis has been performed.
+
+        Arguments:
+            base (ObjectTypeDefn): the class or trait of the type being searched for.
+
+        Returns:
+            ClassType?: returns the base type if this definition is derived from `base`. If
+                `base` is `self`, returns the same as `ClassType.forReceiver(self)`. Returns
+                `None` otherwise.
+        """
+        if self is base:
+            return ir_types.ClassType.forReceiver(self)
+        for sty in self.supertypes:
+            if sty.clas is base:
+                return sty
+        return None
+
+    def findMethodBySourceName(self, name):
+        """Searches the method list.
+
+        Arguments:
+            name (str): the source name of the method. Methods without source names will not
+                be considered.
+
+        Returns:
+            (Function, int)?: returns a pair of the method and the method index for the first
+                matching method. If no match was found, `None` is returned.
+        """
+        assert isinstance(name, str)
+        for i, m in enumerate(m for m in self.methods if flags.STATIC not in m.flags):
+            if m.sourceName == name:
+                return m, i
+        return None
+
+    def getMethodIndex(self, method):
+        for i, m in enumerate(m for m in self.methods if flags.STATIC not in m.flags):
+            if m is method:
+                return i
+        raise KeyError("method does not belong to this class")
+
+
+class Class(ObjectTypeDefn):
     """Represents a class definition.
 
     Attributes:
-        name (Name): the name of the class.
-        id (DefnId): unique identifier for the class.
-        sourceName (str?): name of the definition in source code
-        astDefn (ast.Node?): the location in source code where the class is defined.
+        name (Name): the name of the definition.
+        id (DefnId): unique identifier for the definition.
+        sourceName (str?): name of the definition in source code.
+        astDefn (ast.Node?): the node from the AST where this definition comes from.
         typeParameters (list[TypeParameter]?): a list of type parameters used in this
-            definition. Values with a `ClassType` for this class must have type arguments that
+            definition. `ClassType`s for this definition must have type arguments that
             correspond to these parameters. Note that this list should include not only the
-            parameters from the class definition, but also any parameters defined in outer
-            scopes (which are "implicit" and should come first). This may be `None` before
-            declaration analysis is complete.
-        supertypes (list[ClassType]?): a list of types from which this class is derived,
-            including type arguments. The subtype relation uses this. This may be `None`
-            before type declaration analysis is complete.
+            parameters from the definition, but also any parameters defined in outer
+            scopes (which are "implicit" and should come first).
+        supertypes (list[ClassType]?): a complete list of types from which this definition is
+            derived. This list includes not only the direct base types of the definition, but
+            also the transitive closure types. The list may be `None` or incomplete until
+            inheritance analysis is finished. `Type.isSubtypeOf` may not be used until then.
+            `VariableType`s in this list must correspond to parameters in `typeParameters`.
         initializer (Function?): a function which initializes new instances of this class.
             Constructors call this after calling a superconstructor if they don't call another
             constructor. May be `None` before declaration analysis is complete or if there
@@ -654,6 +808,8 @@ class Class(ParameterizedDefn):
         methods (list[Function]?): a list of functions that operate on instances of this class.
             This may be `None` before declaration analysis is complete. Inherited methods may
             be added to this list during class flattening
+        traits ({DefnId: [Function]}?): a method list for each trait this class inherits,
+            directly or indirectly. This is set during class flattening.
         elementType (Type?): if this is an array class, this is the type of the elements. `None`
             for non-array classes. The `ARRAY` flag must be set if this is not `None`.
         flags (frozenset[flag]): flags indicating how this class is used. Valid flags are
@@ -662,20 +818,19 @@ class Class(ParameterizedDefn):
 
     def __init__(self, name, id, sourceName=None, astDefn=None, typeParameters=None,
                  supertypes=None, initializer=None, constructors=None, fields=None,
-                 methods=None, elementType=None, flags=frozenset()):
-        super(Class, self).__init__(name, id, sourceName, astDefn)
-        self.typeParameters = typeParameters
-        self.supertypes = supertypes
+                 methods=None, traits=None, elementType=None, flags=frozenset()):
+        super(Class, self).__init__(name, id, sourceName, astDefn, typeParameters, supertypes)
         self.initializer = initializer
         self.constructors = constructors
         self.fields = fields
         self.methods = methods
+        self.traits = traits
         self.elementType = elementType
         self.flags = flags
 
     def __repr__(self):
         return reprFormat(self, "name", "typeParameters", "supertypes", "initializer",
-                          "constructors", "fields", "methods", "elementType", "flags")
+                          "constructors", "fields", "methods", "traits", "elementType", "flags")
 
     def __str__(self):
         buf = StringIO.StringIO()
@@ -689,6 +844,11 @@ class Class(ParameterizedDefn):
             buf.write("  constructor %s\n" % ctor.id)
         for method in self.methods:
             buf.write("  method %s\n" % method.id)
+        if self.traits is not None:
+            for id, methods in self.traits:
+                buf.write("  trait %s\n" % id)
+                for method in methods:
+                    buf.write("    method %s\n" % method.id)
         if self.elementType is not None:
             buf.write("  arrayelements %s\n" % str(self.elementType))
         return buf.getvalue()
@@ -701,72 +861,9 @@ class Class(ParameterizedDefn):
                self.constructors == other.constructors and \
                self.fields == other.fields and \
                self.methods == other.methods and \
+               self.traits == other.traits and \
                self.elementType == other.elementType and \
                self.flags == other.flags
-
-    def superclass(self):
-        assert self is not builtins.getNothingClass()
-        if len(self.supertypes) == 0:
-            return None
-        else:
-            return self.supertypes[0].clas
-
-    def superclasses(self):
-        """Returns a generator of superclasses in depth-first order, including this class."""
-        assert self is not builtins.getNothingClass()
-        yield self
-        clas = self
-        while len(clas.supertypes) > 0:
-            clas = clas.supertypes[0].clas
-            yield clas
-
-    def findTypePathToBaseClass(self, base):
-        """Returns a list of supertypes (ClassTypes), which represent a path through the class
-        DAG from this class to the given base class. The path does not include a type for this
-        class, but it does include the supertype for the base. If the given class is not a
-        base, returns None. This class must not be Nothing, since there is no well-defined
-        path in that case."""
-        assert self is not builtins.getNothingClass()
-        path = []
-        indexStack = [0]
-        assert self.id is not None
-        visited = set([self.id])
-
-        while len(indexStack) > 0:
-            index = indexStack[-1]
-            indexStack[-1] += 1
-            clas = path[-1].clas if len(path) > 0 else self
-            if clas is base:
-                return path
-            elif index == len(clas.supertypes):
-                if len(path) > 0:
-                    path.pop()
-                indexStack.pop()
-            elif clas.supertypes[index].clas.id not in visited:
-                supertype = clas.supertypes[index]
-                assert supertype.clas.id is not None
-                visited.add(supertype.clas.id)
-                path.append(supertype)
-                indexStack.append(0)
-        return None
-
-    def findClassPathToBaseClass(self, base):
-        path = self.findTypePathToBaseClass(base)
-        if path is None:
-            return path
-        else:
-            return [sty.clas for sty in path]
-
-    def findDistanceToBaseClass(self, base):
-        return len(self.findClassPathToBaseClass(base))
-
-    def isSubclassOf(self, other):
-        if self is other or self is builtins.getNothingClass():
-            return True
-        elif other is builtins.getNothingClass():
-            return False
-        else:
-            return other in self.superclasses()
 
     def findCommonBaseClass(self, other):
         """Returns a class which (a) is a superclass of both classes, and (b) has no subclasses
@@ -778,8 +875,8 @@ class Class(ParameterizedDefn):
         if other is builtins.getNothingClass():
             return self
 
-        selfBases = list(self.superclasses())
-        otherBases = list(other.superclasses())
+        selfBases = list(self.bases())
+        otherBases = list(other.bases())
         if selfBases[-1] is not otherBases[-1]:
             return None
 
@@ -790,52 +887,17 @@ class Class(ParameterizedDefn):
             i -= 1
         return selfBases[i + 1]
 
-    def getConstructor(self, argTypes):
-        # TODO: support constructor overloading
-        assert len(self.constructors) <= 1
-        if len(self.constructors) > 0:
-            return self.constructors[0]
-        else:
-            return None
-
-    def findMethodByShortName(self, name):
-        assert isinstance(name, str)
-        for m in self.methods:
-            if m.name.short() == name:
-                return m
-        return None
-
-    def getMethodDict(self):
-        methodDict = {}
-        for i, m in enumerate(self.methods):
-            if m.name not in methodDict:
-                methodDict[m.name] = []
-            methodDict[m.name].append((i, m))
-        return methodDict
-
-    def getField(self, name):
-        for f in self.fields:
-            if f.name.short() == name:
-                return f
-        return None
-
-    def getMethod(self, name):
-        for m in self.methods:
-            if m.name.short() == name:
-                return m
+    def findFieldBySourceName(self, name):
+        for i, f in enumerate(self.fields):
+            if name == f.sourceName:
+                return f, i
         return None
 
     def getMember(self, name):
-        method = self.getMethod(name)
+        method = self.findMethodBySourceName(name)[0]
         if method is not None:
             return method
-        return self.getField(name)
-
-    def getMethodIndex(self, method):
-        for i, m in enumerate(m for m in self.methods if flags.STATIC not in m.flags):
-            if m is method:
-                return i
-        raise KeyError("method does not belong to this class")
+        return self.findFieldBySourceName(name)[0]
 
     def getFieldIndex(self, field):
         for i, f in enumerate(self.fields):
@@ -843,11 +905,57 @@ class Class(ParameterizedDefn):
                 return i
         raise KeyError("field does not belong to this class")
 
-    def isTypeDefn(self):
-        return True
-
     def isFinal(self):
         return flags.FINAL in self.flags
+
+
+class Trait(ObjectTypeDefn):
+    """Represents a trait definition. A trait is like an interface from Java, but it allows
+    methods to be defined and inherited.
+
+    Attributes:
+        name (Name): the name of the definition.
+        id (DefnId): unique identifier for the definition.
+        sourceName (str?): name of the definition in source code.
+        astDefn (ast.Node?): the node from the AST where this definition comes from.
+        typeParameters (list[TypeParameter]?): a list of type parameters used in this
+            definition. `ClassType`s for this definition must have type arguments that
+            correspond to these parameters. Note that this list should include not only the
+            parameters from the definition, but also any parameters defined in outer
+            scopes (which are "implicit" and should come first).
+        supertypes (list[ClassType]?): a complete list of types from which this definition is
+            derived. This list includes not only the direct base types of the definition, but
+            also the transitive closure types. The list may be `None` or incomplete until
+            inheritance analysis is finished. `Type.isSubtypeOf` may not be used until then.
+            `VariableType`s in this list must correspond to parameters in `typeParameters`.
+        methods (list[Function]): a list of functions that operate on instances of this trait.
+            Inherited methods may be added to this list during class flattening.
+        flags (frozenset[flag]): flags indicating how this trait is used. Valid flags are
+            `PUBLIC`, `PROTECTED`, `PRIVATE`.
+    """
+
+    def __init__(self, name, id, sourceName=None, astDefn=None, typeParameters=None,
+                 supertypes=None, methods=None, flags=None):
+        super(Trait, self).__init__(name, id, sourceName, astDefn, typeParameters, supertypes)
+        self.methods = methods
+        self.flags = flags
+
+    def __repr__(self):
+        return reprFormat(self, "name", "typeParameters", "supertypes", "methods", "flags")
+
+    def __str__(self):
+        buf = StringIO.StringIO()
+        buf.write("%s trait %s%s\n" % (" ".join(self.flags), self.name, self.id))
+        for method in self.methods:
+            buf.write("  method %s\n" % method.id)
+        return buf.getvalue()
+
+    def __eq__(self, other):
+        return self.name == other.name and \
+               self.typeParameters == other.typeParameters and \
+               self.supertypes == other.supertypes and \
+               self.methods == other.methods and \
+               self.flags == other.flags
 
 
 class TypeParameter(IrTopDefn):
@@ -901,9 +1009,6 @@ class TypeParameter(IrTopDefn):
 
     def isTypeDefn(self):
         return True
-
-    def contains(self, ty):
-        return ty.isSubtypeOf(self.upperBound) and self.lowerBound.isSubtypeOf(ty)
 
     def variance(self):
         if flags.COVARIANT in self.flags:
@@ -1010,10 +1115,33 @@ class Field(IrDefinition):
 
 # Miscellaneous functions for dealing with arguments and parameters.
 def getExplicitTypeParameterCount(irDefn):
-    if hasattr(irDefn, "astDefn") and \
-       hasattr(irDefn.astDefn, "typeParameters"):
-        return len(irDefn.astDefn.typeParameters)
+    """Returns the number of type parameters declared by this definition.
+
+    A definition's type parameter list include parameters from both the enclosing definitions
+    and the definition itself. For example, a method's type parameter list includes parameters
+    from its defining class. "Implicit" type parameters come from an enclosing definition and
+    are at the beginning of the list; "explicit" type parameters come from the definition
+    itself and are at the end of the list.
+
+    Arguments:
+        irDefn (ParameterizedDefn): a definition with type parameters.
+
+    Returns:
+        (int): the number of type parameters declared by this definition.
+    """
+    if isinstance(irDefn, Function):
+        if irDefn.definingClass is not None:
+            return len(irDefn.typeParameters) - len(irDefn.definingClass.typeParameters)
+        elif irDefn.astDefn is not None:
+            # Local functions may still have implicit type parameters. We peek at the AST,
+            # to count the explicit type parameters, which is kind of a hack. Works as long
+            # as we can't import local functions from other packages, since we wouldn't
+            # have an AST.
+            return len(irDefn.astDefn.typeParameters)
+        else:
+            return len(irDefn.typeParameters)
     else:
+        # TODO: implement for classes and traits after nesting is supported.
         return len(irDefn.typeParameters)
 
 
@@ -1041,7 +1169,7 @@ def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes, importedTy
        (flags.STATIC in irFunction.flags or flags.METHOD in irFunction.flags):
         # Method call: type args are implied by receiver.
         if isinstance(receiverType, ir_types.ObjectType):
-            receiverType = receiverType.substituteForBaseClass(irFunction.definingClass)
+            receiverType = receiverType.substituteForBase(irFunction.definingClass)
         implicitTypeArgs = list(receiverType.getTypeArguments())
         allArgTypes = argTypes \
                       if flags.STATIC in irFunction.flags \
@@ -1083,9 +1211,15 @@ def mangleFunctionName(function, package):
         elif ty is ir_types.F64Type:
             return "D"
         elif isinstance(ty, ir_types.ClassType):
+            if isinstance(ty.clas, Class):
+                code = "C"
+            else:
+                assert isinstance(ty.clas, Trait)
+                code = "T"
             nameStr = str(ty.clas.name)
             if ty.clas.isForeign():
-                packageStr = str(package.dependencies[ty.clas.id.packageId.index].name)
+                assert ty.clas.id.packageId.name is not None
+                packageStr = str(ty.clas.id.packageId.name)
                 prefixStr = "%d%s:%d%s" % (len(packageStr), packageStr, len(nameStr), nameStr)
             elif ty.clas.isLocal():
                 prefixStr = ":%d%s" % (len(nameStr), nameStr)
@@ -1098,11 +1232,11 @@ def mangleFunctionName(function, package):
                 typeArgParts = [mangleType(a, variables) for a in ty.typeArguments]
                 typeArgStr = "[" + ",".join(typeArgParts) + "]"
             flagStr = "?" if ty.isNullable() else ""
-            return "C" + prefixStr + typeArgStr + flagStr
+            return code + prefixStr + typeArgStr + flagStr
         elif isinstance(ty, ir_types.VariableType):
             i = indexSame(variables, ty.typeParameter)
             assert i >= 0
-            return "T%d%s" % (i, "?" if ty.isNullable() else "")
+            return "V%d%s" % (i, "?" if ty.isNullable() else "")
         else:
             assert isinstance(ty, ir_types.ExistentialType)
             allVars = variables + list(ty.variables)
@@ -1153,6 +1287,7 @@ __all__ = [
     "Global",
     "Function",
     "Class",
+    "Trait",
     "TypeParameter",
     "Variable",
     "Field",

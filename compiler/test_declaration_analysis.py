@@ -75,8 +75,6 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         irCtor = irClass.constructors[0]
         self.assertTrue(irCtor.isConstructor())
         self.assertIs(astDefn, irCtor.astDefn)
-        classInfo = info.getClassInfo(irClass)
-        self.assertIs(irClass, classInfo.irDefn)
 
     def testDefineClassWithPrimaryAndSecondaryCtors(self):
         source = "class C()\n" + \
@@ -89,8 +87,6 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                       clas.constructors[0])
         self.assertIs(info.getDefnInfo(info.ast.modules[0].definitions[0].members[0]).irDefn,
                       clas.constructors[1])
-        classInfo = info.getClassInfo(clas)
-        self.assertIs(clas, classInfo.irDefn)
         self.assertIsNot(None, clas.initializer)
 
     def testDefineClassWithPrimaryCtor(self):
@@ -228,6 +224,51 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         ast = info.ast
         astDefn = ast.modules[0].definitions[0].members[0]
         self.assertEquals(DefnInfo(self.makeClass("D")), info.getDefnInfo(astDefn))
+
+    def testDefineGlobalTrait(self):
+        info = self.analyzeFromSource("public trait Tr")
+        astDefn = info.ast.modules[0].definitions[0]
+        defnInfo = info.getDefnInfo(astDefn)
+        irTrait = defnInfo.irDefn
+        self.assertEquals(Name(["Tr"]), irTrait.name)
+        self.assertEquals(frozenset([PUBLIC]), irTrait.flags)
+        self.assertEquals(GLOBAL_SCOPE_ID, defnInfo.scopeId)
+        self.assertTrue(info.getScope(GLOBAL_SCOPE_ID).isDefined("Tr"))
+
+    def testDefineTraitFunction(self):
+        source = "trait Tr\n" + \
+                 "  def f = 12"
+        info = self.analyzeFromSource(source)
+        astDefn = info.ast.modules[0].definitions[0].members[0]
+        scopeId = info.getScope(info.ast.modules[0].definitions[0]).scopeId
+        this = self.makeVariable(Name(["Tr", "f", RECEIVER_SUFFIX]),
+                                 kind=PARAMETER, flags=frozenset([LET]))
+        expectedFunction = self.makeFunction("Tr.f", variables=[this], flags=frozenset([METHOD]))
+        expectedDefnInfo = DefnInfo(expectedFunction, scopeId, True)
+        self.assertEquals(expectedDefnInfo, info.getDefnInfo(astDefn))
+
+    def testDefineTraitTypeParameter(self):
+        source = "public trait Tr[static T]\n" + \
+                 "  def f(x: T) = 12"
+        info = self.analyzeFromSource(source)
+        Tr = info.package.findTrait(name="Tr")
+        T = info.package.findTypeParameter(name="Tr.T")
+        f = info.package.findFunction(name="Tr.f")
+        self.assertEquals([T], Tr.typeParameters)
+        self.assertEquals([T], f.typeParameters)
+        self.assertEquals(frozenset([PUBLIC, STATIC]), T.flags)
+        self.assertIs(Tr, T.clas)
+
+    def testDefineAbstractTrait(self):
+        source = "abstract trait Tr"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
+    def testTraitMethodWithoutBodyIsAbstract(self):
+        source = "trait Tr\n" + \
+                 "  def f: unit"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="Tr.f")
+        self.assertIn(ABSTRACT, f.flags)
 
     def testVarDefinedInBlock(self):
         info = self.analyzeFromSource("def f = {\n" +

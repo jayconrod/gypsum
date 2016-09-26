@@ -15,7 +15,7 @@ def hidden-fn = 56
 
 class PrivClass
 
-public class Foo(x: i64)
+public class Foo(x: i64) <: Bar
   public let pub-const = 12
   public var pub-var = 34
   var normal-var = 56
@@ -28,5 +28,7 @@ public class Foo(x: i64)
   private def priv-method = 78
   public static def static-method = 123
 
+public trait Bar
+  public def trait-pub-method = 12
 
 public let foo = Foo(12i64)

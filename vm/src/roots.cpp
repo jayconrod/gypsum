@@ -18,6 +18,7 @@
 #include "stack.h"
 #include "string.h"
 #include "thread-bindle.h"
+#include "trait.h"
 #include "type.h"
 #include "type-parameter.h"
 
@@ -85,6 +86,18 @@ void Roots::initialize(Heap* heap) {
   fieldMeta->objectPointerMap().setWord(0, Field::kPointerMap);
   basicRoots_[FIELD_META_ROOT_INDEX] = fieldMeta;
 
+  auto traitMeta = new(heap, 0, sizeof(Trait), 0) Meta(TRAIT_BLOCK_TYPE);
+  traitMeta->hasPointers_ = true;
+  traitMeta->objectPointerMap().setWord(0, Trait::kPointerMap);
+  basicRoots_[TRAIT_META_ROOT_INDEX] = traitMeta;
+
+  auto traitTableMeta = new(heap, 0, sizeof(TraitTable), sizeof(TraitTable::Element))
+      Meta(TRAIT_TABLE_BLOCK_TYPE);
+  traitTableMeta->hasElementPointers_ = true;
+  traitTableMeta->lengthOffset_ = offsetof(TraitTable, capacity_);
+  traitTableMeta->elementPointerMap().setWord(0, TraitTable::kElementPointerMap);
+  basicRoots_[TRAIT_TABLE_META_ROOT_INDEX] = traitTableMeta;
+
   auto typeParameterMeta =
       new(heap, 0, sizeof(TypeParameter), 0) Meta(TYPE_PARAMETER_BLOCK_TYPE);
   typeParameterMeta->hasPointers_ = true;
@@ -136,10 +149,19 @@ void Roots::initialize(Heap* heap) {
   auto emptyBlockArray = new(heap, 0) BlockArray<Block>;
   basicRoots_[EMPTY_BLOCK_ARRAY_ROOT_INDEX] = emptyBlockArray;
 
+  auto emptyTraitTable = new(heap, 1) TraitTable;
+  basicRoots_[EMPTY_TRAIT_TABLE_ROOT_INDEX] = emptyTraitTable;
+
   initializeBuiltins(heap);
 
   auto labelType = new(heap, 0) Type(Type::LABEL_TYPE);
   basicRoots_[LABEL_TYPE_ROOT_INDEX] = labelType;
+
+  auto anyType = new(heap, 0) Type(Type::ANY_TYPE);
+  basicRoots_[ANY_TYPE_ROOT_INDEX] = anyType;
+
+  auto noType = new(heap, 0) Type(Type::NO_TYPE);
+  basicRoots_[NO_TYPE_ROOT_INDEX] = noType;
 
   auto nullType = new(heap, 1) Type(getBuiltinClass(BUILTIN_NOTHING_CLASS_ID),
                                     Type::NULLABLE_FLAG);
@@ -163,12 +185,6 @@ void Roots::initialize(Heap* heap) {
   Meta* typeMeta = getBuiltinClass(BUILTIN_TYPE_CLASS_ID)->instanceMeta();
   typeMeta->blockType_ = TYPE_BLOCK_TYPE;
   basicRoots_[TYPE_META_ROOT_INDEX] = typeMeta;
-
-  auto externTypeInfoMeta =
-      new(heap, 0, sizeof(ExternTypeInfo), 0) Meta(EXTERN_TYPE_INFO_BLOCK_TYPE);
-  externTypeInfoMeta->hasPointers_ = true;
-  externTypeInfoMeta->objectPointerMap().setWord(0, ExternTypeInfo::kPointerMap);
-  basicRoots_[EXTERN_TYPE_INFO_META_ROOT_INDEX] = externTypeInfoMeta;
 
   Meta* stringMeta = getBuiltinClass(BUILTIN_STRING_CLASS_ID)->instanceMeta();
   stringMeta->blockType_ = STRING_BLOCK_TYPE;
@@ -220,6 +236,8 @@ Meta* Roots::getMetaForBlockType(int type) {
     case FUNCTION_BLOCK_TYPE: return functionMeta();
     case CLASS_BLOCK_TYPE: return classMeta();
     case FIELD_BLOCK_TYPE: return fieldMeta();
+    case TRAIT_BLOCK_TYPE: return traitMeta();
+    case TRAIT_TABLE_BLOCK_TYPE: return traitTableMeta();
     case TYPE_PARAMETER_BLOCK_TYPE: return typeParameterMeta();
     case I8_ARRAY_BLOCK_TYPE: return i8ArrayMeta();
     case I32_ARRAY_BLOCK_TYPE: return i32ArrayMeta();
@@ -229,7 +247,6 @@ Meta* Roots::getMetaForBlockType(int type) {
     case BLOCK_HASH_MAP_TABLE_BLOCK_TYPE: return blockHashMapTableMeta();
     case BLOCK_HASH_MAP_BLOCK_TYPE: return blockHashMapMeta();
     case TYPE_BLOCK_TYPE: return typeMeta();
-    case EXTERN_TYPE_INFO_BLOCK_TYPE: return externTypeInfoMeta();
     case STRING_BLOCK_TYPE: return stringMeta();
     case THREAD_BINDLE_BLOCK_TYPE: return threadBindleMeta();
     default:
@@ -239,10 +256,35 @@ Meta* Roots::getMetaForBlockType(int type) {
 }
 
 
+bool Roots::isValidBuiltinClassId(BuiltinId id) const {
+  auto index = builtinIdToIndex(id);
+  return 0 <= index && index < builtinClasses_.size();
+}
+
+
+bool Roots::isValidBuiltinTraitId(BuiltinId id) const {
+  return false;
+}
+
+
+bool Roots::isValidBuiltinFunctionId(BuiltinId id) const {
+  auto index = builtinIdToIndex(id);
+  return 0 <= index && index < builtinFunctions_.size();
+}
+
+
 Class* Roots::getBuiltinClass(BuiltinId id) const {
+  ASSERT(isValidBuiltinClassId(id));
   auto index = builtinIdToIndex(id);
   ASSERT(index < builtinClasses_.size());
   return builtinClasses_[index];
+}
+
+
+Trait* Roots::getBuiltinTrait(BuiltinId id) const {
+  ASSERT(isValidBuiltinTraitId(id));
+  UNREACHABLE();
+  return nullptr;
 }
 
 
@@ -268,6 +310,7 @@ Name* Roots::getBuiltinName(BuiltinId id) const {
 
 
 Function* Roots::getBuiltinFunction(BuiltinId id) const {
+  ASSERT(isValidBuiltinFunctionId(id));
   auto index = builtinIdToIndex(id);
   ASSERT(index < builtinFunctions_.size());
   return builtinFunctions_[index];

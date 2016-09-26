@@ -1,4 +1,4 @@
-// Copyright 2015 Jay Conrod. All rights reserved.
+// Copyright 2015-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -13,7 +13,8 @@ def get-value(obj: Object) =
     case ptr-obj: PtrMember => ptr-obj.value
     case int-obj: IntMember => int-obj.value.to-string
 
-class Box[static T](value: T)
+trait Boxy[static T]
+class Box[static T](value: T) <: Boxy[T]
 
 
 def test-match-members =
@@ -26,7 +27,7 @@ def test-match-members =
     throw Exception()
 
 
-def test-match-type-with-erased-arg =
+def test-match-class-type-with-erased-arg =
   let obj: Object = Box[String]("foo")
   let result = match (obj)
     case x: Box[_] => true
@@ -35,7 +36,16 @@ def test-match-type-with-erased-arg =
     throw Exception()
 
 
-def test-match-type-with-erased-foreign-arg =
+def test-match-trait-type-with-erased-arg =
+  let obj: Object = Box[String]("foo")
+  let result = match (obj)
+    case x: Boxy[_] => true
+    case _ => false
+  if (!result)
+    throw Exception()
+
+
+def test-match-class-type-with-erased-foreign-arg =
   let obj: Object = std.Tuple2[String, String]("foo", "bar")
   let result = match (obj)
     case x: std.Tuple2[_, _] => true
@@ -46,5 +56,5 @@ def test-match-type-with-erased-foreign-arg =
 
 def main =
   test-match-members
-  test-match-type-with-erased-arg
-  test-match-type-with-erased-foreign-arg
+  test-match-class-type-with-erased-arg
+  test-match-class-type-with-erased-foreign-arg

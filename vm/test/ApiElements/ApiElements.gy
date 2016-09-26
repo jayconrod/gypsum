@@ -4,16 +4,13 @@
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
 
-import std.MutableI8Array
 import std.I8Array
 
 
 public def create-mut-i8-array(len: i32) =
-  let array = new(len) MutableI8Array
+  let array = new(len) I8Array
   var i = 0i32
   while (i < len)
     array.set(i, i.to-i8)
     i += 1i32
   array
-
-public def create-i8-array(len: i32) = I8Array.create(create-mut-i8-array(len))

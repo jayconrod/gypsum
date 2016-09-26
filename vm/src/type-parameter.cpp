@@ -82,6 +82,31 @@ bool TypeParameter::isEquivalent(TypeParameter* other) const {
 }
 
 
+TypeParameter* TypeParameter::findCommonUpperBound(TypeParameter* other) const {
+  vector<const TypeParameter*> selfBounds;
+  selfBounds.push_back(this);
+  for (auto bound = upperBound();
+       bound->isVariable();
+       bound = bound->asVariable()->upperBound()) {
+    selfBounds.push_back(bound->asVariable());
+  }
+
+  if (any_of(selfBounds.begin(), selfBounds.end(),
+          [&](const TypeParameter* tp) { return tp == other; })) {
+    return other;
+  }
+  for (auto bound = other->upperBound();
+       bound->isVariable();
+       bound = bound->asVariable()->upperBound()) {
+    if (any_of(selfBounds.begin(), selfBounds.end(),
+            [&](const TypeParameter* tp) { return tp == other; })) {
+      return bound->asVariable();
+    }
+  }
+  return nullptr;
+}
+
+
 bool TypeParameter::hasCommonBound(TypeParameter* other) const {
   unordered_set<const TypeParameter*> otherLowerBounds{other};
   auto last = other;

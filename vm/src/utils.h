@@ -46,6 +46,7 @@ const word_t kNotSet = static_cast<word_t>(-1);
 const word_t kNotFound = static_cast<word_t>(-1);
 void* const kFailed = reinterpret_cast<void*>(1);
 void* const kUninitialized = nullptr;
+const u32 kHashNotSet = ~0u;
 typedef u32 length_t;
 const length_t kMaxLength = 0x7fffffffu;
 const length_t kLengthNotSet = ~0u;
@@ -56,9 +57,17 @@ const id_t kIdNotSet = -1;
 
 const id_t kLocalPackageId = -1;
 const id_t kBuiltinPackageId = -2;
+
 struct DefnId {
   id_t packageId;
   length_t defnIndex;
+
+  bool operator == (const DefnId& other) const {
+    return packageId == other.packageId && defnIndex == other.defnIndex;
+  }
+  bool operator != (const DefnId& other) const {
+    return !(*this == other);
+  }
 };
 
 const int KB = 1024;

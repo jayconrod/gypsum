@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -49,12 +49,12 @@ class CompileInfo(object):
         self.closureInfo = {}  # keyed by ScopeId
         self.defnInfo = {}  # keyed by AstId
         self.useInfo = {}  # keyed by AstId
-        self.classInfo = {}  # keyed by DefnId
         self.typeInfo = {}  # keyed by AstId
         self.callInfo = {}  # keyed by AstId
         self.scopePrefixInfo = {}  # keyed by AstId
         self.stdExternInfo = {} # keyed by DefnId
         self.importInfo = {}  # keyed by AstId
+        self.typeCheckFunction = None
 
     def languageMode(self):
         if self.isUsingStd:
@@ -93,7 +93,6 @@ _dictNames = [("Scope", "scopes", (ids.ScopeId, ids.AstId, ids.DefnId, ids.Packa
               ("ClosureInfo", "closureInfo", (ids.ScopeId,)),
               ("DefnInfo", "defnInfo", (ids.AstId,)),
               ("UseInfo", "useInfo", (ids.AstId,)),
-              ("ClassInfo", "classInfo", (ids.DefnId,)),
               ("Type", "typeInfo", (ids.AstId,)),
               ("CallInfo", "callInfo", (ids.AstId,)),
               ("ScopePrefixInfo", "scopePrefixInfo", (ids.AstId,)),
@@ -277,8 +276,11 @@ class DefnInfo(data.Data):
     def isMethod(self):
         return isinstance(self.irDefn, Function) and self.irDefn.isMethod()
 
+    def isHeritable(self):
+        return self.inheritanceDepth != NOT_HERITABLE
+
     def inherit(self, scopeId):
-        assert self.inheritanceDepth != NOT_HERITABLE and self.isVisible
+        assert self.isHeritable() and self.isVisible
         return DefnInfo(self.irDefn, scopeId, self.isVisible,
                         self.inheritedScopeId, self.inheritanceDepth + 1)
 
@@ -318,25 +320,6 @@ class UseInfo(data.Data):
                not useScope.isLocalWithin(defnScope)
 
 
-class ClassInfo(data.Data):
-    """Defined for each class. Keeps track of superclass."""
-
-    propertyNames = [
-        "irDefn",
-        "superclassInfo",
-    ]
-
-    def __init__(self, irDefn, superclassInfo=None):
-        self.irDefn = irDefn
-        self.superclassInfo = superclassInfo
-
-    def __repr__(self):
-        irDefnStr = repr(self.irDefn)
-        superclassInfoStr = self.superclassInfo.irDefn.name \
-                            if self.superclassInfo is not None else "None"
-        return "ClassInfo(%s, %s)" % (irDefnStr, superclassInfoStr)
-
-
 class CallInfo(data.Data):
     """Defined at each call site during type/use analysis. Tracks information needed for the
     compiler to generate the call."""
@@ -344,6 +327,11 @@ class CallInfo(data.Data):
     propertyNames = [
         # [Type]: A list of type arguments to be passed to the callee.
         "typeArguments",
+
+        # Type?: The type of the receiver. This is only specified for non-static method calls.
+        # TODO: this may be `None` for calls to closure functions, since they are regular
+        # functions during type analysis. Closure conversion should add this.
+        "receiverType",
     ]
 
 
@@ -370,8 +358,7 @@ class ImportInfo(data.Data):
 
 
 
-__all__ = [ "CompileInfo", "ContextInfo", "ClosureInfo", "DefnInfo",
-            "ClassInfo", "UseInfo", "ImportInfo",
+__all__ = [ "CompileInfo", "ContextInfo", "ClosureInfo", "DefnInfo", "UseInfo", "ImportInfo",
             "USE_AS_VALUE", "USE_AS_TYPE", "USE_AS_PROPERTY", "USE_AS_CONSTRUCTOR",
             "CONTEXT_CONSTRUCTOR_HINT", "CLOSURE_CONSTRUCTOR_HINT", "ARRAY_ELEMENT_GET_HINT",
             "ARRAY_ELEMENT_SET_HINT", "ARRAY_ELEMENT_LENGTH_HINT",

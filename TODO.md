@@ -25,7 +25,8 @@
 - inner classes
 - `static` attribute for closures
 - `static` attribute for inner classes
-- traits and multiple inheritance
+- trait fields
+- implicit / extension traits
 - tail recursion
 - awesome for loops
 - dynamic features

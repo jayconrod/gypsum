@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -6,18 +6,19 @@
 
 import unittest
 
-from lexer import *
+from compile_info import *
+from errors import *
+from flags import LET
+from ids import *
+from inheritance_analysis import analyzeInheritance
+from ir import *
+from ir_types import *
 from layout import layout
+from lexer import *
+from location import NoLoc
 from parser import *
 from scope_analysis import *
 from type_analysis import *
-from ids import *
-from ir import *
-from ir_types import *
-from compile_info import *
-from location import NoLoc
-from flags import LET
-from errors import *
 from utils_test import FakePackageLoader, TestCaseWithDefinitions
 
 
@@ -35,6 +36,7 @@ class TestUseAnalysis(TestCaseWithDefinitions):
         packageLoader = FakePackageLoader([])
         info = CompileInfo(ast, package, packageLoader, isUsingStd=False)
         analyzeDeclarations(info)
+        analyzeTypeDeclarations(info)
         analyzeInheritance(info)
         return info
 
@@ -211,6 +213,13 @@ class TestUseAnalysis(TestCaseWithDefinitions):
                  "  static def f = x"
         self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
 
+    def testUseFieldPropertyFromStaticMethod(self):
+        source = "class Foo(x: i32)\n" + \
+                 "class Bar\n" + \
+                 "  let foo = Foo(12i32)\n" + \
+                 "  static def f = foo.x"
+        self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
+
     def testUseMethodFromStaticMethod(self):
         source = "class Foo\n" + \
                  "  def f = 12\n" + \
@@ -332,3 +341,14 @@ class TestUseAnalysis(TestCaseWithDefinitions):
         S = info.package.findTypeParameter(name="f.S")
         use = info.getUseInfo(info.ast.modules[0].definitions[1].typeParameters[0].upperBound.typeArguments[0])
         self.assertIs(S, use.defnInfo.irDefn)
+
+    def testUseTypeParameterAsVariable(self):
+        source = "def f[static T] = T"
+        self.assertRaises(TypeException, self.analyzeFromSourceWithTypes, source)
+
+    def testUseFieldInStaticMatchCase(self):
+        source = "class Foo(x: i64)\n" + \
+                 "  static def f(obj: Object) =\n" + \
+                 "    match (obj)\n" + \
+                 "      case _ => x"
+        self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)

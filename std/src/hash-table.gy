@@ -1,0 +1,193 @@
+// Copyright 2016, Jay Conrod. All rights reserved.
+//
+// This file is part of the Gypsum standard library. Use of this
+// source code is governed by the 3-clause BSD license that can be
+// found in the LICENSE.txt file.
+
+
+let min-capacity = 16i32
+let min-empty-ratio = 0.25f32
+let min-live-ratio = 0.1f32
+
+
+public final class HashMap[static K <: Hash[K], static V] <: Iter[(K, V)]
+  private var table = new(min-capacity) HashMapTable[K, V]()
+
+  public def size: i32 = table.live-element-count
+
+  public def contains(key: K): boolean = table.contains(key)
+
+  public def get(key: K): V =
+    if (table.contains(key))
+      table.get(key)
+    else
+      throw NoSuchElementException()
+
+  public def get(key: K, default-value: V): V =
+    if (table.contains(key))
+      table.get(key)
+    else
+      default-value
+
+  public def get-opt(key: K): Option[V] =
+    if (table.contains(key))
+      Some[V](table.get(key))
+    else
+      None
+
+  public def set(key: K, value: V): unit =
+    if (table.contains(key))
+      table.set(key, value)
+    else
+      if (table.live-element-count + 1i32 == table.capacity ||
+          table.empty-ratio < min-empty-ratio)
+        resize(table.capacity * 2i32)
+      table.insert(key, value)
+
+  public def remove(key: K): Option[V] =
+    if (table.contains(key))
+      let value = Some[V](table.get(key))
+      table.remove(key)
+      if (table.capacity > min-capacity && table.live-ratio < min-live-ratio)
+        resize(table.capacity / 2i32)
+      value
+    else
+      None
+
+  public override def iter: Iterator[(K, V)] = table.iter
+
+  private def resize(capacity: i32): unit =
+    let new-table = new(capacity) HashMapTable[K, V]()
+    new-table.rehash(table)
+    table = new-table
+    {}
+
+
+abstract class Entry[static +K <: Hash[K], static +V]
+
+final class EmptyEntryClass <: Entry[Nothing, Nothing]
+let EmptyEntry = EmptyEntryClass()
+
+final class DeletedEntryClass <: Entry[Nothing, Nothing]
+let DeletedEntry = DeletedEntryClass()
+
+final class LiveMapEntry[static +K <: Hash[K], static V](key: K, var value: V) <: Entry[K, V]
+  static def try-match(entry: Entry[K, V]): Option[(K, V)] =
+    match (entry)
+      case live-entry: LiveMapEntry[K, V] => Some[(K, V)]((live-entry.key, live-entry.value))
+      case _ => None
+
+
+final class HashMapTable[static K <: Hash[K], static V] <: Iter[(K, V)]
+  var live-element-count = 0i32
+  var dead-element-count = 0i32
+
+  arrayelements Entry[K, V], get-entry, set-entry, capacity
+
+  def this =
+    if (capacity == 0i32)
+      throw IllegalArgumentException()
+    var index = 0i32
+    while (index < capacity)
+      set-entry(index, EmptyEntry)
+
+  def contains(key: K) = lookup(key).is-defined
+
+  def insert(key: K, value: V): unit =
+    let index = lookup-for-insert(key)
+    set-entry(index, LiveMapEntry[K, V](key, value))
+    live-element-count += 1i32
+    {}
+
+  def remove(key: K): unit =
+    let index = lookup-index(key)
+    if (index == -1i32)
+      throw NoSuchElementException()
+    set-entry(index, DeletedEntry)
+    live-element-count -= 1i32
+    dead-element-count += 1i32
+    {}
+
+  def get(key: K): V =
+    match (lookup(key))
+      case Some[LiveMapEntry[K, V]](entry) => entry.value
+      case None => throw NoSuchElementException()
+
+  def set(key: K, value: V): unit =
+    match (lookup(key))
+      case Some[LiveMapEntry[K, V]](entry) =>
+        entry.value = value
+        {}
+      case _ => throw NoSuchElementException()
+
+  def empty-ratio: f32 =
+    (capacity - live-element-count - dead-element-count).to-f32 / capacity.to-f32
+
+  def live-ratio: f32 = live-element-count.to-f32 / capacity.to-f32
+
+  def rehash(table: HashMapTable[K, V]): unit =
+    let it = table.iter
+    while (it.has-next)
+      let (key, value) = it.next
+      insert(key, value)
+
+  public override def iter = HashMapTableIterator[K, V](this)
+
+  private def lookup-for-insert(key: K): i32 =
+    let start-index = key.hash % capacity
+    var index = start-index
+    var done = false
+    while (!done)
+      match (get-entry(index))
+        case EmptyEntry => return index
+        case DeletedEntry => return index
+        case _ =>
+          index = (index + 1i32) % capacity
+          done = index == start-index
+    throw AssertionException()
+
+  private def lookup-index(key: K): i32 =
+    let start-index = key.hash % capacity
+    var index = start-index
+    var done = false
+    while (!done)
+      match (get-entry(index))
+        case entry: LiveMapEntry[K, V] if entry.key == key => return index
+        case EmptySlot => return -1i32
+        case _ =>
+          index = (index + 1i32) % capacity
+          done = index == start-index
+    -1i32
+
+  private def lookup(key: K): Option[LiveMapEntry[K, V]] =
+    let index = lookup-index(key)
+    if (index == -1i32)
+      None
+    else
+      match (get-entry(index))
+        case entry: LiveMapEntry[K, V] => Some[LiveMapEntry[K, V]](entry)
+        case _ => throw AssertionException()
+
+
+final class HashMapTableIterator[static K <: Hash[K], static V](table: HashMapTable[K, V]) <: Iterator[(K, V)]
+  var index = advance-index(-1i32)
+
+  public override def has-next = index < table.capacity
+
+  public override def next =
+    if (!has-next)
+      throw NoSuchElementException()
+    let kv = match (table.get-entry(index))
+      case entry: LiveMapEntry[K, V] => (entry.key, entry.value)
+      case _ => throw AssertionException()
+    index = advance-index(index)
+    kv
+
+  private def advance-index(var index: i32) =
+    index += 1i32
+    while (index < table.capacity)
+      match (table.get-entry(index))
+        case _: LiveMapEntry[K, V] => return index
+        case _ => {}
+      index += 1i32
+    index

@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -126,19 +126,20 @@ class FunctionDefinition(Definition):
 
 class ClassDefinition(Definition):
     def __init__(self, attribs, name, typeParameters, constructor,
-                 supertype, superArgs, members, location):
+                 superclass, superArgs, supertraits, members, location):
         super(ClassDefinition, self).__init__(attribs, location)
         self.name = name
         self.typeParameters = typeParameters
         self.constructor = constructor
-        self.supertype = supertype
+        self.superclass = superclass
         self.superArgs = superArgs
+        self.supertraits = supertraits
         self.members = members
 
     def __repr__(self):
-        return "ClassDefinition(%s, %s, %s, %s, %s, %s)" % \
+        return "ClassDefinition(%s, %s, %s, %s, %s, %s, %s)" % \
             (repr(self.name), repr(self.typeParameters), repr(self.constructor),
-             repr(self.supertype), repr(self.superArgs),
+             repr(self.superclass), repr(self.superArgs), repr(self.supertraits),
              repr(self.members))
 
     def data(self):
@@ -148,10 +149,12 @@ class ClassDefinition(Definition):
         children = self.attribs + self.typeParameters
         if self.constructor is not None:
             children.append(self.constructor)
-        if self.supertype is not None:
-            children.append(self.supertype)
+        if self.superclass is not None:
+            children.append(self.superclass)
         if self.superArgs is not None:
             children.extend(self.superArgs)
+        if self.supertraits is not None:
+            children.extend(self.supertraits)
         children.extend(self.members)
         return children
 
@@ -197,6 +200,33 @@ class ArrayAccessorDefinition(Definition):
 
     def __repr__(self):
         return "ArrayAccessorDefinition(%s)" % repr(self.name)
+
+
+class TraitDefinition(Definition):
+    def __init__(self, attribs, name, typeParameters, supertypes, members, location):
+        super(TraitDefinition, self).__init__(attribs, location)
+        self.name = name
+        self.typeParameters = typeParameters
+        self.supertypes = supertypes
+        self.members = members
+        self.location = location
+
+    def __repr__(self):
+        return "TraitDefinition(%s, %s, %s, %s)" % \
+            (repr(self.name), repr(self.typeParameters),
+             repr(self.supertypes), repr(self.members))
+
+    def data(self):
+        return name
+
+    def children(self):
+        children = []
+        children.extend(self.attribs)
+        children.extend(self.typeParameters)
+        if self.supertypes is not None:
+            children.extend(self.supertypes)
+        children.extend(self.members)
+        return children
 
 
 class ImportStatement(Node):

@@ -15,6 +15,7 @@
 #include "index.h"
 #include "package.h"
 #include "roots.h"
+#include "trait.h"
 #include "type.h"
 
 using namespace std;
@@ -26,10 +27,11 @@ namespace internal {
   F(Class, name_) \
   F(Class, sourceName_) \
   F(Class, typeParameters_) \
-  F(Class, supertype_) \
+  F(Class, supertypes_) \
   F(Class, fields_) \
   F(Class, constructors_) \
   F(Class, methods_) \
+  F(Class, traits_) \
   F(Class, package_) \
   F(Class, instanceMeta_) \
   F(Class, elementType_) \
@@ -53,23 +55,25 @@ Class::Class(Name* name,
              String* sourceName,
              u32 flags,
              BlockArray<TypeParameter>* typeParameters,
-             Type* supertype,
+             BlockArray<Type>* supertypes,
              BlockArray<Field>* fields,
              BlockArray<Function>* constructors,
              BlockArray<Function>* methods,
+             TraitTable* traits,
              Package* package,
              Meta* instanceMeta,
              Type* elementType,
              length_t lengthFieldIndex)
-    : Block(CLASS_BLOCK_TYPE),
+    : ObjectTypeDefn(CLASS_BLOCK_TYPE),
       name_(this, name),
       sourceName_(this, sourceName),
       flags_(flags),
       typeParameters_(this, typeParameters),
-      supertype_(this, supertype),
+      supertypes_(this, supertypes),
       fields_(this, fields),
       constructors_(this, constructors),
       methods_(this, methods),
+      traits_(this, traits),
       package_(this, package),
       instanceMeta_(this, instanceMeta),
       elementType_(this, elementType),
@@ -83,17 +87,18 @@ Local<Class> Class::create(Heap* heap,
                            const Handle<String>& sourceName,
                            u32 flags,
                            const Handle<BlockArray<TypeParameter>>& typeParameters,
-                           const Handle<Type>& supertype,
+                           const Handle<BlockArray<Type>>& supertypes,
                            const Handle<BlockArray<Field>>& fields,
                            const Handle<BlockArray<Function>>& constructors,
                            const Handle<BlockArray<Function>>& methods,
+                           const Handle<TraitTable>& traits,
                            const Handle<Package>& package,
                            const Handle<Meta>& instanceMeta,
                            const Handle<Type>& elementType,
                            length_t lengthFieldIndex) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
-      *name, sourceName.getOrNull(), flags, *typeParameters, *supertype,
-      *fields, *constructors, *methods,
+      *name, sourceName.getOrNull(), flags, *typeParameters, *supertypes,
+      *fields, *constructors, *methods, *traits,
       package.getOrNull(), instanceMeta.getOrNull(),
       elementType.getOrNull(), lengthFieldIndex)));
 }
@@ -102,17 +107,19 @@ Local<Class> Class::create(Heap* heap,
 Local<Class> Class::create(Heap* heap) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
       nullptr, nullptr, 0, nullptr, nullptr, nullptr, nullptr, nullptr,
-      nullptr, nullptr, nullptr, kIndexNotSet)));
+      nullptr, nullptr, nullptr, nullptr, kIndexNotSet)));
 }
 
 
-TypeParameter* Class::typeParameter(length_t index) const {
-  return typeParameters()->get(index);
+Type* Class::baseClassType() const {
+  auto types = supertypes();
+  return types->isEmpty() ? nullptr : types->get(0);
 }
 
 
-length_t Class::typeParameterCount() const {
-  return typeParameters()->length();
+Class* Class::baseClass() const {
+  auto baseType = baseClassType();
+  return baseType ? baseType->asClass() : nullptr;
 }
 
 
@@ -146,9 +153,9 @@ Class* Class::findFieldClass(length_t index) {
   ASSERT(index < fields()->length());
   auto clas = this;
   while (true) {
-    if (clas->supertype() == nullptr)
+    auto base = clas->baseClass();
+    if (!base)
       return clas;
-    auto base = clas->supertype()->asClass();
     if (index >= base->fields()->length())
       return clas;
     clas = base;
@@ -279,8 +286,8 @@ void Class::ensureInstanceMeta(const Handle<Class>& clas) {
 
 bool Class::isSubclassOf(const Class* other) const {
   auto current = this;
-  while (current->supertype() != nullptr && current != other) {
-    current = current->supertype()->asClass();
+  while (current->baseClass() != nullptr && current != other) {
+    current = current->baseClass();
   }
   return current == other;
 }
@@ -310,10 +317,11 @@ ostream& operator << (ostream& os, const Class* clas) {
   os << brief(clas)
      << "\n  name: " << brief(clas->name())
      << "\n  sourceName: " << brief(clas->sourceName())
-     << "\n  supertype: " << brief(clas->supertype())
+     << "\n  supertypes: " << brief(clas->supertypes())
      << "\n  fields: " << brief(clas->fields())
      << "\n  constructors: " << brief(clas->constructors())
      << "\n  methods: " << brief(clas->methods())
+     << "\n  traits: " << brief(clas->traits())
      << "\n  package: " << brief(clas->package())
      << "\n  instance meta: " << brief(clas->instanceMeta())
      << "\n  element type: " << brief(clas->elementType())

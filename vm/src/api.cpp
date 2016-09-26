@@ -34,6 +34,7 @@
 #include "vm.h"
 
 using std::copy_n;
+using std::istream;
 using std::move;
 using std::string;
 using std::unique_ptr;
@@ -100,7 +101,9 @@ static VM* refVM(const Reference& ref) {
 
 
 static Value valueFromRaw(i::Type* type, i::i64 bits) {
-  if (type->isBoolean()) {
+  if (type->isUnit()) {
+    return Value();
+  } else if (type->isBoolean()) {
     return Value(static_cast<bool>(bits));
   } else if (type->isI8()) {
     return Value(static_cast<int8_t>(bits));
@@ -188,6 +191,7 @@ class CallBuilder::Impl final {
   i::VM* vm_;
   i::Persistent<i::Package> package_;
   i::Persistent<i::Class> clas_;
+  i::Persistent<i::Trait> trait_;
   i::Persistent<i::Function> function_;
   i::Persistent<i::Name> name_;
   i::Persistent<i::String> sourceName_;
@@ -262,6 +266,20 @@ Package VM::loadPackageFromFile(const string& fileName,
   i::Persistent<i::Package> package;
   try {
     package = impl_->vm.loadPackage(fileName, nativeFunctionSearchOrder);
+  } catch (i::Error& error) {
+    throw Error(new Error::Impl(error.message()));
+  }
+
+  return wrap<Package, i::Package>(package);
+}
+
+
+Package VM::loadPackageFromStream(istream& stream,
+    const vector<NativeFunctionSearch>& nativeFunctionSearchOrder) {
+  checkNativeFunctionSearchOrder(nativeFunctionSearchOrder);
+  i::Persistent<i::Package> package;
+  try {
+    package = impl_->vm.loadPackage(stream, nativeFunctionSearchOrder);
   } catch (i::Error& error) {
     throw Error(new Error::Impl(error.message()));
   }
@@ -451,6 +469,39 @@ Class Package::findClass(const string& sourceName) const {
 }
 
 
+Trait Package::findTrait(const Name& name) const {
+  API_CHECK_SELF(Package);
+  API_CHECK_ARG(name);
+  auto self = unwrap<i::Package>(*this);
+  auto vm = self->getVM();
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAlloc(vm->heap(), true);
+  auto index = i::Package::ensureAndGetTraitNameIndex(self);
+  auto trait = index->getOrElse(*unwrap<i::Name>(name), nullptr);
+  return trait ? wrap<Trait, i::Trait>(trait) : Trait();
+}
+
+
+Trait Package::findTrait(const String& sourceName) const {
+  API_CHECK_SELF(Package);
+  API_CHECK_ARG(sourceName);
+  auto self = unwrap<i::Package>(*this);
+  auto vm = self->getVM();
+  i::HandleScope handleScope(vm);
+  i::AllowAllocationScope allowAlloc(vm->heap(), true);
+  auto index = i::Package::ensureAndGetTraitSourceNameIndex(self);
+  auto trait = index->getOrElse(*unwrap<i::String>(sourceName), nullptr);
+  return trait ? wrap<Trait, i::Trait>(trait) : Trait();
+}
+
+
+Trait Package::findTrait(const string& sourceName) const {
+  API_CHECK_SELF(Package);
+  String sourceNameStr(refVM(*this), sourceName);
+  return findTrait(sourceNameStr);
+}
+
+
 Global::Global(Impl* impl)
     : Reference(impl) { }
 
@@ -492,7 +543,9 @@ bool Function::isConstructor() const {
 Class Function::clas() const {
   API_CHECK_SELF(Function);
   auto clas = unwrapRaw<i::Function>(*this)->definingClass();
-  return clas ? wrap<Class, i::Class>(clas) : Class();
+  return (clas && i::isa<i::Class>(clas))
+      ? wrap<Class, i::Class>(reinterpret_cast<i::Class*>(clas))
+      : Class();
 }
 
 
@@ -573,6 +626,44 @@ Field Class::findField(const string& sourceName) const {
   API_CHECK_SELF(Class);
   String sourceNameStr(refVM(*this), sourceName);
   return findField(sourceNameStr);
+}
+
+
+Trait::Trait(Impl* impl)
+    : Reference(impl) { }
+
+
+Function Trait::findMethod(const Name& name, const string& signature) const {
+  API_CHECK_SELF(Trait);
+  API_CHECK_ARG(name);
+  auto self = unwrap<i::Trait>(*this);
+
+  i::HandleScope handleScope(self->getVM());
+  i::AllowAllocationScope allowAlloc(self->getHeap(), true);
+  auto mangled = i::mangleName(unwrap<i::Name>(name), signature);
+  auto index = i::Trait::ensureAndGetMethodNameIndex(self);
+  auto method = index->getOrElse(*mangled, nullptr);
+  return method ? wrap<Function, i::Function>(method) : Function();
+}
+
+
+Function Trait::findMethod(const String& sourceName, const string& signature) const {
+  API_CHECK_SELF(Trait);
+  API_CHECK_ARG(sourceName);
+  auto self = unwrap<i::Trait>(*this);
+  i::HandleScope handleScope(self->getVM());
+  i::AllowAllocationScope allowAlloc(self->getHeap(), true);
+  auto mangled = i::mangleSourceName(unwrap<i::String>(sourceName), signature);
+  auto index = i::Trait::ensureAndGetMethodSourceNameIndex(self);
+  auto method = index->getOrElse(*mangled, nullptr);
+  return method ? wrap<Function, i::Function>(method) : Function();
+}
+
+
+Function Trait::findMethod(const string& sourceName, const string& signature) const {
+  API_CHECK_SELF(Trait);
+  String sourceNameStr(refVM(*this), sourceName);
+  return findMethod(sourceNameStr, signature);
 }
 
 
@@ -680,6 +771,30 @@ CallBuilder::CallBuilder(const Class& clas, const string& sourceName)
     : CallBuilder(clas, String(refVM(clas), sourceName)) { }
 
 
+CallBuilder::CallBuilder(const Trait& trait, const Name& name) {
+  API_CHECK_ARG(trait);
+  API_CHECK_ARG(name);
+  auto itrait = unwrap<i::Trait>(trait);
+  impl_ = unique_ptr<CallBuilder::Impl>(new CallBuilder::Impl(itrait->getVM()));
+  impl_->trait_ = itrait;
+  impl_->name_ = unwrap<i::Name>(name);
+}
+
+
+CallBuilder::CallBuilder(const Trait& trait, const String& sourceName) {
+  API_CHECK_ARG(trait);
+  API_CHECK_ARG(sourceName);
+  auto itrait = unwrap<i::Trait>(trait);
+  impl_ = unique_ptr<CallBuilder::Impl>(new CallBuilder::Impl(itrait->getVM()));
+  impl_->trait_ = itrait;
+  impl_->sourceName_ = unwrap<i::String>(sourceName);
+}
+
+
+CallBuilder::CallBuilder(const Trait& trait, const string& sourceName)
+    : CallBuilder(trait, String(refVM(trait), sourceName)) { }
+
+
 CallBuilder& CallBuilder::arg(Value&& value) {
   impl_->args_.push_back(value);
   return *this;
@@ -727,8 +842,10 @@ Value CallBuilder::call() {
       i::Local<i::BlockHashMap<i::Name, i::Function>> index;
       if (impl_->package_) {
         index = i::Package::ensureAndGetFunctionNameIndex(impl_->package_);
-      } else {
+      } else if (impl_->clas_) {
         index = i::Class::ensureAndGetMethodNameIndex(impl_->clas_);
+      } else {
+        index = i::Trait::ensureAndGetMethodNameIndex(impl_->trait_);
       }
       impl_->function_ = i::Local<i::Function>(vm, index->getOrElse(*mangledName, nullptr));
     } else if (impl_->sourceName_) {
@@ -737,8 +854,10 @@ Value CallBuilder::call() {
       i::Local<i::BlockHashMap<i::String, i::Function>> index;
       if (impl_->package_) {
         index = i::Package::ensureAndGetFunctionSourceNameIndex(impl_->package_);
-      } else {
+      } else if (impl_->clas_) {
         index = i::Class::ensureAndGetMethodSourceNameIndex(impl_->clas_);
+      } else {
+        index = i::Trait::ensureAndGetMethodSourceNameIndex(impl_->trait_);
       }
       impl_->function_ =
           i::Local<i::Function>(vm, index->getOrElse(*mangledSourceName, nullptr));
@@ -880,6 +999,20 @@ bool Object::isInstanceOf(const Class& clas) const {
   auto selfClass = unwrapRaw<i::Object>(*this)->clas();
   auto otherClass = unwrapRaw<i::Class>(clas);
   return selfClass->isSubclassOf(otherClass);
+}
+
+
+bool Object::isInstanceOf(const Trait& trait) const {
+  API_CHECK_SELF(Object);
+  API_CHECK_ARG(trait);
+  auto selfClass = unwrapRaw<i::Object>(*this)->clas();
+  auto supertypes = selfClass->supertypes();
+  auto otherTrait = unwrapRaw<i::Trait>(trait);
+  for (auto type : *supertypes) {
+    if (type->isTrait() && type->asTrait() == otherTrait)
+      return true;
+  }
+  return false;
 }
 
 
@@ -1175,6 +1308,11 @@ const Object& Exception::get() const {
 }
 
 
+Value::Value()
+    : bits_(0),
+      tag_(i::Type::UNIT_TYPE) { }
+
+
 Value::Value(bool b)
     : bits_(static_cast<uint64_t>(b)),
       tag_(i::Type::BOOLEAN_TYPE) { }
@@ -1220,6 +1358,11 @@ Value::Value(Object&& o)
     : bits_(0),
       ref_(move(o)),
       tag_(i::Type::CLASS_TYPE) { }
+
+
+void Value::asUnit() const {
+  API_CHECK(tag_ == i::Type::UNIT_TYPE, "value is not unit");
+}
 
 
 bool Value::asBoolean() const {

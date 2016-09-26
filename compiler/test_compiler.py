@@ -7,26 +7,28 @@
 import unittest
 import sys
 
-import ast
-from lexer import *
-from layout import layout
-from parser import *
+from builtins import *
+from bytecode import *
 from compile_info import *
+from compile_info import CompileInfo
+from compiler import *
+from errors import *
+from externalization import externalize
+from flags import LET, PUBLIC, METHOD
+from flatten import flattenTypeDefinitions
+from ids import *
+from inheritance_analysis import analyzeInheritance
+from ir import *
+from ir_instructions import *
+from ir_types import *
+from layout import layout
+from lexer import *
+from parser import *
 from scope_analysis import *
 from type_analysis import *
-from externalization import externalize
-from compiler import *
-from ids import *
-from ir import *
-from ir_types import *
-import ir_instructions
-from ir_instructions import *
-from bytecode import *
-from flags import LET, PUBLIC, METHOD
-from compile_info import CompileInfo
-from builtins import *
-from errors import *
 from utils_test import FakePackageLoader, OPTION_SOURCE, TestCaseWithDefinitions, TUPLE_SOURCE
+import ast
+import ir_instructions
 
 
 class TestCompiler(TestCaseWithDefinitions):
@@ -50,10 +52,11 @@ class TestCompiler(TestCaseWithDefinitions):
         package = Package(id=TARGET_PACKAGE_ID, name=name)
         info = CompileInfo(ast, package, packageLoader, isUsingStd=False)
         analyzeDeclarations(info)
+        analyzeTypeDeclarations(info)
         analyzeInheritance(info)
         analyzeTypes(info)
         convertClosures(info)
-        flattenClasses(info)
+        flattenTypeDefinitions(info)
         externalize(info)
         compile(info)
         return info.package
@@ -715,7 +718,7 @@ class TestCompiler(TestCaseWithDefinitions):
     def testConcatStrings(self):
         package = self.compileFromSource("def f = \"foo\" + \"bar\"")
         stringClass = getStringClass()
-        concatMethod = stringClass.findMethodByShortName("+")
+        concatMethod = stringClass.findMethodBySourceName("+")[0]
         concatMethodIndex = stringClass.getMethodIndex(concatMethod)
         fooIndex = package.findString("foo")
         barIndex = package.findString("bar")
@@ -729,7 +732,7 @@ class TestCompiler(TestCaseWithDefinitions):
     def testCompareStrings(self):
         package = self.compileFromSource("def f = \"foo\" == \"bar\"")
         stringClass = getStringClass()
-        eqMethod = stringClass.findMethodByShortName("==")
+        eqMethod = stringClass.findMethodBySourceName("==")[0]
         eqMethodIndex = stringClass.getMethodIndex(eqMethod)
         fooIndex = package.findString("foo")
         barIndex = package.findString("bar")
@@ -997,6 +1000,67 @@ class TestCompiler(TestCaseWithDefinitions):
                              variables=[self.makeVariable("f.x", type=getRootClassType(),
                                                           kind=PARAMETER, flags=frozenset([LET])),
                                         self.makeVariable("f.y", type=yType,
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testMatchExprWithLocalTraitType(self):
+        source = "trait Foo\n" + \
+                 "def f(x: Object) =\n" + \
+                 "  match (x)\n" + \
+                 "    case y: Foo => 12\n" + \
+                 "    case _ => 34"
+        package = self.compileFromSource(source)
+        Foo = package.findTrait(name="Foo")
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               ldlocal(0),
+                               tytd(Foo),
+                               castcbr(1, 2),
+                             ], [
+                               stlocal(-1),
+                               i64(12),
+                               branch(3),
+                             ], [
+                               drop(),
+                               i64(34),
+                               branch(3),
+                             ], [
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.x", type=getRootClassType(),
+                                                          kind=PARAMETER, flags=frozenset([LET])),
+                                        self.makeVariable("f.y", type=ClassType(Foo),
+                                                          kind=LOCAL, flags=frozenset([LET]))]))
+
+    def testMatchExprWithForeignTraitType(self):
+        foo = Package(name=Name(["foo"]))
+        Foo = foo.addTrait(Name(["Foo"]), typeParameters=[], supertypes=[getRootClassType()],
+                           methods=[], flags=frozenset([PUBLIC]))
+        loader = FakePackageLoader([foo])
+
+        source = "def f(x: Object) =\n" + \
+                 "  match (x)\n" + \
+                 "    case y: foo.Foo => 12\n" + \
+                 "    case _ => 34"
+        package = self.compileFromSource(source, packageLoader=loader)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               ldlocal(0),
+                               tytdf(Foo),
+                               castcbr(1, 2),
+                             ], [
+                               stlocal(-1),
+                               i64(12),
+                               branch(3),
+                             ], [
+                               drop(),
+                               i64(34),
+                               branch(3),
+                             ], [
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable("f.x", type=getRootClassType(),
+                                                          kind=PARAMETER, flags=frozenset([LET])),
+                                        self.makeVariable("f.y", type=ClassType(Foo),
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testMatchExprWithVarWithExistentialType(self):
@@ -1327,8 +1391,7 @@ class TestCompiler(TestCaseWithDefinitions):
                  "    case foo.bar => 12\n" + \
                  "    case _ => 34"
         package = self.compileFromSource(source, packageLoader=loader)
-        eqMethod = stringClass.getMethod("==")
-        eqMethodIndex = stringClass.getMethodIndex(eqMethod)
+        eqMethod, eqMethodIndex = stringClass.findMethodBySourceName("==")
         self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
                                ldlocal(0),
@@ -1360,9 +1423,9 @@ class TestCompiler(TestCaseWithDefinitions):
         stringType = getStringType()
         tryMatch = package.findFunction(name="Some.try-match")
         some = package.findClass(name="Some")
-        isDefined = some.findMethodByShortName("is-defined")
+        isDefined = some.findMethodBySourceName("is-defined")[0]
         isDefinedIndex = some.getMethodIndex(isDefined)
-        get = some.findMethodByShortName("get")
+        get = some.findMethodBySourceName("get")[0]
         getIndex = some.getMethodIndex(get)
         noIndex = package.findString("no")
         self.checkFunction(package,
@@ -1417,9 +1480,9 @@ class TestCompiler(TestCaseWithDefinitions):
         package = self.compileFromSource(source, name=STD_NAME)
         Matcher = package.findFunction(name="Matcher")
         Option = package.findClass(name="Option")
-        isDefined = Option.findMethodByShortName("is-defined")
+        isDefined = Option.findMethodBySourceName("is-defined")[0]
         isDefinedIndex = Option.getMethodIndex(isDefined)
-        get = Option.findMethodByShortName("get")
+        get = Option.findMethodBySourceName("get")[0]
         getIndex = Option.getMethodIndex(get)
         Tuple2 = package.findClass(name="Tuple2")
         self.checkFunction(package,
@@ -1478,12 +1541,12 @@ class TestCompiler(TestCaseWithDefinitions):
                  "      case _ => 34"
         package = self.compileFromSource(source, name=STD_NAME)
         Foo = package.findClass(name="Foo")
-        Matcher = Foo.findMethodByShortName("Matcher")
+        Matcher = Foo.findMethodBySourceName("Matcher")[0]
         MatcherIndex = Foo.getMethodIndex(Matcher)
         Some = package.findClass(name="Some")
-        isDefined = Some.findMethodByShortName("is-defined")
+        isDefined = Some.findMethodBySourceName("is-defined")[0]
         isDefinedIndex = Some.getMethodIndex(isDefined)
-        get = Some.findMethodByShortName("get")
+        get = Some.findMethodBySourceName("get")[0]
         getIndex = Some.getMethodIndex(get)
         self.checkFunction(package,
                            self.makeSimpleFunction("Foo.f", I64Type, [[
@@ -1536,9 +1599,9 @@ class TestCompiler(TestCaseWithDefinitions):
         package = self.compileFromSource(source, name=STD_NAME)
         matcher = package.findFunction(name="~")
         Some = package.findClass(name="Some")
-        isDefined = Some.findMethodByShortName("is-defined")
+        isDefined = Some.findMethodBySourceName("is-defined")[0]
         isDefinedIndex = Some.getMethodIndex(isDefined)
-        get = Some.findMethodByShortName("get")
+        get = Some.findMethodBySourceName("get")[0]
         getIndex = Some.getMethodIndex(get)
         objectType = getRootClassType()
         stringType = getStringType()
@@ -1595,9 +1658,9 @@ class TestCompiler(TestCaseWithDefinitions):
         Bar = package.findClass(name="Bar")
         matcher = package.findFunction(name="::.try-match")
         Some = package.findClass(name="Some")
-        isDefined = Some.findMethodByShortName("is-defined")
+        isDefined = Some.findMethodBySourceName("is-defined")[0]
         isDefinedIndex = Some.getMethodIndex(isDefined)
-        get = Some.findMethodByShortName("get")
+        get = Some.findMethodBySourceName("get")[0]
         getIndex = Some.getMethodIndex(get)
         Tuple = package.findClass(name="Tuple2")
         objectType = getRootClassType()
@@ -3553,6 +3616,44 @@ class TestCompiler(TestCaseWithDefinitions):
                      parameterTypes=[Cty])
         self.assertEquals(expected, f)
 
+    def testCallWithStaticLocalTraitTypeArgument(self):
+        source = "trait Foo\n" + \
+                 "def id[static T](x: T) = x\n" + \
+                 "def f(o: Foo) = id[Foo](o)"
+        package = self.compileFromSource(source)
+        id = package.findFunction(name="id")
+        Foo = package.findTrait(name="Foo")
+        FooType = ClassType.forReceiver(Foo)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", FooType, [[
+                               ldlocal(0),
+                               tyts(Foo),
+                               callg(id),
+                               ret()]],
+                             variables=[self.makeVariable("f.o", type=FooType,
+                                        kind=PARAMETER, flags=frozenset([LET]))]))
+
+    def testCallWithStaticForeignTraitTypeArgument(self):
+        foo = Package(name=Name(["foo"]))
+        Foo = foo.addTrait(Name(["Foo"]), typeParameters=[],
+                           supertypes=[getRootClassType()], methods=[],
+                           flags=frozenset([PUBLIC]))
+        loader = FakePackageLoader([foo])
+
+        source = "def id[static T](x: T) = x\n" + \
+                 "def f(o: foo.Foo) = id[foo.Foo](o)"
+        package = self.compileFromSource(source, packageLoader=loader)
+        id = package.findFunction(name="id")
+        FooType = ClassType.forReceiver(Foo)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", FooType, [[
+                               ldlocal(0),
+                               tytsf(Foo),
+                               callg(id),
+                               ret()]],
+                             variables=[self.makeVariable("f.o", type=FooType,
+                                        kind=PARAMETER, flags=frozenset([LET]))]))
+
     def testCallWithStaticVariableTypeArgument(self):
         source = "def id-outer[static TO](x: TO) = id-inner[TO](x)\n" + \
                  "def id-inner[static TI](x: TI) = x"
@@ -3643,7 +3744,7 @@ class TestCompiler(TestCaseWithDefinitions):
         f = package.findFunction(name="f")
         Foo = package.findClass(name="Foo")
         FooType = ClassType(Foo, (getRootClassType(),))
-        toString = Foo.findMethodByShortName("to-string")
+        toString = Foo.findMethodBySourceName("to-string")[0]
         toStringIndex = Foo.getMethodIndex(toString)
         expected = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
@@ -3666,7 +3767,7 @@ class TestCompiler(TestCaseWithDefinitions):
         f = package.findFunction(name="f")
         Foo = package.findClass(name="Foo")
         FooType = ClassType(Foo, (getRootClassType(),))
-        toString = Foo.findMethodByShortName("to-string")
+        toString = Foo.findMethodBySourceName("to-string")[0]
         toStringIndex = Foo.getMethodIndex(toString)
         expected = self.makeSimpleFunction("f", UnitType, [[
             ldlocal(0),
@@ -3885,6 +3986,88 @@ class TestCompiler(TestCaseWithDefinitions):
                                branch(9),
                              ], [
                                ret()]]))
+
+    def testCallTraitMethodOnSameTrait(self):
+        source = "trait Tr\n" + \
+                 "  def m = {}\n" + \
+                 "def f(tr: Tr) = tr.m"
+        package = self.compileFromSource(source)
+        Tr = package.findTrait(name="Tr")
+        TrType = ClassType(Tr)
+        m = package.findFunction(name="Tr.m")
+        mIndex = Tr.getMethodIndex(m)
+        self.checkFunction(package,
+                           self.makeSimpleFunction(Name(["f"]), UnitType, [[
+                                 ldlocal(0),
+                                 callvt(1, Tr, mIndex),
+                                 ret(),
+                               ]],
+                               variables=[self.makeVariable(Name(["f", "tr"]),
+                                                            type=TrType, kind=PARAMETER,
+                                                            flags=frozenset([LET]))]))
+
+    def testCallTraitMethodOnSameForeignTrait(self):
+        fooPackage = Package(name=Name(["foo"]))
+        Tr = fooPackage.addTrait(Name(["Tr"]), typeParameters=[],
+                                 supertypes=[getRootClassType()],
+                                 flags=frozenset([PUBLIC]))
+        TrType = ClassType(Tr)
+        m = fooPackage.addFunction(Name(["Tr", "m"]), returnType=UnitType,
+                                   typeParameters=[], parameterTypes=[TrType],
+                                   flags=frozenset([PUBLIC, METHOD]), definingClass=Tr)
+        Tr.methods = [m]
+        loader = FakePackageLoader([fooPackage])
+
+        source = "def f(tr: foo.Tr) = tr.m"
+        package = self.compileFromSource(source, packageLoader=loader)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", UnitType, [[
+                               ldlocal(0),
+                               callvtf(1, Tr, 0),
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable(Name(["f", "tr"]),
+                                                          type=TrType, kind=PARAMETER,
+                                                          flags=frozenset([LET]))]))
+
+    def testCallTraitMethodInheritedFromTrait(self):
+        source = "trait Tr1\n" + \
+                 "  def m = {}\n" + \
+                 "trait Tr2 <: Tr1\n" + \
+                 "def f(tr: Tr2) = tr.m"
+        package = self.compileFromSource(source)
+        Tr1 = package.findTrait(name="Tr1")
+        Tr2 = package.findTrait(name="Tr2")
+        Tr2Type = ClassType(Tr2)
+        _, mIndex = Tr1.findMethodBySourceName("m")
+        self.checkFunction(package,
+                           self.makeSimpleFunction(Name(["f"]), UnitType, [[
+                               ldlocal(0),
+                               callvt(1, Tr1, mIndex),
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable(Name(["f", "tr"]),
+                                                          type=Tr2Type, kind=PARAMETER,
+                                                          flags=frozenset([LET]))]))
+
+    def testCallClassMethodInheritedFromTrait(self):
+        source = "trait Tr\n" + \
+                 "  def m = {}\n" + \
+                 "class C <: Tr\n" + \
+                 "def f(c: C) = c.m"
+        package = self.compileFromSource(source)
+        C = package.findClass(name="C")
+        CType = ClassType(C)
+        _, mIndex = C.findMethodBySourceName("m")
+        self.checkFunction(package,
+                           self.makeSimpleFunction(Name(["f"]), UnitType, [[
+                               ldlocal(0),
+                               callv(1, mIndex),
+                               ret(),
+                             ]],
+                             variables=[self.makeVariable(Name(["f", "c"]),
+                                                          type=CType, kind=PARAMETER,
+                                                          flags=frozenset([LET]))]))
 
     # Regression tests
     def testPrimaryCtorCallsSuperCtorWithTypeArgs(self):

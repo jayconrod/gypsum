@@ -127,6 +127,18 @@ Block* Interpreter::pop<Block*>() {
 }
 
 
+template <>
+Object* Interpreter::pop<Object*>() {
+  return reinterpret_cast<Object*>(pop<Block*>());
+}
+
+
+template <>
+Type* Interpreter::pop<Type*>() {
+  return reinterpret_cast<Type*>(pop<Block*>());
+}
+
+
 class Interpreter::GCSafeScope {
  public:
   explicit GCSafeScope(Interpreter* interpreter)
@@ -531,11 +543,13 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       }
 
       case TYCS:
+      case TYTS:
       case TYVS:
         readVbn();
         break;
 
       case TYCSF:
+      case TYTSF:
         readVbn();
         readVbn();
         break;
@@ -587,6 +601,62 @@ i64 Interpreter::call(const Handle<Function>& callee) {
             typeArgs.push_back(arg);
           }
           type = *Type::create(vm_->heap(), clas, typeArgs);
+        } catch (AllocationError& e) {
+          doThrow(threadBindle_->takeOutOfMemoryException());
+          break;
+        }
+        stack_->setSp(stack_->sp() + count * kSlotSize);
+        push<Block*>(type);
+        break;
+      }
+
+      case TYTD: {
+        auto traitId = readVbn();
+        Type* type = nullptr;
+        auto count = kLengthNotSet;
+        try {
+          GCSafeScope gcSafe(this);
+          HandleScope handleScope(vm_);
+          auto trait = handle(isBuiltinId(traitId)
+              ? vm_->roots()->getBuiltinTrait(traitId)
+              : function_->package()->getTrait(traitId));
+          count = trait->typeParameterCount();
+          vector<Local<Type>> typeArgs;
+          typeArgs.reserve(count);
+          for (length_t i = 0; i < count; i++) {
+            size_t offset = kPrepareForGCSize + (count - i - 1) * kSlotSize;
+            auto arg = handle(mem<Type*>(stack_->sp(), offset));
+            typeArgs.push_back(arg);
+          }
+          type = *Type::create(vm_->heap(), trait, typeArgs);
+        } catch (AllocationError& e) {
+          doThrow(threadBindle_->takeOutOfMemoryException());
+          break;
+        }
+        stack_->setSp(stack_->sp() + count * kSlotSize);
+        push<Block*>(type);
+        break;
+      }
+
+      case TYTDF: {
+        auto depIndex = readVbn();
+        auto externIndex = readVbn();
+        Type* type = nullptr;
+        auto count = kLengthNotSet;
+        try {
+          GCSafeScope gcSafe(this);
+          HandleScope handleScope(vm_);
+          auto trait = handle(function_->package()->dependencies()->get(depIndex)
+              ->linkedTraits()->get(externIndex));
+          count = trait->typeParameterCount();
+          vector<Local<Type>> typeArgs;
+          typeArgs.reserve(count);
+          for (length_t i = 0; i < count; i++) {
+            size_t offset = kPrepareForGCSize + (count - i - 1) * kSlotSize;
+            auto arg = handle(mem<Type*>(stack_->sp(), offset));
+            typeArgs.push_back(arg);
+          }
+          type = *Type::create(vm_->heap(), trait, typeArgs);
         } catch (AllocationError& e) {
           doThrow(threadBindle_->takeOutOfMemoryException());
           break;
@@ -678,55 +748,22 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       case CAST:
         break;
 
-      case CASTC:
-        try {
-          GCSafeScope gcSafe(this);
-          HandleScope handleScope(vm_);
-          auto type = handle(mem<Type*>(stack_->sp() + kPrepareForGCSize));
-          auto object = handle(mem<Object*>(stack_->sp() + kPrepareForGCSize + kSlotSize));
-          auto nullOk = *object != nullptr || type->isNullable();
-          bool isSubtype;
-          if (!nullOk) {
-            isSubtype = false;
-          } else {
-            auto objectType = Object::typeof(object);
-            isSubtype = Type::isSubtypeOf(objectType, type);
-          }
-          if (!isSubtype) {
-            doThrow(threadBindle_->takeCastException());
-            break;
-          }
-        } catch (AllocationError& e) {
-          doThrow(threadBindle_->takeOutOfMemoryException());
-          break;
+      case CASTC: {
+        auto type = pop<Type*>();
+        auto object = mem<Object*>(stack_->sp());  // object stays on stack
+        if (!isSubtypeOf(object, type)) {
+          doThrow(threadBindle_->takeCastException());
         }
-        pop<Block*>();
-        // object stays on top of the stack.
         break;
+      }
 
       case CASTCBR: {
         auto trueBlockIndex = toLength(readVbn());
         auto falseBlockIndex = toLength(readVbn());
-        auto isSubtype = false;
-        try {
-          GCSafeScope gcSafe(this);
-          HandleScope handleScope(vm_);
-          auto type = handle(mem<Type*>(stack_->sp(), kPrepareForGCSize));
-          auto object = handle(mem<Object*>(stack_->sp(), kPrepareForGCSize + kSlotSize));
-          auto nullOk = *object != nullptr || type->isNullable();
-          if (!nullOk) {
-            isSubtype = false;
-          } else {
-            auto objectType = Object::typeof(object);
-            isSubtype = Type::isSubtypeOf(objectType, type);
-          }
-        } catch (AllocationError& e) {
-          doThrow(threadBindle_->takeOutOfMemoryException());
-          break;
-        }
-        pop<Block*>();
-        // object stays on top of the stack.
-        pcOffset_ = function_->blockOffset(isSubtype ? trueBlockIndex : falseBlockIndex);
+        auto type = pop<Type*>();
+        auto object = mem<Object*>(stack_->sp());  // object stays on stack
+        auto blockIndex = isSubtypeOf(object, type) ? trueBlockIndex : falseBlockIndex;
+        pcOffset_ = function_->blockOffset(blockIndex);
         break;
       }
 
@@ -768,6 +805,53 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         CHECK_NON_NULL(receiver);
         Persistent<Function> callee(block_cast<Function>(
             receiver->meta()->getData(methodIndex)));
+        if (callee->hasBuiltinId()) {
+          handleBuiltin(callee->builtinId());
+        } else if (callee->isNative()) {
+          handleNative(callee);
+        } else {
+          enter(callee);
+        }
+        break;
+      }
+
+      case CALLVT: {
+        auto argCount = readVbn();
+        auto traitIndex = toLength(readVbn());
+        auto methodIndex = toLength(readVbn());
+        ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
+        auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
+        CHECK_NON_NULL(receiver);
+        Trait* trait;
+        if (traitIndex < 0) {
+          trait = vm_->roots()->getBuiltinTrait(static_cast<BuiltinId>(traitIndex));
+        } else {
+          trait = function_->package()->getTrait(traitIndex);
+        }
+        Persistent<Function> callee(
+            receiver->clas()->traits()->find(trait)->value->get(methodIndex));
+        if (callee->hasBuiltinId()) {
+          handleBuiltin(callee->builtinId());
+        } else if (callee->isNative()) {
+          handleNative(callee);
+        } else {
+          enter(callee);
+        }
+        break;
+      }
+
+      case CALLVTF: {
+        auto argCount = readVbn();
+        auto depIndex = static_cast<id_t>(toLength(readVbn()));
+        auto traitIndex = toLength(readVbn());
+        auto methodIndex = toLength(readVbn());
+        ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
+        auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
+        CHECK_NON_NULL(receiver);
+        auto trait = function_->package()->dependencies()->get(depIndex)
+            ->linkedTraits()->get(traitIndex);
+        Persistent<Function> callee(
+            receiver->clas()->traits()->find(trait)->value->get(methodIndex));
         if (callee->hasBuiltinId()) {
           handleBuiltin(callee->builtinId());
         } else if (callee->isNative()) {
@@ -1306,6 +1390,36 @@ void Interpreter::store(Block* block, word_t offset, Type* type) {
       mem<i64>(block, offset) = pop<i64>();
     }
   }
+}
+
+
+bool Interpreter::isSubtypeOf(Object* object, Type* type) {
+  if (!type->isObject()) {
+    return false;
+  }
+  while (type->isExistential()) {
+    type = type->existentialInnerType();
+  }
+  if (!type->isClassOrTrait()) {
+    return false;
+  }
+  auto typeDefn = type->asClassOrTrait();
+
+  if (object == nullptr && !type->isNullable()) {
+    return false;
+  }
+
+  auto clas = object->clas();
+  if (clas == typeDefn) {
+    return true;
+  }
+  auto supertypes = clas->supertypes();
+  for (length_t i = 0, n = supertypes->length(); i < n; i++) {
+    if (supertypes->get(i)->asClassOrTrait() == typeDefn) {
+      return true;
+    }
+  }
+  return false;
 }
 
 

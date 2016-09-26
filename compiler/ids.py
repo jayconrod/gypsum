@@ -1,4 +1,4 @@
-# Copyright 2015, Jay Conrod. All rights reserved.
+# Copyright 2015-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -48,20 +48,21 @@ PACKAGE_SCOPE_ID = ScopeId("package-list")
 class PackageId(Id):
     """Identifies a package. If an index is specified, this identifies an imported package.
     If not, it identifies the package being compiled."""
-    def __init__(self, index=None):
+    def __init__(self, index=None, name=None):
         self.index = index
+        self.name = name
 
     def __repr__(self):
         if self is TARGET_PACKAGE_ID:
             return "PackageId(TARGET)"
         else:
-            return "PackageId(%s)" % str(self.index)
+            return "PackageId(%s, %s)" % (str(self.index), repr(self.name))
 
     def __str__(self):
         if self is TARGET_PACKAGE_ID:
             return "#TARGET"
         else:
-            return "#%s" % str(self.index)
+            return "#%s(%s)" % (str(self.index), str(self.name))
 
 TARGET_PACKAGE_ID = PackageId()
 BUILTIN_PACKAGE_INDEX = -2
@@ -74,6 +75,7 @@ class DefnId(Id):
     GLOBAL = "global"
     FUNCTION = "function"
     CLASS = "class"
+    TRAIT = "trait"
     TYPE_PARAMETER = "type-parameter"
 
     def __init__(self, packageId, kind, index, externIndex=None):

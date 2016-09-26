@@ -4,10 +4,11 @@
 // source code is governed by the 3-clause BSD license that can be
 // found in the LICENSE.txt file.
 
-public class MutableArrayList[static T]
+
+public class List[static T]
   private var length_: i32
   private var capacity: i32
-  private var elements: MutableArray[T]
+  private var elements: Array[T]
 
   public def this = this(16i32)
 
@@ -30,7 +31,7 @@ public class MutableArrayList[static T]
 
   public def reserve(min-capacity: i32): unit =
     if (capacity < min-capacity)
-      let new-elements = new(min-capacity) MutableArray[T]
+      let new-elements = new(min-capacity) Array[T]
       var i = 0i32
       while (i < length)
         new-elements.set(i, elements.get(i))

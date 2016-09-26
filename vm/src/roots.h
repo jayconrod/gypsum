@@ -27,6 +27,8 @@ class Name;
 class String;
 template <class T>
 class TaggedArray;
+class Trait;
+class TraitTable;
 class Type;
 
 
@@ -49,6 +51,8 @@ class Roots {
     F(Meta, functionMeta, FUNCTION_META)                              \
     F(Meta, classMeta, CLASS_META)                                    \
     F(Meta, fieldMeta, FIELD_META)                                    \
+    F(Meta, traitMeta, TRAIT_META)                                    \
+    F(Meta, traitTableMeta, TRAIT_TABLE_META)                         \
     F(Meta, typeParameterMeta, TYPE_PARAMETER_META)                   \
     F(Meta, i8ArrayMeta, I8_ARRAY_META)                               \
     F(Meta, i32ArrayMeta, I32_ARRAY_META)                             \
@@ -61,9 +65,10 @@ class Roots {
     F(TaggedArray<Block>, emptyTaggedArray, EMPTY_TAGGED_ARRAY)       \
     F(BlockArray<Block>, emptyBlockArray, EMPTY_BLOCK_ARRAY)          \
     F(Type, labelType, LABEL_TYPE)                                    \
+    F(Type, anyType, ANY_TYPE)                                        \
+    F(Type, noType, NO_TYPE)                                          \
     F(Type, nullType, NULL_TYPE)                                      \
     F(Meta, typeMeta, TYPE_META)                                      \
-    F(Meta, externTypeInfoMeta, EXTERN_TYPE_INFO_META)                \
     F(Meta, stringMeta, STRING_META)                                  \
     F(String, emptyString, EMPTY_STRING)                              \
     F(String, trueString, TRUE_STRING)                                \
@@ -71,6 +76,7 @@ class Roots {
     F(Meta, blockHashMapTableMeta, BLOCK_HASH_MAP_TABLE_META)         \
     F(Meta, blockHashMapMeta, BLOCK_HASH_MAP_META)                    \
     F(Meta, threadBindleMeta, THREAD_BINDLE_META)                     \
+    F(TraitTable, emptyTraitTable, EMPTY_TRAIT_TABLE)                 \
 
   #define DEFINE_BASIC_GETTER(type, name, NAME)                       \
   type* name() const {                                                \
@@ -81,7 +87,11 @@ class Roots {
 
   Meta* getMetaForBlockType(int type);
 
+  bool isValidBuiltinClassId(BuiltinId id) const;
+  bool isValidBuiltinTraitId(BuiltinId id) const;
+  bool isValidBuiltinFunctionId(BuiltinId id) const;
   Class* getBuiltinClass(BuiltinId id) const;
+  Trait* getBuiltinTrait(BuiltinId id) const;
   Meta* getBuiltinMeta(BuiltinId id) const;
   Type* getBuiltinType(BuiltinId id) const;
   Name* getBuiltinName(BuiltinId id) const;

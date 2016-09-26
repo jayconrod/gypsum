@@ -1,4 +1,4 @@
-// Copyright 2014 Jay Conrod. All rights reserved.
+// Copyright 2014,2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -12,6 +12,7 @@
 #include "block.h"
 #include "block-visitor.h"
 #include "heap.h"
+#include "tagged.h"
 
 using namespace std;
 
@@ -30,7 +31,7 @@ class PointerMarkingVisitor: public BlockVisitorBase<PointerMarkingVisitor> {
 
   void visitPointer(Block** p) {
     auto block = *p;
-    if (block != nullptr && !gc_.isMarked(block)) {
+    if (block != nullptr && Tagged<Block>::isPointer(block) && !gc_.isMarked(block)) {
       gc_.mark(block);
       markingStack_.push_back(block);
     }

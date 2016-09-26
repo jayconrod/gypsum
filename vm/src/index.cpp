@@ -186,9 +186,37 @@ static void mangleType(stringstream& str,
       break;
     }
 
+    case Type::TRAIT_TYPE:
+    case Type::EXTERN_TRAIT_TYPE: {
+      str << 'T';
+      auto trait = handle(type->asTrait());
+      if (trait->package() == nullptr) {
+        str << "::";
+      } else if (trait->package() != package.getOrNull()) {
+        auto traitPackageNameStr = Name::toString(heap, handle(trait->package()->name()));
+        str << traitPackageNameStr->toUtf8StlString() << ':';
+      } else {
+        str << ':';
+      }
+      auto traitNameStr = Name::toString(heap, handle(trait->name()));
+      str << traitNameStr->toUtf8StlString();
+      if (type->typeArgumentCount() > 0) {
+        str << '[';
+        for (length_t i = 0; i < type->typeArgumentCount(); i++) {
+          if (i > 0)
+            str << ',';
+          mangleType(str, handle(type->typeArgument(i)), variables, package);
+        }
+        str << ']';
+      }
+      if (type->isNullable())
+        str << '?';
+      break;
+    }
+
     case Type::VARIABLE_TYPE:
     case Type::EXTERN_VARIABLE_TYPE: {
-      str << 'T';
+      str << 'V';
       auto typeParameter = handle(type->asVariable());
       length_t index = kLengthNotSet;
       for (length_t i = 0; i < variables.size(); i++) {
@@ -220,6 +248,8 @@ static void mangleType(stringstream& str,
     }
 
     case Type::LABEL_TYPE:
+    case Type::ANY_TYPE:
+    case Type::NO_TYPE:
       UNREACHABLE();
   }
 

@@ -146,6 +146,31 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
         expected.methods = [expectedMethod, externBuiltinMethod]
         self.assertEquals(expected, externClass)
 
+    def testExternalizeTrait(self):
+        trait = self.otherPackage.addTrait(ir.Name(["Tr"]),
+                                           typeParameters=[self.param],
+                                           supertypes=[self.rootClassType],
+                                           methods=[],
+                                           flags=frozenset([flags.PUBLIC]))
+        traitType = ir_types.ClassType(trait, (self.varTy,))
+        method = self.otherPackage.addFunction(ir.Name(["Tr", "f"]),
+                                               returnType=ir_types.UnitType,
+                                               typeParameters=[self.param],
+                                               parameterTypes=[traitType],
+                                               flags=frozenset([flags.PUBLIC, flags.METHOD]))
+        trait.methods = [method]
+        externTrait = self.externalizer.externalizeDefn(trait)
+        expected = ir.Trait(ir.Name(["Tr"]), trait.id, typeParameters=[self.externParam],
+                            supertypes=[self.rootClassType],
+                            flags=frozenset([flags.PUBLIC, flags.EXTERN]))
+        expectedMethod = ir.Function(ir.Name(["Tr", "f"]), method.id,
+                                     returnType=ir_types.UnitType,
+                                     typeParameters=[self.externParam],
+                                     parameterTypes=[traitType],
+                                     flags=frozenset([flags.EXTERN, flags.PUBLIC, flags.METHOD]))
+        expected.methods = [expectedMethod]
+        self.assertEquals(expected, externTrait)
+
     def testExternalizeBuiltinMethodName(self):
         method = builtins.getBuiltinFunctionById(bytecode.BUILTIN_ROOT_CLASS_EQ_OP_ID)
         externMethod = self.externalizer.externalizeMethod(method, self.dep)

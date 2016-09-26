@@ -54,7 +54,7 @@ void HandleStorage::destroyPersistent(Block** slot) {
 }
 
 
-HandleStorage::iterator::iterator(const deque<Block*>::iterator it,
+HandleStorage::iterator::iterator(deque<Block*>::iterator&& it,
                                   bool isLocal,
                                   HandleStorage* storage)
     : it_(it), isLocal_(isLocal), storage_(storage) {
@@ -62,7 +62,7 @@ HandleStorage::iterator::iterator(const deque<Block*>::iterator it,
     isLocal_ = false;
     it_ = storage_->persistentSlots_.begin();
   }
-  while (!isValid() && !done())
+  while (!done() && !isValid())
     advance();
 }
 
@@ -70,7 +70,7 @@ HandleStorage::iterator::iterator(const deque<Block*>::iterator it,
 HandleStorage::iterator& HandleStorage::iterator::operator ++ () {
   do {
     advance();
-  } while (!isValid() && !done());
+  } while (!done() && !isValid());
   return *this;
 }
 

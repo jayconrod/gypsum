@@ -10,6 +10,7 @@
 #include <iostream>
 #include "block.h"
 #include "hash-table.h"
+#include "object-type-defn.h"
 #include "utils.h"
 
 namespace codeswitch {
@@ -26,10 +27,11 @@ class PackageIdArray;
 class Name;
 template <class T>
 class TaggedArray;
+class TraitTable;
 class Type;
 class TypeParameter;
 
-class Class: public Block {
+class Class: public ObjectTypeDefn {
  public:
   static const BlockType kBlockType = CLASS_BLOCK_TYPE;
 
@@ -38,10 +40,11 @@ class Class: public Block {
         String* sourceName,
         u32 flags,
         BlockArray<TypeParameter>* typeParameters,
-        Type* supertype,
+        BlockArray<Type>* supertypes,
         BlockArray<Field>* fields,
         BlockArray<Function>* constructors,
         BlockArray<Function>* methods,
+        TraitTable* traits,
         Package* package,
         Meta* instanceMeta = nullptr,
         Type* elementType = nullptr,
@@ -52,10 +55,11 @@ class Class: public Block {
                              const Handle<String>& sourceName,
                              u32 flags,
                              const Handle<BlockArray<TypeParameter>>& typeParameters,
-                             const Handle<Type>& supertype,
+                             const Handle<BlockArray<Type>>& supertypes,
                              const Handle<BlockArray<Field>>& fields,
                              const Handle<BlockArray<Function>>& constructors,
                              const Handle<BlockArray<Function>>& methods,
+                             const Handle<TraitTable>& traits,
                              const Handle<Package>& package,
                              const Handle<Meta>& instanceMeta = Local<Meta>(),
                              const Handle<Type>& elementType = Local<Type>(),
@@ -79,11 +83,11 @@ class Class: public Block {
   void setTypeParameters(BlockArray<TypeParameter>* newTypeParameters) {
     typeParameters_.set(this, newTypeParameters);
   }
-  TypeParameter* typeParameter(length_t index) const;
-  length_t typeParameterCount() const;
 
-  Type* supertype() const { return supertype_.get(); }
-  void setSupertype(Type* newSupertype) { supertype_.set(this, newSupertype); }
+  BlockArray<Type>* supertypes() const { return supertypes_.get(); }
+  void setSupertypes(BlockArray<Type>* newSupertypes) { supertypes_.set(this, newSupertypes); }
+  Type* baseClassType() const;
+  Class* baseClass() const;
 
   BlockArray<Field>* fields() const { return fields_.get(); }
   void setFields(BlockArray<Field>* newFields) { fields_.set(this, newFields); }
@@ -99,6 +103,9 @@ class Class: public Block {
   BlockArray<Function>* methods() const { return methods_.get(); }
   void setMethods(BlockArray<Function>* newMethods) { methods_.set(this, newMethods); }
   Function* getNonStaticMethod(length_t index) const;
+
+  TraitTable* traits() const { return traits_.get(); }
+  void setTraits(TraitTable* newTraits) { traits_.set(this, newTraits); }
 
   Package* package() const { return package_.get(); }
   void setPackage(Package* newPackage) { package_.set(this, newPackage); }
@@ -168,10 +175,11 @@ class Class: public Block {
   Ptr<String> sourceName_;
   u32 flags_;
   Ptr<BlockArray<TypeParameter>> typeParameters_;
-  Ptr<Type> supertype_;
+  Ptr<BlockArray<Type>> supertypes_;
   Ptr<BlockArray<Field>> fields_;
   Ptr<BlockArray<Function>> constructors_;
   Ptr<BlockArray<Function>> methods_;
+  Ptr<TraitTable> traits_;
   Ptr<Package> package_;
   Ptr<Meta> instanceMeta_;
   Ptr<Type> elementType_;

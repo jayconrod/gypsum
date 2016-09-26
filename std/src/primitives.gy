@@ -1,0 +1,65 @@
+// Copyright 2016, Jay Conrod. All rights reserved.
+//
+// This file is part of the Gypsum standard library. Use of this
+// source code is governed by the 3-clause BSD license that can be
+// found in the LICENSE.txt file.
+
+public final class Boolean private (public value: boolean) <: Hash[Boolean]
+  // TODO: canonicalize Boolean values
+  public static def of(value: boolean) = Boolean(value)
+
+  public override def to-string = value.to-string
+  public override def == (that: Boolean) = value == that.value
+  public override def hash = if (value) 1i32 else 0i32
+
+
+public final class I8 private (public value: i8) <: Hash[I8]
+  // TODO: cache values
+  public static def of(value: i8) = I8(value)
+
+  public override def to-string = value.to-string
+  public override def == (that: I8) = value == that.value
+  public override def hash = HashBuilder().hash(value).finish
+
+
+public final class I16 private (public value: i16) <: Hash[I16]
+  // TODO: cache values
+  public static def of(value: i16) = I16(value)
+
+  public override def to-string = value.to-string
+  public override def == (that: I16) = value == that.value
+  public override def hash = HashBuilder().hash(value).finish
+
+
+public final class I32 private (public value: i32) <: Hash[I32]
+  // TODO: cache values
+  public static def of(value: i32) = I32(value)
+  public override def == (that: I32) = value == that.value
+  public override def hash = HashBuilder().hash(value).finish
+
+
+public final class I64 private (public value: i64) <: Hash[I64]
+  // TODO: cache values
+  public static def of(value: i64) = I64(value)
+
+  public override def to-string = value.to-string
+  public override def == (that: I64) = value == that.value
+  public override def hash = HashBuilder().hash(value).finish
+
+
+public final class F32 private (public value: f32) <: Hash[F32]
+  // TODO: cache values
+  public static def of(value: f32) = F32(value)
+
+  public override def to-string = value.to-string
+  public override def == (that: F32) = value == that.value
+  public override def hash = HashBuilder().hash(value).finish
+
+
+public final class F64 private (public value: f64) <: Hash[F64]
+  // TODO: cache values
+  public static def of(value: f64) = F64(value)
+
+  public override def to-string = value.to-string
+  public override def == (that: F64) = value == that.value
+  public override def hash = HashBuilder().hash(value).finish

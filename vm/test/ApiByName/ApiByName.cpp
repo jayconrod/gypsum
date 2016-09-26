@@ -134,6 +134,9 @@ int main(int argc, char* argv[]) {
   auto fooObj = package.findGlobal("foo").value().asObject();
   string fooSig("(C:Foo)");
 
+  auto barTrait = package.findTrait("Bar");
+  string barSig("(T:Bar)");
+
   // Check that when we load a field that doesn't exist, we get a bad reference.
   {
     auto field = fooClass.findField(Name::fromStringForDefn(&vm, "ieieieie"));
@@ -230,6 +233,21 @@ int main(int argc, char* argv[]) {
   {
     auto method = fooClass.findMethod(Name::fromStringForDefn(&vm, "Foo.priv-method"), fooSig);
     ASSERT_TRUE(method);
+  }
+
+  // Check that we can load a trait method by name.
+  {
+    auto method = barTrait.findMethod(
+        Name::fromStringForDefn(&vm, "Bar.trait-pub-method"), barSig);
+    ASSERT_TRUE(method);
+    ASSERT_EQ(12L, method.call(fooObj).asI64());
+  }
+
+  // Check that we can load a trait method by its source name.
+  {
+    auto method = barTrait.findMethod("trait-pub-method", barSig);
+    ASSERT_TRUE(method);
+    ASSERT_EQ(12L, method.call(fooObj).asI64());
   }
 
   // Check that we can create a new instance of a class.

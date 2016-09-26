@@ -49,6 +49,7 @@ class TypeParameter: public Block {
 
   static bool isCompatibleWith(const Handle<TypeParameter>& a, const Handle<TypeParameter>& b);
   bool isEquivalent(TypeParameter* other) const;
+  TypeParameter* findCommonUpperBound(TypeParameter* other) const;
   bool hasCommonBound(TypeParameter* other) const;
 
   Variance variance() const;

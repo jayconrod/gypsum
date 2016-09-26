@@ -1,4 +1,4 @@
-# Copyright 2014-2015, Jay Conrod. All rights reserved.
+# Copyright 2014-2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -187,6 +187,38 @@ class tycdf(Instruction):
         return self.popCount_
 
 
+class tyts(Instruction):
+    def __init__(self, trait):
+        assert isinstance(trait, ir.Trait) and (trait.isLocal() or trait.isBuiltin())
+        super(tyts, self).__init__(trait.id.index)
+
+
+class tytsf(Instruction):
+    def __init__(self, trait):
+        assert isinstance(trait, ir.Trait) and trait.isForeign()
+        super(tytsf, self).__init__(trait.id.packageId.index, trait.id.externIndex)
+
+
+class tytd(Instruction):
+    def __init__(self, trait):
+        assert isinstance(trait, ir.Trait) and (trait.isLocal() or trait.isBuiltin())
+        super(tytd, self).__init__(trait.id.index)
+        self.popCount_ = len(trait.typeParameters)
+
+    def popCount(self):
+        return self.popCount_
+
+
+class tytdf(Instruction):
+    def __init__(self, trait):
+        assert isinstance(trait, ir.Trait) and trait.isForeign()
+        super(tytdf, self).__init__(trait.id.packageId.index, trait.id.externIndex)
+        self.popCount_ = len(trait.typeParameters)
+
+    def popCount(self):
+        return self.popCount_
+
+
 class tyvs(Instruction):
     def __init__(self, param):
         assert isinstance(param, ir.TypeParameter) and (param.isLocal() or param.isBuiltin())
@@ -239,6 +271,27 @@ class callgf(Instruction):
 class callv(Instruction):
     def popCount(self):
         return self.operands[0]
+
+
+class callvt(Instruction):
+    def __init__(self, argCount, trait, index):
+        assert isinstance(trait, ir.Trait) and not trait.isForeign()
+        super(callvt, self).__init__(argCount, trait.id.index, index)
+        self.popCount_ = argCount
+
+    def popCount(self):
+        return self.popCount_
+
+
+class callvtf(Instruction):
+    def __init__(self, argCount, trait, index):
+        assert isinstance(trait, ir.Trait) and trait.isForeign()
+        super(callvtf, self).__init__(argCount, trait.id.packageId.index,
+                                      trait.id.externIndex, index)
+        self.popCount_ = argCount
+
+    def popCount(self):
+        return self.popCount_
 
 
 for info in bytecode.instInfoByCode:

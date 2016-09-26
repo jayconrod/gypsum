@@ -67,6 +67,12 @@ class Interpreter {
   void load(Block* block, word_t offset, Type* type);
   void store(Block* block, word_t offset, Type* type);
 
+  /**
+   * A simplified implementation of {@link Type#isSubtypeOf}. We lack a lot of information at
+   * run-time, so we only check the class of `object`.
+   */
+  bool isSubtypeOf(Object* object, Type* type);
+
   template <typename T> void add();
   template <typename T> void sub();
   template <typename T> void mul();

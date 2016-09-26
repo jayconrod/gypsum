@@ -17,17 +17,25 @@ from flags import COVARIANT, CONTRAVARIANT, CONSTRUCTOR, INITIALIZER, PROTECTED,
 import scope_analysis
 
 
+def analyzeTypeDeclarations(info):
+    """Analyzes the AST and assigns types to definitions.
+
+    This is a very simple pass that essentially just translates AST types to IR types for
+    class and trait supertypes, function parameters, and type parameter bounds. This must be
+    done prior to inheritance analysis, and the subtype relation can't be used until that
+    is complete, so types can't really be checked at this point. This pass queues processed
+    type arguments to be bounds checked in full type analysis.
+    """
+    declarationVisitor = DeclarationTypeVisitor(info)
+    declarationVisitor.visit(info.ast)
+    info.typeCheckFunction = declarationVisitor.checkTypes
+
+
 def analyzeTypes(info):
     """Analyzes a syntax, determines a type for each node, and reports any inconsistencies."""
     # Establish type information for class supertypes, type parameter upper/lower bounds,
     # and function parameter types. This is needed for `Type.isSubtypeOf` and for typing
     # function calls in expressions.
-    declarationVisitor = DeclarationTypeVisitor(info)
-    declarationVisitor.visit(info.ast)
-    declarationVisitor.checkTypes()
-
-    # Resolve all function overrides. This simplifies lookups later.
-    resolveAllOverrides(info)
 
     # Add type annotations for AST nodes which need them, and add type information to
     # the package.
@@ -37,14 +45,15 @@ def analyzeTypes(info):
     # Check that each overriding function has a return type which is a subtype of the
     # overriden function. The return type is not used to make override decisions, so this needs
     # to be done after overrides are resolved.
-    for func in info.package.functions:
-        if func.override is not None:
-            overridenReturnType = func.override.returnType.substituteForInheritance(
-                func.definingClass, func.override.definingClass)
-            if not func.returnType.isSubtypeOf(overridenReturnType):
-                raise TypeException(func.getLocation(),
-                                    "%s: return type is not subtype of overriden function" %
-                                    func.name)
+    for function in info.package.functions:
+        if function.overrides is not None:
+            for override in function.overrides:
+                overridenReturnType = override.returnType.substituteForInheritance(
+                    function.definingClass, override.definingClass)
+                if not function.returnType.isSubtypeOf(overridenReturnType):
+                    raise TypeException(function.getLocation(),
+                                        "%s: return type is not subtype of overriden function" %
+                                        function.name)
 
 
 def patternMustMatch(pat, ty, info):
@@ -96,31 +105,107 @@ def resolveAllOverrides(info):
         scope.resolveOverrides()
 
 
-def typeCanBeTested(ty, existentialVarIds=None):
-    """Returns whether a type can be tested at runtime, for example with a `cast` or `castcbr`
+def typeCanBeTested(testType, staticType, existentialVarIds=None):
+    """Returns whether a type can be tested at run-time, for example with a `cast` or `castcbr`
     instruction.
 
-    Type declaration must be complete before this is called."""
+    In general, class types without static type arguments may be tested. If the type arguments
+    for static parameters are unbounded existential variables, that may be tested (since it
+    indicates those arguments may be anything). Additionally, if `staticType` is a class type
+    of a superclass or supertrait of `testType`, static type arguments that can be inferred
+    from `staticType` don't need to be tested.
+
+    Inheritance analysis must be complete before this is called.
+
+    Arguments:
+        testType (Type): the type we are trying to test dynamically.
+        staticType (Type): the statically known type of the thing we are trying to test.
+            `testType` should be a subtype of this (otherwise the test would always fail).
+
+    Returns:
+        (bool): whether or not the type can be tested at run-time.
+    """
     if existentialVarIds is None:
         existentialVarIds = frozenset()
 
-    if isinstance(ty, ir_t.ClassType):
-        for tp, ta in zip(ty.clas.typeParameters, ty.typeArguments):
+    if isinstance(testType, ir_t.ClassType):
+        if isinstance(staticType, ir_t.ClassType):
+            baseTypeArgs = extractTypeArgsForSubtype(testType.clas, staticType)
+            if baseTypeArgs is not None and \
+               ir_t.ClassType(testType.clas, baseTypeArgs, testType.flags) == testType:
+                return True
+        rootType = ir_t.getRootClassType()
+        for tp, ta in zip(testType.clas.typeParameters, testType.typeArguments):
             staticArgCanBeTested = STATIC in tp.flags and \
                                    isinstance(ta, ir_t.VariableType) and \
                                    ta.typeParameter.id in existentialVarIds
             dynamicArgCanBeTested = STATIC not in tp.flags and \
-                                    typeCanBeTested(ta, existentialVarIds)
+                                    typeCanBeTested(ta, rootType, existentialVarIds)
             if not staticArgCanBeTested and not dynamicArgCanBeTested:
                 return False
         return True
-    elif isinstance(ty, ir_t.VariableType):
-        return STATIC not in ty.typeParameter.flags
-    elif isinstance(ty, ir_t.ExistentialType):
-        return typeCanBeTested(ty.ty, existentialVarIds | frozenset(v.id for v in ty.variables))
+    elif isinstance(testType, ir_t.VariableType):
+        return STATIC not in testType.typeParameter.flags
+    elif isinstance(testType, ir_t.ExistentialType):
+        return typeCanBeTested(testType.ty, staticType,
+                               existentialVarIds | frozenset(v.id for v in testType.variables))
     else:
         # Primitive types cannot be tested.
         return False
+
+
+def extractTypeArgsForSubtype(clas, supertype):
+    """Extracts type arguments for a subtype of `supertype` based on `clas`.
+
+    Arguments:
+        clas (ObjectTypeDefn): the class or trait we are extracting type arguments for.
+        supertype (ClassType): a class type. `clas` should be derived from the class or trait
+            this is based on, or `None` will be returned.
+
+    Returns:
+        (tuple(Type)?): A tuple of type arguments for `clas`. Once applied, the resulting type
+        will be a subtype of `supertype`. If this is not possible, `None` is returned.
+    """
+    def extract(base, sup):
+        if isinstance(base, ir_t.VariableType):
+            tpid = base.typeParameter.id
+            if tpid in typeMap:
+                if typeMap[tpid] is not None and typeMap[tpid] != sup:
+                    return False
+                typeMap[tpid] = sup
+            return True
+        elif isinstance(base, ir_t.ClassType):
+            if not isinstance(sup, ir_t.ClassType) or base.clas is not sup.clas:
+                return False
+            return all(extract(ba, sa) for ba, sa in zip(base.typeArguments, sup.typeArguments))
+        elif isinstance(base, ir_t.ExistentialType):
+            if not isinstance(sup, ir_t.ExistentialType) or \
+               any(bp is not sp for bp, sp in zip(base.typeParameters, sup.typeParameters)):
+                return False
+            return extract(base.ty, sup.ty)
+        else:
+            return base == sup
+
+    baseType = clas.findBaseType(supertype.clas)
+    if baseType is None:
+        return None
+    typeMap = {p.id: None for p in clas.typeParameters}
+    extract(baseType, supertype)
+    return tuple(typeMap[p.id] for p in clas.typeParameters)
+
+
+def checkTypeArgumentBounds(typeArgs, typeParams, locs):
+    """Checks if type arguments are in bounds for the given type parameters.
+
+    This function performs substitution on the bounds of the type parameters before performing
+    the bounds check. `TypeException` is raised for any type argument not in bounds.
+    """
+    assert len(typeArgs) == len(typeParams) and len(typeArgs) == len(locs)
+    for ta, tp, loc in zip(typeArgs, typeParams, locs):
+        upperBound = tp.upperBound.substitute(typeParams, typeArgs)
+        lowerBound = tp.lowerBound.substitute(typeParams, typeArgs)
+        if not ta.isSubtypeOf(upperBound) or not lowerBound.isSubtypeOf(ta):
+            raise TypeException(loc, "%s: type argument out of bounds" % tp.sourceName)
 
 
 class TypeVisitorBase(ast.NodeVisitor):
@@ -202,7 +287,7 @@ class TypeVisitorBase(ast.NodeVisitor):
 
         flags = frozenset(map(astTypeFlagToIrTypeFlag, node.flags))
 
-        if isinstance(irDefn, ir.Class):
+        if isinstance(irDefn, ir.ObjectTypeDefn):
             explicitTypeParams = ir.getExplicitTypeParameters(irDefn)
             if len(node.typeArguments) != len(explicitTypeParams):
                 raise TypeException(node.location,
@@ -378,7 +463,7 @@ class TypeVisitorBase(ast.NodeVisitor):
             (tuple(ir.Type), tuple(ir.TypeParameter)): A list of explicit type arguments
             compiled from `nodes`, and a list of introduced parameters for an existential
             type."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def introduceExistentialTypeParameter(self, param, node):
         """Introduces an existential type parameter based on a class type parameter.
@@ -448,10 +533,8 @@ class DeclarationTypeVisitor(TypeVisitorBase):
                 raise TypeException(loc,
                                     "%s: lower bound is not subtype of upper bound" % tp.name)
 
-        for ta, tp, loc in self.typeArgsToCheck:
-            if not ta.isSubtypeOf(tp.upperBound) or \
-               not tp.lowerBound.isSubtypeOf(ta):
-                raise TypeException(loc, "%s: type argument is not in bounds" % tp.name)
+        for typeArgs, typeParams, locs in self.typeArgsToCheck:
+            checkTypeArgumentBounds(typeArgs, typeParams, locs)
 
     def visitPackage(self, node):
         self.visitChildren(node)
@@ -479,29 +562,22 @@ class DeclarationTypeVisitor(TypeVisitorBase):
 
     def visitClassDefinition(self, node):
         irClass = self.info.getDefnInfo(node).irDefn
-        irSuperclass = self.info.getClassInfo(irClass).superclassInfo.irDefn
-        if ARRAY in irSuperclass.flags and len(irClass.fields) > 0:
-            raise TypeException(node.location,
-                                "%s: cannot derive from array class and declare new fields" %
-                                node.name)
         for param in node.typeParameters:
             self.visit(param)
         if node.constructor is not None:
             self.visit(node.constructor)
-        if node.supertype is None:
+        if node.superclass is None:
             irClass.supertypes = [ir_t.getRootClassType()]
+            assert node.supertraits is None
         else:
-            supertype = self.visit(node.supertype)
-            if supertype.isNullable():
-                raise TypeException(node.location,
-                                    "%s: supertype may not be nullable" % node.name)
-            if supertype == ir_t.getNothingClassType():
-                raise TypeException(node.location,
-                                    "%s: Nothing cannot be a supertype" % node.name)
-            irClass.supertypes = [supertype]
-        if node.superArgs is not None:
-            for arg in node.superArgs:
-                self.visit(arg)
+            irClass.supertypes = [self.visit(node.superclass)]
+            if node.supertraits is not None:
+                irClass.supertypes.extend(self.visit(ty) for ty in node.supertraits)
+        irSuperclass = irClass.supertypes[0].clas
+        if ARRAY in irSuperclass.flags and len(irClass.fields) > 0:
+            raise TypeException(node.location,
+                                "%s: cannot derive from array class and declare new fields" %
+                                node.name)
         for member in node.members:
             self.visit(member)
         if not node.hasConstructors():
@@ -510,6 +586,18 @@ class DeclarationTypeVisitor(TypeVisitorBase):
             defaultCtor.parameterTypes = [self.getReceiverType()]
         self.setMethodReceiverType(irClass.initializer)
         irClass.initializer.parameterTypes = [self.getReceiverType()]
+
+    def visitTraitDefinition(self, node):
+        irTrait = self.info.getDefnInfo(node).irDefn
+        # TODO: when traits have fields, check that superclass is not array class
+        for param in node.typeParameters:
+            self.visit(param)
+        if node.supertypes is None:
+            irTrait.supertypes = [ir_t.getRootClassType()]
+        else:
+            irTrait.supertypes = map(self.visit, node.supertypes)
+        for member in node.members:
+            self.visit(member)
 
     def visitArrayElementsStatement(self, node):
         elementType = self.visit(node.elementType)
@@ -629,8 +717,8 @@ class DeclarationTypeVisitor(TypeVisitorBase):
                 introducedTypeParams.append(introducedTypeParam)
             else:
                 arg = self.visit(node)
-                self.typeArgsToCheck.append((arg, param, node.location))
             typeArgs.append(arg)
+        self.typeArgsToCheck.append((typeArgs, typeParams, [n.location for n in nodes]))
         return tuple(typeArgs), tuple(introducedTypeParams)
 
     def setMethodReceiverType(self, irFunction):
@@ -728,6 +816,11 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             irDefaultCtor.variables[0].type = thisType
             irDefaultCtor.returnType = ir_t.UnitType
 
+        if node.superArgs is not None and \
+           not isinstance(self.info.getType(node.superclass).clas, ir.Class):
+            raise TypeException(node.superclass.location,
+                                "%s: super-constructor arguments cannot be applies to trait %s" %
+                                (irClass.name, node.superclass.name))
         hasPrimaryOrDefaultCtor = node.constructor is not None or \
                                   not node.hasConstructors()
         if node.superArgs is not None and not hasPrimaryOrDefaultCtor:
@@ -766,6 +859,19 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                      ctor.parameterTypes)
             each(lambda ty: self.checkPublicType(ty, node.name, node.location),
                  irClass.supertypes)
+
+    def visitTraitDefinition(self, node):
+        irTrait = self.info.getDefnInfo(node).irDefn
+        thisType = ir_t.ClassType.forReceiver(irTrait)
+
+        each(self.visit, node.typeParameters)
+        each(self.visit, node.members)
+
+        if self.isExternallyVisible(irTrait):
+            for tp in irTrait.typeParameters:
+                self.checkPublicTypeParameter(tp, node.name, node.location)
+            for sty in irTrait.supertypes:
+                self.chechPublicType(sty, node.name, node.location)
 
     def visitPrimaryConstructorDefinition(self, node):
         self.handleFunctionCommon(node, None, None)
@@ -847,8 +953,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             elementTypes = tuple(self.visit(p, ety, mode)
                                  for p, ety in zip(node.patterns, exprTy.typeArguments))
         else:
-            elementTypes = tuple(self.visit(p, ir_t.getRootClassType(), mode)
-                                 for p in node.patterns)
+            elementExprType = None if exprTy is None else ir_t.getRootClassType()
+            elementTypes = tuple(self.visit(p, elementExprType, mode) for p in node.patterns)
         tupleTy = ir_t.ClassType(tupleClass, elementTypes)
         patTy = self.findPatternType(tupleTy, exprTy, mode, True, None, node.location)
         return patTy
@@ -1148,8 +1254,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             exprTy (Type?): the type of the expression being matched. May be `None` if there is
                 no expression (for example, a parameter or variable declaration). Either `patTy`
                 or `exprTy` must be specified.
-            mode (symbol): either `COMPILE_FOR_VALUE` for variables and parameters or
-                `COMPILE_FOR_MATCH` for pattern matching.
+            mode (symbol): one of `COMPILE_FOR_UNINITIALIZED` (for uninitialized variables),
+                `COMPILE_FOR_EFFECT` (for variables and parameters) or `COMPILE_FOR_MATCH`
+                (for pattern matching.
             isDestructure (bool): true if this is part of a destructuring pattern (just used
                 for tuple patterns). Checking is a little stricter if false, since sub-patterns
                 are not being matched.
@@ -1164,46 +1271,45 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             TypeException: for many reasons, for example, if no type can be inferred or if
                 types cannot be tested at runtime.
         """
+        assert (mode is COMPILE_FOR_UNINITIALIZED or
+                mode is COMPILE_FOR_EFFECT or
+                mode is COMPILE_FOR_MATCH)
+        assert not mode is COMPILE_FOR_UNINITIALIZED or exprTy is None
         nameStr = "%s: " % name if name is not None else ""
         scope = self.scope()
         if patTy is None and exprTy is None:
             raise TypeException(loc, nameStr + "type not specified")
         elif patTy is not None:
-            if mode is COMPILE_FOR_VALUE and \
+            if mode is COMPILE_FOR_EFFECT and \
                exprTy is not None and \
                not exprTy.isSubtypeOf(patTy):
                 raise TypeException(loc, nameStr + "expression doesn't match declared type")
             elif mode is COMPILE_FOR_MATCH and \
-                 exprTy.isDisjoint(patTy):
-                raise TypeException(loc, nameStr + "expression cannot match declared type")
-            elif mode is COMPILE_FOR_MATCH and \
                  not isDestructure and \
                  not exprTy.isSubtypeOf(patTy) and \
-                 not typeCanBeTested(patTy):
+                 not typeCanBeTested(patTy, exprTy):
                 raise TypeException(loc, nameStr + "type cannot be tested at runtime")
             else:
                 return patTy
         else:
             return exprTy
 
-    def handleClassTypeArgs(self, irClass, typeArgs):
+    def handleClassTypeArgs(self, irClass, astTypeArgs):
         typeParams = ir.getExplicitTypeParameters(irClass)
-        assert len(typeParams) == len(typeArgs)
-        types = []
+        assert len(typeParams) == len(astTypeArgs)
+        irTypeArgs = []
         introducedTypeParams = []
-        for tp, ta in zip(typeParams, typeArgs):
-            if isinstance(ta, ast.BlankType):
-                tp, ty = self.introduceExistentialTypeParameter(tp, ta)
+        for tp, ata in zip(typeParams, astTypeArgs):
+            if isinstance(ata, ast.BlankType):
+                tp, ty = self.introduceExistentialTypeParameter(tp, ata)
                 introducedTypeParams.append(tp)
             else:
                 with VarianceScope.forArgument(self, tp.variance()):
-                    ty = self.visit(ta)
-                if not (tp.lowerBound.isSubtypeOf(ty) and
-                        ty.isSubtypeOf(tp.upperBound)):
-                    raise TypeException(ta.location,
-                                        "%s: type argument is not in bounds" % tp.name)
-            types.append(ty)
-        return tuple(types), tuple(introducedTypeParams)
+                    ty = self.visit(ata)
+            irTypeArgs.append(ty)
+
+        checkTypeArgumentBounds(irTypeArgs, typeParams, [n.location for n in astTypeArgs])
+        return tuple(irTypeArgs), tuple(introducedTypeParams)
 
     def handleFunctionCommon(self, node, astReturnType, astBody):
         defnInfo = self.info.getDefnInfo(node)
@@ -1373,7 +1479,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, receiverType,
                                                             None, None, loc)
         self.checkCallAllowed(defnInfo.irDefn, True, USE_AS_VALUE, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
         scope.use(defnInfo, useAstId, USE_AS_VALUE, loc)
         return self.getDefnType(receiverType, False, defnInfo.irDefn, allTypeArgs)
 
@@ -1432,9 +1538,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, receiverType,
                                                                 typeArgs, None, loc)
 
-        self.checkCallAllowed(defnInfo.irDefn, False, USE_AS_PROPERTY, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
-        self.scope().use(defnInfo, useAstId, USE_AS_PROPERTY, loc)
+        self.checkCallAllowed(defnInfo.irDefn, False, USE_AS_VALUE, loc)
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
+        self.scope().use(defnInfo, useAstId, USE_AS_VALUE, loc)
         return self.getDefnType(receiverType, True, defnInfo.irDefn, allTypeArgs)
 
     def handlePropertyCall(self, name, receiverScope, receiverType,
@@ -1494,7 +1600,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             raise TypeException(loc, "%s: cannot access without receiver" % name)
 
         self.checkCallAllowed(defnInfo.irDefn, receiverIsReceiver, useKind, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
         self.scope().use(defnInfo, useAstId, useKind, loc)
         ty = self.getDefnType(receiverType, True, defnInfo.irDefn, allTypeArgs)
         ty = self.upcastExistentialVars(ty, existentialVars, isLvalue, name, loc)
@@ -1537,7 +1643,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                                                 typeArgs, argTypes, loc)
         irDefn = defnInfo.irDefn
         self.checkCallAllowed(irDefn, True, useKind, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
         self.scope().use(defnInfo, useAstId, useKind, loc)
         return self.getDefnType(receiverType, False, irDefn, allTypeArgs)
 
@@ -1621,7 +1727,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
         # Record information and return the resulting type.
         self.checkCallAllowed(defnInfo.irDefn, False, useKind, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
         self.scope().use(defnInfo, useAstId, useKind, loc)
         ty = self.getDefnType(receiverType, False, defnInfo.irDefn, allTypeArgs)
         ty = self.upcastExistentialVars(ty, existentialVars, False, name, loc)
@@ -1663,7 +1769,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, objectType,
                                                             None, argTypes, loc)
         self.checkCallAllowed(defnInfo.irDefn, False, USE_AS_CONSTRUCTOR, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, None))
         self.scope().use(defnInfo, useAstId, USE_AS_CONSTRUCTOR, loc)
 
     def handleDestructure(self, nameInfo, receiverType, receiverIsExplicit,
@@ -1720,7 +1826,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, receiverType,
                                                                 typeArgs, [exprType], loc)
             self.checkCallAllowed(defnInfo.irDefn, False, useKind, loc)
-            self.info.setCallInfo(matcherAstId, CallInfo(allTypeArgs))
+            self.info.setCallInfo(matcherAstId, CallInfo(allTypeArgs, receiverType))
             self.scope().use(defnInfo, matcherAstId, useKind, loc)
             irDefn = defnInfo.irDefn
             self.ensureTypeInfoForDefn(irDefn)
@@ -1777,9 +1883,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         # T1, ..., Tn are the expression types.
         optionClass = self.info.getStdClass("Option", loc)
         if not returnType.isObject() or \
-           not ir_t.getClassFromType(returnType).isSubclassOf(optionClass):
+           not ir_t.getClassFromType(returnType).isDerivedFrom(optionClass):
             raise TypeException(loc, "matcher must return std.Option")
-        returnType = returnType.substituteForBaseClass(optionClass)
+        returnType = returnType.substituteForBase(optionClass)
         returnTypeArg = returnType.typeArguments[0]
         n = len(subPatterns)
         if n == 1:
@@ -1787,9 +1893,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         else:
             tupleClass = self.info.getTupleClass(n, loc)
             if not returnTypeArg.isObject() or \
-               not ir_t.getClassFromType(returnTypeArg).isSubclassOf(tupleClass):
+               not ir_t.getClassFromType(returnTypeArg).isDerivedFrom(tupleClass):
                 raise TypeException(loc, "matcher must return `std.Option[std.Tuple%d]`" % n)
-            returnTypeArg = returnTypeArg.substituteForBaseClass(tupleClass)
+            returnTypeArg = returnTypeArg.substituteForBase(tupleClass)
             patternTypes = returnTypeArg.typeArguments
         for subPat, subExprType in zip(subPatterns, patternTypes):
             self.visit(subPat, subExprType, mode)
@@ -1811,8 +1917,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             raise TypeException(loc,
                                 "wrong number of type arguments: expected %d but have %d" %
                                 (len(explicitTypeParams), len(typeArgs)))
-        if not all(tp.contains(ta) for tp, ta in zip(explicitTypeParams, typeArgs)):
-            raise TypeException(loc, "type error in type arguments for class")
+        checkTypeArgumentBounds(typeArgs, explicitTypeParams, [loc] * len(typeArgs))
         implicitTypeParams = ir.getImplicitTypeParameters(irClass)
         implicitTypeArgs = [ir.VariableType(tp) for tp in implicitTypeParams]
         allTypeArgs = tuple(implicitTypeArgs + typeArgs)
@@ -1824,11 +1929,15 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         Classes and package prefixes cannot be used as values. If the `NameInfo` references
         one of those, a `TypeException` will be raised.
         """
-        if nameInfo.isClass():
-            raise TypeException(loc, "%s: class can't be used as value" % nameInfo.name)
-        if nameInfo.isPackagePrefix():
-            raise TypeException(loc, "%s: package prefix can't be used as value" %
-                                nameInfo.name)
+        if nameInfo.isFunction():
+            return
+        assert not nameInfo.isOverloaded()
+        irDefn = nameInfo.getDefnInfo().irDefn
+        if not (isinstance(irDefn, ir.Global) or \
+            isinstance(irDefn, ir.Variable) or \
+            isinstance(irDefn, ir.Field) or \
+            isinstance(irDefn, ir.Package)):
+            raise TypeException(loc, "%s: definition can't be used as a value" % nameInfo.name)
 
     def chooseConstructorFromNameInfo(self, nameInfo, typeArgs, argTypes, loc):
         """Determines which constructor should be used from a `NameInfo` that refers to a class.
@@ -2015,7 +2124,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         elif isinstance(irDefn, ir.Field):
             ty = irDefn.type
             if receiverIsExplicit and isinstance(receiverType, ir_t.ClassType):
-                fieldClass = self.findBaseClassForField(receiverType.clas, irDefn)
+                fieldClass = self.findBaseForField(receiverType.clas, irDefn)
                 ty = ty.substituteForInheritance(receiverType.clas, fieldClass)
                 ty = ty.substitute(receiverType.clas.typeParameters, receiverType.typeArguments)
             return ty
@@ -2029,10 +2138,10 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             assert isinstance(irDefn, ir.Class)
             return receiverType
 
-    def findBaseClassForField(self, receiverClass, field):
+    def findBaseForField(self, receiverClass, field):
         # At this point, classes haven't been flattened yet, so we have to search up the
-        # inheritance chain for the first class that contains the field.
-        for clas in receiverClass.superclasses():
+        # inheritance graph for the first class or trait that contains the field.
+        for clas in receiverClass.bases():
             if any(True for f in clas.fields if f is field):
                 return clas
         assert False, "field is not defined in this class or any superclass"
@@ -2240,4 +2349,4 @@ class VarianceScope(object):
             assert flag is ir_t.INVARIANT
             return 0
 
-__all__ = ["analyzeTypes", "patternMustMatch"]
+__all__ = ["analyzeTypeDeclarations", "analyzeTypes", "patternMustMatch"]

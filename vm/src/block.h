@@ -30,6 +30,8 @@ V(Global, GLOBAL)                                                              \
 V(Function, FUNCTION)                                                          \
 V(Class, CLASS)                                                                \
 V(Field, FIELD)                                                                \
+V(Trait, TRAIT)                                                                \
+V(TraitTable, TRAIT_TABLE)                                                     \
 V(TypeParameter, TYPE_PARAMETER)                                               \
 V(I8Array, I8_ARRAY)                                                           \
 V(I32Array, I32_ARRAY)                                                         \
@@ -40,7 +42,6 @@ V(BlockHashMapTable, BLOCK_HASH_MAP_TABLE)                                     \
 V(BlockHashMap, BLOCK_HASH_MAP)                                                \
 V(Object, OBJECT)                                                              \
 V(Type, TYPE)                                                                  \
-V(ExternTypeInfo, EXTERN_TYPE_INFO)                                            \
 V(String, STRING)                                                              \
 V(ThreadBindle, THREAD_BINDLE)                                                 \
 

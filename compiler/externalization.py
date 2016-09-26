@@ -32,11 +32,13 @@ def externalize(info):
         elif isinstance(defn, ir.IrTopDefn):
             externalizer.externalizeDefn(defn)
 
-    for ty in info.typeInfo.itervalues():
-        externalizer.externalizeType(ty)
+    def externalizeInheritedMethods(objDefn):
+        each(externalizer.externalizeDefn, objDefn.methods)
+    each(externalizeInheritedMethods, info.package.classes)
+    each(externalizeInheritedMethods, info.package.traits)
 
-    for defn in info.stdExternInfo.itervalues():
-        externalizer.externalizeDefn(defn)
+    each(externalizer.externalizeType, info.typeInfo.itervalues())
+    each(externalizer.externalizeDefn, info.stdExternInfo.itervalues())
 
 
 class Externalizer(object):
@@ -63,6 +65,8 @@ class Externalizer(object):
             externDefns = dep.externFunctions
         elif isinstance(defn, ir.Class):
             externDefns = dep.externClasses
+        elif isinstance(defn, ir.Trait):
+            externDefns = dep.externTraits
         elif isinstance(defn, ir.TypeParameter):
             externDefns = dep.externTypeParameters
         else:
@@ -91,8 +95,6 @@ class Externalizer(object):
             externDefn.typeParameters = [self.externalizeDefn(param)
                                          for param in defn.typeParameters]
             each(self.externalizeType, defn.parameterTypes)
-            if defn.definingClass is not None:
-                externDefn.definingclass = self.externalizeDefn(defn.definingClass)
         elif isinstance(defn, ir.Class):
             externDefn = ir.Class(defn.name, id, astDefn=defn.astDefn,
                                   supertypes=defn.supertypes,
@@ -110,6 +112,15 @@ class Externalizer(object):
             externDefn.methods = [self.externalizeMethod(m, dep) for m in defn.methods]
             if externDefn.elementType is not None:
                 self.externalizeType(externDefn.elementType)
+        elif isinstance(defn, ir.Trait):
+            externDefn = ir.Trait(defn.name, id, astDefn=defn.astDefn,
+                                  supertypes=defn.supertypes,
+                                  flags=externFlags)
+            externDefns.append(externDefn)
+            externDefn.typeParameters = [self.externalizeDefn(param)
+                                         for param in defn.typeParameters]
+            each(self.externalizeType, defn.supertypes)
+            externDefn.methods = [self.externalizeMethod(m, dep) for m in defn.methods]
         elif isinstance(defn, ir.TypeParameter):
             externDefn = ir.TypeParameter(defn.name, id, astDefn=defn.astDefn,
                                           upperBound=defn.upperBound,

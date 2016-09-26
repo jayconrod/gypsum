@@ -9,20 +9,11 @@
 # 1. Scan the AST for definitions and create stub IR definitions to be filled in later by
 #    type analysis and semantic analysis.
 # 2. Scan the AST for symbols and correlate them with the definitions they refer to.
-#
-# To accomplish this, we provide several passes (see doc strings for details):
-# (performed after parsing)
-# - analyzeDeclarations
-# - analyzeInheritance
-# - analyzeUses
-# (performed after type analysis)
-# - convertClosures
-# - flattenClasses
 
 import ast
-from compile_info import ContextInfo, ClosureInfo, DefnInfo, ClassInfo, UseInfo, ImportInfo, USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, NORMAL_MODE, STD_MODE, NOSTD_MODE, CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, NOT_HERITABLE
+from compile_info import ContextInfo, ClosureInfo, DefnInfo, UseInfo, ImportInfo, USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, NORMAL_MODE, STD_MODE, NOSTD_MODE, CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, NOT_HERITABLE
 from data import Data
-from errors import TypeException, ScopeException
+from errors import InheritanceException, ScopeException, TypeException
 from flags import *
 from graph import Graph
 from ids import AstId, DefnId, PackageId, ScopeId, BUILTIN_SCOPE_ID, GLOBAL_SCOPE_ID, PACKAGE_SCOPE_ID
@@ -30,8 +21,9 @@ import ir
 from ir_types import getRootClassType, ClassType, UnitType, I32Type
 from location import Location, NoLoc
 from builtins import registerBuiltins, getBuiltinClasses
-from utils import Counter
+from utils import Counter, each
 from bytecode import BUILTIN_ROOT_CLASS_ID
+
 
 def analyzeDeclarations(info):
     """Traverses the AST, creating a scope tree and DefnInfo for definition nodes.
@@ -43,8 +35,6 @@ def analyzeDeclarations(info):
     - Create an IR definition and a DefnInfo object for each node which defines something.
       IR definitions are added to the package. DefnInfo can be accessed later using
       info.{get,set,has}DefnInfo.
-    - Create a ClassInfo object for each node which defines a class. These can be accessed later
-      using info.{get,set,has}ClassInfo.
 
     Import statements are processed after the AST has been fully traversed. This is necessary
     since we can't import symbols from a scope that hasn't been visited yet. Symbols are
@@ -68,98 +58,6 @@ def analyzeDeclarations(info):
         for child in scope.childScopes.itervalues():
             processImportsForScope(child)
     processImportsForScope(globalScope)
-
-
-def analyzeInheritance(info):
-    """Construct and analyze graph of inheritance between classes and type parameters.
-
-    This pass visits classes and type parameters in the AST and links them with their base
-    classes and bounds. It constructs a subtype graph and verifies there are no cycles.
-    It also constructs an inheritance graph for classes only. This is used to copy symbol
-    bindings from each class to its derived classes. At this point, overrides are treated as
-    overloads, since we cannot distinguish between them until after type analysis."""
-
-    # The subtype graph is for all type definitions (classes and type parameters) in packages
-    # loaded so far. The purpose of the subtype graph is to detect cycles, which are
-    # errors. Type.isSubtypeOf isn't safe until we know the subtype graph is acyclic.
-    # The vertices of the subtype graph are DefnIds. The edges correspond to superclasses
-    # and type parameter bounds. Type arguments are ignored here.
-    subtypeGraph = Graph()
-
-    # The inheritance graph is for local classes only. It's purpose is to decide which order to
-    # copy bindings from base classes to subclasses. The nodes are ScopeIds. The edges are
-    # subclass relationships. Note that this is a subgraph of the subtype graph. Builtin and
-    # foreign classes are not included in this graph because they don't need any bindings
-    # copied to them.
-    inheritanceGraph = Graph()
-
-    # Make sure we have class info for classes in all loaded packages.
-    def ensureClassInfo(package):
-        for clas in package.classes:
-            assert not info.hasClassInfo(clas)
-            info.setClassInfo(clas, ClassInfo(clas))
-    for package in info.packageLoader.getLoadedPackages():
-        ensureClassInfo(package)
-    info.packageLoader.addLoadHook(ensureClassInfo)
-
-    # Populate both graphs with local definitions from the AST. Also, make sure we have
-    # class info for any packages that get loaded.
-    visitor = InheritanceVisitor(info.getScope(GLOBAL_SCOPE_ID), inheritanceGraph, subtypeGraph)
-    visitor.visitChildren(info.ast)
-
-    info.packageLoader.removeLoadHook(ensureClassInfo)
-
-    # Populate the subtype graph using builtin classes.
-    def addNonLocalClass(irClass):
-        assert len(irClass.supertypes) <= 1
-        if len(irClass.supertypes) == 1:
-            classInfo = info.getClassInfo(irClass)
-            irSuperclass = irClass.supertypes[0].clas
-            classInfo.superclassInfo = info.getClassInfo(irSuperclass)
-            subtypeGraph.addEdge(irClass.id, irSuperclass.id)
-    def handleBuiltinInheritance(name, irDefn):
-        if isinstance(irDefn, ir.Class):
-            addNonLocalClass(irDefn)
-        elif isinstance(irDefn, ir.TypeParameter):
-            raise NotImplementedError
-    registerBuiltins(handleBuiltinInheritance)
-
-    # Populate the subtype graph using foreign classes.
-    for package in info.packageLoader.getLoadedPackages():
-        for irClass in package.classes:
-            addNonLocalClass(irClass)
-
-    # Check for cycles.
-    if subtypeGraph.isCyclic():
-        # TODO: need to report an error for each cycle
-        raise ScopeException(NoLoc, "inheritance cycle detected")
-
-    # Copy bindings from superclasses to subclasses. This must be done in topological order
-    # to ensure we don't miss anything, i.e., if S <: T, we must ensure all bindings have been
-    # copied to T before copying from T to S. Builtin classes are already flattened, so this
-    # is not necessary for them.
-    topologicalClassScopeIds = inheritanceGraph.reverseEdges().topologicalSort()
-    for scopeId in topologicalClassScopeIds:
-        scope = info.getScope(scopeId)
-        clas = scope.getIrDefn()
-        classInfo = info.getClassInfo(clas)
-
-        superclass = classInfo.superclassInfo.irDefn
-        if ARRAY in superclass.flags:
-            clas.flags |= frozenset([ARRAY])
-            if ARRAY_FINAL in superclass.flags:
-                clas.flags |= frozenset([ARRAY_FINAL])
-        superclassScope = info.getScope(superclass.id)
-        for name, defnInfo in superclassScope.iterBindings():
-            if defnInfo.inheritanceDepth == NOT_HERITABLE:
-                continue
-            inheritedDefnInfo = defnInfo.inherit(scope.scopeId)
-            if scope.isBound(name) and \
-               not scope.getDefinition(name).isOverloadable(inheritedDefnInfo):
-                raise ScopeException(defnInfo.irDefn.getLocation(),
-                                     "%s: conflicts with inherited definition" % name)
-            scope.bind(name, inheritedDefnInfo)
-            scope.define(name)
 
 
 def convertClosures(info):
@@ -247,55 +145,6 @@ def convertClosures(info):
         scope.finish()
 
 
-def flattenClasses(info):
-    """Copies inherited definitions from base classes to derived classes.
-
-    Until this point, IR classes have only contained definitions defined inside them. Inherited
-    definitions have been made available for the purpose of scope and type analysis through
-    Scope objects. In order for the compiler to determine accurate object sizes and vtable
-    indices, we need to actually copy these inherited definitions into derived classes."""
-
-    # We cannot re-use the inheritance graph we built during inheritance analysis, since we may
-    # have created new classes (especially contexts and closures) since then.
-    allClasses = getBuiltinClasses(includePrimitives=False) + info.package.classes
-    inheritanceGraph = Graph(clas.id for clas in allClasses)
-    for clas in allClasses:
-        for sty in clas.supertypes:
-            # Edges point from base classes to derived classes. So the root class is a "source"
-            # and leaf classes are "sinks".
-            inheritanceGraph.addEdge(sty.clas.id, clas.id)
-
-    topologicalClassIds = inheritanceGraph.topologicalSort()
-    for id in topologicalClassIds:
-        # TODO: this should already be done for builtin classes.
-        if id.isBuiltin():
-            continue
-        irClass = info.package.classes[id.index]
-        if len(irClass.supertypes) != 1:
-            raise NotImplementedError
-        irSuperclass = irClass.supertypes[0].clas
-        irClass.fields = irSuperclass.fields + irClass.fields
-        methods = list(irSuperclass.methods)
-        for ownMethod in irClass.methods:
-            if ownMethod.override is not None:
-                foundOverride = False
-                for i, inheritedMethod in enumerate(irSuperclass.methods):
-                    if ownMethod.override is inheritedMethod:
-                        foundOverride = True
-                        methods[i] = ownMethod
-                        break
-                assert foundOverride
-            else:
-                methods.append(ownMethod)
-        irClass.methods = methods
-        if ABSTRACT not in irClass.flags:
-            for m in methods:
-                if ABSTRACT in m.flags:
-                    raise ScopeException(irClass.getLocation(),
-                                         "must override inherited abstract method `%s` in concrete class `%s`" %
-                                         (m.name, irClass.name))
-
-
 def isHeritable(irDefn):
     """Returns true if the given irDefn can be inherited from a base class by a
     deriving class."""
@@ -318,12 +167,11 @@ class NameInfo(object):
         # list will contain just one element.
         self.overloads = []
 
-        # A map from function ids of overriden functions to ids of the overriding functions.
-        # Only defined after `resolveOverrides` is called and only if `isOverloaded` is true.
-        self.overrides = None
-
     def addOverload(self, defnInfo):
         self.overloads.append(defnInfo)
+
+    def isHeritable(self):
+        return all(isHeritable(o.irDefn) for o in self.overloads)
 
     def isOverloadable(self, otherDefnInfo):
         return isinstance(otherDefnInfo.irDefn, ir.Function) and \
@@ -374,94 +222,6 @@ class NameInfo(object):
         ctorNameInfo = classScope.getDefinition(ir.CONSTRUCTOR_SUFFIX)
         assert ctorNameInfo is not None
         return ctorNameInfo
-
-    def shouldResolveOverrides(self):
-        return self.overrides is None and \
-            (self.isOverloaded() or \
-             (isinstance(self.overloads[0].irDefn, ir.Function) and \
-              OVERRIDE in self.overloads[0].irDefn.flags))
-
-    def resolveOverrides(self):
-        """Decides which definitions are overloads and which are overrides.
-
-        Called during or after type analysis so we know the return and parameter types of each
-        definition. Compares each definition to other definitions. Function A is considered to
-        override function B if all of the following are true:
-
-        - A and B have the same number of parameters
-        - Each parameter type of A is a supertype of the corresponding parameter type of B
-        - The return type of A is a subtype of the return type of B
-        - The inheritance depth of A is strictly less than B
-        - There is no other function A' with inheritance depth between A and B that satisfies
-          the above criteria.
-
-        The overriding function (A) will have its `override` attribute set to point to the
-        overriden function (B). `overrides` will have an entry added."""
-        if not self.shouldResolveOverrides():
-            return
-        self.overrides = {}
-
-        # Sort overloads by depth to simplify the loop and avoid the last condition
-        # mentioned above.
-        overloadsByDepth = sorted(self.overloads,
-                                  key=lambda defnInfo: defnInfo.inheritanceDepth)
-
-        # Compare each function with each other function with greater depth.
-        for (aIndex, aDefnInfo) in enumerate(overloadsByDepth):
-            aIrDefn = aDefnInfo.irDefn
-            aDepth = aDefnInfo.inheritanceDepth
-            overrideIndex = None
-            for (bIndex, bDefnInfo) in enumerate(overloadsByDepth[aIndex + 1:]):
-                bDepth = bDefnInfo.inheritanceDepth
-                bIndex += aIndex + 1
-                assert aDepth <= bDepth
-                if aDepth == bDepth:
-                    continue
-
-                bIrDefn = bDefnInfo.irDefn
-                assert isinstance(aIrDefn, ir.Function) and isinstance(bIrDefn, ir.Function)
-                if aIrDefn.mayOverride(bIrDefn):
-                    # Check that nothing else is already overriding this function.
-                    if bIrDefn.id in self.overrides:
-                        raise TypeException(aIrDefn.getLocation(),
-                                            "%s: multiple definitions may override" %
-                                            self.name)
-                    if bIrDefn.isFinal():
-                        raise TypeException(aIrDefn.getLocation(),
-                                            "%s: can't override final method" % self.name)
-
-                    if OVERRIDE not in aIrDefn.flags:
-                        raise TypeException(aIrDefn.getLocation(),
-                                            ("%s: can't override method in superclass " +
-                                                "without override attribute") % self.name)
-
-                    aIrDefn.override = bIrDefn
-                    self.overrides[bIrDefn.id] = aIrDefn.id
-                    overrideIndex = bIndex
-                    break
-
-            # If we found an override, check that there aren't other functions we could
-            # override.
-            if overrideIndex is not None:
-                overrideDepth = overloadsByDepth[overrideIndex].inheritanceDepth
-                for bDefnInfo in overloadsByDepth[overrideIndex + 1:]:
-                    bDepth = bDefnInfo.inheritanceDepth
-                    if bDepth > overrideDepth:
-                        break
-                    if aIrDefn.mayOverride(bDefnInfo.irDefn):
-                        raise TypeException(aIrDefn.getLocation(),
-                                            "may override multiple definitions: %s" %
-                                            self.name)
-
-            # If we did not find an override, check that no override was expected.
-            if overrideIndex is None and OVERRIDE in aIrDefn.flags:
-                raise TypeException(aIrDefn.getLocation(),
-                                    "%s: has override attribute but doesn't override anything" %
-                                    self.name)
-
-        # Delete overriden functions from the overloads list. They will not be visible anymore
-        # in lookups.
-        self.overloads = filter(lambda o: o.irDefn.id not in self.overrides, self.overloads)
 
 
 class Scope(ast.NodeVisitor):
@@ -642,7 +402,7 @@ class Scope(ast.NodeVisitor):
         """Creates an IR definition and adds it to the package. Returns a tuple containing
         the IrDefinition, a bool indicating whether it should be bound to its short name, and
         a bool indicating whether it should be visible to unrelated scopes."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def getImplicitTypeParameters(self):
         """Returns a list of type parameters implied by this scope and outer scopes. These
@@ -680,8 +440,17 @@ class Scope(ast.NodeVisitor):
                                                           variables=[], flags=ctorFlags)
             self.makeConstructor(irDefaultCtor, irDefn)
             irDefn.constructors.append(irDefaultCtor)
-        classInfo = ClassInfo(irDefn)
-        self.info.setClassInfo(irDefn, classInfo)
+        return irDefn, True
+
+    def createIrTraitDefn(self, astDefn):
+        """Convenience method for creating a trait definition."""
+        implicitTypeParams = self.getImplicitTypeParameters()
+        flags = getFlagsFromAstDefn(astDefn, None)
+        checkFlags(flags, frozenset([PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
+        name = self.makeName(astDefn.name)
+        irDefn = self.info.package.addTrait(name, sourceName=astDefn.name, astDefn=astDefn,
+                                            typeParameters=implicitTypeParams,
+                                            methods=[], flags=flags)
         return irDefn, True
 
     def makeMethod(self, function, clas):
@@ -693,6 +462,7 @@ class Scope(ast.NodeVisitor):
         """
         function.flags |= frozenset([METHOD])
         function.definingClass = clas
+        function.overridenBy = {}
         thisName = function.name.withSuffix(ir.RECEIVER_SUFFIX)
         this = ir.Variable(thisName, sourceName="this", astDefn=function.astDefn,
                            kind=ir.PARAMETER, flags=frozenset([LET]))
@@ -709,7 +479,7 @@ class Scope(ast.NodeVisitor):
         """Returns true if a definition is available as soon as the scope is entered.
 
         This is only false for local variables in function scopes."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def lookup(self, name, loc, fromExternal, mayBeAssignment=False, ignoreDefnOrder=None):
         """Resolves a reference to a symbol, either from this scope or an external scope."""
@@ -815,9 +585,11 @@ class Scope(ast.NodeVisitor):
             return None
         return nameInfo
 
-    def isBound(self, name):
-        """Returns true if a symbol is defined in this scope."""
-        return self.getDefinition(name) is not None
+    def isBound(self, name, irDefn=None):
+        """Returns whether a symbol and definition is bound in this scope."""
+        return (name in self.bindings and
+                (irDefn is None or
+                 any(d.irDefn is irDefn for d in self.bindings[name].overloads)))
 
     def isShadow(self, name):
         """Returns true if a symbol is defined in an outer scope."""
@@ -892,14 +664,6 @@ class Scope(ast.NodeVisitor):
         self.info.setUseInfo(useAstId, useInfo)
         return useInfo
 
-    def resolveOverrides(self):
-        """For bindings with multiple definitions, resolves which definitions are overloads and
-        which are overriden (and by which others).
-
-        All of the overloaded definitions must have type information before this is called.
-        This only needs to be performed in scopes that support overrides."""
-        pass
-
     def isLocal(self):
         """Returns true if values defined in the parent scope are accessible in this scope."""
         return isinstance(self.ast, ast.BlockExpression) or \
@@ -940,7 +704,7 @@ class Scope(ast.NodeVisitor):
         isStatic = False
         isGlobal = False
         while True:
-            if not self.isLocal():
+            if not current.isLocal():
                 isStatic |= STATIC in self.getIrDefn().flags
             current = current.parent
             isWithin |= current.scopeId is id
@@ -960,7 +724,7 @@ class Scope(ast.NodeVisitor):
     def findEnclosingClass(self):
         """Returns the IR class enclosing this scope, if there is one. If this is a class scope,
         this will return the class itself."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def capture(self, useInfo):
         """Makes the named non-local value defined in defnScope accessible in this scope.
@@ -986,7 +750,7 @@ class Scope(ast.NodeVisitor):
         """Returns True if definitions in this scope must be captured to be available in other
         scopes, for example for function and class scopes. Returns False if those definitions
         are available in all scopes, for example for global, builtin, and package scopes."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def captureScopeContext(self):
         """Makes this scope available for capturing.
@@ -994,17 +758,17 @@ class Scope(ast.NodeVisitor):
         For functions, this creates an empty context class and a variable containing an in
         instance of that class (unless they have already been created). Nothing is done for
         classes since instances can already be used as contexts."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def captureInContext(self, defnInfo, irContextClass):
         """Stores the given definition in the given context class.
 
         Returns the field storing the definition in the context class."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def makeClosure(self):
         """Ensures this scope can store contexts from parent scopes."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def closureCaptureContext(self, scopeId):
         """Ensures a closure class captures a specific context from a parent scope.
@@ -1030,7 +794,7 @@ class Scope(ast.NodeVisitor):
 
         Must be implemented by subclasses.
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def scopeForFunction(self, shortName, ast):
         return self.getOrCreateScope(shortName, ast, self.newScopeForFunction)
@@ -1040,7 +804,7 @@ class Scope(ast.NodeVisitor):
 
         Must be implemented by subclasses.
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def scopeForClass(self, shortName, ast):
         return self.getOrCreateScope(shortName, ast, self.newScopeForClass)
@@ -1050,7 +814,17 @@ class Scope(ast.NodeVisitor):
 
         Must be implemented by subclasses.
         """
-        raise NotImplementedError
+        raise NotImplementedError()
+
+    def scopeForTrait(self, shortName, ast):
+        return self.getOrCreateScope(shortName, ast, self.newScopeForTrait)
+
+    def newScopeForTrait(self, prefix, ast):
+        """Creates a new scope for trait definition.
+
+        Must be implemented by subclasses.
+        """
+        raise NotImplementedError()
 
     def scopeForExistential(self, ast):
         return self.getOrCreateScope(ir.EXISTENTIAL_SUFFIX, ast, self.newScopeForExistential)
@@ -1110,8 +884,10 @@ class GlobalScope(Scope):
                 self.info.package.entryFunction = irDefn.id
         elif isinstance(astDefn, ast.ClassDefinition):
             irDefn, shouldBind = self.createIrClassDefn(astDefn)
+        elif isinstance(astDefn, ast.TraitDefinition):
+            irDefn, shouldBind = self.createIrTraitDefn(astDefn)
         else:
-            raise NotImplementedError
+            raise NotImplementedError()
         return irDefn, shouldBind, True
 
     def isDefinedAutomatically(self, astDefn):
@@ -1140,6 +916,9 @@ class GlobalScope(Scope):
 
     def newScopeForClass(self, prefix, ast):
         return ClassScope(prefix, ast, self)
+
+    def newScopeForTrait(self, prefix, ast):
+        return TraitScope(prefix, ast, self)
 
 
 class FunctionScope(Scope):
@@ -1179,7 +958,7 @@ class FunctionScope(Scope):
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([STATIC]), astDefn.location)
             if STATIC not in flags:
-                raise NotImplementedError
+                raise NotImplementedError()
             flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
             irDefn = self.info.package.addTypeParameter(name, sourceName=astDefn.name,
                                                         astDefn=astDefn, flags=flags)
@@ -1220,7 +999,7 @@ class FunctionScope(Scope):
         elif isinstance(astDefn, ast.ClassDefinition):
             irDefn, shouldBind = self.createIrClassDefn(astDefn)
         else:
-            raise NotImplementedError
+            raise NotImplementedError()
         isVisible = False
         return irDefn, shouldBind, isVisible
 
@@ -1287,12 +1066,12 @@ class FunctionScope(Scope):
             defnInfo.irDefn = irCaptureField
         elif isinstance(defnInfo.irDefn, ir.Function):
             # TODO
-            raise NotImplementedError
+            raise NotImplementedError()
         elif isinstance(defnInfo.irDefn, ir.Class):
             # TODO
-            raise NotImplementedError
+            raise NotImplementedError()
         else:
-            raise NotImplementedError
+            raise NotImplementedError()
 
     def makeClosure(self):
         # Check if the function is already a closure.
@@ -1357,6 +1136,9 @@ class FunctionScope(Scope):
 
     def newScopeForClass(self, prefix, ast):
         return ClassScope(prefix, ast, self)
+
+    def newScopeForTrait(self, prefix, ast):
+        return TraitScope(prefix, ast, self)
 
     def finish(self):
         if not self.isLocal():
@@ -1472,7 +1254,7 @@ class ClassScope(Scope):
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([STATIC, COVARIANT, CONTRAVARIANT]), astDefn.location)
             if STATIC not in flags:
-                raise NotImplementedError
+                raise NotImplementedError()
             flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
             irDefn = self.info.package.addTypeParameter(name, sourceName=astDefn.name,
                                                         astDefn=astDefn, flags=flags)
@@ -1523,10 +1305,6 @@ class ClassScope(Scope):
             irScopeDefn.methods.append(irDefn)
         return irDefn, shouldBind, isVisible
 
-    def resolveOverrides(self):
-        for nameInfo in self.bindings.values():
-            nameInfo.resolveOverrides()
-
     def canImport(self, defnInfo):
         if not super(ClassScope, self).canImport(defnInfo):
             return False
@@ -1568,6 +1346,119 @@ class ClassScope(Scope):
     def newScopeForClass(self, prefix, ast):
         return ClassScope(prefix, ast, self)
 
+    def newScopeForTrait(self, prefix, ast):
+        return TraitScope(prefix, ast, self)
+
+
+class TraitScope(Scope):
+    def __init__(self, prefix, ast, parent):
+        super(TraitScope, self).__init__(prefix, ast, ScopeId(ast.id), parent, parent.info)
+        irDefn = self.getIrDefn()
+        self.info.setScope(irDefn.id, self)
+        contextInfo = self.info.getContextInfo(self.scopeId)
+        contextInfo.irContextClass = irDefn
+
+    def getClass(self):
+        return getIrDefn()
+
+    def createIrDefn(self, astDefn, astVarDefn):
+        irScopeDefn = self.getIrDefn()
+        flags = getFlagsFromAstDefn(astDefn, astVarDefn)
+        shouldBind = True
+        isVisible = True
+        if isinstance(astDefn, ast.VariablePattern):
+            raise NotImplementedError()
+        elif isinstance(astDefn, ast.FunctionDefinition):
+            if astDefn.body is not None:
+                if ABSTRACT in flags:
+                    raise ScopeException(astDefn.location,
+                                         "%s: abstract method must not have body" %
+                                         astDefn.name)
+                if NATIVE in flags:
+                    raise ScopeException(astDefn.location,
+                                         "%s: native method must not have body")
+            else:
+               flags |= frozenset([ABSTRACT])
+
+            if astDefn.name == "this":
+                raise ScopeException(astDefn.location,
+                                     "constructors may not be defined for traits")
+
+            name = self.makeName(astDefn.name)
+            implicitTypeParams = self.getImplicitTypeParameters()
+            if STATIC in flags:
+                checkFlags(flags, frozenset([STATIC, PUBLIC, PROTECTED, PRIVATE, NATIVE]),
+                           astDefn.location)
+                flags |= frozenset([METHOD])
+                irDefn = self.info.package.addFunction(name, sourceName=astDefn.name,
+                                                       astDefn=astDefn,
+                                                       typeParameters=implicitTypeParams,
+                                                       variables=[], flags=flags,
+                                                       definingClass=irScopeDefn)
+            else:
+                checkFlags(flags, frozenset([ABSTRACT, FINAL, PUBLIC, PROTECTED, PRIVATE,
+                                             OVERRIDE, NATIVE]),
+                           astDefn.location)
+                irDefn = self.info.package.addFunction(name, sourceName=astDefn.name,
+                                                       astDefn=astDefn,
+                                                       typeParameters=implicitTypeParams,
+                                                       variables=[], flags=flags)
+                self.makeMethod(irDefn, irScopeDefn)
+            irScopeDefn.methods.append(irDefn)
+        else:
+            assert isinstance(astDefn, ast.TypeParameter)
+            name = self.makeName(astDefn.name)
+            checkFlags(flags, frozenset([STATIC, COVARIANT, CONTRAVARIANT]), astDefn.location)
+            if STATIC not in flags:
+                raise NotImplementedError()
+            flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
+            irDefn = self.info.package.addTypeParameter(name, sourceName=astDefn.name,
+                                                        astDefn=astDefn, flags=flags)
+            irDefn.clas = irScopeDefn
+            irScopeDefn.typeParameters.append(irDefn)
+            isVisible = False
+        return irDefn, shouldBind, isVisible
+
+    def canImport(self, defnInfo):
+        if not super(TraitScope, self).canImport(defnInfo):
+            return False
+        flags = defnInfo.irDefn.flags
+        return PRIVATE not in flags and PROTECTED not in flags and STATIC in flags
+
+    def isDefinedAutomatically(self, astDefn):
+        return isinstance(astDefn, ast.FunctionDefinition)
+
+    def findEnclosingClass(self):
+        return self.getIrDefn()
+
+    def requiresCapture(self):
+        return True
+
+    def captureScopeContext(self):
+        pass
+
+    def captureInContext(self, defnInfo, irContextClass):
+        pass
+
+    def makeClosure(self):
+        pass
+
+    def newLocalScope(self, prefix, ast):
+        return FunctionScope(prefix, ast, self)
+
+    def newScopeForFunction(self, prefix, ast):
+        scope = FunctionScope(prefix, ast, self)
+        irDefn = scope.getIrDefn()
+        if irDefn.isMethod():
+            scope.configureAsMethod(self.scopeId, self.getIrDefn())
+        return scope
+
+    def newScopeForClass(self, prefix, ast):
+        return ClassScope(prefix, ast, self)
+
+    def newScopeForTrait(self, prefix, ast):
+        return TraitScope(prefix, ast, self)
+
 
 class ExistentialTypeScope(Scope):
     def __init__(self, prefix, ast, parent):
@@ -1583,7 +1474,7 @@ class ExistentialTypeScope(Scope):
             irDefn = self.info.package.addTypeParameter(name, sourceName=astDefn.name,
                                                         astDefn=astDefn, flags=flags)
         else:
-            raise NotImplementedError
+            raise NotImplementedError()
 
         shouldBind = True
         isVisible = False
@@ -1601,27 +1492,31 @@ class ExistentialTypeScope(Scope):
 
     def captureScopeContext(self):
         # Nothing can be captured.
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def captureInContext(self, defnInfo, irContextClass):
         # Nothing can be captured.
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def makeClosure(self):
         # Nothing can be captured.
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def newLocalScope(self, prefix, ast):
         # Not syntactically possible.
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def newScopeForFunction(self):
         # Not syntactically possible.
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def newScopeForClass(self):
         # Not syntactically possible.
-        raise NotImplementedError
+        raise NotImplementedError()
+
+    def newScopeForTrait(self):
+        # Not syntactically possible.
+        raise NotImplementedError()
 
 
 class BuiltinGlobalScope(Scope):
@@ -1649,7 +1544,6 @@ class BuiltinClassScope(Scope):
         self.info.setScope(irClass.id, self)
         self.defnInfo = classDefnInfo
         if not hasattr(irClass, "isPrimitive"):
-            parent.info.setClassInfo(irClass, ClassInfo(irClass))
             for ctor in irClass.constructors:
                 defnInfo = DefnInfo(ctor, self.scopeId, True, self.scopeId, NOT_HERITABLE)
                 self.bind(ir.CONSTRUCTOR_SUFFIX, defnInfo)
@@ -1695,6 +1589,8 @@ class PackageScope(Scope):
                                  if PUBLIC in f.flags and METHOD not in f.flags)
             exportedClasses = [c for c in package.classes if PUBLIC in c.flags]
             exportedDefns.extend(exportedClasses)
+            exportedTraits = [tr for tr in package.traits if PUBLIC in tr.flags]
+            exportedDefns.extend(exportedTraits)
             for defn in exportedDefns:
                 defnInfo = DefnInfo(defn, scopeId, True)
                 self.bind(defn.name.short(), defnInfo)
@@ -1702,6 +1598,9 @@ class PackageScope(Scope):
             for clas in exportedClasses:
                 scope = ExternClassScope(ScopeId(clas.name), self, info, clas)
                 self.info.setScope(clas.id, scope)
+            for trait in exportedTraits:
+                scope = ExternTraitScope(ScopeId(trait.name), self, info, trait)
+                self.info.setScope(trait.id, scope)
 
         packageBindings = {}
         for name in packageNames:
@@ -1779,6 +1678,17 @@ class ExternClassScope(Scope):
         return True
 
 
+class ExternTraitScope(Scope):
+    def __init__(self, scopeId, parent, info, trait):
+        super(ExternTraitScope, self).__init__(trait.name.components, None,
+                                               scopeId, parent, info)
+        for method in trait.methods:
+            if PUBLIC in method.flags:
+                defnInfo = DefnInfo(method, self.scopeId, isVisible=True)
+                self.bind(method.name.short(), defnInfo)
+                self.define(method.name.short())
+
+
 class ScopeVisitor(ast.NodeVisitor):
     """Abstract base class for scope analysis related visitor.
 
@@ -1791,7 +1701,7 @@ class ScopeVisitor(ast.NodeVisitor):
 
     def createChildVisitor(self, scope):
         """Create a new visitor for a descendant scope. Subclasses must override."""
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def visitVariableDefinition(self, node):
         if node.expression is not None:
@@ -1806,6 +1716,11 @@ class ScopeVisitor(ast.NodeVisitor):
 
     def visitClassDefinition(self, node):
         scope = self.scope.scopeForClass(node.name, node)
+        visitor = self.createChildVisitor(scope)
+        visitor.visitChildren(node)
+
+    def visitTraitDefinition(self, node):
+        scope = self.scope.scopeForTrait(node.name, node)
         visitor = self.createChildVisitor(scope)
         visitor.visitChildren(node)
 
@@ -1869,6 +1784,10 @@ class DeclarationVisitor(ScopeVisitor):
         self.scope.declare(node)
         super(DeclarationVisitor, self).visitClassDefinition(node)
 
+    def visitTraitDefinition(self, node):
+        self.scope.declare(node)
+        super(DeclarationVisitor, self).visitTraitDefinition(node)
+
     def visitPrimaryConstructorDefinition(self, node):
         self.scope.declare(node)
         self.visitChildren(node)
@@ -1895,92 +1814,6 @@ class DeclarationVisitor(ScopeVisitor):
         if node.ty is not None:
             self.visit(node.ty)
         self.scope.declare(node, astVarDefn)
-
-
-class InheritanceVisitor(ScopeVisitor):
-    def __init__(self, scope, inheritanceGraph, subtypeGraph):
-        super(InheritanceVisitor, self).__init__(scope)
-        self.inheritanceGraph = inheritanceGraph
-        self.subtypeGraph = subtypeGraph
-
-    def createChildVisitor(self, scope):
-        return InheritanceVisitor(scope, self.inheritanceGraph, self.subtypeGraph)
-
-    def visitClassDefinition(self, node):
-        scope = self.scope.scopeForClass(node.name, node)
-        irClass = scope.getIrDefn()
-        classInfo = self.info.getClassInfo(irClass)
-        superclassScopeId = None
-
-        if node.supertype is None:
-            classInfo.superclassInfo = self.info.getClassInfo(BUILTIN_ROOT_CLASS_ID)
-            self.subtypeGraph.addEdge(irClass.id, BUILTIN_ROOT_CLASS_ID)
-        else:
-            supertypeIrDefn = self.addTypeToSubtypeGraph(irClass.id, scope, node.supertype)
-            if not isinstance(supertypeIrDefn, ir.Class):
-                raise ScopeException(node.location, "inheritance from non-class type")
-            if supertypeIrDefn.isFinal():
-                raise ScopeException(node.location, "inheritance from final class")
-            superclassInfo = self.info.getClassInfo(supertypeIrDefn)
-            classInfo.superclassInfo = superclassInfo
-
-            if supertypeIrDefn.isLocal():
-                if classInfo is superclassInfo:
-                    raise ScopeException(node.location, "class cannot inherit from itself")
-                superclassScopeId = self.info.getScope(supertypeIrDefn).scopeId
-
-        if superclassScopeId is None:
-            self.inheritanceGraph.addVertex(scope.scopeId)
-        else:
-            self.inheritanceGraph.addEdge(scope.scopeId, superclassScopeId)
-
-        super(InheritanceVisitor, self).visitClassDefinition(node)
-
-    def visitTypeParameter(self, node):
-        irParam = self.info.getDefnInfo(node).irDefn
-        if node.upperBound is not None:
-            self.addTypeToSubtypeGraph(irParam.id, self.scope, node.upperBound)
-        if node.lowerBound is not None:
-            self.addTypeToSubtypeGraph(irParam.id, self.scope, node.lowerBound, reverse=True)
-
-    def addTypeToSubtypeGraph(self, id, scope, astType, reverse=False):
-        assert isinstance(id, DefnId)
-        irDefn = self.lookupTypeDefn(scope, astType)
-        if not irDefn.isTypeDefn():
-            raise ScopeException(astType.location, "inheritance from non-class definition")
-        if not reverse:
-            self.subtypeGraph.addEdge(id, irDefn.id)
-        else:
-            self.subtypeGraph.addEdge(irDefn.id, id)
-        return irDefn
-
-    def lookupTypeDefn(self, scope, astType):
-        if not isinstance(astType, ast.ClassType):
-            raise ScopeException(astType.location, "inheritance from non-class type")
-
-        hasPrefix = False
-        for component in astType.prefix:
-            nameInfo = scope.lookup(component.name, component.location,
-                                    fromExternal=hasPrefix, ignoreDefnOrder=True)
-            if not nameInfo.isScope():
-                raise ScopeException(component.location,
-                                     "%s: not a scope name" % component.name)
-            defnInfo = nameInfo.getDefnInfo()
-            irDefn = defnInfo.irDefn
-            if isinstance(irDefn, ir.PackagePrefix):
-                scope = self.info.getScope(defnInfo.scopeId).scopeForPrefix(name, loc)
-            else:
-                scope = self.info.getScope(irDefn)
-            hasPrefix = True
-
-        nameInfo = scope.lookup(astType.name, astType.location,
-                                fromExternal=hasPrefix, ignoreDefnOrder=True)
-        if nameInfo.isOverloaded():
-            raise ScopeException(astType.location, "%s: not a type name" % astType.name)
-        irDefn = nameInfo.getDefnInfo().irDefn
-        if not isinstance(irDefn, ir.IrDefinition) or not irDefn.isTypeDefn():
-            raise ScopeException(astType.location, "%s: not a type name" % astType.name)
-        return irDefn
 
 
 def getFlagsFromAstDefn(astDefn, astVarDefn):

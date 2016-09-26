@@ -16,6 +16,7 @@
 #include "field.h"
 #include "global.h"
 #include "name.h"
+#include "object-type-defn.h"
 #include "package.h"
 #include "roots.h"
 #include "string.h"
@@ -60,7 +61,7 @@ Function::Function(Name* name,
                    BlockArray<TypeParameter>* typeParameters,
                    Type* returnType,
                    BlockArray<Type>* parameterTypes,
-                   Class* definingClass,
+                   ObjectTypeDefn* definingClass,
                    word_t localsSize,
                    const vector<u8>& instructions,
                    LengthArray* blockOffsets,
@@ -101,7 +102,7 @@ Local<Function> Function::create(Heap* heap,
                                  const Handle<BlockArray<TypeParameter>>& typeParameters,
                                  const Handle<Type>& returnType,
                                  const Handle<BlockArray<Type>>& parameterTypes,
-                                 const Handle<Class>& definingClass,
+                                 const Handle<ObjectTypeDefn>& definingClass,
                                  word_t localsSize,
                                  const vector<u8>& instructions,
                                  const Handle<LengthArray>& blockOffsets,
@@ -671,6 +672,70 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
+        case TYTS: {
+          i64 traitId = readVbn(bytecode, &pcOffset);
+          Local<Trait> trait;
+          if (isBuiltinId(traitId)) {
+            trait = handle(roots->getBuiltinTrait(static_cast<BuiltinId>(traitId)));
+          } else {
+            trait = handle(package->getTrait(traitId));
+          }
+          vector<Local<Type>> typeArgs;
+          currentMap.popTypeArgs(trait->typeParameterCount(), &typeArgs);
+          auto type = Type::create(heap, trait, typeArgs);
+          currentMap.pushTypeArg(type);
+          break;
+        }
+
+        case TYTSF: {
+          auto depIndex = readVbn(bytecode, &pcOffset);
+          auto externIndex = readVbn(bytecode, &pcOffset);
+          auto trait = handle(package->dependencies()->get(depIndex)
+              ->linkedTraits()->get(externIndex));
+          vector<Local<Type>> typeArgs;
+          currentMap.popTypeArgs(trait->typeParameterCount(), &typeArgs);
+          auto type = Type::create(heap, trait, typeArgs);
+          currentMap.pushTypeArg(type);
+          break;
+        }
+
+        case TYTD: {
+          i64 traitId = readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          Local<Trait> trait;
+          if (isBuiltinId(traitId)) {
+            trait = handle(roots->getBuiltinTrait(static_cast<BuiltinId>(traitId)));
+          } else {
+            trait = handle(package->getTrait(traitId));
+          }
+          vector<Local<Type>> typeArgs;
+          currentMap.popTypeArgs(trait->typeParameterCount(), &typeArgs);
+          currentMap.pop(trait->typeParameterCount());
+          auto type = Type::create(heap, trait, typeArgs);
+          currentMap.pushTypeArg(type);
+          auto valueType = handle(roots->getBuiltinType(BUILTIN_TYPE_CLASS_ID));
+          currentMap.push(valueType);
+          break;
+        }
+
+        case TYTDF: {
+          auto depIndex = readVbn(bytecode, &pcOffset);
+          auto externIndex = readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          auto trait = handle(package->dependencies()->get(depIndex)
+              ->linkedTraits()->get(externIndex));
+          vector<Local<Type>> typeArgs;
+          currentMap.popTypeArgs(trait->typeParameterCount(), &typeArgs);
+          currentMap.pop(trait->typeParameterCount());
+          auto type = Type::create(heap, trait, typeArgs);
+          currentMap.pushTypeArg(type);
+          auto valueType = handle(roots->getBuiltinType(BUILTIN_TYPE_CLASS_ID));
+          currentMap.push(valueType);
+          break;
+        }
+
         case TYVS: {
           auto typeParamId = readVbn(bytecode, &pcOffset);
           ASSERT(!isBuiltinId(typeParamId));
@@ -768,8 +833,6 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         }
 
         case CASTC: {
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
           auto type = currentMap.popTypeArg();
           currentMap.pop();
           currentMap.pop();
@@ -780,8 +843,6 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         case CASTCBR: {
           i64 trueBlockIndex = readVbn(bytecode, &pcOffset);
           i64 falseBlockIndex = readVbn(bytecode, &pcOffset);
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
           auto type = currentMap.popTypeArg();
           currentMap.pop();
           currentMap.pcOffset = function->blockOffset(falseBlockIndex);
@@ -849,6 +910,44 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           for (word_t i = 0, n = callee->parameterTypes()->length(); i < n; i++)
             currentMap.pop();
           auto returnType = currentMap.substituteReturnType(callee);
+          currentMap.popTypeArgs();
+          currentMap.push(returnType);
+          break;
+        }
+
+        case CALLVT: {
+          readVbn(bytecode, &pcOffset);  // argCount
+          auto traitIndex = readVbn(bytecode, &pcOffset);
+          auto methodIndex = readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          Local<Trait> trait;
+          if (traitIndex < 0) {
+            trait = handle(roots->getBuiltinTrait(static_cast<BuiltinId>(traitIndex)));
+          } else {
+            trait = handle(package->getTrait(traitIndex));
+          }
+          auto callee = handle(trait->methods()->get(methodIndex));
+
+          auto returnType = currentMap.substituteReturnType(callee);
+          currentMap.pop(callee->parameterTypes()->length());
+          currentMap.popTypeArgs();
+          currentMap.push(returnType);
+          break;
+        }
+
+        case CALLVTF: {
+          readVbn(bytecode, &pcOffset);  // argCount
+          auto depIndex = static_cast<id_t>(readVbn(bytecode, &pcOffset));
+          auto externIndex = static_cast<length_t>(readVbn(bytecode, &pcOffset));
+          auto methodIndex = readVbn(bytecode, &pcOffset);
+          currentMap.pcOffset = pcOffset;
+          maps.push_back(currentMap);
+          auto callee = handle(package->dependencies()->get(depIndex)
+              ->linkedTraits()->get(externIndex)->methods()->get(methodIndex));
+
+          auto returnType = currentMap.substituteReturnType(callee);
+          currentMap.pop(callee->parameterTypes()->length());
           currentMap.popTypeArgs();
           currentMap.push(returnType);
           break;

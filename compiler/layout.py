@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014,2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -42,6 +42,7 @@ def layout(tokensIn, skipAnalysis=False):
       ["var", ANY_PATTERN, "="],
       ["def", ANY_PATTERN, "="],
       ["class", ANY_PATTERN],
+      ["trait", ANY_PATTERN],
       ["if", "(", ANY_PATTERN, ")"],
       ["else"],
       ["else", "if", "(", ANY_PATTERN, ")"],
