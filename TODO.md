@@ -10,8 +10,6 @@
 - variadic type parameterization
 - dynamic type parameterization
 - template type parameterization
-- native functions
-- standard library
 - downcasting and type testing
 - default parameters
 - positional, keyword arguments
@@ -21,22 +19,24 @@
 - type inference for type arguments
 - type inference for lambda parameters
 - infer types for numeric literals
+- autoboxing
 - class closures
 - inner classes
 - `static` attribute for closures
 - `static` attribute for inner classes
 - trait fields
-- implicit / extension traits
+- impl traits
 - tail recursion
 - awesome for loops
 - dynamic features
 - doc annotations
 - list literal
-- map literal
-- number classes and autoboxing
+- dict literal
+- mutable / non-mutable references
+- lifetimes and borrowing
+- structs
 
 ## VM features
-- native object access (depends on dynamic features)
 - backtrace implementation for exceptions
 
 ## Standard library features
@@ -45,6 +45,7 @@
 - sets
 - net
 - concurrency
+- unit testing
 
 ## Emacs mode
 - match types properly
