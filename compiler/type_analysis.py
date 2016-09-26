@@ -953,8 +953,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             elementTypes = tuple(self.visit(p, ety, mode)
                                  for p, ety in zip(node.patterns, exprTy.typeArguments))
         else:
-            elementTypes = tuple(self.visit(p, ir_t.getRootClassType(), mode)
-                                 for p in node.patterns)
+            elementExprType = None if exprTy is None else ir_t.getRootClassType()
+            elementTypes = tuple(self.visit(p, elementExprType, mode) for p in node.patterns)
         tupleTy = ir_t.ClassType(tupleClass, elementTypes)
         patTy = self.findPatternType(tupleTy, exprTy, mode, True, None, node.location)
         return patTy
@@ -1254,8 +1254,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             exprTy (Type?): the type of the expression being matched. May be `None` if there is
                 no expression (for example, a parameter or variable declaration). Either `patTy`
                 or `exprTy` must be specified.
-            mode (symbol): either `COMPILE_FOR_VALUE` for variables and parameters or
-                `COMPILE_FOR_MATCH` for pattern matching.
+            mode (symbol): one of `COMPILE_FOR_UNINITIALIZED` (for uninitialized variables),
+                `COMPILE_FOR_EFFECT` (for variables and parameters) or `COMPILE_FOR_MATCH`
+                (for pattern matching.
             isDestructure (bool): true if this is part of a destructuring pattern (just used
                 for tuple patterns). Checking is a little stricter if false, since sub-patterns
                 are not being matched.
@@ -1270,12 +1271,16 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             TypeException: for many reasons, for example, if no type can be inferred or if
                 types cannot be tested at runtime.
         """
+        assert (mode is COMPILE_FOR_UNINITIALIZED or
+                mode is COMPILE_FOR_EFFECT or
+                mode is COMPILE_FOR_MATCH)
+        assert not mode is COMPILE_FOR_UNINITIALIZED or exprTy is None
         nameStr = "%s: " % name if name is not None else ""
         scope = self.scope()
         if patTy is None and exprTy is None:
             raise TypeException(loc, nameStr + "type not specified")
         elif patTy is not None:
-            if mode is COMPILE_FOR_VALUE and \
+            if mode is COMPILE_FOR_EFFECT and \
                exprTy is not None and \
                not exprTy.isSubtypeOf(patTy):
                 raise TypeException(loc, nameStr + "expression doesn't match declared type")

@@ -215,6 +215,9 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testVariableWithoutType(self):
         self.assertRaises(TypeException, self.analyzeFromSource, "var x")
 
+    def testVariableWithSubtype(self):
+        self.assertRaises(TypeException, self.analyzeFromSource, "let x: String = Object()")
+
     def testConstructorBeforeField(self):
         source = "class Foo\n" + \
                  "  def this(x: i32) =\n" + \
