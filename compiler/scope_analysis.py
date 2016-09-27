@@ -216,11 +216,25 @@ class NameInfo(object):
         return scope
 
     def getInfoForConstructors(self, info):
+        """Returns NameInfo for constructors of this class.
+
+        This may only be called on a `NameInfo` for a class (`isClass` must return True).
+        This method queries the class's scope for constructors.
+
+        Arguments:
+            info (CompileInfo): used to access scopes.
+
+        Returns:
+            (NameInfo?): the `NameInfo` for constructors in the class's scope. If the class
+            has no constructors in its scope, `None` is returned. This happens with extern
+            classes without public constructors. For local classes, the returned `NameInfo`
+            will include private constructors. It is the caller's responsibility to check
+            access to these.
+        """
         assert self.isClass()
         irClass = self.getDefnInfo().irDefn
         classScope = info.getScope(irClass)
         ctorNameInfo = classScope.getDefinition(ir.CONSTRUCTOR_SUFFIX)
-        assert ctorNameInfo is not None
         return ctorNameInfo
 
 

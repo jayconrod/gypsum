@@ -1972,6 +1972,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         if irClass is getNothingClass():
             raise TypeException(loc, "cannot instantiate Nothing")
         nameInfo = nameInfo.getInfoForConstructors(self.info)
+        if nameInfo is None:
+            raise TypeException(loc, "%s: class has no visible constrcutors" % irClass.name)
         return nameInfo, receiverType
 
     def chooseDefnFromNameInfo(self, nameInfo, receiverType, typeArgs, argTypes, loc):

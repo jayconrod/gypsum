@@ -2327,3 +2327,14 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "abstract class HashSet[static K <: Hash[K]]\n" + \
                  "  abstract def new-table: HashTable[K]"
         self.analyzeFromSource(source)
+
+    def testExternClassWithoutVisibleCtor(self):
+        foo = Package(name=Name(["foo"]))
+        Bar = foo.addClass(Name(["Bar"]), typeParameters=[],
+                           supertypes=[getRootClassType()],
+                           constructors=[], fields=[],
+                           methods=[], flags=frozenset([PUBLIC]))
+        loader = FakePackageLoader([foo])
+
+        source = "let x = foo.Bar()"
+        self.assertRaises(TypeException, self.analyzeFromSource, source, packageLoader=loader)
