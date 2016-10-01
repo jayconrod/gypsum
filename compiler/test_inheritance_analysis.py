@@ -603,3 +603,15 @@ class TestInheritanceAnalysis(unittest.TestCase):
         self.assertEquals(1, len(BarToString.overrides))
         self.assertIs(ObjectToString, BarToString.overrides[0])
         self.assertIs(BarToString, ObjectToString.overridenBy[Bar.id])
+
+    def testAbstractClassMethodNotOverridenInConcreteClass(self):
+        source = "abstract class Foo\n" + \
+                 "  abstract def f: unit\n" + \
+                 "class Bar <: Foo"
+        self.assertRaises(InheritanceException, self.analyzeFromSource, source)
+
+    def testAbstractTraitMethodNotOverridenInConcreteClass(self):
+        source = "trait Foo\n" + \
+                 "  def f: unit\n" + \
+                 "class Bar <: Foo"
+        self.assertRaises(InheritanceException, self.analyzeFromSource, source)

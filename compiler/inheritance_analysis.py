@@ -269,6 +269,7 @@ def copyInheritedDefinitions(info, inheritanceGraph, bases):
         if not id.isLocal():
             continue
         scope = info.getScope(id)
+        irScopeDefn = scope.getIrDefn()
         superScopes = [info.getScope(baseId) for baseId in bases[id]]
         overridenIds = set()
 
@@ -323,9 +324,15 @@ def copyInheritedDefinitions(info, inheritanceGraph, bases):
                     (isinstance(defnInfo.irDefn, ir.IrTopDefn) and
                      defnInfo.irDefn.id in overridenIds)):
                     continue
+                if isinstance(irScopeDefn, ir.Class) and \
+                   ABSTRACT not in irScopeDefn.flags and \
+                   isinstance(defnInfo.irDefn, ir.Function) and \
+                   ABSTRACT in defnInfo.irDefn.flags:
+                    raise InheritanceException(irScopeDefn.astDefn.location,
+                                               "%s: concrete class does not override abstract method %s" %
+                                               (irScopeDefn.name, defnInfo.irDefn.name))
                 scope.bind(name, defnInfo.inherit(scope.scopeId))
 
-        irScopeDefn = scope.getIrDefn()
         if isinstance(irScopeDefn, ir.Class):
             superclass = irScopeDefn.superclass()
             if ARRAY in superclass.flags:
