@@ -110,7 +110,7 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         otherPackage = ir.Package()
         method = otherPackage.addFunction(ir.Name(["foo"]), returnType=ir_types.UnitType,
                                           typeParameters=[], parameterTypes=[],
-                                          flags=frozenset([METHOD]))
+                                          flags=frozenset([PUBLIC, METHOD]))
         loader = utils_test.FakePackageLoader([otherPackage])
         externalizer = externalization.Externalizer(package, loader)
         externMethod = externalizer.externalizeDefn(method)
