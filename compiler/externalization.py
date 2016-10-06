@@ -108,7 +108,8 @@ class Externalizer(object):
             externDefn.constructors = [self.externalizeMethod(ctor, dep)
                                        for ctor in defn.constructors
                                        if flags.PUBLIC in ctor.flags]
-            externDefn.fields = [f for f in defn.fields if flags.PUBLIC in f.flags]
+            externDefn.fields = [f for f in defn.fields
+                                 if flags.PUBLIC in f.flags or flags.ARRAY in f.flags]
             each(self.package.addName, (f.name for f in externDefn.fields))
             each(self.externalizeType, (f.type for f in externDefn.fields))
             externDefn.methods = [self.externalizeMethod(m, dep)

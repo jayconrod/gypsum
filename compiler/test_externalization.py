@@ -158,6 +158,20 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
         expected.methods = [expectedMethod, externBuiltinMethod]
         self.assertEquals(expected, externClass)
 
+    def testExternalizeArrayClassWithPrivateLength(self):
+        clas = self.otherPackage.addClass(ir.Name(["C"]),
+                                          typeParameters=[],
+                                          supertypes=[self.rootClassType],
+                                          constructors=[],
+                                          methods=[], elementType=ir_types.I8Type,
+                                          flags=frozenset([flags.ARRAY, flags.FINAL, flags.PUBLIC]))
+        lengthField = self.otherPackage.newField(ir.Name(["C", ir.ARRAY_LENGTH_SUFFIX]),
+                                                 type=ir_types.I32Type,
+                                                 flags=frozenset([flags.ARRAY, flags.LET, flags.PRIVATE]))
+        clas.fields = [lengthField]
+        externClass = self.externalizer.externalizeDefn(clas)
+        self.assertEquals([lengthField], externClass.fields)
+
     def testExternalizeTrait(self):
         trait = self.otherPackage.addTrait(ir.Name(["Tr"]),
                                            typeParameters=[self.param],
