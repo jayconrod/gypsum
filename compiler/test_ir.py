@@ -12,6 +12,7 @@ from flags import METHOD, STATIC
 import ids
 import ir
 from ir_types import *
+from name import Name
 import utils_test
 
 
@@ -105,7 +106,7 @@ class TestIr(utils_test.TestCaseWithDefinitions):
 
     def testMangleFunctionNameSimple(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
-        f = self.makeFunction(ir.Name(["foo", "bar", "baz"]), returnType=UnitType,
+        f = self.makeFunction(Name(["foo", "bar", "baz"]), returnType=UnitType,
                               typeParameters=[],
                               parameterTypes=[UnitType, BooleanType, I8Type, I16Type,
                                               I32Type, I64Type, F32Type, F64Type])
@@ -113,48 +114,48 @@ class TestIr(utils_test.TestCaseWithDefinitions):
 
     def testMangleFunctionNameClasses(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
-        P = package.addTypeParameter(ir.Name(["P"]))
-        Q = package.addTypeParameter(ir.Name(["Q"]))
-        Local = package.addClass(ir.Name(["local", "Local"]), typeParameters=[P, Q])
-        otherPackage = ir.Package(name=ir.Name(["foo", "bar", "baz"]))
+        P = package.addTypeParameter(Name(["P"]))
+        Q = package.addTypeParameter(Name(["Q"]))
+        Local = package.addClass(Name(["local", "Local"]), typeParameters=[P, Q])
+        otherPackage = ir.Package(name=Name(["foo", "bar", "baz"]))
         otherPackage.id.index = 0
-        S = otherPackage.addTypeParameter(ir.Name(["S"]))
-        T = otherPackage.addTypeParameter(ir.Name(["T"]))
-        Foreign = otherPackage.addClass(ir.Name(["foreign", "Foreign"]), typeParameters=[S, T])
+        S = otherPackage.addTypeParameter(Name(["S"]))
+        T = otherPackage.addTypeParameter(Name(["T"]))
+        Foreign = otherPackage.addClass(Name(["foreign", "Foreign"]), typeParameters=[S, T])
         Foreign.id.packageId = otherPackage.id
         package.dependencies = [ir.PackageDependency(otherPackage.name, None, None)]
 
-        X = package.addTypeParameter(ir.Name(["X"]), upperBound=getRootClassType(),
+        X = package.addTypeParameter(Name(["X"]), upperBound=getRootClassType(),
                                      lowerBound=getNothingClassType(),
                                      flags=frozenset([STATIC]))
         XType = VariableType(X)
-        Y = package.addTypeParameter(ir.Name(["Y"]), upperBound=getRootClassType(),
+        Y = package.addTypeParameter(Name(["Y"]), upperBound=getRootClassType(),
                                      lowerBound=getNothingClassType())
         YType = VariableType(Y, frozenset([NULLABLE_TYPE_FLAG]))
         LocalType = ClassType(Local, (XType, YType))
         ForeignType = ClassType(Foreign, (YType, XType), frozenset([NULLABLE_TYPE_FLAG]))
         BuiltinType = getRootClassType()
 
-        f = package.addFunction(ir.Name(["quux"]), typeParameters=[X, Y],
+        f = package.addFunction(Name(["quux"]), typeParameters=[X, Y],
                                 parameterTypes=[LocalType, ForeignType, BuiltinType])
         expected = "4quux[s<C::6Object>C::7Nothing,<C::6Object>C::7Nothing](C:11local.Local[V0,V1?],C11foo.bar.baz:15foreign.Foreign[V1?,V0]?,C::6Object)"
         self.assertEquals(expected, ir.mangleFunctionName(f, package))
 
     def testMangleFunctionNameExistential(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
-        S = package.addTypeParameter(ir.Name(["S"]), upperBound=getRootClassType(),
+        S = package.addTypeParameter(Name(["S"]), upperBound=getRootClassType(),
                                      lowerBound=getNothingClassType())
-        T = package.addTypeParameter(ir.Name(["T"]), upperBound=getRootClassType(),
+        T = package.addTypeParameter(Name(["T"]), upperBound=getRootClassType(),
                                      lowerBound=getNothingClassType())
-        C = package.addClass(ir.Name(["C"]), typeParameters=[S, T])
-        P = package.addTypeParameter(ir.Name(["P"]), upperBound=getRootClassType(),
+        C = package.addClass(Name(["C"]), typeParameters=[S, T])
+        P = package.addTypeParameter(Name(["P"]), upperBound=getRootClassType(),
                                      lowerBound=getNothingClassType())
         PType = VariableType(P)
-        X = package.addTypeParameter(ir.Name(["X"]), upperBound=getRootClassType(),
+        X = package.addTypeParameter(Name(["X"]), upperBound=getRootClassType(),
                                      lowerBound=getNothingClassType())
         XType = VariableType(X)
         eXType = ExistentialType((X,), ClassType(C, (PType, XType)))
-        f = package.addFunction(ir.Name(["foo"]), typeParameters=[P],
+        f = package.addFunction(Name(["foo"]), typeParameters=[P],
                                 parameterTypes=[eXType])
         expected = "3foo[<C::6Object>C::7Nothing](E[<C::6Object>C::7Nothing]C:1C[V0,V1])"
         self.assertEquals(expected, ir.mangleFunctionName(f, package))
@@ -162,18 +163,18 @@ class TestIr(utils_test.TestCaseWithDefinitions):
 
 class TestName(unittest.TestCase):
     def testFromStringBasic(self):
-        name = ir.Name.fromString("foo")
-        self.assertEquals(ir.Name(["foo"]), name)
-        name = ir.Name.fromString("foo.bar.baz")
-        self.assertEquals(ir.Name(["foo", "bar", "baz"]), name)
+        name = Name.fromString("foo")
+        self.assertEquals(Name(["foo"]), name)
+        name = Name.fromString("foo.bar.baz")
+        self.assertEquals(Name(["foo", "bar", "baz"]), name)
 
     def testFromStringChars(self):
-        name = ir.Name.fromString("||")
-        self.assertEquals(ir.Name(["||"]), name)
-        self.assertRaises(ValueError, ir.Name.fromString, "||", isPackageName=True)
+        name = Name.fromString("||")
+        self.assertEquals(Name(["||"]), name)
+        self.assertRaises(ValueError, Name.fromString, "||", isPackageName=True)
 
     def testUnicodeShortReturnsStr(self):
-        name = ir.Name([unicode("foo")])
+        name = Name([unicode("foo")])
         self.assertEquals(str, type(name.short()))
 
 
@@ -193,24 +194,24 @@ class TestPackageDependency(unittest.TestCase):
 
     def testFromStringBasic(self):
         dep = ir.PackageDependency.fromString("foo.bar")
-        expected = ir.PackageDependency(ir.Name(["foo", "bar"]), None, None)
+        expected = ir.PackageDependency(Name(["foo", "bar"]), None, None)
         self.assertNameAndVersionEquals(expected, dep)
 
     def testFromStringWithMin(self):
         dep = ir.PackageDependency.fromString("foo.bar:1.2")
-        expected = ir.PackageDependency(ir.Name(["foo", "bar"]),
+        expected = ir.PackageDependency(Name(["foo", "bar"]),
                                         ir.PackageVersion([1, 2]), None)
         self.assertNameAndVersionEquals(expected, dep)
 
     def testFromStringWithMax(self):
         dep = ir.PackageDependency.fromString("foo.bar:-3.4")
-        expected = ir.PackageDependency(ir.Name(["foo", "bar"]),
+        expected = ir.PackageDependency(Name(["foo", "bar"]),
                                         None, ir.PackageVersion([3, 4]))
         self.assertNameAndVersionEquals(expected, dep)
 
     def testFromStringWithBoth(self):
         dep = ir.PackageDependency.fromString("foo.bar:1.2-3.4")
-        expected = ir.PackageDependency(ir.Name(["foo", "bar"]),
+        expected = ir.PackageDependency(Name(["foo", "bar"]),
                                         ir.PackageVersion([1, 2]),
                                         ir.PackageVersion([3, 4]))
         self.assertNameAndVersionEquals(expected, dep)

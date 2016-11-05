@@ -23,6 +23,17 @@ from location import Location, NoLoc
 from builtins import registerBuiltins, getBuiltinClasses
 from utils import Counter, each
 from bytecode import BUILTIN_ROOT_CLASS_ID
+from name import (
+    ANON_PARAMETER_SUFFIX,
+    ARRAY_LENGTH_SUFFIX,
+    CLASS_INIT_SUFFIX,
+    CLOSURE_SUFFIX,
+    CONSTRUCTOR_SUFFIX,
+    CONTEXT_SUFFIX,
+    EXISTENTIAL_SUFFIX,
+    Name,
+    RECEIVER_SUFFIX,
+)
 
 
 def analyzeDeclarations(info):
@@ -234,7 +245,7 @@ class NameInfo(object):
         assert self.isClass()
         irClass = self.getDefnInfo().irDefn
         classScope = info.getScope(irClass)
-        ctorNameInfo = classScope.getDefinition(ir.CONSTRUCTOR_SUFFIX)
+        ctorNameInfo = classScope.getDefinition(CONSTRUCTOR_SUFFIX)
         return ctorNameInfo
 
 
@@ -278,7 +289,7 @@ class Scope(ast.NodeVisitor):
         return self.getDefnInfo().irDefn
 
     def makeName(self, short):
-        return ir.Name(self.prefix + [short])
+        return Name(self.prefix + [short])
 
     def declare(self, astDefn, astVarDefn=None):
         """Creates an IR definition to the package, adds it to the package, and
@@ -437,7 +448,7 @@ class Scope(ast.NodeVisitor):
                                             typeParameters=implicitTypeParams,
                                             constructors=[], fields=[], methods=[], flags=flags)
 
-        irInitializerName = name.withSuffix(ir.CLASS_INIT_SUFFIX)
+        irInitializerName = name.withSuffix(CLASS_INIT_SUFFIX)
         irInitializer = self.info.package.addFunction(irInitializerName, astDefn=astDefn,
                                                       typeParameters=list(implicitTypeParams),
                                                       variables=[],
@@ -447,7 +458,7 @@ class Scope(ast.NodeVisitor):
 
         if not astDefn.hasConstructors():
             ctorFlags = flags & frozenset([PUBLIC, PROTECTED])
-            irDefaultCtorName = name.withSuffix(ir.CONSTRUCTOR_SUFFIX)
+            irDefaultCtorName = name.withSuffix(CONSTRUCTOR_SUFFIX)
             irDefaultCtor = self.info.package.addFunction(irDefaultCtorName, astDefn=astDefn,
                                                           typeParameters=
                                                               list(implicitTypeParams),
@@ -477,7 +488,7 @@ class Scope(ast.NodeVisitor):
         function.flags |= frozenset([METHOD])
         function.definingClass = clas
         function.overridenBy = {}
-        thisName = function.name.withSuffix(ir.RECEIVER_SUFFIX)
+        thisName = function.name.withSuffix(RECEIVER_SUFFIX)
         this = ir.Variable(thisName, sourceName="this", astDefn=function.astDefn,
                            kind=ir.PARAMETER, flags=frozenset([LET]))
         function.variables.insert(0, this)
@@ -794,7 +805,7 @@ class Scope(ast.NodeVisitor):
             irClosureClass = closureInfo.irClosureClass
             irContextClass = self.info.getContextInfo(scopeId).irContextClass
             irContextType = ClassType(irContextClass)
-            contextFieldName = irClosureClass.name.withSuffix(ir.CONTEXT_SUFFIX)
+            contextFieldName = irClosureClass.name.withSuffix(CONTEXT_SUFFIX)
             irContextField = self.info.package.newField(contextFieldName, type=irContextType)
             irClosureClass.fields.append(irContextField)
             irClosureClass.constructors[0].parameterTypes.append(irContextType)
@@ -841,7 +852,7 @@ class Scope(ast.NodeVisitor):
         raise NotImplementedError()
 
     def scopeForExistential(self, ast):
-        return self.getOrCreateScope(ir.EXISTENTIAL_SUFFIX, ast, self.newScopeForExistential)
+        return self.getOrCreateScope(EXISTENTIAL_SUFFIX, ast, self.newScopeForExistential)
 
     def newScopeForExistential(self, prefix, ast):
         """Creates a new scope for an existential type."""
@@ -984,7 +995,7 @@ class FunctionScope(Scope):
                 # need to create a separate definition here.
                 irDefn = None
             else:
-                name = self.makeName(ir.ANON_PARAMETER_SUFFIX)
+                name = self.makeName(ANON_PARAMETER_SUFFIX)
                 irDefn = ir.Variable(name, astDefn=astDefn, kind=ir.PARAMETER, flags=flags)
                 irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, ast.VariablePattern):
@@ -1035,15 +1046,15 @@ class FunctionScope(Scope):
 
         # Create the context class.
         implicitTypeParams = self.getImplicitTypeParameters()
-        contextClassName = irDefn.name.withSuffix(ir.CONTEXT_SUFFIX)
+        contextClassName = irDefn.name.withSuffix(CONTEXT_SUFFIX)
         irContextClass = self.info.package.addClass(contextClassName,
                                                     typeParameters=list(implicitTypeParams),
                                                     supertypes=[getRootClassType()],
                                                     constructors=[], fields=[],
                                                     methods=[], flags=frozenset())
         irContextType = ClassType(irContextClass, ())
-        ctorName = contextClassName.withSuffix(ir.CONSTRUCTOR_SUFFIX)
-        receiverName = ctorName.withSuffix(ir.RECEIVER_SUFFIX)
+        ctorName = contextClassName.withSuffix(CONSTRUCTOR_SUFFIX)
+        receiverName = ctorName.withSuffix(RECEIVER_SUFFIX)
         ctor = self.info.package.addFunction(ctorName, returnType=UnitType,
                                              typeParameters=list(implicitTypeParams),
                                              parameterTypes=[irContextType],
@@ -1098,7 +1109,7 @@ class FunctionScope(Scope):
 
         # Create a closure class to hold this method and its contexts.
         implicitTypeParams = self.getImplicitTypeParameters()
-        closureName = irDefn.name.withSuffix(ir.CLOSURE_SUFFIX)
+        closureName = irDefn.name.withSuffix(CLOSURE_SUFFIX)
         irClosureClass = self.info.package.addClass(closureName,
                                                     typeParameters=list(implicitTypeParams),
                                                     supertypes=[getRootClassType()],
@@ -1106,8 +1117,8 @@ class FunctionScope(Scope):
                                                     methods=[], flags=frozenset())
         closureInfo.irClosureClass = irClosureClass
         irClosureType = ClassType(irClosureClass)
-        ctorName = closureName.withSuffix(ir.CONSTRUCTOR_SUFFIX)
-        ctorReceiverName = ctorName.withSuffix(ir.RECEIVER_SUFFIX)
+        ctorName = closureName.withSuffix(CONSTRUCTOR_SUFFIX)
+        ctorReceiverName = ctorName.withSuffix(RECEIVER_SUFFIX)
         irClosureCtor = self.info.package.addFunction(ctorName,
                                                       returnType=UnitType,
                                                       typeParameters=list(implicitTypeParams),
@@ -1127,7 +1138,7 @@ class FunctionScope(Scope):
         assert not irDefn.isMethod()
         irDefn.flags |= frozenset([METHOD])
         thisType = ClassType.forReceiver(irClosureClass)
-        thisName = irDefn.name.withSuffix(ir.RECEIVER_SUFFIX)
+        thisName = irDefn.name.withSuffix(RECEIVER_SUFFIX)
         this = ir.Variable(thisName, astDefn=irDefn.astDefn, type=thisType,
                            kind=ir.PARAMETER, flags=frozenset([LET]))
         irDefn.variables.insert(0, this)
@@ -1176,7 +1187,7 @@ class ClassScope(Scope):
         contextInfo = self.info.getContextInfo(self.scopeId)
         contextInfo.irContextClass = irDefn
         this = irDefn.initializer.variables[0]
-        assert this.name.short() == ir.RECEIVER_SUFFIX
+        assert this.name.short() == RECEIVER_SUFFIX
         self.bind("this", DefnInfo(this, self.scopeId, False, self.scopeId, NOT_HERITABLE))
         self.define("this")
         closureInfo = self.info.getClosureInfo(self.scopeId)
@@ -1224,7 +1235,7 @@ class ClassScope(Scope):
                                      astDefn.name)
 
             if astDefn.name == "this":
-                name = self.makeName(ir.CONSTRUCTOR_SUFFIX)
+                name = self.makeName(CONSTRUCTOR_SUFFIX)
                 checkFlags(flags, frozenset([PUBLIC, PROTECTED, PRIVATE, NATIVE]),
                            astDefn.location)
                 irDefn = self.info.package.addFunction(name, astDefn=astDefn,
@@ -1254,7 +1265,7 @@ class ClassScope(Scope):
                     self.makeMethod(irDefn, irScopeDefn)
                 irScopeDefn.methods.append(irDefn)
         elif isinstance(astDefn, ast.PrimaryConstructorDefinition):
-            name = self.makeName(ir.CONSTRUCTOR_SUFFIX)
+            name = self.makeName(CONSTRUCTOR_SUFFIX)
             checkFlags(flags, frozenset([PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
             if len(flags & frozenset([PUBLIC, PROTECTED, PRIVATE])) == 0:
                 flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
@@ -1285,7 +1296,7 @@ class ClassScope(Scope):
             # pattern nodes.
             name = self.makeName(astDefn.pattern.name) \
                    if isinstance(astDefn.pattern, ast.VariablePattern) \
-                   else self.makeName(ir.ANON_PARAMETER_SUFFIX)
+                   else self.makeName(ANON_PARAMETER_SUFFIX)
             irDefn = ir.Variable(name, sourceName=astDefn.pattern.name, astDefn=astDefn,
                                  kind=ir.PARAMETER, flags=frozenset([LET]))
             irCtor = self.info.getDefnInfo(self.ast.constructor).irDefn
@@ -1298,7 +1309,7 @@ class ClassScope(Scope):
             irScopeDefn.flags |= frozenset([ARRAY])
             if FINAL in flags:
                 irScopeDefn.flags |= frozenset([ARRAY_FINAL])
-            name = self.makeName(ir.ARRAY_LENGTH_SUFFIX)
+            name = self.makeName(ARRAY_LENGTH_SUFFIX)
             irDefn = self.info.package.newField(name, astDefn=astDefn, type=I32Type,
                                                 flags=frozenset([PRIVATE, LET, ARRAY]))
             irScopeDefn.fields.append(irDefn)
@@ -1560,8 +1571,8 @@ class BuiltinClassScope(Scope):
         if not hasattr(irClass, "isPrimitive"):
             for ctor in irClass.constructors:
                 defnInfo = DefnInfo(ctor, self.scopeId, True, self.scopeId, NOT_HERITABLE)
-                self.bind(ir.CONSTRUCTOR_SUFFIX, defnInfo)
-                self.define(ir.CONSTRUCTOR_SUFFIX)
+                self.bind(CONSTRUCTOR_SUFFIX, defnInfo)
+                self.define(CONSTRUCTOR_SUFFIX)
         for method in irClass.methods:
             methodClass = method.definingClass
             inheritedScopeId = self.info.getScope(methodClass.id).scopeId
@@ -1625,7 +1636,7 @@ class PackageScope(Scope):
 
                 self.packageNames.append(name)
                 nextPrefix = list(prefix) + [nextComponent]
-                package = ir.PackagePrefix(ir.Name(nextPrefix))
+                package = ir.PackagePrefix(Name(nextPrefix))
                 if nextComponent not in packageBindings or \
                    (isinstance(packageBindings[nextComponent], ir.PackagePrefix) and \
                     isinstance(package, ir.Package)):
@@ -1660,7 +1671,7 @@ class PackageScope(Scope):
         defnInfo = nameInfo.getDefnInfo()
         irDefn = defnInfo.irDefn
         if isinstance(irDefn, ir.PackagePrefix):
-            packageName = ir.Name(self.prefix + [name])
+            packageName = Name(self.prefix + [name])
             if packageName in self.packageNames:
                 defnInfo.irDefn = self.info.packageLoader.loadPackage(packageName, NoLoc)
                 self.scopeForPrefix(name, NoLoc)  # force scope to be created
@@ -1677,8 +1688,8 @@ class ExternClassScope(Scope):
         for ctor in clas.constructors:
             if PUBLIC in ctor.flags:
                 defnInfo = DefnInfo(ctor, self.scopeId, isVisible=True)
-                self.bind(ir.CONSTRUCTOR_SUFFIX, defnInfo)
-                self.define(ir.CONSTRUCTOR_SUFFIX)
+                self.bind(CONSTRUCTOR_SUFFIX, defnInfo)
+                self.define(CONSTRUCTOR_SUFFIX)
         for member in clas.methods + clas.fields:
             if PUBLIC in member.flags:
                 defnInfo = DefnInfo(member, self.scopeId, isVisible=True)
@@ -1723,7 +1734,7 @@ class ScopeVisitor(ast.NodeVisitor):
         self.visit(node.pattern, node)
 
     def visitFunctionDefinition(self, node):
-        scopeName = ir.CONSTRUCTOR_SUFFIX if node.name == "this" else node.name
+        scopeName = CONSTRUCTOR_SUFFIX if node.name == "this" else node.name
         scope = self.scope.scopeForFunction(scopeName, node)
         visitor = self.createChildVisitor(scope)
         visitor.visitChildren(node)

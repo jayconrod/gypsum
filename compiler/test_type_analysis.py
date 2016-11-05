@@ -21,6 +21,13 @@ from type_analysis import *
 from flags import *
 from builtins import getRootClass, getStringClass, getNothingClass, getExceptionClass
 from utils_test import FakePackageLoader, TestCaseWithDefinitions, OPTION_SOURCE, TUPLE_SOURCE
+from name import (
+    CLASS_INIT_SUFFIX,
+    CONSTRUCTOR_SUFFIX,
+    EXISTENTIAL_SUFFIX,
+    Name,
+    RECEIVER_SUFFIX,
+)
 
 
 class TestTypeAnalysis(TestCaseWithDefinitions):

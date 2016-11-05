@@ -17,6 +17,14 @@ from errors import *
 from flags import *
 from utils_test import FakePackageLoader, TestCaseWithDefinitions
 from location import NoLoc
+from name import (
+    ARRAY_LENGTH_SUFFIX,
+    CLASS_INIT_SUFFIX,
+    CONSTRUCTOR_SUFFIX,
+    EXISTENTIAL_SUFFIX,
+    Name,
+    RECEIVER_SUFFIX,
+)
 
 
 class TestDeclarationAnalysis(TestCaseWithDefinitions):

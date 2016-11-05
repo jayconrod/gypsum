@@ -29,6 +29,17 @@ from type_analysis import *
 from utils_test import FakePackageLoader, OPTION_SOURCE, TestCaseWithDefinitions, TUPLE_SOURCE
 import ast
 import ir_instructions
+from name import (
+    ANON_PARAMETER_SUFFIX,
+    CLASS_INIT_SUFFIX,
+    CLOSURE_SUFFIX,
+    CONSTRUCTOR_SUFFIX,
+    CONTEXT_SUFFIX,
+    EXISTENTIAL_SUFFIX,
+    Name,
+    PACKAGE_INIT_NAME,
+    RECEIVER_SUFFIX,
+)
 
 
 class TestCompiler(TestCaseWithDefinitions):

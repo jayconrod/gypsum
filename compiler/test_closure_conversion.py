@@ -20,6 +20,12 @@ from parser import *
 from scope_analysis import *
 from type_analysis import *
 from utils_test import FakePackageLoader, TestCaseWithDefinitions
+from name import (
+    CLOSURE_SUFFIX,
+    CONTEXT_SUFFIX,
+    Name,
+    RECEIVER_SUFFIX,
+)
 
 
 class TestClosureConversion(TestCaseWithDefinitions):

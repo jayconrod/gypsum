@@ -16,6 +16,7 @@ from ir_types import *
 from layout import layout
 from lexer import *
 from location import NoLoc
+from name import CLASS_INIT_SUFFIX, Name, RECEIVER_SUFFIX
 from parser import *
 from scope_analysis import *
 from type_analysis import *

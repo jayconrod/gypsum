@@ -12,6 +12,7 @@ import ids
 import ir
 import ir_types
 import location
+from name import Name
 
 
 CONTEXT_CONSTRUCTOR_HINT = "context-constructor-hint"
@@ -26,7 +27,7 @@ NORMAL_MODE = "normal-mode"
 STD_MODE = "std-mode"
 NOSTD_MODE = "nostd-mode"
 
-STD_NAME = ir.Name(["std"])
+STD_NAME = Name(["std"])
 
 MAX_TUPLE_LENGTH = 10
 

@@ -14,7 +14,9 @@ import ids
 import ir
 import ir_instructions
 import ir_types
+from name import Name
 import utils
+
 
 def serialize(package, fileName):
     if fileName == "-":
@@ -465,7 +467,7 @@ class Deserializer(object):
             self.package.initFunction = self.package.functions[initFunctionIndex]
 
         nameStr = self.readString()
-        self.package.name = ir.Name.fromString(nameStr, isPackageName=True)
+        self.package.name = Name.fromString(nameStr, isPackageName=True)
         versionStr = self.readString()
         self.package.version = ir.PackageVersion.fromString(versionStr)
         self.package.id.name = self.package.name
@@ -724,7 +726,7 @@ class Deserializer(object):
     def readName(self):
         readComponent = lambda: self.readId(self.package.strings)
         components = self.readList(readComponent)
-        return ir.Name(components)
+        return Name(components)
 
     def readDefiningClassId(self):
         n = self.readVbn()

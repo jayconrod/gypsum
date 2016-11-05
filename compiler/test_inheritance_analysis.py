@@ -9,7 +9,7 @@ import unittest
 from builtins import getRootClass
 from compile_info import CompileInfo
 import ids
-from ir import Package, PackageDependency, Name, CONSTRUCTOR_SUFFIX
+from ir import Package, PackageDependency
 from ir_types import ClassType, getRootClassType, getExceptionClassType
 from errors import InheritanceException
 from flags import *
@@ -20,6 +20,8 @@ from scope_analysis import analyzeDeclarations
 from type_analysis import analyzeTypeDeclarations
 from inheritance_analysis import analyzeInheritance
 from utils_test import FakePackageLoader
+from name import CONSTRUCTOR_SUFFIX, Name
+
 
 class TestInheritanceAnalysis(unittest.TestCase):
     def parseFromSource(self, source):

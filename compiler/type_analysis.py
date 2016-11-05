@@ -15,6 +15,13 @@ from utils import COMPILE_FOR_VALUE, COMPILE_FOR_MATCH, COMPILE_FOR_UNINITIALIZE
 from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, NORMAL_MODE, STD_MODE, NOSTD_MODE, CallInfo, ScopePrefixInfo
 from flags import COVARIANT, CONTRAVARIANT, CONSTRUCTOR, INITIALIZER, PROTECTED, PUBLIC, STATIC, ARRAY
 import scope_analysis
+from name import (
+    BLANK_SUFFIX,
+    CONSTRUCTOR_SUFFIX,
+    EXISTENTIAL_SUFFIX,
+    Name,
+    RECEIVER_SUFFIX,
+)
 
 
 def analyzeTypeDeclarations(info):
@@ -484,7 +491,7 @@ class TypeVisitorBase(ast.NodeVisitor):
         """
         assert isinstance(node, ast.BlankType)
         if not self.info.hasDefnInfo(node):
-            paramName = ir.Name(self.scope().prefix + [ir.EXISTENTIAL_SUFFIX, ir.BLANK_SUFFIX])
+            paramName = Name(self.scope().prefix + [EXISTENTIAL_SUFFIX, BLANK_SUFFIX])
             blankParam = self.info.package.addTypeParameter(paramName, astDefn=node,
                                                             upperBound=param.upperBound,
                                                             lowerBound=param.lowerBound)
@@ -722,7 +729,7 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         return tuple(typeArgs), tuple(introducedTypeParams)
 
     def setMethodReceiverType(self, irFunction):
-        assert irFunction.variables[0].name.short() == ir.RECEIVER_SUFFIX
+        assert irFunction.variables[0].name.short() == RECEIVER_SUFFIX
         irFunction.variables[0].type = self.getReceiverType()
 
 
@@ -833,7 +840,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                             if node.superArgs is not None \
                             else []
             superScope = self.info.getScope(ir_t.getClassFromType(supertype))
-            self.handlePropertyCall(ir.CONSTRUCTOR_SUFFIX, superScope, supertype,
+            self.handlePropertyCall(CONSTRUCTOR_SUFFIX, superScope, supertype,
                                     None, superArgTypes, True, True, False,
                                     node.id, node.location)
 
@@ -1107,7 +1114,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
              isinstance(node.callee, ast.SuperExpression):
             receiverType = self.visit(node.callee)
             receiverScope = self.info.getScope(ir_t.getClassFromType(receiverType))
-            self.handlePropertyCall(ir.CONSTRUCTOR_SUFFIX, receiverScope, receiverType,
+            self.handlePropertyCall(CONSTRUCTOR_SUFFIX, receiverScope, receiverType,
                                     typeArgs, argTypes, True, True, False,
                                     node.id, node.location)
             ty = ir_t.UnitType
@@ -1765,7 +1772,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         if irClass is getNothingClass():
             raise TypeException(loc, "cannot instantiate Nothing")
         classScope = self.info.getScope(irClass)
-        nameInfo = classScope.lookupFromExternal(ir.CONSTRUCTOR_SUFFIX, loc)
+        nameInfo = classScope.lookupFromExternal(CONSTRUCTOR_SUFFIX, loc)
         defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, objectType,
                                                             None, argTypes, loc)
         self.checkCallAllowed(defnInfo.irDefn, False, USE_AS_CONSTRUCTOR, loc)
