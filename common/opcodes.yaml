@@ -31,8 +31,10 @@
 - {name: "ldgf", iops: 2, push: 1, pop: 0, term: false}
 - {name: "stg", iops: 1, push: 0, pop: 1, term: false}
 - {name: "stgf", iops: 2, push: 0, pop: 1, term: false}
-- {name: "ldf", iops: 1, push: 1, pop: 1, term: false}
-- {name: "stf", iops: 1, push: 0, pop: 2, term: false}
+- {name: "ldf", iops: 2, push: 1, pop: 1, term: false}
+- {name: "ldff", iops: 3, push: 1, pop: 1, term: false}
+- {name: "stf", iops: 2, push: 0, pop: 2, term: false}
+- {name: "stff", iops: 3, push: 0, pop: 2, term: false}
 - {name: "lde", iops: 0, push: 1, pop: 2, term: false}
 - {name: "ste", iops: 0, push: 0, pop: 3, term: false}
 - {name: "allocobj", iops: 1, push: 1, pop: 0, term: false}
@@ -61,8 +63,7 @@
 - {name: "callg", iops: 1, push: 1, pop: ~, term: false}
 - {name: "callgf", iops: 2, push: 1, pop: ~, term: false}
 - {name: "callv", iops: 2, push: 1, pop: ~, term: false}
-- {name: "callvt", iops: 3, push: 1, pop: ~, term: false}
-- {name: "callvtf", iops: 4, push: 1, pop: ~, term: false}
+- {name: "callvf", iops: 3, push: 1, pop: ~, term: false}
 - {name: "eqp", iops: 0, push: 1, pop: 2, term: false}
 - {name: "nep", iops: 0, push: 1, pop: 2, term: false}
 - {name: "addi8", iops: 0, push: 1, pop: 2, term: false}
