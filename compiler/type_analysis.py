@@ -2148,8 +2148,11 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             return receiverType
 
     def findBaseForField(self, receiverClass, field):
-        # At this point, classes haven't been flattened yet, so we have to search up the
-        # inheritance graph for the first class or trait that contains the field.
+        """Returns the class that defines `field`, accessed through `receiverClass`.
+
+        This is needed for type substitution, since `field.type` may include type variables
+        from the base.
+        """
         for clas in receiverClass.bases():
             if any(True for f in clas.fields if f is field):
                 return clas
