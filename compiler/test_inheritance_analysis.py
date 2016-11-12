@@ -357,7 +357,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
         scope = info.getScope(info.ast.modules[0].definitions[0])
         self.assertEquals(1, len(scope.getDefinition("to-string").overloads))
         overrides = scope.getDefinition("to-string").overloads[0].irDefn.overrides
-        self.assertEquals([getRootClass().findMethodBySourceName("to-string")[0].id],
+        self.assertEquals([getRootClass().findMethodBySourceName("to-string").id],
                           [o.id for o in overrides])
 
     def testMultipleMethodsOverrideSameMethod(self):
@@ -599,7 +599,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
                  "class Bar <: Object, Foo\n" + \
                  "  public override def to-string = \"Bar\""
         info = self.analyzeFromSource(source)
-        ObjectToString = getRootClass().findMethodBySourceName("to-string")[0]
+        ObjectToString = getRootClass().findMethodBySourceName("to-string")
         Bar = info.package.findClass(name="Bar")
         BarToString = info.package.findFunction(name="Bar.to-string")
         self.assertEquals(1, len(BarToString.overrides))

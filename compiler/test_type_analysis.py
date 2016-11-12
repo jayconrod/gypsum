@@ -1646,9 +1646,9 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  override def to-string = \"A\"\n"
         info = self.analyzeFromSource(source)
         A = info.package.findClass(name="A")
-        toString = A.findMethodBySourceName("to-string")[0]
+        toString = A.findMethodBySourceName("to-string")
         self.assertIs(A, toString.definingClass)
-        self.assertEquals([getRootClass().findMethodBySourceName("to-string")[0].id],
+        self.assertEquals([getRootClass().findMethodBySourceName("to-string").id],
                           [o.id for o in toString.overrides])
 
     def testOverrideCovariantParameters(self):

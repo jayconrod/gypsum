@@ -115,6 +115,11 @@ class Package(object):
             self.findOrAddString(f.sourceName)
         return f
 
+    def addField(self, clas, name, **kwargs):
+        f = self.newField(name, definingClass=clas, index=len(clas.fields), **kwargs)
+        clas.fields.append(f)
+        return f
+
     def ensureDependency(self, package):
         if package.id.index is not None:
             assert self.dependencies[package.id.index].package is package
@@ -682,28 +687,14 @@ class ObjectTypeDefn(ParameterizedDefn):
                 return sty
         return None
 
-    def findMethodBySourceName(self, name):
-        """Searches the method list.
-
-        Arguments:
-            name (str): the source name of the method. Methods without source names will not
-                be considered.
-
-        Returns:
-            (Function, int)?: returns a pair of the method and the method index for the first
-                matching method. If no match was found, `None` is returned.
-        """
-        assert isinstance(name, str)
-        for i, m in enumerate(m for m in self.methods if flags.STATIC not in m.flags):
-            if m.sourceName == name:
-                return m, i
+    def findMethodBySourceName(self, sourceName):
+        """Searches the method list for a non-static function with the given `sourceName`.
+        Returns `None` if no such method is found."""
+        assert isinstance(sourceName, str)
+        for m in self.methods:
+            if m.sourceName == sourceName and flags.STATIC not in m.flags:
+                return m
         return None
-
-    def getMethodIndex(self, method):
-        for i, m in enumerate(m for m in self.methods if flags.STATIC not in m.flags):
-            if m is method:
-                return i
-        raise KeyError("method does not belong to this class")
 
 
 class Class(ObjectTypeDefn):
@@ -808,16 +799,16 @@ class Class(ObjectTypeDefn):
         return selfBases[i + 1]
 
     def findFieldBySourceName(self, name):
-        for i, f in enumerate(self.fields):
+        for f in self.fields:
             if name == f.sourceName:
-                return f, i
+                return f
         return None
 
     def getMember(self, name):
-        method = self.findMethodBySourceName(name)[0]
+        method = self.findMethodBySourceName(name)
         if method is not None:
             return method
-        return self.findFieldBySourceName(name)[0]
+        return self.findFieldBySourceName(name)
 
     def getFieldIndex(self, field):
         for i, f in enumerate(self.fields):
@@ -1009,16 +1000,19 @@ class Field(IrDefinition):
         type (Type?): the type of the field. May be `None` before type analysis.
         flags (frozenset[flag]): flags indicating how this field is used. Valid flags are
             `LET`, `PUBLIC`, `PROTECTED`, `PRIVATE`, `STATIC`.
+        definingClass (Class?): the class this field was defined in (as opposed to any other
+            class that inherits this field.
         index (int?): an integer indicating where this field is located with an instance of
             its class. 0 is the first field, 1 is the second, etc. Used to generate load / store
             instructions. This will usually be `None` before semantic analysis.
     """
 
     def __init__(self, name, sourceName=None, astDefn=None, type=None, flags=frozenset(),
-                 index=None):
+                 definingClass=None, index=None):
         super(Field, self).__init__(name, sourceName, astDefn)
         self.type = type
         self.flags = flags
+        self.definingClass = definingClass
         self.index = index
 
     def __repr__(self):

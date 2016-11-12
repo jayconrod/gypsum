@@ -806,8 +806,8 @@ class Scope(ast.NodeVisitor):
             irContextClass = self.info.getContextInfo(scopeId).irContextClass
             irContextType = ClassType(irContextClass)
             contextFieldName = irClosureClass.name.withSuffix(CONTEXT_SUFFIX)
-            irContextField = self.info.package.newField(contextFieldName, type=irContextType)
-            irClosureClass.fields.append(irContextField)
+            irContextField = self.info.package.addField(irClosureClass, contextFieldName,
+                                                        type=irContextType)
             irClosureClass.constructors[0].parameterTypes.append(irContextType)
             closureInfo.irClosureContexts[scopeId] = irContextField
 
@@ -1081,13 +1081,14 @@ class FunctionScope(Scope):
             pass
         elif isinstance(irDefn, ir.Variable):
             defnInfo.irDefn.kind = None  # finish() will delete this
-            irCaptureField = self.info.package.newField(irDefn.name, astDefn=irDefn.astDefn,
-                                                        type=irDefn.type, flags=irDefn.flags)
+            irCaptureField = self.info.package.addField(irContextClass, irDefn.name,
+                                                        astDefn=irDefn.astDefn,
+                                                        type=irDefn.type,
+                                                        flags=irDefn.flags)
             if hasattr(defnInfo.irDefn, "astDefn"):
                 irCaptureField.astDefn = defnInfo.irDefn.astDefn
             if hasattr(defnInfo.irDefn, "astVarDefn"):
                 irCaptureField.astVarDefn = defnInfo.irDefn.astVarDefn
-            irContextClass.fields.append(irCaptureField)
             defnInfo.irDefn = irCaptureField
         elif isinstance(defnInfo.irDefn, ir.Function):
             # TODO
@@ -1211,9 +1212,8 @@ class ClassScope(Scope):
         if isinstance(astDefn, ast.VariablePattern):
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([LET, PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
-            irDefn = self.info.package.newField(name, sourceName=astDefn.name,
+            irDefn = self.info.package.addField(irScopeDefn, name, sourceName=astDefn.name,
                                                 astDefn=astDefn, flags=flags)
-            irScopeDefn.fields.append(irDefn)
         elif isinstance(astDefn, ast.FunctionDefinition):
             implicitTypeParams = self.getImplicitTypeParameters()
             if astDefn.body is not None:
@@ -1310,9 +1310,9 @@ class ClassScope(Scope):
             if FINAL in flags:
                 irScopeDefn.flags |= frozenset([ARRAY_FINAL])
             name = self.makeName(ARRAY_LENGTH_SUFFIX)
-            irDefn = self.info.package.newField(name, astDefn=astDefn, type=I32Type,
+            irDefn = self.info.package.addField(irScopeDefn, name, astDefn=astDefn,
+                                                type=I32Type,
                                                 flags=frozenset([PRIVATE, LET, ARRAY]))
-            irScopeDefn.fields.append(irDefn)
             shouldBind = False
         else:
             assert isinstance(astDefn, ast.ArrayAccessorDefinition)

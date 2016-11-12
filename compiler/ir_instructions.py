@@ -126,14 +126,16 @@ class stgf(Instruction):
 
 
 class ldf(Instruction):
-    def __init__(self, clas, field):
+    def __init__(self, field):
+        clas = field.definingClass
         assert isinstance(clas, ir.Class) and not clas.isForeign()
         assert isinstance(field, ir.Field)
         super(ldf, self).__init__(clas.id.index, field.index)
 
 
 class ldff(Instruction):
-    def __init__(self, clas, field):
+    def __init__(self, field):
+        clas = field.definingClass
         assert isinstance(clas, ir.Class) and clas.isForeign()
         assert isinstance(field, ir.Field)
         super(ldff, self).__init__(clas.id.packageId.index,
@@ -142,14 +144,16 @@ class ldff(Instruction):
 
 
 class stf(Instruction):
-    def __init__(self, clas, field):
+    def __init__(self, field):
+        clas = field.definingClass
         assert isinstance(clas, ir.Class) and not clas.isForeign()
         assert isinstance(field, ir.Field)
         super(stf, self).__init__(clas.id.index, field.index)
 
 
 class stff(Instruction):
-    def __init__(self, clas, field):
+    def __init__(self, field):
+        clas = field.definingClass
         assert isinstance(clas, ir.Class) and not clas.isForeign()
         assert isinstance(field, ir.Field)
         super(stff, self).__init__(clas.id.packageId.index,
@@ -301,20 +305,20 @@ class callgf(Instruction):
 
 
 class callv(Instruction):
-    def __init__(self, function):
-        assert isinstance(function, ir.Function) and not function.isForeign()
-        super(callv, self).__init__(len(function.parameterTypes), function.id.index)
+    def __init__(self, method):
+        assert isinstance(method, ir.Function) and not method.isForeign()
+        super(callv, self).__init__(len(method.parameterTypes), method.id.index)
 
     def popCount(self):
         return self.operands[0]
 
 
 class callvf(Instruction):
-    def __init__(self, function):
-        assert isinstance(function, ir.Function) and function.isForeign()
-        super(callvf, self).__init__(len(function.parameterTypes),
-                                     function.id.packageId.index,
-                                     function.id.externIndex)
+    def __init__(self, method):
+        assert isinstance(method, ir.Function) and method.isForeign()
+        super(callvf, self).__init__(len(method.parameterTypes),
+                                     method.id.packageId.index,
+                                     method.id.externIndex)
 
     def popCount(self):
         return self.operands[0]

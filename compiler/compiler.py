@@ -187,7 +187,7 @@ class CompileVisitor(ast.NodeVisitor):
             self.loadThis()
             clas = self.function.definingClass
             length = next(f for f in clas.fields if ARRAY in f.flags)
-            self.ldf(length.index)
+            self.loadField(length)
             self.ret()
 
         self.function.blocks = self.blocks
@@ -418,7 +418,7 @@ class CompileVisitor(ast.NodeVisitor):
             if not isBlank(p, pty):
                 if i != lastMatchingIndex:
                     self.dup()
-                self.ldf(i)
+                self.loadField(tupleClass.fields[i])
                 self.visit(p, mode, pty, elementFailBlock)
 
         # Clean up.
@@ -1386,10 +1386,16 @@ class CompileVisitor(ast.NodeVisitor):
             self.loadThis()
 
     def loadField(self, field):
-        self.ldf(field.index)
+        if field.definingClass.isForeign():
+            self.ldff(field)
+        else:
+            self.ldf(field)
 
     def storeField(self, field):
-        self.stf(field.index)
+        if field.definingClass.isForeign():
+            self.stff(field)
+        else:
+            self.stf(field)
 
     def loadThis(self):
         assert self.function.isMethod()
@@ -1514,7 +1520,7 @@ class CompileVisitor(ast.NodeVisitor):
 
     def buildCallNamedMethod(self, receiverType, name, mode):
         receiverClass = getClassFromType(receiverType)
-        method, _ = receiverClass.findMethodBySourceName(name)
+        method = receiverClass.findMethodBySourceName(name)
         self.callMethod(method, receiverType)
         self.dropForEffect(mode)
 
@@ -1524,7 +1530,6 @@ class CompileVisitor(ast.NodeVisitor):
         If the method has instructions specified (nearly all primitive methods), those are
         inlined directly. If the method is final, it is called statically. If the method is
         defined in a class or the receiver type is a class, it will be called virtually.
-        Otherwise, it will be called through its defining trait.
 
         Args:
             method (Function): the method to call.
@@ -1539,22 +1544,10 @@ class CompileVisitor(ast.NodeVisitor):
         elif method.isFinal():
             self.callFunction(method)
         else:
-            argCount = len(method.parameterTypes)
-            methodClass = method.definingClass
-            if isinstance(methodClass, Trait) and receiverType is not None:
-                if not isinstance(receiverType, ClassType):
-                    receiverType = receiverType.getBaseClassType()
-                if isinstance(receiverType.clas, Class):
-                    methodClass = receiverType.clas
-            index = methodClass.getMethodIndex(method)
-            if isinstance(methodClass, Class):
-                self.callv(argCount, index)
+            if method.isForeign():
+                self.callvf(method)
             else:
-                assert isinstance(methodClass, Trait)
-                if methodClass.isForeign():
-                    self.callvtf(argCount, methodClass, index)
-                else:
-                    self.callvt(argCount, methodClass, index)
+                self.callv(method)
 
     HAVE_RECEIVER = "HAVE_RECEIVER"
 
@@ -1721,16 +1714,17 @@ class CompileVisitor(ast.NodeVisitor):
             self.visit(subPatterns[0], COMPILE_FOR_MATCH, valueType, dropBlock)
             successState = self.saveCurrentBlock()
         else:
+            tupleClass = valueType.clas
             valueTypeArgs = valueType.getTypeArguments()
             dropFieldBlock = self.newBlock()
             mustMatch = True
             for i in xrange(n - 1):
                 self.dup()
-                self.ldf(i)
+                self.loadField(tupleClass.fields[i])
                 self.visit(subPatterns[i], COMPILE_FOR_MATCH, valueTypeArgs[i], dropFieldBlock)
                 mustMatch &= type_analysis.patternMustMatch(subPatterns[i], valueTypeArgs[i],
                                                            self.info)
-            self.ldf(n - 1)
+            self.loadField(tupleClass.fields[n - 1])
             self.visit(subPatterns[-1], COMPILE_FOR_MATCH, valueTypeArgs[-1], dropBlock)
             successState = self.saveCurrentBlock()
 

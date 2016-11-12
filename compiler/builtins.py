@@ -163,7 +163,8 @@ def _initialize():
         name = Name([clas.name.short(), fieldData["name"]])
         ty = buildType(fieldData["type"])
         flags = buildFlags(fieldData["flags"])
-        return ir.Field(name, sourceName=fieldData["name"], type=ty, flags=flags, index=index)
+        return ir.Field(name, sourceName=fieldData["name"], type=ty, flags=flags,
+                        index=index, definingClass=clas)
 
     def declareClass(classData):
         name = Name([classData["name"]])

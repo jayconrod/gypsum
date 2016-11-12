@@ -154,7 +154,7 @@ class TestDefn(object):
         else:
             super(TestDefn, self).__init__(name, **kwargs)
         self.test = test
-        self.propNames = frozenset(kwargs.keys())
+        self.propNames = frozenset(kwargs.keys() + ["name"])
 
     def __repr__(self):
         pairStrs = ("%s=%s" % (key, getattr(self, key)) for key in self.propNames)
