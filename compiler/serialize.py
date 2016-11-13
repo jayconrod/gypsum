@@ -137,6 +137,10 @@ class Serializer(object):
             self.writeType(ty)
         if flags.EXTERN not in function.flags:
             self.writeDefiningClassId(function.definingClass)
+        assert function.overrides is None or \
+            (flags.EXTERN not in function.flags and flags.OVERRIDE in function.flags)
+        if function.overrides is not None:
+            self.writeList(self.writeMethodId, function.overrides)
 
         assert function.blocks is not None or \
                0 < len(frozenset([flags.ABSTRACT, flags.EXTERN, flags.NATIVE]) & function.flags)
@@ -186,7 +190,6 @@ class Serializer(object):
         else:
             self.writeMethodList(clas.constructors)
             self.writeMethodList(clas.methods)
-            self.writeTraitMethodLists(clas.traits)
         self.writeOption(self.writeType, clas.elementType)
 
     def writeField(self, field):
@@ -310,16 +313,6 @@ class Serializer(object):
 
     def writeMethodList(self, list):
         self.writeList(self.writeMethodId, list)
-
-    def writeTraitMethodLists(self, traits):
-        self.writeVbn(len(traits))
-        for traitId, methods in traits.iteritems():
-            self.writeVbn(traitId.getPackageIndex())
-            index = traitId.getDefnIndex()
-            if traitId.getPackageIndex() == ids.BUILTIN_PACKAGE_INDEX:
-                index = ~index
-            self.writeVbn(index)
-            self.writeMethodList(methods)
 
     def writeMethodId(self, method):
         self.writeVbn(method.id.getPackageIndex())
@@ -523,6 +516,8 @@ class Deserializer(object):
         function.parameterTypes = self.readList(self.readType)
         if flags.EXTERN not in function.flags:
             function.definingClass = self.readDefiningClassId()
+            if flags.OVERRIDE in function.flags:
+                function.overrides = self.readList(self.readMethodId)
             if frozenset([flags.ABSTRACT, flags.NATIVE]).isdisjoint(function.flags):
                 localsSize = self.readVbn()
                 instructionsSize = self.readVbn()
@@ -548,8 +543,6 @@ class Deserializer(object):
         clas.fields = self.readFields()
         clas.constructors = self.readList(self.readMethodId, dep)
         clas.methods = self.readList(self.readMethodId, dep)
-        if flags.EXTERN not in clas.flags:
-            clas.traits = self.readTraitMethodLists()
         clas.elementType = self.readOption(self.readType)
 
     def readFields(self):
@@ -567,26 +560,6 @@ class Deserializer(object):
         ty = self.readType()
         field = ir.Field(name, sourceName=sourceName, type=ty, flags=flags, index=index)
         return field
-
-    def readTraitMethodLists(self):
-        n = self.readVbn()
-        if n < 0:
-            raise IOError("invalid list length")
-        traits = {}
-        for i in xrange(n):
-            packageIndex = self.readVbn()
-            traitIndex = self.readVbn()
-            if packageIndex == ids.BUILTIN_PACKAGE_INDEX:
-                traitIndex = ~traitIndex
-                traitId = builtins.getBuiltinTraitById(traitIndex).id
-            elif packageIndex == ids.LOCAL_PACKAGE_INDEX:
-                traitId = self.package.traits[traitIndex].id
-            else:
-                traitId = self.package.dependencies[packageIndex].externTraits[traitIndex]
-            if traitId in traits:
-                raise IOError("same trait implemented multiple times")
-            traits[traitId] = self.readList(self.readMethodId)
-        return traits
 
     def readTrait(self, trait, dep=None):
         trait.name = self.readName()

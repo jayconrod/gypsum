@@ -296,7 +296,6 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         externMethod = externalizer.externalizeDefn(otherMethod)
         builtinMethod = builtins.getBuiltinFunctionById(bytecode.BUILTIN_ROOT_CLASS_TO_STRING_ID)
         clas.methods = [localMethod, externMethod, builtinMethod]
-        clas.traits = {trait.id: [localMethod]}
 
         self.ser.package = package
         self.ser.writeClass(clas)
@@ -351,7 +350,6 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         field = otherPackage.newField(Name(["C", "x"]), type=ir_types.VariableType(T),
                                       flags=frozenset([PUBLIC, LET]))
         clas.fields = [field]
-        clas.traits = {trait.id: [method1]}
 
         # "Compile" a package that depends on the foreign class.
         externPackage = self.copyPackage(otherPackage)
@@ -380,7 +378,6 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         self.assertEquals(len(externClass.constructors), len(rewrittenClass.constructors))
         self.assertEquals(len(externClass.fields), len(rewrittenClass.fields))
         self.assertEquals(len(externClass.methods), len(rewrittenClass.methods))
-        self.assertEquals(externClass.traits, rewrittenClass.traits)
         self.assertEquals(externClass.elementType, rewrittenClass.elementType)
         self.assertEquals(externClass.flags, rewrittenClass.flags)
 

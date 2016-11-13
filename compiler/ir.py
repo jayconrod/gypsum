@@ -457,6 +457,9 @@ class Function(ParameterizedDefn):
         blocks (list[BasicBlock]?): a list of basic blocks containing instructions for the
             function. The first block is the only entry point. This may be `None` before
             semantic analysis and for `EXTERN` or `ABSTRACT` or builtin functions.
+        overrides ([Function]?): methods in inherited traits or a base class that this
+            method overrides. This must be set if the `METHOD` and `OVERRIDE` flags are set and
+            the `STATIC`, `CONSTRUCTOR`, and `EXTERN` flags are not set. It must not be empty.
         flags (frozenset[flag]): a flags indicating how this function is used. Valid flags are
             `ABSTRACT`, `EXTERN`, `PUBLIC`, `PROTECTED`, `PRIVATE`, `STATIC`, `CONSTRUCTOR`,
             `METHOD`.
@@ -464,9 +467,6 @@ class Function(ParameterizedDefn):
             defined in (as opposed to any other class that inherits the method). For
             non-static methods, this could be derived from the receiver type, but there's
             no easy way to get it for static methods.
-        overrides ([Function]?): methods in inherited traits or a base class that this
-            method overrides. This must be set if the `METHOD` and `OVERRIDE` flags are set and
-            the `STATIC`, `CONSTRUCTOR`, and `EXTERN` flags are not set. It must not be empty.
         overridenBy ({DefnId, Function}?): a map from class and trait ids to methods. Each
             entry describes an overriding function in a subclass or subtrait. This should only
             be set for non-constructor, non-static methods.
@@ -480,7 +480,7 @@ class Function(ParameterizedDefn):
 
     def __init__(self, name, id, sourceName=None, astDefn=None, returnType=None,
                  typeParameters=None, parameterTypes=None, variables=None, blocks=None,
-                 flags=frozenset(), definingClass=None, overrides=None, overridenBy=None,
+                 overrides=None, flags=frozenset(), definingClass=None, overridenBy=None,
                  insts=None, compileHint=None):
         super(Function, self).__init__(name, id, sourceName, astDefn)
         self.returnType = returnType
@@ -488,16 +488,16 @@ class Function(ParameterizedDefn):
         self.parameterTypes = parameterTypes
         self.variables = variables
         self.blocks = blocks
+        self.overrides = overrides
         self.flags = flags
         self.definingClass = definingClass
         self.insts = insts
-        self.overrides = overrides
         self.overridenBy = overridenBy
         self.compileHint = compileHint
 
     def __repr__(self):
         return reprFormat(self, "name", "returnType", "typeParameters", "parameterTypes",
-                          "variables", "blocks", "flags")
+                          "variables", "blocks", "overrides", "flags")
 
     def __str__(self):
         buf = StringIO.StringIO()
@@ -532,6 +532,7 @@ class Function(ParameterizedDefn):
                self.parameterTypes == other.parameterTypes and \
                self.variables == other.variables and \
                self.blocks == other.blocks and \
+               self.overrides == other.overrides and \
                self.flags == other.flags and \
                self.definingClass is other.definingClass and \
                self.insts == other.insts and \
