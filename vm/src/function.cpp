@@ -55,7 +55,8 @@ void* Function::operator new(size_t, Heap* heap, length_t instructionsSize) {
 }
 
 
-Function::Function(Name* name,
+Function::Function(DefnId id,
+                   Name* name,
                    String* sourceName,
                    u32 flags,
                    BlockArray<TypeParameter>* typeParameters,
@@ -69,6 +70,7 @@ Function::Function(Name* name,
                    StackPointerMap* stackPointerMap,
                    NativeFunction nativeFunction)
     : Block(FUNCTION_BLOCK_TYPE),
+      id_(id),
       name_(this, name),
       sourceName_(this, sourceName),
       flags_(flags),
@@ -88,14 +90,15 @@ Function::Function(Name* name,
 }
 
 
-Local<Function> Function::create(Heap* heap) {
+Local<Function> Function::create(Heap* heap, DefnId id) {
   RETRY_WITH_GC(heap, return Local<Function>(new(heap, 0) Function(
-      nullptr, nullptr, 0, nullptr, nullptr, nullptr, nullptr,
+      id, nullptr, nullptr, 0, nullptr, nullptr, nullptr, nullptr,
       0, vector<u8>{}, nullptr, nullptr, nullptr, nullptr)));
 }
 
 
 Local<Function> Function::create(Heap* heap,
+                                 DefnId id,
                                  const Handle<Name>& name,
                                  const Handle<String>& sourceName,
                                  u32 flags,
@@ -109,7 +112,7 @@ Local<Function> Function::create(Heap* heap,
                                  const Handle<Package>& package,
                                  NativeFunction nativeFunction) {
   RETRY_WITH_GC(heap, return Local<Function>(new(heap, instructions.size()) Function(
-      *name, sourceName.getOrNull(), flags, *typeParameters, *returnType, *parameterTypes,
+      id, *name, sourceName.getOrNull(), flags, *typeParameters, *returnType, *parameterTypes,
       definingClass.getOrNull(), localsSize, instructions, blockOffsets.getOrNull(),
       package.getOrNull(), nullptr, nativeFunction)));
 }
@@ -174,7 +177,8 @@ NativeFunction Function::ensureAndGetNativeFunction() {
 
 
 ostream& operator << (ostream& os, const Function* fn) {
-  os << brief(fn);
+  os << brief(fn)
+     << "\n  id: " << fn->id();
   if (fn->hasBuiltinId())
     os << "\n  builtin id: " << fn->builtinId();
   os << "\n  name: " << brief(fn->name())
@@ -915,41 +919,8 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
-        case CALLVT: {
-          readVbn(bytecode, &pcOffset);  // argCount
-          auto traitIndex = readVbn(bytecode, &pcOffset);
-          auto methodIndex = readVbn(bytecode, &pcOffset);
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
-          Local<Trait> trait;
-          if (traitIndex < 0) {
-            trait = handle(roots->getBuiltinTrait(static_cast<BuiltinId>(traitIndex)));
-          } else {
-            trait = handle(package->getTrait(traitIndex));
-          }
-          auto callee = handle(trait->methods()->get(methodIndex));
-
-          auto returnType = currentMap.substituteReturnType(callee);
-          currentMap.pop(callee->parameterTypes()->length());
-          currentMap.popTypeArgs();
-          currentMap.push(returnType);
-          break;
-        }
-
-        case CALLVTF: {
-          readVbn(bytecode, &pcOffset);  // argCount
-          auto depIndex = static_cast<id_t>(readVbn(bytecode, &pcOffset));
-          auto externIndex = static_cast<length_t>(readVbn(bytecode, &pcOffset));
-          auto methodIndex = readVbn(bytecode, &pcOffset);
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
-          auto callee = handle(package->dependencies()->get(depIndex)
-              ->linkedTraits()->get(externIndex)->methods()->get(methodIndex));
-
-          auto returnType = currentMap.substituteReturnType(callee);
-          currentMap.pop(callee->parameterTypes()->length());
-          currentMap.popTypeArgs();
-          currentMap.push(returnType);
+        case CALLVF: {
+          UNIMPLEMENTED();
           break;
         }
 

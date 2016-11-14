@@ -58,18 +58,6 @@ const id_t kIdNotSet = -1;
 const id_t kLocalPackageId = -1;
 const id_t kBuiltinPackageId = -2;
 
-struct DefnId {
-  id_t packageId;
-  length_t defnIndex;
-
-  bool operator == (const DefnId& other) const {
-    return packageId == other.packageId && defnIndex == other.defnIndex;
-  }
-  bool operator != (const DefnId& other) const {
-    return !(*this == other);
-  }
-};
-
 const int KB = 1024;
 const int MB = 1024 * KB;
 const int GB = 1024 * MB;
@@ -252,6 +240,14 @@ inline size_t hashMix(size_t n) {
 
 
 std::vector<std::string> split(const std::string& str, char delim);
+
+
+class Counter {
+ public:
+  id_t next() { return id_++; }
+ private:
+  id_t id_ = 0;
+};
 
 
 const u32 UTF8_DECODE_ERROR = 0xffffffffU;

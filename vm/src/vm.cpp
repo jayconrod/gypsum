@@ -123,7 +123,7 @@ Persistent<Package> VM::loadPackage(const string& fileName,
       ? nativeFunctionSearchOrder_
       : nativeFunctionSearchOrder;
   vector<Persistent<Package>> loadedPackages =
-      Package::load(this, fileName, effectiveNativeFunctionSearchOrder);
+      Package::load(this, &packageIdCounter_, fileName, effectiveNativeFunctionSearchOrder);
   ASSERT(!loadedPackages.empty());
   for (auto i = loadedPackages.begin(), e = loadedPackages.end(); i != e; i++) {
     initializePackage(*i);
@@ -138,8 +138,8 @@ Persistent<Package> VM::loadPackage(istream& stream,
       nativeFunctionSearchOrder.empty()
       ? nativeFunctionSearchOrder_
       : nativeFunctionSearchOrder;
-  vector<Persistent<Package>> loadedPackages =
-      Package::load(this, stream, "" /* dirName */, effectiveNativeFunctionSearchOrder);
+  vector<Persistent<Package>> loadedPackages = Package::load(
+      this, &packageIdCounter_, stream, "" /* dirName */, effectiveNativeFunctionSearchOrder);
   ASSERT(!loadedPackages.empty());
   for (auto i = loadedPackages.begin(), e = loadedPackages.end(); i != e; i++) {
     initializePackage(*i);

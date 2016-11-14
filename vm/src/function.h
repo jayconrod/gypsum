@@ -12,6 +12,7 @@
 #include <vector>
 #include "array.h"
 #include "block.h"
+#include "defnid.h"
 #include "platform.h"
 #include "type.h"
 #include "utils.h"
@@ -32,7 +33,8 @@ class Function: public Block {
   static const BlockType kBlockType = FUNCTION_BLOCK_TYPE;
 
   void* operator new(size_t, Heap* heap, length_t instructionsSize);
-  Function(Name* name,
+  Function(DefnId id,
+           Name* name,
            String* sourceName,
            u32 flags,
            BlockArray<TypeParameter>* typeParameters,
@@ -45,8 +47,9 @@ class Function: public Block {
            Package* package,
            StackPointerMap* stackPointerMap,
            NativeFunction nativeFunction);
-  static Local<Function> create(Heap* heap);
+  static Local<Function> create(Heap* heap, DefnId id);
   static Local<Function> create(Heap* heap,
+                                DefnId id,
                                 const Handle<Name>& name,
                                 const Handle<String>& sourceName,
                                 u32 flags,
@@ -62,6 +65,7 @@ class Function: public Block {
 
   static word_t sizeForFunction(length_t instructionsSize);
 
+  DefnId id() const { return id_; }
   Name* name() const { return name_.get(); }
   void setName(Name* newName) { name_.set(this, newName); }
   String* sourceName() const { return sourceName_.get(); }
@@ -125,6 +129,7 @@ class Function: public Block {
 
  private:
   DECLARE_POINTER_MAP()
+  DefnId id_;
   Ptr<Name> name_;
   Ptr<String> sourceName_;
   u32 flags_;

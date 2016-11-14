@@ -39,21 +39,24 @@ class Package: public Object {
   static const BlockType kBlockType = PACKAGE_BLOCK_TYPE;
 
   DEFINE_NEW(Package)
-  explicit Package(VM* vm);
-  static Local<Package> create(Heap* heap);
+  Package(VM* vm, id_t id);
+  static Local<Package> create(Heap* heap, id_t id);
 
   static std::vector<Persistent<Package>> load(
       VM* vm,
+      Counter* idCounter,
       const std::string& fileName,
       const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder
           = std::vector<NativeFunctionSearch>());
   static std::vector<Persistent<Package>> load(
       VM* vm,
+      Counter* idCounter,
       std::istream& stream,
       const std::string& dirName,
       const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder
           = std::vector<NativeFunctionSearch>());
 
+  id_t id() const { return id_; }
   DEFINE_INL_ACCESSORS2(u64, flags, setFlags)
   Name* name() const { return name_.get(); }
   void setName(Name* newName) { name_.set(this, newName); }
@@ -72,7 +75,6 @@ class Package: public Object {
   BlockArray<Function>* functions() const { return functions_.get(); }
   void setFunctions(BlockArray<Function>* newFunctions) { functions_.set(this, newFunctions); }
   Function* getFunction(length_t index) const;
-  Function* getFunction(DefnId id) const;
   BlockArray<Class>* classes() const { return classes_.get(); }
   void setClasses(BlockArray<Class>* newClasses) { classes_.set(this, newClasses); }
   Class* getClass(length_t index) const;
@@ -179,6 +181,7 @@ class Package: public Object {
  private:
   DECLARE_POINTER_MAP()
 
+  id_t id_;
   u64 flags_;
   Ptr<Name> name_;
   Ptr<PackageVersion> version_;

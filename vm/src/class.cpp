@@ -51,7 +51,8 @@ void* Class::operator new (size_t, Heap* heap) {
 }
 
 
-Class::Class(Name* name,
+Class::Class(DefnId id,
+             Name* name,
              String* sourceName,
              u32 flags,
              BlockArray<TypeParameter>* typeParameters,
@@ -65,6 +66,7 @@ Class::Class(Name* name,
              Type* elementType,
              length_t lengthFieldIndex)
     : ObjectTypeDefn(CLASS_BLOCK_TYPE),
+      id_(id),
       name_(this, name),
       sourceName_(this, sourceName),
       flags_(flags),
@@ -83,6 +85,7 @@ Class::Class(Name* name,
 
 
 Local<Class> Class::create(Heap* heap,
+                           DefnId id,
                            const Handle<Name>& name,
                            const Handle<String>& sourceName,
                            u32 flags,
@@ -97,16 +100,16 @@ Local<Class> Class::create(Heap* heap,
                            const Handle<Type>& elementType,
                            length_t lengthFieldIndex) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
-      *name, sourceName.getOrNull(), flags, *typeParameters, *supertypes,
+      id, *name, sourceName.getOrNull(), flags, *typeParameters, *supertypes,
       *fields, *constructors, *methods, *traits,
       package.getOrNull(), instanceMeta.getOrNull(),
       elementType.getOrNull(), lengthFieldIndex)));
 }
 
 
-Local<Class> Class::create(Heap* heap) {
+Local<Class> Class::create(Heap* heap, DefnId id) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
-      nullptr, nullptr, 0, nullptr, nullptr, nullptr, nullptr, nullptr,
+      id, nullptr, nullptr, 0, nullptr, nullptr, nullptr, nullptr, nullptr,
       nullptr, nullptr, nullptr, nullptr, kIndexNotSet)));
 }
 
@@ -315,6 +318,7 @@ void Class::computeSizeAndPointerMapForType(Type* type, u32* size,
 
 ostream& operator << (ostream& os, const Class* clas) {
   os << brief(clas)
+     << "\n  id: " << clas->id()
      << "\n  name: " << brief(clas->name())
      << "\n  sourceName: " << brief(clas->sourceName())
      << "\n  supertypes: " << brief(clas->supertypes())

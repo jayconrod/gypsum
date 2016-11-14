@@ -61,6 +61,8 @@ def initClass(out, classData):
     assert not classData["isPrimitive"]
     out.write("\n  { // %s\n" % classData["id"])
     out.write("    auto clas = getBuiltinClass(%s);\n" % classData["id"])
+    out.write("    DefnId id(DefnId::CLASS, kBuiltinPackageId, static_cast<length_t>(%s));\n" %
+              classData["id"])
     out.write("    auto name = getBuiltinName(%s);\n" % classData["id"])
     out.write("    auto typeParameters = reinterpret_cast<BlockArray<TypeParameter>*>(" +
               "emptyBlockArray());\n")
@@ -115,7 +117,7 @@ def initClass(out, classData):
         for i, id in enumerate(allMethodIds):
             out.write("    methods->set(%d, getBuiltinFunction(%s));\n" % (i, id))
     out.write("    auto traits = emptyTraitTable();\n")
-    out.write("    ::new(clas) Class(name, nullptr, flags, typeParameters, supertypes, " +
+    out.write("    ::new(clas) Class(id, name, nullptr, flags, typeParameters, supertypes, " +
               "fields, constructors, methods, traits, nullptr, nullptr, elementType, " +
               "lengthFieldIndex);\n")
     if classData.get("isOpaque"):
@@ -129,6 +131,8 @@ def initClass(out, classData):
 def initFunction(out, functionData):
     out.write("\n  { // %s\n" % functionData["id"])
     out.write("    auto function = getBuiltinFunction(%s);\n" % functionData["id"])
+    out.write("    DefnId id(DefnId::FUNCTION, kBuiltinPackageId, static_cast<length_t>(%s));\n" %
+              functionData["id"])
     if "name" not in functionData:
         out.write("    auto name = nameFromUtf8CString(heap, \"$constructor\");\n")
     else:
@@ -140,7 +144,7 @@ def initFunction(out, functionData):
     for i, name in enumerate(functionData["parameterTypes"]):
         out.write("    parameterTypes->set(%d, %s);\n" % (i, getTypeFromName(name)))
     out.write("    u32 flags = " + buildFlags(functionData["flags"]) + ";\n")
-    out.write("    ::new(function) Function(name, nullptr, flags, emptyTypeParameters, " +
+    out.write("    ::new(function) Function(id, name, nullptr, flags, emptyTypeParameters, " +
               "returnType, parameterTypes, nullptr, 0, emptyInstructions, " +
               "nullptr, nullptr, nullptr, nullptr);\n")
     out.write("    function->setBuiltinId(%s);\n" % functionData["id"])
@@ -198,6 +202,7 @@ with open(rootsBuiltinsName, "w") as rootsBuiltinsFile:
 #include "builtins.h"
 #include "block.h"
 #include "class.h"
+#include "defnid.h"
 #include "field.h"
 #include "flags.h"
 #include "function.h"

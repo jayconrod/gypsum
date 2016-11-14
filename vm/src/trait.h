@@ -9,6 +9,7 @@
 
 #include <iostream>
 #include "block.h"
+#include "defnid.h"
 #include "hash-table.h"
 #include "object-type-defn.h"
 #include "ptr.h"
@@ -34,15 +35,17 @@ class Trait: public ObjectTypeDefn {
   static const BlockType kBlockType = TRAIT_BLOCK_TYPE;
 
   void* operator new(size_t, Heap* heap);
-  Trait(Name* name,
+  Trait(DefnId id,
+        Name* name,
         String* sourceName,
         u32 flags,
         BlockArray<TypeParameter>* typeParameters,
         BlockArray<Type>* supertypes,
         BlockArray<Function>* methods,
         Package* package);
-  static Local<Trait> create(Heap* heap);
+  static Local<Trait> create(Heap* heap, DefnId id);
   static Local<Trait> create(Heap* heap,
+                             DefnId id,
                              const Handle<Name>& name,
                              const Handle<String>& sourceName,
                              u32 flags,
@@ -50,6 +53,8 @@ class Trait: public ObjectTypeDefn {
                              const Handle<BlockArray<Type>>& supertypes,
                              const Handle<BlockArray<Function>>& methods,
                              const Handle<Package>& package);
+
+  DefnId id() const { return id_; }
 
   Name* name() const { return name_.get(); }
   void setName(Name* name) { name_.set(this, name); }
@@ -94,6 +99,7 @@ class Trait: public ObjectTypeDefn {
 
  private:
   DECLARE_POINTER_MAP()
+  DefnId id_;
   Ptr<Name> name_;
   Ptr<String> sourceName_;
   u32 flags_;

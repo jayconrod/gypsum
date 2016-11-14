@@ -94,6 +94,7 @@ class VM {
   std::vector<Persistent<Package>> packages_;
   std::vector<Persistent<Package>> loadingPackages_;
   std::vector<NativeFunctionSearch> nativeFunctionSearchOrder_;
+  Counter packageIdCounter_;
   std::unordered_map<NativeFunctionKey, NativeFunction, HashNativeFunctionKey>
       registeredNativeFunctions_;
   bool shouldVerifyHeap_;

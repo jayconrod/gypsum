@@ -9,6 +9,7 @@
 
 #include <iostream>
 #include "block.h"
+#include "defnid.h"
 #include "hash-table.h"
 #include "object-type-defn.h"
 #include "utils.h"
@@ -36,7 +37,8 @@ class Class: public ObjectTypeDefn {
   static const BlockType kBlockType = CLASS_BLOCK_TYPE;
 
   void* operator new(size_t, Heap* heap);
-  Class(Name* name,
+  Class(DefnId id,
+        Name* name,
         String* sourceName,
         u32 flags,
         BlockArray<TypeParameter>* typeParameters,
@@ -49,8 +51,9 @@ class Class: public ObjectTypeDefn {
         Meta* instanceMeta = nullptr,
         Type* elementType = nullptr,
         length_t lengthFieldIndex = kIndexNotSet);
-  static Local<Class> create(Heap* heap);
+  static Local<Class> create(Heap* heap, DefnId id);
   static Local<Class> create(Heap* heap,
+                             DefnId id,
                              const Handle<Name>& name,
                              const Handle<String>& sourceName,
                              u32 flags,
@@ -69,6 +72,8 @@ class Class: public ObjectTypeDefn {
   // as immutable. This is necessary since Class and Type have a cyclic relationship. We may
   // need to allocate empty Class objects early, then fill them after other objects which
   // refer to them have been allocated.
+
+  DefnId id() const { return id_; }
 
   Name* name() const { return name_.get(); }
   void setName(Name* name) { name_.set(this, name); }
@@ -171,6 +176,7 @@ class Class: public ObjectTypeDefn {
                                        bool* hasPointers, BitSet* pointerMap) const;
 
   DECLARE_POINTER_MAP()
+  DefnId id_;
   Ptr<Name> name_;
   Ptr<String> sourceName_;
   u32 flags_;

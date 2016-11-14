@@ -815,50 +815,8 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
-      case CALLVT: {
-        auto argCount = readVbn();
-        auto traitIndex = toLength(readVbn());
-        auto methodIndex = toLength(readVbn());
-        ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
-        auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
-        CHECK_NON_NULL(receiver);
-        Trait* trait;
-        if (traitIndex < 0) {
-          trait = vm_->roots()->getBuiltinTrait(static_cast<BuiltinId>(traitIndex));
-        } else {
-          trait = function_->package()->getTrait(traitIndex);
-        }
-        Persistent<Function> callee(
-            receiver->clas()->traits()->find(trait)->value->get(methodIndex));
-        if (callee->hasBuiltinId()) {
-          handleBuiltin(callee->builtinId());
-        } else if (callee->isNative()) {
-          handleNative(callee);
-        } else {
-          enter(callee);
-        }
-        break;
-      }
-
-      case CALLVTF: {
-        auto argCount = readVbn();
-        auto depIndex = static_cast<id_t>(toLength(readVbn()));
-        auto traitIndex = toLength(readVbn());
-        auto methodIndex = toLength(readVbn());
-        ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
-        auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
-        CHECK_NON_NULL(receiver);
-        auto trait = function_->package()->dependencies()->get(depIndex)
-            ->linkedTraits()->get(traitIndex);
-        Persistent<Function> callee(
-            receiver->clas()->traits()->find(trait)->value->get(methodIndex));
-        if (callee->hasBuiltinId()) {
-          handleBuiltin(callee->builtinId());
-        } else if (callee->isNative()) {
-          handleNative(callee);
-        } else {
-          enter(callee);
-        }
+      case CALLVF: {
+        UNIMPLEMENTED();
         break;
       }
 

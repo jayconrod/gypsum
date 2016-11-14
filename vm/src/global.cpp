@@ -24,8 +24,9 @@ DEFINE_POINTER_MAP(Global, GLOBAL_POINTERS_LIST)
 #undef GLOBAL_POINTERS_LIST
 
 
-Global::Global(Name* name, String* sourceName, u32 flags, Type* type)
+Global::Global(DefnId id, Name* name, String* sourceName, u32 flags, Type* type)
     : Block(GLOBAL_BLOCK_TYPE),
+      id_(id),
       name_(this, name),
       sourceName_(this, sourceName),
       flags_(flags),
@@ -34,11 +35,11 @@ Global::Global(Name* name, String* sourceName, u32 flags, Type* type)
 }
 
 
-Local<Global> Global::create(Heap* heap, const Handle<Name>& name,
+Local<Global> Global::create(Heap* heap, DefnId id, const Handle<Name>& name,
                              const Handle<String>& sourceName,
                              u32 flags, const Handle<Type>& type) {
   RETRY_WITH_GC(heap, return Local<Global>(new(heap) Global(
-      *name, sourceName.getOrNull(), flags, *type)));
+      id, *name, sourceName.getOrNull(), flags, *type)));
 }
 
 
@@ -104,6 +105,7 @@ void Global::setRaw(i64 value) {
 
 ostream& operator << (ostream& os, const Global* global) {
   os << brief(global)
+     << "\n  id: " << global->id()
      << "\n  name: " << brief(global->name())
      << "\n  sourceName: " << brief(global->sourceName())
      << "\n  type: " << brief(global->type())
