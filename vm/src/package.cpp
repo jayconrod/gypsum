@@ -122,7 +122,8 @@ class Loader {
                           Local<BlockArray<TypeParameter>>* typeParameters,
                           Local<Type>* returnType,
                           Local<BlockArray<Type>>* parameterTypes,
-                          Local<ObjectTypeDefn>* definingClass);
+                          Local<ObjectTypeDefn>* definingClass,
+                          Local<BlockArray<Function>>* overrides);
   void readClass(const Local<Class>& clas);
   void readTrait(const Local<Trait>& trait);
   Local<Field> readField(u32 index, u32 offset);
@@ -1041,9 +1042,10 @@ Local<Function> Loader::readFunction(DefnId id) {
   Local<Type> returnType;
   Local<BlockArray<Type>> parameterTypes;
   Local<ObjectTypeDefn> definingClass;
+  Local<BlockArray<Function>> overrides;
   readFunctionHeader(
       &name, &sourceName, &flags, &typeParameters,
-      &returnType, &parameterTypes, &definingClass);
+      &returnType, &parameterTypes, &definingClass, &overrides);
 
   word_t localsSize = kNotSet;
   Local<LengthArray> blockOffsets;
@@ -1064,7 +1066,7 @@ Local<Function> Loader::readFunction(DefnId id) {
   auto func = Function::create(heap(), id, name, sourceName, flags, typeParameters,
                                returnType, parameterTypes, definingClass,
                                localsSize, instructions, blockOffsets,
-                               package_, nullptr);
+                               package_, overrides, nullptr);
   return func;
 }
 
@@ -1075,7 +1077,8 @@ void Loader::readFunctionHeader(Local<Name>* name,
                                 Local<BlockArray<TypeParameter>>* typeParameters,
                                 Local<Type>* returnType,
                                 Local<BlockArray<Type>>* parameterTypes,
-                                Local<ObjectTypeDefn>* definingClass) {
+                                Local<ObjectTypeDefn>* definingClass,
+                                Local<BlockArray<Function>>* overrides) {
   *name = readName();
   *sourceName = readSourceName();
   *flags = readValue<u32>();
@@ -1092,6 +1095,12 @@ void Loader::readFunctionHeader(Local<Name>* name,
     *definingClass = readDefiningClass();
   } else {
     definingClass->clear();
+  }
+
+  if ((OVERRIDE_FLAG & *flags) != 0) {
+    *overrides = readBlockList<Function>([this]() { return readIdAndGetMethod(); });
+  } else {
+    overrides->clear();
   }
 }
 
@@ -1861,10 +1870,11 @@ void DependencyLoader::readExternFunction(const Handle<Function>& func) {
   Local<Type> returnType;
   Local<BlockArray<Type>> parameterTypes;
   Local<ObjectTypeDefn> definingClass;
+  Local<BlockArray<Function>> overrides;
 
   readFunctionHeader(
       &name, &sourceName, &flags, &typeParameters,
-      &returnType, &parameterTypes, &definingClass);
+      &returnType, &parameterTypes, &definingClass, &overrides);
   func->setName(*name);
   func->setSourceName(sourceName.getOrNull());
   func->setFlags(flags);
@@ -1872,6 +1882,7 @@ void DependencyLoader::readExternFunction(const Handle<Function>& func) {
   func->setReturnType(*returnType);
   func->setParameterTypes(*parameterTypes);
   func->setDefiningClass(definingClass.getOrNull());
+  func->setOverrides(overrides.getOrNull());
 
   if ((flags & EXTERN_FLAG) == 0) {
     throw Error("invalid function");

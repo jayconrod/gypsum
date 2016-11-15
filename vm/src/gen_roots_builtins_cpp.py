@@ -143,10 +143,17 @@ def initFunction(out, functionData):
               len(functionData["parameterTypes"]))
     for i, name in enumerate(functionData["parameterTypes"]):
         out.write("    parameterTypes->set(%d, %s);\n" % (i, getTypeFromName(name)))
+    if "OVERRIDE" in functionData["flags"]:
+        out.write("    auto overrides = new(heap, %d) BlockArray<Function>;\n" %
+                  len(functionData["overrides"]))
+        for i, id in enumerate(functionData["overrides"]):
+            out.write("    overrides->set(%d, getBuiltinFunction(%s));\n" % (i, id))
+    else:
+        out.write("    BlockArray<Function>* overrides = nullptr;\n")
     out.write("    u32 flags = " + buildFlags(functionData["flags"]) + ";\n")
     out.write("    ::new(function) Function(id, name, nullptr, flags, emptyTypeParameters, " +
               "returnType, parameterTypes, nullptr, 0, emptyInstructions, " +
-              "nullptr, nullptr, nullptr, nullptr);\n")
+              "nullptr, nullptr, overrides, nullptr, nullptr);\n")
     out.write("    function->setBuiltinId(%s);\n" % functionData["id"])
     out.write("  }")
 

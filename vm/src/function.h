@@ -45,6 +45,7 @@ class Function: public Block {
            const std::vector<u8>& instructions,
            LengthArray* blockOffsets,
            Package* package,
+           BlockArray<Function>* overrides,
            StackPointerMap* stackPointerMap,
            NativeFunction nativeFunction);
   static Local<Function> create(Heap* heap, DefnId id);
@@ -61,6 +62,7 @@ class Function: public Block {
                                 const std::vector<u8>& instructions,
                                 const Handle<LengthArray>& blockOffsets,
                                 const Handle<Package>& package,
+                                const Handle<BlockArray<Function>>& overrides,
                                 NativeFunction nativeFunction);
 
   static word_t sizeForFunction(length_t instructionsSize);
@@ -113,6 +115,9 @@ class Function: public Block {
   Package* package() const { return package_.get(); }
   void setPackage(Package* newPackage) { package_.set(this, newPackage); }
 
+  BlockArray<Function>* overrides() const { return overrides_.get(); }
+  void setOverrides(BlockArray<Function>* newOverrides) { overrides_.set(this, newOverrides); }
+
   StackPointerMap* stackPointerMap() const { return stackPointerMap_.get(); }
   void setStackPointerMap(StackPointerMap* newStackPointerMap) {
     stackPointerMap_.set(this, newStackPointerMap);
@@ -142,6 +147,7 @@ class Function: public Block {
   length_t instructionsSize_;
   Ptr<LengthArray> blockOffsets_;
   Ptr<Package> package_;
+  Ptr<BlockArray<Function>> overrides_;
   Ptr<StackPointerMap> stackPointerMap_;
   NativeFunction nativeFunction_;
   // Update FUNCTION_POINTER_LIST if pointer members change.

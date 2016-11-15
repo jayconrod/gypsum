@@ -38,6 +38,7 @@ namespace internal {
   F(Function, definingClass_)    \
   F(Function, blockOffsets_)     \
   F(Function, package_)          \
+  F(Function, overrides_)        \
   F(Function, stackPointerMap_)  \
 
 
@@ -67,6 +68,7 @@ Function::Function(DefnId id,
                    const vector<u8>& instructions,
                    LengthArray* blockOffsets,
                    Package* package,
+                   BlockArray<Function>* overrides,
                    StackPointerMap* stackPointerMap,
                    NativeFunction nativeFunction)
     : Block(FUNCTION_BLOCK_TYPE),
@@ -83,6 +85,7 @@ Function::Function(DefnId id,
       instructionsSize_(instructions.size()),
       blockOffsets_(this, blockOffsets),
       package_(this, package),
+      overrides_(this, overrides),
       stackPointerMap_(this, stackPointerMap),
       nativeFunction_(nullptr) {
   ASSERT(instructionsSize_ <= kMaxLength);
@@ -93,7 +96,7 @@ Function::Function(DefnId id,
 Local<Function> Function::create(Heap* heap, DefnId id) {
   RETRY_WITH_GC(heap, return Local<Function>(new(heap, 0) Function(
       id, nullptr, nullptr, 0, nullptr, nullptr, nullptr, nullptr,
-      0, vector<u8>{}, nullptr, nullptr, nullptr, nullptr)));
+      0, vector<u8>{}, nullptr, nullptr, nullptr, nullptr, nullptr)));
 }
 
 
@@ -110,11 +113,12 @@ Local<Function> Function::create(Heap* heap,
                                  const vector<u8>& instructions,
                                  const Handle<LengthArray>& blockOffsets,
                                  const Handle<Package>& package,
+                                 const Handle<BlockArray<Function>>& overrides,
                                  NativeFunction nativeFunction) {
   RETRY_WITH_GC(heap, return Local<Function>(new(heap, instructions.size()) Function(
       id, *name, sourceName.getOrNull(), flags, *typeParameters, *returnType, *parameterTypes,
       definingClass.getOrNull(), localsSize, instructions, blockOffsets.getOrNull(),
-      package.getOrNull(), nullptr, nativeFunction)));
+      package.getOrNull(), overrides.getOrNull(), nullptr, nativeFunction)));
 }
 
 
@@ -190,6 +194,7 @@ ostream& operator << (ostream& os, const Function* fn) {
      << "\n  instructions size: " << fn->instructionsSize()
      << "\n  block offsets: " << brief(fn->blockOffsets())
      << "\n  package: " << brief(fn->package())
+     << "\n  overrides: " << brief(fn->overrides())
      << "\n  stack pointer map: " << brief(fn->stackPointerMap());
   return os;
 }
