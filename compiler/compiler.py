@@ -373,7 +373,7 @@ class CompileVisitor(ast.NodeVisitor):
         else:
             self.dup()  # value
             self.buildLiteral(lit)
-            self.buildCallNamedMethod(ty, "==", COMPILE_FOR_VALUE)
+            self.buildEquals(ty)
         successBlock = self.newBlock()
         self.branchif(successBlock.id, failBlock.id)
         self.setCurrentBlock(successBlock)
@@ -448,13 +448,13 @@ class CompileVisitor(ast.NodeVisitor):
             # first is a little more compact.
             self.dup()
             buildValue()
-            self.buildCallNamedMethod(ty, "==", COMPILE_FOR_VALUE)
+            self.buildEquals(ty)
         else:
             # The == operator for the matching value could be anything, so we want to make
             # sure to call the method on the value from this pattern.
             buildValue()
             self.dupi(1)
-            self.buildCallNamedMethod(ty, "==", COMPILE_FOR_VALUE)
+            self.buildEquals(ty)
         successBlock = self.newBlock()
         self.branchif(successBlock.id, failBlock.id)
         self.setCurrentBlock(successBlock)
@@ -1756,8 +1756,10 @@ class CompileVisitor(ast.NodeVisitor):
     def buildEquals(self, ty):
         """Compares the two values on top of the stack for equality. For objects, reference
         equality is used."""
-        methodName = "==" if ty.isPrimitive() else "==="
-        self.buildCallNamedMethod(ty, methodName, COMPILE_FOR_VALUE)
+        if ty.isPrimitive():
+            self.buildCallNamedMethod(ty, "==", COMPILE_FOR_VALUE)
+        else:
+            self.buildCallNamedMethod(getRootClassType(), "===", COMPILE_FOR_VALUE)
 
     def buildType(self, ty, loc):
         """Builds a type on the static type argument stack and simultaneously builds an

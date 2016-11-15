@@ -170,7 +170,7 @@ def _initialize():
         name = Name([classData["name"]])
         flags = buildFlags(classData["flags"])
         clas = ir.Class(name, None, sourceName=classData["name"],
-                        typeParameters=[], flags=flags)
+                        typeParameters=[], methods=[], flags=flags)
         _builtinClasses.append(clas)
         _builtinClassNameMap[classData["name"]] = clas
 
@@ -181,35 +181,27 @@ def _initialize():
             if classData["supertype"] is not None:
                 superclass = _builtinClassNameMap[classData["supertype"]]
                 clas.supertypes = [ir_types.ClassType(superclass)]
-                clas.fields = list(superclass.fields)
-                clas.methods = list(superclass.methods)
             else:
                 clas.supertypes = []
-                clas.fields = []
-                clas.methods = []
             clas.constructors = [buildConstructor(ctorData, clas)
                                  for ctorData in classData["constructors"]]
-            clas.fields += [buildField(fieldData, index, clas)
-                            for index, fieldData in enumerate(classData["fields"])]
+            clas.fields = [buildField(fieldData, index, clas)
+                           for index, fieldData in enumerate(classData["fields"])]
         else:
             clas.supertypes = []
             clas.fields = []
-            clas.methods = []
             clas.isPrimitive = True
         inheritedMethodCount = len(clas.methods)
         for m in classData["methods"]:
-            addMethod(clas.methods, inheritedMethodCount, buildMethod(m, clas))
+            method = buildMethod(m, clas)
+            clas.methods.append(method)
+            if method.overrides is not None:
+                for overrideId in method.overrides:
+                    override = getBuiltinFunctionById(overrideId)
+                    override.overridenBy[clas.id] = method
 
         _builtinClassTypeMap[classData["name"]] = clas
         _builtinClassIdMap[clas.id] = clas
-
-    def addMethod(methods, inheritedCount, method):
-        for i, m in enumerate(methods[:inheritedCount]):
-            if method.name.short() == m.name.short() and method.mayOverride(m):
-                method.override = m
-                methods[i] = method
-                return
-        methods.append(method)
 
     def defineFunction(functionData):
         function = buildFunction(functionData)

@@ -1377,13 +1377,12 @@ class TestCompiler(TestCaseWithDefinitions):
                  "    case foo.bar => 12\n" + \
                  "    case _ => 34"
         package = self.compileFromSource(source, packageLoader=loader)
-        eqMethod = stringClass.findMethodBySourceName("==")
         self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
                                ldlocal(0),
                                ldgf(bar),
                                dupi(1),
-                               callv(eqMethod),
+                               eqp(),
                                branchif(1, 2),
                              ], [
                                drop(),
