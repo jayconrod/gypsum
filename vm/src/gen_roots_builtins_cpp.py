@@ -107,14 +107,13 @@ def initClass(out, classData):
         for i, ctorData in enumerate(classData["constructors"]):
             out.write("    constructors->set(%d, getBuiltinFunction(%s));\n" %
                       (i, ctorData["id"]))
-    allMethodIds = [method["id"] for method in findInheritedMethods(classData)]
-    if len(allMethodIds) == 0:
+    methodIds = [m["id"] for m in classData["methods"]]
+    if len(methodIds) == 0:
         out.write("    auto methods = reinterpret_cast<BlockArray<Function>*>(" +
                   "emptyBlockArray());\n")
     else:
-        out.write("    auto methods = new(heap, %d) BlockArray<Function>;\n" %
-                  len(allMethodIds))
-        for i, id in enumerate(allMethodIds):
+        out.write("    auto methods = new(heap, %d) BlockArray<Function>;\n" % len(methodIds))
+        for i, id in enumerate(methodIds):
             out.write("    methods->set(%d, getBuiltinFunction(%s));\n" % (i, id))
     out.write("    auto traits = emptyTraitTable();\n")
     out.write("    ::new(clas) Class(id, name, nullptr, flags, typeParameters, supertypes, " +
@@ -167,23 +166,6 @@ def buildFlags(flagsData):
 
 def findClass(name):
     return next(classData for classData in classesData if classData["name"] == name)
-
-
-def findInheritedMethods(classData):
-    ownMethods = classData["methods"]
-    if classData["supertype"] is None:
-        return ownMethods
-    else:
-        superclassData = findClass(classData["supertype"])
-        inheritedMethods = findInheritedMethods(superclassData)
-        methods = list(inheritedMethods)
-        indexMap = {method["name"]: index for index, method in enumerate(methods)}
-        for method in ownMethods:
-            if method["name"] in indexMap:
-                methods[indexMap[method["name"]]] = method
-            else:
-                methods.append(method)
-        return methods
 
 
 def getTypeFromName(name):
