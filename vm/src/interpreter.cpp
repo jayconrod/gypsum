@@ -488,7 +488,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
           HandleScope handleScope(vm_);
           auto clas = handle(function_->package()->dependencies()->get(depIndex)
               ->linkedClasses()->get(externIndex));
-          auto meta = Class::ensureAndGetInstanceMeta(clas);
+          auto meta = Class::ensureInstanceMeta(clas);
           obj = *Object::create(vm_->heap(), meta);
         } catch (AllocationError& e) {
           doThrow(threadBindle_->takeOutOfMemoryException());
@@ -525,7 +525,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
           HandleScope handleScope(vm_);
           auto clas = handle(function_->package()->dependencies()->get(depIndex)
               ->linkedClasses()->get(externIndex));
-          auto meta = Class::ensureAndGetInstanceMeta(clas);
+          auto meta = Class::ensureInstanceMeta(clas);
           array = *Object::create(vm_->heap(), meta, length);
         } catch (AllocationError& e) {
           doThrow(threadBindle_->takeOutOfMemoryException());
@@ -1012,7 +1012,7 @@ void Interpreter::handleBuiltin(BuiltinId id) {
         if (!clas->elementType() || !clas->elementType()->isI32()) {
           auto exnClass = handle(
               vm_->roots()->getBuiltinClass(BUILTIN_ILLEGAL_ARGUMENT_EXCEPTION_CLASS_ID));
-          auto exnMeta = Class::ensureAndGetInstanceMeta(exnClass);
+          auto exnMeta = Class::ensureInstanceMeta(exnClass);
           auto exn = Object::create(vm_->heap(), exnMeta);
           doThrow(*exn);
           break;
@@ -1124,7 +1124,7 @@ void Interpreter::handleBuiltin(BuiltinId id) {
         HandleScope handleScope(vm_);
         if (!cin.good()) {
           auto clas = handle(vm_->roots()->getBuiltinClass(BUILTIN_EXCEPTION_CLASS_ID));
-          auto meta = Class::ensureAndGetInstanceMeta(clas);
+          auto meta = Class::ensureInstanceMeta(clas);
           auto exn = Object::create(vm_->heap(), meta);
           doThrow(*exn);
           break;
@@ -1181,7 +1181,7 @@ Local<Meta> Interpreter::getMetaForClassId(i64 classId) {
     return handle(vm_->roots()->getBuiltinMeta(classId));
   }
   Local<Class> clas(function_->package()->getClass(classId));
-  return Class::ensureAndGetInstanceMeta(clas);
+  return Class::ensureInstanceMeta(clas);
 }
 
 

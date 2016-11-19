@@ -126,7 +126,7 @@ class Loader {
                           Local<BlockArray<Function>>* overrides);
   void readClass(const Local<Class>& clas);
   void readTrait(const Local<Trait>& trait);
-  Local<Field> readField(u32 index, u32 offset);
+  Local<Field> readField();
   void readTypeParameter(const Local<TypeParameter>& typeParam);
   Local<Type> readType();
 
@@ -1119,11 +1119,9 @@ void Loader::readClass(const Local<Class>& clas) {
 
   auto fieldCount = readLengthVbn();
   auto fields = BlockArray<Field>::create(heap(), fieldCount);
-  u32 fieldOffset = kWordSize;
   for (length_t i = 0; i < fieldCount; i++) {
-    auto field = readField(i, fieldOffset);
+    auto field = readField();
     fields->set(i, *field);
-    fieldOffset = field->offset() + field->type()->typeSize();
   }
 
   auto constructors = readBlockList<Function>([this]() { return readIdAndGetMethod(); });
@@ -1132,18 +1130,6 @@ void Loader::readClass(const Local<Class>& clas) {
   auto traits = readTraitTable();
 
   auto elementType = readOption<Type>(&Loader::readType);
-  length_t lengthFieldIndex = kIndexNotSet;
-  if (elementType) {
-    for (length_t i = 0; i < fields->length(); i++) {
-      if ((fields->get(i)->flags() & ARRAY_FLAG) != 0) {
-        lengthFieldIndex = i;
-        break;
-      }
-    }
-    if (lengthFieldIndex == kIndexNotSet) {
-      throw Error("no length field found in array");
-    }
-  }
 
   clas->setName(*name);
   clas->setSourceName(sourceName.getOrNull());
@@ -1155,7 +1141,6 @@ void Loader::readClass(const Local<Class>& clas) {
   clas->setMethods(*methods);
   clas->setTraits(traits.getOrNull());
   clas->setElementType(elementType.getOrNull());
-  clas->setLengthFieldIndex(lengthFieldIndex);
 }
 
 
@@ -1181,13 +1166,13 @@ void Loader::readTrait(const Local<Trait>& trait) {
 }
 
 
-Local<Field> Loader::readField(u32 index, u32 offset) {
+Local<Field> Loader::readField() {
   auto name = readName();
   auto sourceName = readSourceName();
   auto flags = readValue<u32>();
   auto type = readType();
-  u32 alignedOffset = align(offset, type->alignment());
-  auto field = Field::create(heap(), name, sourceName, flags, type, index, alignedOffset);
+  auto offset = static_cast<u32>(kNotSet);
+  auto field = Field::create(heap(), name, sourceName, flags, type, offset);
   return field;
 }
 

@@ -77,27 +77,19 @@ def initClass(out, classData):
     else:
         out.write("    auto fields = new(heap, %d) BlockArray<Field>;\n" %
                   len(classData["fields"]))
-        out.write("    u32 fieldOffset = kWordSize;\n")
         for i, fieldData in enumerate(classData["fields"]):
             out.write("    auto field%dName = nameFromUtf8CString(heap, \"%s\");\n" %
                       (i, fieldData["name"]))
             out.write("    auto field%dType = %s;\n" % (i, getTypeFromName(fieldData["type"])))
-            out.write("    fieldOffset = align(fieldOffset, field%dType->alignment());\n" % i)
             flags = buildFlags(fieldData["flags"])
             out.write(("    auto field%d = new(heap) Field(field%dName, nullptr, " +
-                       "%s, field%dType, %d, fieldOffset);\n") %
-                      (i, i, flags, i, i))
+                       "%s, field%dType, static_cast<u32>(kNotSet));\n") %
+                      (i, i, flags, i))
             out.write("    fields->set(%d, field%d);\n" % (i, i))
-            out.write("    fieldOffset += field%dType->typeSize();\n" % i)
     if "elements" not in classData:
         out.write("    Type* elementType = nullptr;\n")
-        out.write("    length_t lengthFieldIndex = kIndexNotSet;\n")
     else:
         out.write("    auto elementType = %s;\n" % getTypeFromName(classData["elements"]))
-        lengthFieldIndex = next(i for i, field in
-                                enumerate(classData["fields"])
-                                if field["name"] == "length")
-        out.write("    auto lengthFieldIndex = %d;\n" % lengthFieldIndex)
     if len(classData["constructors"]) == 0:
         out.write("    auto constructors = reinterpret_cast<BlockArray<Function>*>(" +
                   "emptyBlockArray());\n")
@@ -117,12 +109,11 @@ def initClass(out, classData):
             out.write("    methods->set(%d, getBuiltinFunction(%s));\n" % (i, id))
     out.write("    auto traits = emptyTraitTable();\n")
     out.write("    ::new(clas) Class(id, name, nullptr, flags, typeParameters, supertypes, " +
-              "fields, constructors, methods, traits, nullptr, nullptr, elementType, " +
-              "lengthFieldIndex);\n")
+              "fields, constructors, methods, traits, nullptr, nullptr, elementType);\n")
     if classData.get("isOpaque"):
         out.write("    builtinMetas_.push_back(nullptr);\n  }")
     else:
-        out.write("    auto meta = clas->buildInstanceMeta();\n")
+        out.write("    auto meta = *Class::ensureInstanceMeta(handle(clas));\n")
         out.write("    clas->setInstanceMeta(meta);\n")
         out.write("    builtinMetas_.push_back(meta);\n  }")
 

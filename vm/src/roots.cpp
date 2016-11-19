@@ -30,6 +30,7 @@ void Roots::initialize(Heap* heap) {
   // to partially constructed objects, and we're doing a lot of allocation. Garbage collection
   // will almost certainly break this initialization.
   AllowGcScope disableGc(heap, false);
+  HandleScope handleScope(heap->vm());
 
   auto metaMeta = new(heap, 0, sizeof(Meta), Meta::kElementSize) Meta(META_BLOCK_TYPE);
   basicRoots_[META_META_ROOT_INDEX] = metaMeta;

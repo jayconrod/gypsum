@@ -36,6 +36,13 @@ class Class: public ObjectTypeDefn {
  public:
   static const BlockType kBlockType = CLASS_BLOCK_TYPE;
 
+  /**
+   * Size in bytes of the metadata at the beginning of each instance of a `Class`.
+   *
+   * The first field of an object can be found at this offset.
+   */
+  static const u32 kObjectMetaSize = kWordSize;
+
   void* operator new(size_t, Heap* heap);
   Class(DefnId id,
         Name* name,
@@ -49,8 +56,7 @@ class Class: public ObjectTypeDefn {
         TraitTable* traits,
         Package* package,
         Meta* instanceMeta = nullptr,
-        Type* elementType = nullptr,
-        length_t lengthFieldIndex = kIndexNotSet);
+        Type* elementType = nullptr);
   static Local<Class> create(Heap* heap, DefnId id);
   static Local<Class> create(Heap* heap,
                              DefnId id,
@@ -65,8 +71,7 @@ class Class: public ObjectTypeDefn {
                              const Handle<TraitTable>& traits,
                              const Handle<Package>& package,
                              const Handle<Meta>& instanceMeta = Local<Meta>(),
-                             const Handle<Type>& elementType = Local<Type>(),
-                             length_t lengthFieldIndex = kIndexNotSet);
+                             const Handle<Type>& elementType = Local<Type>());
 
   // Most members can be set after construction, even though we would like to consider Class
   // as immutable. This is necessary since Class and Type have a cyclic relationship. We may
@@ -96,6 +101,8 @@ class Class: public ObjectTypeDefn {
 
   BlockArray<Field>* fields() const { return fields_.get(); }
   void setFields(BlockArray<Field>* newFields) { fields_.set(this, newFields); }
+  BlockArray<Field>* flatFields() const { return flatFields_.get(); }
+  void setFlatFields(BlockArray<Field>* newFlatFields) { flatFields_.set(this, newFlatFields); }
   length_t findFieldIndex(word_t offset) const;
   word_t findFieldOffset(length_t index) const;
   Class* findFieldClass(length_t index);
@@ -119,9 +126,6 @@ class Class: public ObjectTypeDefn {
 
   Type* elementType() const { return elementType_.get(); }
   void setElementType(Type* newElementType) { elementType_.set(this, newElementType); }
-
-  length_t lengthFieldIndex() const { return lengthFieldIndex_; }
-  void setLengthFieldIndex(length_t newIndex) { lengthFieldIndex_ = newIndex; }
 
   BlockHashMap<Name, Field>* fieldNameIndex() const { return fieldNameIndex_.get(); }
   void setFieldNameIndex(BlockHashMap<Name, Field>* index) {
@@ -160,21 +164,27 @@ class Class: public ObjectTypeDefn {
   static Local<BlockHashMap<String, Function>> ensureAndGetConstructorSignatureIndex(
       const Handle<Class>& clas);
 
-  /** Constructs a new instance Meta whether one already exists or not. Does not use handles
-   *  or invoke the garbage collector. This is used by Roots, since GC is not available there.
-   *  `ensureAndGetInstaceMeta` should be called normally.
-   */
-  Meta* buildInstanceMeta();
-  static Local<Meta> ensureAndGetInstanceMeta(const Handle<Class>& clas);
-  static void ensureInstanceMeta(const Handle<Class>& clas);
-
   bool isSubclassOf(const Class* other) const;
 
- private:
-  void computeSizeAndPointerMap(u32* size, bool* hasPointers, BitSet* pointerMap) const;
-  void computeSizeAndPointerMapForType(Type* type, u32* size,
-                                       bool* hasPointers, BitSet* pointerMap) const;
+  /**
+   * Builds a {@link Meta} for instances of this class if it doesn't exist, then returns it.
+   *
+   * Note that fields and methods must be flattened in order for the {@link Meta} to be created,
+   * so {@link #ensureFlatFields} and {@link #ensureFlatMethods} will be called internally.
+   */
+  static Local<Meta> ensureInstanceMeta(const Handle<Class>& clas);
 
+  /**
+   * Builds a list of all {@link Field}s in this class if it doesn't exist, then returns it.
+   *
+   * When serialized into a package file, a `Class` only includes fields it defines. It does
+   * not include inherited fields, since these may change in another package and break
+   * binary compatibility. We need to build the full "flat" list of fields at run-time, which
+   * is what this method does.
+   */
+  static Local<BlockArray<Field>> ensureFlatFields(const Handle<Class>& clas);
+
+ private:
   DECLARE_POINTER_MAP()
   DefnId id_;
   Ptr<Name> name_;
@@ -183,13 +193,13 @@ class Class: public ObjectTypeDefn {
   Ptr<BlockArray<TypeParameter>> typeParameters_;
   Ptr<BlockArray<Type>> supertypes_;
   Ptr<BlockArray<Field>> fields_;
+  Ptr<BlockArray<Field>> flatFields_;
   Ptr<BlockArray<Function>> constructors_;
   Ptr<BlockArray<Function>> methods_;
   Ptr<TraitTable> traits_;
   Ptr<Package> package_;
   Ptr<Meta> instanceMeta_;
   Ptr<Type> elementType_;
-  length_t lengthFieldIndex_;
   Ptr<BlockHashMap<Name, Field>> fieldNameIndex_;
   Ptr<BlockHashMap<String, Field>> fieldSourceNameIndex_;
   Ptr<BlockHashMap<Name, Function>> methodNameIndex_;
