@@ -46,6 +46,8 @@ class PointerMarkingVisitor: public BlockVisitorBase<PointerMarkingVisitor> {
 
 
 void GC::collectGarbage() {
+  ASSERT(heap_->isGcAllowed());
+
   #ifdef DEBUG
   for (auto chunk : *heap_) {
     ASSERT(!chunk->isMarked());

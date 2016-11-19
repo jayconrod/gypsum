@@ -27,7 +27,8 @@ namespace internal {
 Heap::Heap(VM* vm)
     : vm_(vm),
       shouldExpand_(true),
-      isAllocationAllowed_(false) {
+      isAllocationAllowed_(false),
+      isGcAllowed_(true) {
   expand();
 }
 
@@ -57,6 +58,7 @@ void Heap::recordWrite(Address from, Address to) { }
 
 void Heap::collectGarbage() {
   ASSERT(isAllocationAllowed());
+  CHECK(!isGcAllowed());
   allocator_.release();
   GC gc(this);
   gc.collectGarbage();
@@ -209,7 +211,7 @@ Address Heap::allocateSlow(word_t size) {
 
 bool Heap::shouldExpand() const {
   // TODO: come up with a better metric.
-  return shouldExpand_;
+  return !isGcAllowed() || shouldExpand_;
 }
 
 
