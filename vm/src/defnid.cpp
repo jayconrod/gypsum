@@ -21,7 +21,7 @@ ostream& operator << (ostream& os, DefnId id) {
     case DefnId::TYPE_PARAMETER: kind = "type-parameter"; break;
     default: kind = "invalid";
   }
-  os << kind << '(' << id.packageId << ", " << id.index << ')';
+  os << kind << '(' << id.packageId << ", " << id.index << ", " << id.isLocal << ')';
   return os;
 }
 

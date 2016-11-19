@@ -31,19 +31,14 @@ struct DefnId {
     TYPE_PARAMETER,
   };
 
-  DefnId(Kind kind, id_t packageId, length_t index)
-      : kind(kind), packageId(packageId), index(index) { }
-
-  static DefnId invalidGlobal() { return DefnId(GLOBAL, kIdNotSet, kLengthNotSet); }
-  static DefnId invalidFunction() { return DefnId(FUNCTION, kIdNotSet, kLengthNotSet); }
-  static DefnId invalidClass() { return DefnId(CLASS, kIdNotSet, kLengthNotSet); }
-  static DefnId invalidTrait() { return DefnId(TRAIT, kIdNotSet, kLengthNotSet); }
-  static DefnId invalidTypeParameter() {
-    return DefnId(TYPE_PARAMETER, kIdNotSet, kLengthNotSet);
-  }
+  DefnId(Kind kind, id_t packageId, length_t index, bool isLocal)
+      : kind(kind), packageId(packageId), index(index), isLocal(isLocal) { }
 
   bool operator == (const DefnId& id) const {
-    return kind == id.kind && packageId == id.packageId && index == id.index;
+    return kind == id.kind &&
+        packageId == id.packageId &&
+        index == id.index &&
+        isLocal == id.isLocal;
   }
   bool operator != (const DefnId& id) const {
     return !(*this == id);
@@ -52,6 +47,7 @@ struct DefnId {
   const Kind kind;
   const id_t packageId;
   const length_t index;
+  const bool isLocal;
 };
 
 
@@ -70,6 +66,7 @@ struct hash<codeswitch::internal::DefnId> {
     auto h = std::hash<int>()(static_cast<int>(id.kind));
     h = hashMix(h ^ std::hash<codeswitch::internal::id_t>()(id.packageId));
     h = hashMix(h ^ std::hash<codeswitch::internal::length_t>()(id.index));
+    h = hashMix(h ^ std::hash<bool>()(id.isLocal));
     return h;
   }
 };

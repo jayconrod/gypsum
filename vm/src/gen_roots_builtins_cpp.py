@@ -61,7 +61,7 @@ def initClass(out, classData):
     assert not classData["isPrimitive"]
     out.write("\n  { // %s\n" % classData["id"])
     out.write("    auto clas = getBuiltinClass(%s);\n" % classData["id"])
-    out.write("    DefnId id(DefnId::CLASS, kBuiltinPackageId, static_cast<length_t>(%s));\n" %
+    out.write("    DefnId id(DefnId::CLASS, kBuiltinPackageId, static_cast<length_t>(%s), false /* isLocal */);\n" %
               classData["id"])
     out.write("    auto name = getBuiltinName(%s);\n" % classData["id"])
     out.write("    auto typeParameters = reinterpret_cast<BlockArray<TypeParameter>*>(" +
@@ -121,7 +121,7 @@ def initClass(out, classData):
 def initFunction(out, functionData):
     out.write("\n  { // %s\n" % functionData["id"])
     out.write("    auto function = getBuiltinFunction(%s);\n" % functionData["id"])
-    out.write("    DefnId id(DefnId::FUNCTION, kBuiltinPackageId, static_cast<length_t>(%s));\n" %
+    out.write("    DefnId id(DefnId::FUNCTION, kBuiltinPackageId, static_cast<length_t>(%s), false /* isLocal */);\n" %
               functionData["id"])
     if "name" not in functionData:
         out.write("    auto name = nameFromUtf8CString(heap, \"$constructor\");\n")

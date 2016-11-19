@@ -82,23 +82,6 @@ struct LoadState {
 };
 
 
-/**
- * Identifier used within a package to point to a local, builtin, or foreign definition.
- * The type of the definition is implied by the context.
- */
-struct PackageDefnId {
-  id_t packageId;
-  length_t defnIndex;
-
-  bool operator == (const PackageDefnId& other) const {
-    return packageId == other.packageId && defnIndex == other.defnIndex;
-  }
-  bool operator != (const PackageDefnId& other) const {
-    return !(*this == other);
-  }
-};
-
-
 class Loader {
  public:
   Loader(LoadState* loadState, istream& stream, Persistent<Package> package)
@@ -147,13 +130,11 @@ class Loader {
   Local<T> readOption(Reader reader);
   length_t readLength();
   vector<u8> readData(word_t size);
-  PackageDefnId readDefnIdVbns();
+  DefnId readLocalDefnId(DefnId::Kind kind);
   i64 readVbn();
   word_t readWordVbn();
   length_t readLengthVbn();
   id_t readIdVbn();
-
-  DependencyLoader createDependencyLoader(const Handle<PackageDependency>& dep);
 
   virtual Local<TypeParameter> getTypeParameter(length_t index) const = 0;
   virtual Local<Function> readIdAndGetMethod() = 0;
@@ -192,8 +173,9 @@ class PackageLoader: public Loader {
 
   Persistent<Package> loadDependency(const Handle<PackageDependency>& dep);
 
-  Local<PackageDependency> readDependencyHeader();
+  Local<PackageDependency> readDependencyHeader(id_t depIndex);
   void loadNativeLibrary();
+  void linkFunctionOverrides(const Handle<Function>& function);
 
   string dirName_;
 };
@@ -204,9 +186,11 @@ class DependencyLoader: public Loader {
   DependencyLoader(LoadState* loadState,
                    istream& stream,
                    const Handle<Package>& package,
-                   const Handle<PackageDependency>& dep)
+                   const Handle<PackageDependency>& dep,
+                   length_t depIndex)
       : Loader(loadState, stream, package),
-        dep_(dep) { }
+        dep_(dep),
+        depIndex_(depIndex) { }
 
  public:
   void readDependencyBody();
@@ -220,6 +204,7 @@ class DependencyLoader: public Loader {
 
  private:
   Local<PackageDependency> dep_;
+  length_t depIndex_;
 };
 
 
@@ -1446,11 +1431,10 @@ vector<u8> Loader::readData(word_t size) {
 }
 
 
-PackageDefnId Loader::readDefnIdVbns() {
+DefnId Loader::readLocalDefnId(DefnId::Kind kind) {
   auto packageId = readIdVbn();
   auto index = readLengthVbn();
-  PackageDefnId id = { packageId, index };
-  return id;
+  return DefnId(kind, packageId, index, true /* isLocal */);
 }
 
 
@@ -1504,11 +1488,6 @@ id_t Loader::readIdVbn() {
 }
 
 
-DependencyLoader Loader::createDependencyLoader(const Handle<PackageDependency>& dep) {
-  return DependencyLoader(loadState_, stream_, package_, dep);
-}
-
-
 Persistent<Package> PackageLoader::load() {
   AllowAllocationScope allowAllocation(heap(), true);
   HandleScope handleScope(vm());
@@ -1540,7 +1519,7 @@ Persistent<Package> PackageLoader::load() {
     auto classArray = BlockArray<Class>::create(heap(), classCount);
     for (length_t i = 0; i < classCount; i++) {
       // We pre-allocate classes so Types we read can refer to them.
-      DefnId id(DefnId::CLASS, package_->id(), i);
+      DefnId id(DefnId::CLASS, package_->id(), i, false /* isLocal */);
       auto clas = Class::create(heap(), id);
       clas->setPackage(*package_);
       classArray->set(i, *clas);
@@ -1551,7 +1530,7 @@ Persistent<Package> PackageLoader::load() {
     auto traitArray = BlockArray<Trait>::create(heap(), traitCount);
     for (length_t i = 0; i < traitCount; i++) {
       // We pre-allocate traits so Types can refer to them.
-      DefnId id(DefnId::TRAIT, package_->id(), i);
+      DefnId id(DefnId::TRAIT, package_->id(), i, false /* isLocal */);
       auto trait = Trait::create(heap(), id);
       trait->setPackage(*package_);
       traitArray->set(i, *trait);
@@ -1563,7 +1542,7 @@ Persistent<Package> PackageLoader::load() {
         BlockArray<TypeParameter>::create(heap(), typeParameterCount);
     for (length_t i = 0; i < typeParameterCount; i++) {
       // Type parameters are also pre-allocated.
-      DefnId id(DefnId::TYPE_PARAMETER, package_->id(), i);
+      DefnId id(DefnId::TYPE_PARAMETER, package_->id(), i, false /* isLocal */);
       auto param = TypeParameter::create(heap(), id);
       typeParametersArray->set(i, *param);
     }
@@ -1592,7 +1571,7 @@ Persistent<Package> PackageLoader::load() {
     package_->setVersion(*version);
 
     for (length_t i = 0; i < depCount; i++) {
-      auto dep = readDependencyHeader();
+      auto dep = readDependencyHeader(i);
       depArray->set(i, *dep);
     }
 
@@ -1603,7 +1582,7 @@ Persistent<Package> PackageLoader::load() {
 
     for (length_t i = 0; i < depCount; i++) {
       auto dep = handle(depArray->get(i));
-      DependencyLoader loader = createDependencyLoader(dep);
+      DependencyLoader loader(loadState_, stream_, package_, dep, i);
       loader.readDependencyBody();
     }
 
@@ -1624,17 +1603,20 @@ Persistent<Package> PackageLoader::load() {
     isLinked_ = true;
 
     for (length_t i = 0; i < globalCount; i++) {
-      DefnId id(DefnId::GLOBAL, package_->id(), i);
+      DefnId id(DefnId::GLOBAL, package_->id(), i, false /* isLocal */);
       auto global = readGlobal(id);
       globalArray->set(i, *global);
     }
 
     bool hasNativeFunctions = false;
     for (length_t i = 0; i < functionCount; i++) {
-      DefnId id(DefnId::FUNCTION, package_->id(), i);
+      DefnId id(DefnId::FUNCTION, package_->id(), i, false /* isLocal */);
       auto function = readFunction(id);
       functionArray->set(i, *function);
       hasNativeFunctions |= (NATIVE_FLAG & function->flags()) != 0;
+    }
+    for (length_t i = 0; i < functionCount; i++) {
+      linkFunctionOverrides(handle(functionArray->get(i)));
     }
 
     for (length_t i = 0; i < classCount; i++) {
@@ -1677,23 +1659,23 @@ Local<TypeParameter> PackageLoader::getTypeParameter(length_t index) const {
 
 
 Local<Function> PackageLoader::readIdAndGetMethod() {
-  PackageDefnId id = readDefnIdVbns();
+  DefnId id = readLocalDefnId(DefnId::FUNCTION);
   if (id.packageId == kBuiltinPackageId) {
-    if (id.defnIndex >= BUILTIN_FUNCTION_COUNT) {
+    if (id.index >= BUILTIN_FUNCTION_COUNT) {
       throw Error("invalid builtin function id");
     }
-    return handle(roots()->getBuiltinFunction(indexToBuiltinId(id.defnIndex)));
+    return handle(roots()->getBuiltinFunction(indexToBuiltinId(id.index)));
   } else if (id.packageId == kLocalPackageId) {
-    if (id.defnIndex >= package()->functions()->length()) {
+    if (id.index >= package()->functions()->length()) {
       throw Error("invalid method index");
     }
-    return handle(package()->functions()->get(id.defnIndex));
+    return handle(package()->functions()->get(id.index));
   } else {
     if (static_cast<length_t>(id.packageId) >= package()->dependencies()->length()) {
       throw Error("invalid dependency index");
     }
     return handle(package()->dependencies()->get(id.packageId)
-        ->externFunctions()->get(id.defnIndex));
+        ->externFunctions()->get(id.index));
   }
 }
 
@@ -1781,7 +1763,7 @@ Persistent<Package> PackageLoader::loadDependency(const Handle<PackageDependency
 }
 
 
-Local<PackageDependency> PackageLoader::readDependencyHeader() {
+Local<PackageDependency> PackageLoader::readDependencyHeader(id_t depIndex) {
   auto depStr = readString();
   Local<Name> name;
   Local<PackageVersion> minVersion, maxVersion;
@@ -1807,25 +1789,29 @@ Local<PackageDependency> PackageLoader::readDependencyHeader() {
   // variable size, but these are extern and don't have code.
   auto externClasses = handle(dep->externClasses());
   for (length_t i = 0; i < classCount; i++) {
-    auto c = Class::create(heap(), DefnId::invalidClass());
+    DefnId id(DefnId::CLASS, depIndex, i, true /* isLocal */);
+    auto c = Class::create(heap(), id);
     externClasses->set(i, *c);
   }
 
   auto externTraits = handle(dep->externTraits());
   for (length_t i = 0; i < traitCount; i++) {
-    auto t = Trait::create(heap(), DefnId::invalidTrait());
+    DefnId id(DefnId::TRAIT, depIndex, i, true /* isLocal */);
+    auto t = Trait::create(heap(), id);
     externTraits->set(i, *t);
   }
 
   auto externMethods = handle(dep->externMethods());
   for (length_t i = 0; i < methodCount; i++) {
-    auto f = Function::create(heap(), DefnId::invalidFunction());
+    DefnId id(DefnId::FUNCTION, depIndex, i, true /* isLocal */);
+    auto f = Function::create(heap(), id);
     externMethods->set(i, *f);
   }
 
   auto externTypeParameters = handle(dep->externTypeParameters());
   for (length_t i = 0; i < typeParameterCount; i++) {
-    auto p = TypeParameter::create(heap(), DefnId::invalidTypeParameter());
+    DefnId id(DefnId::TYPE_PARAMETER, depIndex, i, true /* isLocal */);
+    auto p = TypeParameter::create(heap(), id);
     externTypeParameters->set(i, *p);
   }
 
@@ -1844,6 +1830,33 @@ void PackageLoader::loadNativeLibrary() {
   auto libPath = pathJoin(dirName_, libName);
   auto lib = codeswitch::internal::loadNativeLibrary(libPath);
   package_->setNativeLibrary(lib);
+}
+
+
+void PackageLoader::linkFunctionOverrides(const Handle<Function>& function) {
+  if (function->overrides() == nullptr)
+    return;
+  auto overrides = handle(function->overrides());
+  for (length_t i = 0; i < overrides->length(); i++) {
+    auto override = handle(overrides->get(i));
+    if ((EXTERN_FLAG & override->flags()) == 0) {
+      // Function is defined in the same package, no need to link.
+      continue;
+    }
+    auto overrideId = override->id();
+    ASSERT(overrideId.isLocal && overrideId.packageId >= 0);
+    auto depIndex = overrideId.packageId;
+    auto defnIndex = overrideId.index;
+    if (static_cast<length_t>(depIndex) >= package_->dependencies()->length()) {
+      throw Error("invalid dependency index");
+    }
+    auto dep = handle(package_->dependencies()->get(static_cast<length_t>(depIndex)));
+    if (defnIndex >= dep->linkedFunctions()->length()) {
+      throw Error("invalid extern function index");
+    }
+    auto linkedOverride = handle(dep->linkedFunctions()->get(defnIndex));
+    overrides->set(i, *linkedOverride);
+  }
 }
 
 
@@ -1878,7 +1891,7 @@ void DependencyLoader::readExternFunction(const Handle<Function>& func) {
 void DependencyLoader::readDependencyBody() {
   auto globals = handle(dep_->externGlobals());
   for (length_t i = 0; i < globals->length(); i++) {
-    auto g = readGlobal(DefnId::invalidGlobal());
+    auto g = readGlobal(DefnId(DefnId::GLOBAL, depIndex_, i, true /* isLocal */));
     if ((g->flags() & EXTERN_FLAG) == 0)
       throw Error("dependency global is not extern");
     globals->set(i, *g);
@@ -1886,7 +1899,7 @@ void DependencyLoader::readDependencyBody() {
 
   auto functions = handle(dep_->externFunctions());
   for (length_t i = 0; i < functions->length(); i++) {
-    auto f = readFunction(DefnId::invalidFunction());
+    auto f = readFunction(DefnId(DefnId::FUNCTION, depIndex_, i, true /* isLocal */));
     if ((f->flags() & EXTERN_FLAG) == 0)
       throw Error("dependency function is not extern");
     functions->set(i, *f);
