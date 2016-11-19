@@ -32,6 +32,7 @@ namespace internal {
   F(Class, flatFields_) \
   F(Class, constructors_) \
   F(Class, methods_) \
+  F(Class, flatMethods_) \
   F(Class, traits_) \
   F(Class, package_) \
   F(Class, instanceMeta_) \
@@ -119,12 +120,6 @@ Type* Class::baseClassType() const {
 Class* Class::baseClass() const {
   auto baseType = baseClassType();
   return baseType ? baseType->asClass() : nullptr;
-}
-
-
-Function* Class::getNonStaticMethod(length_t index) const {
-  ASSERT(instanceMeta_);
-  return block_cast<Function>(instanceMeta_.get()->getData(index));
 }
 
 
@@ -242,8 +237,9 @@ Local<Meta> Class::ensureInstanceMeta(const Handle<Class>& clas) {
     return handle(clas->instanceMeta());
   }
 
-  // Flatten fields if we haven't done so already.
+  // Flatten fields and methods if we haven't done so already.
   auto flatFields = ensureFlatFields(clas);
+  ensureFlatMethods(Local<ObjectTypeDefn>(*clas));
 
   // Compute object size from the last field.
   u32 objectSize;

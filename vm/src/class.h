@@ -114,7 +114,10 @@ class Class: public ObjectTypeDefn {
 
   BlockArray<Function>* methods() const { return methods_.get(); }
   void setMethods(BlockArray<Function>* newMethods) { methods_.set(this, newMethods); }
-  Function* getNonStaticMethod(length_t index) const;
+  BlockArray<Function>* flatMethods() const { return methods_.get(); }
+  void setFlatMethods(BlockArray<Function>* newFlatMethods) {
+    flatMethods_.set(this, newFlatMethods);
+  }
 
   TraitTable* traits() const { return traits_.get(); }
   void setTraits(TraitTable* newTraits) { traits_.set(this, newTraits); }
@@ -196,6 +199,7 @@ class Class: public ObjectTypeDefn {
   Ptr<BlockArray<Field>> flatFields_;
   Ptr<BlockArray<Function>> constructors_;
   Ptr<BlockArray<Function>> methods_;
+  Ptr<BlockArray<Function>> flatMethods_;
   Ptr<TraitTable> traits_;
   Ptr<Package> package_;
   Ptr<Meta> instanceMeta_;

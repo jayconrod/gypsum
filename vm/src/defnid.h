@@ -42,6 +42,13 @@ struct DefnId {
     return DefnId(TYPE_PARAMETER, kIdNotSet, kLengthNotSet);
   }
 
+  bool operator == (const DefnId& id) const {
+    return kind == id.kind && packageId == id.packageId && index == id.index;
+  }
+  bool operator != (const DefnId& id) const {
+    return !(*this == id);
+  }
+
   const Kind kind;
   const id_t packageId;
   const length_t index;

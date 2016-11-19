@@ -906,21 +906,22 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         }
 
         case CALLV: {
-          i64 argCount = readVbn(bytecode, &pcOffset);
-          i64 methodIndex = readVbn(bytecode, &pcOffset);
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
-          word_t slot = currentMap.size() - argCount;
-          Local<Class> clas(currentMap.typeMap[slot]->effectiveClass());
-          Class::ensureInstanceMeta(clas);
-          Local<Function> callee(clas->getNonStaticMethod(methodIndex));
+          UNIMPLEMENTED();
+          // i64 argCount = readVbn(bytecode, &pcOffset);
+          // i64 methodIndex = readVbn(bytecode, &pcOffset);
+          // currentMap.pcOffset = pcOffset;
+          // maps.push_back(currentMap);
+          // word_t slot = currentMap.size() - argCount;
+          // Local<Class> clas(currentMap.typeMap[slot]->effectiveClass());
+          // Class::ensureInstanceMeta(clas);
+          // Local<Function> callee(clas->getNonStaticMethod(methodIndex));
 
-          ASSERT(currentMap.size() >= callee->parameterTypes()->length());
-          for (word_t i = 0, n = callee->parameterTypes()->length(); i < n; i++)
-            currentMap.pop();
-          auto returnType = currentMap.substituteReturnType(callee);
-          currentMap.popTypeArgs();
-          currentMap.push(returnType);
+          // ASSERT(currentMap.size() >= callee->parameterTypes()->length());
+          // for (word_t i = 0, n = callee->parameterTypes()->length(); i < n; i++)
+          //   currentMap.pop();
+          // auto returnType = currentMap.substituteReturnType(callee);
+          // currentMap.popTypeArgs();
+          // currentMap.push(returnType);
           break;
         }
 
