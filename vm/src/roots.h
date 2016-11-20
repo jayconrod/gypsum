@@ -75,6 +75,8 @@ class Roots {
     F(String, falseString, FALSE_STRING)                              \
     F(Meta, blockHashMapTableMeta, BLOCK_HASH_MAP_TABLE_META)         \
     F(Meta, blockHashMapMeta, BLOCK_HASH_MAP_META)                    \
+    F(Meta, defnIdHashMapTableMeta, DEFN_ID_HASH_MAP_TABLE_META)      \
+    F(Meta, defnIdHashMapMeta, DEFN_ID_HASH_MAP_META)                 \
     F(Meta, threadBindleMeta, THREAD_BINDLE_META)                     \
     F(TraitTable, emptyTraitTable, EMPTY_TRAIT_TABLE)                 \
 

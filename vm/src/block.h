@@ -40,6 +40,8 @@ V(BlockArray, BLOCK_ARRAY)                                                     \
 V(TaggedArray, TAGGED_ARRAY)                                                   \
 V(BlockHashMapTable, BLOCK_HASH_MAP_TABLE)                                     \
 V(BlockHashMap, BLOCK_HASH_MAP)                                                \
+V(DefnIdHashMapTable, DEFN_ID_HASH_MAP_TABLE)                                  \
+V(DefnIdHashMap, DEFN_ID_HASH_MAP)                                             \
 V(Object, OBJECT)                                                              \
 V(Type, TYPE)                                                                  \
 V(String, STRING)                                                              \

@@ -24,6 +24,7 @@ namespace internal {
  */
 struct DefnId {
   enum Kind {
+    NOT_VALID,
     GLOBAL,
     FUNCTION,
     CLASS,
@@ -31,9 +32,12 @@ struct DefnId {
     TYPE_PARAMETER,
   };
 
-  DefnId(Kind kind, id_t packageId, length_t index, bool isLocal)
+  DefnId()
+      : kind(NOT_VALID), packageId(kIdNotSet), index(kIndexNotSet), isLocal(false) { }
+  DefnId(Kind kind, id_t packageId, length_t index, bool isLocal = false)
       : kind(kind), packageId(packageId), index(index), isLocal(isLocal) { }
 
+  bool isValid() const { return kind == NOT_VALID; }
   bool operator == (const DefnId& id) const {
     return kind == id.kind &&
         packageId == id.packageId &&
@@ -44,10 +48,10 @@ struct DefnId {
     return !(*this == id);
   }
 
-  const Kind kind;
-  const id_t packageId;
-  const length_t index;
-  const bool isLocal;
+  Kind kind;
+  id_t packageId;
+  length_t index;
+  bool isLocal;
 };
 
 

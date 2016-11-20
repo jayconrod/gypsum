@@ -7,8 +7,10 @@
 #ifndef hash_table_h
 #define hash_table_h
 
+#include <functional>
 #include <iostream>
 #include "block.h"
+#include "defnid.h"
 #include "handle.h"
 #include "utils.h"
 
@@ -304,7 +306,7 @@ struct BlockHashMapElement {
   static const word_t kEmpty = 0;
   static const word_t kDead = 1;
 
-  BlockHashMapElement& operator = (const BlockHashMapElement& other) = delete;
+  BlockHashMapElement& operator = (const BlockHashMapElement&) = delete;
 };
 
 
@@ -348,6 +350,105 @@ class BlockHashMap: public HashMap<BlockHashMapTable<K, V>> {
 
   static Local<BlockHashMap> create(Heap* heap) {
     RETRY_WITH_GC(heap, return Local<BlockHashMap>(new(heap) BlockHashMap()));
+  }
+};
+
+
+template <class V>
+struct DefnIdHashMapElement {
+  typedef DefnId Key;
+  typedef DefnId SafeKey;
+  typedef V* Value;
+  typedef Local<V> SafeValue;
+
+  static Key keyFromSafeKey(const SafeKey& key) { return key; }
+  static Value valueFromSafeValue(const SafeValue& value) { return value.getOrNull(); }
+
+  DefnIdHashMapElement() { }
+  explicit DefnIdHashMapElement(Key key)
+      : key(key) { }
+  DefnIdHashMapElement(Key key, Value value)
+      : key(key), value(value) { }
+  DefnIdHashMapElement(SafeKey key, SafeValue value)
+      : key(keyFromSafeKey(key)), value(valueFromSafeValue(value)) { }
+
+  bool isEmpty() const { return !key.isValid(); }
+  void setEmpty() { key = empty(); }
+  bool isDead() const { return key == dead(); }
+  void setDead() { key = dead(); }
+  bool isLive() const { return key.isValid(); }
+
+  void set(const HashTable<DefnIdHashMapElement>* table, const DefnIdHashMapElement& elem) {
+    key = elem.key;
+    value = elem.value;
+    table->getHeap()->recordWrite(&value, elem.value);
+  }
+
+  bool operator == (const DefnIdHashMapElement& other) const {
+    return key == other.key && value == other.value;
+  }
+  bool operator != (const DefnIdHashMapElement& other) const {
+    return !(*this == other);
+  }
+  bool matches(const DefnIdHashMapElement& other) const {
+    return isLive() && key == other.key;
+  }
+  u32 hashCode() const {
+    return static_cast<u32>(std::hash<DefnId>()(key));
+  }
+
+  Key key;
+  Value value;
+
+ private:
+  static Key empty() { return DefnId(); }
+  static Key dead() { return DefnId(DefnId::NOT_VALID, kIdNotSet, 0 /* index */); }
+
+  DefnIdHashMapElement& operator = (const DefnIdHashMapElement&) = delete;
+};
+
+
+template <class V>
+std::ostream& operator << (std::ostream& os, const DefnIdHashMapElement<V>& elem) {
+  os << "\n    key: " << elem.key
+     << "\n    value: " << elem.value;
+  return os;
+}
+
+
+template <class V>
+class DefnIdHashMapTable: public HashTable<DefnIdHashMapElement<V>> {
+ public:
+  static const BlockType kBlockType = DEFN_ID_HASH_MAP_TABLE_BLOCK_TYPE;
+
+  DefnIdHashMapTable()
+      : HashTable<DefnIdHashMapElement<V>>(kBlockType) { }
+
+  static Local<DefnIdHashMapTable> create(Heap* heap, length_t capacity) {
+    RETRY_WITH_GC(heap, return Local<DefnIdHashMapTable>(
+        new(heap, capacity) DefnIdHashMapTable()));
+  }
+
+ private:
+  friend class Roots;
+
+  static const word_t kElementPointerMap =
+      1 << (offsetof(DefnIdHashMapElement<Block*>, value) / kWordSize);
+};
+
+
+template <class V>
+class DefnIdHashMap: public HashMap<DefnIdHashMapTable<V>> {
+ public:
+  static const BlockType kBlockType = DEFN_ID_HASH_MAP_BLOCK_TYPE;
+
+  DEFINE_NEW(DefnIdHashMap)
+
+  DefnIdHashMap()
+      : HashMap<DefnIdHashMapTable<V>>(kBlockType) { }
+
+  static Local<DefnIdHashMap> create(Heap* heap) {
+    RETRY_WITH_GC(heap, return Local<DefnIdHashMap>(new(heap) DefnIdHashMap()));
   }
 };
 

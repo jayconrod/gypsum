@@ -420,24 +420,52 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       }
 
       case LDF: {
+        auto classId = readVbn();
         auto index = readVbn();
         auto block = pop<Block*>();
         CHECK_NON_NULL(block);
-        auto clas = block->meta()->clas();
-        auto fieldType = clas->fields()->get(index)->type();
-        auto offset = clas->findFieldOffset(index);
-        load(block, offset, fieldType);
+        auto clas = isBuiltinId(classId)
+            ? vm_->roots()->getBuiltinClass(static_cast<BuiltinId>(classId))
+            : function_->package()->getClass(classId);
+        auto field = clas->fields()->get(index);
+        load(block, field->offset(), field->type());
+        break;
+      }
+
+      case LDFF: {
+        auto depIndex = readVbn();
+        auto externIndex = readVbn();
+        auto fieldIndex = readVbn();
+        auto block = pop<Block*>();
+        CHECK_NON_NULL(block);
+        auto field = function_->package()->dependencies()->get(depIndex)
+            ->linkedClasses()->get(externIndex)->fields()->get(fieldIndex);
+        load(block, field->offset(), field->type());
         break;
       }
 
       case STF: {
+        auto classId = readVbn();
         auto index = readVbn();
         auto block = pop<Block*>();
         CHECK_NON_NULL(block);
-        auto clas = block->meta()->clas();
-        auto fieldType = clas->fields()->get(index)->type();
-        auto offset = clas->findFieldOffset(index);
-        store(block, offset, fieldType);
+        auto clas = isBuiltinId(classId)
+            ? vm_->roots()->getBuiltinClass(static_cast<BuiltinId>(classId))
+            : function_->package()->getClass(classId);
+        auto field = clas->fields()->get(index);
+        store(block, field->offset(), field->type());
+        break;
+      }
+
+      case STFF: {
+        auto depIndex = readVbn();
+        auto externIndex = readVbn();
+        auto fieldIndex = readVbn();
+        auto block = pop<Block*>();
+        CHECK_NON_NULL(block);
+        auto field = function_->package()->dependencies()->get(depIndex)
+            ->linkedClasses()->get(externIndex)->fields()->get(fieldIndex);
+        store(block, field->offset(), field->type());
         break;
       }
 
@@ -798,13 +826,21 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       }
 
       case CALLV: {
-        auto argCount = readVbn();
-        auto methodIndex = toLength(readVbn());
+        auto functionId = readVbn();
         ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
+        DefnId methodId;
+        length_t argCount;
+        if (isBuiltinId(functionId)) {
+          methodId = DefnId(DefnId::FUNCTION, kBuiltinPackageId, toLength(functionId));
+          argCount = vm_->roots()->getBuiltinFunction(static_cast<BuiltinId>(functionId))
+              ->parameterTypes()->length();
+        } else {
+          methodId = DefnId(DefnId::FUNCTION, function_->package()->id(), toLength(functionId));
+          argCount = function_->package()->getFunction(functionId)->parameterTypes()->length();
+        }
         auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
         CHECK_NON_NULL(receiver);
-        Persistent<Function> callee(block_cast<Function>(
-            receiver->meta()->getData(methodIndex)));
+        Persistent<Function> callee(receiver->findMethod(methodId));
         if (callee->hasBuiltinId()) {
           handleBuiltin(callee->builtinId());
         } else if (callee->isNative()) {
@@ -816,7 +852,23 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       }
 
       case CALLVF: {
-        UNIMPLEMENTED();
+        auto depIndex = readVbn();
+        auto externIndex = readVbn();
+        ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
+        auto externFunc = function_->package()->dependencies()->get(toLength(depIndex))
+            ->linkedFunctions()->get(toLength(externIndex));
+        auto methodId = externFunc->id();
+        auto argCount = externFunc->parameterTypes()->length();
+        auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
+        CHECK_NON_NULL(receiver);
+        Persistent<Function> callee(receiver->findMethod(methodId));
+        if (callee->hasBuiltinId()) {
+          handleBuiltin(callee->builtinId());
+        } else if (callee->isNative()) {
+          handleNative(callee);
+        } else {
+          enter(callee);
+        }
         break;
       }
 

@@ -118,6 +118,11 @@ class Class: public ObjectTypeDefn {
   void setFlatMethods(BlockArray<Function>* newFlatMethods) {
     flatMethods_.set(this, newFlatMethods);
   }
+  DefnIdHashMap<Function>* methodIdIndex() const { return methodIdIndex_.get(); }
+  void setMethodIdIndex(DefnIdHashMap<Function>* newMethodIdIndex) {
+    methodIdIndex_.set(this, newMethodIdIndex);
+  }
+  Function* findMethod(DefnId methodId) const;
 
   TraitTable* traits() const { return traits_.get(); }
   void setTraits(TraitTable* newTraits) { traits_.set(this, newTraits); }
@@ -189,7 +194,7 @@ class Class: public ObjectTypeDefn {
 
  private:
   DECLARE_POINTER_MAP()
-  DefnId id_;
+  const DefnId id_;
   Ptr<Name> name_;
   Ptr<String> sourceName_;
   u32 flags_;
@@ -200,6 +205,7 @@ class Class: public ObjectTypeDefn {
   Ptr<BlockArray<Function>> constructors_;
   Ptr<BlockArray<Function>> methods_;
   Ptr<BlockArray<Function>> flatMethods_;
+  Ptr<DefnIdHashMap<Function>> methodIdIndex_;
   Ptr<TraitTable> traits_;
   Ptr<Package> package_;
   Ptr<Meta> instanceMeta_;

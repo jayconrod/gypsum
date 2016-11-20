@@ -33,6 +33,7 @@ namespace internal {
   F(Class, constructors_) \
   F(Class, methods_) \
   F(Class, flatMethods_) \
+  F(Class, methodIdIndex_) \
   F(Class, traits_) \
   F(Class, package_) \
   F(Class, instanceMeta_) \
@@ -156,6 +157,11 @@ Class* Class::findFieldClass(length_t index) {
   }
   UNREACHABLE();
   return nullptr;
+}
+
+
+Function* Class::findMethod(DefnId methodId) const {
+  return methodIdIndex()->get(methodId);
 }
 
 

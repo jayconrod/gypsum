@@ -307,21 +307,21 @@ class callgf(Instruction):
 class callv(Instruction):
     def __init__(self, method):
         assert isinstance(method, ir.Function) and not method.isForeign()
-        super(callv, self).__init__(len(method.parameterTypes), method.id.index)
+        super(callv, self).__init__(method.id.index)
+        self.popCount_ = len(method.parameterTypes)
 
     def popCount(self):
-        return self.operands[0]
+        return self.popCount_
 
 
 class callvf(Instruction):
     def __init__(self, method):
         assert isinstance(method, ir.Function) and method.isForeign()
-        super(callvf, self).__init__(len(method.parameterTypes),
-                                     method.id.packageId.index,
-                                     method.id.externIndex)
+        super(callvf, self).__init__(method.id.packageId.index, method.id.externIndex)
+        self.popCount_ = len(method.parameterTypes)
 
     def popCount(self):
-        return self.operands[0]
+        return self.popCount_
 
 
 for info in bytecode.instInfoByCode:

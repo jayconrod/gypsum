@@ -134,7 +134,7 @@ class Function: public Block {
 
  private:
   DECLARE_POINTER_MAP()
-  DefnId id_;
+  const DefnId id_;
   Ptr<Name> name_;
   Ptr<String> sourceName_;
   u32 flags_;

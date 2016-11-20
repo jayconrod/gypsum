@@ -544,12 +544,32 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         }
 
         case LDF: {
+          auto classId = readVbn(bytecode, &pcOffset);
           auto index = readVbn(bytecode, &pcOffset);
+          Local<Class> fieldClass = handle(isBuiltinId(classId)
+              ? roots->getBuiltinClass(static_cast<BuiltinId>(classId))
+              : package->getClass(classId));
+          auto fieldType = handle(fieldClass->fields()->get(index)->type());
           auto receiverType = currentMap.pop();
           auto receiverClass = handle(receiverType->effectiveClass());
-          auto fieldType = handle(receiverClass->fields()->get(index)->type());
           if (fieldType->isObject()) {
-            auto fieldClass = handle(receiverClass->findFieldClass(index));
+            fieldType = Type::substituteForInheritance(fieldType, receiverClass, fieldClass);
+            fieldType = Type::substitute(fieldType, receiverType->getTypeArgumentBindings());
+          }
+          currentMap.push(fieldType);
+          break;
+        }
+
+        case LDFF: {
+          auto depIndex = readVbn(bytecode, &pcOffset);
+          auto externIndex = readVbn(bytecode, &pcOffset);
+          auto fieldIndex = readVbn(bytecode, &pcOffset);
+          auto fieldClass = handle(package->dependencies()->get(depIndex)
+              ->linkedClasses()->get(externIndex));
+          auto fieldType = handle(fieldClass->fields()->get(fieldIndex)->type());
+          auto receiverType = currentMap.pop();
+          auto receiverClass = handle(receiverType->effectiveClass());
+          if (fieldType->isObject()) {
             fieldType = Type::substituteForInheritance(fieldType, receiverClass, fieldClass);
             fieldType = Type::substitute(fieldType, receiverType->getTypeArgumentBindings());
           }
@@ -558,6 +578,15 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         }
 
         case STF:
+          readVbn(bytecode, &pcOffset);
+          readVbn(bytecode, &pcOffset);
+          currentMap.pop();
+          currentMap.pop();
+          break;
+
+        case STFF:
+          readVbn(bytecode, &pcOffset);
+          readVbn(bytecode, &pcOffset);
           readVbn(bytecode, &pcOffset);
           currentMap.pop();
           currentMap.pop();
@@ -864,7 +893,8 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
-        case CALLG: {
+        case CALLG:
+        case CALLV: {
           i64 functionId = readVbn(bytecode, &pcOffset);
           currentMap.pcOffset = pcOffset;
           maps.push_back(currentMap);
@@ -882,7 +912,8 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
-        case CALLGF: {
+        case CALLGF:
+        case CALLVF: {
           auto depIndex = readVbn(bytecode, &pcOffset);
           auto externIndex = readVbn(bytecode, &pcOffset);
           currentMap.pcOffset = pcOffset;
@@ -902,31 +933,6 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           auto packageClass = handle(roots->getBuiltinClass(BUILTIN_PACKAGE_CLASS_ID));
           auto type = Type::create(heap, packageClass);
           currentMap.push(type);
-          break;
-        }
-
-        case CALLV: {
-          UNIMPLEMENTED();
-          // i64 argCount = readVbn(bytecode, &pcOffset);
-          // i64 methodIndex = readVbn(bytecode, &pcOffset);
-          // currentMap.pcOffset = pcOffset;
-          // maps.push_back(currentMap);
-          // word_t slot = currentMap.size() - argCount;
-          // Local<Class> clas(currentMap.typeMap[slot]->effectiveClass());
-          // Class::ensureInstanceMeta(clas);
-          // Local<Function> callee(clas->getNonStaticMethod(methodIndex));
-
-          // ASSERT(currentMap.size() >= callee->parameterTypes()->length());
-          // for (word_t i = 0, n = callee->parameterTypes()->length(); i < n; i++)
-          //   currentMap.pop();
-          // auto returnType = currentMap.substituteReturnType(callee);
-          // currentMap.popTypeArgs();
-          // currentMap.push(returnType);
-          break;
-        }
-
-        case CALLVF: {
-          UNIMPLEMENTED();
           break;
         }
 

@@ -36,6 +36,7 @@
   }
 
 
+using std::pair;
 using std::unordered_map;
 using std::unordered_set;
 using std::vector;
@@ -145,6 +146,14 @@ class FlatMethodsBuilder {
     return flatMethodsArray;
   }
 
+  Local<DefnIdHashMap<Function>> buildMethodIdIndex() {
+    auto methodIdIndex = DefnIdHashMap<Function>::create(heap_);
+    for (auto& entry : methodsById_) {
+      DefnIdHashMap<Function>::add(methodIdIndex, entry.first, entry.second);
+    }
+    return methodIdIndex;
+  }
+
  private:
   /**
    * Returns ids of the non-overriding methods that this method overrides, directly or
@@ -170,6 +179,7 @@ class FlatMethodsBuilder {
   vector<Local<Function>> flatMethods_;
   unordered_set<DefnId> inheritedMethodIds_;
   unordered_map<DefnId, unordered_set<size_t>> methodIndices_;
+  unordered_map<DefnId, Local<Function>> methodsById_;
 };
 
 
@@ -202,6 +212,12 @@ ObjectTypeDefn::ensureFlatMethods(const Handle<ObjectTypeDefn>& defn) {
 
   auto flatMethods = builder.buildFlatMethods();
   defn->setFlatMethods(*flatMethods);
+
+  if (isa<Class>(*defn)) {
+    auto methodIdIndex = builder.buildMethodIdIndex();
+    block_cast<Class>(*defn)->setMethodIdIndex(*methodIdIndex);
+  }
+
   return flatMethods;
 }
 
