@@ -105,6 +105,16 @@ void Test ## name ::test()
 
 #define STR(s) String::fromUtf8CString(heap, s)
 #define NAME(s) Name::fromString(heap, STR(s), Name::DEFN_NAME)
+#define GID(n) DefnId(DefnId::GLOBAL, kIdNotSet, n)
+#define GID0 GID(0)
+#define FID(n) DefnId(DefnId::FUNCTION, kIdNotSet, n)
+#define FID0 FID(0)
+#define CID(n) DefnId(DefnId::CLASS, kIdNotSet, n)
+#define CID0 CID(0)
+#define TID(n) DefnId(DefnId::TRAIT, kIdNotSet, n)
+#define TID0 TID(0)
+#define PID(n) DefnId(DefnId::TYPE_PARAMETER, kIdNotSet, n)
+#define PID0 PID(0)
 
 
 // Ugly hack: bypass member protection for classes included after this. The "correct" way would

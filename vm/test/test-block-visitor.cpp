@@ -144,14 +144,15 @@ static Local<Package> createTestPackage(Heap* heap) {
   };
   auto blockOffsetList = LengthArray::create(heap, 1);
   blockOffsetList->set(0, 0);
-  auto package = Package::create(heap);
+  auto package = Package::create(heap, 0);
   auto functions = BlockArray<Function>::create(heap, 1);
   Local<BlockArray<TypeParameter>> emptyTypeParameters(
       reinterpret_cast<BlockArray<TypeParameter>*>(roots->emptyBlockArray()));
-  auto function = Function::create(heap, NAME("foo"), STR("foo"),
+  auto function = Function::create(heap, FID0, NAME("foo"), STR("foo"),
                                    0, emptyTypeParameters, returnType, parameterTypes,
                                    Local<ObjectTypeDefn>(), 2 * kWordSize, instList,
-                                   blockOffsetList, package, nullptr);
+                                   blockOffsetList, package, Local<BlockArray<Function>>(),
+                                   nullptr);
   functions->set(0, *function);
   package->setFunctions(*functions);
   package->setEntryFunctionIndex(0);
