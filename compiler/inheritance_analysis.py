@@ -15,7 +15,7 @@ from ids import GLOBAL_SCOPE_ID
 import ir
 from ir_types import ClassType, ExistentialType, VariableType, getRootClassType
 from location import NoLoc
-from scope_analysis import ScopeVisitor
+from scope_analysis import ScopeVisitor, NonLocalObjectTypeDefnScope
 from utils import each
 
 
@@ -89,6 +89,8 @@ def buildSubtypeGraph(info):
                     raise InheritanceException(irTypeDefn.getLocation(),
                                                "%s: cannot inherit from itself" %
                                                irTypeDefn.name)
+                if not supertype.clas.isLocal():
+                    NonLocalObjectTypeDefnScope.ensureForDefn(supertype.clas, info)
                 subtypeGraph.addEdge(irTypeDefn.id, supertypeId)
         elif isinstance(irTypeDefn, ir.TypeParameter):
             upperBoundId = getIdForType(irTypeDefn.upperBound)

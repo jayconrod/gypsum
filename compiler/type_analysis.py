@@ -232,6 +232,12 @@ class TypeVisitorBase(ast.NodeVisitor):
     def scope(self):
         return self.scopeStack[-1]
 
+    def getScopeForDefn(self, irDefn):
+        if not self.info.hasScope(irDefn):
+            assert not irDefn.isLocal()
+            return scope_analysis.NonLocalObjectTypeDefnScope.ensureForDefn(irDefn, self.info)
+        return self.info.getScope(irDefn)
+
     def hasReceiverType(self):
         return len(self.receiverTypeStack) > 0 and self.receiverTypeStack[-1] is not None
 
@@ -443,7 +449,7 @@ class TypeVisitorBase(ast.NodeVisitor):
                 scope = self.info.getScope(defnInfo.scopeId).scopeForPrefix(component.name,
                                                                             component.location)
             else:
-                scope = self.info.getScope(irDefn)
+                scope = self.getScopeForDefn(irDefn)
             hasPrefix = True
 
         return scope, typeArgs
@@ -839,7 +845,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             superArgTypes = map(self.visit, node.superArgs) \
                             if node.superArgs is not None \
                             else []
-            superScope = self.info.getScope(ir_t.getClassFromType(supertype))
+            superScope = self.getScopeForDefn(ir_t.getClassFromType(supertype))
             self.handlePropertyCall(CONSTRUCTOR_SUFFIX, superScope, supertype,
                                     None, superArgTypes, True, True, False,
                                     node.id, node.location)
@@ -1062,7 +1068,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 self.info.getScopePrefixInfo(node.receiver).scopeId)
             hasReceiver = False
         else:
-            receiverScope = self.info.getScope(ir_t.getClassFromType(receiverType))
+            receiverScope = self.getScopeForDefn(ir_t.getClassFromType(receiverType))
             hasReceiver = True
 
         if mayBePrefix and not hasReceiver:
@@ -1099,7 +1105,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                     self.info.getScopePrefixInfo(node.callee.receiver).scopeId)
                 hasReceiver = False
             else:
-                receiverScope = self.info.getScope(ir_t.getClassFromType(receiverType))
+                receiverScope = self.getScopeForDefn(ir_t.getClassFromType(receiverType))
                 hasReceiver = True
             if mayBePrefix and not hasReceiver:
                 ty = self.handlePossiblePrefixSymbol(node.callee.propertyName,
@@ -1113,7 +1119,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         elif isinstance(node.callee, ast.ThisExpression) or \
              isinstance(node.callee, ast.SuperExpression):
             receiverType = self.visit(node.callee)
-            receiverScope = self.info.getScope(ir_t.getClassFromType(receiverType))
+            receiverScope = self.getScopeForDefn(ir_t.getClassFromType(receiverType))
             self.handlePropertyCall(CONSTRUCTOR_SUFFIX, receiverScope, receiverType,
                                     typeArgs, argTypes, True, True, False,
                                     node.id, node.location)
@@ -1453,7 +1459,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             self.info.setType(prefix[i], ty)
             i += 1
         while i < len(prefix):
-            scope = self.info.getScope(ir_t.getClassFromType(ty))
+            scope = self.getScopeForDefn(ir_t.getClassFromType(ty))
             typeArgs = map(self.visit, prefix[i].typeArguments) \
                        if prefix[i].typeArguments is not None \
                        else None
@@ -1465,7 +1471,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         if self.info.hasScopePrefixInfo(prefix[-1]):
             scope = self.info.getScope(self.info.getScopePrefixInfo(prefix[i - 1]).scopeId)
         else:
-            scope = self.info.getScope(ir_t.getClassFromType(ty))
+            scope = self.getScopeForDefn(ir_t.getClassFromType(ty))
         return scope, ty
 
     def handleSimpleVariable(self, name, useAstId, loc):
@@ -1529,7 +1535,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         if nameInfo.isScope():
             defnInfo = nameInfo.getDefnInfo()
             if isinstance(defnInfo.irDefn, ir.Class):
-                defnScopeId = self.info.getScope(defnInfo.irDefn).scopeId
+                defnScopeId = self.getScopeForDefn(defnInfo.irDefn).scopeId
             else:
                 parentScope = self.info.getScope(defnInfo.scopeId)
                 defnScopeId = parentScope.scopeForPrefix(name, loc).scopeId
@@ -1704,7 +1710,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         operandDefnInfo, operandAllTypeArgs, operandUseKind = None, None, None
         operandReceiverType, operandExistentialVars = self.openExistentialReceiver(firstType)
         try:
-            operandScope = self.info.getScope(ir_t.getClassFromType(firstType))
+            operandScope = self.getScopeForDefn(ir_t.getClassFromType(firstType))
             operandNameInfo = operandScope.lookupFromExternal(name, loc,
                                                               mayBeAssignment=mayBeAssignment)
             argTypes = [secondType] if secondType is not None else []
@@ -1771,7 +1777,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         irClass = objectType.clas
         if irClass is getNothingClass():
             raise TypeException(loc, "cannot instantiate Nothing")
-        classScope = self.info.getScope(irClass)
+        classScope = self.getScopeForDefn(irClass)
         nameInfo = classScope.lookupFromExternal(CONSTRUCTOR_SUFFIX, loc)
         defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, objectType,
                                                             None, argTypes, loc)
@@ -1864,7 +1870,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                     raise TypeException(loc,
                                         "%s: type arguments could not be applied for this class" %
                                         nameInfo.name)
-                matcherScopeId = self.info.getScope(matcherIrDefn).scopeId
+                matcherScopeId = self.getScopeForDefn(matcherIrDefn).scopeId
                 matcherScopePrefixInfo = ScopePrefixInfo(matcherIrDefn, matcherScopeId)
                 self.info.setScopePrefixInfo(useAstId, matcherScopePrefixInfo)
                 matcherReceiverType = ir_t.ClassType(matcherIrDefn, callTypeArgs)
@@ -1875,7 +1881,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                     nameInfo.name)
 
             # Lookup the try-match method.
-            matcherScope = self.info.getScope(matcherClass)
+            matcherScope = self.getScopeForDefn(matcherClass)
             try:
                 returnType = self.handlePropertyCall("try-match", matcherScope,
                                                      matcherReceiverType, None, [exprType],
@@ -1889,6 +1895,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         # (T1 may be a tuple). If there are more, it should return Option[(T1, ..., Tn)], and
         # T1, ..., Tn are the expression types.
         optionClass = self.info.getStdClass("Option", loc)
+        self.registerDestructureMethods(optionClass)
         if not returnType.isObject() or \
            not ir_t.getClassFromType(returnType).isDerivedFrom(optionClass):
             raise TypeException(loc, "matcher must return std.Option")
@@ -1910,6 +1917,23 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         # We return the expression type as the pattern type. Destructures are never guaranteed,
         # so we cannot be any more specific.
         return exprType
+
+    def registerDestructureMethods(self, optionClass):
+        """Registers methods used in destructuring pattern matching for externalization.
+
+        Methods that we reference in other packages must be externalized, which means we need
+        to add package dependencies and extern stubs for them. We need to explicitly register
+        definitions in the `std` for externalization that we reference implicitly. This method
+        registers methods in the `Option` class. We don't use methods in the `Tuple` classes,
+        so those don't need to be registered; fields are accessed directly and don't need to
+        be externalized.
+
+        Arguments:
+            optionClass (Class): the option class being used.
+        """
+        for name in ["is-defined", "get"]:
+            method = optionClass.findMethodBySourceName(name)
+            self.info.setStdExternInfo(method.id, method)
 
     def getReceiverTypeForClass(self, irClass, typeArgs, loc):
         """Returns a type with the given explicit type arguments applied.

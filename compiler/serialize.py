@@ -540,25 +540,26 @@ class Deserializer(object):
         assert (flags.EXTERN in clas.flags) == (dep is not None)
         clas.typeParameters = self.readList(self.readTypeParameterId, dep)
         clas.supertypes = self.readList(self.readType)
-        clas.fields = self.readFields()
+        clas.fields = self.readFields(clas)
         clas.constructors = self.readList(self.readMethodId, dep)
         clas.methods = self.readList(self.readMethodId, dep)
         clas.elementType = self.readOption(self.readType)
 
-    def readFields(self):
+    def readFields(self, definingClass):
         n = self.readVbn()
         fields = []
         for i in xrange(n):
-            field = self.readField(i)
+            field = self.readField(definingClass, i)
             fields.append(field)
         return fields
 
-    def readField(self, index):
+    def readField(self, definingClass, index):
         name = self.readName()
         sourceName = self.readOption(self.readStringIndex)
         flags = self.readFlags()
         ty = self.readType()
-        field = ir.Field(name, sourceName=sourceName, type=ty, flags=flags, index=index)
+        field = ir.Field(name, sourceName=sourceName, type=ty, flags=flags,
+                         definingClass=definingClass, index=index)
         return field
 
     def readTrait(self, trait, dep=None):

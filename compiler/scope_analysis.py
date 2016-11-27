@@ -20,7 +20,7 @@ from ids import AstId, DefnId, PackageId, ScopeId, BUILTIN_SCOPE_ID, GLOBAL_SCOP
 import ir
 from ir_types import getRootClassType, ClassType, UnitType, I32Type
 from location import Location, NoLoc
-from builtins import registerBuiltins, getBuiltinClasses
+from builtins import registerBuiltins, getBuiltinClasses, getNothingClass
 from utils import Counter, each
 from bytecode import BUILTIN_ROOT_CLASS_ID
 from name import (
@@ -220,11 +220,14 @@ class NameInfo(object):
     def getScope(self, info, loc):
         assert self.isScope()
         defnInfo = self.overloads[0]
-        if isinstance(defnInfo.irDefn, ir.PackagePrefix):
-            scope = info.getScope(defnInfo.scopeId).scopeForPrefix(self.name, loc)
+        irDefn = defnInfo.irDefn
+        if isinstance(irDefn, ir.PackagePrefix):
+            return info.getScope(defnInfo.scopeId).scopeForPrefix(self.name, loc)
+        elif info.hasScope(irDefn):
+            return info.getScope(irDefn)
         else:
-            scope = info.getScope(defnInfo.irDefn)
-        return scope
+            assert not irDefn.isLocal()
+            return NonLocalObjectTypeDefnScope.ensureForDefn(irDefn, info)
 
     def getInfoForConstructors(self, info):
         """Returns NameInfo for constructors of this class.
@@ -243,8 +246,7 @@ class NameInfo(object):
             access to these.
         """
         assert self.isClass()
-        irClass = self.getDefnInfo().irDefn
-        classScope = info.getScope(irClass)
+        classScope = self.getScope(info, NoLoc)
         ctorNameInfo = classScope.getDefinition(CONSTRUCTOR_SUFFIX)
         return ctorNameInfo
 
@@ -403,7 +405,7 @@ class Scope(ast.NodeVisitor):
         For non-function defintions, this requires the name is not already bound. For function
         definitions, multiple functions may share the same name. They are added to
         OverloadInfo."""
-        assert isinstance(name, str)
+        assert isinstance(name, str) or isinstance(name, unicode)
         assert isinstance(defnInfo, DefnInfo)
         if name not in self.bindings:
             self.bindings[name] = NameInfo(name)
@@ -635,7 +637,7 @@ class Scope(ast.NodeVisitor):
         return name in self.defined
 
     def define(self, name):
-        assert isinstance(name, str)
+        assert isinstance(name, str) or isinstance(name, unicode)
         self.defined.add(name)
 
     def deleteVar(self, name):
@@ -1546,13 +1548,13 @@ class ExistentialTypeScope(Scope):
 
 class BuiltinGlobalScope(Scope):
     def __init__(self, parent):
-        super(BuiltinGlobalScope, self).__init__([], None, BUILTIN_SCOPE_ID,
-                                                 parent, parent.info)
+        super(BuiltinGlobalScope, self).__init__(
+            prefix=[], ast=None, scopeId=BUILTIN_SCOPE_ID, parent=parent, info=parent.info)
         def bind(name, irDefn):
             defnInfo = DefnInfo(irDefn, self.scopeId, isVisible=True)
             if isinstance(irDefn, ir.Class):
                 # This scope will automatically be registered.
-                BuiltinClassScope(defnInfo, self)
+                BuiltinClassScope(defnInfo, self.info)
             self.bind(name.short(), defnInfo)
             self.define(name.short())
         registerBuiltins(bind)
@@ -1561,29 +1563,100 @@ class BuiltinGlobalScope(Scope):
         return False
 
 
-class BuiltinClassScope(Scope):
-    def __init__(self, classDefnInfo, parent):
+class NonLocalObjectTypeDefnScope(Scope):
+    def __init__(self, scopeId, irDefn, info):
+        super(NonLocalObjectTypeDefnScope, self).__init__(
+            prefix=[], ast=None, scopeId=scopeId, parent=None, info=info)
+        self.info.setScope(irDefn.id, self)
+        self.irDefn = irDefn
+        self.flatFields = []
+        self.flatMethods = []
+
+        if isinstance(irDefn, ir.Class) and irDefn is not getNothingClass():
+            self.bindConstructors()
+            self.bindFields()
+        self.bindMethods()
+
+    @staticmethod
+    def ensureForDefn(irDefn, info):
+        assert not irDefn.isLocal()
+        if info.hasScope(irDefn.id):
+            return info.getScope(irDefn.id)
+        # BuiltinGlobalScope creates and registers BuiltinClassScope, so we shouldn't get here
+        # for those classes.
+        assert irDefn.isForeign()
+
+        return ForeignObjectTypeDefnScope(irDefn, info)
+
+    def bindConstructors(self):
+        assert isinstance(self.irDefn, ir.Class)
+        if self.irDefn.constructors is not None:
+            for ctor in self.irDefn.constructors:
+                if PUBLIC in ctor.flags:
+                    defnInfo = DefnInfo(ctor, self.scopeId, True, self.scopeId, NOT_HERITABLE)
+                    self.bind(CONSTRUCTOR_SUFFIX, defnInfo)
+                    self.define(CONSTRUCTOR_SUFFIX)
+
+    def bindFields(self):
+        assert isinstance(self.irDefn, ir.Class)
+        baseClass = self.irDefn.superclass()
+        if baseClass is not None:
+            baseScope = NonLocalObjectTypeDefnScope.ensureForDefn(baseClass, self.info)
+            assert isinstance(baseScope, NonLocalObjectTypeDefnScope)
+            for fieldDefnInfo in baseScope.flatFields:
+                inheritedFieldDefnInfo = fieldDefnInfo.inherit(self.scopeId)
+                self.flatFields.append(inheritedFieldDefnInfo)
+
+        for field in self.irDefn.fields:
+            if PUBLIC in field.flags and field.sourceName is not None:
+                fieldDefnInfo = DefnInfo(field, self.scopeId, True)
+                self.flatFields.append(fieldDefnInfo)
+
+        for fieldDefnInfo in self.flatFields:
+            name = fieldDefnInfo.irDefn.sourceName
+            self.bind(name, fieldDefnInfo)
+            self.define(name)
+
+    def bindMethods(self):
+        inheritedBaseIds = set()  # set(DefnId)
+        methodsByOverrideId = {}  # {DefnId: Function}
+
+        def addMethod(methodDefnInfo):
+            assert methodDefnInfo.irDefn.sourceName is not None
+            for overrideId in methodDefnInfo.irDefn.getOverridenMethodIds():
+                methodsByOverrideId[overrideId] = methodDefnInfo
+
+        for supertype in self.irDefn.supertypes:
+            baseDefn = supertype.clas
+            if baseDefn.id in inheritedBaseIds:
+                continue
+            inheritedBaseIds.add(baseDefn.id)
+            for baseSupertype in baseDefn.supertypes:
+                inheritedBaseIds.add(baseSupertype.clas.id)
+
+            baseScope = NonLocalObjectTypeDefnScope.ensureForDefn(baseDefn, self.info)
+            for methodDefnInfo in baseScope.flatMethods:
+                if methodDefnInfo.isHeritable():
+                    addMethod(methodDefnInfo.inherit(self.scopeId))
+
+        for method in self.irDefn.methods:
+            if PUBLIC in method.flags and method.sourceName is not None:
+                methodDefnInfo = DefnInfo(method, self.scopeId, True)
+                addMethod(methodDefnInfo)
+
+        for methodDefnInfo in methodsByOverrideId.itervalues():
+            name = methodDefnInfo.irDefn.sourceName
+            self.bind(name, methodDefnInfo)
+            self.define(name)
+            self.flatMethods.append(methodDefnInfo)
+
+
+class BuiltinClassScope(NonLocalObjectTypeDefnScope):
+    def __init__(self, classDefnInfo, info):
         irClass = classDefnInfo.irDefn
-        super(BuiltinClassScope, self).__init__(
-            [], None, ScopeId("builtin-" + irClass.name.short()), parent, parent.info)
-        self.info.setScope(irClass.id, self)
+        scopeId = ScopeId("builtin-" + irClass.name.short())
+        super(BuiltinClassScope, self).__init__(scopeId, irClass, info)
         self.defnInfo = classDefnInfo
-        if not hasattr(irClass, "isPrimitive"):
-            for ctor in irClass.constructors:
-                defnInfo = DefnInfo(ctor, self.scopeId, True, self.scopeId, NOT_HERITABLE)
-                self.bind(CONSTRUCTOR_SUFFIX, defnInfo)
-                self.define(CONSTRUCTOR_SUFFIX)
-        for method in irClass.methods:
-            methodClass = method.definingClass
-            inheritedScopeId = self.info.getScope(methodClass.id).scopeId
-            inheritanceDepth = irClass.findDistanceToBaseClass(methodClass)
-            defnInfo = DefnInfo(method, self.scopeId, True, inheritedScopeId, inheritanceDepth)
-            self.bind(method.name.short(), defnInfo)
-            self.define(method.name.short())
-        for field in irClass.fields:
-            defnInfo = DefnInfo(field, self.scopeId, True)
-            self.bind(field.name.short(), defnInfo)
-            self.define(field.name.short())
 
     def getDefnInfo(self):
         return self.defnInfo
@@ -1591,8 +1664,14 @@ class BuiltinClassScope(Scope):
     def getClass(self):
         return self.getIrDefn()
 
-    def requiresCapture(self):
-        return False
+
+class ForeignObjectTypeDefnScope(NonLocalObjectTypeDefnScope):
+    def __init__(self, irDefn, info):
+        scopeId = ScopeId("foreign-" + irDefn.name.short())
+        super(ForeignObjectTypeDefnScope, self).__init__(scopeId, irDefn, info)
+
+    def isForeign(self):
+        return True
 
 
 class PackageScope(Scope):
@@ -1620,12 +1699,6 @@ class PackageScope(Scope):
                 defnInfo = DefnInfo(defn, scopeId, True)
                 self.bind(defn.name.short(), defnInfo)
                 self.define(defn.name.short())
-            for clas in exportedClasses:
-                scope = ExternClassScope(ScopeId(clas.name), self, info, clas)
-                self.info.setScope(clas.id, scope)
-            for trait in exportedTraits:
-                scope = ExternTraitScope(ScopeId(trait.name), self, info, trait)
-                self.info.setScope(trait.id, scope)
 
         packageBindings = {}
         for name in packageNames:
@@ -1679,39 +1752,6 @@ class PackageScope(Scope):
 
     def requiresCapture(self):
         return False
-
-
-class ExternClassScope(Scope):
-    def __init__(self, scopeId, parent, info, clas):
-        super(ExternClassScope, self).__init__(clas.name.components, None,
-                                               scopeId, parent, info)
-        for ctor in clas.constructors:
-            if PUBLIC in ctor.flags:
-                defnInfo = DefnInfo(ctor, self.scopeId, isVisible=True)
-                self.bind(CONSTRUCTOR_SUFFIX, defnInfo)
-                self.define(CONSTRUCTOR_SUFFIX)
-        for member in clas.methods + clas.fields:
-            if PUBLIC in member.flags:
-                defnInfo = DefnInfo(member, self.scopeId, isVisible=True)
-                self.bind(member.name.short(), defnInfo)
-                self.define(member.name.short())
-
-    def isForeign(self):
-        return True
-
-    def requiresCapture(self):
-        return True
-
-
-class ExternTraitScope(Scope):
-    def __init__(self, scopeId, parent, info, trait):
-        super(ExternTraitScope, self).__init__(trait.name.components, None,
-                                               scopeId, parent, info)
-        for method in trait.methods:
-            if PUBLIC in method.flags:
-                defnInfo = DefnInfo(method, self.scopeId, isVisible=True)
-                self.bind(method.name.short(), defnInfo)
-                self.define(method.name.short())
 
 
 class ScopeVisitor(ast.NodeVisitor):

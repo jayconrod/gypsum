@@ -535,7 +535,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                    supertypes=[getRootClassType()],
                                    constructors=[], fields=[],
                                    methods=[], flags=frozenset([PUBLIC]))
-        field = fooPackage.addField(clas, Name(["Bar", "x"]),
+        field = fooPackage.addField(clas, Name(["Bar", "x"]), sourceName="x",
                                     type=getRootClassType(), flags=frozenset([LET, PUBLIC]))
         ty = ClassType(clas)
         loader = FakePackageLoader([fooPackage])
@@ -3982,7 +3982,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                  supertypes=[getRootClassType()],
                                  flags=frozenset([PUBLIC]))
         TrType = ClassType(Tr)
-        m = fooPackage.addFunction(Name(["Tr", "m"]), returnType=UnitType,
+        m = fooPackage.addFunction(Name(["Tr", "m"]), sourceName="m", returnType=UnitType,
                                    typeParameters=[], parameterTypes=[TrType],
                                    flags=frozenset([PUBLIC, METHOD]), definingClass=Tr)
         Tr.methods = [m]

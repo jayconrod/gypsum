@@ -172,6 +172,17 @@ class Package(object):
             dep.linkedTypeParameters = [depExports[p.name] for p in dep.externTypeParameters]
             assert all(isinstance(p, TypeParameter) for p in dep.linkedTypeParameters)
 
+        # Link function overrides.
+        for f in self.functions:
+            if f.overrides is not None:
+                for i, override in enumerate(f.overrides):
+                    if override.id.packageId is not self.id:
+                        depIndex = override.id.packageId.index
+                        externIndex = override.id.index
+                        linkedOverride = \
+                          self.dependencies[depIndex].linkedFunctions[externIndex]
+                        f.overrides[i] = linkedOverride
+
     def addName(self, name):
         assert isinstance(name, Name)
         each(self.findOrAddString, name.components)
@@ -583,6 +594,31 @@ class Function(ParameterizedDefn):
             all(bt.isSubtypeOf(at) for at, bt in zip(selfParameterTypes, otherParameterTypes))
         return typeParametersAreCompatible and \
                parameterTypesAreCompatible
+
+    def getOverridenMethodIds(self):
+        """Returns a set of function ids of the methods that this method overrides.
+
+        The functions referenced by ids in the returned set do not override anything. If this
+        is called on a method that doesn't override anything, a set containing the function's
+        own id is returned.
+
+        If a method is part of a chain of overrides (e.g., a overrides b overrides c), then
+        only the top-most non-overriding id would be returned (c).
+
+        Multiple ids may be returned if a method overrides different methods in different
+        base definitions.
+
+        This may only be called on functions with the `METHOD` flag. It may be called on
+        methods with the `STATIC` flag.
+        """
+        assert flags.METHOD in self.flags
+        if self.overrides is None:
+            return set([self.id])
+        else:
+            allOverrideIds = set()
+            for override in self.overrides:
+                allOverrideIds.update(override.getOverridenMethodIds())
+            return allOverrideIds
 
 
 class ObjectTypeDefn(ParameterizedDefn):

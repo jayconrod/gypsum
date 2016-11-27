@@ -632,16 +632,18 @@ class TestPackageScope(unittest.TestCase):
                                           typeParameters=[], parameterTypes=[classType],
                                           flags=frozenset([PRIVATE, METHOD, EXTERN]))
         clas.constructors = [publicCtor, privateCtor]
-        publicMethod = package.addFunction(Name(["C", "m1"]), returnType=UnitType,
+        publicMethod = package.addFunction(Name(["C", "m1"]), sourceName="m1",
+                                           returnType=UnitType,
                                            typeParameters=[], parameterTypes=[classType],
                                            flags=frozenset([PUBLIC, METHOD, EXTERN]))
-        privateMethod = package.addFunction(Name(["C", "m2"]), returnType=UnitType,
+        privateMethod = package.addFunction(Name(["C", "m2"]), sourceName="m2",
+                                            returnType=UnitType,
                                             typeParameters=[], parameterTypes=[classType],
                                             flags=frozenset([PRIVATE, METHOD, EXTERN]))
         clas.methods = [publicMethod, privateMethod]
-        publicField = package.newField(Name(["C", "x"]), type=UnitType,
+        publicField = package.newField(Name(["C", "x"]), sourceName="x", type=UnitType,
                                        flags=frozenset([PUBLIC, EXTERN]))
-        privateField = package.newField(Name(["C", "y"]), type=UnitType,
+        privateField = package.newField(Name(["C", "y"]), sourceName="y", type=UnitType,
                                         flags=frozenset([PRIVATE, EXTERN]))
         clas.fields = [publicField, privateField]
 
@@ -649,12 +651,15 @@ class TestPackageScope(unittest.TestCase):
         info = CompileInfo(None, Package(id=TARGET_PACKAGE_ID), packageLoader)
         topPackageScope = PackageScope(PACKAGE_SCOPE_ID, None, info,
                                        packageLoader.getPackageNames(), [], None)
+        builtinScope = BuiltinGlobalScope(topPackageScope)
         fooPackageScope = topPackageScope.scopeForPrefix("foo", NoLoc)
 
         defnInfo = fooPackageScope.lookupFromSelf("C", NoLoc).getDefnInfo()
         self.assertIs(clas, defnInfo.irDefn)
         self.assertIs(fooPackageScope.scopeId, defnInfo.scopeId)
-        classScope = info.getScope(clas.id)
+        self.assertFalse(info.hasScope(clas.id))
+        classScope = NonLocalObjectTypeDefnScope.ensureForDefn(clas, info)
+        self.assertIs(classScope, info.getScope(clas.id))
         defnInfo = classScope.lookupFromSelf(CONSTRUCTOR_SUFFIX, NoLoc).getDefnInfo()
         self.assertIs(publicCtor, defnInfo.irDefn)
         self.assertIs(classScope.scopeId, defnInfo.scopeId)

@@ -212,14 +212,16 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
 
     def testRewriteField(self):
         package = ir.Package()
-        field = package.newField(Name(["foo"]), type=ir_types.I64Type,
+        field = package.newField(Name(["C", "foo"]), type=ir_types.I64Type,
                                  flags=frozenset([PUBLIC, LET]))
         self.ser.package = package
         self.ser.writeField(field)
 
         self.des.package = package
-        outField = self.des.readField(2)
+        clas = package.addClass(Name(["C"]))
+        outField = self.des.readField(clas, 2)
         self.assertEquals(field, outField)
+        self.assertIs(clas, outField.definingClass)
         self.assertEquals(2, outField.index)
 
     def testRewriteTypeParameter(self):

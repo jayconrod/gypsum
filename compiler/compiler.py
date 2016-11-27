@@ -1386,6 +1386,8 @@ class CompileVisitor(ast.NodeVisitor):
             self.loadThis()
 
     def loadField(self, field):
+        if field.definingClass is None:
+            import pdb; pdb.set_trace()
         if field.definingClass.isForeign():
             self.ldff(field)
         else:
