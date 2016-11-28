@@ -158,6 +158,40 @@ void Roots::initialize(Heap* heap) {
   auto emptyTraitTable = new(heap, 1) TraitTable;
   basicRoots_[EMPTY_TRAIT_TABLE_ROOT_INDEX] = emptyTraitTable;
 
+  typedef BlockHashMapTable<String, Block> DefaultBlockHashMapTable;
+  auto blockHashMapTableMeta = new(heap, 0, sizeof(DefaultBlockHashMapTable),
+                                   sizeof(DefaultBlockHashMapTable::Element))
+      Meta(DefaultBlockHashMapTable::kBlockType);
+  blockHashMapTableMeta->hasElementPointers_ = true;
+  blockHashMapTableMeta->lengthOffset_ = offsetof(DefaultBlockHashMapTable, capacity_);
+  blockHashMapTableMeta->elementPointerMap().setWord(
+      0, DefaultBlockHashMapTable::kElementPointerMap);
+  basicRoots_[BLOCK_HASH_MAP_TABLE_META_ROOT_INDEX] = blockHashMapTableMeta;
+
+  typedef BlockHashMap<String, Block> DefaultBlockHashMap;
+  auto blockHashMapMeta = new(heap, 0, sizeof(DefaultBlockHashMap), 0)
+      Meta(DefaultBlockHashMapTable::kBlockType);
+  blockHashMapMeta->hasPointers_ = true;
+  blockHashMapMeta->objectPointerMap().setWord(0, DefaultBlockHashMap::kPointerMap);
+  basicRoots_[BLOCK_HASH_MAP_META_ROOT_INDEX] = blockHashMapMeta;
+
+  typedef DefnIdHashMapTable<Block> DefaultDefnIdHashMapTable;
+  auto defnIdHashMapTableMeta = new(heap, 0, sizeof(DefaultDefnIdHashMapTable),
+                                   sizeof(DefaultDefnIdHashMapTable::Element))
+      Meta(DefaultDefnIdHashMapTable::kBlockType);
+  defnIdHashMapTableMeta->hasElementPointers_ = true;
+  defnIdHashMapTableMeta->lengthOffset_ = offsetof(DefaultDefnIdHashMapTable, capacity_);
+  defnIdHashMapTableMeta->elementPointerMap().setWord(
+      0, DefaultDefnIdHashMapTable::kElementPointerMap);
+  basicRoots_[DEFN_ID_HASH_MAP_TABLE_META_ROOT_INDEX] = defnIdHashMapTableMeta;
+
+  typedef DefnIdHashMap<Block> DefaultDefnIdHashMap;
+  auto defnIdHashMapMeta = new(heap, 0, sizeof(DefaultDefnIdHashMap), 0)
+      Meta(DefaultDefnIdHashMapTable::kBlockType);
+  defnIdHashMapMeta->hasPointers_ = true;
+  defnIdHashMapMeta->objectPointerMap().setWord(0, DefaultDefnIdHashMap::kPointerMap);
+  basicRoots_[DEFN_ID_HASH_MAP_META_ROOT_INDEX] = defnIdHashMapMeta;
+
   initializeBuiltins(heap);
 
   auto labelType = new(heap, 0) Type(Type::LABEL_TYPE);
@@ -205,40 +239,6 @@ void Roots::initialize(Heap* heap) {
   auto falseString = String::rawFromUtf8CString(heap, "false");
   basicRoots_[FALSE_STRING_ROOT_INDEX] = falseString;
 
-  typedef BlockHashMapTable<String, Block> DefaultBlockHashMapTable;
-  auto blockHashMapTableMeta = new(heap, 0, sizeof(DefaultBlockHashMapTable),
-                                   sizeof(DefaultBlockHashMapTable::Element))
-      Meta(DefaultBlockHashMapTable::kBlockType);
-  blockHashMapTableMeta->hasElementPointers_ = true;
-  blockHashMapTableMeta->lengthOffset_ = offsetof(DefaultBlockHashMapTable, capacity_);
-  blockHashMapTableMeta->elementPointerMap().setWord(
-      0, DefaultBlockHashMapTable::kElementPointerMap);
-  basicRoots_[BLOCK_HASH_MAP_TABLE_META_ROOT_INDEX] = blockHashMapTableMeta;
-
-  typedef BlockHashMap<String, Block> DefaultBlockHashMap;
-  auto blockHashMapMeta = new(heap, 0, sizeof(DefaultBlockHashMap), 0)
-      Meta(DefaultBlockHashMapTable::kBlockType);
-  blockHashMapMeta->hasPointers_ = true;
-  blockHashMapMeta->objectPointerMap().setWord(0, DefaultBlockHashMap::kPointerMap);
-  basicRoots_[BLOCK_HASH_MAP_META_ROOT_INDEX] = blockHashMapMeta;
-
-  typedef DefnIdHashMapTable<Block> DefaultDefnIdHashMapTable;
-  auto defnIdHashMapTableMeta = new(heap, 0, sizeof(DefaultDefnIdHashMapTable),
-                                   sizeof(DefaultDefnIdHashMapTable::Element))
-      Meta(DefaultDefnIdHashMapTable::kBlockType);
-  defnIdHashMapTableMeta->hasElementPointers_ = true;
-  defnIdHashMapTableMeta->lengthOffset_ = offsetof(DefaultDefnIdHashMapTable, capacity_);
-  defnIdHashMapTableMeta->elementPointerMap().setWord(
-      0, DefaultDefnIdHashMapTable::kElementPointerMap);
-  basicRoots_[DEFN_ID_HASH_MAP_TABLE_META_ROOT_INDEX] = defnIdHashMapTableMeta;
-
-  typedef DefnIdHashMap<Block> DefaultDefnIdHashMap;
-  auto defnIdHashMapMeta = new(heap, 0, sizeof(DefaultDefnIdHashMap), 0)
-      Meta(DefaultDefnIdHashMapTable::kBlockType);
-  defnIdHashMapMeta->hasPointers_ = true;
-  defnIdHashMapMeta->objectPointerMap().setWord(0, DefaultDefnIdHashMap::kPointerMap);
-  basicRoots_[DEFN_ID_HASH_MAP_META_ROOT_INDEX] = defnIdHashMapMeta;
-
   auto threadBindleMeta = new(heap, 0, sizeof(ThreadBindle), 0) Meta(THREAD_BINDLE_BLOCK_TYPE);
   threadBindleMeta->hasPointers_ = true;
   threadBindleMeta->objectPointerMap().setWord(0, ThreadBindle::kPointerMap);
@@ -270,7 +270,7 @@ Meta* Roots::getMetaForBlockType(int type) {
     case BLOCK_HASH_MAP_TABLE_BLOCK_TYPE: return blockHashMapTableMeta();
     case BLOCK_HASH_MAP_BLOCK_TYPE: return blockHashMapMeta();
     case DEFN_ID_HASH_MAP_TABLE_BLOCK_TYPE: return defnIdHashMapTableMeta();
-    case DEFN_ID_HASH_MAP_BLOCK_TYPE: return defnIdHashMapTableMeta();
+    case DEFN_ID_HASH_MAP_BLOCK_TYPE: return defnIdHashMapMeta();
     case TYPE_BLOCK_TYPE: return typeMeta();
     case STRING_BLOCK_TYPE: return stringMeta();
     case THREAD_BINDLE_BLOCK_TYPE: return threadBindleMeta();

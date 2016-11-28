@@ -28,7 +28,6 @@ class PackageIdArray;
 class Name;
 template <class T>
 class TaggedArray;
-class TraitTable;
 class Type;
 class TypeParameter;
 
@@ -53,7 +52,6 @@ class Class: public ObjectTypeDefn {
         BlockArray<Field>* fields,
         BlockArray<Function>* constructors,
         BlockArray<Function>* methods,
-        TraitTable* traits,
         Package* package,
         Meta* instanceMeta = nullptr,
         Type* elementType = nullptr);
@@ -68,7 +66,6 @@ class Class: public ObjectTypeDefn {
                              const Handle<BlockArray<Field>>& fields,
                              const Handle<BlockArray<Function>>& constructors,
                              const Handle<BlockArray<Function>>& methods,
-                             const Handle<TraitTable>& traits,
                              const Handle<Package>& package,
                              const Handle<Meta>& instanceMeta = Local<Meta>(),
                              const Handle<Type>& elementType = Local<Type>());
@@ -114,7 +111,7 @@ class Class: public ObjectTypeDefn {
 
   BlockArray<Function>* methods() const { return methods_.get(); }
   void setMethods(BlockArray<Function>* newMethods) { methods_.set(this, newMethods); }
-  BlockArray<Function>* flatMethods() const { return methods_.get(); }
+  BlockArray<Function>* flatMethods() const { return flatMethods_.get(); }
   void setFlatMethods(BlockArray<Function>* newFlatMethods) {
     flatMethods_.set(this, newFlatMethods);
   }
@@ -123,9 +120,6 @@ class Class: public ObjectTypeDefn {
     methodIdIndex_.set(this, newMethodIdIndex);
   }
   Function* findMethod(DefnId methodId) const;
-
-  TraitTable* traits() const { return traits_.get(); }
-  void setTraits(TraitTable* newTraits) { traits_.set(this, newTraits); }
 
   Package* package() const { return package_.get(); }
   void setPackage(Package* newPackage) { package_.set(this, newPackage); }
@@ -206,7 +200,6 @@ class Class: public ObjectTypeDefn {
   Ptr<BlockArray<Function>> methods_;
   Ptr<BlockArray<Function>> flatMethods_;
   Ptr<DefnIdHashMap<Function>> methodIdIndex_;
-  Ptr<TraitTable> traits_;
   Ptr<Package> package_;
   Ptr<Meta> instanceMeta_;
   Ptr<Type> elementType_;

@@ -22,6 +22,7 @@ namespace internal {
   F(Trait, typeParameters_) \
   F(Trait, supertypes_) \
   F(Trait, methods_) \
+  F(Trait, flatMethods_) \
   F(Trait, package_) \
   F(Trait, methodNameIndex_) \
   F(Trait, methodSourceNameIndex_) \
@@ -127,6 +128,7 @@ ostream& operator << (ostream& os, const Trait* trait) {
      << "\n  type parameters: " << brief(trait->typeParameters())
      << "\n  supertypes: " << brief(trait->supertypes())
      << "\n  methods: " << brief(trait->methods())
+     << "\n  flat methods: " << brief(trait->flatMethods())
      << "\n  package: " << brief(trait->package())
      << "\n  method name index: " << brief(trait->methodNameIndex())
      << "\n  method source name index: " << brief(trait->methodSourceNameIndex());

@@ -115,6 +115,8 @@ void GC::mark(Block* block) {
 }
 
 
+Address prevLive = 0;
+
 void GC::sweepChunk(Chunk* chunk) {
   // Collect free blocks in this chunk.
   vector<Free*> freeBlocks;
@@ -127,6 +129,7 @@ void GC::sweepChunk(Chunk* chunk) {
     auto blockSize = reinterpret_cast<Block*>(live)->sizeOfBlock();
     auto alignedSize = align(blockSize, kWordSize);
     endOfPrevLive = live + alignedSize;
+    prevLive = live;
   }
   auto free = maybeFreeRange(endOfPrevLive, chunk->storageLimit());
   if (free)

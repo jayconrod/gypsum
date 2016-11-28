@@ -828,19 +828,17 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       case CALLV: {
         auto functionId = readVbn();
         ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
-        DefnId methodId;
-        length_t argCount;
+        Function* method;
         if (isBuiltinId(functionId)) {
-          methodId = DefnId(DefnId::FUNCTION, kBuiltinPackageId, toLength(functionId));
-          argCount = vm_->roots()->getBuiltinFunction(static_cast<BuiltinId>(functionId))
-              ->parameterTypes()->length();
+          method = vm_->roots()->getBuiltinFunction(static_cast<BuiltinId>(functionId));
         } else {
-          methodId = DefnId(DefnId::FUNCTION, function_->package()->id(), toLength(functionId));
-          argCount = function_->package()->getFunction(functionId)->parameterTypes()->length();
+          method = function_->package()->getFunction(functionId);
         }
+        auto argCount = method->parameterTypes()->length();
         auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
         CHECK_NON_NULL(receiver);
-        Persistent<Function> callee(receiver->findMethod(methodId));
+        auto overrideId = method->findOverriddenMethodId();
+        Persistent<Function> callee(receiver->findMethod(overrideId));
         if (callee->hasBuiltinId()) {
           handleBuiltin(callee->builtinId());
         } else if (callee->isNative()) {
@@ -855,13 +853,13 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         auto depIndex = readVbn();
         auto externIndex = readVbn();
         ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
-        auto externFunc = function_->package()->dependencies()->get(toLength(depIndex))
+        auto method = function_->package()->dependencies()->get(toLength(depIndex))
             ->linkedFunctions()->get(toLength(externIndex));
-        auto methodId = externFunc->id();
-        auto argCount = externFunc->parameterTypes()->length();
+        auto argCount = method->parameterTypes()->length();
         auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
         CHECK_NON_NULL(receiver);
-        Persistent<Function> callee(receiver->findMethod(methodId));
+        auto overrideId = method->findOverriddenMethodId();
+        Persistent<Function> callee(receiver->findMethod(overrideId));
         if (callee->hasBuiltinId()) {
           handleBuiltin(callee->builtinId());
         } else if (callee->isNative()) {

@@ -113,17 +113,19 @@ class FlatMethodsBuilder {
       // This method overrides nothing. Just append it.
       flatMethods_.push_back(method);
       methodIndices_[method->id()].insert(flatMethods_.size() - 1);
+      methodsById_[method->id()] = method;
     } else {
       // This method overrides at least one other method. We may not have inherited the
       // overriden methods yet though because we may not have found a path to the base yet.
       bool didOverrideMethod = false;
-      for (auto overrideId : getOverridenMethodIds(method)) {
+      for (auto overrideId : method->findOverriddenMethodIds()) {
         // Replace the method in our method list if we've inherited it.
         if (methodIndices_.find(overrideId) != methodIndices_.end()) {
           for (auto index : methodIndices_[overrideId]) {
             flatMethods_[index] = method;
-            didOverrideMethod = false;
+            didOverrideMethod = true;
           }
+          methodsById_[overrideId] = method;
         }
       }
 
@@ -131,8 +133,9 @@ class FlatMethodsBuilder {
       if (!didOverrideMethod) {
         flatMethods_.push_back(method);
         auto index = flatMethods_.size() - 1;
-        for (auto overrideId : getOverridenMethodIds(method)) {
+        for (auto overrideId : method->findOverriddenMethodIds()) {
           methodIndices_[overrideId].insert(index);
+          methodsById_[overrideId] = method;
         }
       }
     }
@@ -155,26 +158,6 @@ class FlatMethodsBuilder {
   }
 
  private:
-  /**
-   * Returns ids of the non-overriding methods that this method overrides, directly or
-   * indirectly.
-   *
-   * If this is called on a static or non-overriding method, it just returns the method's id.
-   */
-  unordered_set<DefnId> getOverridenMethodIds(const Handle<Function>& method) {
-    if (method->overrides() == nullptr) {
-      return unordered_set<DefnId>{method->id()};
-    } else {
-      unordered_set<DefnId> allOverrideIds;
-      auto overrides = handle(method->overrides());
-      for (length_t i = 0; i < overrides->length(); i++) {
-        auto overrideIds = getOverridenMethodIds(handle(overrides->get(i)));
-        allOverrideIds.insert(overrideIds.begin(), overrideIds.end());
-      }
-      return allOverrideIds;
-    }
-  }
-
   Heap* heap_;
   vector<Local<Function>> flatMethods_;
   unordered_set<DefnId> inheritedMethodIds_;
@@ -185,6 +168,10 @@ class FlatMethodsBuilder {
 
 Local<BlockArray<Function>>
 ObjectTypeDefn::ensureFlatMethods(const Handle<ObjectTypeDefn>& defn) {
+  if (defn->flatMethods() != nullptr) {
+    return handle(defn->flatMethods());
+  }
+
   FlatMethodsBuilder builder(defn->getHeap());
 
   unordered_set<DefnId> inheritedBaseIds;
@@ -199,7 +186,7 @@ ObjectTypeDefn::ensureFlatMethods(const Handle<ObjectTypeDefn>& defn) {
       inheritedBaseIds.insert(baseSupertype->asClassOrTrait()->id());
     }
 
-    auto baseMethods = handle(base->flatMethods());
+    auto baseMethods = ensureFlatMethods(base);
     for (length_t i = 0; i < baseMethods->length(); i++) {
       builder.addMethod(handle(baseMethods->get(i)));
     }

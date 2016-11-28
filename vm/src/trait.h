@@ -78,6 +78,11 @@ class Trait: public ObjectTypeDefn {
   BlockArray<Function>* methods() const { return methods_.get(); }
   void setMethods(BlockArray<Function>* methods) { methods_.set(this, methods); }
 
+  BlockArray<Function>* flatMethods() const { return flatMethods_.get(); }
+  void setFlatMethods(BlockArray<Function>* flatMethods) {
+    flatMethods_.set(this, flatMethods);
+  }
+
   Package* package() const { return package_.get(); }
   void setPackage(Package* package) { package_.set(this, package); }
 
@@ -107,6 +112,7 @@ class Trait: public ObjectTypeDefn {
   Ptr<BlockArray<TypeParameter>> typeParameters_;
   Ptr<BlockArray<Type>> supertypes_;
   Ptr<BlockArray<Function>> methods_;
+  Ptr<BlockArray<Function>> flatMethods_;
   Ptr<Package> package_;
   Ptr<BlockHashMap<Name, Function>> methodNameIndex_;
   Ptr<BlockHashMap<String, Function>> methodSourceNameIndex_;

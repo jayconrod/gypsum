@@ -107,9 +107,8 @@ def initClass(out, classData):
         out.write("    auto methods = new(heap, %d) BlockArray<Function>;\n" % len(methodIds))
         for i, id in enumerate(methodIds):
             out.write("    methods->set(%d, getBuiltinFunction(%s));\n" % (i, id))
-    out.write("    auto traits = emptyTraitTable();\n")
     out.write("    ::new(clas) Class(id, name, nullptr, flags, typeParameters, supertypes, " +
-              "fields, constructors, methods, traits, nullptr, nullptr, elementType);\n")
+              "fields, constructors, methods, nullptr, nullptr, elementType);\n")
     if classData.get("isOpaque"):
         out.write("    builtinMetas_.push_back(nullptr);\n  }")
     else:

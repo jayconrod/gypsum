@@ -9,6 +9,7 @@
 #include "array.h"
 #include "function.h"
 #include "handle.h"
+#include "hash-table.h"
 #include "heap.h"
 #include "roots.h"
 #include "stack.h"
@@ -117,6 +118,8 @@ void dump(const Block* block) {
     case TAGGED_ARRAY_BLOCK_TYPE: cerr << reinterpret_cast<const TaggedArray<Block>*>(block); break;
     case BLOCK_HASH_MAP_TABLE_BLOCK_TYPE: cerr << reinterpret_cast<const BlockHashMapTable<Block*, Block*>*>(block); break;
     case BLOCK_HASH_MAP_BLOCK_TYPE: cerr << reinterpret_cast<const BlockHashMap<Block*, Block*>*>(block); break;
+    case DEFN_ID_HASH_MAP_TABLE_BLOCK_TYPE: cerr << reinterpret_cast<const DefnIdHashMapTable<Block*>*>(block); break;
+    case DEFN_ID_HASH_MAP_BLOCK_TYPE: cerr << reinterpret_cast<const DefnIdHashMap<Block*>*>(block); break;
     case OBJECT_BLOCK_TYPE: cerr << reinterpret_cast<const Object*>(block); break;
     case TYPE_BLOCK_TYPE: cerr << reinterpret_cast<const Type*>(block); break;
     case STRING_BLOCK_TYPE: cerr << reinterpret_cast<const String*>(block); break;

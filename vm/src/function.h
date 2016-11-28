@@ -9,6 +9,7 @@
 
 #include <iostream>
 #include <new>
+#include <unordered_set>
 #include <vector>
 #include "array.h"
 #include "block.h"
@@ -131,6 +132,25 @@ class Function: public Block {
   }
   void ensureNativeFunction();
   NativeFunction ensureAndGetNativeFunction();
+
+  /**
+   * Returns the {@link DefnId} of the first base method this function overrides.
+   *
+   * If this function does not override anything, its own id is returned. If it overrides
+   * a method, which itself is an override, the id of the base method is returned. This will
+   * never return the id of an overriding method.
+   */
+  DefnId findOverriddenMethodId() const;
+
+  /**
+   * Returns a set of {@link DefnId}s of base methods this function overrides.
+   *
+   * If this function does not override anything, a singleton set with its own id is returned.
+   * If it overrides methods which are also overrides, the ids of the base methods are
+   * returned. This will never return ids of an overriding method, and it will always return
+   * at least one id.
+   */
+  std::unordered_set<DefnId> findOverriddenMethodIds() const;
 
  private:
   DECLARE_POINTER_MAP()

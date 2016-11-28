@@ -15,7 +15,6 @@
 #include "index.h"
 #include "package.h"
 #include "roots.h"
-#include "trait.h"
 #include "type.h"
 
 using namespace std;
@@ -34,7 +33,6 @@ namespace internal {
   F(Class, methods_) \
   F(Class, flatMethods_) \
   F(Class, methodIdIndex_) \
-  F(Class, traits_) \
   F(Class, package_) \
   F(Class, instanceMeta_) \
   F(Class, elementType_) \
@@ -63,7 +61,6 @@ Class::Class(DefnId id,
              BlockArray<Field>* fields,
              BlockArray<Function>* constructors,
              BlockArray<Function>* methods,
-             TraitTable* traits,
              Package* package,
              Meta* instanceMeta,
              Type* elementType)
@@ -77,7 +74,6 @@ Class::Class(DefnId id,
       fields_(this, fields),
       constructors_(this, constructors),
       methods_(this, methods),
-      traits_(this, traits),
       package_(this, package),
       instanceMeta_(this, instanceMeta),
       elementType_(this, elementType) {}
@@ -93,13 +89,12 @@ Local<Class> Class::create(Heap* heap,
                            const Handle<BlockArray<Field>>& fields,
                            const Handle<BlockArray<Function>>& constructors,
                            const Handle<BlockArray<Function>>& methods,
-                           const Handle<TraitTable>& traits,
                            const Handle<Package>& package,
                            const Handle<Meta>& instanceMeta,
                            const Handle<Type>& elementType) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
       id, *name, sourceName.getOrNull(), flags, *typeParameters, *supertypes,
-      *fields, *constructors, *methods, *traits,
+      *fields, *constructors, *methods,
       package.getOrNull(), instanceMeta.getOrNull(),
       elementType.getOrNull())));
 }
@@ -107,7 +102,7 @@ Local<Class> Class::create(Heap* heap,
 
 Local<Class> Class::create(Heap* heap, DefnId id) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
-      id, nullptr, nullptr, 0, nullptr, nullptr, nullptr, nullptr, nullptr,
+      id, nullptr, nullptr, 0, nullptr, nullptr, nullptr, nullptr,
       nullptr, nullptr, nullptr, nullptr)));
 }
 
@@ -280,6 +275,7 @@ Local<Meta> Class::ensureInstanceMeta(const Handle<Class>& clas) {
   bool hasElementPointers = false;
   if (clas->elementType() != nullptr) {
     elementSize = clas->elementType()->typeSize();
+    elementPointerMap.expand(align(elementSize, kWordSize) / kWordSize);
     ASSERT(lengthFieldIndex != kIndexNotSet);
     lengthOffset = static_cast<u8>(flatFields->get(lengthFieldIndex)->offset());
     ASSERT(lengthOffset == flatFields->get(lengthFieldIndex)->offset());
@@ -362,7 +358,6 @@ ostream& operator << (ostream& os, const Class* clas) {
      << "\n  flat fields: " << brief(clas->flatFields())
      << "\n  constructors: " << brief(clas->constructors())
      << "\n  methods: " << brief(clas->methods())
-     << "\n  traits: " << brief(clas->traits())
      << "\n  package: " << brief(clas->package())
      << "\n  instance meta: " << brief(clas->instanceMeta())
      << "\n  element type: " << brief(clas->elementType())

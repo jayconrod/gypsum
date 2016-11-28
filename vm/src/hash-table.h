@@ -372,7 +372,7 @@ struct DefnIdHashMapElement {
   DefnIdHashMapElement(SafeKey key, SafeValue value)
       : key(keyFromSafeKey(key)), value(valueFromSafeValue(value)) { }
 
-  bool isEmpty() const { return !key.isValid(); }
+  bool isEmpty() const { return key == empty(); }
   void setEmpty() { key = empty(); }
   bool isDead() const { return key == dead(); }
   void setDead() { key = dead(); }

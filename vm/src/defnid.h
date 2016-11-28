@@ -37,7 +37,7 @@ struct DefnId {
   DefnId(Kind kind, id_t packageId, length_t index, bool isLocal = false)
       : kind(kind), packageId(packageId), index(index), isLocal(isLocal) { }
 
-  bool isValid() const { return kind == NOT_VALID; }
+  bool isValid() const { return kind != NOT_VALID; }
   bool operator == (const DefnId& id) const {
     return kind == id.kind &&
         packageId == id.packageId &&

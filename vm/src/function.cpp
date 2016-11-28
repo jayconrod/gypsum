@@ -180,6 +180,29 @@ NativeFunction Function::ensureAndGetNativeFunction() {
 }
 
 
+DefnId Function::findOverriddenMethodId() const {
+  auto override = this;
+  while (override->overrides() != nullptr) {
+    override = override->overrides()->get(0);
+  }
+  return override->id();
+}
+
+
+unordered_set<DefnId> Function::findOverriddenMethodIds() const {
+  if (overrides() == nullptr) {
+    return unordered_set<DefnId>{id()};
+  } else {
+    unordered_set<DefnId> allOverrideIds;
+    for (length_t i = 0; i < overrides()->length(); i++) {
+      auto overrideIds = overrides()->get(i)->findOverriddenMethodIds();
+      allOverrideIds.insert(overrideIds.begin(), overrideIds.end());
+    }
+    return allOverrideIds;
+  }
+}
+
+
 ostream& operator << (ostream& os, const Function* fn) {
   os << brief(fn)
      << "\n  id: " << fn->id();
