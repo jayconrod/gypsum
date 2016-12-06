@@ -551,6 +551,57 @@ class TestCompiler(TestCaseWithDefinitions):
                              variables=[self.makeVariable("f.o", type=ty,
                                         kind=PARAMETER, flags=frozenset([LET]))]))
 
+    def testLoadInheritedField(self):
+        source = "class Foo\n" + \
+                 "  let x = 12i64\n" + \
+                 "class Bar <: Foo\n" + \
+                 "def f(bar: Bar) =\n" + \
+                 "  bar.x"
+        package = self.compileFromSource(source)
+        Foo = package.findClass(name="Foo")
+        x = Foo.findFieldBySourceName("x")
+        Bar = package.findClass(name="Bar")
+        BarType = ClassType.forReceiver(Bar)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", I64Type, [[
+                               ldlocal(0),
+                               ldf(x),
+                               ret(),
+                             ]],
+                             parameterTypes=[BarType],
+                             variables=[self.makeVariable("f.bar", type=BarType,
+                                                          kind=PARAMETER, flags=frozenset([LET]))]))
+
+    def testLoadInheritedForeignField(self):
+        fooPackage = Package(name=Name(["foo"]))
+        Bar = fooPackage.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
+                                  supertypes=[getRootClassType()],
+                                  constructors=[], fields=[],
+                                  methods=[], flags=frozenset([PUBLIC]))
+        x = fooPackage.addField(Bar, Name(["Bar", "x"]), sourceName="x",
+                                type=getRootClassType(), flags=frozenset([LET, PUBLIC]))
+        BarType = ClassType.forReceiver(Bar)
+        ctor = fooPackage.addFunction(Name(["Bar", CONSTRUCTOR_SUFFIX]), typeParameters=[],
+                                      returnType=UnitType, parameterTypes=[BarType],
+                                      definingClass=Bar,
+                                      flags=frozenset([PUBLIC, METHOD, CONSTRUCTOR]))
+        Bar.constructors.append(ctor)
+        loader = FakePackageLoader([fooPackage])
+
+        source = "class Baz <: foo.Bar\n" + \
+                 "def f(baz: Baz) = baz.x"
+        package = self.compileFromSource(source, packageLoader=loader)
+        Baz = package.findClass(name="Baz")
+        BazType = ClassType.forReceiver(Baz)
+        self.checkFunction(package,
+                           self.makeSimpleFunction("f", getRootClassType(), [[
+                               ldlocal(0),
+                               ldff(x),
+                               ret()]],
+                             parameterTypes=[BazType],
+                             variables=[self.makeVariable("f.baz", type=BazType,
+                                        kind=PARAMETER, flags=frozenset([LET]))]))
+
     def testAccumShortPropForEffect(self):
         package = self.compileFromSource("class Foo\n" +
                                          "  var x: i64\n" +
