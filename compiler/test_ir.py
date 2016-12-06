@@ -197,8 +197,15 @@ class TestPackageDependency(unittest.TestCase):
         expected = ir.PackageDependency(Name(["foo", "bar"]), None, None)
         self.assertNameAndVersionEquals(expected, dep)
 
-    def testFromStringWithMin(self):
+    def testFromStringFixed(self):
         dep = ir.PackageDependency.fromString("foo.bar:1.2")
+        expected = ir.PackageDependency(Name(["foo", "bar"]),
+                                        ir.PackageVersion([1, 2]),
+                                        ir.PackageVersion([1, 2]))
+        self.assertNameAndVersionEquals(expected, dep)
+
+    def testFromStringWithMin(self):
+        dep = ir.PackageDependency.fromString("foo.bar:1.2-")
         expected = ir.PackageDependency(Name(["foo", "bar"]),
                                         ir.PackageVersion([1, 2]), None)
         self.assertNameAndVersionEquals(expected, dep)

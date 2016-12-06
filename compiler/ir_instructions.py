@@ -154,7 +154,7 @@ class stf(Instruction):
 class stff(Instruction):
     def __init__(self, field):
         clas = field.definingClass
-        assert isinstance(clas, ir.Class) and not clas.isForeign()
+        assert isinstance(clas, ir.Class) and clas.isForeign()
         assert isinstance(field, ir.Field)
         super(stff, self).__init__(clas.id.packageId.index,
                                    clas.id.externIndex,

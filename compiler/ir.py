@@ -287,7 +287,7 @@ class PackageVersion(object):
 
 
 class PackageDependency(object):
-    dependencySrc = "(%s)(?::(%s)?(?:-(%s))?)?" % \
+    dependencySrc = "(%s)(?::(%s)?(?:(-)(%s)?)?)?" % \
                     (Name.packageSrc, PackageVersion.versionSrc, PackageVersion.versionSrc)
     dependencyRex = re.compile(r"\A%s\Z" % dependencySrc)
 
@@ -318,7 +318,13 @@ class PackageDependency(object):
             raise ValueError("invalid package dependency: " + s)
         name = Name.fromString(m.group(1))
         minVersion = PackageVersion.fromString(m.group(2)) if m.group(2) else None
-        maxVersion = PackageVersion.fromString(m.group(3)) if m.group(3) else None
+        dash = m.group(3) is not None
+        if m.group(4) is not None:
+            maxVersion = PackageVersion.fromString(m.group(4))
+        elif dash:
+            maxVersion = None
+        else:
+            maxVersion = minVersion
         return PackageDependency(name, minVersion, maxVersion)
 
     @staticmethod
@@ -329,7 +335,7 @@ class PackageDependency(object):
 
     def dependencyString(self):
         minStr = str(self.minVersion) if self.minVersion is not None else ""
-        maxStr = "-" + str(self.maxVersion) if self.maxVersion is not None else ""
+        maxStr = "-" + str(self.maxVersion) if self.maxVersion is not None else "-"
         versionStr = ":" + minStr + maxStr if minStr or maxStr else ""
         return str(self.name) + versionStr
 
@@ -1038,7 +1044,7 @@ class Field(IrDefinition):
         flags (frozenset[flag]): flags indicating how this field is used. Valid flags are
             `LET`, `PUBLIC`, `PROTECTED`, `PRIVATE`, `STATIC`.
         definingClass (Class?): the class this field was defined in (as opposed to any other
-            class that inherits this field.
+            class that inherits this field).
         index (int?): an integer indicating where this field is located with an instance of
             its class. 0 is the first field, 1 is the second, etc. Used to generate load / store
             instructions. This will usually be `None` before semantic analysis.
