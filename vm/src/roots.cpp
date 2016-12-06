@@ -97,13 +97,6 @@ void Roots::initialize(Heap* heap) {
   traitMeta->objectPointerMap().setWord(0, Trait::kPointerMap);
   basicRoots_[TRAIT_META_ROOT_INDEX] = traitMeta;
 
-  auto traitTableMeta = new(heap, 0, sizeof(TraitTable), sizeof(TraitTable::Element))
-      Meta(TRAIT_TABLE_BLOCK_TYPE);
-  traitTableMeta->hasElementPointers_ = true;
-  traitTableMeta->lengthOffset_ = offsetof(TraitTable, capacity_);
-  traitTableMeta->elementPointerMap().setWord(0, TraitTable::kElementPointerMap);
-  basicRoots_[TRAIT_TABLE_META_ROOT_INDEX] = traitTableMeta;
-
   auto typeParameterMeta =
       new(heap, 0, sizeof(TypeParameter), 0) Meta(TYPE_PARAMETER_BLOCK_TYPE);
   typeParameterMeta->hasPointers_ = true;
@@ -154,9 +147,6 @@ void Roots::initialize(Heap* heap) {
 
   auto emptyBlockArray = new(heap, 0) BlockArray<Block>;
   basicRoots_[EMPTY_BLOCK_ARRAY_ROOT_INDEX] = emptyBlockArray;
-
-  auto emptyTraitTable = new(heap, 1) TraitTable;
-  basicRoots_[EMPTY_TRAIT_TABLE_ROOT_INDEX] = emptyTraitTable;
 
   typedef BlockHashMapTable<String, Block> DefaultBlockHashMapTable;
   auto blockHashMapTableMeta = new(heap, 0, sizeof(DefaultBlockHashMapTable),
@@ -260,7 +250,6 @@ Meta* Roots::getMetaForBlockType(int type) {
     case CLASS_BLOCK_TYPE: return classMeta();
     case FIELD_BLOCK_TYPE: return fieldMeta();
     case TRAIT_BLOCK_TYPE: return traitMeta();
-    case TRAIT_TABLE_BLOCK_TYPE: return traitTableMeta();
     case TYPE_PARAMETER_BLOCK_TYPE: return typeParameterMeta();
     case I8_ARRAY_BLOCK_TYPE: return i8ArrayMeta();
     case I32_ARRAY_BLOCK_TYPE: return i32ArrayMeta();

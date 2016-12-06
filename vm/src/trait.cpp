@@ -135,20 +135,5 @@ ostream& operator << (ostream& os, const Trait* trait) {
   return os;
 }
 
-
-void TraitTableElement::set(const HashTable<TraitTableElement>* table,
-                            const TraitTableElement& elem) {
-  key = elem.key;
-  table->getHeap()->recordWrite(
-      reinterpret_cast<Trait**>(&key), reinterpret_cast<Trait*>(elem.key.getPointer()));
-  value = elem.value;
-  table->getHeap()->recordWrite(&value, elem.value);
-}
-
-
-Local<TraitTable> TraitTable::create(Heap* heap, length_t capacity) {
-  RETRY_WITH_GC(heap, return Local<TraitTable>(new(heap, capacity) TraitTable()));
-}
-
 }
 }

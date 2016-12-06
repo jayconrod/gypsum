@@ -121,65 +121,6 @@ class Trait: public ObjectTypeDefn {
 
 std::ostream& operator << (std::ostream& os, const Trait* trait);
 
-
-struct TraitTableElement {
-  static const word_t kEmpty = 1;
-  static const word_t kDead = 2;
-
-  TraitTableElement()
-      : key(kEmpty),
-        value(nullptr) { }
-  TraitTableElement(Trait* trait)
-      : key(trait),
-        value(nullptr) { }
-  TraitTableElement(Trait* trait, BlockArray<Function>* value)
-      : key(trait),
-        value(value) { }
-  TraitTableElement(const TraitTableElement&) = delete;
-  TraitTableElement& operator = (const TraitTableElement&) = delete;
-  TraitTableElement(TraitTableElement&&) = delete;
-  TraitTableElement&& operator = (TraitTableElement&&) = delete;
-
-  bool isEmpty() const { return key.isNumber() && key.getNumber() == kEmpty; }
-  void setEmpty() { return key.setNumber(kEmpty); }
-  bool isDead() const { return key.isNumber() && key.getNumber() == kDead; }
-  void setDead() { return key.setNumber(kDead); }
-  bool isLive() const { return key.isPointer(); }
-
-  void set(const HashTable<TraitTableElement>* table, const TraitTableElement& elem);
-
-  bool operator == (const TraitTableElement& other) const {
-    return key == other.key && value == other.value;
-  }
-  bool operator != (const TraitTableElement& other) const {
-    return !(*this == other);
-  }
-  bool matches(const TraitTableElement& other) const {
-    return isLive() && key == other.key;
-  }
-  u32 hashCode() const {
-    return key.getPointer()->hashCode();
-  }
-
-  Tagged<Trait> key;
-  BlockArray<Function>* value;
-};
-
-
-class TraitTable: public HashTable<TraitTableElement> {
- public:
-  static const BlockType kBlockType = TRAIT_TABLE_BLOCK_TYPE;
-
-  TraitTable()
-      : HashTable<TraitTableElement>(kBlockType) { }
-
-  static Local<TraitTable> create(Heap* heap, length_t capacity);
-
- private:
-  friend class Roots;
-  static const word_t kElementPointerMap = 3;
-};
-
 }
 }
 
