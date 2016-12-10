@@ -223,8 +223,14 @@ class Package(object):
 
     def find(self, defns, kwargs):
         def matchItem(defn, key, value):
-            if key == "name" and isinstance(value, str):
-                return Name.fromString(value) == defn.name
+            if key == "name":
+                if isinstance(value, str):
+                    name = Name.fromString(value)
+                else:
+                    name = value
+                return name == defn.name or \
+                    name == unmangleName(defn.name) or \
+                    (isinstance(value, str) and defn.sourceName == value)
             elif key == "flag":
                 return value in defn.flags
             elif key == "pred":
@@ -1148,8 +1154,8 @@ def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes, importedTy
         return None
 
 
-def mangleFunctionName(function, package):
-    """Returns a mangled name string which can be used to link overloaded functions."""
+def mangleFunctionShortName(function, package):
+    """Returns a mangled name string which can be used when linking overloaded functions."""
     def mangleType(ty, variables):
         if ty is ir_types.UnitType:
             return "U"
@@ -1208,13 +1214,8 @@ def mangleFunctionName(function, package):
         lowerStr = mangleType(typeParameter.lowerBound, variables)
         return "%s<%s>%s" % (flagStr, upperStr, lowerStr)
 
-    if len(function.name.components) == 1:
-        nameStr = "%d%s" % (len(function.name.components[0]), function.name.components[0])
-    else:
-        nameStr = "%s.%d%s" % (
-            ".".join(function.name.components[:-1]),
-            len(function.name.components[-1]),
-            function.name.components[-1])
+    shortName = function.name.short()
+    nameStr = "%d%s" % (len(shortName), shortName)
     if len(function.typeParameters) == 0:
         typeParamsStr = ""
     else:
@@ -1224,6 +1225,25 @@ def mangleFunctionName(function, package):
     argsParts = [mangleType(pt, function.typeParameters) for pt in function.parameterTypes]
     argsStr = "(" + ",".join(argsParts) + ")"
     return nameStr + typeParamsStr + argsStr
+
+
+def mangleFunctionName(function, package):
+    components = function.name.components[:-1]
+    components.append(mangleFunctionShortName(function, package))
+    return Name(components)
+
+
+def unmangleName(name):
+    def unmangleComponent(component):
+        if len(component) == 0 or not component[0].isdigit():
+            return component
+        lengthLength = 1
+        while lengthLength < len(component) and component[lengthLength].isdigit():
+            lengthLength += 1
+        length = int(component[:lengthLength])
+        return component[lengthLength:lengthLength + length]
+
+    return Name(map(unmangleComponent, name.components))
 
 
 __all__ = [
