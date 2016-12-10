@@ -694,11 +694,13 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                    constructors=[], fields=[], methods=[],
                                    flags=frozenset([PUBLIC]))
         ty = ClassType(clas)
+        rootClass = getRootClass()
+        rootToString = rootClass.findMethodBySourceName("to-string")
         method = fooPackage.addFunction(name=Name(["Bar", "to-string"]), sourceName="to-string",
                                         returnType=getStringType(), typeParameters=[],
                                         parameterTypes=[ty],
                                         flags=frozenset([PUBLIC, METHOD, OVERRIDE]),
-                                        definingClass=clas)
+                                        definingClass=clas, overrides=[rootToString])
         clas.methods.append(method)
         packageLoader = FakePackageLoader([fooPackage])
 

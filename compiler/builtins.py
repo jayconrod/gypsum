@@ -152,6 +152,13 @@ def _initialize():
         assert flags.METHOD in function.flags
         function.definingClass = clas
         function.overridenBy = {}
+        if "overrides" in functionData:
+            function.overrides = []
+            for overrideName in functionData["overrides"]:
+                overrideId = getattr(bytecode, overrideName)
+                override = _builtinFunctionIdMap[overrideId]
+                function.overrides.append(override)
+                override.overridenBy[clas.id] = function
         return function
 
     def buildConstructor(functionData, clas):
@@ -195,10 +202,6 @@ def _initialize():
         for m in classData["methods"]:
             method = buildMethod(m, clas)
             clas.methods.append(method)
-            if method.overrides is not None:
-                for overrideId in method.overrides:
-                    override = getBuiltinFunctionById(overrideId)
-                    override.overridenBy[clas.id] = method
 
         _builtinClassTypeMap[classData["name"]] = clas
         _builtinClassIdMap[clas.id] = clas
