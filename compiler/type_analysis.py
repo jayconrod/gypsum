@@ -13,7 +13,7 @@ import ir_types as ir_t
 from builtins import getExceptionClass, getPackageClass, getNothingClass
 from utils import COMPILE_FOR_VALUE, COMPILE_FOR_MATCH, COMPILE_FOR_UNINITIALIZED, COMPILE_FOR_EFFECT, each
 from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, NORMAL_MODE, STD_MODE, NOSTD_MODE, CallInfo, ScopePrefixInfo
-from flags import COVARIANT, CONTRAVARIANT, CONSTRUCTOR, INITIALIZER, PROTECTED, PUBLIC, STATIC, ARRAY
+from flags import COVARIANT, CONTRAVARIANT, CONSTRUCTOR, INITIALIZER, METHOD, PROTECTED, PUBLIC, STATIC, ARRAY
 import scope_analysis
 from name import (
     BLANK_SUFFIX,
@@ -2055,45 +2055,88 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 if candidate is None:
                     candidate = (defnInfo, allTypeArgs)
                 else:
-                    candidate = self.chooseOverload(candidate, (defnInfo, allTypeArgs),
-                                                    name, loc)
+                    ocmp = self.compareOverloads(candidate[0].irDefn, candidate[1],
+                                                 irDefn, allTypeArgs,
+                                                 callArgTypes)
+                    if ocmp < 0:
+                        pass  # old candidate is more specific
+                    elif ocmp > 0:
+                        candidate = (defnInfo, allTypeArgs)  # new candidate is more specific
+                    else:
+                        raise TypeException(loc,
+                                            "%s: ambiguous call to overloaded function" % name)
 
         if candidate is None:
             raise TypeException(loc, "%s: could not find compatible definition" % name)
         return candidate
 
-    def chooseOverload(self, first, second, name, loc):
-        """Chooses between two possible candidates for an overloaded function call. Both
+    def compareOverloads(self, firstFunction, firstTypeArgs,
+                         secondFunction, secondTypeArgs,
+                         argTypes):
+        """Compares two possible candidates for an overloaded function call. Both
         candidates must be compatible with the provided arguments.
 
+        This works by determining a compatibility distance for each function. Function
+        compatibility distance is the sum of distances for each parameter, not including
+        the receiver.. A parameter gets 0 distance points if its type is exactly the same as
+        the argument type. A parameter gets 1 distance point if it is a subtype of the
+        corresponding parameter of the other function. Otherwise, a parameter gets 2
+        distance points. The receiver type does not count.
+
         Args:
-            first (DefnInfo, list(Type)): the first candidate. Must be a Function.
-            second (DefnInfo, list(Type)): the second candidate. Must be a Function.
-            name (str): name of the function being called. Used for error reporting.
-            loc (Location): location in source of the call. Used for error reporting.
+            firstFunction (Function): the first overloaded function.
+            firstTypeArgs ([Type]): full list of type arguments passed to the first function.
+            secondFunction (Function): the second overloaded function.
+            secondTypeArgs ([Type]): full list of type arguments passed to the second function.
+            argTypes ([Type]): list of types of arguments passed to the functions,
+                not including the receiver type.
 
         Return:
-            (DefnInfo, list(Type)): the more specific candidate is returned.
-
-        Raises:
-            TypeException: if the call is ambiguous
+            int: the difference between the two function compatibility distances is returned.
+            Negative indicates the first function should be called; positive indicates the
+            second function should be called; zero indicates the call is ambiguous.
         """
-        firstFunction = first[0].irDefn
-        secondFunction = second[0].irDefn
-        assert isinstance(firstFunction, ir.Function) and \
-               isinstance(secondFunction, ir.Function) and \
-               len(firstFunction.parameterTypes) == len(secondFunction.parameterTypes)
-        if all(pt1 == pt2 for pt1, pt2 in
-               zip(firstFunction.parameterTypes, secondFunction.parameterTypes)):
-            raise TypeException(loc, "%s: ambiguous call to overloaded function" % name)
-        elif all(pt1.isSubtypeOf(pt2) for pt1, pt2 in
-                 zip(firstFunction.parameterTypes, secondFunction.parameterTypes)):
-            return first
-        elif all(pt2.isSubtypeOf(pt2) for pt1, pt2 in
-                 zip(firstFunction.parameterTypes, secondFunction.parameterTypes)):
-            return second
-        else:
-            raise TypeException(loc, "%s: ambiguous call to overloaded function" % name)
+        def extractParameterTypes(function, typeArgs):
+            if METHOD in function.flags and STATIC not in function.flags:
+                parameterTypes = function.parameterTypes[1:]
+            else:
+                parameterTypes = list(function.parameterTypes)
+            sub = lambda ty: ty.substitute(function.typeParameters, typeArgs)
+            return map(sub, parameterTypes)
+
+        def calculateDistance(argType, firstParameterType, secondParameterType):
+            parameterTypesAreEqual = False
+            if argType == firstParameterType:
+                firstDistance = 0
+            elif firstParameterType == secondParameterType:
+                parameterTypesAreEqual = True
+                firstDistance = 1
+            elif firstParameterType.isSubtypeOf(secondParameterType):
+                firstDistance = 1
+            else:
+                firstDistance = 2
+
+            if argType == secondParameterType:
+                secondDistance = 0
+            elif parameterTypesAreEqual or secondParameterType.isSubtypeOf(firstParameterType):
+                secondDistance = 1
+            else:
+                secondDistance = 2
+
+            return firstDistance, secondDistance
+
+        firstParameterTypes = extractParameterTypes(firstFunction, firstTypeArgs)
+        secondParameterTypes = extractParameterTypes(secondFunction, secondTypeArgs)
+        assert len(firstParameterTypes) == len(secondParameterTypes)
+        assert len(firstParameterTypes) == len(argTypes)
+        difference = 0
+        for i in xrange(len(argTypes)):
+            firstDistance, secondDistance = calculateDistance(
+                argTypes[i],
+                firstParameterTypes[i],
+                secondParameterTypes[i])
+            difference += firstDistance - secondDistance
+        return difference
 
     def checkCallAllowed(self, irCallee, receiverIsReceiver, useKind, loc):
         """Checks whether a call to a function is valid.

@@ -1124,9 +1124,23 @@ def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes, importedTy
     Some type arguments may be implied. If the function was imported, these type arguments
     were specified in the import statement. If the function is defined inside a class with
     type parameters, type arguments are implied by the receiver (the enclosing scope
-    in general). If the function is compatible, this function returns a
-    ([Type], [Type]) tuple containing the full list of type arguments and argument types
-    (including the receiver). If the function is not compatible, None is returned."""
+    in general).
+
+    Arguments:
+        irFunction (Function): the function being called.
+        receiverType (Type?): the type of the receiver if this function is being called as
+            a method.
+        typeArgs ([Type]): a list of type arguments explicitly passed to the function.
+            Does not include implicit type arguments from the receiver or the surrounding scope.
+        argTypes ([Type]): a list of types of arguments explicitly passed to the function,
+            not including the receiver type.
+        importedTypeArgs ([Type]?): imported type arguments from the function's definition.
+
+    Returns:
+        ([Type], [Type])?: if the function is compatible, this returns a tuple containing the
+        full list of type arguments and the full list of argument types. Otherwise, `None`
+        is returned.
+    """
     if receiverType is not None and \
        importedTypeArgs is None and \
        (flags.STATIC in irFunction.flags or flags.METHOD in irFunction.flags):

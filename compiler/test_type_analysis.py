@@ -1693,30 +1693,30 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals([fooClass.methods[-1].id],
                           [o.id for o in barClass.methods[-1].overrides])
 
+    @unittest.skip("issues/25")
     def testAmbiguousOverloadWithoutCall(self):
         source = "def f = 12\n" + \
                  "def f = 34\n"
-        self.analyzeFromSource(source)
-        # pass if no error
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
 
+    @unittest.skip("issues/25")
     def testAmbiguousOverloadWithoutCallInClass(self):
         source = "class Foo\n" + \
                  "  def f = 12\n" + \
                  "  def f = 34\n"
-        self.analyzeFromSource(source)
-        # pass if no error
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testAmbiguousOverloadGlobal(self):
-        source = "def f = 12\n" + \
-                 "def f = 34\n" + \
-                 "var x = f"
+        source = "def f(a: String, b: Object) = 12\n" + \
+                 "def f(a: Object, b: String) = 34\n" + \
+                 "var x = f(\"a\", \"b\")"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testAmbiguousOverloadMethods(self):
         source = "class Foo\n" + \
-                 "  def f = 12\n" + \
-                 "  def f = 34\n" + \
-                 "def g(foo: Foo) = foo.f"
+                 "  def f(a: Object, b: String) = 12\n" + \
+                 "  def f(a: String, b: Object) = 34\n" + \
+                 "def g(foo: Foo) = foo.f(\"a\", \"b\")"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testSimpleOverload(self):
@@ -1729,6 +1729,25 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         statements = info.ast.modules[0].definitions[2].body.statements
         self.assertEquals(I32Type, info.getType(statements[0]))
         self.assertEquals(F32Type, info.getType(statements[1]))
+
+    def testOverloadEqualType(self):
+        source = "def f(x: Object) = x\n" + \
+                 "def f(x: String) = x\n" + \
+                 "def g(x: String) = f(x)"
+        info = self.analyzeFromSource(source)
+        g = info.package.findFunction(name="g")
+        self.assertEquals(getStringType(), g.returnType)
+
+    def testOverloadCloserType(self):
+        source = "class A\n" + \
+                 "class B <: A\n" + \
+                 "class C <: B\n" + \
+                 "def f(a: A) = true\n" + \
+                 "def f(b: B) = 12i64\n" + \
+                 "def g(c: C) = f(c)"
+        info = self.analyzeFromSource(source)
+        g = info.package.findFunction(name="g")
+        self.assertEquals(I64Type, g.returnType)
 
     def testOverloadWithTypeParameter(self):
         source = "def f[static T] = {}\n" + \
@@ -1751,6 +1770,16 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                           fn.typeParameters[0].upperBound.clas is getRootClass()
         f = info.package.findFunction(name="f", pred=pred)
         self.assertIs(use.defnInfo.irDefn, f)
+
+    def testOverloadWithSubstitution(self):
+        source = "class C[static T]\n" + \
+                 "  static def f(x: T) = true\n" + \
+                 "import C[String].f\n" + \
+                 "def f(x: Object) = 12i64\n" + \
+                 "def g(x: String) = f(x)"
+        info = self.analyzeFromSource(source)
+        g = info.package.findFunction(name="g")
+        self.assertEquals(BooleanType, g.returnType)
 
     def testIdentityTypeParameter(self):
         source = "def id[static T](o: T) = o\n" + \

@@ -473,8 +473,8 @@ class TestInheritanceAnalysis(unittest.TestCase):
 
     def testMethodOverridesInSameClass(self):
         source = "class Foo\n" + \
-                 "  def f = {}\n" + \
-                 "  override def f = {}"
+                 "  def f(s: String) = {}\n" + \
+                 "  override def f(o: Object) = {}"
         self.assertRaises(InheritanceException, self.analyzeFromSource, source)
 
     def testOverrideMethodWithOverloadInBaseClass(self):
