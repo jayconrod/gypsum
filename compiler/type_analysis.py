@@ -497,7 +497,8 @@ class TypeVisitorBase(ast.NodeVisitor):
         """
         assert isinstance(node, ast.BlankType)
         if not self.info.hasDefnInfo(node):
-            paramName = Name(self.scope().prefix + [EXISTENTIAL_SUFFIX, BLANK_SUFFIX])
+            paramName = self.info.makeUniqueName(
+                Name(self.scope().prefix + [EXISTENTIAL_SUFFIX, BLANK_SUFFIX]))
             blankParam = self.info.package.addTypeParameter(paramName, astDefn=node,
                                                             upperBound=param.upperBound,
                                                             lowerBound=param.lowerBound)

@@ -7,7 +7,7 @@
 import unittest
 
 from ids import DefnId, TARGET_PACKAGE_ID
-from ir import Class, Global, Field, Function, IrTopDefn, LOCAL, Name, Package, PackagePrefix, Trait, TypeParameter, Variable, unmangleName
+from ir import Class, Global, Field, Function, IrTopDefn, LOCAL, Name, Package, PackagePrefix, Trait, TypeParameter, Variable, unmangleNameForTest
 from ir_types import getNothingClassType, getRootClassType
 from location import NoLoc
 from package_loader import BasePackageLoader
@@ -166,7 +166,7 @@ class TestDefn(object):
             self.test.assertEquals(self.__class__.__bases__[1], other.__class__)
             return False
         if self.name != other.name and \
-           self.name != unmangleName(other.name):
+           self.name != unmangleNameForTest(other.name):
             self.test.assertEquals(self.name, other.name,
                                    "for name: %s != %s" % (self.name, other.name))
             return False

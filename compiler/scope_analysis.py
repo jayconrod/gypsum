@@ -807,7 +807,8 @@ class Scope(ast.NodeVisitor):
             irClosureClass = closureInfo.irClosureClass
             irContextClass = self.info.getContextInfo(scopeId).irContextClass
             irContextType = ClassType(irContextClass)
-            contextFieldName = irClosureClass.name.withSuffix(CONTEXT_SUFFIX)
+            contextFieldName = self.info.makeUniqueName(
+                irClosureClass.name.withSuffix(CONTEXT_SUFFIX))
             irContextField = self.info.package.addField(irClosureClass, contextFieldName,
                                                         type=irContextType)
             irClosureClass.constructors[0].parameterTypes.append(irContextType)
@@ -997,7 +998,7 @@ class FunctionScope(Scope):
                 # need to create a separate definition here.
                 irDefn = None
             else:
-                name = self.makeName(ANON_PARAMETER_SUFFIX)
+                name = self.info.makeUniqueName(self.makeName(ANON_PARAMETER_SUFFIX))
                 irDefn = ir.Variable(name, astDefn=astDefn, kind=ir.PARAMETER, flags=flags)
                 irScopeDefn.variables.append(irDefn)
         elif isinstance(astDefn, ast.VariablePattern):
@@ -1048,7 +1049,7 @@ class FunctionScope(Scope):
 
         # Create the context class.
         implicitTypeParams = self.getImplicitTypeParameters()
-        contextClassName = irDefn.name.withSuffix(CONTEXT_SUFFIX)
+        contextClassName = self.info.makeUniqueName(irDefn.name.withSuffix(CONTEXT_SUFFIX))
         irContextClass = self.info.package.addClass(contextClassName,
                                                     typeParameters=list(implicitTypeParams),
                                                     supertypes=[getRootClassType()],
@@ -1112,7 +1113,7 @@ class FunctionScope(Scope):
 
         # Create a closure class to hold this method and its contexts.
         implicitTypeParams = self.getImplicitTypeParameters()
-        closureName = irDefn.name.withSuffix(CLOSURE_SUFFIX)
+        closureName = self.info.makeUniqueName(irDefn.name.withSuffix(CLOSURE_SUFFIX))
         irClosureClass = self.info.package.addClass(closureName,
                                                     typeParameters=list(implicitTypeParams),
                                                     supertypes=[getRootClassType()],
@@ -1298,7 +1299,7 @@ class ClassScope(Scope):
             # pattern nodes.
             name = self.makeName(astDefn.pattern.name) \
                    if isinstance(astDefn.pattern, ast.VariablePattern) \
-                   else self.makeName(ANON_PARAMETER_SUFFIX)
+                   else self.info.makeUniqueName(self.makeName(ANON_PARAMETER_SUFFIX))
             irDefn = ir.Variable(name, sourceName=astDefn.pattern.name, astDefn=astDefn,
                                  kind=ir.PARAMETER, flags=frozenset([LET]))
             irCtor = self.info.getDefnInfo(self.ast.constructor).irDefn

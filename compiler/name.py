@@ -69,6 +69,8 @@ class Name(object):
         return s
 
 
+# Strings used in internal names for generated definitions.
+# Use CompileInfo.makeUniqueName to generate internal names that won't conflict with each other.
 CLOSURE_SUFFIX = "$closure"
 CONSTRUCTOR_SUFFIX = "$constructor"
 CONTEXT_SUFFIX = "$context"

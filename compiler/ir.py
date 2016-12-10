@@ -229,7 +229,7 @@ class Package(object):
                 else:
                     name = value
                 return name == defn.name or \
-                    name == unmangleName(defn.name) or \
+                    name == unmangleNameForTest(defn.name) or \
                     (isinstance(value, str) and defn.sourceName == value)
             elif key == "flag":
                 return value in defn.flags
@@ -1247,15 +1247,23 @@ def mangleFunctionName(function, package):
     return Name(components)
 
 
-def unmangleName(name):
+def unmangleNameForTest(name):
     def unmangleComponent(component):
-        if len(component) == 0 or not component[0].isdigit():
-            return component
-        lengthLength = 1
-        while lengthLength < len(component) and component[lengthLength].isdigit():
-            lengthLength += 1
-        length = int(component[:lengthLength])
-        return component[lengthLength:lengthLength + length]
+        if '$' in component:
+            # Remove unique numbers from the end of internal names.
+            numberIndex = component.rfind('_')
+            if numberIndex >= 0:
+                component = component[:numberIndex]
+
+        if len(component) > 0 and component[0].isdigit():
+            # Remove function name mangling.
+            lengthLength = 1
+            while lengthLength < len(component) and component[lengthLength].isdigit():
+                lengthLength += 1
+            length = int(component[:lengthLength])
+            component = component[lengthLength : lengthLength + length]
+
+        return component
 
     return Name(map(unmangleComponent, name.components))
 
