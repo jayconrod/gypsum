@@ -11,7 +11,14 @@ from ids import GLOBAL_SCOPE_ID
 import ir
 import ir_types as ir_t
 from builtins import getExceptionClass, getPackageClass, getNothingClass
-from utils import COMPILE_FOR_VALUE, COMPILE_FOR_MATCH, COMPILE_FOR_UNINITIALIZED, COMPILE_FOR_EFFECT, each
+from utils import (
+    COMPILE_FOR_EFFECT,
+    COMPILE_FOR_MATCH,
+    COMPILE_FOR_UNINITIALIZED,
+    COMPILE_FOR_VALUE,
+    each,
+    flatMap,
+)
 from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, NORMAL_MODE, STD_MODE, NOSTD_MODE, CallInfo, ScopePrefixInfo
 from flags import ARRAY, COVARIANT, CONTRAVARIANT, CONSTRUCTOR, INITIALIZER, METHOD, PROTECTED, PUBLIC, STATIC
 import scope_analysis
@@ -233,7 +240,9 @@ def checkUniqueNames(package):
 
     each(checkName, package.globals)
     each(checkName, package.functions)
+    each(checkName, flatMap(lambda f: f.variables, package.functions))
     each(checkName, package.classes)
+    each(checkName, flatMap(lambda c: c.fields, package.classes))
     each(checkName, package.traits)
     each(checkName, package.typeParameters)
 

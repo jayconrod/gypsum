@@ -31,6 +31,7 @@ from name import (
     CONSTRUCTOR_SUFFIX,
     CONTEXT_SUFFIX,
     EXISTENTIAL_SUFFIX,
+    LOCAL_SUFFIX,
     Name,
     RECEIVER_SUFFIX,
 )
@@ -815,7 +816,8 @@ class Scope(ast.NodeVisitor):
             closureInfo.irClosureContexts[scopeId] = irContextField
 
     def localScope(self, ast):
-        return self.getOrCreateScope(None, ast, self.newLocalScope)
+        prefixShort = self.info.makeUniqueName(Name(self.prefix + [LOCAL_SUFFIX])).short()
+        return self.getOrCreateScope(prefixShort, ast, self.newLocalScope)
 
     def newLocalScope(self, prefix, ast):
         """Creates a new scope for block expressions which may introduce definitions

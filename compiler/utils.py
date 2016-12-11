@@ -15,6 +15,12 @@ def each(f, iterable):
         f(elem)
 
 
+def flatMap(f, iterable):
+    for elem in iterable:
+        for subElem in f(elem):
+            yield subElem
+
+
 def indexSame(haystack, needle):
     for index, elem in enumerate(haystack):
         if elem is needle:

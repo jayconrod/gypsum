@@ -1025,7 +1025,7 @@ class TestCompiler(TestCaseWithDefinitions):
                            ], [
                              ret(),
                            ]],
-                           variables=[self.makeVariable("f.y", type=I64Type,
+                           variables=[self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]), type=I64Type,
                                                         kind=LOCAL, flags=frozenset([LET]))]))
 
     def testMatchExprWithVarWithBlankType(self):
@@ -1059,7 +1059,7 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]],
                              variables=[self.makeVariable("f.x", type=getRootClassType(),
                                                           kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable("f.y", type=yType,
+                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]), type=yType,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testMatchExprWithLocalTraitType(self):
@@ -1088,7 +1088,7 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]],
                              variables=[self.makeVariable("f.x", type=getRootClassType(),
                                                           kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable("f.y", type=ClassType(Foo),
+                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]), type=ClassType(Foo),
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testMatchExprWithForeignTraitType(self):
@@ -1120,7 +1120,7 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]],
                              variables=[self.makeVariable("f.x", type=getRootClassType(),
                                                           kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable("f.y", type=ClassType(Foo),
+                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]), type=ClassType(Foo),
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testMatchExprWithVarWithExistentialType(self):
@@ -1131,7 +1131,7 @@ class TestCompiler(TestCaseWithDefinitions):
                  "    case _ => 34"
         package = self.compileFromSource(source)
         Foo = package.findClass(name="Foo")
-        X = package.findTypeParameter(name=Name(["f", EXISTENTIAL_SUFFIX, "X"]))
+        X = package.findTypeParameter(name=Name(["f", LOCAL_SUFFIX, EXISTENTIAL_SUFFIX, "X"]))
         yType = ExistentialType((X,), ClassType(Foo, (VariableType(X),)))
         self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
@@ -1154,8 +1154,10 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]],
                              variables=[self.makeVariable("f.x", type=getRootClassType(),
                                                           kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable("f.y", type=yType,
-                                                          kind=LOCAL, flags=frozenset([LET]))]))
+                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]),
+                                                          type=yType,
+                                                          kind=LOCAL,
+                                                          flags=frozenset([LET]))]))
 
     def testMatchExprWithVarWithExistentialForeignTypeArg(self):
         foo = Package(name=Name(["foo"]))
@@ -1171,7 +1173,7 @@ class TestCompiler(TestCaseWithDefinitions):
                  "    case y: forsome [X] foo.Foo[X] => 12\n" + \
                  "    case _ => 34"
         package = self.compileFromSource(source, packageLoader=loader)
-        X = package.findTypeParameter(name=Name(["f", EXISTENTIAL_SUFFIX, "X"]))
+        X = package.findTypeParameter(name=Name(["f", LOCAL_SUFFIX, EXISTENTIAL_SUFFIX, "X"]))
         yType = ExistentialType((X,), ClassType(Foo, (VariableType(X),)))
         self.checkFunction(package,
                            self.makeSimpleFunction("f", I64Type, [[
@@ -1194,8 +1196,10 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]],
                              variables=[self.makeVariable("f.x", type=getRootClassType(),
                                                           kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable("f.y", type=yType,
-                                                          kind=LOCAL, flags=frozenset([LET]))]))
+                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]),
+                                                          type=yType,
+                                                          kind=LOCAL,
+                                                          flags=frozenset([LET]))]))
 
     def testMatchExprWithIntShadow(self):
         source = "def f(x: i64) =\n" + \
@@ -1226,9 +1230,9 @@ class TestCompiler(TestCaseWithDefinitions):
                              variables=[self.makeVariable("f.x", type=I64Type,
                                                           kind=PARAMETER,
                                                           flags=frozenset([LET])),
-                                        self.makeVariable("f.y", type=I64Type,
+                                        self.makeVariable(Name(["f", "y"]), type=I64Type,
                                                           kind=LOCAL, flags=frozenset([LET])),
-                                        self.makeVariable("f.z", type=I64Type,
+                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "z"]), type=I64Type,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testMatchExprWithObjectShadow(self):
@@ -1261,9 +1265,9 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]],
                              variables=[self.makeVariable("f.x", type=getRootClassType(),
                                                           kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable("f.y", type=getStringType(),
+                                        self.makeVariable(Name(["f", "y"]), type=getStringType(),
                                                           kind=LOCAL, flags=frozenset([LET])),
-                                        self.makeVariable("f.z", type=getRootClassType(),
+                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "z"]), type=getRootClassType(),
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testMatchExprWithBlankPattern(self):
@@ -1499,7 +1503,7 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]],
                              variables=[self.makeVariable("f.obj", type=getRootClassType(),
                                                           kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable("f.x", type=stringType, kind=LOCAL,
+                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "x"]), type=stringType, kind=LOCAL,
                                                           flags=frozenset([LET]))]))
 
     def testMatchDestructureSomeTupleFromFunction(self):
@@ -1557,9 +1561,9 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]],
                              variables=[self.makeVariable("f.obj", type=getRootClassType(),
                                                           kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable("f.x", type=getStringType(),
+                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "x"]), type=getStringType(),
                                                           kind=LOCAL, flags=frozenset([LET])),
-                                        self.makeVariable("f.y", type=getStringType(),
+                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]), type=getStringType(),
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testMatchExprDestructureFromMethod(self):
@@ -1612,7 +1616,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                                           kind=PARAMETER, flags=frozenset([LET])),
                                         self.makeVariable("Foo.f.obj", type=getRootClassType(),
                                                           kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable("Foo.f.x", type=getStringType(),
+                                        self.makeVariable(Name(["Foo", "f", LOCAL_SUFFIX, "x"]), type=getStringType(),
                                                           kind=LOCAL, flags=frozenset([LET]))],
                              flags=frozenset([METHOD])))
 
@@ -1663,7 +1667,7 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]],
                              variables=[self.makeVariable(Name(["f", "obj"]), type=objectType,
                                                           kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable(Name(["f", "s"]), type=stringType,
+                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "s"]), type=stringType,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testMatchExprBinaryWithStaticMethod(self):
@@ -1727,9 +1731,9 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]],
                              variables=[self.makeVariable(Name(["f", "obj"]), type=objectType,
                                                           kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable(Name(["f", "a"]), type=ClassType(Foo),
+                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "a"]), type=ClassType(Foo),
                                                           kind=LOCAL, flags=frozenset([LET])),
-                                        self.makeVariable(Name(["f", "b"]), type=ClassType(Bar),
+                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "b"]), type=ClassType(Bar),
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testMatchAllCasesTerminate(self):
@@ -1765,9 +1769,9 @@ class TestCompiler(TestCaseWithDefinitions):
                                drop(),
                                throw(),
                              ]],
-                             variables=[self.makeVariable("f.x", type=I64Type,
+                             variables=[self.makeVariable(Name(["f", LOCAL_SUFFIX, "x"]), type=I64Type,
                                                           kind=LOCAL, flags=frozenset([LET])),
-                                        self.makeVariable("f.y", type=I64Type,
+                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]), type=I64Type,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testMatchUnreachableAfterMustMatchCase(self):
@@ -1783,9 +1787,9 @@ class TestCompiler(TestCaseWithDefinitions):
                                i64(1),
                                ret(),
                              ]],
-                             variables=[self.makeVariable("f.x", type=I64Type,
+                             variables=[self.makeVariable(Name(["f", LOCAL_SUFFIX, "x"]), type=I64Type,
                                                           kind=LOCAL, flags=frozenset([LET])),
-                                        self.makeVariable("f.y", type=I64Type,
+                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]), type=I64Type,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testMatchNotUnreachableAfterSomeTermination(self):
@@ -1814,9 +1818,9 @@ class TestCompiler(TestCaseWithDefinitions):
                                i64(3),
                                ret(),
                              ]],
-                             variables=[self.makeVariable("f.x", type=I64Type,
+                             variables=[self.makeVariable(Name(["f", LOCAL_SUFFIX, "x"]), type=I64Type,
                                                           kind=LOCAL, flags=frozenset([LET])),
-                                        self.makeVariable("f.y", type=I64Type,
+                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]), type=I64Type,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testTryValueMustCatch(self):
@@ -1836,7 +1840,7 @@ class TestCompiler(TestCaseWithDefinitions):
                              ], [
                                ret(),
                              ]],
-                             variables=[self.makeVariable("f.exn", type=exnTy,
+                             variables=[self.makeVariable(Name(["f", LOCAL_SUFFIX, "exn"]), type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testTryValueMayCatch(self):
@@ -1868,7 +1872,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # block 5 (rethrow)
                                throw(),
                              ]],
-                             variables=[self.makeVariable("f.exn", type=exnTy,
+                             variables=[self.makeVariable(Name(["f", LOCAL_SUFFIX, "exn"]), type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testTryEffectMustCatch(self):
@@ -1894,7 +1898,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                unit(),
                                ret(),
                              ]],
-                             variables=[self.makeVariable("f.exn", type=exnTy,
+                             variables=[self.makeVariable(Name(["f", LOCAL_SUFFIX, "exn"]), type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testTryEffectMayCatch(self):
@@ -1929,7 +1933,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # block 5 (rethrow)
                                throw(),
                              ]],
-                             variables=[self.makeVariable("f.exn", type=exnTy,
+                             variables=[self.makeVariable(Name(["f", LOCAL_SUFFIX, "exn"]), type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testTryValueFinally(self):
@@ -2062,7 +2066,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                drop(),
                                ret(),
                              ]],
-                             variables=[self.makeVariable("f.exn", type=exnTy,
+                             variables=[self.makeVariable(Name(["f", LOCAL_SUFFIX, "exn"]), type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testTryValueMayCatchFinally(self):
@@ -2130,7 +2134,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                drop(),
                                ret(),
                              ]],
-                             variables=[self.makeVariable("f.exn", type=exnTy,
+                             variables=[self.makeVariable(Name(["f", LOCAL_SUFFIX, "exn"]), type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testTryEffectMustCatchFinally(self):
@@ -2189,7 +2193,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                unit(),
                                ret(),
                              ]],
-                             variables=[self.makeVariable("f.exn", type=exnTy,
+                             variables=[self.makeVariable(Name(["f", LOCAL_SUFFIX, "exn"]), type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testTryEffectMayCatchFinally(self):
@@ -2257,7 +2261,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                unit(),
                                ret(),
                              ]],
-                             variables=[self.makeVariable("f.exn", type=exnTy,
+                             variables=[self.makeVariable(Name(["f", LOCAL_SUFFIX, "exn"]), type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testAssignVarDefinedInCatch(self):
@@ -2346,7 +2350,7 @@ class TestCompiler(TestCaseWithDefinitions):
                              ], [
                                ret(),
                              ]],
-                             variables=[self.makeVariable("f.exn", type=exnTy,
+                             variables=[self.makeVariable(Name(["f", LOCAL_SUFFIX, "exn"]), type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testTryFinallyExpr(self):
@@ -2451,7 +2455,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # block 3 (done) [value ...]
                                ret(),
                              ]],
-                             variables=[self.makeVariable("f.exn", type=exnTy,
+                             variables=[self.makeVariable(Name(["f", LOCAL_SUFFIX, "exn"]), type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testTryFinallyReturnTwice(self):
@@ -2985,7 +2989,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                # block 21 (outer finally-return) [return exception value ...]
                                ret(),
                              ]],
-                             variables=[self.makeVariable("f.x", type=I64Type,
+                             variables=[self.makeVariable(Name(["f", LOCAL_SUFFIX, LOCAL_SUFFIX, "x"]), type=I64Type,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
 
@@ -3041,7 +3045,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                i64(1),
                                ret(),
                              ]],
-                             variables=[self.makeVariable("f.exn", type=exnTy,
+                             variables=[self.makeVariable(Name(["f", LOCAL_SUFFIX, "exn"]), type=exnTy,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testFactorial(self):
@@ -3206,7 +3210,7 @@ class TestCompiler(TestCaseWithDefinitions):
                              ], [
                                throw(),
                              ]],
-                             variables=[self.makeVariable("f.x", type=barType,
+                             variables=[self.makeVariable(Name(["f", LOCAL_SUFFIX, "x"]), type=barType,
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testInitializer(self):
@@ -3279,7 +3283,7 @@ class TestCompiler(TestCaseWithDefinitions):
           variables=[self.makeVariable(Name(["Foo", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
                                        type=thisType,
                                        kind=PARAMETER, flags=frozenset([LET])),
-                     self.makeVariable(Name(["Foo", "x"]), type=I32Type,
+                     self.makeVariable(Name(["Foo", CONSTRUCTOR_SUFFIX, "x"]), type=I32Type,
                                        kind=PARAMETER, flags=frozenset([LET]))],
           flags=frozenset([METHOD, CONSTRUCTOR]))
         self.assertEquals(expected, ctor)
@@ -3373,7 +3377,7 @@ class TestCompiler(TestCaseWithDefinitions):
                             variables=[self.makeVariable(Name(["Foo", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
                                                          type=thisType,
                                                          kind=PARAMETER, flags=frozenset([LET])),
-                                       self.makeVariable(Name(["Foo", "x"]), type=I32Type,
+                                       self.makeVariable(Name(["Foo", CONSTRUCTOR_SUFFIX, "x"]), type=I32Type,
                                                          kind=PARAMETER, flags=frozenset([LET]))],
                             flags=frozenset([METHOD, CONSTRUCTOR])),
                           ctor)
@@ -3553,7 +3557,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                                             type=barTy,
                                                             kind=PARAMETER,
                                                             flags=frozenset([LET])),
-                                          self.makeVariable(Name(["Bar", "y"]),
+                                          self.makeVariable(Name(["Bar", CONSTRUCTOR_SUFFIX, "y"]),
                                                             type=I64Type, kind=PARAMETER,
                                                             flags=frozenset([LET]))],
                                flags=frozenset([METHOD, CONSTRUCTOR])))

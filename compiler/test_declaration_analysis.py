@@ -107,10 +107,10 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.assertIs(ctor, clas.constructors[0])
         self.assertEquals([self.makeVariable(Name(["C", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
                                              kind=PARAMETER, flags=frozenset([LET])),
-                           self.makeVariable(Name(["C", "x"]), kind=PARAMETER,
-                                             flags=frozenset([LET])),
-                           self.makeVariable(Name(["C", "y"]), kind=PARAMETER,
-                                             flags=frozenset([LET]))],
+                           self.makeVariable(Name(["C", CONSTRUCTOR_SUFFIX, "x"]),
+                                             kind=PARAMETER, flags=frozenset([LET])),
+                           self.makeVariable(Name(["C", CONSTRUCTOR_SUFFIX, "y"]),
+                                             kind=PARAMETER, flags=frozenset([LET]))],
                           ctor.variables)
         self.assertEquals([self.makeField("C.x", flags=frozenset([LET])),
                            self.makeField("C.y", flags=frozenset([LET]))],
@@ -199,7 +199,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         irInitializer = info.package.findClass(name="C").initializer
         self.assertEquals([self.makeVariable(Name(["C", CLASS_INIT_SUFFIX, RECEIVER_SUFFIX]),
                                              kind=PARAMETER, flags=frozenset([LET])),
-                           self.makeVariable("C.y", kind=LOCAL)],
+                           self.makeVariable(Name(["C", LOCAL_SUFFIX, "y"]), kind=LOCAL)],
                           irInitializer.variables)
 
     def testDefineClassFunction(self):
@@ -286,7 +286,8 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                                       "};")
         ast = info.ast
         defnInfo = info.getDefnInfo(ast.modules[0].definitions[0].body.statements[0].statements[0].pattern)
-        self.assertEquals(self.makeVariable("f.x", kind=LOCAL), defnInfo.irDefn)
+        self.assertEquals(self.makeVariable(Name(["f", LOCAL_SUFFIX, "x"]), kind=LOCAL),
+                          defnInfo.irDefn)
         self.assertIs(info.getScope(ast.modules[0].definitions[0].body.statements[0].id),
                       info.getScope(defnInfo.scopeId))
 
@@ -295,7 +296,8 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                                       "  case x => x\n")
         ast = info.ast
         defnInfo = info.getDefnInfo(ast.modules[0].definitions[0].body.catchHandler.cases[0].pattern)
-        self.assertEquals(self.makeVariable("f.x", kind=LOCAL, flags=frozenset([LET])),
+        self.assertEquals(self.makeVariable(Name(["f", LOCAL_SUFFIX, "x"]),
+                                            kind=LOCAL, flags=frozenset([LET])),
                           defnInfo.irDefn)
         self.assertIs(info.getScope(ast.modules[0].definitions[0].body.catchHandler.cases[0].id),
                       info.getScope(defnInfo.scopeId))
