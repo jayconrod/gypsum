@@ -38,6 +38,9 @@ class Package(object):
         self.traits = []
         self.typeParameters = []
         self.strings = []
+        self.stringIndices = {}
+        self.names = []
+        self.nameIndices = {}
         self.entryFunction = None
         self.initFunction = None
         self.exports = None
@@ -65,7 +68,7 @@ class Package(object):
 
     def addGlobal(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.GLOBAL, len(self.globals))
-        self.addName(name)
+        self.findOrAddName(name)
         g = Global(name, id, *args, **kwargs)
         if g.sourceName is not None:
             self.findOrAddString(g.sourceName)
@@ -74,7 +77,7 @@ class Package(object):
 
     def addFunction(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.FUNCTION, len(self.functions))
-        self.addName(name)
+        self.findOrAddName(name)
         f = Function(name, id, *args, **kwargs)
         if f.sourceName is not None:
             self.findOrAddString(f.sourceName)
@@ -83,7 +86,7 @@ class Package(object):
 
     def addClass(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.CLASS, len(self.classes))
-        self.addName(name)
+        self.findOrAddName(name)
         c = Class(name, id, *args, **kwargs)
         if c.sourceName is not None:
             self.findOrAddString(c.sourceName)
@@ -92,7 +95,7 @@ class Package(object):
 
     def addTrait(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.TRAIT, len(self.traits))
-        self.addName(name)
+        self.findOrAddName(name)
         t = Trait(name, id, *args, **kwargs)
         if t.sourceName is not None:
             self.findOrAddString(t.sourceName)
@@ -101,7 +104,7 @@ class Package(object):
 
     def addTypeParameter(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.TYPE_PARAMETER, len(self.typeParameters))
-        self.addName(name)
+        self.findOrAddName(name)
         p = TypeParameter(name, id, *args, **kwargs)
         if p.sourceName is not None:
             self.findOrAddString(p.sourceName)
@@ -109,7 +112,7 @@ class Package(object):
         return p
 
     def newField(self, name, **kwargs):
-        self.addName(name)
+        self.findOrAddName(name)
         f = Field(name, **kwargs)
         if f.sourceName is not None:
             self.findOrAddString(f.sourceName)
@@ -119,6 +122,18 @@ class Package(object):
         f = self.newField(name, definingClass=clas, index=len(clas.fields), **kwargs)
         clas.fields.append(f)
         return f
+
+    def newVariable(self, name, **kwargs):
+        self.findOrAddName(name)
+        v = Variable(name, **kwargs)
+        if v.sourceName is not None:
+            self.findOrAddString(v.sourceName)
+        return v
+
+    def addVariable(self, function, name, **kwargs):
+        v = self.newVariable(name, **kwargs)
+        function.variables.append(v)
+        return v
 
     def ensureDependency(self, package):
         if package.id.index is not None:
@@ -183,25 +198,34 @@ class Package(object):
                           self.dependencies[depIndex].linkedFunctions[externIndex]
                         f.overrides[i] = linkedOverride
 
-    def addName(self, name):
-        assert isinstance(name, Name)
-        each(self.findOrAddString, name.components)
-
     def findString(self, s):
         if isinstance(s, str):
             s = unicode(s)
         assert isinstance(s, unicode)
-        return self.strings.index(s)
+        return self.stringIndices.get(s)
 
     def findOrAddString(self, s):
         if isinstance(s, str):
             s = unicode(s)
         assert isinstance(s, unicode)
-        for i in xrange(0, len(self.strings)):
-            if self.strings[i] == s:
-                return i
-        self.strings.append(s)
-        return len(self.strings) - 1
+        index = self.findString(s)
+        if index is None:
+            index = len(self.strings)
+            self.strings.append(s)
+            self.stringIndices[s] = index
+        return index
+
+    def findName(self, name):
+        return self.nameIndices.get(name)
+
+    def findOrAddName(self, name):
+        index = self.findName(name)
+        if index is None:
+            index = len(self.names)
+            each(self.findOrAddString, name.components)
+            self.names.append(name)
+            self.nameIndices[name] = index
+        return index
 
     def findFunction(self, **kwargs):
         return next(self.find(self.functions, kwargs))

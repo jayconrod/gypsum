@@ -199,8 +199,8 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         package = ir.Package()
         foobar = Name(["foo", "bar"])
         bazquux = Name(["baz", "quux"])
-        package.addName(foobar)
-        package.addName(bazquux)
+        package.findOrAddName(foobar)
+        package.findOrAddName(bazquux)
 
         self.ser.package = package
         self.ser.writeName(foobar)

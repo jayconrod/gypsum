@@ -47,10 +47,10 @@ def deserialize(fileName, packageLoader):
         raise IOError(exn)
 
 
-HEADER_FORMAT = "<Ihhqiiiiiiiii"
+HEADER_FORMAT = "<Ihhqiiiiiiiiii"
 MAGIC = 0x676b7073
 MAJOR_VERSION = 0
-MINOR_VERSION = 20
+MINOR_VERSION = 21
 
 FLAG_FORMAT = "<i"
 
@@ -66,6 +66,8 @@ class Serializer(object):
             self.writeDependencyHeader(d)
         for s in self.package.strings:
             self.writeString(s)
+        for n in self.package.names:
+            self.writeName(n)
         for d in self.package.dependencies:
             self.writeDependency(d)
         for g in self.package.globals:
@@ -92,6 +94,7 @@ class Serializer(object):
                                        MINOR_VERSION,
                                        0,
                                        len(self.package.strings),
+                                       len(self.package.names),
                                        len(self.package.globals),
                                        len(self.package.functions),
                                        len(self.package.classes),
@@ -121,13 +124,13 @@ class Serializer(object):
         self.writeVbn(index)
 
     def writeGlobal(self, globl):
-        self.writeName(globl.name)
+        self.writeNameIndex(glob.name)
         self.writeOption(self.writeStringIndex, globl.sourceName)
         self.writeFlags(globl.flags)
         self.writeType(globl.type)
 
     def writeFunction(self, function):
-        self.writeName(function.name)
+        self.writeNameIndex(function.name)
         self.writeOption(self.writeStringIndex, function.sourceName)
         self.writeFlags(function.flags)
         self.writeTypeParameterList(function.typeParameters)
@@ -178,7 +181,7 @@ class Serializer(object):
         return buf, blockOffsetTable
 
     def writeClass(self, clas):
-        self.writeName(clas.name)
+        self.writeNameIndex(clas.name)
         self.writeOption(self.writeStringIndex, clas.sourceName)
         self.writeFlags(clas.flags)
         self.writeTypeParameterList(clas.typeParameters)
@@ -193,13 +196,13 @@ class Serializer(object):
         self.writeOption(self.writeType, clas.elementType)
 
     def writeField(self, field):
-        self.writeName(field.name)
+        self.writeNameIndex(field.name)
         self.writeOption(self.writeStringIndex, field.sourceName)
         self.writeFlags(field.flags)
         self.writeType(field.type)
 
     def writeTrait(self, trait):
-        self.writeName(trait.name)
+        self.writeNameIndex(trait.name)
         self.writeOption(self.writeStringIndex, trait.sourceName)
         self.writeFlags(trait.flags)
         self.writeTypeParameterList(trait.typeParameters)
@@ -210,7 +213,7 @@ class Serializer(object):
             self.writeMethodList(trait.methods)
 
     def writeTypeParameter(self, typeParameter):
-        self.writeName(typeParameter.name)
+        self.writeNameIndex(typeParameter.name)
         self.writeOption(self.writeStringIndex, typeParameter.sourceName)
         self.writeFlags(typeParameter.flags)
         self.writeType(typeParameter.upperBound)
@@ -297,6 +300,10 @@ class Serializer(object):
             index = self.package.findString(comp)
             self.writeVbn(index)
         self.writeList(writeComponent, name.components)
+
+    def writeNameIndex(self, name):
+        index = self.package.findName(name)
+        self.writeVbn(index)
 
     def writeFlags(self, flags_var):
         bits = flags.flagSetToFlagBits(flags_var)
@@ -399,6 +406,8 @@ class Deserializer(object):
             self.package.dependencies[i] = self.readDependencyHeader(i)
         for i in xrange(len(self.package.strings)):
             self.package.strings[i] = self.readString()
+        for i in xrange(len(self.package.names)):
+            self.package.names[i] = self.readName()
         for dep in self.package.dependencies:
             self.readDependency(dep)
         self.package.link()
@@ -427,33 +436,36 @@ class Deserializer(object):
         stringCount = headers[4]
         self.package.strings = [None] * stringCount
 
+        nameCount = headers[5]
+        self.package.names = [None] * nameCount
+
         # We pre-allocate top-level definitions so they can point to each other if we read
         # them out of order. This is particularly important for type definitions.
-        globalCount = headers[5]
+        globalCount = headers[6]
         self.package.globals = self.createEmptyGlobalList(globalCount, self.package.id)
 
-        functionCount = headers[6]
+        functionCount = headers[7]
         self.package.functions = self.createEmptyFunctionList(functionCount, self.package.id)
 
-        classCount = headers[7]
+        classCount = headers[8]
         self.package.classes = self.createEmptyClassList(classCount, self.package.id)
 
-        traitCount = headers[8]
+        traitCount = headers[9]
         self.package.traits = self.createEmptyTraitList(traitCount, self.package.id)
 
-        typeParamCount = headers[9]
+        typeParamCount = headers[10]
         self.package.typeParameters = self.createEmptyTypeParameterList(typeParamCount,
                                                                         self.package.id)
 
-        depCount = headers[10]
+        depCount = headers[11]
         self.package.dependencies = [None] * depCount
 
-        entryFunctionIndex = headers[11]
+        entryFunctionIndex = headers[12]
         if entryFunctionIndex != -1:
             if entryFunctionIndex < 0 or entryFunctionIndex >= len(self.package.functions):
                 raise IOError("invalid entry function index")
             self.package.entryFunction = self.package.functions[entryFunctionIndex]
-        initFunctionIndex = headers[12]
+        initFunctionIndex = headers[13]
         if initFunctionIndex != -1:
             if initFunctionIndex < 0 or initFunctionIndex >= len(self.package.functions):
                 raise IOError("invalid init function index")
@@ -501,13 +513,13 @@ class Deserializer(object):
         return self.package.strings[index]
 
     def readGlobal(self, globl):
-        globl.name = self.readName()
+        globl.name = self.readNameIndex()
         globl.sourceName = self.readOption(self.readStringIndex)
         globl.flags = self.readFlags()
         globl.type = self.readType()
 
     def readFunction(self, function, dep=None):
-        function.name = self.readName()
+        function.name = self.readNameIndex()
         function.sourceName = self.readOption(self.readStringIndex)
         function.flags = self.readFlags()
         assert (flags.EXTERN in function.flags) == (dep is not None)
@@ -534,7 +546,7 @@ class Deserializer(object):
         return None
 
     def readClass(self, clas, dep=None):
-        clas.name = self.readName()
+        clas.name = self.readNameIndex()
         clas.sourceName = self.readOption(self.readStringIndex)
         clas.flags = self.readFlags()
         assert (flags.EXTERN in clas.flags) == (dep is not None)
@@ -554,7 +566,7 @@ class Deserializer(object):
         return fields
 
     def readField(self, definingClass, index):
-        name = self.readName()
+        name = self.readNameIndex()
         sourceName = self.readOption(self.readStringIndex)
         flags = self.readFlags()
         ty = self.readType()
@@ -563,7 +575,7 @@ class Deserializer(object):
         return field
 
     def readTrait(self, trait, dep=None):
-        trait.name = self.readName()
+        trait.name = self.readNameIndex()
         trait.sourceName = self.readOption(self.readStringIndex)
         trait.flags = self.readFlags()
         assert (flags.EXTERN in trait.flags) == (dep is not None)
@@ -572,7 +584,7 @@ class Deserializer(object):
         trait.methods = self.readList(self.readMethodId, dep)
 
     def readTypeParameter(self, param):
-        param.name = self.readName()
+        param.name = self.readNameIndex()
         param.sourceName = self.readOption(self.readStringIndex)
         param.flags = self.readFlags()
         param.upperBound = self.readType()
@@ -701,6 +713,10 @@ class Deserializer(object):
         readComponent = lambda: self.readId(self.package.strings)
         components = self.readList(readComponent)
         return Name(components)
+
+    def readNameIndex(self):
+        index = self.readVbn()
+        return self.package.names[index]
 
     def readDefiningClassId(self):
         n = self.readVbn()
