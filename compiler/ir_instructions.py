@@ -126,39 +126,31 @@ class stgf(Instruction):
 
 
 class ldf(Instruction):
-    def __init__(self, field):
-        clas = field.definingClass
+    def __init__(self, clas, nameIndex):
         assert isinstance(clas, ir.Class) and not clas.isForeign()
-        assert isinstance(field, ir.Field)
-        super(ldf, self).__init__(clas.id.index, field.index)
+        super(ldf, self).__init__(clas.id.index, nameIndex)
 
 
 class ldff(Instruction):
-    def __init__(self, field):
-        clas = field.definingClass
+    def __init__(self, clas, nameIndex):
         assert isinstance(clas, ir.Class) and clas.isForeign()
-        assert isinstance(field, ir.Field)
         super(ldff, self).__init__(clas.id.packageId.index,
                                    clas.id.externIndex,
-                                   field.index)
+                                   nameIndex)
 
 
 class stf(Instruction):
-    def __init__(self, field):
-        clas = field.definingClass
+    def __init__(self, clas, nameIndex):
         assert isinstance(clas, ir.Class) and not clas.isForeign()
-        assert isinstance(field, ir.Field)
-        super(stf, self).__init__(clas.id.index, field.index)
+        super(stf, self).__init__(clas.id.index, nameIndex)
 
 
 class stff(Instruction):
-    def __init__(self, field):
-        clas = field.definingClass
+    def __init__(self, clas, nameIndex):
         assert isinstance(clas, ir.Class) and clas.isForeign()
-        assert isinstance(field, ir.Field)
         super(stff, self).__init__(clas.id.packageId.index,
                                    clas.id.externIndex,
-                                   field.index)
+                                   nameIndex)
 
 
 class allocobj(Instruction):

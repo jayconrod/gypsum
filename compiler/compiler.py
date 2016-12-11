@@ -1386,16 +1386,18 @@ class CompileVisitor(ast.NodeVisitor):
             self.loadThis()
 
     def loadField(self, field):
+        nameIndex = self.info.package.findName(field.name)
         if field.definingClass.isForeign():
-            self.ldff(field)
+            self.ldff(field.definingClass, nameIndex)
         else:
-            self.ldf(field)
+            self.ldf(field.definingClass, nameIndex)
 
     def storeField(self, field):
+        nameIndex = self.info.package.findName(field.name)
         if field.definingClass.isForeign():
-            self.stff(field)
+            self.stff(field.definingClass, nameIndex)
         else:
-            self.stf(field)
+            self.stf(field.definingClass, nameIndex)
 
     def loadThis(self):
         assert self.function.isMethod()
