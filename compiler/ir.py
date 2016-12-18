@@ -1236,7 +1236,10 @@ def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes, importedTy
 
 
 def mangleFunctionShortName(function, package):
-    """Returns a mangled name string which can be used when linking overloaded functions."""
+    """Returns a mangled name string which can be used when linking overloaded functions.
+
+    This should be kept in sync with vm/src/index.cpp.
+    """
     def mangleType(ty, variables):
         if ty is ir_types.UnitType:
             return "U"
@@ -1264,12 +1267,12 @@ def mangleFunctionShortName(function, package):
             if ty.clas.isForeign():
                 assert ty.clas.id.packageId.name is not None
                 packageStr = str(ty.clas.id.packageId.name)
-                prefixStr = "%d%s:%d%s" % (len(packageStr), packageStr, len(nameStr), nameStr)
+                prefixStr = "%s:%s" % (packageStr, nameStr)
             elif ty.clas.isLocal():
-                prefixStr = ":%d%s" % (len(nameStr), nameStr)
+                prefixStr = ":%s" % nameStr
             else:
                 assert ty.clas.isBuiltin()
-                prefixStr = "::%d%s" % (len(nameStr), nameStr)
+                prefixStr = "::%s" % nameStr
             if len(ty.typeArguments) == 0:
                 typeArgStr = ""
             else:
@@ -1296,15 +1299,18 @@ def mangleFunctionShortName(function, package):
         return "%s<%s>%s" % (flagStr, upperStr, lowerStr)
 
     shortName = function.name.short()
-    nameStr = "%d%s" % (len(shortName), shortName)
+    nameStr = "%s" % shortName
     if len(function.typeParameters) == 0:
         typeParamsStr = ""
     else:
         typeParamsParts = [mangleTypeParameter(tp, function.typeParameters)
                            for tp in function.typeParameters]
         typeParamsStr = "[" + ",".join(typeParamsParts) + "]"
-    argsParts = [mangleType(pt, function.typeParameters) for pt in function.parameterTypes]
-    argsStr = "(" + ",".join(argsParts) + ")"
+    if len(function.parameterTypes) == 0:
+        argsStr = ""
+    else:
+        argsParts = [mangleType(pt, function.typeParameters) for pt in function.parameterTypes]
+        argsStr = "(" + ",".join(argsParts) + ")"
     return nameStr + typeParamsStr + argsStr
 
 
@@ -1322,14 +1328,14 @@ def unmangleNameForTest(name):
             if numberIndex >= 0:
                 component = component[:numberIndex]
 
-        if len(component) > 0 and component[0].isdigit():
-            # Remove function name mangling.
-            lengthLength = 1
-            while lengthLength < len(component) and component[lengthLength].isdigit():
-                lengthLength += 1
-            length = int(component[:lengthLength])
-            component = component[lengthLength : lengthLength + length]
-
+        paramTypesIndex = component.find('(')
+        if paramTypesIndex == -1:
+            paramTypesIndex = len(component)
+        typeParamsIndex = component.find('[')
+        if typeParamsIndex == -1:
+            typeParamsIndex = len(component)
+        endIndex = min(paramTypesIndex, typeParamsIndex)
+        component = component[:endIndex]
         return component
 
     return Name(map(unmangleComponent, name.components))
