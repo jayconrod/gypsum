@@ -274,8 +274,8 @@ class TestCompiler(TestCaseWithDefinitions):
         foo = Package(name=Name(["foo"]))
         self.assertIsNot(foo.id, TARGET_PACKAGE_ID)
         self.assertIsNone(foo.id.index)
-        x = foo.addGlobal(Name(["x"]), type=I64Type, flags=frozenset([PUBLIC]))
-        y = foo.addGlobal(Name(["y"]), type=I64Type, flags=frozenset([PUBLIC]))
+        x = foo.addGlobal(Name(["x"]), sourceName="x", type=I64Type, flags=frozenset([PUBLIC]))
+        y = foo.addGlobal(Name(["y"]), sourceName="y", type=I64Type, flags=frozenset([PUBLIC]))
         source = "def f = foo.y"
         package = self.compileFromSource(source, packageLoader=FakePackageLoader([foo]))
         depIndex = foo.id.index
@@ -295,7 +295,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testStoreForeignGlobal(self):
         foo = Package(name=Name(["foo"]))
-        x = foo.addGlobal(Name(["x"]), type=I64Type, flags=frozenset([PUBLIC]))
+        x = foo.addGlobal(Name(["x"]), sourceName="x", type=I64Type, flags=frozenset([PUBLIC]))
         loader = FakePackageLoader([foo])
         source = "def f =\n" + \
                  "  foo.x = 12\n" + \
@@ -536,7 +536,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testLoadForeignPtrField(self):
         fooPackage = Package(name=Name(["foo"]))
-        clas = fooPackage.addClass(Name(["Bar"]), typeParameters=[],
+        clas = fooPackage.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                    supertypes=[getRootClassType()],
                                    constructors=[], fields=[],
                                    methods=[], flags=frozenset([PUBLIC]))
@@ -1105,7 +1105,8 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testMatchExprWithForeignTraitType(self):
         foo = Package(name=Name(["foo"]))
-        Foo = foo.addTrait(Name(["Foo"]), typeParameters=[], supertypes=[getRootClassType()],
+        Foo = foo.addTrait(Name(["Foo"]), sourceName="Foo",
+                           typeParameters=[], supertypes=[getRootClassType()],
                            methods=[], flags=frozenset([PUBLIC]))
         loader = FakePackageLoader([foo])
 
@@ -1175,7 +1176,8 @@ class TestCompiler(TestCaseWithDefinitions):
         foo = Package(name=Name(["foo"]))
         T = foo.addTypeParameter(Name(["Foo", "T"]), upperBound=getRootClassType(),
                                  lowerBound=getNothingClassType(), flags=frozenset([PUBLIC]))
-        Foo = foo.addClass(Name(["Foo"]), typeParameters=[T], supertypes=[getRootClassType()],
+        Foo = foo.addClass(Name(["Foo"]), sourceName="Foo",
+                           typeParameters=[T], supertypes=[getRootClassType()],
                            constructors=[], fields=[],
                            methods=[], flags=frozenset([PUBLIC]))
         loader = FakePackageLoader([foo])
@@ -1403,7 +1405,8 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testMatchExprWithValuePrimitive(self):
         foo = Package(name=Name(["foo"]))
-        bar = foo.addGlobal(Name(["bar"]), type=I64Type, flags=frozenset([PUBLIC, LET]))
+        bar = foo.addGlobal(Name(["bar"]), sourceName="bar",
+                            type=I64Type, flags=frozenset([PUBLIC, LET]))
         loader = FakePackageLoader([foo])
 
         source = "def f(x: i64) =\n" + \
@@ -1436,7 +1439,8 @@ class TestCompiler(TestCaseWithDefinitions):
         stringType = getStringType()
         stringClass = stringType.clas
         foo = Package(name=Name(["foo"]))
-        bar = foo.addGlobal(Name(["bar"]), type=stringType, flags=frozenset([PUBLIC, LET]))
+        bar = foo.addGlobal(Name(["bar"]), sourceName="bar",
+                            type=stringType, flags=frozenset([PUBLIC, LET]))
         loader = FakePackageLoader([foo])
 
         source = "def f(x: String) =\n" + \
@@ -3131,7 +3135,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testForeignFunctionCall(self):
         foo = Package(name=Name(["foo"]))
-        bar = foo.addFunction(Name(["bar"]), returnType=I64Type,
+        bar = foo.addFunction(Name(["bar"]), sourceName="bar", returnType=I64Type,
                               typeParameters=[], parameterTypes=[I64Type],
                               flags=frozenset([PUBLIC]))
         loader = FakePackageLoader([foo])
@@ -3152,7 +3156,8 @@ class TestCompiler(TestCaseWithDefinitions):
         T = foo.addTypeParameter(Name(["foo", "T"]), upperBound=getRootClassType(),
                                  lowerBound=getNothingClassType(), flags=frozenset([STATIC]))
         Tty = VariableType(T)
-        bar = foo.addFunction(Name(["bar"]), returnType=Tty, typeParameters=[T],
+        bar = foo.addFunction(Name(["bar"]), sourceName="bar",
+                              returnType=Tty, typeParameters=[T],
                               parameterTypes=[Tty], flags=frozenset([PUBLIC]))
         loader = FakePackageLoader([foo])
         source = "def f(s: String) = foo.bar[String](s)"
@@ -3170,7 +3175,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testFunctionCallWithForeignTypeArg(self):
         fooPackage = Package(name=Name(["foo"]))
-        barClass = fooPackage.addClass(Name(["Bar"]), typeParameters=[],
+        barClass = fooPackage.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                        supertypes=[getRootClassType()],
                                        constructors=[], fields=[],
                                        methods=[], flags=frozenset([PUBLIC]))
@@ -3196,7 +3201,7 @@ class TestCompiler(TestCaseWithDefinitions):
         # try-catch is used for now, since full pattern matching hasn't been implemented yet.
         fooPackage = Package(name=Name(["foo"]))
         exceptionClass = getExceptionClass()
-        clas = fooPackage.addClass(Name(["Bar"]), typeParameters=[],
+        clas = fooPackage.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                    supertypes=[ClassType(exceptionClass)],
                                    constructors=[], fields=[], methods=[],
                                    flags=frozenset([PUBLIC]))
@@ -3423,12 +3428,13 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testForeignCtor(self):
         fooPackage = Package(name=Name(["foo"]))
-        barClass = fooPackage.addClass(Name(["Bar"]), typeParameters=[],
+        barClass = fooPackage.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                        supertypes=[getRootClassType()],
                                        constructors=[], fields=[], methods=[],
                                        flags=frozenset([PUBLIC]))
         barTy = ClassType(barClass)
         ctor = fooPackage.addFunction(Name(["Bar", CONSTRUCTOR_SUFFIX]),
+                                      sourceName=CONSTRUCTOR_SUFFIX,
                                       returnType=UnitType, typeParameters=[],
                                       parameterTypes=[barTy],
                                       flags=frozenset([PUBLIC, METHOD, CONSTRUCTOR]),
@@ -3689,7 +3695,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testCallWithStaticForeignTraitTypeArgument(self):
         foo = Package(name=Name(["foo"]))
-        Foo = foo.addTrait(Name(["Foo"]), typeParameters=[],
+        Foo = foo.addTrait(Name(["Foo"]), sourceName="Foo", typeParameters=[],
                            supertypes=[getRootClassType()], methods=[],
                            flags=frozenset([PUBLIC]))
         loader = FakePackageLoader([foo])
@@ -3974,13 +3980,15 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testAllocateForeignArrayForValue(self):
         fooPackage = Package(name=Name(["foo"]))
-        arrayClass = fooPackage.addClass(Name(["Array"]), typeParameters=[],
+        arrayClass = fooPackage.addClass(Name(["Array"]), sourceName="Array",
+                                         typeParameters=[],
                                          supertypes=[getRootClassType()],
                                          fields=[], methods=[],
                                          flags=frozenset([PUBLIC, FINAL, ARRAY]),
                                          elementType=I32Type)
         arrayType = ClassType(arrayClass)
-        ctor = fooPackage.addFunction(Name(["Array", CONSTRUCTOR_SUFFIX]), returnType=UnitType,
+        ctor = fooPackage.addFunction(Name(["Array", CONSTRUCTOR_SUFFIX]),
+                                      sourceName=CONSTRUCTOR_SUFFIX, returnType=UnitType,
                                       typeParameters=[], parameterTypes=[arrayType],
                                       flags=frozenset([PUBLIC, METHOD, CONSTRUCTOR]),
                                       definingClass=arrayClass)
@@ -4060,7 +4068,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testCallTraitMethodOnSameForeignTrait(self):
         fooPackage = Package(name=Name(["foo"]))
-        Tr = fooPackage.addTrait(Name(["Tr"]), typeParameters=[],
+        Tr = fooPackage.addTrait(Name(["Tr"]), sourceName="Tr", typeParameters=[],
                                  supertypes=[getRootClassType()],
                                  flags=frozenset([PUBLIC]))
         TrType = ClassType(Tr)

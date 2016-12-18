@@ -321,7 +321,8 @@ class Scope(ast.NodeVisitor):
         # If the definition has a user-specified name, bind it in this scope.
         if not shouldBind:
             return
-        name = irDefn.name.short()
+        assert irDefn.sourceName is not None
+        name = irDefn.sourceName
         if self.isBound(name) and not self.bindings[name].isOverloadable(defnInfo):
             raise ScopeException(astDefn.location, "%s: already declared" % name)
         self.bind(name, defnInfo)
@@ -1004,6 +1005,7 @@ class FunctionScope(Scope):
                 name = self.info.makeUniqueName(self.makeName(ANON_PARAMETER_SUFFIX))
                 irDefn = self.info.package.addVariable(
                     irScopeDefn, name, astDefn=astDefn, kind=ir.PARAMETER, flags=flags)
+                shouldBind = False
         elif isinstance(astDefn, ast.VariablePattern):
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([LET]), astDefn.location)
@@ -1203,9 +1205,10 @@ class ClassScope(Scope):
 
         # Bind default constructors.
         for ctor in irDefn.constructors:
+            assert ctor.name.short() == CONSTRUCTOR_SUFFIX
             defnInfo = DefnInfo(ctor, self.scopeId, True, self.scopeId, NOT_HERITABLE)
-            self.bind(ctor.name.short(), defnInfo)
-            self.define(ctor.name.short())
+            self.bind(CONSTRUCTOR_SUFFIX, defnInfo)
+            self.define(CONSTRUCTOR_SUFFIX)
 
     def getClass(self):
         return getIrDefn()
@@ -1244,7 +1247,8 @@ class ClassScope(Scope):
                 name = self.makeName(CONSTRUCTOR_SUFFIX)
                 checkFlags(flags, frozenset([PUBLIC, PROTECTED, PRIVATE, NATIVE]),
                            astDefn.location)
-                irDefn = self.info.package.addFunction(name, astDefn=astDefn,
+                irDefn = self.info.package.addFunction(name, sourceName=CONSTRUCTOR_SUFFIX,
+                                                       astDefn=astDefn,
                                                        typeParameters=implicitTypeParams,
                                                        variables=[], flags=flags)
                 self.makeConstructor(irDefn, irScopeDefn)
@@ -1276,7 +1280,8 @@ class ClassScope(Scope):
             if len(flags & frozenset([PUBLIC, PROTECTED, PRIVATE])) == 0:
                 flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
             implicitTypeParams = self.getImplicitTypeParameters()
-            irDefn = self.info.package.addFunction(name, astDefn=astDefn,
+            irDefn = self.info.package.addFunction(name, sourceName=CONSTRUCTOR_SUFFIX,
+                                                   astDefn=astDefn,
                                                    typeParameters=implicitTypeParams,
                                                    variables=[], flags=flags)
             self.makeConstructor(irDefn, irScopeDefn)
@@ -1557,6 +1562,7 @@ class BuiltinGlobalScope(Scope):
         super(BuiltinGlobalScope, self).__init__(
             prefix=[], ast=None, scopeId=BUILTIN_SCOPE_ID, parent=parent, info=parent.info)
         def bind(name, irDefn):
+            # TODO: bind source names instead of short name.
             defnInfo = DefnInfo(irDefn, self.scopeId, isVisible=True)
             if isinstance(irDefn, ir.Class):
                 # This scope will automatically be registered.
@@ -1692,19 +1698,23 @@ class PackageScope(Scope):
         self.prefixScopes = {}
 
         if isinstance(package, ir.Package):
+            def isDefnVisible(defn):
+                return PUBLIC in defn.flags and defn.sourceName is not None
+            def isFunctionVisible(f):
+                return PUBLIC in f.flags and METHOD not in f.flags and f.sourceName is not None
+
             info.setScope(package.id, self)
             exportedDefns = []
-            exportedDefns.extend(g for g in package.globals if PUBLIC in g.flags)
-            exportedDefns.extend(f for f in package.functions
-                                 if PUBLIC in f.flags and METHOD not in f.flags)
-            exportedClasses = [c for c in package.classes if PUBLIC in c.flags]
+            exportedDefns.extend(filter(isDefnVisible, package.globals))
+            exportedDefns.extend(filter(isFunctionVisible, package.functions))
+            exportedClasses = filter(isDefnVisible, package.classes)
             exportedDefns.extend(exportedClasses)
-            exportedTraits = [tr for tr in package.traits if PUBLIC in tr.flags]
+            exportedTraits = filter(isDefnVisible, package.traits)
             exportedDefns.extend(exportedTraits)
             for defn in exportedDefns:
                 defnInfo = DefnInfo(defn, scopeId, True)
-                self.bind(defn.name.short(), defnInfo)
-                self.define(defn.name.short())
+                self.bind(defn.sourceName, defnInfo)
+                self.define(defn.sourceName)
 
         packageBindings = {}
         for name in packageNames:

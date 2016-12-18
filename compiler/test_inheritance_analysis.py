@@ -58,7 +58,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
 
     def testInheritFromForeignType(self):
         package = Package(name=Name(["foo"]))
-        foreignClass = package.addClass(Name(["Bar"]), typeParameters=[],
+        foreignClass = package.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                         supertypes=[getRootClassType()],
                                         constructors=[], fields=[],
                                         methods=[], flags=frozenset([PUBLIC]))
@@ -74,11 +74,11 @@ class TestInheritanceAnalysis(unittest.TestCase):
 
     def testInheritForeignTypeInForeignTypeInSamePackage(self):
         package = Package(name=Name(["foo"]))
-        barClass = package.addClass(Name(["Bar"]), typeParameters=[],
+        barClass = package.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                     supertypes=[getRootClassType()],
                                     constructors=[], fields=[],
                                     methods=[], flags=frozenset([PUBLIC]))
-        bazClass = package.addClass(Name(["Baz"]), typeParameters=[],
+        bazClass = package.addClass(Name(["Baz"]), sourceName="Baz", typeParameters=[],
                                     supertypes=[ClassType(barClass), getRootClassType()],
                                     constructors=[], fields=[],
                                     methods=[], flags=frozenset([PUBLIC]))
@@ -90,14 +90,14 @@ class TestInheritanceAnalysis(unittest.TestCase):
 
     def testInheritForeignTypeInForeignTypeInDifferentPackage(self):
         fooPackage = Package(name=Name(["foo"]))
-        barClass = fooPackage.addClass(Name(["Bar"]), typeParameters=[],
+        barClass = fooPackage.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                        supertypes=[getRootClassType()],
                                        constructors=[], fields=[],
                                        methods=[], flags=frozenset([PUBLIC]))
         bazPackage = Package(name=Name(["baz"]))
         loader = FakePackageLoader([fooPackage, bazPackage])
         bazPackage.dependencies.append(PackageDependency.fromPackage(fooPackage))
-        quuxClass = bazPackage.addClass(Name(["Quux"]), typeParameters=[],
+        quuxClass = bazPackage.addClass(Name(["Quux"]), sourceName="Quux", typeParameters=[],
                                         supertypes=[ClassType(barClass), getRootClassType()],
                                         constructors=[], fields=[],
                                         methods=[], flags=frozenset([PUBLIC]))
@@ -293,7 +293,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
 
     def testTypeParameterCycleForeign(self):
         package = Package(name=Name(["foo"]))
-        barClass = package.addClass(Name(["Bar"]), typeParameters=[],
+        barClass = package.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                     supertypes=[getRootClassType()],
                                     constructors=[], fields=[],
                                     methods=[], flags=frozenset([PUBLIC]))
@@ -574,7 +574,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
 
     def testInheritFromImportedClass(self):
         foo = Package(name=Name(["foo"]))
-        Bar = foo.addClass(Name(["Bar"]), typeParameters=[],
+        Bar = foo.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                            supertypes=[getRootClassType()],
                            constructors=[], fields=[],
                            methods=[], flags=frozenset([PUBLIC]))

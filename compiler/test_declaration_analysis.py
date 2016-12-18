@@ -501,8 +501,8 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
 
     def testImportGlobalFromPackage(self):
         foo = Package(name=Name(["foo"]))
-        foo.addGlobal(Name(["bar"]), flags=frozenset([PUBLIC, LET]))
-        foo.addGlobal(Name(["baz"]), flags=frozenset([LET]))
+        foo.addGlobal(Name(["bar"]), sourceName="bar", flags=frozenset([PUBLIC, LET]))
+        foo.addGlobal(Name(["baz"]), sourceName="baz", flags=frozenset([LET]))
         source = "import foo._"
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         scope = info.getScope(GLOBAL_SCOPE_ID)
@@ -624,13 +624,17 @@ class TestPackageScope(unittest.TestCase):
 
     def testPackageClassHasScope(self):
         package = Package(name=Name(["foo"]))
-        clas = package.addClass(Name(["C"]), typeParameters=[],
+        clas = package.addClass(Name(["C"]), sourceName="C", typeParameters=[],
                                 supertypes=[getRootClassType()], flags=frozenset([PUBLIC]))
         classType = ClassType(clas)
-        publicCtor = package.addFunction(Name(["C", CONSTRUCTOR_SUFFIX]), returnType=UnitType,
+        publicCtor = package.addFunction(Name(["C", CONSTRUCTOR_SUFFIX]),
+                                         sourceName=CONSTRUCTOR_SUFFIX,
+                                         returnType=UnitType,
                                          typeParameters=[], parameterTypes=[classType],
                                          flags=frozenset([PUBLIC, METHOD, EXTERN]))
-        privateCtor = package.addFunction(Name(["C", CONSTRUCTOR_SUFFIX]), returnType=UnitType,
+        privateCtor = package.addFunction(Name(["C", CONSTRUCTOR_SUFFIX]),
+                                          sourceName=CONSTRUCTOR_SUFFIX,
+                                          returnType=UnitType,
                                           typeParameters=[], parameterTypes=[classType],
                                           flags=frozenset([PRIVATE, METHOD, EXTERN]))
         clas.constructors = [publicCtor, privateCtor]

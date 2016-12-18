@@ -421,7 +421,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testPropertyForeignGlobal(self):
         source = "var x = foo.bar"
         foo = Package(name=Name(["foo"]))
-        bar = foo.addGlobal(Name(["bar"]), type=UnitType, flags=frozenset([PUBLIC, LET]))
+        bar = foo.addGlobal(Name(["bar"]), sourceName="bar",
+                            type=UnitType, flags=frozenset([PUBLIC, LET]))
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         x = info.package.findGlobal(name="x")
         self.assertEquals(UnitType, x.type)
@@ -430,7 +431,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testPropertyForeignFunction(self):
         source = "var x = foo.bar"
         foo = Package(name=Name(["foo"]))
-        bar = foo.addFunction(Name(["bar"]), returnType=UnitType, typeParameters=[],
+        bar = foo.addFunction(Name(["bar"]), sourceName="bar",
+                              returnType=UnitType, typeParameters=[],
                               parameterTypes=[], flags=frozenset([PUBLIC]))
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         x = info.package.findGlobal(name="x")
@@ -439,7 +441,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testPropertyForeignCtor(self):
         foo = Package(name=Name(["foo"]))
-        bar = foo.addClass(Name(["Bar"]), typeParameters=[],
+        bar = foo.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                            supertypes=[getRootClassType()],
                            constructors=[], fields=[],
                            methods=[], flags=frozenset([PUBLIC]))
@@ -460,7 +462,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testCallForeignFunctionWithArg(self):
         source = "var x = foo.bar(12)"
         foo = Package(name=Name(["foo"]))
-        bar = foo.addFunction(Name(["bar"]), returnType=I64Type, typeParameters=[],
+        bar = foo.addFunction(Name(["bar"]), sourceName="bar",
+                              returnType=I64Type, typeParameters=[],
                               parameterTypes=[I64Type], flags=frozenset([PUBLIC]))
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         x = info.package.findGlobal(name="x")
@@ -472,7 +475,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         T = foo.addTypeParameter(Name(["T"]), upperBound=getRootClassType(),
                                  lowerBound=getNothingClassType(), flags=frozenset([STATIC]))
         Tty = VariableType(T)
-        bar = foo.addFunction(Name(["bar"]), returnType=Tty, typeParameters=[T],
+        bar = foo.addFunction(Name(["bar"]), sourceName="bar",
+                              returnType=Tty, typeParameters=[T],
                               parameterTypes=[Tty], flags=frozenset([PUBLIC]))
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         x = info.package.findGlobal(name="x")
@@ -480,7 +484,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testCallFunctionWithForeignTypeArg(self):
         otherPackage = Package(name=Name(["foo"]))
-        clas = otherPackage.addClass(Name(["Bar"]), typeParameters=[],
+        clas = otherPackage.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                      supertypes=[getRootClassType()],
                                      constructors=[], fields=[],
                                      methods=[], flags=frozenset([PUBLIC]))
@@ -497,7 +501,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testLoadFromForeignClass(self):
         fooPackage = Package(name=Name(["foo"]))
-        clas = fooPackage.addClass(Name(["Bar"]), typeParameters=[],
+        clas = fooPackage.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                    supertypes=[getRootClassType()],
                                    constructors=[], fields=[],
                                    methods=[], flags=frozenset([PUBLIC]))
@@ -513,7 +517,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testStoreToForeignClass(self):
         fooPackage = Package(name=Name(["foo"]))
-        clas = fooPackage.addClass(Name(["Bar"]), typeParameters=[],
+        clas = fooPackage.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                    supertypes=[getRootClassType()],
                                    constructors=[], fields=[],
                                    methods=[], flags=frozenset([PUBLIC]))
@@ -529,7 +533,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testCallForeignMethod(self):
         fooPackage = Package(name=Name(["foo"]))
-        clas = fooPackage.addClass(Name(["Bar"]), typeParameters=[],
+        clas = fooPackage.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                    supertypes=[getRootClassType()],
                                    constructors=[], fields=[],
                                    methods=[], flags=frozenset([PUBLIC]))
@@ -548,7 +552,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testLoadFromInheritedForeignClass(self):
         fooPackage = Package(name=Name(["foo"]))
-        clas = fooPackage.addClass(Name(["Bar"]), typeParameters=[],
+        clas = fooPackage.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                    supertypes=[getRootClassType()],
                                    constructors=[], fields=[],
                                    methods=[], flags=frozenset([PUBLIC]))
@@ -572,7 +576,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testCallInInheritedForeignClass(self):
         fooPackage = Package(name=Name(["foo"]))
-        clas = fooPackage.addClass(Name(["Bar"]), typeParameters=[],
+        clas = fooPackage.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                    supertypes=[getRootClassType()],
                                    constructors=[], fields=[],
                                    methods=[], flags=frozenset([PUBLIC]))
@@ -689,7 +693,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testForeignClassWithOverrideMethod(self):
         fooPackage = Package(name=Name(["foo"]))
-        clas = fooPackage.addClass(name=Name(["Bar"]), typeParameters=[],
+        clas = fooPackage.addClass(name=Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                    supertypes=[getRootClassType()],
                                    constructors=[], fields=[], methods=[],
                                    flags=frozenset([PUBLIC]))
@@ -991,7 +995,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testMatchExprValue(self):
         foo = Package(name=Name(["foo"]))
-        foo.addGlobal(Name(["bar"]), type=I64Type, flags=frozenset([PUBLIC, LET]))
+        foo.addGlobal(Name(["bar"]), sourceName="bar",
+                      type=I64Type, flags=frozenset([PUBLIC, LET]))
         source = "def f(x: i64) =\n" + \
                  "  match (x)\n" + \
                  "    case foo.bar => 1"
@@ -1400,7 +1405,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testForeignProjectedClassType(self):
         package = Package(name=Name(["foo"]))
-        clas = package.addClass(Name(["Bar"]), typeParameters=[],
+        clas = package.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                 supertypes=[getRootClassType()],
                                 constructors=[], fields=[],
                                 methods=[], flags=frozenset([PUBLIC]))
@@ -1431,7 +1436,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         param = package.addTypeParameter(Name(["Bar", "T"]), upperBound=getRootClassType(),
                                          lowerBound=getNothingClassType(),
                                          flags=frozenset([STATIC]))
-        clas = package.addClass(Name(["Bar"]), typeParameters=[param],
+        clas = package.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[param],
                                 supertypes=[getRootClassType()],
                                 constructors=[], fields=[], methods=[],
                                 flags=frozenset([PUBLIC]))
@@ -1447,7 +1452,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         param = package.addTypeParameter(Name(["Bar", "T"]), upperBound=getStringType(),
                                          lowerBound=getNothingClassType(),
                                          flags=frozenset([STATIC]))
-        clas = package.addClass(Name(["Bar"]), typeParameters=[param],
+        clas = package.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[param],
                                 supertypes=[getRootClassType()],
                                 constructors=[], fields=[],
                                 methods=[], flags=frozenset([PUBLIC]))
@@ -2256,7 +2261,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testImportGlobalFromPackage(self):
         foo = Package(name=Name(["foo"]))
-        bar = foo.addGlobal(Name(["bar"]), type=I64Type, flags=frozenset([PUBLIC]))
+        bar = foo.addGlobal(Name(["bar"]), sourceName="bar",
+                            type=I64Type, flags=frozenset([PUBLIC]))
         source = "import foo.bar as baz\n" + \
                  "let x = baz"
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
@@ -2379,7 +2385,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testExternClassWithoutVisibleCtor(self):
         foo = Package(name=Name(["foo"]))
-        Bar = foo.addClass(Name(["Bar"]), typeParameters=[],
+        Bar = foo.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                            supertypes=[getRootClassType()],
                            constructors=[], fields=[],
                            methods=[], flags=frozenset([PUBLIC]))
