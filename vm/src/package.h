@@ -69,6 +69,9 @@ class Package: public Object {
   BlockArray<String>* strings() const { return strings_.get(); }
   void setStrings(BlockArray<String>* newStrings) { strings_.set(this, newStrings); }
   String* getString(length_t index) const;
+  BlockArray<Name>* names() const { return names_.get(); }
+  void setNames(BlockArray<Name>* newNames) { names_.set(this, newNames); }
+  Name* getName(length_t index) const;
   BlockArray<Global>* globals() const { return globals_.get(); }
   void setGlobals(BlockArray<Global>* newGlobals) { globals_.set(this, newGlobals); }
   Global* getGlobal(length_t index) const;
@@ -187,6 +190,7 @@ class Package: public Object {
   Ptr<PackageVersion> version_;
   Ptr<BlockArray<PackageDependency>> dependencies_;
   Ptr<BlockArray<String>> strings_;
+  Ptr<BlockArray<Name>> names_;
   Ptr<BlockArray<Global>> globals_;
   Ptr<BlockArray<Function>> functions_;
   Ptr<BlockArray<Class>> classes_;

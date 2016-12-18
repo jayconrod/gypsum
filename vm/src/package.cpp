@@ -42,6 +42,7 @@ namespace internal {
   F(Package, version_) \
   F(Package, dependencies_) \
   F(Package, strings_) \
+  F(Package, names_) \
   F(Package, globals_) \
   F(Package, functions_) \
   F(Package, classes_) \
@@ -115,6 +116,7 @@ class Loader {
   template <typename T>
   T readValue();
   Local<Name> readName();
+  Local<Name> readNameId();
   Local<ObjectTypeDefn> readDefiningClass();
   Local<String> readSourceName();
   Local<String> readStringId();
@@ -272,6 +274,11 @@ vector<Persistent<Package>> Package::load(
 
 String* Package::getString(length_t index) const {
   return strings()->get(index);
+}
+
+
+Name* Package::getName(length_t index) const {
+  return names()->get(index);
 }
 
 
@@ -513,11 +520,14 @@ bool Package::mayLoadFunctionsFromNativeLibrary() const {
 
 
 static void buildFunctionName(string* nameStr, Name* name) {
-  auto components = name->components();
-  for (length_t i = 0; i < components->length(); i++) {
-    if (i > 0)
-      *nameStr += "__";
-    for (auto ch : *components->get(i)) {
+  auto sep = "";
+  for (auto component : *name->components()) {
+    *nameStr += sep;
+    sep = "__";
+
+    for (auto ch : *component) {
+      if (ch == '[' || ch == '(')
+        break;
       auto valid = ('0' <= ch && ch <= '9') ||
           ('A' <= ch && ch <= 'Z') ||
           ('a' <= ch && ch <= 'z') ||
@@ -1009,7 +1019,7 @@ Local<String> Loader::readString() {
 
 
 Local<Global> Loader::readGlobal(DefnId id) {
-  auto name = readName();
+  auto name = readNameId();
   auto sourceName = readSourceName();
   auto flags = readValue<u32>();
   auto type = readType();
@@ -1068,7 +1078,7 @@ void Loader::readFunctionHeader(Local<Name>* name,
                                 Local<Type>* returnType,
                                 Local<BlockArray<Type>>* parameterTypes,
                                 Local<ObjectTypeDefn>* definingClass) {
-  *name = readName();
+  *name = readNameId();
   *sourceName = readSourceName();
   *flags = readValue<u32>();
 
@@ -1089,7 +1099,7 @@ void Loader::readFunctionHeader(Local<Name>* name,
 
 
 void Loader::readClass(const Local<Class>& clas) {
-  auto name = readName();
+  auto name = readNameId();
   auto sourceName = readSourceName();
   auto flags = readValue<u32>();
 
@@ -1125,7 +1135,7 @@ void Loader::readClass(const Local<Class>& clas) {
 
 
 void Loader::readTrait(const Local<Trait>& trait) {
-  auto name = readName();
+  auto name = readNameId();
   auto sourceName = readSourceName();
   auto flags = readValue<u32>();
 
@@ -1147,7 +1157,7 @@ void Loader::readTrait(const Local<Trait>& trait) {
 
 
 Local<Field> Loader::readField() {
-  auto name = readName();
+  auto name = readNameId();
   auto sourceName = readSourceName();
   auto flags = readValue<u32>();
   auto type = readType();
@@ -1158,7 +1168,7 @@ Local<Field> Loader::readField() {
 
 
 void Loader::readTypeParameter(const Local<TypeParameter>& param) {
-  auto name = readName();
+  auto name = readNameId();
   auto sourceName = readSourceName();
   auto flags = readValue<u32>();
   auto upperBound = readType();
@@ -1337,6 +1347,15 @@ Local<Name> Loader::readName() {
 }
 
 
+Local<Name> Loader::readNameId() {
+  auto index = readLengthVbn();
+  if (index >= package_->names()->length()) {
+    throw Error("name index out of bounds");
+  }
+  return handle(package_->names()->get(index));
+}
+
+
 Local<ObjectTypeDefn> Loader::readDefiningClass() {
   auto code = readVbn();
   if (code == 0) {
@@ -1492,7 +1511,7 @@ Persistent<Package> PackageLoader::load() {
       throw Error("package file is corrupt");
     auto majorVersion = readValue<u16>();
     auto minorVersion = readValue<u16>();
-    if (majorVersion != 0 || minorVersion != 20)
+    if (majorVersion != 0 || minorVersion != 21)
       throw Error("package file has wrong format version");
 
     auto flags = readValue<u64>();
@@ -1501,6 +1520,10 @@ Persistent<Package> PackageLoader::load() {
     auto stringCount = readLength();
     auto stringArray = BlockArray<String>::create(heap(), stringCount);
     package_->setStrings(*stringArray);
+
+    auto nameCount = readLength();
+    auto nameArray = BlockArray<Name>::create(heap(), nameCount);
+    package_->setNames(*nameArray);
 
     auto globalCount = readLength();
     auto globalArray = BlockArray<Global>::create(heap(), globalCount);
@@ -1573,6 +1596,11 @@ Persistent<Package> PackageLoader::load() {
     for (length_t i = 0; i < stringCount; i++) {
       auto string = readString();
       stringArray->set(i, *string);
+    }
+
+    for (length_t i = 0; i < nameCount; i++) {
+      auto name = readName();
+      nameArray->set(i, *name);
     }
 
     for (length_t i = 0; i < depCount; i++) {

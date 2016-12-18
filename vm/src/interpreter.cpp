@@ -421,13 +421,14 @@ i64 Interpreter::call(const Handle<Function>& callee) {
 
       case LDF: {
         auto classId = readVbn();
-        auto index = readVbn();
+        auto nameIndex = readVbn();
         auto block = pop<Block*>();
         CHECK_NON_NULL(block);
         auto clas = isBuiltinId(classId)
             ? vm_->roots()->getBuiltinClass(static_cast<BuiltinId>(classId))
             : function_->package()->getClass(classId);
-        auto field = clas->fields()->get(index);
+        auto name = function_->package()->getName(nameIndex);
+        auto field = clas->findField(name);
         load(block, field->offset(), field->type());
         break;
       }
@@ -435,24 +436,27 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       case LDFF: {
         auto depIndex = readVbn();
         auto externIndex = readVbn();
-        auto fieldIndex = readVbn();
+        auto nameIndex = readVbn();
         auto block = pop<Block*>();
         CHECK_NON_NULL(block);
-        auto field = function_->package()->dependencies()->get(depIndex)
-            ->linkedClasses()->get(externIndex)->fields()->get(fieldIndex);
+        auto clas = function_->package()->dependencies()->get(depIndex)
+            ->linkedClasses()->get(externIndex);
+        auto name = function_->package()->getName(nameIndex);
+        auto field = clas->findField(name);
         load(block, field->offset(), field->type());
         break;
       }
 
       case STF: {
         auto classId = readVbn();
-        auto index = readVbn();
+        auto nameIndex = readVbn();
         auto block = pop<Block*>();
         CHECK_NON_NULL(block);
         auto clas = isBuiltinId(classId)
             ? vm_->roots()->getBuiltinClass(static_cast<BuiltinId>(classId))
             : function_->package()->getClass(classId);
-        auto field = clas->fields()->get(index);
+        auto name = function_->package()->getName(nameIndex);
+        auto field = clas->findField(name);
         store(block, field->offset(), field->type());
         break;
       }
@@ -460,11 +464,13 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       case STFF: {
         auto depIndex = readVbn();
         auto externIndex = readVbn();
-        auto fieldIndex = readVbn();
+        auto nameIndex = readVbn();
         auto block = pop<Block*>();
         CHECK_NON_NULL(block);
-        auto field = function_->package()->dependencies()->get(depIndex)
-            ->linkedClasses()->get(externIndex)->fields()->get(fieldIndex);
+        auto clas = function_->package()->dependencies()->get(depIndex)
+            ->linkedClasses()->get(externIndex);
+        auto name = function_->package()->getName(nameIndex);
+        auto field = clas->findField(name);
         store(block, field->offset(), field->type());
         break;
       }

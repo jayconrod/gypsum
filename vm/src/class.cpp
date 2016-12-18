@@ -119,6 +119,17 @@ Class* Class::baseClass() const {
 }
 
 
+Field* Class::findField(Name* name) const {
+  for (auto f : *fields()) {
+    if (f->name()->equals(name)) {
+      return f;
+    }
+  }
+  UNREACHABLE();
+  return nullptr;
+}
+
+
 length_t Class::findFieldIndex(word_t offset) const {
   word_t currentOffset = kWordSize;
   for (length_t i = 0, n = fields()->length(); i < n; i++) {

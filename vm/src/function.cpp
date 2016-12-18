@@ -568,11 +568,12 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
 
         case LDF: {
           auto classId = readVbn(bytecode, &pcOffset);
-          auto index = readVbn(bytecode, &pcOffset);
+          auto nameIndex = readVbn(bytecode, &pcOffset);
           Local<Class> fieldClass = handle(isBuiltinId(classId)
               ? roots->getBuiltinClass(static_cast<BuiltinId>(classId))
               : package->getClass(classId));
-          auto fieldType = handle(fieldClass->fields()->get(index)->type());
+          auto name = handle(package->getName(nameIndex));
+          auto fieldType = handle(fieldClass->findField(*name)->type());
           auto receiverType = currentMap.pop();
           auto receiverClass = handle(receiverType->effectiveClass());
           if (fieldType->isObject()) {
@@ -586,10 +587,11 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         case LDFF: {
           auto depIndex = readVbn(bytecode, &pcOffset);
           auto externIndex = readVbn(bytecode, &pcOffset);
-          auto fieldIndex = readVbn(bytecode, &pcOffset);
+          auto nameIndex = readVbn(bytecode, &pcOffset);
           auto fieldClass = handle(package->dependencies()->get(depIndex)
               ->linkedClasses()->get(externIndex));
-          auto fieldType = handle(fieldClass->fields()->get(fieldIndex)->type());
+          auto name = handle(package->getName(nameIndex));
+          auto fieldType = handle(fieldClass->findField(*name)->type());
           auto receiverType = currentMap.pop();
           auto receiverClass = handle(receiverType->effectiveClass());
           if (fieldType->isObject()) {

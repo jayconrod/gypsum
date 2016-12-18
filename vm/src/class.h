@@ -100,6 +100,7 @@ class Class: public ObjectTypeDefn {
   void setFields(BlockArray<Field>* newFields) { fields_.set(this, newFields); }
   BlockArray<Field>* flatFields() const { return flatFields_.get(); }
   void setFlatFields(BlockArray<Field>* newFlatFields) { flatFields_.set(this, newFlatFields); }
+  Field* findField(Name* name) const;
   length_t findFieldIndex(word_t offset) const;
   word_t findFieldOffset(length_t index) const;
   Class* findFieldClass(length_t index);

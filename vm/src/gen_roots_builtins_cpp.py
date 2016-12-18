@@ -53,7 +53,7 @@ def initType(out, classData):
 
 def initName(out, classData):
     out.write("\n  { // %s\n" % classData["id"])
-    out.write("    auto name = nameFromUtf8CString(heap, \"%s\");\n" % classData["name"])
+    out.write("    auto name = buildName(heap, {\"%s\"});\n" % classData["name"])
     out.write("    builtinNames_.push_back(name);\n  }")
 
 
@@ -78,8 +78,9 @@ def initClass(out, classData):
         out.write("    auto fields = new(heap, %d) BlockArray<Field>;\n" %
                   len(classData["fields"]))
         for i, fieldData in enumerate(classData["fields"]):
-            out.write("    auto field%dName = nameFromUtf8CString(heap, \"%s\");\n" %
-                      (i, fieldData["name"]))
+            fieldName = "%s.%s" % (classData["name"], fieldData["name"])
+            out.write("    auto field%dName = buildName(heap, {\"%s\", \"%s\"});\n" %
+                      (i, classData["name"], fieldData["name"]))
             out.write("    auto field%dType = %s;\n" % (i, getTypeFromName(fieldData["type"])))
             flags = buildFlags(fieldData["flags"])
             out.write(("    auto field%d = new(heap) Field(field%dName, nullptr, " +
@@ -117,16 +118,20 @@ def initClass(out, classData):
         out.write("    builtinMetas_.push_back(meta);\n  }")
 
 
-def initFunction(out, functionData):
+def initFunction(out, functionData, className):
     out.write("\n  { // %s\n" % functionData["id"])
     out.write("    auto function = getBuiltinFunction(%s);\n" % functionData["id"])
     out.write("    DefnId id(DefnId::FUNCTION, kBuiltinPackageId, static_cast<length_t>(%s), false /* isLocal */);\n" %
               functionData["id"])
-    if "name" not in functionData:
-        out.write("    auto name = nameFromUtf8CString(heap, \"$constructor\");\n")
+    if className is not None:
+        if "name" not in functionData:
+            out.write("    auto name = buildName(heap, {\"%s\", \"$constructor\"});\n" %
+                      className)
+        else:
+            out.write("    auto name = buildName(heap, {\"%s\", \"%s\"});\n" %
+                      (className, functionData["name"]))
     else:
-        out.write("    auto name = nameFromUtf8CString(heap, \"%s\");\n" %
-                  functionData["name"])
+        out.write("    auto name = buildName(heap, {\"%s\"});\n" % functionData["name"])
     out.write("    auto returnType = %s;\n" % getTypeFromName(functionData["returnType"]))
     out.write("    auto parameterTypes = new(heap, %d) BlockArray<Type>;\n" %
               len(functionData["parameterTypes"]))
@@ -175,6 +180,7 @@ with open(rootsBuiltinsName, "w") as rootsBuiltinsFile:
 
 #include "roots.h"
 
+#include <initializer_list>
 #include <new>
 #include <vector>
 #include "array.h"
@@ -194,12 +200,14 @@ using namespace std;
 namespace codeswitch {
 namespace internal {
 
-static Name* nameFromUtf8CString(Heap* heap, const char* cstr) {
-  auto vmstr = String::rawFromUtf8CString(heap, cstr);
-  auto components = new(heap, 1) BlockArray<String>;
-  components->set(0, vmstr);
-  auto name = new(heap) Name(components);
-  return name;
+static Name* buildName(Heap* heap, initializer_list<const char*> cstrs) {
+  auto components = new(heap, cstrs.size()) BlockArray<String>;
+  length_t i = 0;
+  for (auto cstr : cstrs) {
+    auto component = String::rawFromUtf8CString(heap, cstr);
+    components->set(i++, component);
+  }
+  return new(heap) Name(components);
 }
 
 
@@ -250,11 +258,11 @@ void Roots::initializeBuiltins(Heap* heap) {
     for classData in classesData:
         if not classData["isPrimitive"]:
             for ctorData in classData["constructors"]:
-                initFunction(rootsBuiltinsFile, ctorData)
+                initFunction(rootsBuiltinsFile, ctorData, classData["name"])
         for methodData in classData["methods"]:
-            initFunction(rootsBuiltinsFile, methodData)
+            initFunction(rootsBuiltinsFile, methodData, classData["name"])
     for functionData in functionsData:
-        initFunction(rootsBuiltinsFile, functionData)
+        initFunction(rootsBuiltinsFile, functionData, className=None)
 
     rootsBuiltinsFile.write("""
 
