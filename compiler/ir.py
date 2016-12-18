@@ -12,7 +12,13 @@ import ids
 import ir_types
 from name import Name
 import bytecode
-from utils import each, indexSame, hashList, reprFormat
+from utils import (
+    each,
+    flatMap,
+    indexSame,
+    hashList,
+    reprFormat
+)
 
 import re
 import StringIO
@@ -39,8 +45,8 @@ class Package(object):
         self.typeParameters = []
         self.strings = []
         self.stringIndices = {}
-        self.names = []
-        self.nameIndices = {}
+        self.names = None
+        self.nameIndices = None
         self.entryFunction = None
         self.initFunction = None
         self.exports = None
@@ -68,7 +74,8 @@ class Package(object):
 
     def addGlobal(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.GLOBAL, len(self.globals))
-        self.findOrAddName(name)
+        if self.names is not None:
+            self.findOrAddName(name)
         g = Global(name, id, *args, **kwargs)
         if g.sourceName is not None:
             self.findOrAddString(g.sourceName)
@@ -77,7 +84,8 @@ class Package(object):
 
     def addFunction(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.FUNCTION, len(self.functions))
-        self.findOrAddName(name)
+        if self.names is not None:
+            self.findOrAddName(name)
         f = Function(name, id, *args, **kwargs)
         if f.sourceName is not None:
             self.findOrAddString(f.sourceName)
@@ -86,7 +94,8 @@ class Package(object):
 
     def addClass(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.CLASS, len(self.classes))
-        self.findOrAddName(name)
+        if self.names is not None:
+            self.findOrAddName(name)
         c = Class(name, id, *args, **kwargs)
         if c.sourceName is not None:
             self.findOrAddString(c.sourceName)
@@ -95,7 +104,8 @@ class Package(object):
 
     def addTrait(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.TRAIT, len(self.traits))
-        self.findOrAddName(name)
+        if self.names is not None:
+            self.findOrAddName(name)
         t = Trait(name, id, *args, **kwargs)
         if t.sourceName is not None:
             self.findOrAddString(t.sourceName)
@@ -104,7 +114,8 @@ class Package(object):
 
     def addTypeParameter(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.TYPE_PARAMETER, len(self.typeParameters))
-        self.findOrAddName(name)
+        if self.names is not None:
+            self.findOrAddName(name)
         p = TypeParameter(name, id, *args, **kwargs)
         if p.sourceName is not None:
             self.findOrAddString(p.sourceName)
@@ -112,7 +123,8 @@ class Package(object):
         return p
 
     def newField(self, name, **kwargs):
-        self.findOrAddName(name)
+        if self.names is not None:
+            self.findOrAddName(name)
         f = Field(name, **kwargs)
         if f.sourceName is not None:
             self.findOrAddString(f.sourceName)
@@ -124,7 +136,8 @@ class Package(object):
         return f
 
     def newVariable(self, name, **kwargs):
-        self.findOrAddName(name)
+        if self.names is not None:
+            self.findOrAddName(name)
         v = Variable(name, **kwargs)
         if v.sourceName is not None:
             self.findOrAddString(v.sourceName)
@@ -216,9 +229,11 @@ class Package(object):
         return index
 
     def findName(self, name):
+        assert self.names is not None
         return self.nameIndices.get(name)
 
     def findOrAddName(self, name):
+        assert self.names is not None
         index = self.findName(name)
         if index is None:
             index = len(self.names)
@@ -226,6 +241,34 @@ class Package(object):
             self.names.append(name)
             self.nameIndices[name] = index
         return index
+
+    def buildNameIndex(self):
+        """Builds a table of names and a map from names to indices in that table.
+
+        This is done after type declaration analysis, when functions are renamed using their
+        type signatures.
+
+        This is used by the serializer and by instructions (e.g., ldf, stf) that refer to
+        definitions by name using the name's index.
+        """
+        assert self.names is None
+        self.names = []
+        self.nameIndices = {}
+
+        def addName(defn):
+            name = defn.name
+            assert name is not None
+            assert name not in self.nameIndices
+            each(self.findOrAddString, name.components)
+            self.nameIndices[name] = len(self.names)
+            self.names.append(name)
+
+        each(addName, self.globals)
+        each(addName, self.functions)
+        each(addName, self.classes)
+        each(addName, flatMap(lambda c: c.fields, self.classes))
+        each(addName, self.traits)
+        each(addName, self.typeParameters)
 
     def findFunction(self, **kwargs):
         return next(self.find(self.functions, kwargs))

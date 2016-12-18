@@ -31,6 +31,9 @@ def externalize(info):
             info.package.ensureDependency(defn)
         elif isinstance(defn, ir.IrTopDefn):
             externalizer.externalizeDefn(defn)
+        elif isinstance(defn, ir.Field):
+            externalizer.externalizeDefn(defn.definingClass)
+            info.package.findOrAddName(defn.name)
 
     def externalizeInheritedMethods(objDefn):
         each(externalizer.externalizeDefn, objDefn.methods)

@@ -51,7 +51,7 @@ def analyzeTypeDeclarations(info):
     declarationVisitor = DeclarationTypeVisitor(info)
     declarationVisitor.visit(info.ast)
     info.typeCheckFunction = declarationVisitor.checkTypes
-    checkUniqueNames(info.package)
+    info.package.buildNameIndex()
 
 
 def analyzeTypes(info):
@@ -229,22 +229,6 @@ def checkTypeArgumentBounds(typeArgs, typeParams, locs):
         lowerBound = tp.lowerBound.substitute(typeParams, typeArgs)
         if not ta.isSubtypeOf(upperBound) or not lowerBound.isSubtypeOf(ta):
             raise TypeException(loc, "%s: type argument out of bounds" % tp.sourceName)
-
-
-def checkUniqueNames(package):
-    """Checks that all definitions in the package have unique names."""
-    names = set()
-    def checkName(defn):
-        assert defn.name not in names
-        names.add(defn.name)
-
-    each(checkName, package.globals)
-    each(checkName, package.functions)
-    each(checkName, flatMap(lambda f: f.variables, package.functions))
-    each(checkName, package.classes)
-    each(checkName, flatMap(lambda c: c.fields, package.classes))
-    each(checkName, package.traits)
-    each(checkName, package.typeParameters)
 
 
 class TypeVisitorBase(ast.NodeVisitor):

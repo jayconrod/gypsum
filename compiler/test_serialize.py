@@ -109,6 +109,7 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
 
     def testRewriteForeignMethodId(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
+        package.buildNameIndex()
         otherPackage = ir.Package()
         method = otherPackage.addFunction(Name(["foo"]), returnType=ir_types.UnitType,
                                           typeParameters=[], parameterTypes=[],
@@ -127,16 +128,6 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         self.ser.writeFlags(flagSet)
         flagSetOut = self.des.readFlags()
         self.assertEquals(flagSet, flagSetOut)
-
-    def testRewriteName(self):
-        package = ir.Package()
-        package.strings = ["foo", "bar", "baz"]
-        self.ser.package = package
-        self.des.package = package
-
-        self.ser.writeName("foo")
-        nameOut = self.des.readName()
-        self.assertEquals("foo", nameOut)
 
     def testRewriteType(self):
         def checkType(ty):
@@ -175,6 +166,7 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
 
     def testRewriteExternClassType(self):
         package = ir.Package(id=ids.TARGET_PACKAGE_ID)
+        package.buildNameIndex()
         depPackage = ir.Package()
         loader = utils_test.FakePackageLoader([depPackage])
         depClass = depPackage.addClass(Name(["C"]), typeParameters=[],
@@ -197,6 +189,7 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
 
     def testRewriteName(self):
         package = ir.Package()
+        package.buildNameIndex()
         foobar = Name(["foo", "bar"])
         bazquux = Name(["baz", "quux"])
         package.findOrAddName(foobar)
@@ -210,8 +203,22 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         self.assertEquals(foobar, self.des.readName())
         self.assertEquals(bazquux, self.des.readName())
 
+    def testRewriteGlobal(self):
+        package = ir.Package()
+        package.buildNameIndex()
+        globl = package.addGlobal(Name(["g"]), sourceName="g", type=ir_types.I64Type,
+                                  flags=frozenset([PUBLIC, LET]))
+        self.ser.package = package
+        self.ser.writeGlobal(globl)
+
+        self.des.package = package
+        outGlobal = ir.Global(None, globl.id)
+        self.des.readGlobal(outGlobal)
+        self.assertEquals(globl, outGlobal)
+
     def testRewriteField(self):
         package = ir.Package()
+        package.buildNameIndex()
         field = package.newField(Name(["C", "foo"]), type=ir_types.I64Type,
                                  flags=frozenset([PUBLIC, LET]))
         self.ser.package = package
@@ -226,6 +233,7 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
 
     def testRewriteTypeParameter(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
+        package.buildNameIndex()
         typeParam = package.addTypeParameter(Name(["T"]),
                                              upperBound=ir_types.getRootClassType(),
                                              lowerBound=ir_types.getNothingClassType(),
@@ -239,6 +247,7 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
 
     def testRewriteForeignTypeParameter(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
+        package.buildNameIndex()
         otherPackage = ir.Package()
         typeParam = otherPackage.addTypeParameter(Name(["T"]),
                                                   upperBound=ir_types.getRootClassType(),
@@ -256,6 +265,7 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
 
     def testRewriteClass(self):
         package = ir.Package(id=ids.TARGET_PACKAGE_ID)
+        package.buildNameIndex()
         typeParam = package.addTypeParameter(Name(["Foo", "T"]),
                                              upperBound=ir_types.getRootClassType(),
                                              lowerBound=ir_types.getNothingClassType(),
@@ -309,6 +319,7 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
     def testRewriteForeignClass(self):
         # "Compile" a foreign package with a class we'll depend on.
         otherPackage = ir.Package(id=ids.TARGET_PACKAGE_ID, name=Name(["foo", "bar"]))
+        otherPackage.buildNameIndex()
         rootType = ir_types.getRootClassType()
         trait = otherPackage.addTrait(Name(["Tr"]), typeParameters=[],
                                       supertypes=[rootType], flags=frozenset([PUBLIC]))
@@ -357,6 +368,7 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         externPackage = self.copyPackage(otherPackage)
         foreignClass = externPackage.findClass(name=clas.name)
         package = ir.Package(ids.TARGET_PACKAGE_ID)
+        package.buildNameIndex()
         externLoader = utils_test.FakePackageLoader([externPackage])
         externalizer = externalization.Externalizer(package, externLoader)
         externClass = externalizer.externalizeDefn(foreignClass)
@@ -385,6 +397,7 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
 
     def testRewriteTrait(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
+        package.buildNameIndex()
         rootType = ir_types.getRootClassType()
         typeParam = package.addTypeParameter(Name(["Tr", "T"]),
                                              upperBound=rootType,
@@ -410,6 +423,7 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
     def testRewriteForeignTrait(self):
         # "Compile" a foreign package with a trait we'll depend on.
         otherPackage = ir.Package(id=ids.TARGET_PACKAGE_ID, name=Name(["foo", "bar"]))
+        otherPackage.buildNameIndex()
 
         rootType = ir_types.getRootClassType()
         T = otherPackage.addTypeParameter(Name(["Tr", "T"]),
@@ -431,6 +445,7 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         externPackage = self.copyPackage(otherPackage)
         foreignTrait = externPackage.findTrait(name=trait.name)
         package = ir.Package(ids.TARGET_PACKAGE_ID)
+        package.buildNameIndex()
         externLoader = utils_test.FakePackageLoader([externPackage])
         externalizer = externalization.Externalizer(package, externLoader)
         externTrait = externalizer.externalizeDefn(foreignTrait)

@@ -124,7 +124,7 @@ class Serializer(object):
         self.writeVbn(index)
 
     def writeGlobal(self, globl):
-        self.writeNameIndex(glob.name)
+        self.writeNameIndex(globl.name)
         self.writeOption(self.writeStringIndex, globl.sourceName)
         self.writeFlags(globl.flags)
         self.writeType(globl.type)

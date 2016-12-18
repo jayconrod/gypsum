@@ -21,6 +21,7 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
     def setUp(self):
         super(TestExternalization, self).setUp()
         self.package = ir.Package(ids.TARGET_PACKAGE_ID)
+        self.package.buildNameIndex()
         self.rootClassType = ir_types.getRootClassType()
         self.nothingClassType = ir_types.getNothingClassType()
         self.otherPackage = ir.Package()

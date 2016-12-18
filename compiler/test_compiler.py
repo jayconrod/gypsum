@@ -4153,3 +4153,8 @@ class TestCompiler(TestCaseWithDefinitions):
                  "  let s = \"foobar\"\n" + \
                  "  s.length = 42i32"
         self.assertRaises(SemanticException, self.compileFromSource, source)
+
+    def testStringLengthNameExternalized(self):
+        source = "def f = \"foo\".length"
+        package = self.compileFromSource(source)
+        self.assertIn(Name(["String", "length"]), package.nameIndices)
