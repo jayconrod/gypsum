@@ -12,6 +12,7 @@
 #include "function.h"
 #include "handle.h"
 #include "heap.h"
+#include "index.h"
 #include "interpreter.h"
 #include "memory.h"
 #include "name.h"
@@ -208,7 +209,7 @@ string VM::searchForPackage(const Handle<PackageDependency>& dependency) {
 
 
 NativeFunction VM::loadRegisteredFunction(Name* packageName, Name* functionName) {
-  return loadRegisteredFunction(packageName->toStlString(), functionName->toStlString());
+  return loadRegisteredFunction(packageName->toStlString(), demangleFunctionName(functionName));
 }
 
 

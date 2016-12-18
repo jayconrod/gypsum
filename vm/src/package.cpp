@@ -413,11 +413,7 @@ Local<BlockHashMap<Name, Function>> Package::ensureAndGetFunctionNameIndex(
   if (package->functionNameIndex()) {
     return handle(package->functionNameIndex());
   }
-  Local<Name> (*getKey)(const Handle<Function>&) = mangleFunctionName;
-  auto index = buildIndex<Name, Function>(
-      handle(package->functions()),
-      getKey,
-      allDefnFilter<Function>);
+  auto index = buildNameIndex<Function>(handle(package->functions()), allDefnFilter<Function>);
   package->setFunctionNameIndex(*index);
   return index;
 }
@@ -519,31 +515,23 @@ bool Package::mayLoadFunctionsFromNativeLibrary() const {
 }
 
 
-static void buildFunctionName(string* nameStr, Name* name) {
+static string buildNativeFunctionName(Name* packageName, Name* functionName) {
+  string nameStr;
   auto sep = "";
-  for (auto component : *name->components()) {
-    *nameStr += sep;
+  for (auto component : *packageName->components()) {
+    nameStr += sep;
     sep = "__";
-
-    for (auto ch : *component) {
-      if (ch == '[' || ch == '(')
-        break;
-      auto valid = ('0' <= ch && ch <= '9') ||
-          ('A' <= ch && ch <= 'Z') ||
-          ('a' <= ch && ch <= 'z') ||
-          ch == '_';
-      *nameStr += valid ? static_cast<char>(ch) : '_';
-    }
+    nameStr += component->toUtf8StlString();
   }
+  nameStr += "___";
+  nameStr += demangleFunctionName(functionName);
+  return nameStr;
 }
 
 
 NativeFunction Package::loadNativeFunction(Name* functionName) {
   // Determine the name of the function.
-  string nameStr;
-  buildFunctionName(&nameStr, name());
-  nameStr += "___";
-  buildFunctionName(&nameStr, functionName);
+  auto nameStr = buildNativeFunctionName(name(), functionName);
 
   // Search for the function according to the search order.
   auto searchOrder = nativeFunctionSearchOrder();

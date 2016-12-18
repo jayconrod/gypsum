@@ -311,5 +311,26 @@ string buildSignature(const vector<Local<Type>>& types, const Handle<Package>& p
   return str.str();
 }
 
+
+string demangleFunctionName(Name* name) {
+  string nameStr;
+  auto sep = "";
+  for (auto component : *name->components()) {
+    nameStr += sep;
+    sep = "__";
+
+    for (auto ch : *component) {
+      if (ch == '[' || ch == '(')
+        break;
+      auto valid = ('0' <= ch && ch <= '9') ||
+          ('A' <= ch && ch <= 'Z') ||
+          ('a' <= ch && ch <= 'z') ||
+          ch == '_';
+      nameStr += valid ? static_cast<char>(ch) : '_';
+    }
+  }
+  return nameStr;
+}
+
 }
 }

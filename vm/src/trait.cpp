@@ -96,11 +96,7 @@ Local<BlockHashMap<Name, Function>> Trait::ensureAndGetMethodNameIndex(
   if (trait->methodNameIndex()) {
     return handle(trait->methodNameIndex());
   }
-  Local<Name> (*getKey)(const Handle<Function>&) = mangleFunctionName;
-  auto index = buildIndex<Name, Function>(
-      handle(trait->methods()),
-      getKey,
-      allDefnFilter<Function>);
+  auto index = buildNameIndex<Function>(handle(trait->methods()), allDefnFilter<Function>);
   trait->setMethodNameIndex(*index);
   return index;
 }
