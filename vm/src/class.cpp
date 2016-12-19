@@ -15,7 +15,6 @@
 #include "index.h"
 #include "package.h"
 #include "roots.h"
-#include "trait.h"
 #include "type.h"
 
 using namespace std;
@@ -29,9 +28,11 @@ namespace internal {
   F(Class, typeParameters_) \
   F(Class, supertypes_) \
   F(Class, fields_) \
+  F(Class, flatFields_) \
   F(Class, constructors_) \
   F(Class, methods_) \
-  F(Class, traits_) \
+  F(Class, flatMethods_) \
+  F(Class, methodIdIndex_) \
   F(Class, package_) \
   F(Class, instanceMeta_) \
   F(Class, elementType_) \
@@ -51,7 +52,8 @@ void* Class::operator new (size_t, Heap* heap) {
 }
 
 
-Class::Class(Name* name,
+Class::Class(DefnId id,
+             Name* name,
              String* sourceName,
              u32 flags,
              BlockArray<TypeParameter>* typeParameters,
@@ -59,12 +61,11 @@ Class::Class(Name* name,
              BlockArray<Field>* fields,
              BlockArray<Function>* constructors,
              BlockArray<Function>* methods,
-             TraitTable* traits,
              Package* package,
              Meta* instanceMeta,
-             Type* elementType,
-             length_t lengthFieldIndex)
+             Type* elementType)
     : ObjectTypeDefn(CLASS_BLOCK_TYPE),
+      id_(id),
       name_(this, name),
       sourceName_(this, sourceName),
       flags_(flags),
@@ -73,16 +74,13 @@ Class::Class(Name* name,
       fields_(this, fields),
       constructors_(this, constructors),
       methods_(this, methods),
-      traits_(this, traits),
       package_(this, package),
       instanceMeta_(this, instanceMeta),
-      elementType_(this, elementType),
-      lengthFieldIndex_(lengthFieldIndex) {
-  ASSERT((elementType_ == nullptr) == (lengthFieldIndex_ == kIndexNotSet));
-}
+      elementType_(this, elementType) {}
 
 
 Local<Class> Class::create(Heap* heap,
+                           DefnId id,
                            const Handle<Name>& name,
                            const Handle<String>& sourceName,
                            u32 flags,
@@ -91,23 +89,21 @@ Local<Class> Class::create(Heap* heap,
                            const Handle<BlockArray<Field>>& fields,
                            const Handle<BlockArray<Function>>& constructors,
                            const Handle<BlockArray<Function>>& methods,
-                           const Handle<TraitTable>& traits,
                            const Handle<Package>& package,
                            const Handle<Meta>& instanceMeta,
-                           const Handle<Type>& elementType,
-                           length_t lengthFieldIndex) {
+                           const Handle<Type>& elementType) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
-      *name, sourceName.getOrNull(), flags, *typeParameters, *supertypes,
-      *fields, *constructors, *methods, *traits,
+      id, *name, sourceName.getOrNull(), flags, *typeParameters, *supertypes,
+      *fields, *constructors, *methods,
       package.getOrNull(), instanceMeta.getOrNull(),
-      elementType.getOrNull(), lengthFieldIndex)));
+      elementType.getOrNull())));
 }
 
 
-Local<Class> Class::create(Heap* heap) {
+Local<Class> Class::create(Heap* heap, DefnId id) {
   RETRY_WITH_GC(heap, return Local<Class>(new(heap) Class(
-      nullptr, nullptr, 0, nullptr, nullptr, nullptr, nullptr, nullptr,
-      nullptr, nullptr, nullptr, nullptr, kIndexNotSet)));
+      id, nullptr, nullptr, 0, nullptr, nullptr, nullptr, nullptr,
+      nullptr, nullptr, nullptr, nullptr)));
 }
 
 
@@ -123,9 +119,14 @@ Class* Class::baseClass() const {
 }
 
 
-Function* Class::getNonStaticMethod(length_t index) const {
-  ASSERT(instanceMeta_);
-  return block_cast<Function>(instanceMeta_.get()->getData(index));
+Field* Class::findField(Name* name) const {
+  for (auto f : *fields()) {
+    if (f->name()->equals(name)) {
+      return f;
+    }
+  }
+  UNREACHABLE();
+  return nullptr;
 }
 
 
@@ -165,6 +166,11 @@ Class* Class::findFieldClass(length_t index) {
 }
 
 
+Function* Class::findMethod(DefnId methodId) const {
+  return methodIdIndex()->get(methodId);
+}
+
+
 Local<BlockHashMap<Name, Field>> Class::ensureAndGetFieldNameIndex(const Handle<Class>& clas) {
   if (clas->fieldNameIndex()) {
     return handle(clas->fieldNameIndex());
@@ -191,11 +197,7 @@ Local<BlockHashMap<Name, Function>> Class::ensureAndGetMethodNameIndex(
   if (clas->methodNameIndex()) {
     return handle(clas->methodNameIndex());
   }
-  Local<Name> (*getKey)(const Handle<Function>&) = mangleFunctionName;
-  auto index = buildIndex<Name, Function>(
-      handle(clas->methods()),
-      getKey,
-      allDefnFilter<Function>);
+  auto index = buildNameIndex<Function>(handle(clas->methods()), allDefnFilter<Function>);
   clas->setMethodNameIndex(*index);
   return index;
 }
@@ -229,61 +231,6 @@ Local<BlockHashMap<String, Function>> Class::ensureAndGetConstructorSignatureInd
 }
 
 
-Meta* Class::buildInstanceMeta() {
-  // Compute size of instances of this class.
-  u32 objectSize = kWordSize, elementSize = 0;
-  u8 lengthOffset = 0;
-  bool hasObjectPointers = false, hasElementPointers = false;
-  BitSet objectPointerMap(1), elementPointerMap;
-  computeSizeAndPointerMap(&objectSize, &hasObjectPointers, &objectPointerMap);
-  if (elementType() != nullptr) {
-    computeSizeAndPointerMapForType(elementType(), &elementSize,
-                                    &hasElementPointers, &elementPointerMap);
-    lengthOffset = findFieldOffset(lengthFieldIndex_);
-  }
-
-  // Count non-static methods.
-  length_t methodCount = 0;
-  for (length_t i = 0; i < methods()->length(); i++) {
-    if ((methods()->get(i)->flags() & STATIC_FLAG) == 0) {
-      methodCount++;
-    }
-  }
-
-  // Allocate the meta and set the data elements to point to the non-static methods.
-  auto meta = new(getHeap(), methodCount, objectSize, elementSize) Meta(OBJECT_BLOCK_TYPE);
-  meta->setClass(this);
-  meta->hasPointers_ = hasObjectPointers;
-  meta->hasElementPointers_ = hasElementPointers;
-  meta->lengthOffset_ = lengthOffset;
-  for (length_t methodIndex = 0, dataIndex = 0;
-       methodIndex < methods()->length();
-       methodIndex++) {
-    auto method = methods()->get(methodIndex);
-    if ((method->flags() & STATIC_FLAG) == 0) {
-      meta->setData(dataIndex++, method);
-    }
-  }
-  meta->objectPointerMap().copyFrom(objectPointerMap.bitmap());
-  if (elementSize > 0)
-    meta->elementPointerMap().copyFrom(elementPointerMap.bitmap());
-  return meta;
-}
-
-
-Local<Meta> Class::ensureAndGetInstanceMeta(const Handle<Class>& clas) {
-  ensureInstanceMeta(clas);
-  return Local<Meta>(clas->instanceMeta());
-}
-
-
-void Class::ensureInstanceMeta(const Handle<Class>& clas) {
-  if (clas->instanceMeta() != nullptr)
-    return;
-  RETRY_WITH_GC(clas->getHeap(), clas->setInstanceMeta(clas->buildInstanceMeta()));
-}
-
-
 bool Class::isSubclassOf(const Class* other) const {
   auto current = this;
   while (current->baseClass() != nullptr && current != other) {
@@ -293,39 +240,134 @@ bool Class::isSubclassOf(const Class* other) const {
 }
 
 
-void Class::computeSizeAndPointerMap(u32* size, bool* hasPointers, BitSet* pointerMap) const {
-  for (length_t i = 0, n = fields()->length(); i < n; i++) {
-    auto type = block_cast<Field>(fields()->get(i))->type();
-    computeSizeAndPointerMapForType(type, size, hasPointers, pointerMap);
+Local<Meta> Class::ensureInstanceMeta(const Handle<Class>& clas) {
+  if (clas->instanceMeta() != nullptr) {
+    return handle(clas->instanceMeta());
   }
+
+  // Flatten fields and methods if we haven't done so already.
+  auto flatFields = ensureFlatFields(clas);
+  ensureFlatMethods(Local<ObjectTypeDefn>(*clas));
+
+  // Compute object size from the last field.
+  u32 objectSize;
+  if (flatFields->isEmpty()) {
+    objectSize = kObjectMetaSize;
+  } else {
+    auto lastField = flatFields->get(flatFields->length() - 1);
+    objectSize = lastField->offset() + lastField->type()->typeSize();
+  }
+
+  // Build a pointer map for the object.
+  BitSet objectPointerMap(align(objectSize, kWordSize) / kWordSize);
+  bool hasObjectPointers = false;
+  length_t lengthFieldIndex = kIndexNotSet;
+  for (length_t i = 0; i < flatFields->length(); i++) {
+    auto field = handle(flatFields->get(i));
+    if (field->type()->isObject()) {
+      hasObjectPointers = true;
+      objectPointerMap.add(field->offset() / kWordSize);
+    }
+    if ((ARRAY_FLAG & field->flags()) != 0) {
+      ASSERT(lengthFieldIndex == kIndexNotSet);
+      ASSERT(clas->elementType() != nullptr);
+      lengthFieldIndex = i;
+    }
+  }
+
+  // Build a pointer map for the elements, if there are any.
+  u32 elementSize = 0;
+  u8 lengthOffset = 0;
+  BitSet elementPointerMap;
+  bool hasElementPointers = false;
+  if (clas->elementType() != nullptr) {
+    elementSize = clas->elementType()->typeSize();
+    elementPointerMap.expand(align(elementSize, kWordSize) / kWordSize);
+    ASSERT(lengthFieldIndex != kIndexNotSet);
+    lengthOffset = static_cast<u8>(flatFields->get(lengthFieldIndex)->offset());
+    ASSERT(lengthOffset == flatFields->get(lengthFieldIndex)->offset());
+    if (clas->elementType()->isObject()) {
+      hasElementPointers = true;
+      elementPointerMap.add(0);
+    }
+  }
+
+  // Build the meta.
+  // TODO: include non-static methods in the meta in order to enable virtual calls. No point
+  // in doing this yet because virtual calls aren't optimized.
+  auto meta = Meta::create(
+      clas->getHeap(), 0 /* dataLength */, objectSize, elementSize, OBJECT_BLOCK_TYPE);
+  meta->setClass(*clas);
+  meta->hasPointers_ = hasObjectPointers;
+  meta->hasElementPointers_ = hasElementPointers;
+  meta->lengthOffset_ = lengthOffset;
+  meta->objectPointerMap().copyFrom(objectPointerMap.bitmap());
+  if (elementSize > 0) {
+    meta->elementPointerMap().copyFrom(elementPointerMap.bitmap());
+  }
+  clas->setInstanceMeta(*meta);
+
+  return meta;
 }
 
 
-void Class::computeSizeAndPointerMapForType(Type* type, u32* size,
-                                            bool* hasPointers, BitSet* pointerMap) const {
-  u32 offset = align(*size, type->alignment());
-  if (type->isObject()) {
-    pointerMap->add(offset / kWordSize);
-    *hasPointers = true;
+Local<BlockArray<Field>> Class::ensureFlatFields(const Handle<Class>& clas) {
+  if (clas->flatFields() != nullptr) {
+    return handle(clas->flatFields());
   }
-  *size = offset + type->typeSize();
-  pointerMap->expand(align(*size, kWordSize) / kWordSize);
+
+  Local<Class> base(clas->getVM(), clas->baseClass());
+  Local<BlockArray<Field>> flatFields;
+  length_t firstOwnFieldIndex = kIndexNotSet;
+  u32 lastFieldEnd;
+  if (base.isEmpty()) {
+    flatFields = handle(clas->fields());
+    firstOwnFieldIndex = 0;
+    lastFieldEnd = kObjectMetaSize;
+  } else {
+    auto baseFields = Class::ensureFlatFields(base);
+    auto flatFieldCount = baseFields->length() + clas->fields()->length();
+    flatFields = BlockArray<Field>::create(clas->getHeap(), flatFieldCount);
+    for (length_t i = 0; i < baseFields->length(); i++) {
+      flatFields->set(i, baseFields->get(i));
+    }
+    firstOwnFieldIndex = baseFields->length();
+    if (baseFields->isEmpty()) {
+      lastFieldEnd = kObjectMetaSize;
+    } else {
+      auto lastBaseField = handle(baseFields->get(baseFields->length() - 1));
+      lastFieldEnd = lastBaseField->offset() + lastBaseField->type()->typeSize();
+    }
+  }
+
+  auto ownFields = handle(clas->fields());
+  for (length_t i = 0; i < ownFields->length(); i++) {
+    auto ownFieldIndex = firstOwnFieldIndex + i;
+    auto field = handle(ownFields->get(i));
+    auto offset = align(lastFieldEnd, field->type()->alignment());
+    field->setOffset(offset);
+    flatFields->set(ownFieldIndex, *field);
+    lastFieldEnd = offset + field->type()->typeSize();
+  }
+
+  clas->setFlatFields(*flatFields);
+  return flatFields;
 }
 
 
 ostream& operator << (ostream& os, const Class* clas) {
   os << brief(clas)
+     << "\n  id: " << clas->id()
      << "\n  name: " << brief(clas->name())
      << "\n  sourceName: " << brief(clas->sourceName())
      << "\n  supertypes: " << brief(clas->supertypes())
      << "\n  fields: " << brief(clas->fields())
+     << "\n  flat fields: " << brief(clas->flatFields())
      << "\n  constructors: " << brief(clas->constructors())
      << "\n  methods: " << brief(clas->methods())
-     << "\n  traits: " << brief(clas->traits())
      << "\n  package: " << brief(clas->package())
      << "\n  instance meta: " << brief(clas->instanceMeta())
      << "\n  element type: " << brief(clas->elementType())
-     << "\n  length field index: " << clas->lengthFieldIndex()
      << "\n  field name index: " << brief(clas->fieldNameIndex())
      << "\n  field source name index: " << brief(clas->fieldSourceNameIndex())
      << "\n  method name index: " << brief(clas->methodNameIndex())

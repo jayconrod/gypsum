@@ -9,6 +9,7 @@
 
 #include <iostream>
 #include "block.h"
+#include "defnid.h"
 #include "hash-table.h"
 #include "object-type-defn.h"
 #include "ptr.h"
@@ -34,15 +35,17 @@ class Trait: public ObjectTypeDefn {
   static const BlockType kBlockType = TRAIT_BLOCK_TYPE;
 
   void* operator new(size_t, Heap* heap);
-  Trait(Name* name,
+  Trait(DefnId id,
+        Name* name,
         String* sourceName,
         u32 flags,
         BlockArray<TypeParameter>* typeParameters,
         BlockArray<Type>* supertypes,
         BlockArray<Function>* methods,
         Package* package);
-  static Local<Trait> create(Heap* heap);
+  static Local<Trait> create(Heap* heap, DefnId id);
   static Local<Trait> create(Heap* heap,
+                             DefnId id,
                              const Handle<Name>& name,
                              const Handle<String>& sourceName,
                              u32 flags,
@@ -50,6 +53,8 @@ class Trait: public ObjectTypeDefn {
                              const Handle<BlockArray<Type>>& supertypes,
                              const Handle<BlockArray<Function>>& methods,
                              const Handle<Package>& package);
+
+  DefnId id() const { return id_; }
 
   Name* name() const { return name_.get(); }
   void setName(Name* name) { name_.set(this, name); }
@@ -73,6 +78,11 @@ class Trait: public ObjectTypeDefn {
   BlockArray<Function>* methods() const { return methods_.get(); }
   void setMethods(BlockArray<Function>* methods) { methods_.set(this, methods); }
 
+  BlockArray<Function>* flatMethods() const { return flatMethods_.get(); }
+  void setFlatMethods(BlockArray<Function>* flatMethods) {
+    flatMethods_.set(this, flatMethods);
+  }
+
   Package* package() const { return package_.get(); }
   void setPackage(Package* package) { package_.set(this, package); }
 
@@ -94,6 +104,7 @@ class Trait: public ObjectTypeDefn {
 
  private:
   DECLARE_POINTER_MAP()
+  const DefnId id_;
   Ptr<Name> name_;
   Ptr<String> sourceName_;
   u32 flags_;
@@ -101,6 +112,7 @@ class Trait: public ObjectTypeDefn {
   Ptr<BlockArray<TypeParameter>> typeParameters_;
   Ptr<BlockArray<Type>> supertypes_;
   Ptr<BlockArray<Function>> methods_;
+  Ptr<BlockArray<Function>> flatMethods_;
   Ptr<Package> package_;
   Ptr<BlockHashMap<Name, Function>> methodNameIndex_;
   Ptr<BlockHashMap<String, Function>> methodSourceNameIndex_;
@@ -108,65 +120,6 @@ class Trait: public ObjectTypeDefn {
 };
 
 std::ostream& operator << (std::ostream& os, const Trait* trait);
-
-
-struct TraitTableElement {
-  static const word_t kEmpty = 1;
-  static const word_t kDead = 2;
-
-  TraitTableElement()
-      : key(kEmpty),
-        value(nullptr) { }
-  TraitTableElement(Trait* trait)
-      : key(trait),
-        value(nullptr) { }
-  TraitTableElement(Trait* trait, BlockArray<Function>* value)
-      : key(trait),
-        value(value) { }
-  TraitTableElement(const TraitTableElement&) = delete;
-  TraitTableElement& operator = (const TraitTableElement&) = delete;
-  TraitTableElement(TraitTableElement&&) = delete;
-  TraitTableElement&& operator = (TraitTableElement&&) = delete;
-
-  bool isEmpty() const { return key.isNumber() && key.getNumber() == kEmpty; }
-  void setEmpty() { return key.setNumber(kEmpty); }
-  bool isDead() const { return key.isNumber() && key.getNumber() == kDead; }
-  void setDead() { return key.setNumber(kDead); }
-  bool isLive() const { return key.isPointer(); }
-
-  void set(const HashTable<TraitTableElement>* table, const TraitTableElement& elem);
-
-  bool operator == (const TraitTableElement& other) const {
-    return key == other.key && value == other.value;
-  }
-  bool operator != (const TraitTableElement& other) const {
-    return !(*this == other);
-  }
-  bool matches(const TraitTableElement& other) const {
-    return isLive() && key == other.key;
-  }
-  u32 hashCode() const {
-    return key.getPointer()->hashCode();
-  }
-
-  Tagged<Trait> key;
-  BlockArray<Function>* value;
-};
-
-
-class TraitTable: public HashTable<TraitTableElement> {
- public:
-  static const BlockType kBlockType = TRAIT_TABLE_BLOCK_TYPE;
-
-  TraitTable()
-      : HashTable<TraitTableElement>(kBlockType) { }
-
-  static Local<TraitTable> create(Heap* heap, length_t capacity);
-
- private:
-  friend class Roots;
-  static const word_t kElementPointerMap = 3;
-};
 
 }
 }

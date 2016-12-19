@@ -15,7 +15,6 @@ from compile_info import CompileInfo, STD_NAME
 from compiler import compile
 from errors import CompileException
 from externalization import externalize
-from flatten import flattenTypeDefinitions
 from ids import AstId, TARGET_PACKAGE_ID
 from inheritance_analysis import analyzeInheritance
 from ir import Package, PackageVersion, PackageDependency, Name
@@ -112,7 +111,6 @@ try:
     if args.print_types:
         sys.stderr.write("--print-types not supported right now\n")
     convertClosures(info)
-    flattenTypeDefinitions(info)
     externalize(info)
     compile(info)
 

@@ -9,9 +9,11 @@
 
 #include <iostream>
 #include <new>
+#include <unordered_set>
 #include <vector>
 #include "array.h"
 #include "block.h"
+#include "defnid.h"
 #include "platform.h"
 #include "type.h"
 #include "utils.h"
@@ -32,7 +34,8 @@ class Function: public Block {
   static const BlockType kBlockType = FUNCTION_BLOCK_TYPE;
 
   void* operator new(size_t, Heap* heap, length_t instructionsSize);
-  Function(Name* name,
+  Function(DefnId id,
+           Name* name,
            String* sourceName,
            u32 flags,
            BlockArray<TypeParameter>* typeParameters,
@@ -43,10 +46,12 @@ class Function: public Block {
            const std::vector<u8>& instructions,
            LengthArray* blockOffsets,
            Package* package,
+           BlockArray<Function>* overrides,
            StackPointerMap* stackPointerMap,
            NativeFunction nativeFunction);
-  static Local<Function> create(Heap* heap);
+  static Local<Function> create(Heap* heap, DefnId id);
   static Local<Function> create(Heap* heap,
+                                DefnId id,
                                 const Handle<Name>& name,
                                 const Handle<String>& sourceName,
                                 u32 flags,
@@ -58,10 +63,12 @@ class Function: public Block {
                                 const std::vector<u8>& instructions,
                                 const Handle<LengthArray>& blockOffsets,
                                 const Handle<Package>& package,
+                                const Handle<BlockArray<Function>>& overrides,
                                 NativeFunction nativeFunction);
 
   static word_t sizeForFunction(length_t instructionsSize);
 
+  DefnId id() const { return id_; }
   Name* name() const { return name_.get(); }
   void setName(Name* newName) { name_.set(this, newName); }
   String* sourceName() const { return sourceName_.get(); }
@@ -109,6 +116,9 @@ class Function: public Block {
   Package* package() const { return package_.get(); }
   void setPackage(Package* newPackage) { package_.set(this, newPackage); }
 
+  BlockArray<Function>* overrides() const { return overrides_.get(); }
+  void setOverrides(BlockArray<Function>* newOverrides) { overrides_.set(this, newOverrides); }
+
   StackPointerMap* stackPointerMap() const { return stackPointerMap_.get(); }
   void setStackPointerMap(StackPointerMap* newStackPointerMap) {
     stackPointerMap_.set(this, newStackPointerMap);
@@ -123,8 +133,28 @@ class Function: public Block {
   void ensureNativeFunction();
   NativeFunction ensureAndGetNativeFunction();
 
+  /**
+   * Returns the {@link DefnId} of the first base method this function overrides.
+   *
+   * If this function does not override anything, its own id is returned. If it overrides
+   * a method, which itself is an override, the id of the base method is returned. This will
+   * never return the id of an overriding method.
+   */
+  DefnId findOverriddenMethodId() const;
+
+  /**
+   * Returns a set of {@link DefnId}s of base methods this function overrides.
+   *
+   * If this function does not override anything, a singleton set with its own id is returned.
+   * If it overrides methods which are also overrides, the ids of the base methods are
+   * returned. This will never return ids of an overriding method, and it will always return
+   * at least one id.
+   */
+  std::unordered_set<DefnId> findOverriddenMethodIds() const;
+
  private:
   DECLARE_POINTER_MAP()
+  const DefnId id_;
   Ptr<Name> name_;
   Ptr<String> sourceName_;
   u32 flags_;
@@ -137,6 +167,7 @@ class Function: public Block {
   length_t instructionsSize_;
   Ptr<LengthArray> blockOffsets_;
   Ptr<Package> package_;
+  Ptr<BlockArray<Function>> overrides_;
   Ptr<StackPointerMap> stackPointerMap_;
   NativeFunction nativeFunction_;
   // Update FUNCTION_POINTER_LIST if pointer members change.

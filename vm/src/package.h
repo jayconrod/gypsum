@@ -39,21 +39,24 @@ class Package: public Object {
   static const BlockType kBlockType = PACKAGE_BLOCK_TYPE;
 
   DEFINE_NEW(Package)
-  explicit Package(VM* vm);
-  static Local<Package> create(Heap* heap);
+  Package(VM* vm, id_t id);
+  static Local<Package> create(Heap* heap, id_t id);
 
   static std::vector<Persistent<Package>> load(
       VM* vm,
+      Counter* idCounter,
       const std::string& fileName,
       const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder
           = std::vector<NativeFunctionSearch>());
   static std::vector<Persistent<Package>> load(
       VM* vm,
+      Counter* idCounter,
       std::istream& stream,
       const std::string& dirName,
       const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder
           = std::vector<NativeFunctionSearch>());
 
+  id_t id() const { return id_; }
   DEFINE_INL_ACCESSORS2(u64, flags, setFlags)
   Name* name() const { return name_.get(); }
   void setName(Name* newName) { name_.set(this, newName); }
@@ -66,13 +69,15 @@ class Package: public Object {
   BlockArray<String>* strings() const { return strings_.get(); }
   void setStrings(BlockArray<String>* newStrings) { strings_.set(this, newStrings); }
   String* getString(length_t index) const;
+  BlockArray<Name>* names() const { return names_.get(); }
+  void setNames(BlockArray<Name>* newNames) { names_.set(this, newNames); }
+  Name* getName(length_t index) const;
   BlockArray<Global>* globals() const { return globals_.get(); }
   void setGlobals(BlockArray<Global>* newGlobals) { globals_.set(this, newGlobals); }
   Global* getGlobal(length_t index) const;
   BlockArray<Function>* functions() const { return functions_.get(); }
   void setFunctions(BlockArray<Function>* newFunctions) { functions_.set(this, newFunctions); }
   Function* getFunction(length_t index) const;
-  Function* getFunction(DefnId id) const;
   BlockArray<Class>* classes() const { return classes_.get(); }
   void setClasses(BlockArray<Class>* newClasses) { classes_.set(this, newClasses); }
   Class* getClass(length_t index) const;
@@ -179,11 +184,13 @@ class Package: public Object {
  private:
   DECLARE_POINTER_MAP()
 
+  id_t id_;
   u64 flags_;
   Ptr<Name> name_;
   Ptr<PackageVersion> version_;
   Ptr<BlockArray<PackageDependency>> dependencies_;
   Ptr<BlockArray<String>> strings_;
+  Ptr<BlockArray<Name>> names_;
   Ptr<BlockArray<Global>> globals_;
   Ptr<BlockArray<Function>> functions_;
   Ptr<BlockArray<Class>> classes_;

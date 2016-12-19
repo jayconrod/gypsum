@@ -10,6 +10,8 @@
 #include <cstring>
 #include "array.h"
 #include "block.h"
+#include "class.h"
+#include "defnid.h"
 #include "field.h"
 #include "flags.h"
 #include "handle.h"
@@ -92,6 +94,11 @@ Local<Type> Object::typeof(const Handle<Object>& object) {
 
 Class* Object::clas() const {
   return meta()->clas();
+}
+
+
+Function* Object::findMethod(DefnId id) const {
+  return clas()->findMethod(id);
 }
 
 

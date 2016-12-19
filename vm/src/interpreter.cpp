@@ -420,24 +420,58 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       }
 
       case LDF: {
-        auto index = readVbn();
+        auto classId = readVbn();
+        auto nameIndex = readVbn();
         auto block = pop<Block*>();
         CHECK_NON_NULL(block);
-        auto clas = block->meta()->clas();
-        auto fieldType = clas->fields()->get(index)->type();
-        auto offset = clas->findFieldOffset(index);
-        load(block, offset, fieldType);
+        auto clas = isBuiltinId(classId)
+            ? vm_->roots()->getBuiltinClass(static_cast<BuiltinId>(classId))
+            : function_->package()->getClass(classId);
+        auto name = function_->package()->getName(nameIndex);
+        auto field = clas->findField(name);
+        load(block, field->offset(), field->type());
+        break;
+      }
+
+      case LDFF: {
+        auto depIndex = readVbn();
+        auto externIndex = readVbn();
+        auto nameIndex = readVbn();
+        auto block = pop<Block*>();
+        CHECK_NON_NULL(block);
+        auto clas = function_->package()->dependencies()->get(depIndex)
+            ->linkedClasses()->get(externIndex);
+        auto name = function_->package()->getName(nameIndex);
+        auto field = clas->findField(name);
+        load(block, field->offset(), field->type());
         break;
       }
 
       case STF: {
-        auto index = readVbn();
+        auto classId = readVbn();
+        auto nameIndex = readVbn();
         auto block = pop<Block*>();
         CHECK_NON_NULL(block);
-        auto clas = block->meta()->clas();
-        auto fieldType = clas->fields()->get(index)->type();
-        auto offset = clas->findFieldOffset(index);
-        store(block, offset, fieldType);
+        auto clas = isBuiltinId(classId)
+            ? vm_->roots()->getBuiltinClass(static_cast<BuiltinId>(classId))
+            : function_->package()->getClass(classId);
+        auto name = function_->package()->getName(nameIndex);
+        auto field = clas->findField(name);
+        store(block, field->offset(), field->type());
+        break;
+      }
+
+      case STFF: {
+        auto depIndex = readVbn();
+        auto externIndex = readVbn();
+        auto nameIndex = readVbn();
+        auto block = pop<Block*>();
+        CHECK_NON_NULL(block);
+        auto clas = function_->package()->dependencies()->get(depIndex)
+            ->linkedClasses()->get(externIndex);
+        auto name = function_->package()->getName(nameIndex);
+        auto field = clas->findField(name);
+        store(block, field->offset(), field->type());
         break;
       }
 
@@ -488,7 +522,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
           HandleScope handleScope(vm_);
           auto clas = handle(function_->package()->dependencies()->get(depIndex)
               ->linkedClasses()->get(externIndex));
-          auto meta = Class::ensureAndGetInstanceMeta(clas);
+          auto meta = Class::ensureInstanceMeta(clas);
           obj = *Object::create(vm_->heap(), meta);
         } catch (AllocationError& e) {
           doThrow(threadBindle_->takeOutOfMemoryException());
@@ -525,7 +559,7 @@ i64 Interpreter::call(const Handle<Function>& callee) {
           HandleScope handleScope(vm_);
           auto clas = handle(function_->package()->dependencies()->get(depIndex)
               ->linkedClasses()->get(externIndex));
-          auto meta = Class::ensureAndGetInstanceMeta(clas);
+          auto meta = Class::ensureInstanceMeta(clas);
           array = *Object::create(vm_->heap(), meta, length);
         } catch (AllocationError& e) {
           doThrow(threadBindle_->takeOutOfMemoryException());
@@ -798,13 +832,19 @@ i64 Interpreter::call(const Handle<Function>& callee) {
       }
 
       case CALLV: {
-        auto argCount = readVbn();
-        auto methodIndex = toLength(readVbn());
+        auto functionId = readVbn();
         ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
+        Function* method;
+        if (isBuiltinId(functionId)) {
+          method = vm_->roots()->getBuiltinFunction(static_cast<BuiltinId>(functionId));
+        } else {
+          method = function_->package()->getFunction(functionId);
+        }
+        auto argCount = method->parameterTypes()->length();
         auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
         CHECK_NON_NULL(receiver);
-        Persistent<Function> callee(block_cast<Function>(
-            receiver->meta()->getData(methodIndex)));
+        auto overrideId = method->findOverriddenMethodId();
+        Persistent<Function> callee(receiver->findMethod(overrideId));
         if (callee->hasBuiltinId()) {
           handleBuiltin(callee->builtinId());
         } else if (callee->isNative()) {
@@ -815,43 +855,17 @@ i64 Interpreter::call(const Handle<Function>& callee) {
         break;
       }
 
-      case CALLVT: {
-        auto argCount = readVbn();
-        auto traitIndex = toLength(readVbn());
-        auto methodIndex = toLength(readVbn());
+      case CALLVF: {
+        auto depIndex = readVbn();
+        auto externIndex = readVbn();
         ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
+        auto method = function_->package()->dependencies()->get(toLength(depIndex))
+            ->linkedFunctions()->get(toLength(externIndex));
+        auto argCount = method->parameterTypes()->length();
         auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
         CHECK_NON_NULL(receiver);
-        Trait* trait;
-        if (traitIndex < 0) {
-          trait = vm_->roots()->getBuiltinTrait(static_cast<BuiltinId>(traitIndex));
-        } else {
-          trait = function_->package()->getTrait(traitIndex);
-        }
-        Persistent<Function> callee(
-            receiver->clas()->traits()->find(trait)->value->get(methodIndex));
-        if (callee->hasBuiltinId()) {
-          handleBuiltin(callee->builtinId());
-        } else if (callee->isNative()) {
-          handleNative(callee);
-        } else {
-          enter(callee);
-        }
-        break;
-      }
-
-      case CALLVTF: {
-        auto argCount = readVbn();
-        auto depIndex = static_cast<id_t>(toLength(readVbn()));
-        auto traitIndex = toLength(readVbn());
-        auto methodIndex = toLength(readVbn());
-        ASSERT(function_->hasPointerMapAtPcOffset(pcOffset_));
-        auto receiver = mem<Object*>(stack_->sp(), 0, argCount - 1);
-        CHECK_NON_NULL(receiver);
-        auto trait = function_->package()->dependencies()->get(depIndex)
-            ->linkedTraits()->get(traitIndex);
-        Persistent<Function> callee(
-            receiver->clas()->traits()->find(trait)->value->get(methodIndex));
+        auto overrideId = method->findOverriddenMethodId();
+        Persistent<Function> callee(receiver->findMethod(overrideId));
         if (callee->hasBuiltinId()) {
           handleBuiltin(callee->builtinId());
         } else if (callee->isNative()) {
@@ -1054,7 +1068,7 @@ void Interpreter::handleBuiltin(BuiltinId id) {
         if (!clas->elementType() || !clas->elementType()->isI32()) {
           auto exnClass = handle(
               vm_->roots()->getBuiltinClass(BUILTIN_ILLEGAL_ARGUMENT_EXCEPTION_CLASS_ID));
-          auto exnMeta = Class::ensureAndGetInstanceMeta(exnClass);
+          auto exnMeta = Class::ensureInstanceMeta(exnClass);
           auto exn = Object::create(vm_->heap(), exnMeta);
           doThrow(*exn);
           break;
@@ -1166,7 +1180,7 @@ void Interpreter::handleBuiltin(BuiltinId id) {
         HandleScope handleScope(vm_);
         if (!cin.good()) {
           auto clas = handle(vm_->roots()->getBuiltinClass(BUILTIN_EXCEPTION_CLASS_ID));
-          auto meta = Class::ensureAndGetInstanceMeta(clas);
+          auto meta = Class::ensureInstanceMeta(clas);
           auto exn = Object::create(vm_->heap(), meta);
           doThrow(*exn);
           break;
@@ -1223,7 +1237,7 @@ Local<Meta> Interpreter::getMetaForClassId(i64 classId) {
     return handle(vm_->roots()->getBuiltinMeta(classId));
   }
   Local<Class> clas(function_->package()->getClass(classId));
-  return Class::ensureAndGetInstanceMeta(clas);
+  return Class::ensureInstanceMeta(clas);
 }
 
 

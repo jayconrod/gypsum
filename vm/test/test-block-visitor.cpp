@@ -144,14 +144,15 @@ static Local<Package> createTestPackage(Heap* heap) {
   };
   auto blockOffsetList = LengthArray::create(heap, 1);
   blockOffsetList->set(0, 0);
-  auto package = Package::create(heap);
+  auto package = Package::create(heap, 0);
   auto functions = BlockArray<Function>::create(heap, 1);
   Local<BlockArray<TypeParameter>> emptyTypeParameters(
       reinterpret_cast<BlockArray<TypeParameter>*>(roots->emptyBlockArray()));
-  auto function = Function::create(heap, NAME("foo"), STR("foo"),
+  auto function = Function::create(heap, FID0, NAME("foo"), STR("foo"),
                                    0, emptyTypeParameters, returnType, parameterTypes,
                                    Local<ObjectTypeDefn>(), 2 * kWordSize, instList,
-                                   blockOffsetList, package, nullptr);
+                                   blockOffsetList, package, Local<BlockArray<Function>>(),
+                                   nullptr);
   functions->set(0, *function);
   package->setFunctions(*functions);
   package->setEntryFunctionIndex(0);
@@ -181,8 +182,10 @@ TEST(BlockVisitorFunction) {
   HandleScope handleScope(&vm);
   auto package = *createTestPackage(heap);
   auto function = package->getFunction(0);
+  auto id = function->id();
   auto name = function->name();
   auto sourceName = function->sourceName();
+  auto flags = function->flags();
   auto typeParameters = function->typeParameters();
   auto returnType = function->returnType();
   auto parameterTypes = function->parameterTypes();
@@ -190,27 +193,56 @@ TEST(BlockVisitorFunction) {
   auto localsSize = function->localsSize();
   auto instructionsSize = function->instructionsSize();
   auto blockOffsets = function->blockOffsets();
+  auto overrides = function->overrides();
+  auto stackPointerMap = function->stackPointerMap();
+  auto nativeFunction = function->nativeFunction();
+
   IncrementVisitor visitor;
   visitor.visit(function);
-  word_t expected[] = {
-      FUNCTION_BLOCK_TYPE << 2,
-      reinterpret_cast<word_t>(name) + 4,
-      reinterpret_cast<word_t>(sourceName) + 4,
-      0,
-      0,
-      reinterpret_cast<word_t>(typeParameters) + 4,
-      reinterpret_cast<word_t>(returnType) + 4,
-      reinterpret_cast<word_t>(parameterTypes) + 4,
-      reinterpret_cast<word_t>(definingClass) + 4,
-      localsSize,
-      instructionsSize,
-      reinterpret_cast<word_t>(blockOffsets) + 4,
-      reinterpret_cast<word_t>(package) + 4,
-      4,
-      0,
-  };
-  for (word_t i = 0; i < ARRAY_LENGTH(expected); i++)
-    ASSERT_EQ(expected[i], reinterpret_cast<word_t*>(function)[i]);
+
+  #define ASSERT_PTR_VISITED(field) \
+    ASSERT_EQ(reinterpret_cast<word_t>(field) + 4, reinterpret_cast<word_t>(function->field()))
+  #define ASSERT_NOT_VISITED(field) \
+    ASSERT_EQ(field, function->field())
+  ASSERT_NOT_VISITED(id);
+  ASSERT_PTR_VISITED(name);
+  ASSERT_PTR_VISITED(sourceName);
+  ASSERT_NOT_VISITED(flags);
+  ASSERT_PTR_VISITED(typeParameters);
+  ASSERT_PTR_VISITED(returnType);
+  ASSERT_PTR_VISITED(parameterTypes);
+  ASSERT_PTR_VISITED(definingClass);
+  ASSERT_NOT_VISITED(localsSize);
+  ASSERT_NOT_VISITED(instructionsSize);
+  ASSERT_PTR_VISITED(blockOffsets);
+  ASSERT_PTR_VISITED(package);
+  ASSERT_PTR_VISITED(overrides);
+  ASSERT_PTR_VISITED(stackPointerMap);
+  ASSERT_NOT_VISITED(nativeFunction);
+  #undef ASSERT_NOT_VISITED
+  #undef ASSERT_PTR_VISITED
+
+  // word_t expected[] = {
+  //     FUNCTION_BLOCK_TYPE << 2,
+  //     0,  // DefnId
+  //     0,  // DefnId
+  //     reinterpret_cast<word_t>(name) + 4,
+  //     reinterpret_cast<word_t>(sourceName) + 4,
+  //     0,  // flags
+  //     0,
+  //     reinterpret_cast<word_t>(typeParameters) + 4,
+  //     reinterpret_cast<word_t>(returnType) + 4,
+  //     reinterpret_cast<word_t>(parameterTypes) + 4,
+  //     reinterpret_cast<word_t>(definingClass) + 4,
+  //     localsSize,
+  //     instructionsSize,
+  //     reinterpret_cast<word_t>(blockOffsets) + 4,
+  //     reinterpret_cast<word_t>(package) + 4,
+  //     4,
+  //     0,
+  // };
+  // for (word_t i = 0; i < ARRAY_LENGTH(expected); i++)
+  //   ASSERT_EQ(expected[i], reinterpret_cast<word_t*>(function)[i]);
 }
 
 

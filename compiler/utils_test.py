@@ -7,7 +7,7 @@
 import unittest
 
 from ids import DefnId, TARGET_PACKAGE_ID
-from ir import Class, Global, Field, Function, IrTopDefn, LOCAL, Name, Package, PackagePrefix, Trait, TypeParameter, Variable
+from ir import Class, Global, Field, Function, IrTopDefn, LOCAL, Name, Package, PackagePrefix, Trait, TypeParameter, Variable, unmangleNameForTest
 from ir_types import getNothingClassType, getRootClassType
 from location import NoLoc
 from package_loader import BasePackageLoader
@@ -164,6 +164,11 @@ class TestDefn(object):
         if self.__class__.__bases__[1] is not other.__class__:
             # This assertion should throw.
             self.test.assertEquals(self.__class__.__bases__[1], other.__class__)
+            return False
+        if self.name != other.name and \
+           self.name != unmangleNameForTest(other.name):
+            self.test.assertEquals(self.name, other.name,
+                                   "for name: %s != %s" % (self.name, other.name))
             return False
         for key in self.propNames:
             value = getattr(self, key)

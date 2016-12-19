@@ -9,7 +9,7 @@ import unittest
 from builtins import getRootClass
 from compile_info import CompileInfo
 import ids
-from ir import Package, PackageDependency, Name, CONSTRUCTOR_SUFFIX
+from ir import Package, PackageDependency
 from ir_types import ClassType, getRootClassType, getExceptionClassType
 from errors import InheritanceException
 from flags import *
@@ -20,6 +20,8 @@ from scope_analysis import analyzeDeclarations
 from type_analysis import analyzeTypeDeclarations
 from inheritance_analysis import analyzeInheritance
 from utils_test import FakePackageLoader
+from name import CONSTRUCTOR_SUFFIX, Name
+
 
 class TestInheritanceAnalysis(unittest.TestCase):
     def parseFromSource(self, source):
@@ -56,11 +58,11 @@ class TestInheritanceAnalysis(unittest.TestCase):
 
     def testInheritFromForeignType(self):
         package = Package(name=Name(["foo"]))
-        foreignClass = package.addClass(Name(["Bar"]), typeParameters=[],
+        foreignClass = package.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                         supertypes=[getRootClassType()],
                                         constructors=[], fields=[],
                                         methods=[], flags=frozenset([PUBLIC]))
-        field = package.newField(Name(["x"]), flags=frozenset([PUBLIC]))
+        field = package.newField(Name(["Bar", "x"]), sourceName="x", flags=frozenset([PUBLIC]))
         foreignClass.fields = [field]
         loader = FakePackageLoader([package])
         source = "class Baz <: foo.Bar"
@@ -72,11 +74,11 @@ class TestInheritanceAnalysis(unittest.TestCase):
 
     def testInheritForeignTypeInForeignTypeInSamePackage(self):
         package = Package(name=Name(["foo"]))
-        barClass = package.addClass(Name(["Bar"]), typeParameters=[],
+        barClass = package.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                     supertypes=[getRootClassType()],
                                     constructors=[], fields=[],
                                     methods=[], flags=frozenset([PUBLIC]))
-        bazClass = package.addClass(Name(["Baz"]), typeParameters=[],
+        bazClass = package.addClass(Name(["Baz"]), sourceName="Baz", typeParameters=[],
                                     supertypes=[ClassType(barClass), getRootClassType()],
                                     constructors=[], fields=[],
                                     methods=[], flags=frozenset([PUBLIC]))
@@ -88,14 +90,14 @@ class TestInheritanceAnalysis(unittest.TestCase):
 
     def testInheritForeignTypeInForeignTypeInDifferentPackage(self):
         fooPackage = Package(name=Name(["foo"]))
-        barClass = fooPackage.addClass(Name(["Bar"]), typeParameters=[],
+        barClass = fooPackage.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                        supertypes=[getRootClassType()],
                                        constructors=[], fields=[],
                                        methods=[], flags=frozenset([PUBLIC]))
         bazPackage = Package(name=Name(["baz"]))
         loader = FakePackageLoader([fooPackage, bazPackage])
         bazPackage.dependencies.append(PackageDependency.fromPackage(fooPackage))
-        quuxClass = bazPackage.addClass(Name(["Quux"]), typeParameters=[],
+        quuxClass = bazPackage.addClass(Name(["Quux"]), sourceName="Quux", typeParameters=[],
                                         supertypes=[ClassType(barClass), getRootClassType()],
                                         constructors=[], fields=[],
                                         methods=[], flags=frozenset([PUBLIC]))
@@ -291,7 +293,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
 
     def testTypeParameterCycleForeign(self):
         package = Package(name=Name(["foo"]))
-        barClass = package.addClass(Name(["Bar"]), typeParameters=[],
+        barClass = package.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                     supertypes=[getRootClassType()],
                                     constructors=[], fields=[],
                                     methods=[], flags=frozenset([PUBLIC]))
@@ -355,7 +357,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
         scope = info.getScope(info.ast.modules[0].definitions[0])
         self.assertEquals(1, len(scope.getDefinition("to-string").overloads))
         overrides = scope.getDefinition("to-string").overloads[0].irDefn.overrides
-        self.assertEquals([getRootClass().findMethodBySourceName("to-string")[0].id],
+        self.assertEquals([getRootClass().findMethodBySourceName("to-string").id],
                           [o.id for o in overrides])
 
     def testMultipleMethodsOverrideSameMethod(self):
@@ -471,8 +473,8 @@ class TestInheritanceAnalysis(unittest.TestCase):
 
     def testMethodOverridesInSameClass(self):
         source = "class Foo\n" + \
-                 "  def f = {}\n" + \
-                 "  override def f = {}"
+                 "  def f(s: String) = {}\n" + \
+                 "  override def f(o: Object) = {}"
         self.assertRaises(InheritanceException, self.analyzeFromSource, source)
 
     def testOverrideMethodWithOverloadInBaseClass(self):
@@ -572,11 +574,11 @@ class TestInheritanceAnalysis(unittest.TestCase):
 
     def testInheritFromImportedClass(self):
         foo = Package(name=Name(["foo"]))
-        Bar = foo.addClass(Name(["Bar"]), typeParameters=[],
+        Bar = foo.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                            supertypes=[getRootClassType()],
                            constructors=[], fields=[],
                            methods=[], flags=frozenset([PUBLIC]))
-        x = foo.newField(Name(["x"]), flags=frozenset([PUBLIC, LET]))
+        x = foo.newField(Name(["Bar", "x"]), sourceName="x", flags=frozenset([PUBLIC, LET]))
         Bar.fields.append(x)
 
         source = "import foo.Bar\n" + \
@@ -597,7 +599,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
                  "class Bar <: Object, Foo\n" + \
                  "  public override def to-string = \"Bar\""
         info = self.analyzeFromSource(source)
-        ObjectToString = getRootClass().findMethodBySourceName("to-string")[0]
+        ObjectToString = getRootClass().findMethodBySourceName("to-string")
         Bar = info.package.findClass(name="Bar")
         BarToString = info.package.findFunction(name="Bar.to-string")
         self.assertEquals(1, len(BarToString.overrides))

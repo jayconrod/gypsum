@@ -19,7 +19,7 @@
       parameterTypes:
         - Object?
         - Object?
-      flags: [PUBLIC, METHOD]
+      flags: [PUBLIC, FINAL, METHOD]
       insts:
         - eqp
     - name: "!=="
@@ -28,7 +28,7 @@
       parameterTypes:
         - Object?
         - Object?
-      flags: [PUBLIC, METHOD]
+      flags: [PUBLIC, FINAL, METHOD]
       insts:
         - nep
     - name: typeof
@@ -195,12 +195,13 @@
       flags: [PUBLIC, LET, ARRAY]
   elements: i32
   methods:
-    - name: "to-string"
+    - name: to-string
       id: BUILTIN_STRING_TO_STRING_ID
       returnType: String
       parameterTypes:
         - String
-      flags: [PUBLIC, METHOD]
+      flags: [PUBLIC, METHOD, OVERRIDE]
+      overrides: [BUILTIN_ROOT_CLASS_TO_STRING_ID]
     - name: get
       id: BUILTIN_STRING_GET_ID
       returnType: i32

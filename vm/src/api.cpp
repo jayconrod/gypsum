@@ -727,7 +727,7 @@ CallBuilder::CallBuilder(const Class& clas, const Function& constructor) {
   impl_->function_ = unwrap<i::Function>(constructor);
   i::HandleScope handleScope(vm);
   i::AllowAllocationScope allowAllocation(vm->heap(), true);
-  auto meta = i::Class::ensureAndGetInstanceMeta(iclass);
+  auto meta = i::Class::ensureInstanceMeta(iclass);
   auto receiver = i::Object::create(vm->heap(), meta);
   arg(wrap<Object, i::Object>(receiver));
 }
@@ -741,7 +741,7 @@ CallBuilder::CallBuilder(const Class& clas) {
   impl_->clas_ = iclass;
   i::HandleScope handleScope(vm);
   i::AllowAllocationScope allowAllocation(vm->heap(), true);
-  auto meta = i::Class::ensureAndGetInstanceMeta(iclass);
+  auto meta = i::Class::ensureInstanceMeta(iclass);
   auto receiver = i::Object::create(vm->heap(), meta);
   arg(wrap<Object, i::Object>(receiver));
 }

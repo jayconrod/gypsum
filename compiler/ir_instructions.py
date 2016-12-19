@@ -125,6 +125,34 @@ class stgf(Instruction):
         super(stgf, self).__init__(globl.id.packageId.index, globl.id.externIndex)
 
 
+class ldf(Instruction):
+    def __init__(self, clas, nameIndex):
+        assert isinstance(clas, ir.Class) and not clas.isForeign()
+        super(ldf, self).__init__(clas.id.index, nameIndex)
+
+
+class ldff(Instruction):
+    def __init__(self, clas, nameIndex):
+        assert isinstance(clas, ir.Class) and clas.isForeign()
+        super(ldff, self).__init__(clas.id.packageId.index,
+                                   clas.id.externIndex,
+                                   nameIndex)
+
+
+class stf(Instruction):
+    def __init__(self, clas, nameIndex):
+        assert isinstance(clas, ir.Class) and not clas.isForeign()
+        super(stf, self).__init__(clas.id.index, nameIndex)
+
+
+class stff(Instruction):
+    def __init__(self, clas, nameIndex):
+        assert isinstance(clas, ir.Class) and clas.isForeign()
+        super(stff, self).__init__(clas.id.packageId.index,
+                                   clas.id.externIndex,
+                                   nameIndex)
+
+
 class allocobj(Instruction):
     def __init__(self, clas):
         assert isinstance(clas, ir.Class) and (clas.isLocal() or clas.isBuiltin())
@@ -269,26 +297,20 @@ class callgf(Instruction):
 
 
 class callv(Instruction):
-    def popCount(self):
-        return self.operands[0]
-
-
-class callvt(Instruction):
-    def __init__(self, argCount, trait, index):
-        assert isinstance(trait, ir.Trait) and not trait.isForeign()
-        super(callvt, self).__init__(argCount, trait.id.index, index)
-        self.popCount_ = argCount
+    def __init__(self, method):
+        assert isinstance(method, ir.Function) and not method.isForeign()
+        super(callv, self).__init__(method.id.index)
+        self.popCount_ = len(method.parameterTypes)
 
     def popCount(self):
         return self.popCount_
 
 
-class callvtf(Instruction):
-    def __init__(self, argCount, trait, index):
-        assert isinstance(trait, ir.Trait) and trait.isForeign()
-        super(callvtf, self).__init__(argCount, trait.id.packageId.index,
-                                      trait.id.externIndex, index)
-        self.popCount_ = argCount
+class callvf(Instruction):
+    def __init__(self, method):
+        assert isinstance(method, ir.Function) and method.isForeign()
+        super(callvf, self).__init__(method.id.packageId.index, method.id.externIndex)
+        self.popCount_ = len(method.parameterTypes)
 
     def popCount(self):
         return self.popCount_

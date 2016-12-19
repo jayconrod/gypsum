@@ -11,24 +11,47 @@ from ids import GLOBAL_SCOPE_ID
 import ir
 import ir_types as ir_t
 from builtins import getExceptionClass, getPackageClass, getNothingClass
-from utils import COMPILE_FOR_VALUE, COMPILE_FOR_MATCH, COMPILE_FOR_UNINITIALIZED, COMPILE_FOR_EFFECT, each
+from utils import (
+    COMPILE_FOR_EFFECT,
+    COMPILE_FOR_MATCH,
+    COMPILE_FOR_UNINITIALIZED,
+    COMPILE_FOR_VALUE,
+    each,
+    flatMap,
+)
 from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, NORMAL_MODE, STD_MODE, NOSTD_MODE, CallInfo, ScopePrefixInfo
-from flags import COVARIANT, CONTRAVARIANT, CONSTRUCTOR, INITIALIZER, PROTECTED, PUBLIC, STATIC, ARRAY
+from flags import ARRAY, COVARIANT, CONTRAVARIANT, CONSTRUCTOR, INITIALIZER, METHOD, PROTECTED, PUBLIC, STATIC
 import scope_analysis
+from name import (
+    BLANK_SUFFIX,
+    CONSTRUCTOR_SUFFIX,
+    EXISTENTIAL_SUFFIX,
+    Name,
+    RECEIVER_SUFFIX,
+)
+from location import NoLoc
 
 
 def analyzeTypeDeclarations(info):
     """Analyzes the AST and assigns types to definitions.
 
-    This is a very simple pass that essentially just translates AST types to IR types for
-    class and trait supertypes, function parameters, and type parameter bounds. This must be
-    done prior to inheritance analysis, and the subtype relation can't be used until that
-    is complete, so types can't really be checked at this point. This pass queues processed
-    type arguments to be bounds checked in full type analysis.
+    This pass translates AST types to IR types for class and trait supertypes,
+    function parameters, and type parameter bounds. This must happen before we type individual
+    expressions and patterns because `Type.isSubtypeOf` doesn't work without this. We also
+    need function types so when we call an overloaded function, we know which implementation
+    to use.
+
+    Since `Type.isSubtypeOf` does not work yet, we can't check that type arguments are
+    in bounds. These checks are queued and are performed later in full type analysis by
+    calling `info.typeCheckFunction`.
+
+    This pass also renames functions and child definitions according to type signatures. This
+    ensures all definitions in the package have unique names.
     """
     declarationVisitor = DeclarationTypeVisitor(info)
     declarationVisitor.visit(info.ast)
     info.typeCheckFunction = declarationVisitor.checkTypes
+    info.package.buildNameIndex()
 
 
 def analyzeTypes(info):
@@ -224,6 +247,12 @@ class TypeVisitorBase(ast.NodeVisitor):
 
     def scope(self):
         return self.scopeStack[-1]
+
+    def getScopeForDefn(self, irDefn):
+        if not self.info.hasScope(irDefn):
+            assert not irDefn.isLocal()
+            return scope_analysis.NonLocalObjectTypeDefnScope.ensureForDefn(irDefn, self.info)
+        return self.info.getScope(irDefn)
 
     def hasReceiverType(self):
         return len(self.receiverTypeStack) > 0 and self.receiverTypeStack[-1] is not None
@@ -436,7 +465,7 @@ class TypeVisitorBase(ast.NodeVisitor):
                 scope = self.info.getScope(defnInfo.scopeId).scopeForPrefix(component.name,
                                                                             component.location)
             else:
-                scope = self.info.getScope(irDefn)
+                scope = self.getScopeForDefn(irDefn)
             hasPrefix = True
 
         return scope, typeArgs
@@ -484,7 +513,8 @@ class TypeVisitorBase(ast.NodeVisitor):
         """
         assert isinstance(node, ast.BlankType)
         if not self.info.hasDefnInfo(node):
-            paramName = ir.Name(self.scope().prefix + [ir.EXISTENTIAL_SUFFIX, ir.BLANK_SUFFIX])
+            paramName = self.info.makeUniqueName(
+                Name(self.scope().prefix + [EXISTENTIAL_SUFFIX, BLANK_SUFFIX]))
             blankParam = self.info.package.addTypeParameter(paramName, astDefn=node,
                                                             upperBound=param.upperBound,
                                                             lowerBound=param.lowerBound)
@@ -504,10 +534,15 @@ class TypeVisitorBase(ast.NodeVisitor):
 class DeclarationTypeVisitor(TypeVisitorBase):
     """Analyzes functions, classes, and type parameters and saves supertypes, upper bounds,
     lower bounds, and parameter types. The analysis proceeds in lexical order over the AST.
+
     This must be done before we can start typing expressions, because we need a fully
     functional Type.isSubtypeOf method, which relies on this information. We use isSubtypeOf
     here, too, but only on definitions we've already processed. This is guaranteed to
-    terminate, since we checked the subtype graph for cycles in an earlier phase."""
+    terminate, since we checked the subtype graph for cycles in an earlier phase.
+
+    We also rename functions and their inner definitions using their type signatures
+    as we traverse the AST. It is important that no two definitions have the same name, since
+    we need to identify them by name later."""
 
     def __init__(self, info):
         super(DeclarationTypeVisitor, self).__init__(info)
@@ -522,6 +557,14 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         # List of type arguments to bounds-check after the AST traversal. We have to defer
         # checking these because `Type.isSubtypeOf` won't work until the traversal is complete.
         self.typeArgsToCheck = []
+
+        # When visiting a definition, if this list of components is a prefix of the definition's
+        # name, the last corresponding component should be replaced with `renameSignature`.
+        self.renamePrefix = None
+
+        # A string type signature for a function currently being renamed. Set using
+        # `RenameScope`.
+        self.renameSignature = None
 
     def checkTypes(self):
         """Called after analyzing all declrations in the AST to verify that type arguments are
@@ -544,6 +587,7 @@ class DeclarationTypeVisitor(TypeVisitorBase):
 
     def visitFunctionDefinition(self, node):
         irFunction = self.info.getDefnInfo(node).irDefn
+        self.maybeRename(irFunction)
         if irFunction.isMethod():
             self.setMethodReceiverType(irFunction)
         for param in node.typeParameters:
@@ -552,16 +596,23 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         if irFunction.isMethod():
             irFunction.parameterTypes.append(self.getReceiverType())
         irFunction.parameterTypes.extend(map(self.visit, node.parameters))
-        if node.body is not None:
-            self.visit(node.body)
+
+        with self.renameFunction(irFunction):
+            each(self.maybeRename, irFunction.typeParameters)
+            each(self.maybeRename, (v for v in irFunction.variables))
+
+            if node.body is not None:
+                self.visit(node.body)
 
     def visitPrimaryConstructorDefinition(self, node):
         irFunction = self.info.getDefnInfo(node).irDefn
+        self.maybeRename(irFunction)
         irFunction.parameterTypes = [self.getReceiverType()] + map(self.visit, node.parameters)
         self.setMethodReceiverType(irFunction)
 
     def visitClassDefinition(self, node):
         irClass = self.info.getDefnInfo(node).irDefn
+        self.maybeRename(irClass)
         for param in node.typeParameters:
             self.visit(param)
         if node.constructor is not None:
@@ -584,11 +635,13 @@ class DeclarationTypeVisitor(TypeVisitorBase):
             defaultCtor = irClass.constructors[0]
             self.setMethodReceiverType(defaultCtor)
             defaultCtor.parameterTypes = [self.getReceiverType()]
+        self.maybeRename(irClass.initializer)
         self.setMethodReceiverType(irClass.initializer)
         irClass.initializer.parameterTypes = [self.getReceiverType()]
 
     def visitTraitDefinition(self, node):
         irTrait = self.info.getDefnInfo(node).irDefn
+        self.maybeRename(irTrait)
         # TODO: when traits have fields, check that superclass is not array class
         for param in node.typeParameters:
             self.visit(param)
@@ -607,12 +660,14 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         irClass.elementType = elementType
 
         getMethod = self.info.getDefnInfo(node.getDefn).irDefn
+        self.maybeRename(getMethod)
         getMethod.returnType = elementType
         getMethod.parameterTypes = [receiverType, ir_t.I32Type]
         getMethod.variables[0].type = receiverType
         getMethod.compileHint = compile_info.ARRAY_ELEMENT_GET_HINT
 
         setMethod = self.info.getDefnInfo(node.setDefn).irDefn
+        self.maybeRename(setMethod)
         setMethod.returnType = ir_t.UnitType
         setMethod.parameterTypes = [receiverType, ir_t.I32Type, elementType]
         setMethod.variables[0].type = receiverType
@@ -621,6 +676,7 @@ class DeclarationTypeVisitor(TypeVisitorBase):
             setMethod.flags |= frozenset([INITIALIZER])
 
         lengthMethod = self.info.getDefnInfo(node.lengthDefn).irDefn
+        self.maybeRename(lengthMethod)
         lengthMethod.returnType = ir_t.I32Type
         lengthMethod.parameterTypes = [receiverType]
         lengthMethod.variables[0].type = receiverType
@@ -634,6 +690,7 @@ class DeclarationTypeVisitor(TypeVisitorBase):
 
     def visitTypeParameter(self, node):
         irParam = self.info.getDefnInfo(node).irDefn
+        self.maybeRename(irParam)
 
         def visitBound(bound, default):
             if bound is None:
@@ -722,8 +779,29 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         return tuple(typeArgs), tuple(introducedTypeParams)
 
     def setMethodReceiverType(self, irFunction):
-        assert irFunction.variables[0].name.short() == ir.RECEIVER_SUFFIX
+        assert irFunction.variables[0].name.short() == RECEIVER_SUFFIX
         irFunction.variables[0].type = self.getReceiverType()
+
+    def renameFunction(self, irFunction):
+        """Renames a function according to its type signature. This is necessary to ensure
+        all definitions have unique names.
+
+        Returns:
+            (RenameScope): when entered, this scope will set properties that allow inner
+            definitions to be renamed correctly using `maybeRename`.
+        """
+        oldName = irFunction.name
+        irFunction.name = ir.mangleFunctionName(irFunction, self.info.package)
+        return RenameScope(self, oldName, irFunction.name)
+
+    def maybeRename(self, irDefn):
+        """Renames the given definition according to the type signature of a parent function."""
+        if self.renamePrefix is not None and irDefn.name.hasPrefix(self.renamePrefix):
+            index = len(self.renamePrefix) - 1
+            newComponents = irDefn.name.components[:index] + \
+                [self.renameSignature] + \
+                irDefn.name.components[index + 1:]
+            irDefn.name = Name(newComponents)
 
 
 class DefinitionTypeVisitor(TypeVisitorBase):
@@ -832,8 +910,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             superArgTypes = map(self.visit, node.superArgs) \
                             if node.superArgs is not None \
                             else []
-            superScope = self.info.getScope(ir_t.getClassFromType(supertype))
-            self.handlePropertyCall(ir.CONSTRUCTOR_SUFFIX, superScope, supertype,
+            superScope = self.getScopeForDefn(ir_t.getClassFromType(supertype))
+            self.handlePropertyCall(CONSTRUCTOR_SUFFIX, superScope, supertype,
                                     None, superArgTypes, True, True, False,
                                     node.id, node.location)
 
@@ -1055,7 +1133,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 self.info.getScopePrefixInfo(node.receiver).scopeId)
             hasReceiver = False
         else:
-            receiverScope = self.info.getScope(ir_t.getClassFromType(receiverType))
+            receiverScope = self.getScopeForDefn(ir_t.getClassFromType(receiverType))
             hasReceiver = True
 
         if mayBePrefix and not hasReceiver:
@@ -1092,7 +1170,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                     self.info.getScopePrefixInfo(node.callee.receiver).scopeId)
                 hasReceiver = False
             else:
-                receiverScope = self.info.getScope(ir_t.getClassFromType(receiverType))
+                receiverScope = self.getScopeForDefn(ir_t.getClassFromType(receiverType))
                 hasReceiver = True
             if mayBePrefix and not hasReceiver:
                 ty = self.handlePossiblePrefixSymbol(node.callee.propertyName,
@@ -1106,8 +1184,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         elif isinstance(node.callee, ast.ThisExpression) or \
              isinstance(node.callee, ast.SuperExpression):
             receiverType = self.visit(node.callee)
-            receiverScope = self.info.getScope(ir_t.getClassFromType(receiverType))
-            self.handlePropertyCall(ir.CONSTRUCTOR_SUFFIX, receiverScope, receiverType,
+            receiverScope = self.getScopeForDefn(ir_t.getClassFromType(receiverType))
+            self.handlePropertyCall(CONSTRUCTOR_SUFFIX, receiverScope, receiverType,
                                     typeArgs, argTypes, True, True, False,
                                     node.id, node.location)
             ty = ir_t.UnitType
@@ -1446,7 +1524,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             self.info.setType(prefix[i], ty)
             i += 1
         while i < len(prefix):
-            scope = self.info.getScope(ir_t.getClassFromType(ty))
+            scope = self.getScopeForDefn(ir_t.getClassFromType(ty))
             typeArgs = map(self.visit, prefix[i].typeArguments) \
                        if prefix[i].typeArguments is not None \
                        else None
@@ -1458,7 +1536,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         if self.info.hasScopePrefixInfo(prefix[-1]):
             scope = self.info.getScope(self.info.getScopePrefixInfo(prefix[i - 1]).scopeId)
         else:
-            scope = self.info.getScope(ir_t.getClassFromType(ty))
+            scope = self.getScopeForDefn(ir_t.getClassFromType(ty))
         return scope, ty
 
     def handleSimpleVariable(self, name, useAstId, loc):
@@ -1522,7 +1600,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         if nameInfo.isScope():
             defnInfo = nameInfo.getDefnInfo()
             if isinstance(defnInfo.irDefn, ir.Class):
-                defnScopeId = self.info.getScope(defnInfo.irDefn).scopeId
+                defnScopeId = self.getScopeForDefn(defnInfo.irDefn).scopeId
             else:
                 parentScope = self.info.getScope(defnInfo.scopeId)
                 defnScopeId = parentScope.scopeForPrefix(name, loc).scopeId
@@ -1697,7 +1775,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         operandDefnInfo, operandAllTypeArgs, operandUseKind = None, None, None
         operandReceiverType, operandExistentialVars = self.openExistentialReceiver(firstType)
         try:
-            operandScope = self.info.getScope(ir_t.getClassFromType(firstType))
+            operandScope = self.getScopeForDefn(ir_t.getClassFromType(firstType))
             operandNameInfo = operandScope.lookupFromExternal(name, loc,
                                                               mayBeAssignment=mayBeAssignment)
             argTypes = [secondType] if secondType is not None else []
@@ -1764,8 +1842,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         irClass = objectType.clas
         if irClass is getNothingClass():
             raise TypeException(loc, "cannot instantiate Nothing")
-        classScope = self.info.getScope(irClass)
-        nameInfo = classScope.lookupFromExternal(ir.CONSTRUCTOR_SUFFIX, loc)
+        classScope = self.getScopeForDefn(irClass)
+        nameInfo = classScope.lookupFromExternal(CONSTRUCTOR_SUFFIX, loc)
         defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, objectType,
                                                             None, argTypes, loc)
         self.checkCallAllowed(defnInfo.irDefn, False, USE_AS_CONSTRUCTOR, loc)
@@ -1857,7 +1935,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                     raise TypeException(loc,
                                         "%s: type arguments could not be applied for this class" %
                                         nameInfo.name)
-                matcherScopeId = self.info.getScope(matcherIrDefn).scopeId
+                matcherScopeId = self.getScopeForDefn(matcherIrDefn).scopeId
                 matcherScopePrefixInfo = ScopePrefixInfo(matcherIrDefn, matcherScopeId)
                 self.info.setScopePrefixInfo(useAstId, matcherScopePrefixInfo)
                 matcherReceiverType = ir_t.ClassType(matcherIrDefn, callTypeArgs)
@@ -1868,7 +1946,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                     nameInfo.name)
 
             # Lookup the try-match method.
-            matcherScope = self.info.getScope(matcherClass)
+            matcherScope = self.getScopeForDefn(matcherClass)
             try:
                 returnType = self.handlePropertyCall("try-match", matcherScope,
                                                      matcherReceiverType, None, [exprType],
@@ -1882,6 +1960,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         # (T1 may be a tuple). If there are more, it should return Option[(T1, ..., Tn)], and
         # T1, ..., Tn are the expression types.
         optionClass = self.info.getStdClass("Option", loc)
+        self.registerDestructureMethods(optionClass)
         if not returnType.isObject() or \
            not ir_t.getClassFromType(returnType).isDerivedFrom(optionClass):
             raise TypeException(loc, "matcher must return std.Option")
@@ -1903,6 +1982,23 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         # We return the expression type as the pattern type. Destructures are never guaranteed,
         # so we cannot be any more specific.
         return exprType
+
+    def registerDestructureMethods(self, optionClass):
+        """Registers methods used in destructuring pattern matching for externalization.
+
+        Methods that we reference in other packages must be externalized, which means we need
+        to add package dependencies and extern stubs for them. We need to explicitly register
+        definitions in the `std` for externalization that we reference implicitly. This method
+        registers methods in the `Option` class. We don't use methods in the `Tuple` classes,
+        so those don't need to be registered; fields are accessed directly and don't need to
+        be externalized.
+
+        Arguments:
+            optionClass (Class): the option class being used.
+        """
+        for name in ["is-defined", "get"]:
+            method = optionClass.findMethodBySourceName(name)
+            self.info.setStdExternInfo(method.id, method)
 
     def getReceiverTypeForClass(self, irClass, typeArgs, loc):
         """Returns a type with the given explicit type arguments applied.
@@ -2024,45 +2120,88 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 if candidate is None:
                     candidate = (defnInfo, allTypeArgs)
                 else:
-                    candidate = self.chooseOverload(candidate, (defnInfo, allTypeArgs),
-                                                    name, loc)
+                    ocmp = self.compareOverloads(candidate[0].irDefn, candidate[1],
+                                                 irDefn, allTypeArgs,
+                                                 callArgTypes)
+                    if ocmp < 0:
+                        pass  # old candidate is more specific
+                    elif ocmp > 0:
+                        candidate = (defnInfo, allTypeArgs)  # new candidate is more specific
+                    else:
+                        raise TypeException(loc,
+                                            "%s: ambiguous call to overloaded function" % name)
 
         if candidate is None:
             raise TypeException(loc, "%s: could not find compatible definition" % name)
         return candidate
 
-    def chooseOverload(self, first, second, name, loc):
-        """Chooses between two possible candidates for an overloaded function call. Both
+    def compareOverloads(self, firstFunction, firstTypeArgs,
+                         secondFunction, secondTypeArgs,
+                         argTypes):
+        """Compares two possible candidates for an overloaded function call. Both
         candidates must be compatible with the provided arguments.
 
+        This works by determining a compatibility distance for each function. Function
+        compatibility distance is the sum of distances for each parameter, not including
+        the receiver.. A parameter gets 0 distance points if its type is exactly the same as
+        the argument type. A parameter gets 1 distance point if it is a subtype of the
+        corresponding parameter of the other function. Otherwise, a parameter gets 2
+        distance points. The receiver type does not count.
+
         Args:
-            first (DefnInfo, list(Type)): the first candidate. Must be a Function.
-            second (DefnInfo, list(Type)): the second candidate. Must be a Function.
-            name (str): name of the function being called. Used for error reporting.
-            loc (Location): location in source of the call. Used for error reporting.
+            firstFunction (Function): the first overloaded function.
+            firstTypeArgs ([Type]): full list of type arguments passed to the first function.
+            secondFunction (Function): the second overloaded function.
+            secondTypeArgs ([Type]): full list of type arguments passed to the second function.
+            argTypes ([Type]): list of types of arguments passed to the functions,
+                not including the receiver type.
 
         Return:
-            (DefnInfo, list(Type)): the more specific candidate is returned.
-
-        Raises:
-            TypeException: if the call is ambiguous
+            int: the difference between the two function compatibility distances is returned.
+            Negative indicates the first function should be called; positive indicates the
+            second function should be called; zero indicates the call is ambiguous.
         """
-        firstFunction = first[0].irDefn
-        secondFunction = second[0].irDefn
-        assert isinstance(firstFunction, ir.Function) and \
-               isinstance(secondFunction, ir.Function) and \
-               len(firstFunction.parameterTypes) == len(secondFunction.parameterTypes)
-        if all(pt1 == pt2 for pt1, pt2 in
-               zip(firstFunction.parameterTypes, secondFunction.parameterTypes)):
-            raise TypeException(loc, "%s: ambiguous call to overloaded function" % name)
-        elif all(pt1.isSubtypeOf(pt2) for pt1, pt2 in
-                 zip(firstFunction.parameterTypes, secondFunction.parameterTypes)):
-            return first
-        elif all(pt2.isSubtypeOf(pt2) for pt1, pt2 in
-                 zip(firstFunction.parameterTypes, secondFunction.parameterTypes)):
-            return second
-        else:
-            raise TypeException(loc, "%s: ambiguous call to overloaded function" % name)
+        def extractParameterTypes(function, typeArgs):
+            if METHOD in function.flags and STATIC not in function.flags:
+                parameterTypes = function.parameterTypes[1:]
+            else:
+                parameterTypes = list(function.parameterTypes)
+            sub = lambda ty: ty.substitute(function.typeParameters, typeArgs)
+            return map(sub, parameterTypes)
+
+        def calculateDistance(argType, firstParameterType, secondParameterType):
+            parameterTypesAreEqual = False
+            if argType == firstParameterType:
+                firstDistance = 0
+            elif firstParameterType == secondParameterType:
+                parameterTypesAreEqual = True
+                firstDistance = 1
+            elif firstParameterType.isSubtypeOf(secondParameterType):
+                firstDistance = 1
+            else:
+                firstDistance = 2
+
+            if argType == secondParameterType:
+                secondDistance = 0
+            elif parameterTypesAreEqual or secondParameterType.isSubtypeOf(firstParameterType):
+                secondDistance = 1
+            else:
+                secondDistance = 2
+
+            return firstDistance, secondDistance
+
+        firstParameterTypes = extractParameterTypes(firstFunction, firstTypeArgs)
+        secondParameterTypes = extractParameterTypes(secondFunction, secondTypeArgs)
+        assert len(firstParameterTypes) == len(secondParameterTypes)
+        assert len(firstParameterTypes) == len(argTypes)
+        difference = 0
+        for i in xrange(len(argTypes)):
+            firstDistance, secondDistance = calculateDistance(
+                argTypes[i],
+                firstParameterTypes[i],
+                secondParameterTypes[i])
+            difference += firstDistance - secondDistance
+        return difference
 
     def checkCallAllowed(self, irCallee, receiverIsReceiver, useKind, loc):
         """Checks whether a call to a function is valid.
@@ -2141,8 +2280,11 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             return receiverType
 
     def findBaseForField(self, receiverClass, field):
-        # At this point, classes haven't been flattened yet, so we have to search up the
-        # inheritance graph for the first class or trait that contains the field.
+        """Returns the class that defines `field`, accessed through `receiverClass`.
+
+        This is needed for type substitution, since `field.type` may include type variables
+        from the base.
+        """
         for clas in receiverClass.bases():
             if any(True for f in clas.fields if f is field):
                 return clas
@@ -2314,6 +2456,23 @@ class FunctionState(object):
             return self.bodyReturnType
         else:
             return ir_t.ClassType.forReceiver(getNothingClass())
+
+
+class RenameScope(object):
+    def __init__(self, visitor, oldName, newName):
+        self.visitor = visitor
+        self.oldName = oldName
+        self.newName = newName
+        self.oldRenamePrefix = visitor.renamePrefix
+        self.oldRenameSignature = visitor.renameSignature
+
+    def __enter__(self):
+        self.visitor.renamePrefix = self.oldName.components
+        self.visitor.renameSignature = self.newName.components[-1]
+
+    def __exit__(self, *unused):
+        self.visitor.renamePrefix = self.oldRenamePrefix
+        self.visitor.renameSignature = self.oldRenameSignature
 
 
 class VarianceScope(object):

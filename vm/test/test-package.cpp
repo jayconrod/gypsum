@@ -175,14 +175,14 @@ TEST(PackageDependencySatisfied) {
 TEST(PackageExports) {
   TEST_PROLOGUE
 
-  auto package = Package::create(heap);
+  auto package = Package::create(heap, 0);
   auto globals = BlockArray<Global>::create(heap, 2);
   auto fooName = NAME("foo");
-  auto foo = Global::create(heap, fooName, STR("foo"),
+  auto foo = Global::create(heap, GID(0), fooName, STR("foo"),
       NO_FLAGS, handle(Type::unitType(roots)));
   globals->set(0, *foo);
   auto barName = NAME("bar");
-  auto bar = Global::create(heap, barName, STR("bar"), PUBLIC_FLAG,
+  auto bar = Global::create(heap, GID(1), barName, STR("bar"), PUBLIC_FLAG,
       handle(Type::unitType(roots)));
   globals->set(1, *bar);
   package->setGlobals(*globals);
@@ -197,14 +197,14 @@ TEST(PackageExports) {
 TEST(PackageLink) {
   TEST_PROLOGUE
 
-  auto package = Package::create(heap);
+  auto package = Package::create(heap, 0);
 
   auto fooName = Name::fromString(heap, STR("foo"), Name::PACKAGE_NAME);
   Local<PackageVersion> nullVersion;
   auto fooDep = PackageDependency::create(heap, fooName, nullVersion, nullVersion,
                                           1, 0, 0, 0, 0, 0);
   ASSERT_EQ(nullptr, fooDep->linkedGlobals());
-  auto externBar = Global::create(heap, NAME("bar"), STR("bar"),
+  auto externBar = Global::create(heap, GID(0), NAME("bar"), STR("bar"),
                                   EXTERN_FLAG | PUBLIC_FLAG,
                                   handle(Type::unitType(roots)));
   fooDep->externGlobals()->set(0, *externBar);
@@ -212,9 +212,9 @@ TEST(PackageLink) {
   deps->set(0, *fooDep);
   package->setDependencies(*deps);
 
-  auto fooPackage = Package::create(heap);
+  auto fooPackage = Package::create(heap, 1);
   auto fooGlobals = BlockArray<Global>::create(heap, 1);
-  auto bar = Global::create(heap, NAME("bar"), STR("bar"), PUBLIC_FLAG,
+  auto bar = Global::create(heap, GID(1), NAME("bar"), STR("bar"), PUBLIC_FLAG,
       handle(Type::unitType(roots)));
   fooGlobals->set(0, *bar);
   fooPackage->setGlobals(*fooGlobals);
@@ -229,14 +229,14 @@ TEST(PackageLink) {
 TEST(PackageLinkMissingGlobal) {
   TEST_PROLOGUE
 
-  auto package = Package::create(heap);
+  auto package = Package::create(heap, 0);
 
   auto fooName = Name::fromString(heap, STR("foo"), Name::PACKAGE_NAME);
   Local<PackageVersion> nullVersion;
   auto fooDep = PackageDependency::create(heap, fooName, nullVersion, nullVersion,
                                           1, 0, 0, 0, 0, 0);
   ASSERT_EQ(nullptr, fooDep->linkedGlobals());
-  auto externBar = Global::create(heap, NAME("bar"), STR("bar"),
+  auto externBar = Global::create(heap, GID0, NAME("bar"), STR("bar"),
                                   EXTERN_FLAG | PUBLIC_FLAG,
                                   handle(Type::unitType(roots)));
   fooDep->externGlobals()->set(0, *externBar);
@@ -244,7 +244,7 @@ TEST(PackageLinkMissingGlobal) {
   deps->set(0, *fooDep);
   package->setDependencies(*deps);
 
-  auto fooPackage = Package::create(heap);
+  auto fooPackage = Package::create(heap, 1);
   fooDep->setPackage(*fooPackage);
 
   ASSERT_THROWS(Error, Package::link(package));

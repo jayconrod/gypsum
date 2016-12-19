@@ -9,6 +9,7 @@
 
 #include <iostream>
 #include "block.h"
+#include "defnid.h"
 #include "type.h"
 
 namespace codeswitch {
@@ -22,9 +23,15 @@ class TypeParameter: public Block {
   static const BlockType kBlockType = TYPE_PARAMETER_BLOCK_TYPE;
 
   void* operator new (size_t, Heap* heap);
-  TypeParameter(Name* name, String* sourceName, u32 flags, Type* upperBound, Type* lowerBound);
-  static Local<TypeParameter> create(Heap* heap);
+  TypeParameter(DefnId id,
+                Name* name,
+                String* sourceName,
+                u32 flags,
+                Type* upperBound,
+                Type* lowerBound);
+  static Local<TypeParameter> create(Heap* heap, DefnId id);
   static Local<TypeParameter> create(Heap* heap,
+                                     DefnId id,
                                      const Handle<Name>& name,
                                      const Handle<String>& sourceName,
                                      u32 flags,
@@ -36,6 +43,7 @@ class TypeParameter: public Block {
   // relationship. We may need to allocate TypeParameter objects early, then fill them after
   // other objects which refer to them have been allocated.
 
+  DefnId id() const { return id_; }
   Name* name() const { return name_.get(); }
   void setName(Name* name) { name_.set(this, name); }
   String* sourceName() const { return sourceName_.get(); }
@@ -57,6 +65,7 @@ class TypeParameter: public Block {
  private:
   DECLARE_POINTER_MAP()
 
+  const DefnId id_;
   Ptr<Name> name_;
   Ptr<String> sourceName_;
   u32 flags_;

@@ -38,6 +38,7 @@ namespace internal {
   F(Function, definingClass_)    \
   F(Function, blockOffsets_)     \
   F(Function, package_)          \
+  F(Function, overrides_)        \
   F(Function, stackPointerMap_)  \
 
 
@@ -55,7 +56,8 @@ void* Function::operator new(size_t, Heap* heap, length_t instructionsSize) {
 }
 
 
-Function::Function(Name* name,
+Function::Function(DefnId id,
+                   Name* name,
                    String* sourceName,
                    u32 flags,
                    BlockArray<TypeParameter>* typeParameters,
@@ -66,9 +68,11 @@ Function::Function(Name* name,
                    const vector<u8>& instructions,
                    LengthArray* blockOffsets,
                    Package* package,
+                   BlockArray<Function>* overrides,
                    StackPointerMap* stackPointerMap,
                    NativeFunction nativeFunction)
     : Block(FUNCTION_BLOCK_TYPE),
+      id_(id),
       name_(this, name),
       sourceName_(this, sourceName),
       flags_(flags),
@@ -81,6 +85,7 @@ Function::Function(Name* name,
       instructionsSize_(instructions.size()),
       blockOffsets_(this, blockOffsets),
       package_(this, package),
+      overrides_(this, overrides),
       stackPointerMap_(this, stackPointerMap),
       nativeFunction_(nullptr) {
   ASSERT(instructionsSize_ <= kMaxLength);
@@ -88,14 +93,15 @@ Function::Function(Name* name,
 }
 
 
-Local<Function> Function::create(Heap* heap) {
+Local<Function> Function::create(Heap* heap, DefnId id) {
   RETRY_WITH_GC(heap, return Local<Function>(new(heap, 0) Function(
-      nullptr, nullptr, 0, nullptr, nullptr, nullptr, nullptr,
-      0, vector<u8>{}, nullptr, nullptr, nullptr, nullptr)));
+      id, nullptr, nullptr, 0, nullptr, nullptr, nullptr, nullptr,
+      0, vector<u8>{}, nullptr, nullptr, nullptr, nullptr, nullptr)));
 }
 
 
 Local<Function> Function::create(Heap* heap,
+                                 DefnId id,
                                  const Handle<Name>& name,
                                  const Handle<String>& sourceName,
                                  u32 flags,
@@ -107,11 +113,12 @@ Local<Function> Function::create(Heap* heap,
                                  const vector<u8>& instructions,
                                  const Handle<LengthArray>& blockOffsets,
                                  const Handle<Package>& package,
+                                 const Handle<BlockArray<Function>>& overrides,
                                  NativeFunction nativeFunction) {
   RETRY_WITH_GC(heap, return Local<Function>(new(heap, instructions.size()) Function(
-      *name, sourceName.getOrNull(), flags, *typeParameters, *returnType, *parameterTypes,
+      id, *name, sourceName.getOrNull(), flags, *typeParameters, *returnType, *parameterTypes,
       definingClass.getOrNull(), localsSize, instructions, blockOffsets.getOrNull(),
-      package.getOrNull(), nullptr, nativeFunction)));
+      package.getOrNull(), overrides.getOrNull(), nullptr, nativeFunction)));
 }
 
 
@@ -173,8 +180,32 @@ NativeFunction Function::ensureAndGetNativeFunction() {
 }
 
 
+DefnId Function::findOverriddenMethodId() const {
+  auto override = this;
+  while (override->overrides() != nullptr) {
+    override = override->overrides()->get(0);
+  }
+  return override->id();
+}
+
+
+unordered_set<DefnId> Function::findOverriddenMethodIds() const {
+  if (overrides() == nullptr) {
+    return unordered_set<DefnId>{id()};
+  } else {
+    unordered_set<DefnId> allOverrideIds;
+    for (length_t i = 0; i < overrides()->length(); i++) {
+      auto overrideIds = overrides()->get(i)->findOverriddenMethodIds();
+      allOverrideIds.insert(overrideIds.begin(), overrideIds.end());
+    }
+    return allOverrideIds;
+  }
+}
+
+
 ostream& operator << (ostream& os, const Function* fn) {
-  os << brief(fn);
+  os << brief(fn)
+     << "\n  id: " << fn->id();
   if (fn->hasBuiltinId())
     os << "\n  builtin id: " << fn->builtinId();
   os << "\n  name: " << brief(fn->name())
@@ -186,6 +217,7 @@ ostream& operator << (ostream& os, const Function* fn) {
      << "\n  instructions size: " << fn->instructionsSize()
      << "\n  block offsets: " << brief(fn->blockOffsets())
      << "\n  package: " << brief(fn->package())
+     << "\n  overrides: " << brief(fn->overrides())
      << "\n  stack pointer map: " << brief(fn->stackPointerMap());
   return os;
 }
@@ -535,12 +567,34 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         }
 
         case LDF: {
-          auto index = readVbn(bytecode, &pcOffset);
+          auto classId = readVbn(bytecode, &pcOffset);
+          auto nameIndex = readVbn(bytecode, &pcOffset);
+          Local<Class> fieldClass = handle(isBuiltinId(classId)
+              ? roots->getBuiltinClass(static_cast<BuiltinId>(classId))
+              : package->getClass(classId));
+          auto name = handle(package->getName(nameIndex));
+          auto fieldType = handle(fieldClass->findField(*name)->type());
           auto receiverType = currentMap.pop();
           auto receiverClass = handle(receiverType->effectiveClass());
-          auto fieldType = handle(receiverClass->fields()->get(index)->type());
           if (fieldType->isObject()) {
-            auto fieldClass = handle(receiverClass->findFieldClass(index));
+            fieldType = Type::substituteForInheritance(fieldType, receiverClass, fieldClass);
+            fieldType = Type::substitute(fieldType, receiverType->getTypeArgumentBindings());
+          }
+          currentMap.push(fieldType);
+          break;
+        }
+
+        case LDFF: {
+          auto depIndex = readVbn(bytecode, &pcOffset);
+          auto externIndex = readVbn(bytecode, &pcOffset);
+          auto nameIndex = readVbn(bytecode, &pcOffset);
+          auto fieldClass = handle(package->dependencies()->get(depIndex)
+              ->linkedClasses()->get(externIndex));
+          auto name = handle(package->getName(nameIndex));
+          auto fieldType = handle(fieldClass->findField(*name)->type());
+          auto receiverType = currentMap.pop();
+          auto receiverClass = handle(receiverType->effectiveClass());
+          if (fieldType->isObject()) {
             fieldType = Type::substituteForInheritance(fieldType, receiverClass, fieldClass);
             fieldType = Type::substitute(fieldType, receiverType->getTypeArgumentBindings());
           }
@@ -549,6 +603,15 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
         }
 
         case STF:
+          readVbn(bytecode, &pcOffset);
+          readVbn(bytecode, &pcOffset);
+          currentMap.pop();
+          currentMap.pop();
+          break;
+
+        case STFF:
+          readVbn(bytecode, &pcOffset);
+          readVbn(bytecode, &pcOffset);
           readVbn(bytecode, &pcOffset);
           currentMap.pop();
           currentMap.pop();
@@ -855,7 +918,8 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
-        case CALLG: {
+        case CALLG:
+        case CALLV: {
           i64 functionId = readVbn(bytecode, &pcOffset);
           currentMap.pcOffset = pcOffset;
           maps.push_back(currentMap);
@@ -873,7 +937,8 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
-        case CALLGF: {
+        case CALLGF:
+        case CALLVF: {
           auto depIndex = readVbn(bytecode, &pcOffset);
           auto externIndex = readVbn(bytecode, &pcOffset);
           currentMap.pcOffset = pcOffset;
@@ -893,63 +958,6 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           auto packageClass = handle(roots->getBuiltinClass(BUILTIN_PACKAGE_CLASS_ID));
           auto type = Type::create(heap, packageClass);
           currentMap.push(type);
-          break;
-        }
-
-        case CALLV: {
-          i64 argCount = readVbn(bytecode, &pcOffset);
-          i64 methodIndex = readVbn(bytecode, &pcOffset);
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
-          word_t slot = currentMap.size() - argCount;
-          Local<Class> clas(currentMap.typeMap[slot]->effectiveClass());
-          Class::ensureInstanceMeta(clas);
-          Local<Function> callee(clas->getNonStaticMethod(methodIndex));
-
-          ASSERT(currentMap.size() >= callee->parameterTypes()->length());
-          for (word_t i = 0, n = callee->parameterTypes()->length(); i < n; i++)
-            currentMap.pop();
-          auto returnType = currentMap.substituteReturnType(callee);
-          currentMap.popTypeArgs();
-          currentMap.push(returnType);
-          break;
-        }
-
-        case CALLVT: {
-          readVbn(bytecode, &pcOffset);  // argCount
-          auto traitIndex = readVbn(bytecode, &pcOffset);
-          auto methodIndex = readVbn(bytecode, &pcOffset);
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
-          Local<Trait> trait;
-          if (traitIndex < 0) {
-            trait = handle(roots->getBuiltinTrait(static_cast<BuiltinId>(traitIndex)));
-          } else {
-            trait = handle(package->getTrait(traitIndex));
-          }
-          auto callee = handle(trait->methods()->get(methodIndex));
-
-          auto returnType = currentMap.substituteReturnType(callee);
-          currentMap.pop(callee->parameterTypes()->length());
-          currentMap.popTypeArgs();
-          currentMap.push(returnType);
-          break;
-        }
-
-        case CALLVTF: {
-          readVbn(bytecode, &pcOffset);  // argCount
-          auto depIndex = static_cast<id_t>(readVbn(bytecode, &pcOffset));
-          auto externIndex = static_cast<length_t>(readVbn(bytecode, &pcOffset));
-          auto methodIndex = readVbn(bytecode, &pcOffset);
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
-          auto callee = handle(package->dependencies()->get(depIndex)
-              ->linkedTraits()->get(externIndex)->methods()->get(methodIndex));
-
-          auto returnType = currentMap.substituteReturnType(callee);
-          currentMap.pop(callee->parameterTypes()->length());
-          currentMap.popTypeArgs();
-          currentMap.push(returnType);
           break;
         }
 

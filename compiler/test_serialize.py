@@ -13,8 +13,10 @@ from flags import ABSTRACT, ARRAY, CONSTRUCTOR, EXTERN, FINAL, LET, METHOD, NATI
 import ids
 import ir
 import ir_types
+from name import CLASS_INIT_SUFFIX, CONSTRUCTOR_SUFFIX, Name
 import serialize
 import utils_test
+
 
 class MockFile(object):
     def __init__(self, bytes=None):
@@ -96,7 +98,7 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
 
     def testRewriteLocalMethodId(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
-        method = package.addFunction(ir.Name(["foo"]), returnType=ir_types.UnitType,
+        method = package.addFunction(Name(["foo"]), returnType=ir_types.UnitType,
                                      typeParameters=[], parameterTypes=[],
                                      flags=frozenset([METHOD]))
         self.ser.package = package
@@ -107,8 +109,9 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
 
     def testRewriteForeignMethodId(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
+        package.buildNameIndex()
         otherPackage = ir.Package()
-        method = otherPackage.addFunction(ir.Name(["foo"]), returnType=ir_types.UnitType,
+        method = otherPackage.addFunction(Name(["foo"]), returnType=ir_types.UnitType,
                                           typeParameters=[], parameterTypes=[],
                                           flags=frozenset([PUBLIC, METHOD]))
         loader = utils_test.FakePackageLoader([otherPackage])
@@ -125,16 +128,6 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         self.ser.writeFlags(flagSet)
         flagSetOut = self.des.readFlags()
         self.assertEquals(flagSet, flagSetOut)
-
-    def testRewriteName(self):
-        package = ir.Package()
-        package.strings = ["foo", "bar", "baz"]
-        self.ser.package = package
-        self.des.package = package
-
-        self.ser.writeName("foo")
-        nameOut = self.des.readName()
-        self.assertEquals("foo", nameOut)
 
     def testRewriteType(self):
         def checkType(ty):
@@ -173,9 +166,10 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
 
     def testRewriteExternClassType(self):
         package = ir.Package(id=ids.TARGET_PACKAGE_ID)
+        package.buildNameIndex()
         depPackage = ir.Package()
         loader = utils_test.FakePackageLoader([depPackage])
-        depClass = depPackage.addClass(ir.Name(["C"]), typeParameters=[],
+        depClass = depPackage.addClass(Name(["C"]), typeParameters=[],
                                        supertypes=[ir_types.getRootClassType()],
                                        constructors=[], fields=[],
                                        methods=[], flags=frozenset([PUBLIC]))
@@ -195,10 +189,11 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
 
     def testRewriteName(self):
         package = ir.Package()
-        foobar = ir.Name(["foo", "bar"])
-        bazquux = ir.Name(["baz", "quux"])
-        package.addName(foobar)
-        package.addName(bazquux)
+        package.buildNameIndex()
+        foobar = Name(["foo", "bar"])
+        bazquux = Name(["baz", "quux"])
+        package.findOrAddName(foobar)
+        package.findOrAddName(bazquux)
 
         self.ser.package = package
         self.ser.writeName(foobar)
@@ -208,21 +203,38 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         self.assertEquals(foobar, self.des.readName())
         self.assertEquals(bazquux, self.des.readName())
 
+    def testRewriteGlobal(self):
+        package = ir.Package()
+        package.buildNameIndex()
+        globl = package.addGlobal(Name(["g"]), sourceName="g", type=ir_types.I64Type,
+                                  flags=frozenset([PUBLIC, LET]))
+        self.ser.package = package
+        self.ser.writeGlobal(globl)
+
+        self.des.package = package
+        outGlobal = ir.Global(None, globl.id)
+        self.des.readGlobal(outGlobal)
+        self.assertEquals(globl, outGlobal)
+
     def testRewriteField(self):
         package = ir.Package()
-        field = package.newField(ir.Name(["foo"]), type=ir_types.I64Type,
+        package.buildNameIndex()
+        field = package.newField(Name(["C", "foo"]), type=ir_types.I64Type,
                                  flags=frozenset([PUBLIC, LET]))
         self.ser.package = package
         self.ser.writeField(field)
 
         self.des.package = package
-        outField = self.des.readField(2)
+        clas = package.addClass(Name(["C"]))
+        outField = self.des.readField(clas, 2)
         self.assertEquals(field, outField)
+        self.assertIs(clas, outField.definingClass)
         self.assertEquals(2, outField.index)
 
     def testRewriteTypeParameter(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
-        typeParam = package.addTypeParameter(ir.Name(["T"]),
+        package.buildNameIndex()
+        typeParam = package.addTypeParameter(Name(["T"]),
                                              upperBound=ir_types.getRootClassType(),
                                              lowerBound=ir_types.getNothingClassType(),
                                              flags=frozenset([STATIC]))
@@ -235,8 +247,9 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
 
     def testRewriteForeignTypeParameter(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
+        package.buildNameIndex()
         otherPackage = ir.Package()
-        typeParam = otherPackage.addTypeParameter(ir.Name(["T"]),
+        typeParam = otherPackage.addTypeParameter(Name(["T"]),
                                                   upperBound=ir_types.getRootClassType(),
                                                   lowerBound=ir_types.getNothingClassType(),
                                                   flags=frozenset([STATIC]))
@@ -252,40 +265,41 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
 
     def testRewriteClass(self):
         package = ir.Package(id=ids.TARGET_PACKAGE_ID)
-        typeParam = package.addTypeParameter(ir.Name(["Foo", "T"]),
+        package.buildNameIndex()
+        typeParam = package.addTypeParameter(Name(["Foo", "T"]),
                                              upperBound=ir_types.getRootClassType(),
                                              lowerBound=ir_types.getNothingClassType(),
                                              flags=frozenset([STATIC]))
         rootType = ir_types.getRootClassType()
-        trait = package.addTrait(ir.Name(["Tr"]),
+        trait = package.addTrait(Name(["Tr"]),
                                  typeParameters=[], supertypes=[rootType], flags=frozenset([]))
         traitType = ir_types.ClassType(trait)
-        traitMethod = package.addFunction(ir.Name(["Tr", "m"]),
+        traitMethod = package.addFunction(Name(["Tr", "m"]),
                                           returnType=ir_types.UnitType, typeParameters=[],
                                           parameterTypes=[traitType],
                                           flags=frozenset([PUBLIC, ABSTRACT,
                                                            METHOD]))
         trait.methods = [traitMethod]
-        field = package.newField(ir.Name(["Foo", "x"]),
+        field = package.newField(Name(["Foo", "x"]),
                                  type=ir_types.I64Type, flags=frozenset([PRIVATE]))
-        clas = package.addClass(ir.Name(["Foo"]), typeParameters=[typeParam],
+        clas = package.addClass(Name(["Foo"]), typeParameters=[typeParam],
                                 supertypes=[rootType, traitType],
                                 constructors=[], fields=[field],
                                 methods=[], elementType=ir_types.VariableType(typeParam),
                                 flags=frozenset([PUBLIC, FINAL, ARRAY]))
         ty = ir_types.ClassType(clas)
-        constructor = package.addFunction(ir.Name(["Foo", ir.CONSTRUCTOR_SUFFIX]),
+        constructor = package.addFunction(Name(["Foo", CONSTRUCTOR_SUFFIX]),
                                           returnType=ir_types.UnitType, typeParameters=[],
                                           parameterTypes=[ty],
                                           flags=frozenset([PUBLIC, METHOD]))
         clas.constructors = [constructor]
-        localMethod = package.addFunction(ir.Name(["Foo", "m"]), returnType=ir_types.I64Type,
+        localMethod = package.addFunction(Name(["Foo", "m"]), returnType=ir_types.I64Type,
                                           typeParameters=[], parameterTypes=[ty],
                                           flags=frozenset([PUBLIC, OVERRIDE,
                                                            METHOD]))
         otherPackage = ir.Package()
         loader = utils_test.FakePackageLoader([otherPackage])
-        otherMethod = otherPackage.addFunction(ir.Name(["Foo", "o"]),
+        otherMethod = otherPackage.addFunction(Name(["Foo", "o"]),
                                                returnType=ir_types.I64Type,
                                                typeParameters=[],
                                                parameterTypes=[ir_types.getRootClassType()],
@@ -294,7 +308,6 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         externMethod = externalizer.externalizeDefn(otherMethod)
         builtinMethod = builtins.getBuiltinFunctionById(bytecode.BUILTIN_ROOT_CLASS_TO_STRING_ID)
         clas.methods = [localMethod, externMethod, builtinMethod]
-        clas.traits = {trait.id: [localMethod]}
 
         self.ser.package = package
         self.ser.writeClass(clas)
@@ -305,56 +318,57 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
 
     def testRewriteForeignClass(self):
         # "Compile" a foreign package with a class we'll depend on.
-        otherPackage = ir.Package(id=ids.TARGET_PACKAGE_ID, name=ir.Name(["foo", "bar"]))
+        otherPackage = ir.Package(id=ids.TARGET_PACKAGE_ID, name=Name(["foo", "bar"]))
+        otherPackage.buildNameIndex()
         rootType = ir_types.getRootClassType()
-        trait = otherPackage.addTrait(ir.Name(["Tr"]), typeParameters=[],
+        trait = otherPackage.addTrait(Name(["Tr"]), typeParameters=[],
                                       supertypes=[rootType], flags=frozenset([PUBLIC]))
         traitType = ir_types.ClassType(trait)
-        traitMethod = otherPackage.addFunction(ir.Name(["Tr", "m"]),
+        traitMethod = otherPackage.addFunction(Name(["Tr", "m"]),
                                                returnType=rootType,
                                                typeParameters=[],
                                                parameterTypes=[traitType],
                                                flags=frozenset([PUBLIC, METHOD, ABSTRACT]))
         trait.methods = [traitMethod]
 
-        clas = otherPackage.addClass(ir.Name(["C"]), supertypes=[],
+        clas = otherPackage.addClass(Name(["C"]), supertypes=[],
                                      elementType=ir_types.I8Type,
                                      flags=frozenset([PUBLIC, ARRAY, FINAL]))
-        T = otherPackage.addTypeParameter(ir.Name(["C", "T"]),
+        T = otherPackage.addTypeParameter(Name(["C", "T"]),
                                           upperBound=ir_types.getRootClassType(),
                                           lowerBound=ir_types.getNothingClassType(),
                                           flags=frozenset([PUBLIC, STATIC]))
         clas.typeParameters = [T]
         classType = ir_types.ClassType(clas, (ir_types.VariableType(T),))
-        init = otherPackage.addFunction(ir.Name(["C", ir.CLASS_INIT_SUFFIX]),
+        init = otherPackage.addFunction(Name(["C", CLASS_INIT_SUFFIX]),
                                         returnType=ir_types.UnitType,
                                         typeParameters=[T], parameterTypes=[classType],
                                         flags=frozenset([PRIVATE, METHOD, NATIVE]))
         clas.initializer = init
-        ctor = otherPackage.addFunction(ir.Name(["C", ir.CONSTRUCTOR_SUFFIX]),
+        ctor = otherPackage.addFunction(Name(["C", CONSTRUCTOR_SUFFIX]),
                                         returnType=ir_types.UnitType,
                                         typeParameters=[T], parameterTypes=[classType],
                                         flags=frozenset([PUBLIC, CONSTRUCTOR, METHOD, NATIVE]))
         clas.constructors = [ctor]
-        method1 = otherPackage.addFunction(ir.Name(["C", "m"]),
+        method1 = otherPackage.addFunction(Name(["C", "m"]),
                                            returnType=ir_types.VariableType(T),
                                            typeParameters=[T], parameterTypes=[classType],
                                            flags=frozenset([PUBLIC, METHOD, ABSTRACT]))
 
-        method2 = otherPackage.addFunction(ir.Name(["C", "n"]),
+        method2 = otherPackage.addFunction(Name(["C", "n"]),
                                            returnType=ir_types.I32Type,
                                            typeParameters=[T], parameterTypes=[classType],
                                            flags=frozenset([PUBLIC, STATIC, METHOD, NATIVE]))
         clas.methods = [method1, method2]
-        field = otherPackage.newField(ir.Name(["C", "x"]), type=ir_types.VariableType(T),
+        field = otherPackage.newField(Name(["C", "x"]), type=ir_types.VariableType(T),
                                       flags=frozenset([PUBLIC, LET]))
         clas.fields = [field]
-        clas.traits = {trait.id: [method1]}
 
         # "Compile" a package that depends on the foreign class.
         externPackage = self.copyPackage(otherPackage)
         foreignClass = externPackage.findClass(name=clas.name)
         package = ir.Package(ids.TARGET_PACKAGE_ID)
+        package.buildNameIndex()
         externLoader = utils_test.FakePackageLoader([externPackage])
         externalizer = externalization.Externalizer(package, externLoader)
         externClass = externalizer.externalizeDefn(foreignClass)
@@ -378,21 +392,21 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         self.assertEquals(len(externClass.constructors), len(rewrittenClass.constructors))
         self.assertEquals(len(externClass.fields), len(rewrittenClass.fields))
         self.assertEquals(len(externClass.methods), len(rewrittenClass.methods))
-        self.assertEquals(externClass.traits, rewrittenClass.traits)
         self.assertEquals(externClass.elementType, rewrittenClass.elementType)
         self.assertEquals(externClass.flags, rewrittenClass.flags)
 
     def testRewriteTrait(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
+        package.buildNameIndex()
         rootType = ir_types.getRootClassType()
-        typeParam = package.addTypeParameter(ir.Name(["Tr", "T"]),
+        typeParam = package.addTypeParameter(Name(["Tr", "T"]),
                                              upperBound=rootType,
                                              lowerBound=ir_types.getNothingClassType(),
                                              flags=frozenset([STATIC]))
-        trait = package.addTrait(ir.Name(["Tr"]), typeParameters=[typeParam],
+        trait = package.addTrait(Name(["Tr"]), typeParameters=[typeParam],
                                  supertypes=[rootType], flags=frozenset([PUBLIC]))
         traitType = ir_types.ClassType.forReceiver(trait)
-        traitMethod = package.addFunction(ir.Name(["Tr", "m"]), returnType=ir_types.UnitType,
+        traitMethod = package.addFunction(Name(["Tr", "m"]), returnType=ir_types.UnitType,
                                           typeParameters=[typeParam],
                                           parameterTypes=[traitType],
                                           flags=frozenset([PUBLIC, METHOD,
@@ -408,17 +422,18 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
 
     def testRewriteForeignTrait(self):
         # "Compile" a foreign package with a trait we'll depend on.
-        otherPackage = ir.Package(id=ids.TARGET_PACKAGE_ID, name=ir.Name(["foo", "bar"]))
+        otherPackage = ir.Package(id=ids.TARGET_PACKAGE_ID, name=Name(["foo", "bar"]))
+        otherPackage.buildNameIndex()
 
         rootType = ir_types.getRootClassType()
-        T = otherPackage.addTypeParameter(ir.Name(["Tr", "T"]),
+        T = otherPackage.addTypeParameter(Name(["Tr", "T"]),
                                           upperBound=rootType,
                                           lowerBound=ir_types.getNothingClassType(),
                                           flags=frozenset([PUBLIC, STATIC]))
-        trait = otherPackage.addTrait(ir.Name(["Tr"]), typeParameters=[T],
+        trait = otherPackage.addTrait(Name(["Tr"]), typeParameters=[T],
                                       supertypes=[rootType], flags=frozenset([PUBLIC]))
         traitType = ir_types.ClassType.forReceiver(trait)
-        traitMethod = otherPackage.addFunction(ir.Name(["Tr", "m"]),
+        traitMethod = otherPackage.addFunction(Name(["Tr", "m"]),
                                                returnType=ir_types.UnitType,
                                                typeParameters=[T],
                                                parameterTypes=[traitType],
@@ -430,6 +445,7 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         externPackage = self.copyPackage(otherPackage)
         foreignTrait = externPackage.findTrait(name=trait.name)
         package = ir.Package(ids.TARGET_PACKAGE_ID)
+        package.buildNameIndex()
         externLoader = utils_test.FakePackageLoader([externPackage])
         externalizer = externalization.Externalizer(package, externLoader)
         externTrait = externalizer.externalizeDefn(foreignTrait)

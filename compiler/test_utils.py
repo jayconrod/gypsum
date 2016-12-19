@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014,2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -11,7 +11,6 @@ from utils import *
 
 class TestUtils(unittest.TestCase):
     def testTryDecodeString(self):
-        # import pdb; pdb.set_trace()
         pairs = [("", '""'),
                  ("foo", '"foo"'),
                  (None, r'"foo\"'),

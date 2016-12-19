@@ -90,6 +90,8 @@ Local<String> mangleSourceName(const Handle<String>& sourceName, const std::stri
 std::string buildSignature(const std::vector<Local<Type>>& types,
                            const Handle<Package>& package);
 
+std::string demangleFunctionName(Name* name);
+
 }
 }
 

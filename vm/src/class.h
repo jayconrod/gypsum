@@ -9,6 +9,7 @@
 
 #include <iostream>
 #include "block.h"
+#include "defnid.h"
 #include "hash-table.h"
 #include "object-type-defn.h"
 #include "utils.h"
@@ -27,7 +28,6 @@ class PackageIdArray;
 class Name;
 template <class T>
 class TaggedArray;
-class TraitTable;
 class Type;
 class TypeParameter;
 
@@ -35,8 +35,16 @@ class Class: public ObjectTypeDefn {
  public:
   static const BlockType kBlockType = CLASS_BLOCK_TYPE;
 
+  /**
+   * Size in bytes of the metadata at the beginning of each instance of a `Class`.
+   *
+   * The first field of an object can be found at this offset.
+   */
+  static const u32 kObjectMetaSize = kWordSize;
+
   void* operator new(size_t, Heap* heap);
-  Class(Name* name,
+  Class(DefnId id,
+        Name* name,
         String* sourceName,
         u32 flags,
         BlockArray<TypeParameter>* typeParameters,
@@ -44,13 +52,12 @@ class Class: public ObjectTypeDefn {
         BlockArray<Field>* fields,
         BlockArray<Function>* constructors,
         BlockArray<Function>* methods,
-        TraitTable* traits,
         Package* package,
         Meta* instanceMeta = nullptr,
-        Type* elementType = nullptr,
-        length_t lengthFieldIndex = kIndexNotSet);
-  static Local<Class> create(Heap* heap);
+        Type* elementType = nullptr);
+  static Local<Class> create(Heap* heap, DefnId id);
   static Local<Class> create(Heap* heap,
+                             DefnId id,
                              const Handle<Name>& name,
                              const Handle<String>& sourceName,
                              u32 flags,
@@ -59,16 +66,16 @@ class Class: public ObjectTypeDefn {
                              const Handle<BlockArray<Field>>& fields,
                              const Handle<BlockArray<Function>>& constructors,
                              const Handle<BlockArray<Function>>& methods,
-                             const Handle<TraitTable>& traits,
                              const Handle<Package>& package,
                              const Handle<Meta>& instanceMeta = Local<Meta>(),
-                             const Handle<Type>& elementType = Local<Type>(),
-                             length_t lengthFieldIndex = kIndexNotSet);
+                             const Handle<Type>& elementType = Local<Type>());
 
   // Most members can be set after construction, even though we would like to consider Class
   // as immutable. This is necessary since Class and Type have a cyclic relationship. We may
   // need to allocate empty Class objects early, then fill them after other objects which
   // refer to them have been allocated.
+
+  DefnId id() const { return id_; }
 
   Name* name() const { return name_.get(); }
   void setName(Name* name) { name_.set(this, name); }
@@ -91,6 +98,9 @@ class Class: public ObjectTypeDefn {
 
   BlockArray<Field>* fields() const { return fields_.get(); }
   void setFields(BlockArray<Field>* newFields) { fields_.set(this, newFields); }
+  BlockArray<Field>* flatFields() const { return flatFields_.get(); }
+  void setFlatFields(BlockArray<Field>* newFlatFields) { flatFields_.set(this, newFlatFields); }
+  Field* findField(Name* name) const;
   length_t findFieldIndex(word_t offset) const;
   word_t findFieldOffset(length_t index) const;
   Class* findFieldClass(length_t index);
@@ -102,10 +112,15 @@ class Class: public ObjectTypeDefn {
 
   BlockArray<Function>* methods() const { return methods_.get(); }
   void setMethods(BlockArray<Function>* newMethods) { methods_.set(this, newMethods); }
-  Function* getNonStaticMethod(length_t index) const;
-
-  TraitTable* traits() const { return traits_.get(); }
-  void setTraits(TraitTable* newTraits) { traits_.set(this, newTraits); }
+  BlockArray<Function>* flatMethods() const { return flatMethods_.get(); }
+  void setFlatMethods(BlockArray<Function>* newFlatMethods) {
+    flatMethods_.set(this, newFlatMethods);
+  }
+  DefnIdHashMap<Function>* methodIdIndex() const { return methodIdIndex_.get(); }
+  void setMethodIdIndex(DefnIdHashMap<Function>* newMethodIdIndex) {
+    methodIdIndex_.set(this, newMethodIdIndex);
+  }
+  Function* findMethod(DefnId methodId) const;
 
   Package* package() const { return package_.get(); }
   void setPackage(Package* newPackage) { package_.set(this, newPackage); }
@@ -114,9 +129,6 @@ class Class: public ObjectTypeDefn {
 
   Type* elementType() const { return elementType_.get(); }
   void setElementType(Type* newElementType) { elementType_.set(this, newElementType); }
-
-  length_t lengthFieldIndex() const { return lengthFieldIndex_; }
-  void setLengthFieldIndex(length_t newIndex) { lengthFieldIndex_ = newIndex; }
 
   BlockHashMap<Name, Field>* fieldNameIndex() const { return fieldNameIndex_.get(); }
   void setFieldNameIndex(BlockHashMap<Name, Field>* index) {
@@ -155,35 +167,43 @@ class Class: public ObjectTypeDefn {
   static Local<BlockHashMap<String, Function>> ensureAndGetConstructorSignatureIndex(
       const Handle<Class>& clas);
 
-  /** Constructs a new instance Meta whether one already exists or not. Does not use handles
-   *  or invoke the garbage collector. This is used by Roots, since GC is not available there.
-   *  `ensureAndGetInstaceMeta` should be called normally.
-   */
-  Meta* buildInstanceMeta();
-  static Local<Meta> ensureAndGetInstanceMeta(const Handle<Class>& clas);
-  static void ensureInstanceMeta(const Handle<Class>& clas);
-
   bool isSubclassOf(const Class* other) const;
 
- private:
-  void computeSizeAndPointerMap(u32* size, bool* hasPointers, BitSet* pointerMap) const;
-  void computeSizeAndPointerMapForType(Type* type, u32* size,
-                                       bool* hasPointers, BitSet* pointerMap) const;
+  /**
+   * Builds a {@link Meta} for instances of this class if it doesn't exist, then returns it.
+   *
+   * Note that fields and methods must be flattened in order for the {@link Meta} to be created,
+   * so {@link #ensureFlatFields} and {@link #ensureFlatMethods} will be called internally.
+   */
+  static Local<Meta> ensureInstanceMeta(const Handle<Class>& clas);
 
+  /**
+   * Builds a list of all {@link Field}s in this class if it doesn't exist, then returns it.
+   *
+   * When serialized into a package file, a `Class` only includes fields it defines. It does
+   * not include inherited fields, since these may change in another package and break
+   * binary compatibility. We need to build the full "flat" list of fields at run-time, which
+   * is what this method does.
+   */
+  static Local<BlockArray<Field>> ensureFlatFields(const Handle<Class>& clas);
+
+ private:
   DECLARE_POINTER_MAP()
+  const DefnId id_;
   Ptr<Name> name_;
   Ptr<String> sourceName_;
   u32 flags_;
   Ptr<BlockArray<TypeParameter>> typeParameters_;
   Ptr<BlockArray<Type>> supertypes_;
   Ptr<BlockArray<Field>> fields_;
+  Ptr<BlockArray<Field>> flatFields_;
   Ptr<BlockArray<Function>> constructors_;
   Ptr<BlockArray<Function>> methods_;
-  Ptr<TraitTable> traits_;
+  Ptr<BlockArray<Function>> flatMethods_;
+  Ptr<DefnIdHashMap<Function>> methodIdIndex_;
   Ptr<Package> package_;
   Ptr<Meta> instanceMeta_;
   Ptr<Type> elementType_;
-  length_t lengthFieldIndex_;
   Ptr<BlockHashMap<Name, Field>> fieldNameIndex_;
   Ptr<BlockHashMap<String, Field>> fieldSourceNameIndex_;
   Ptr<BlockHashMap<Name, Function>> methodNameIndex_;

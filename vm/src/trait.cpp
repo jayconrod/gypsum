@@ -22,6 +22,7 @@ namespace internal {
   F(Trait, typeParameters_) \
   F(Trait, supertypes_) \
   F(Trait, methods_) \
+  F(Trait, flatMethods_) \
   F(Trait, package_) \
   F(Trait, methodNameIndex_) \
   F(Trait, methodSourceNameIndex_) \
@@ -36,7 +37,8 @@ void* Trait::operator new (size_t, Heap* heap) {
 }
 
 
-Trait::Trait(Name* name,
+Trait::Trait(DefnId id,
+             Name* name,
              String* sourceName,
              u32 flags,
              BlockArray<TypeParameter>* typeParameters,
@@ -44,6 +46,7 @@ Trait::Trait(Name* name,
              BlockArray<Function>* methods,
              Package* package)
     : ObjectTypeDefn(TRAIT_BLOCK_TYPE),
+      id_(id),
       name_(this, name),
       sourceName_(this, sourceName),
       flags_(flags),
@@ -52,13 +55,14 @@ Trait::Trait(Name* name,
       methods_(this, methods) { }
 
 
-Local<Trait> Trait::create(Heap* heap) {
+Local<Trait> Trait::create(Heap* heap, DefnId id) {
   RETRY_WITH_GC(heap, return Local<Trait>(new(heap) Trait(
-      nullptr, nullptr, 0, nullptr, nullptr, nullptr, nullptr)));
+      id, nullptr, nullptr, 0, nullptr, nullptr, nullptr, nullptr)));
 }
 
 
 Local<Trait> Trait::create(Heap* heap,
+                           DefnId id,
                            const Handle<Name>& name,
                            const Handle<String>& sourceName,
                            u32 flags,
@@ -67,7 +71,7 @@ Local<Trait> Trait::create(Heap* heap,
                            const Handle<BlockArray<Function>>& methods,
                            const Handle<Package>& package) {
   RETRY_WITH_GC(heap, return Local<Trait>(new(heap) Trait(
-      *name, sourceName.getOrNull(), flags, *typeParameters, *supertypes,
+      id, *name, sourceName.getOrNull(), flags, *typeParameters, *supertypes,
       *methods, package.getOrNull())));
 }
 
@@ -92,11 +96,7 @@ Local<BlockHashMap<Name, Function>> Trait::ensureAndGetMethodNameIndex(
   if (trait->methodNameIndex()) {
     return handle(trait->methodNameIndex());
   }
-  Local<Name> (*getKey)(const Handle<Function>&) = mangleFunctionName;
-  auto index = buildIndex<Name, Function>(
-      handle(trait->methods()),
-      getKey,
-      allDefnFilter<Function>);
+  auto index = buildNameIndex<Function>(handle(trait->methods()), allDefnFilter<Function>);
   trait->setMethodNameIndex(*index);
   return index;
 }
@@ -118,30 +118,17 @@ Local<BlockHashMap<String, Function>> Trait::ensureAndGetMethodSourceNameIndex(
 
 ostream& operator << (ostream& os, const Trait* trait) {
   os << brief(trait)
+     << "\n  id: " << trait->id()
      << "\n  name: " << brief(trait->name())
      << "\n  source name: " << brief(trait->sourceName())
      << "\n  type parameters: " << brief(trait->typeParameters())
      << "\n  supertypes: " << brief(trait->supertypes())
      << "\n  methods: " << brief(trait->methods())
+     << "\n  flat methods: " << brief(trait->flatMethods())
      << "\n  package: " << brief(trait->package())
      << "\n  method name index: " << brief(trait->methodNameIndex())
      << "\n  method source name index: " << brief(trait->methodSourceNameIndex());
   return os;
-}
-
-
-void TraitTableElement::set(const HashTable<TraitTableElement>* table,
-                            const TraitTableElement& elem) {
-  key = elem.key;
-  table->getHeap()->recordWrite(
-      reinterpret_cast<Trait**>(&key), reinterpret_cast<Trait*>(elem.key.getPointer()));
-  value = elem.value;
-  table->getHeap()->recordWrite(&value, elem.value);
-}
-
-
-Local<TraitTable> TraitTable::create(Heap* heap, length_t capacity) {
-  RETRY_WITH_GC(heap, return Local<TraitTable>(new(heap, capacity) TraitTable()));
 }
 
 }

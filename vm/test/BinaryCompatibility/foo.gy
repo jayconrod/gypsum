@@ -1,0 +1,78 @@
+// Copyright 2016 Jay Conrod. All rights reserved.
+
+// This file is part of CodeSwitch. Use of this source code is governed by
+// the 3-clause BSD license that can be found in the LICENSE.txt file.
+
+
+import binarycompatibility.bar.FieldClass, MethodClass, MethodTrait
+
+
+class DerivedFieldClass <: FieldClass
+
+
+class DerivedMethodClass <: MethodClass
+
+
+class DerivedClassFromTrait <: MethodTrait
+
+
+def test-load-store-field =
+  let o = FieldClass()
+  assert-eq(34i64, o.x)
+  assert-eq("bar", o.y)
+  o.x = 56i64
+  o.y = "baz"
+  assert-eq(56i64, o.x)
+  assert-eq("baz", o.y)
+  {}
+
+
+def test-load-store-inherited-field =
+  let o = DerivedFieldClass()
+  assert-eq(34i64, o.x)
+  assert-eq("bar", o.y)
+  o.x = 56i64
+  o.y = "baz"
+  assert-eq(56i64, o.x)
+  assert-eq("baz", o.y)
+  {}
+
+
+def test-call-class-method =
+  let o = MethodClass()
+  assert-eq(34i64, o.f)
+  assert-eq("bar", o.g)
+  {}
+
+
+def test-call-inherited-class-method =
+  let o = DerivedMethodClass()
+  assert-eq(34i64, o.f)
+  assert-eq("bar", o.g)
+  {}
+
+
+def test-call-inherited-trait-method =
+  let o = DerivedClassFromTrait()
+  assert-eq(34i64, o.f)
+  assert-eq("bar", o.g)
+  {}
+
+
+def main =
+  test-load-store-field
+  test-load-store-inherited-field
+  test-call-class-method
+  test-call-inherited-class-method
+  test-call-inherited-trait-method
+  {}
+
+
+def assert-eq(expected: String, actual: String) =
+  if (expected != actual)
+    throw Exception()
+
+
+def assert-eq(expected: i64, actual: i64) =
+  if (expected != actual)
+    throw Exception()

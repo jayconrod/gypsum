@@ -12,6 +12,7 @@ import ids
 import ir
 import ir_types
 import location
+from name import Name
 
 
 CONTEXT_CONSTRUCTOR_HINT = "context-constructor-hint"
@@ -26,7 +27,7 @@ NORMAL_MODE = "normal-mode"
 STD_MODE = "std-mode"
 NOSTD_MODE = "nostd-mode"
 
-STD_NAME = ir.Name(["std"])
+STD_NAME = Name(["std"])
 
 MAX_TUPLE_LENGTH = 10
 
@@ -54,6 +55,7 @@ class CompileInfo(object):
         self.scopePrefixInfo = {}  # keyed by AstId
         self.stdExternInfo = {} # keyed by DefnId
         self.importInfo = {}  # keyed by AstId
+        self.generatedNames = {}  # keyed by Name
         self.typeCheckFunction = None
 
     def languageMode(self):
@@ -86,6 +88,14 @@ class CompileInfo(object):
     def getTupleClass(self, n, loc):
         name = "Tuple%d" % n
         return self.getStdClass(name, loc)
+
+    def makeUniqueName(self, name):
+        assert '$' in name.short()
+        if name not in self.generatedNames:
+            self.generatedNames[name] = 1
+        short = "%s_%d" % (name.short(), self.generatedNames[name])
+        self.generatedNames[name] += 1
+        return Name(name.components[:-1] + [short])
 
 
 _dictNames = [("Scope", "scopes", (ids.ScopeId, ids.AstId, ids.DefnId, ids.PackageId)),

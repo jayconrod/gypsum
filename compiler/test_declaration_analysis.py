@@ -17,6 +17,14 @@ from errors import *
 from flags import *
 from utils_test import FakePackageLoader, TestCaseWithDefinitions
 from location import NoLoc
+from name import (
+    ARRAY_LENGTH_SUFFIX,
+    CLASS_INIT_SUFFIX,
+    CONSTRUCTOR_SUFFIX,
+    EXISTENTIAL_SUFFIX,
+    Name,
+    RECEIVER_SUFFIX,
+)
 
 
 class TestDeclarationAnalysis(TestCaseWithDefinitions):
@@ -99,10 +107,10 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.assertIs(ctor, clas.constructors[0])
         self.assertEquals([self.makeVariable(Name(["C", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
                                              kind=PARAMETER, flags=frozenset([LET])),
-                           self.makeVariable(Name(["C", "x"]), kind=PARAMETER,
-                                             flags=frozenset([LET])),
-                           self.makeVariable(Name(["C", "y"]), kind=PARAMETER,
-                                             flags=frozenset([LET]))],
+                           self.makeVariable(Name(["C", CONSTRUCTOR_SUFFIX, "x"]),
+                                             kind=PARAMETER, flags=frozenset([LET])),
+                           self.makeVariable(Name(["C", CONSTRUCTOR_SUFFIX, "y"]),
+                                             kind=PARAMETER, flags=frozenset([LET]))],
                           ctor.variables)
         self.assertEquals([self.makeField("C.x", flags=frozenset([LET])),
                            self.makeField("C.y", flags=frozenset([LET]))],
@@ -191,7 +199,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         irInitializer = info.package.findClass(name="C").initializer
         self.assertEquals([self.makeVariable(Name(["C", CLASS_INIT_SUFFIX, RECEIVER_SUFFIX]),
                                              kind=PARAMETER, flags=frozenset([LET])),
-                           self.makeVariable("C.y", kind=LOCAL)],
+                           self.makeVariable(Name(["C", LOCAL_SUFFIX, "y"]), kind=LOCAL)],
                           irInitializer.variables)
 
     def testDefineClassFunction(self):
@@ -278,7 +286,8 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                                       "};")
         ast = info.ast
         defnInfo = info.getDefnInfo(ast.modules[0].definitions[0].body.statements[0].statements[0].pattern)
-        self.assertEquals(self.makeVariable("f.x", kind=LOCAL), defnInfo.irDefn)
+        self.assertEquals(self.makeVariable(Name(["f", LOCAL_SUFFIX, "x"]), kind=LOCAL),
+                          defnInfo.irDefn)
         self.assertIs(info.getScope(ast.modules[0].definitions[0].body.statements[0].id),
                       info.getScope(defnInfo.scopeId))
 
@@ -287,7 +296,8 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                                       "  case x => x\n")
         ast = info.ast
         defnInfo = info.getDefnInfo(ast.modules[0].definitions[0].body.catchHandler.cases[0].pattern)
-        self.assertEquals(self.makeVariable("f.x", kind=LOCAL, flags=frozenset([LET])),
+        self.assertEquals(self.makeVariable(Name(["f", LOCAL_SUFFIX, "x"]),
+                                            kind=LOCAL, flags=frozenset([LET])),
                           defnInfo.irDefn)
         self.assertIs(info.getScope(ast.modules[0].definitions[0].body.catchHandler.cases[0].id),
                       info.getScope(defnInfo.scopeId))
@@ -491,8 +501,8 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
 
     def testImportGlobalFromPackage(self):
         foo = Package(name=Name(["foo"]))
-        foo.addGlobal(Name(["bar"]), flags=frozenset([PUBLIC, LET]))
-        foo.addGlobal(Name(["baz"]), flags=frozenset([LET]))
+        foo.addGlobal(Name(["bar"]), sourceName="bar", flags=frozenset([PUBLIC, LET]))
+        foo.addGlobal(Name(["baz"]), sourceName="baz", flags=frozenset([LET]))
         source = "import foo._"
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         scope = info.getScope(GLOBAL_SCOPE_ID)
@@ -614,26 +624,32 @@ class TestPackageScope(unittest.TestCase):
 
     def testPackageClassHasScope(self):
         package = Package(name=Name(["foo"]))
-        clas = package.addClass(Name(["C"]), typeParameters=[],
+        clas = package.addClass(Name(["C"]), sourceName="C", typeParameters=[],
                                 supertypes=[getRootClassType()], flags=frozenset([PUBLIC]))
         classType = ClassType(clas)
-        publicCtor = package.addFunction(Name(["C", CONSTRUCTOR_SUFFIX]), returnType=UnitType,
+        publicCtor = package.addFunction(Name(["C", CONSTRUCTOR_SUFFIX]),
+                                         sourceName=CONSTRUCTOR_SUFFIX,
+                                         returnType=UnitType,
                                          typeParameters=[], parameterTypes=[classType],
                                          flags=frozenset([PUBLIC, METHOD, EXTERN]))
-        privateCtor = package.addFunction(Name(["C", CONSTRUCTOR_SUFFIX]), returnType=UnitType,
+        privateCtor = package.addFunction(Name(["C", CONSTRUCTOR_SUFFIX]),
+                                          sourceName=CONSTRUCTOR_SUFFIX,
+                                          returnType=UnitType,
                                           typeParameters=[], parameterTypes=[classType],
                                           flags=frozenset([PRIVATE, METHOD, EXTERN]))
         clas.constructors = [publicCtor, privateCtor]
-        publicMethod = package.addFunction(Name(["C", "m1"]), returnType=UnitType,
+        publicMethod = package.addFunction(Name(["C", "m1"]), sourceName="m1",
+                                           returnType=UnitType,
                                            typeParameters=[], parameterTypes=[classType],
                                            flags=frozenset([PUBLIC, METHOD, EXTERN]))
-        privateMethod = package.addFunction(Name(["C", "m2"]), returnType=UnitType,
+        privateMethod = package.addFunction(Name(["C", "m2"]), sourceName="m2",
+                                            returnType=UnitType,
                                             typeParameters=[], parameterTypes=[classType],
                                             flags=frozenset([PRIVATE, METHOD, EXTERN]))
         clas.methods = [publicMethod, privateMethod]
-        publicField = package.newField(Name(["C", "x"]), type=UnitType,
+        publicField = package.newField(Name(["C", "x"]), sourceName="x", type=UnitType,
                                        flags=frozenset([PUBLIC, EXTERN]))
-        privateField = package.newField(Name(["C", "y"]), type=UnitType,
+        privateField = package.newField(Name(["C", "y"]), sourceName="y", type=UnitType,
                                         flags=frozenset([PRIVATE, EXTERN]))
         clas.fields = [publicField, privateField]
 
@@ -641,12 +657,15 @@ class TestPackageScope(unittest.TestCase):
         info = CompileInfo(None, Package(id=TARGET_PACKAGE_ID), packageLoader)
         topPackageScope = PackageScope(PACKAGE_SCOPE_ID, None, info,
                                        packageLoader.getPackageNames(), [], None)
+        builtinScope = BuiltinGlobalScope(topPackageScope)
         fooPackageScope = topPackageScope.scopeForPrefix("foo", NoLoc)
 
         defnInfo = fooPackageScope.lookupFromSelf("C", NoLoc).getDefnInfo()
         self.assertIs(clas, defnInfo.irDefn)
         self.assertIs(fooPackageScope.scopeId, defnInfo.scopeId)
-        classScope = info.getScope(clas.id)
+        self.assertFalse(info.hasScope(clas.id))
+        classScope = NonLocalObjectTypeDefnScope.ensureForDefn(clas, info)
+        self.assertIs(classScope, info.getScope(clas.id))
         defnInfo = classScope.lookupFromSelf(CONSTRUCTOR_SUFFIX, NoLoc).getDefnInfo()
         self.assertIs(publicCtor, defnInfo.irDefn)
         self.assertIs(classScope.scopeId, defnInfo.scopeId)

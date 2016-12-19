@@ -89,6 +89,9 @@ class Heap {
   bool isAllocationAllowed() const { return isAllocationAllowed_; }
   void setIsAllocationAllowed(bool allowed) { isAllocationAllowed_ = allowed; }
 
+  bool isGcAllowed() const { return isGcAllowed_; }
+  void setIsGcAllowed(bool allowed) { isGcAllowed_ = allowed; }
+
   /** Reserves raw memory on the heap without initializing it. Note that all words in a block
    *  should be initialized before storing a pointer to the block in any other reachable block.
    *  Throws `AllocationError` on failure.
@@ -168,6 +171,7 @@ class Heap {
   Allocator allocator_;
   bool shouldExpand_;
   bool isAllocationAllowed_;
+  bool isGcAllowed_;
 
   friend class GC;
   friend class VM;
@@ -197,6 +201,24 @@ class AllowAllocationScope {
  private:
   Heap* heap_;
   bool wasAllocationAllowed_;
+};
+
+
+class AllowGcScope {
+ public:
+  AllowGcScope(Heap* heap, bool allow)
+      : heap_(heap),
+        wasGcAllowed_(heap->isGcAllowed()) {
+    heap_->setIsGcAllowed(allow);
+  }
+
+  ~AllowGcScope() {
+    heap_->setIsGcAllowed(wasGcAllowed_);
+  }
+
+ private:
+  Heap* heap_;
+  bool wasGcAllowed_;
 };
 
 }

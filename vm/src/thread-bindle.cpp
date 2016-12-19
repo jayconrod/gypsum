@@ -140,7 +140,7 @@ void ThreadBindle::restoreException(
   auto roots = bindle->getVM()->roots();
   auto heap = bindle->getHeap();
   auto clas = handle(roots->getBuiltinClass(id));
-  auto meta = Class::ensureAndGetInstanceMeta(clas);
+  auto meta = Class::ensureInstanceMeta(clas);
   auto e = Object::create(heap, meta);
   exn->set(*bindle, *e);
 }

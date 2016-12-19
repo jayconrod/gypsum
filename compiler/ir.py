@@ -10,8 +10,15 @@ import data
 import flags
 import ids
 import ir_types
+from name import Name
 import bytecode
-from utils import each, indexSame, hashList, reprFormat
+from utils import (
+    each,
+    flatMap,
+    indexSame,
+    hashList,
+    reprFormat
+)
 
 import re
 import StringIO
@@ -37,6 +44,9 @@ class Package(object):
         self.traits = []
         self.typeParameters = []
         self.strings = []
+        self.stringIndices = {}
+        self.names = None
+        self.nameIndices = None
         self.entryFunction = None
         self.initFunction = None
         self.exports = None
@@ -64,7 +74,8 @@ class Package(object):
 
     def addGlobal(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.GLOBAL, len(self.globals))
-        self.addName(name)
+        if self.names is not None:
+            self.findOrAddName(name)
         g = Global(name, id, *args, **kwargs)
         if g.sourceName is not None:
             self.findOrAddString(g.sourceName)
@@ -73,7 +84,8 @@ class Package(object):
 
     def addFunction(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.FUNCTION, len(self.functions))
-        self.addName(name)
+        if self.names is not None:
+            self.findOrAddName(name)
         f = Function(name, id, *args, **kwargs)
         if f.sourceName is not None:
             self.findOrAddString(f.sourceName)
@@ -82,7 +94,8 @@ class Package(object):
 
     def addClass(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.CLASS, len(self.classes))
-        self.addName(name)
+        if self.names is not None:
+            self.findOrAddName(name)
         c = Class(name, id, *args, **kwargs)
         if c.sourceName is not None:
             self.findOrAddString(c.sourceName)
@@ -91,7 +104,8 @@ class Package(object):
 
     def addTrait(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.TRAIT, len(self.traits))
-        self.addName(name)
+        if self.names is not None:
+            self.findOrAddName(name)
         t = Trait(name, id, *args, **kwargs)
         if t.sourceName is not None:
             self.findOrAddString(t.sourceName)
@@ -100,7 +114,8 @@ class Package(object):
 
     def addTypeParameter(self, name, *args, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.TYPE_PARAMETER, len(self.typeParameters))
-        self.addName(name)
+        if self.names is not None:
+            self.findOrAddName(name)
         p = TypeParameter(name, id, *args, **kwargs)
         if p.sourceName is not None:
             self.findOrAddString(p.sourceName)
@@ -108,11 +123,30 @@ class Package(object):
         return p
 
     def newField(self, name, **kwargs):
-        self.addName(name)
+        if self.names is not None:
+            self.findOrAddName(name)
         f = Field(name, **kwargs)
         if f.sourceName is not None:
             self.findOrAddString(f.sourceName)
         return f
+
+    def addField(self, clas, name, **kwargs):
+        f = self.newField(name, definingClass=clas, index=len(clas.fields), **kwargs)
+        clas.fields.append(f)
+        return f
+
+    def newVariable(self, name, **kwargs):
+        if self.names is not None:
+            self.findOrAddName(name)
+        v = Variable(name, **kwargs)
+        if v.sourceName is not None:
+            self.findOrAddString(v.sourceName)
+        return v
+
+    def addVariable(self, function, name, **kwargs):
+        v = self.newVariable(name, **kwargs)
+        function.variables.append(v)
+        return v
 
     def ensureDependency(self, package):
         if package.id.index is not None:
@@ -166,25 +200,75 @@ class Package(object):
             dep.linkedTypeParameters = [depExports[p.name] for p in dep.externTypeParameters]
             assert all(isinstance(p, TypeParameter) for p in dep.linkedTypeParameters)
 
-    def addName(self, name):
-        assert isinstance(name, Name)
-        each(self.findOrAddString, name.components)
+        # Link function overrides.
+        for f in self.functions:
+            if f.overrides is not None:
+                for i, override in enumerate(f.overrides):
+                    if override.id.packageId is not self.id:
+                        depIndex = override.id.packageId.index
+                        externIndex = override.id.index
+                        linkedOverride = \
+                          self.dependencies[depIndex].linkedFunctions[externIndex]
+                        f.overrides[i] = linkedOverride
 
     def findString(self, s):
         if isinstance(s, str):
             s = unicode(s)
         assert isinstance(s, unicode)
-        return self.strings.index(s)
+        return self.stringIndices.get(s)
 
     def findOrAddString(self, s):
         if isinstance(s, str):
             s = unicode(s)
         assert isinstance(s, unicode)
-        for i in xrange(0, len(self.strings)):
-            if self.strings[i] == s:
-                return i
-        self.strings.append(s)
-        return len(self.strings) - 1
+        index = self.findString(s)
+        if index is None:
+            index = len(self.strings)
+            self.strings.append(s)
+            self.stringIndices[s] = index
+        return index
+
+    def findName(self, name):
+        assert self.names is not None
+        return self.nameIndices.get(name)
+
+    def findOrAddName(self, name):
+        assert self.names is not None
+        index = self.findName(name)
+        if index is None:
+            index = len(self.names)
+            each(self.findOrAddString, name.components)
+            self.names.append(name)
+            self.nameIndices[name] = index
+        return index
+
+    def buildNameIndex(self):
+        """Builds a table of names and a map from names to indices in that table.
+
+        This is done after type declaration analysis, when functions are renamed using their
+        type signatures.
+
+        This is used by the serializer and by instructions (e.g., ldf, stf) that refer to
+        definitions by name using the name's index.
+        """
+        assert self.names is None
+        self.names = []
+        self.nameIndices = {}
+
+        def addName(defn):
+            name = defn.name
+            assert name is not None
+            assert name not in self.nameIndices
+            each(self.findOrAddString, name.components)
+            self.nameIndices[name] = len(self.names)
+            self.names.append(name)
+
+        each(addName, self.globals)
+        each(addName, self.functions)
+        each(addName, self.classes)
+        each(addName, flatMap(lambda c: c.fields, self.classes))
+        each(addName, self.traits)
+        each(addName, self.typeParameters)
 
     def findFunction(self, **kwargs):
         return next(self.find(self.functions, kwargs))
@@ -206,8 +290,14 @@ class Package(object):
 
     def find(self, defns, kwargs):
         def matchItem(defn, key, value):
-            if key == "name" and isinstance(value, str):
-                return Name.fromString(value) == defn.name
+            if key == "name":
+                if isinstance(value, str):
+                    name = Name.fromString(value)
+                else:
+                    name = value
+                return name == defn.name or \
+                    name == unmangleNameForTest(defn.name) or \
+                    (isinstance(value, str) and defn.sourceName == value)
             elif key == "flag":
                 return value in defn.flags
             elif key == "pred":
@@ -237,78 +327,6 @@ class Package(object):
         else:
             assert id.kind is ids.DefnId.TYPE_PARAMETER
             return self.typeParameters[id.index]
-
-
-class Name(object):
-    """The name of a package or a definition within a package.
-
-    Names consist of a list between 1 and 100 (inclusive) components. Each component is a
-    string of between 1 and 1000 unicode characters. The only invalid character is '.'; this
-    acts as a separator when names are printed.
-
-    Package name components are restricted to upper and lower case Roman letters, numbers,
-    and '_' (although '_' cannot be the first character).
-
-    Names are not guaranteed to be unique among all definitions in the same package. They
-    should be unique among public and protected definitions though."""
-
-    nameComponentSrc = "[^.]+"
-    nameSrc = r"%s(?:\.%s)*" % (nameComponentSrc, nameComponentSrc)
-    nameRex = re.compile(r"\A%s\Z" % nameSrc)
-
-    packageComponentSrc = "[A-Za-z][A-Za-z0-9_]*"
-    packageSrc = r"%s(?:\.%s)*" % (packageComponentSrc, packageComponentSrc)
-    packageRex = re.compile(r"\A%s\Z" % packageSrc)
-
-    def __init__(self, components):
-        self.components = list(components)
-
-    @staticmethod
-    def fromString(s, isPackageName=False):
-        m = Name.packageRex.match(s) if isPackageName else Name.nameRex.match(s)
-        if not m or m.end() != len(s):
-            raise ValueError("invalid package name: " + s)
-        return Name(s.split("."))
-
-    def __cmp__(self, other):
-        return cmp(self.components, other.components)
-
-    def __hash__(self):
-        return hashList(self.components)
-
-    def __repr__(self):
-        return "Name(%s)" % ".".join(self.components)
-
-    def __str__(self):
-        return ".".join(self.components)
-
-    def __add__(self, other):
-        return Name(self.components + other.components)
-
-    def withSuffix(self, suffix):
-        return Name(self.components + [suffix])
-
-    def hasPrefix(self, components):
-        return len(components) < len(self.components) and \
-               all(a == b for a, b in zip(self.components, components))
-
-    def short(self):
-        s = self.components[-1]
-        if isinstance(s, unicode):
-            s = str(s)
-        return s
-
-
-CLOSURE_SUFFIX = "$closure"
-CONSTRUCTOR_SUFFIX = "$constructor"
-CONTEXT_SUFFIX = "$context"
-PACKAGE_INIT_NAME = Name(["$pkginit"])
-CLASS_INIT_SUFFIX = "$init"
-ANON_PARAMETER_SUFFIX = "$parameter"
-RECEIVER_SUFFIX = "$this"
-ARRAY_LENGTH_SUFFIX = "$length"
-EXISTENTIAL_SUFFIX = "$forsome"
-BLANK_SUFFIX = "$blank"
 
 
 class PackagePrefix(object):
@@ -342,7 +360,7 @@ class PackageVersion(object):
 
 
 class PackageDependency(object):
-    dependencySrc = "(%s)(?::(%s)?(?:-(%s))?)?" % \
+    dependencySrc = "(%s)(?::(%s)?(?:(-)(%s)?)?)?" % \
                     (Name.packageSrc, PackageVersion.versionSrc, PackageVersion.versionSrc)
     dependencyRex = re.compile(r"\A%s\Z" % dependencySrc)
 
@@ -373,7 +391,13 @@ class PackageDependency(object):
             raise ValueError("invalid package dependency: " + s)
         name = Name.fromString(m.group(1))
         minVersion = PackageVersion.fromString(m.group(2)) if m.group(2) else None
-        maxVersion = PackageVersion.fromString(m.group(3)) if m.group(3) else None
+        dash = m.group(3) is not None
+        if m.group(4) is not None:
+            maxVersion = PackageVersion.fromString(m.group(4))
+        elif dash:
+            maxVersion = None
+        else:
+            maxVersion = minVersion
         return PackageDependency(name, minVersion, maxVersion)
 
     @staticmethod
@@ -384,7 +408,7 @@ class PackageDependency(object):
 
     def dependencyString(self):
         minStr = str(self.minVersion) if self.minVersion is not None else ""
-        maxStr = "-" + str(self.maxVersion) if self.maxVersion is not None else ""
+        maxStr = "-" + str(self.maxVersion) if self.maxVersion is not None else "-"
         versionStr = ":" + minStr + maxStr if minStr or maxStr else ""
         return str(self.name) + versionStr
 
@@ -523,6 +547,9 @@ class Function(ParameterizedDefn):
         blocks (list[BasicBlock]?): a list of basic blocks containing instructions for the
             function. The first block is the only entry point. This may be `None` before
             semantic analysis and for `EXTERN` or `ABSTRACT` or builtin functions.
+        overrides ([Function]?): methods in inherited traits or a base class that this
+            method overrides. This must be set if the `METHOD` and `OVERRIDE` flags are set and
+            the `STATIC`, `CONSTRUCTOR`, and `EXTERN` flags are not set. It must not be empty.
         flags (frozenset[flag]): a flags indicating how this function is used. Valid flags are
             `ABSTRACT`, `EXTERN`, `PUBLIC`, `PROTECTED`, `PRIVATE`, `STATIC`, `CONSTRUCTOR`,
             `METHOD`.
@@ -530,9 +557,6 @@ class Function(ParameterizedDefn):
             defined in (as opposed to any other class that inherits the method). For
             non-static methods, this could be derived from the receiver type, but there's
             no easy way to get it for static methods.
-        overrides ([Function]?): methods in inherited traits or a base class that this
-            method overrides. This must be set if the `METHOD` and `OVERRIDE` flags are set and
-            the `STATIC`, `CONSTRUCTOR`, and `EXTERN` flags are not set. It must not be empty.
         overridenBy ({DefnId, Function}?): a map from class and trait ids to methods. Each
             entry describes an overriding function in a subclass or subtrait. This should only
             be set for non-constructor, non-static methods.
@@ -546,7 +570,7 @@ class Function(ParameterizedDefn):
 
     def __init__(self, name, id, sourceName=None, astDefn=None, returnType=None,
                  typeParameters=None, parameterTypes=None, variables=None, blocks=None,
-                 flags=frozenset(), definingClass=None, overrides=None, overridenBy=None,
+                 overrides=None, flags=frozenset(), definingClass=None, overridenBy=None,
                  insts=None, compileHint=None):
         super(Function, self).__init__(name, id, sourceName, astDefn)
         self.returnType = returnType
@@ -554,16 +578,16 @@ class Function(ParameterizedDefn):
         self.parameterTypes = parameterTypes
         self.variables = variables
         self.blocks = blocks
+        self.overrides = overrides
         self.flags = flags
         self.definingClass = definingClass
         self.insts = insts
-        self.overrides = overrides
         self.overridenBy = overridenBy
         self.compileHint = compileHint
 
     def __repr__(self):
         return reprFormat(self, "name", "returnType", "typeParameters", "parameterTypes",
-                          "variables", "blocks", "flags")
+                          "variables", "blocks", "overrides", "flags")
 
     def __str__(self):
         buf = StringIO.StringIO()
@@ -598,6 +622,7 @@ class Function(ParameterizedDefn):
                self.parameterTypes == other.parameterTypes and \
                self.variables == other.variables and \
                self.blocks == other.blocks and \
+               self.overrides == other.overrides and \
                self.flags == other.flags and \
                self.definingClass is other.definingClass and \
                self.insts == other.insts and \
@@ -648,6 +673,31 @@ class Function(ParameterizedDefn):
             all(bt.isSubtypeOf(at) for at, bt in zip(selfParameterTypes, otherParameterTypes))
         return typeParametersAreCompatible and \
                parameterTypesAreCompatible
+
+    def getOverridenMethodIds(self):
+        """Returns a set of function ids of the methods that this method overrides.
+
+        The functions referenced by ids in the returned set do not override anything. If this
+        is called on a method that doesn't override anything, a set containing the function's
+        own id is returned.
+
+        If a method is part of a chain of overrides (e.g., a overrides b overrides c), then
+        only the top-most non-overriding id would be returned (c).
+
+        Multiple ids may be returned if a method overrides different methods in different
+        base definitions.
+
+        This may only be called on functions with the `METHOD` flag. It may be called on
+        methods with the `STATIC` flag.
+        """
+        assert flags.METHOD in self.flags
+        if self.overrides is None:
+            return set([self.id])
+        else:
+            allOverrideIds = set()
+            for override in self.overrides:
+                allOverrideIds.update(override.getOverridenMethodIds())
+            return allOverrideIds
 
 
 class ObjectTypeDefn(ParameterizedDefn):
@@ -753,28 +803,14 @@ class ObjectTypeDefn(ParameterizedDefn):
                 return sty
         return None
 
-    def findMethodBySourceName(self, name):
-        """Searches the method list.
-
-        Arguments:
-            name (str): the source name of the method. Methods without source names will not
-                be considered.
-
-        Returns:
-            (Function, int)?: returns a pair of the method and the method index for the first
-                matching method. If no match was found, `None` is returned.
-        """
-        assert isinstance(name, str)
-        for i, m in enumerate(m for m in self.methods if flags.STATIC not in m.flags):
-            if m.sourceName == name:
-                return m, i
+    def findMethodBySourceName(self, sourceName):
+        """Searches the method list for a non-static function with the given `sourceName`.
+        Returns `None` if no such method is found."""
+        assert isinstance(sourceName, str)
+        for m in self.methods:
+            if m.sourceName == sourceName and flags.STATIC not in m.flags:
+                return m
         return None
-
-    def getMethodIndex(self, method):
-        for i, m in enumerate(m for m in self.methods if flags.STATIC not in m.flags):
-            if m is method:
-                return i
-        raise KeyError("method does not belong to this class")
 
 
 class Class(ObjectTypeDefn):
@@ -803,13 +839,11 @@ class Class(ObjectTypeDefn):
             this class. These functions are called directly after creating a new instance. This
             may be `None` before declaration analysis is complete.
         fields (list[Field]?): a list of fields found in instances of this class. This may be
-            `None` before declaration analysis is complete. Inherited fields are added to
-            this list during class flattening.
+            `None` before declaration analysis is complete. This list does not include
+            inherited fields.
         methods (list[Function]?): a list of functions that operate on instances of this class.
-            This may be `None` before declaration analysis is complete. Inherited methods may
-            be added to this list during class flattening
-        traits ({DefnId: [Function]}?): a method list for each trait this class inherits,
-            directly or indirectly. This is set during class flattening.
+            This may be `None` before declaration analysis is complete. This list does not
+            include inherited methods.
         elementType (Type?): if this is an array class, this is the type of the elements. `None`
             for non-array classes. The `ARRAY` flag must be set if this is not `None`.
         flags (frozenset[flag]): flags indicating how this class is used. Valid flags are
@@ -818,19 +852,18 @@ class Class(ObjectTypeDefn):
 
     def __init__(self, name, id, sourceName=None, astDefn=None, typeParameters=None,
                  supertypes=None, initializer=None, constructors=None, fields=None,
-                 methods=None, traits=None, elementType=None, flags=frozenset()):
+                 methods=None, elementType=None, flags=frozenset()):
         super(Class, self).__init__(name, id, sourceName, astDefn, typeParameters, supertypes)
         self.initializer = initializer
         self.constructors = constructors
         self.fields = fields
         self.methods = methods
-        self.traits = traits
         self.elementType = elementType
         self.flags = flags
 
     def __repr__(self):
         return reprFormat(self, "name", "typeParameters", "supertypes", "initializer",
-                          "constructors", "fields", "methods", "traits", "elementType", "flags")
+                          "constructors", "fields", "methods", "elementType", "flags")
 
     def __str__(self):
         buf = StringIO.StringIO()
@@ -844,11 +877,6 @@ class Class(ObjectTypeDefn):
             buf.write("  constructor %s\n" % ctor.id)
         for method in self.methods:
             buf.write("  method %s\n" % method.id)
-        if self.traits is not None:
-            for id, methods in self.traits:
-                buf.write("  trait %s\n" % id)
-                for method in methods:
-                    buf.write("    method %s\n" % method.id)
         if self.elementType is not None:
             buf.write("  arrayelements %s\n" % str(self.elementType))
         return buf.getvalue()
@@ -861,7 +889,6 @@ class Class(ObjectTypeDefn):
                self.constructors == other.constructors and \
                self.fields == other.fields and \
                self.methods == other.methods and \
-               self.traits == other.traits and \
                self.elementType == other.elementType and \
                self.flags == other.flags
 
@@ -888,16 +915,16 @@ class Class(ObjectTypeDefn):
         return selfBases[i + 1]
 
     def findFieldBySourceName(self, name):
-        for i, f in enumerate(self.fields):
+        for f in self.fields:
             if name == f.sourceName:
-                return f, i
+                return f
         return None
 
     def getMember(self, name):
-        method = self.findMethodBySourceName(name)[0]
+        method = self.findMethodBySourceName(name)
         if method is not None:
             return method
-        return self.findFieldBySourceName(name)[0]
+        return self.findFieldBySourceName(name)
 
     def getFieldIndex(self, field):
         for i, f in enumerate(self.fields):
@@ -929,7 +956,7 @@ class Trait(ObjectTypeDefn):
             inheritance analysis is finished. `Type.isSubtypeOf` may not be used until then.
             `VariableType`s in this list must correspond to parameters in `typeParameters`.
         methods (list[Function]): a list of functions that operate on instances of this trait.
-            Inherited methods may be added to this list during class flattening.
+            This list does not include inherited methods.
         flags (frozenset[flag]): flags indicating how this trait is used. Valid flags are
             `PUBLIC`, `PROTECTED`, `PRIVATE`.
     """
@@ -1089,16 +1116,19 @@ class Field(IrDefinition):
         type (Type?): the type of the field. May be `None` before type analysis.
         flags (frozenset[flag]): flags indicating how this field is used. Valid flags are
             `LET`, `PUBLIC`, `PROTECTED`, `PRIVATE`, `STATIC`.
+        definingClass (Class?): the class this field was defined in (as opposed to any other
+            class that inherits this field).
         index (int?): an integer indicating where this field is located with an instance of
             its class. 0 is the first field, 1 is the second, etc. Used to generate load / store
             instructions. This will usually be `None` before semantic analysis.
     """
 
     def __init__(self, name, sourceName=None, astDefn=None, type=None, flags=frozenset(),
-                 index=None):
+                 definingClass=None, index=None):
         super(Field, self).__init__(name, sourceName, astDefn)
         self.type = type
         self.flags = flags
+        self.definingClass = definingClass
         self.index = index
 
     def __repr__(self):
@@ -1161,9 +1191,23 @@ def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes, importedTy
     Some type arguments may be implied. If the function was imported, these type arguments
     were specified in the import statement. If the function is defined inside a class with
     type parameters, type arguments are implied by the receiver (the enclosing scope
-    in general). If the function is compatible, this function returns a
-    ([Type], [Type]) tuple containing the full list of type arguments and argument types
-    (including the receiver). If the function is not compatible, None is returned."""
+    in general).
+
+    Arguments:
+        irFunction (Function): the function being called.
+        receiverType (Type?): the type of the receiver if this function is being called as
+            a method.
+        typeArgs ([Type]): a list of type arguments explicitly passed to the function.
+            Does not include implicit type arguments from the receiver or the surrounding scope.
+        argTypes ([Type]): a list of types of arguments explicitly passed to the function,
+            not including the receiver type.
+        importedTypeArgs ([Type]?): imported type arguments from the function's definition.
+
+    Returns:
+        ([Type], [Type])?: if the function is compatible, this returns a tuple containing the
+        full list of type arguments and the full list of argument types. Otherwise, `None`
+        is returned.
+    """
     if receiverType is not None and \
        importedTypeArgs is None and \
        (flags.STATIC in irFunction.flags or flags.METHOD in irFunction.flags):
@@ -1191,8 +1235,11 @@ def getAllArgumentTypes(irFunction, receiverType, typeArgs, argTypes, importedTy
         return None
 
 
-def mangleFunctionName(function, package):
-    """Returns a mangled name string which can be used to link overloaded functions."""
+def mangleFunctionShortName(function, package):
+    """Returns a mangled name string which can be used when linking overloaded functions.
+
+    This should be kept in sync with vm/src/index.cpp.
+    """
     def mangleType(ty, variables):
         if ty is ir_types.UnitType:
             return "U"
@@ -1220,12 +1267,12 @@ def mangleFunctionName(function, package):
             if ty.clas.isForeign():
                 assert ty.clas.id.packageId.name is not None
                 packageStr = str(ty.clas.id.packageId.name)
-                prefixStr = "%d%s:%d%s" % (len(packageStr), packageStr, len(nameStr), nameStr)
+                prefixStr = "%s:%s" % (packageStr, nameStr)
             elif ty.clas.isLocal():
-                prefixStr = ":%d%s" % (len(nameStr), nameStr)
+                prefixStr = ":%s" % nameStr
             else:
                 assert ty.clas.isBuiltin()
-                prefixStr = "::%d%s" % (len(nameStr), nameStr)
+                prefixStr = "::%s" % nameStr
             if len(ty.typeArguments) == 0:
                 typeArgStr = ""
             else:
@@ -1251,37 +1298,51 @@ def mangleFunctionName(function, package):
         lowerStr = mangleType(typeParameter.lowerBound, variables)
         return "%s<%s>%s" % (flagStr, upperStr, lowerStr)
 
-    if len(function.name.components) == 1:
-        nameStr = "%d%s" % (len(function.name.components[0]), function.name.components[0])
-    else:
-        nameStr = "%s.%d%s" % (
-            ".".join(function.name.components[:-1]),
-            len(function.name.components[-1]),
-            function.name.components[-1])
+    shortName = function.name.short()
+    nameStr = "%s" % shortName
     if len(function.typeParameters) == 0:
         typeParamsStr = ""
     else:
         typeParamsParts = [mangleTypeParameter(tp, function.typeParameters)
                            for tp in function.typeParameters]
         typeParamsStr = "[" + ",".join(typeParamsParts) + "]"
-    argsParts = [mangleType(pt, function.typeParameters) for pt in function.parameterTypes]
-    argsStr = "(" + ",".join(argsParts) + ")"
+    if len(function.parameterTypes) == 0:
+        argsStr = ""
+    else:
+        argsParts = [mangleType(pt, function.typeParameters) for pt in function.parameterTypes]
+        argsStr = "(" + ",".join(argsParts) + ")"
     return nameStr + typeParamsStr + argsStr
+
+
+def mangleFunctionName(function, package):
+    components = function.name.components[:-1]
+    components.append(mangleFunctionShortName(function, package))
+    return Name(components)
+
+
+def unmangleNameForTest(name):
+    def unmangleComponent(component):
+        if '$' in component:
+            # Remove unique numbers from the end of internal names.
+            numberIndex = component.rfind('_')
+            if numberIndex >= 0:
+                component = component[:numberIndex]
+
+        paramTypesIndex = component.find('(')
+        if paramTypesIndex == -1:
+            paramTypesIndex = len(component)
+        typeParamsIndex = component.find('[')
+        if typeParamsIndex == -1:
+            typeParamsIndex = len(component)
+        endIndex = min(paramTypesIndex, typeParamsIndex)
+        component = component[:endIndex]
+        return component
+
+    return Name(map(unmangleComponent, name.components))
 
 
 __all__ = [
     "Package",
-    "Name",
-    "CLOSURE_SUFFIX",
-    "CONSTRUCTOR_SUFFIX",
-    "CONTEXT_SUFFIX",
-    "PACKAGE_INIT_NAME",
-    "CLASS_INIT_SUFFIX",
-    "ANON_PARAMETER_SUFFIX",
-    "RECEIVER_SUFFIX",
-    "ARRAY_LENGTH_SUFFIX",
-    "EXISTENTIAL_SUFFIX",
-    "BLANK_SUFFIX",
     "PackagePrefix",
     "PackageDependency",
     "Global",

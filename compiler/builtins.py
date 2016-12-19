@@ -10,6 +10,7 @@ import flags
 import ids
 import ir
 import ir_types
+from name import CONSTRUCTOR_SUFFIX, Name
 import utils
 
 import bytecode
@@ -132,9 +133,9 @@ def _initialize():
         nameComponents = []
         if namePrefix is not None:
             nameComponents.append(namePrefix)
-        sourceName = functionData.get("name", ir.CONSTRUCTOR_SUFFIX)
+        sourceName = functionData.get("name", CONSTRUCTOR_SUFFIX)
         nameComponents.append(sourceName)
-        name = ir.Name(nameComponents)
+        name = Name(nameComponents)
         id = getattr(bytecode, functionData["id"])
         flags = buildFlags(functionData["flags"])
         function = ir.Function(name, id,
@@ -151,6 +152,13 @@ def _initialize():
         assert flags.METHOD in function.flags
         function.definingClass = clas
         function.overridenBy = {}
+        if "overrides" in functionData:
+            function.overrides = []
+            for overrideName in functionData["overrides"]:
+                overrideId = getattr(bytecode, overrideName)
+                override = _builtinFunctionIdMap[overrideId]
+                function.overrides.append(override)
+                override.overridenBy[clas.id] = function
         return function
 
     def buildConstructor(functionData, clas):
@@ -159,16 +167,17 @@ def _initialize():
         return function
 
     def buildField(fieldData, index, clas):
-        name = ir.Name([clas.name.short(), fieldData["name"]])
+        name = Name([clas.name.short(), fieldData["name"]])
         ty = buildType(fieldData["type"])
         flags = buildFlags(fieldData["flags"])
-        return ir.Field(name, sourceName=fieldData["name"], type=ty, flags=flags, index=index)
+        return ir.Field(name, sourceName=fieldData["name"], type=ty, flags=flags,
+                        index=index, definingClass=clas)
 
     def declareClass(classData):
-        name = ir.Name([classData["name"]])
+        name = Name([classData["name"]])
         flags = buildFlags(classData["flags"])
         clas = ir.Class(name, None, sourceName=classData["name"],
-                        typeParameters=[], flags=flags)
+                        typeParameters=[], methods=[], flags=flags)
         _builtinClasses.append(clas)
         _builtinClassNameMap[classData["name"]] = clas
 
@@ -179,35 +188,23 @@ def _initialize():
             if classData["supertype"] is not None:
                 superclass = _builtinClassNameMap[classData["supertype"]]
                 clas.supertypes = [ir_types.ClassType(superclass)]
-                clas.fields = list(superclass.fields)
-                clas.methods = list(superclass.methods)
             else:
                 clas.supertypes = []
-                clas.fields = []
-                clas.methods = []
             clas.constructors = [buildConstructor(ctorData, clas)
                                  for ctorData in classData["constructors"]]
-            clas.fields += [buildField(fieldData, index, clas)
-                            for index, fieldData in enumerate(classData["fields"])]
+            clas.fields = [buildField(fieldData, index, clas)
+                           for index, fieldData in enumerate(classData["fields"])]
         else:
             clas.supertypes = []
             clas.fields = []
-            clas.methods = []
             clas.isPrimitive = True
         inheritedMethodCount = len(clas.methods)
         for m in classData["methods"]:
-            addMethod(clas.methods, inheritedMethodCount, buildMethod(m, clas))
+            method = buildMethod(m, clas)
+            clas.methods.append(method)
 
         _builtinClassTypeMap[classData["name"]] = clas
         _builtinClassIdMap[clas.id] = clas
-
-    def addMethod(methods, inheritedCount, method):
-        for i, m in enumerate(methods[:inheritedCount]):
-            if method.name.short() == m.name.short() and method.mayOverride(m):
-                method.override = m
-                methods[i] = method
-                return
-        methods.append(method)
 
     def defineFunction(functionData):
         function = buildFunction(functionData)

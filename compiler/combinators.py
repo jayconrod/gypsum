@@ -1,4 +1,4 @@
-# Copyright 2014, Jay Conrod. All rights reserved.
+# Copyright 2014,2016, Jay Conrod. All rights reserved.
 #
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
@@ -275,17 +275,6 @@ class LeftRec(Parser):
 
             result = nextResult
             result.value = nextValue
-        return result
-
-
-class Break(Parser):
-    def __init__(self, parser):
-        assert isinstance(parser, Parser)
-        self.parser = parser
-
-    def __call__(self, reader):
-        import pdb; pdb.set_trace()
-        result = self.parser(reader)
         return result
 
 

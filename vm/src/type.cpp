@@ -451,7 +451,7 @@ bool Type::isClass() const {
 
 
 Class* Type::asClass() const {
-  ASSERT(isClass() && length() > 0);
+  ASSERT(isClass() && length_ > 0);
   return block_cast<Class>(elements_[0].get());
 }
 
@@ -473,7 +473,7 @@ bool Type::isClassOrTrait() const {
 
 
 ObjectTypeDefn* Type::asClassOrTrait() const {
-  ASSERT(isClassOrTrait() && length() > 0);
+  ASSERT(isClassOrTrait() && length_ > 0);
   return reinterpret_cast<ObjectTypeDefn*>(elements_[0].get());
 }
 

@@ -14,7 +14,9 @@ namespace codeswitch {
 namespace internal {
 
 class Class;
+class DefnId;
 class Field;
+class Function;
 class Type;
 
 class Object: public Block {
@@ -29,6 +31,8 @@ class Object: public Block {
 
   static Local<Type> typeof(const Handle<Object>& object);
   Class* clas() const;
+
+  Function* findMethod(DefnId methodId) const;
 
   u64 getRawField(const Field* field) const;
   void setRawField(const Field* field, u64 bits);

@@ -21,10 +21,22 @@ from type_analysis import *
 from flags import *
 from builtins import getRootClass, getStringClass, getNothingClass, getExceptionClass
 from utils_test import FakePackageLoader, TestCaseWithDefinitions, OPTION_SOURCE, TUPLE_SOURCE
+from name import (
+    CLASS_INIT_SUFFIX,
+    CONSTRUCTOR_SUFFIX,
+    EXISTENTIAL_SUFFIX,
+    Name,
+    RECEIVER_SUFFIX,
+)
 
 
 class TestTypeAnalysis(TestCaseWithDefinitions):
-    def analyzeFromSource(self, source, name=None, packageNames=None, packageLoader=None):
+    def analyzeFromSource(self,
+                          source,
+                          name=None,
+                          packageNames=None,
+                          packageLoader=None,
+                          isUsingStd=False):
         assert packageNames is None or packageLoader is None
         filename = "(test)"
         rawTokens = lex(filename, source)
@@ -38,7 +50,10 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
             packageNameFromString = lambda s: Name.fromString(s, isPackageName=True)
             packageLoader = FakePackageLoader(map(packageNameFromString, packageNames))
         package = Package(TARGET_PACKAGE_ID, name=name)
-        info = CompileInfo(ast, package=package, packageLoader=packageLoader, isUsingStd=False)
+        info = CompileInfo(ast,
+                           package=package,
+                           packageLoader=packageLoader,
+                           isUsingStd=isUsingStd)
         analyzeDeclarations(info)
         analyzeTypeDeclarations(info)
         analyzeInheritance(info)
@@ -406,7 +421,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testPropertyForeignGlobal(self):
         source = "var x = foo.bar"
         foo = Package(name=Name(["foo"]))
-        bar = foo.addGlobal(Name(["bar"]), type=UnitType, flags=frozenset([PUBLIC, LET]))
+        bar = foo.addGlobal(Name(["bar"]), sourceName="bar",
+                            type=UnitType, flags=frozenset([PUBLIC, LET]))
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         x = info.package.findGlobal(name="x")
         self.assertEquals(UnitType, x.type)
@@ -415,7 +431,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testPropertyForeignFunction(self):
         source = "var x = foo.bar"
         foo = Package(name=Name(["foo"]))
-        bar = foo.addFunction(Name(["bar"]), returnType=UnitType, typeParameters=[],
+        bar = foo.addFunction(Name(["bar"]), sourceName="bar",
+                              returnType=UnitType, typeParameters=[],
                               parameterTypes=[], flags=frozenset([PUBLIC]))
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         x = info.package.findGlobal(name="x")
@@ -424,7 +441,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testPropertyForeignCtor(self):
         foo = Package(name=Name(["foo"]))
-        bar = foo.addClass(Name(["Bar"]), typeParameters=[],
+        bar = foo.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                            supertypes=[getRootClassType()],
                            constructors=[], fields=[],
                            methods=[], flags=frozenset([PUBLIC]))
@@ -445,7 +462,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testCallForeignFunctionWithArg(self):
         source = "var x = foo.bar(12)"
         foo = Package(name=Name(["foo"]))
-        bar = foo.addFunction(Name(["bar"]), returnType=I64Type, typeParameters=[],
+        bar = foo.addFunction(Name(["bar"]), sourceName="bar",
+                              returnType=I64Type, typeParameters=[],
                               parameterTypes=[I64Type], flags=frozenset([PUBLIC]))
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         x = info.package.findGlobal(name="x")
@@ -457,7 +475,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         T = foo.addTypeParameter(Name(["T"]), upperBound=getRootClassType(),
                                  lowerBound=getNothingClassType(), flags=frozenset([STATIC]))
         Tty = VariableType(T)
-        bar = foo.addFunction(Name(["bar"]), returnType=Tty, typeParameters=[T],
+        bar = foo.addFunction(Name(["bar"]), sourceName="bar",
+                              returnType=Tty, typeParameters=[T],
                               parameterTypes=[Tty], flags=frozenset([PUBLIC]))
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
         x = info.package.findGlobal(name="x")
@@ -465,7 +484,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testCallFunctionWithForeignTypeArg(self):
         otherPackage = Package(name=Name(["foo"]))
-        clas = otherPackage.addClass(Name(["Bar"]), typeParameters=[],
+        clas = otherPackage.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                      supertypes=[getRootClassType()],
                                      constructors=[], fields=[],
                                      methods=[], flags=frozenset([PUBLIC]))
@@ -482,11 +501,12 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testLoadFromForeignClass(self):
         fooPackage = Package(name=Name(["foo"]))
-        clas = fooPackage.addClass(Name(["Bar"]), typeParameters=[],
+        clas = fooPackage.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                    supertypes=[getRootClassType()],
                                    constructors=[], fields=[],
                                    methods=[], flags=frozenset([PUBLIC]))
-        clas.fields.append(fooPackage.newField(Name(["Bar", "x"]), type=I64Type,
+        clas.fields.append(fooPackage.newField(Name(["Bar", "x"]), sourceName="x",
+                                               type=I64Type,
                                                flags=frozenset([PUBLIC])))
         loader = FakePackageLoader([fooPackage])
 
@@ -497,11 +517,12 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testStoreToForeignClass(self):
         fooPackage = Package(name=Name(["foo"]))
-        clas = fooPackage.addClass(Name(["Bar"]), typeParameters=[],
+        clas = fooPackage.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                    supertypes=[getRootClassType()],
                                    constructors=[], fields=[],
                                    methods=[], flags=frozenset([PUBLIC]))
-        clas.fields.append(fooPackage.newField(Name(["Bar", "x"]), type=I64Type,
+        clas.fields.append(fooPackage.newField(Name(["Bar", "x"]), sourceName="x",
+                                               type=I64Type,
                                                flags=frozenset([PUBLIC])))
         loader = FakePackageLoader([fooPackage])
 
@@ -512,11 +533,11 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testCallForeignMethod(self):
         fooPackage = Package(name=Name(["foo"]))
-        clas = fooPackage.addClass(Name(["Bar"]), typeParameters=[],
+        clas = fooPackage.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                    supertypes=[getRootClassType()],
                                    constructors=[], fields=[],
                                    methods=[], flags=frozenset([PUBLIC]))
-        m = fooPackage.addFunction(Name(["Bar", "m"]),
+        m = fooPackage.addFunction(Name(["Bar", "m"]), sourceName="m",
                                    returnType=I64Type, typeParameters=[],
                                    parameterTypes=[ClassType(clas)],
                                    flags=frozenset([PUBLIC, METHOD]),
@@ -531,7 +552,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testLoadFromInheritedForeignClass(self):
         fooPackage = Package(name=Name(["foo"]))
-        clas = fooPackage.addClass(Name(["Bar"]), typeParameters=[],
+        clas = fooPackage.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                    supertypes=[getRootClassType()],
                                    constructors=[], fields=[],
                                    methods=[], flags=frozenset([PUBLIC]))
@@ -542,7 +563,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                       flags=frozenset([PUBLIC, METHOD]),
                                       definingClass=clas)
         clas.constructors = [ctor]
-        field = fooPackage.newField(Name(["Bar", "x"]), type=I64Type, flags=frozenset([PUBLIC]))
+        field = fooPackage.newField(Name(["Bar", "x"]), sourceName="x",
+                                    type=I64Type, flags=frozenset([PUBLIC]))
         clas.fields = [field]
         packageLoader = FakePackageLoader([fooPackage])
 
@@ -554,7 +576,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testCallInInheritedForeignClass(self):
         fooPackage = Package(name=Name(["foo"]))
-        clas = fooPackage.addClass(Name(["Bar"]), typeParameters=[],
+        clas = fooPackage.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                    supertypes=[getRootClassType()],
                                    constructors=[], fields=[],
                                    methods=[], flags=frozenset([PUBLIC]))
@@ -565,7 +587,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                       flags=frozenset([PUBLIC, METHOD]),
                                       definingClass=clas)
         clas.constructors.append(ctor)
-        m = fooPackage.addFunction(Name(["Bar", "m"]),
+        m = fooPackage.addFunction(Name(["Bar", "m"]), sourceName="m",
                                    returnType=ty, typeParameters=[], parameterTypes=[ty],
                                    flags=frozenset([PUBLIC, METHOD]),
                                    definingClass=clas)
@@ -671,16 +693,18 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testForeignClassWithOverrideMethod(self):
         fooPackage = Package(name=Name(["foo"]))
-        clas = fooPackage.addClass(name=Name(["Bar"]), typeParameters=[],
+        clas = fooPackage.addClass(name=Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                    supertypes=[getRootClassType()],
                                    constructors=[], fields=[], methods=[],
                                    flags=frozenset([PUBLIC]))
         ty = ClassType(clas)
-        method = fooPackage.addFunction(name=Name(["Bar", "to-string"]),
+        rootClass = getRootClass()
+        rootToString = rootClass.findMethodBySourceName("to-string")
+        method = fooPackage.addFunction(name=Name(["Bar", "to-string"]), sourceName="to-string",
                                         returnType=getStringType(), typeParameters=[],
                                         parameterTypes=[ty],
                                         flags=frozenset([PUBLIC, METHOD, OVERRIDE]),
-                                        definingClass=clas)
+                                        definingClass=clas, overrides=[rootToString])
         clas.methods.append(method)
         packageLoader = FakePackageLoader([fooPackage])
 
@@ -971,7 +995,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testMatchExprValue(self):
         foo = Package(name=Name(["foo"]))
-        foo.addGlobal(Name(["bar"]), type=I64Type, flags=frozenset([PUBLIC, LET]))
+        foo.addGlobal(Name(["bar"]), sourceName="bar",
+                      type=I64Type, flags=frozenset([PUBLIC, LET]))
         source = "def f(x: i64) =\n" + \
                  "  match (x)\n" + \
                  "    case foo.bar => 1"
@@ -1380,7 +1405,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testForeignProjectedClassType(self):
         package = Package(name=Name(["foo"]))
-        clas = package.addClass(Name(["Bar"]), typeParameters=[],
+        clas = package.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                 supertypes=[getRootClassType()],
                                 constructors=[], fields=[],
                                 methods=[], flags=frozenset([PUBLIC]))
@@ -1411,7 +1436,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         param = package.addTypeParameter(Name(["Bar", "T"]), upperBound=getRootClassType(),
                                          lowerBound=getNothingClassType(),
                                          flags=frozenset([STATIC]))
-        clas = package.addClass(Name(["Bar"]), typeParameters=[param],
+        clas = package.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[param],
                                 supertypes=[getRootClassType()],
                                 constructors=[], fields=[], methods=[],
                                 flags=frozenset([PUBLIC]))
@@ -1427,7 +1452,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         param = package.addTypeParameter(Name(["Bar", "T"]), upperBound=getStringType(),
                                          lowerBound=getNothingClassType(),
                                          flags=frozenset([STATIC]))
-        clas = package.addClass(Name(["Bar"]), typeParameters=[param],
+        clas = package.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[param],
                                 supertypes=[getRootClassType()],
                                 constructors=[], fields=[],
                                 methods=[], flags=frozenset([PUBLIC]))
@@ -1639,9 +1664,9 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  override def to-string = \"A\"\n"
         info = self.analyzeFromSource(source)
         A = info.package.findClass(name="A")
-        toString = A.findMethodBySourceName("to-string")[0]
+        toString = A.findMethodBySourceName("to-string")
         self.assertIs(A, toString.definingClass)
-        self.assertEquals([getRootClass().findMethodBySourceName("to-string")[0].id],
+        self.assertEquals([getRootClass().findMethodBySourceName("to-string").id],
                           [o.id for o in toString.overrides])
 
     def testOverrideCovariantParameters(self):
@@ -1673,30 +1698,30 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals([fooClass.methods[-1].id],
                           [o.id for o in barClass.methods[-1].overrides])
 
+    @unittest.skip("issues/25")
     def testAmbiguousOverloadWithoutCall(self):
         source = "def f = 12\n" + \
                  "def f = 34\n"
-        self.analyzeFromSource(source)
-        # pass if no error
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
 
+    @unittest.skip("issues/25")
     def testAmbiguousOverloadWithoutCallInClass(self):
         source = "class Foo\n" + \
                  "  def f = 12\n" + \
                  "  def f = 34\n"
-        self.analyzeFromSource(source)
-        # pass if no error
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testAmbiguousOverloadGlobal(self):
-        source = "def f = 12\n" + \
-                 "def f = 34\n" + \
-                 "var x = f"
+        source = "def f(a: String, b: Object) = 12\n" + \
+                 "def f(a: Object, b: String) = 34\n" + \
+                 "var x = f(\"a\", \"b\")"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testAmbiguousOverloadMethods(self):
         source = "class Foo\n" + \
-                 "  def f = 12\n" + \
-                 "  def f = 34\n" + \
-                 "def g(foo: Foo) = foo.f"
+                 "  def f(a: Object, b: String) = 12\n" + \
+                 "  def f(a: String, b: Object) = 34\n" + \
+                 "def g(foo: Foo) = foo.f(\"a\", \"b\")"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testSimpleOverload(self):
@@ -1709,6 +1734,25 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         statements = info.ast.modules[0].definitions[2].body.statements
         self.assertEquals(I32Type, info.getType(statements[0]))
         self.assertEquals(F32Type, info.getType(statements[1]))
+
+    def testOverloadEqualType(self):
+        source = "def f(x: Object) = x\n" + \
+                 "def f(x: String) = x\n" + \
+                 "def g(x: String) = f(x)"
+        info = self.analyzeFromSource(source)
+        g = info.package.findFunction(name="g")
+        self.assertEquals(getStringType(), g.returnType)
+
+    def testOverloadCloserType(self):
+        source = "class A\n" + \
+                 "class B <: A\n" + \
+                 "class C <: B\n" + \
+                 "def f(a: A) = true\n" + \
+                 "def f(b: B) = 12i64\n" + \
+                 "def g(c: C) = f(c)"
+        info = self.analyzeFromSource(source)
+        g = info.package.findFunction(name="g")
+        self.assertEquals(I64Type, g.returnType)
 
     def testOverloadWithTypeParameter(self):
         source = "def f[static T] = {}\n" + \
@@ -1731,6 +1775,16 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                           fn.typeParameters[0].upperBound.clas is getRootClass()
         f = info.package.findFunction(name="f", pred=pred)
         self.assertIs(use.defnInfo.irDefn, f)
+
+    def testOverloadWithSubstitution(self):
+        source = "class C[static T]\n" + \
+                 "  static def f(x: T) = true\n" + \
+                 "import C[String].f\n" + \
+                 "def f(x: Object) = 12i64\n" + \
+                 "def g(x: String) = f(x)"
+        info = self.analyzeFromSource(source)
+        g = info.package.findFunction(name="g")
+        self.assertEquals(BooleanType, g.returnType)
 
     def testIdentityTypeParameter(self):
         source = "def id[static T](o: T) = o\n" + \
@@ -2207,7 +2261,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testImportGlobalFromPackage(self):
         foo = Package(name=Name(["foo"]))
-        bar = foo.addGlobal(Name(["bar"]), type=I64Type, flags=frozenset([PUBLIC]))
+        bar = foo.addGlobal(Name(["bar"]), sourceName="bar",
+                            type=I64Type, flags=frozenset([PUBLIC]))
         source = "import foo.bar as baz\n" + \
                  "let x = baz"
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
@@ -2330,7 +2385,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testExternClassWithoutVisibleCtor(self):
         foo = Package(name=Name(["foo"]))
-        Bar = foo.addClass(Name(["Bar"]), typeParameters=[],
+        Bar = foo.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                            supertypes=[getRootClassType()],
                            constructors=[], fields=[],
                            methods=[], flags=frozenset([PUBLIC]))
@@ -2338,3 +2393,94 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
         source = "let x = foo.Bar()"
         self.assertRaises(TypeException, self.analyzeFromSource, source, packageLoader=loader)
+
+    def testOptionAndTupleExternalizedInDestructure(self):
+        import sys
+        sys.setrecursionlimit(10000)
+        std = Package(name=Name(["std"]))
+        OptionT = std.addTypeParameter(Name(["Option", "T"]),
+                                       upperBound=getRootClassType(),
+                                       lowerBound=getNothingClassType(),
+                                       flags=frozenset([STATIC, COVARIANT]))
+        Option = std.addClass(Name(["Option"]), sourceName="Option",
+                              typeParameters=[OptionT],
+                              supertypes=[getRootClassType()],
+                              constructors=[], fields=[],
+                              methods=[], flags=frozenset([PUBLIC, ABSTRACT]))
+        OptionType = ClassType.forReceiver(Option)
+        OptionIsDefined = std.addFunction(Name(["Option", "is-defined"]),
+                                          sourceName="is-defined",
+                                          returnType=BooleanType, typeParameters=[OptionT],
+                                          parameterTypes=[OptionType],
+                                          flags=frozenset([PUBLIC, ABSTRACT, METHOD]),
+                                          definingClass=Option)
+        OptionGet = std.addFunction(Name(["Option", "get"]), sourceName="get",
+                                    returnType=VariableType(OptionT),
+                                    parameterTypes=[OptionType],
+                                    flags=frozenset([PUBLIC, ABSTRACT, METHOD]),
+                                    definingClass=Option)
+        Option.methods.extend([OptionIsDefined, OptionGet])
+        Non = std.addGlobal(Name(["None"]), sourceName="None",
+                            type=ClassType(Option, (getNothingClassType(),)),
+                            flags=frozenset([PUBLIC, LET]))
+        SomeT = std.addTypeParameter(Name(["Some", "T"]),
+                                     upperBound=getRootClassType(),
+                                     lowerBound=getNothingClassType(),
+                                     flags=frozenset([STATIC, COVARIANT]))
+        SomeTType = VariableType(SomeT)
+        Some = std.addClass(Name(["Some"]), sourceName="Some",
+                            typeParameters=[SomeT],
+                            supertypes=[ClassType(Option, (SomeTType,)), getRootClassType()],
+                            constructors=[], fields=[], methods=[],
+                            flags=frozenset([PUBLIC, FINAL]))
+        SomeType = ClassType.forReceiver(Some)
+        SomeCtor = std.addFunction(Name(["Some", CONSTRUCTOR_SUFFIX]),
+                                   returnType=UnitType,
+                                   typeParameters=[SomeT],
+                                   parameterTypes=[SomeType, SomeTType],
+                                   flags=frozenset([PUBLIC, METHOD, CONSTRUCTOR]),
+                                   definingClass=Some)
+        Some.constructors.append(SomeCtor)
+        Tuple2T1 = std.addTypeParameter(Name(["Tuple2", "T1"]),
+                                        upperBound=getRootClassType(),
+                                        lowerBound=getNothingClassType(),
+                                        flags=frozenset([STATIC, COVARIANT]))
+        Tuple2T1Type = VariableType(Tuple2T1)
+        Tuple2T2 = std.addTypeParameter(Name(["Tuple2", "T2"]),
+                                        upperBound=getRootClassType(),
+                                        lowerBound=getNothingClassType(),
+                                        flags=frozenset([STATIC, COVARIANT]))
+        Tuple2T2Type = VariableType(Tuple2T2)
+        Tuple2 = std.addClass(Name(["Tuple2"]), sourceName="Tuple2",
+                              typeParameters=[Tuple2T1, Tuple2T2],
+                              supertypes=[getRootClassType()],
+                              constructors=[], fields=[],
+                              methods=[], flags=frozenset([PUBLIC, FINAL]))
+        Tuple2Type = ClassType.forReceiver(Tuple2)
+        Tuple2Ctor = std.addFunction(Name(["Tuple2", CONSTRUCTOR_SUFFIX]),
+                                     returnType=UnitType,
+                                     typeParameters=[Tuple2T1, Tuple2T2],
+                                     parameterTypes=[Tuple2Type, Tuple2T1Type, Tuple2T2Type],
+                                     flags=frozenset([PUBLIC, METHOD, CONSTRUCTOR]),
+                                     definingClass=Tuple2)
+        Tuple2.constructors.append(Tuple2Ctor)
+
+        packageLoader = FakePackageLoader([std])
+        source = "import std.None, Option, Some\n" + \
+                 "abstract class Expr\n" + \
+                 "final class AddExpr(left: Expr, right: Expr) <: Expr\n" + \
+                 "  static def try-match(obj: Object): Option[(Expr, Expr)] =\n" + \
+                 "    match (obj)\n" + \
+                 "      case e: AddExpr => Some[(Expr, Expr)]((e.left, e.right))\n" + \
+                 "      case _ => None\n" + \
+                 "def f(obj: Object) =\n" + \
+                 "  match (obj)\n" + \
+                 "    case AddExpr(a, b) => true\n" + \
+                 "    case _ => false"
+        info = self.analyzeFromSource(source, packageLoader=packageLoader, isUsingStd=True)
+
+        stdExternInfoNames = [defn.name for defn in info.stdExternInfo.itervalues()]
+        self.assertIn(Option.name, stdExternInfoNames)
+        self.assertIn(OptionIsDefined.name, stdExternInfoNames)
+        self.assertIn(OptionGet.name, stdExternInfoNames)
+        self.assertIn(Tuple2.name, stdExternInfoNames)

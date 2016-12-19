@@ -8,7 +8,7 @@ from functools import partial
 
 import ast
 from bytecode import W8, W16, W32, W64, BUILTIN_TYPE_CLASS_ID, BUILTIN_TYPE_CTOR_ID, instInfoByCode, BUILTIN_MATCH_EXCEPTION_CLASS_ID, BUILTIN_MATCH_EXCEPTION_CTOR_ID, BUILTIN_STRING_EQ_OP_ID
-from ir import IrTopDefn, Class, Field, Function, Global, LOCAL, Package, PACKAGE_INIT_NAME, RECEIVER_SUFFIX, Trait, Variable
+from ir import IrTopDefn, Class, Field, Function, Global, LOCAL, Package, Trait, Variable
 from ir_types import Type, NoType, UnitType, BooleanType, I8Type, I16Type, I32Type, I64Type, F32Type, F64Type, ObjectType, ClassType, VariableType, ExistentialType, NULLABLE_TYPE_FLAG, getExceptionClassType, getClassFromType, getStringType, getRootClassType
 import ir_instructions
 from compile_info import CONTEXT_CONSTRUCTOR_HINT, CLOSURE_CONSTRUCTOR_HINT, PACKAGE_INITIALIZER_HINT, ARRAY_ELEMENT_GET_HINT, ARRAY_ELEMENT_SET_HINT, ARRAY_ELEMENT_LENGTH_HINT, DefnInfo, NORMAL_MODE, STD_MODE, NOSTD_MODE
@@ -17,6 +17,11 @@ from errors import SemanticException
 from builtins import getTypeClass, getExceptionClass, getRootClass, getStringClass, getBuiltinFunctionById, getBuiltinClassById
 import type_analysis
 from utils import Counter, COMPILE_FOR_EFFECT, COMPILE_FOR_VALUE, COMPILE_FOR_UNINITIALIZED, COMPILE_FOR_MATCH, each
+from name import (
+    PACKAGE_INIT_NAME,
+    RECEIVER_SUFFIX,
+)
+
 
 def compile(info):
     for clas in info.package.classes:
@@ -182,7 +187,7 @@ class CompileVisitor(ast.NodeVisitor):
             self.loadThis()
             clas = self.function.definingClass
             length = next(f for f in clas.fields if ARRAY in f.flags)
-            self.ldf(length.index)
+            self.loadField(length)
             self.ret()
 
         self.function.blocks = self.blocks
@@ -368,7 +373,7 @@ class CompileVisitor(ast.NodeVisitor):
         else:
             self.dup()  # value
             self.buildLiteral(lit)
-            self.buildCallNamedMethod(ty, "==", COMPILE_FOR_VALUE)
+            self.buildEquals(ty)
         successBlock = self.newBlock()
         self.branchif(successBlock.id, failBlock.id)
         self.setCurrentBlock(successBlock)
@@ -413,7 +418,7 @@ class CompileVisitor(ast.NodeVisitor):
             if not isBlank(p, pty):
                 if i != lastMatchingIndex:
                     self.dup()
-                self.ldf(i)
+                self.loadField(tupleClass.fields[i])
                 self.visit(p, mode, pty, elementFailBlock)
 
         # Clean up.
@@ -443,13 +448,13 @@ class CompileVisitor(ast.NodeVisitor):
             # first is a little more compact.
             self.dup()
             buildValue()
-            self.buildCallNamedMethod(ty, "==", COMPILE_FOR_VALUE)
+            self.buildEquals(ty)
         else:
             # The == operator for the matching value could be anything, so we want to make
             # sure to call the method on the value from this pattern.
             buildValue()
             self.dupi(1)
-            self.buildCallNamedMethod(ty, "==", COMPILE_FOR_VALUE)
+            self.buildEquals(ty)
         successBlock = self.newBlock()
         self.branchif(successBlock.id, failBlock.id)
         self.setCurrentBlock(successBlock)
@@ -1381,10 +1386,18 @@ class CompileVisitor(ast.NodeVisitor):
             self.loadThis()
 
     def loadField(self, field):
-        self.ldf(field.index)
+        nameIndex = self.info.package.findName(field.name)
+        if field.definingClass.isForeign():
+            self.ldff(field.definingClass, nameIndex)
+        else:
+            self.ldf(field.definingClass, nameIndex)
 
     def storeField(self, field):
-        self.stf(field.index)
+        nameIndex = self.info.package.findName(field.name)
+        if field.definingClass.isForeign():
+            self.stff(field.definingClass, nameIndex)
+        else:
+            self.stf(field.definingClass, nameIndex)
 
     def loadThis(self):
         assert self.function.isMethod()
@@ -1509,7 +1522,7 @@ class CompileVisitor(ast.NodeVisitor):
 
     def buildCallNamedMethod(self, receiverType, name, mode):
         receiverClass = getClassFromType(receiverType)
-        method, _ = receiverClass.findMethodBySourceName(name)
+        method = receiverClass.findMethodBySourceName(name)
         self.callMethod(method, receiverType)
         self.dropForEffect(mode)
 
@@ -1519,7 +1532,6 @@ class CompileVisitor(ast.NodeVisitor):
         If the method has instructions specified (nearly all primitive methods), those are
         inlined directly. If the method is final, it is called statically. If the method is
         defined in a class or the receiver type is a class, it will be called virtually.
-        Otherwise, it will be called through its defining trait.
 
         Args:
             method (Function): the method to call.
@@ -1534,22 +1546,10 @@ class CompileVisitor(ast.NodeVisitor):
         elif method.isFinal():
             self.callFunction(method)
         else:
-            argCount = len(method.parameterTypes)
-            methodClass = method.definingClass
-            if isinstance(methodClass, Trait) and receiverType is not None:
-                if not isinstance(receiverType, ClassType):
-                    receiverType = receiverType.getBaseClassType()
-                if isinstance(receiverType.clas, Class):
-                    methodClass = receiverType.clas
-            index = methodClass.getMethodIndex(method)
-            if isinstance(methodClass, Class):
-                self.callv(argCount, index)
+            if method.isForeign():
+                self.callvf(method)
             else:
-                assert isinstance(methodClass, Trait)
-                if methodClass.isForeign():
-                    self.callvtf(argCount, methodClass, index)
-                else:
-                    self.callvt(argCount, methodClass, index)
+                self.callv(method)
 
     HAVE_RECEIVER = "HAVE_RECEIVER"
 
@@ -1716,16 +1716,17 @@ class CompileVisitor(ast.NodeVisitor):
             self.visit(subPatterns[0], COMPILE_FOR_MATCH, valueType, dropBlock)
             successState = self.saveCurrentBlock()
         else:
+            tupleClass = valueType.clas
             valueTypeArgs = valueType.getTypeArguments()
             dropFieldBlock = self.newBlock()
             mustMatch = True
             for i in xrange(n - 1):
                 self.dup()
-                self.ldf(i)
+                self.loadField(tupleClass.fields[i])
                 self.visit(subPatterns[i], COMPILE_FOR_MATCH, valueTypeArgs[i], dropFieldBlock)
                 mustMatch &= type_analysis.patternMustMatch(subPatterns[i], valueTypeArgs[i],
                                                            self.info)
-            self.ldf(n - 1)
+            self.loadField(tupleClass.fields[n - 1])
             self.visit(subPatterns[-1], COMPILE_FOR_MATCH, valueTypeArgs[-1], dropBlock)
             successState = self.saveCurrentBlock()
 
@@ -1757,8 +1758,10 @@ class CompileVisitor(ast.NodeVisitor):
     def buildEquals(self, ty):
         """Compares the two values on top of the stack for equality. For objects, reference
         equality is used."""
-        methodName = "==" if ty.isPrimitive() else "==="
-        self.buildCallNamedMethod(ty, methodName, COMPILE_FOR_VALUE)
+        if ty.isPrimitive():
+            self.buildCallNamedMethod(ty, "==", COMPILE_FOR_VALUE)
+        else:
+            self.buildCallNamedMethod(getRootClassType(), "===", COMPILE_FOR_VALUE)
 
     def buildType(self, ty, loc):
         """Builds a type on the static type argument stack and simultaneously builds an
