@@ -1152,6 +1152,51 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         caseType = info.getType(tryMatch.astDefn.body.statements[0].matcher.cases[0].expression)
         self.assertEquals(SomeTType, caseType)
 
+    def testMatchExprTestStaticAndDynamicTwoParamsFail(self):
+        source = OPTION_SOURCE + \
+                 "class Box[static +T]\n" + \
+                 "class MoreBox[static +S, static +T](foo: S, bar: T) <: Box[T]\n" + \
+                 "  static def try-match(box: Box[T]): Option[T] =\n" + \
+                 "    match (box)\n" + \
+                 "      case more-box: MoreBox[String, T] => Some[T](more-box.bar)\n" + \
+                 "      case _ => None"
+        self.assertRaises(TypeException, self.analyzeFromSource, source, name=STD_NAME)
+
+    def testMatchExprTestStaticAndDynamicTwoParamsOk(self):
+        source = OPTION_SOURCE + \
+                 "class Box[static +T]\n" + \
+                 "class MoreBox[static +S, static +T](foo: S, bar: T) <: Box[T]\n" + \
+                 "  static def try-match(box: Box[T]): Option[T] =\n" + \
+                 "    match (box)\n" + \
+                 "      case more-box: MoreBox[_, T] => Some[T](more-box.bar)\n" + \
+                 "      case _ => None"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        T = info.package.findTypeParameter(name="MoreBox.T")
+        tryMatchAst = info.package.findFunction(name="MoreBox.try-match").astDefn
+        resultAst = tryMatchAst.body.statements[0].matcher.cases[0].expression.arguments[0]
+        resultType = info.getType(resultAst)
+        self.assertEquals(VariableType(T), resultType)
+
+    def testMatchExprTestStaticAndDynamicTypeParameterUpperBound(self):
+        source = "class Box[static +T]\n" + \
+                 "class FullBox[static +T](value: T) <: Box[T]\n" + \
+                 "def f[static T <: Box[String]](box: T) =\n" + \
+                 "  match (box)\n" + \
+                 "    case full-box: FullBox[String] => full-box.value"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(getStringType(), f.returnType)
+
+    def testMatchExprTestStaticAndDynamicExistential(self):
+        source = "class Box[static +T]\n" + \
+                 "class FullBox[static +T](value: T) <: Box[T]\n" + \
+                 "def f(box: forsome [X] Box[String]) =\n" + \
+                 "  match (box)\n" + \
+                 "    case full-box: FullBox[String] => full-box.value"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(getStringType(), f.returnType)
+
     def testMatchExprTestStaticAndDynamicOption(self):
         source = OPTION_SOURCE + \
                  "class Foo[static F]\n" + \
@@ -1163,15 +1208,19 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.analyzeFromSource(source, name=STD_NAME)
         # pass if no exception is raised
 
-    def testMatchExprTestStaticAndDynamicTwoParams(self):
-        source = OPTION_SOURCE + \
-                 "class Foo[static F]\n" + \
-                 "class Bar[static B1, static B2] <: Foo[B1]\n" + \
-                 "def f(foo: Foo[String]) =\n" + \
-                 "  match (foo)\n" + \
-                 "    case bar: Bar[String, String] => true\n" + \
-                 "    case _ => false"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
+    def testMatchExprTestStaticAndDynamicNothingStatic(self):
+        source = "def f(nothing: Nothing) =\n" + \
+                 "  match (nothing)\n" + \
+                 "    case s: String => s"
+        self.analyzeFromSource(source)
+        # pass if no exception is raised
+
+    def testMatchExprTestStaticAndDynamicNothingTest(self):
+        source = "def f(obj: Object) =\n" + \
+                 "  match (obj)\n" + \
+                 "    case n: Nothing => n"
+        self.analyzeFromSource(source)
+        # pass if no exception is raised
 
     def testMatchExprWithDisjointType(self):
         source = "def f(x: String) =\n" + \

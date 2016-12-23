@@ -152,19 +152,33 @@ def typeCanBeTested(testType, staticType, existentialVarIds=None):
         existentialVarIds = frozenset()
 
     if isinstance(testType, ir_t.ClassType):
-        if isinstance(staticType, ir_t.ClassType):
-            baseTypeArgs = extractTypeArgsForSubtype(testType.clas, staticType)
-            if baseTypeArgs is not None and \
-               ir_t.ClassType(testType.clas, baseTypeArgs, testType.flags) == testType:
-                return True
-        rootType = ir_t.getRootClassType()
-        for tp, ta in zip(testType.clas.typeParameters, testType.typeArguments):
-            staticArgCanBeTested = STATIC in tp.flags and \
-                                   isinstance(ta, ir_t.VariableType) and \
-                                   ta.typeParameter.id in existentialVarIds
-            dynamicArgCanBeTested = STATIC not in tp.flags and \
-                                    typeCanBeTested(ta, rootType, existentialVarIds)
-            if not staticArgCanBeTested and not dynamicArgCanBeTested:
+        # Peel off existential layers from the static type. We won't be able to test against
+        # any existential variables we see.
+        while isinstance(staticType, ir_t.ExistentialType):
+            staticType = staticType.ty
+
+        # If the static type is a type variable, we just treat it as the upper bound.
+        # TODO: handle dynamic type variables.
+        if isinstance(staticType, ir_t.VariableType):
+            assert STATIC in staticType.typeParameter.flags
+            staticType = staticType.getBaseClassType()
+        assert isinstance(staticType, ir_t.ClassType)
+
+        # When we successfully test the type at run-time, we are effectively down-casting
+        # the static type. We still need to verify the down-cast type arguments match the
+        # test type arguments or are wildcarded.
+        # TODO: handle type parameter variance.
+        # TODO: handle dynamic type variables.
+        subTypeArgs = extractTypeArgsForSubtype(testType.clas, staticType)
+        if subTypeArgs is None:
+            # testType.clas is not derived from staticType.clas. The test will always fail,
+            # but it is safe to do.
+            return True
+        for sta, tta in zip(subTypeArgs, testType.typeArguments):
+            isWildcard = isinstance(tta, ir_t.VariableType) \
+                         and tta.typeParameter.id in existentialVarIds
+            isMatch = sta == tta
+            if not isWildcard and not isMatch:
                 return False
         return True
     elif isinstance(testType, ir_t.VariableType):
