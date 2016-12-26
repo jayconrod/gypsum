@@ -1,0 +1,92 @@
+// Copyright 2016, Jay Conrod. All rights reserved.
+//
+// This file is part of the Gypsum standard library. Use of this
+// source code is governed by the 3-clause BSD license that can be
+// found in the LICENSE.txt file.
+
+
+import std.AssertionException, Set, Eq, I32, NoSuchElementException
+
+
+def assert-true(b: boolean) =
+  if (!b)
+    throw AssertionException()
+
+
+def assert-false(b: boolean) =
+  if (b)
+    throw AssertionException()
+
+
+def assert-eq(expected: i32, actual: i32) =
+  if (expected != actual)
+    throw AssertionException()
+
+
+def assert-eq[static T <: Eq[T]](expected: T, actual: T) =
+  if (expected != actual)
+    throw AssertionException()
+
+
+def test-empty-set =
+  let set = Set[I32]()
+  assert-eq(0i32, set.length)
+
+  let it = set.iter
+  assert-false(it.has-next)
+  try
+    it.next
+    throw AssertionException()
+  catch (e: NoSuchElementException) {}
+
+  assert-false(set.contains(I32.of(1i32)))
+  assert-false(set.remove(I32.of(1i32)))
+
+
+def test-insert-remove =
+  let set = Set[I32]()
+  var i = 0i32
+  let N = 50i32
+  while (i < N)
+    assert-eq(i, set.length)
+    assert-true(set.add(I32.of(i)))
+    assert-false(set.add(I32.of(i)))
+    i += 1i32
+
+  i = 0i32
+  while (i < N)
+    assert-true(set.contains(I32.of(i)))
+    i += 1i32
+
+  i = 0i32
+  while (i < N)
+    assert-eq(N - i, set.length)
+    assert-true(set.remove(I32.of(i)))
+    assert-false(set.remove(I32.of(i)))
+    i += 1i32
+  assert-eq(0i32, set.length)
+
+
+def test-iter =
+  let set = Set[I32]()
+  var i = 0i32
+  let N = 32i32
+  while (i < N)
+    set.add(I32.of(i))
+    i += 1i32
+
+  var bitmap = 0i32
+  let it = set.iter
+  while (it.has-next)
+    let elem = it.next
+    let bit = 1i32 << elem.value
+    assert-eq(0i32, bitmap & bit)
+    bitmap |= bit
+  assert-eq(0xffffffffi32, bitmap)
+
+
+def main =
+  test-empty-set
+  test-insert-remove
+  test-iter
+  {}

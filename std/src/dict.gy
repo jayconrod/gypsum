@@ -1,0 +1,75 @@
+// Copyright 2016, Jay Conrod. All rights reserved.
+//
+// This file is part of the Gypsum standard library. Use of this
+// source code is governed by the 3-clause BSD license that can be
+// found in the LICENSE.txt file.
+
+
+public final class Dict[static K <: Hash[K], static V] <: Iter[(K, V)]
+  private var table = new(MIN-CAPACITY) HashTable[K, V]
+
+  public def length = table.live-element-count
+
+  public def contains(key: K): boolean = table.get(key).is-defined
+
+  public def get(key: K): Option[V] =
+    match (table.get(key))
+      case Some[LiveEntry[K, V]](entry: LiveDictEntry[K, V]) => Some[V](entry.value)
+      case _ => None
+
+  public def get-or-else(key: K, default-value: V): V =
+    match (table.get(key))
+      case Some[LiveEntry[K, V]](entry: LiveDictEntry[K, V]) => entry.value
+      case _ => default-value
+
+  public def put(key: K, value: V): Option[V] =
+    match (table.get(key))
+      case Some[LiveEntry[K, V]](entry: LiveDictEntry[K, V]) =>
+        let old-value = entry.value
+        entry.value = value
+        Some[V](old-value)
+      case _ =>
+        if (table.live-element-count == table.capacity ||
+            table.empty-ratio < MIN-EMPTY-RATIO)
+          resize(table.capacity * 2i32)
+        table.insert(LiveDictEntry[K, V](key, value))
+        None
+
+  public def remove(key: K): Option[V] =
+    match (table.remove(key))
+      case Some[LiveEntry[K, V]](entry: LiveDictEntry[K, V]) =>
+        if (table.capacity > MIN-CAPACITY && table.live-ratio < MIN-LIVE-RATIO)
+          resize(table.capacity / 2i32)
+        Some[V](entry.value)
+      case _ => None
+
+  public override def iter: Iterator[(K, V)] = DictIterator[K, V](table.iter)
+
+  private def resize(new-capacity: i32): unit =
+    let new-table = new(new-capacity) HashTable[K, V]
+    new-table.rehash(table)
+    table = new-table
+    {}
+
+
+final class LiveDictEntry[static +K <: Hash[K], static V] <: LiveEntry[K, V]
+  var value: V
+
+  def this(key: K, value: V) =
+    super(key)
+    this.value = value
+
+
+final class DictIterator[
+    static K <: Hash[K],
+    static V
+  ](
+    table-it: HashTableIterator[K, V]
+  ) <: Iterator[(K, V)]
+
+  public override def has-next = table-it.has-next
+
+  public override def next =
+    match (table-it.next)
+      case entry: LiveDictEntry[K, V] => (entry.key, entry.value)
+      case _ => throw AssertionException()

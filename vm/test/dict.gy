@@ -1,0 +1,94 @@
+// Copyright 2016 Jay Conrod. All rights reserved.
+
+// This file is part of CodeSwitch. Use of this source code is governed by
+// the 3-clause BSD license that can be found in the LICENSE.txt file.
+
+
+import std.AssertionException, Dict, Eq, I32, NoSuchElementException
+
+
+def assert-true(b: boolean) =
+  if (!b)
+    throw AssertionException()
+
+
+def assert-false(b: boolean) =
+  if (b)
+    throw AssertionException()
+
+
+def assert-eq(expected: i32, actual: i32) =
+  if (expected != actual)
+    throw AssertionException()
+
+
+def assert-eq[static T <: Eq[T]](expected: T, actual: T) =
+  if (expected != actual)
+    throw AssertionException()
+
+
+def test-empty-dict =
+  let dict = Dict[I32, I32]()
+  assert-eq(0i32, dict.length)
+
+  let it = dict.iter
+  assert-false(it.has-next)
+  try
+    it.next
+    throw AssertionException()
+  catch (e: NoSuchElementException) {}
+
+  assert-false(dict.get(I32.of(42i32)).is-defined)
+  assert-eq[I32](I32.of(12i32), dict.get-or-else(I32.of(42i32), I32.of(12i32)))
+  assert-false(dict.remove(I32.of(42i32)).is-defined)
+  {}
+
+
+def test-insert-retrieve-remove =
+  let dict = Dict[I32, I32]()
+  var i = 0i32
+  let N = 50i32
+  while (i < N)
+    assert-eq(i, dict.length)
+    assert-false(dict.put(I32.of(i), I32.of(i)).is-defined)
+    assert-eq(i, dict.put(I32.of(i), I32.of(i * 10i32)).get.value)
+    i += 1i32
+
+  i = 0i32
+  while (i < N)
+    assert-true(dict.contains(I32.of(i)))
+    assert-eq(10i32 * i, dict.get(I32.of(i)).get.value)
+    i += 1i32
+
+  i = 0i32
+  while (i < N)
+    assert-eq(N - i, dict.length)
+    assert-eq(10i32 * i, dict.remove(I32.of(i)).get.value)
+    assert-false(dict.remove(I32.of(i)).is-defined)
+    i += 1i32
+  assert-eq(0i32, dict.length)
+
+
+def test-iter =
+  let dict = Dict[I32, I32]()
+  var i = 0i32
+  while (i < 32i32)
+    dict.put(I32.of(i), I32.of(i))
+    i += 1i32
+
+  var bitmap = 0i32
+  let it = dict.iter
+  while (it.has-next)
+    let (key, value) = it.next
+    assert-true(key == value)
+    let bit = 1i32 << value.value
+    assert-false((bitmap & bit) != 0i32)
+    bitmap |= bit
+  assert-eq(0xffffffffi32, bitmap)
+
+
+def main =
+  test-empty-dict
+  test-insert-retrieve-remove
+  test-iter
+  {}

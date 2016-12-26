@@ -1,0 +1,57 @@
+// Copyright 2016, Jay Conrod. All rights reserved.
+//
+// This file is part of the Gypsum standard library. Use of this
+// source code is governed by the 3-clause BSD license that can be
+// found in the LICENSE.txt file.
+
+
+public final class Set[static E <: Hash[E]] <: Iter[E]
+  private var table = new(MIN-CAPACITY) HashTable[E, Nothing]
+
+  public def length = table.live-element-count
+
+  public def contains(elem: E): boolean = table.get(elem).is-defined
+
+  public def add(elem: E): boolean =
+    if (contains(elem))
+      false
+    else
+      if (table.live-element-count == table.capacity ||
+          table.empty-ratio < MIN-EMPTY-RATIO)
+        resize(table.capacity * 2i32)
+      table.insert(LiveSetEntry[E](elem))
+      true
+
+  public def remove(elem: E): boolean =
+    match (table.remove(elem))
+      case _: Some[LiveEntry[E, Nothing]] =>
+        if (table.capacity > MIN-CAPACITY && table.live-ratio < MIN-LIVE-RATIO)
+          resize(table.capacity / 2i32)
+        true
+      case _ => false
+
+  public override def iter: Iterator[E] = SetIterator[E](table.iter)
+
+  private def resize(new-capacity: i32): unit =
+    let new-table = new(new-capacity) HashTable[E, Nothing]
+    new-table.rehash(table)
+    table = new-table
+    {}
+
+
+final class LiveSetEntry[static +E <: Hash[E]] <: LiveEntry[E, Nothing]
+  def this(elem: E) = super(elem)
+
+
+final class SetIterator[
+    static E <: Hash[E]
+  ](
+    table-it: HashTableIterator[E, Nothing]
+  ) <: Iterator[E]
+
+  public override def has-next = table-it.has-next
+
+  public override def next =
+    match (table-it.next)
+      case entry: LiveEntry[E, Nothing] => entry.key
+      case _ => throw AssertionException()
