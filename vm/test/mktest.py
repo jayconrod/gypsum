@@ -36,6 +36,7 @@ with open(outFileName, "w") as outFile:
 #include "codeswitch.h"
 
 using codeswitch::Error;
+using codeswitch::Exception;
 using codeswitch::VM;
 using codeswitch::VMOptions;
 using std::ios;
@@ -78,6 +79,8 @@ TEST({testName}) {{
   }} catch (Error& exn) {{
     // Test will throw an exception on failure.
     throw TestException(exn.message());
+  }} catch (Exception& exn) {{
+    throw TestException("exception thrown from interpreted code");
   }}
 }}
 """.format(scriptName=os.path.basename(sys.argv[0]),
