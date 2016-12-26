@@ -1049,24 +1049,27 @@ class CompileVisitor(ast.NodeVisitor):
                 self.drop()
 
     def visitPartialFunctionExpression(self, expr, mode, ty, doneBlock, failBlock):
-        allCasesTerminate = True
-        mustMatchCaseTerminates = False
+        doneIsReachable = False
 
-        for case in expr.cases[:-1]:
-            nextBlock = self.newBlock()
+        def handleCase(case, failBlock):
             with UnreachableScope(self):
-                self.visitPartialFunctionCase(case, mode, ty, doneBlock, nextBlock)
+                self.visitPartialFunctionCase(case, mode, ty, doneBlock, failBlock)
                 caseTerminates = self.unreachable
-                mustMatchCaseTerminates |= \
-                    type_analysis.partialFunctionCaseMustMatch(case, ty, self.info)
-                allCasesTerminate &= caseTerminates
-            if mustMatchCaseTerminates:
+            mustMatch = type_analysis.partialFunctionCaseMustMatch(case, ty, self.info)
+            doneIsReachable = not self.unreachable and not caseTerminates
+            if mustMatch:
+                # Later cases are not reachable.
                 self.setUnreachable()
-            self.setCurrentBlock(nextBlock)
+            return doneIsReachable
+
         with UnreachableScope(self):
-            self.visitPartialFunctionCase(expr.cases[-1], mode, ty, doneBlock, failBlock)
-            allCasesTerminate &= self.unreachable
-        if allCasesTerminate or mustMatchCaseTerminates:
+            for case in expr.cases[:-1]:
+                nextBlock = self.newBlock()
+                doneIsReachable |= handleCase(case, nextBlock)
+
+                self.setCurrentBlock(nextBlock)
+            doneIsReachable |= handleCase(expr.cases[-1], failBlock)
+        if not doneIsReachable:
             self.setUnreachable()
         assert self.isDetached()
 

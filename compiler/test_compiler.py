@@ -4166,3 +4166,24 @@ class TestCompiler(TestCaseWithDefinitions):
         source = "def f = \"foo\".length"
         package = self.compileFromSource(source)
         self.assertIn(Name(["String", "length"]), package.nameIndices)
+
+    def testPointlessMatchAndError(self):
+        source = "def f(s: String) =\n" + \
+                 "  match (s)\n" + \
+                 "    case s2: String => s2\n" + \
+                 "    case _ => throw Exception()"
+        self.checkFunction(source,
+                           self.makeSimpleFunction("f", getStringType(), [[
+                                 ldlocal(0),
+                                 stlocal(-1),
+                                 ldlocal(-1),
+                                 branch(1),
+                               ], [
+                                 ret(),
+                               ]],
+                               variables=[self.makeVariable("f.s", type=getStringType(),
+                                                            kind=PARAMETER, flags=frozenset([LET])),
+                                          self.makeVariable(Name(["f", LOCAL_SUFFIX, "s2"]),
+                                                            type=getStringType(),
+                                                            kind=LOCAL,
+                                                            flags=frozenset([LET]))]))
