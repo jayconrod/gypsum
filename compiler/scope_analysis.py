@@ -990,7 +990,8 @@ class FunctionScope(Scope):
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([STATIC]), astDefn.location)
             if STATIC not in flags:
-                raise NotImplementedError()
+                raise ScopeException(astDefn.location,
+                                     "%s: non-static type parameters not supported yet" % name)
             flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
             irDefn = self.info.package.addTypeParameter(name, sourceName=astDefn.name,
                                                         astDefn=astDefn, flags=flags)
