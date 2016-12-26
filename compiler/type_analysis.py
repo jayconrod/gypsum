@@ -1573,7 +1573,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.checkCallAllowed(defnInfo.irDefn, True, USE_AS_VALUE, loc)
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
         scope.use(defnInfo, useAstId, USE_AS_VALUE, loc)
-        return self.getDefnType(receiverType, False, defnInfo.irDefn, allTypeArgs)
+        return self.getDefnType(receiverType, defnInfo.irDefn, allTypeArgs)
 
     def handlePossiblePrefixSymbol(self, name, scope, scopeType, typeArgs, useAstId, loc):
         """Processes a symbol reference which may be part of a scope prefix.
@@ -1633,7 +1633,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.checkCallAllowed(defnInfo.irDefn, False, USE_AS_VALUE, loc)
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
         self.scope().use(defnInfo, useAstId, USE_AS_VALUE, loc)
-        return self.getDefnType(receiverType, True, defnInfo.irDefn, allTypeArgs)
+        return self.getDefnType(receiverType, defnInfo.irDefn, allTypeArgs)
 
     def handlePropertyCall(self, name, receiverScope, receiverType,
                            typeArgs, argTypes, hasReceiver, receiverIsReceiver,
@@ -1694,7 +1694,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.checkCallAllowed(defnInfo.irDefn, receiverIsReceiver, useKind, loc)
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
         self.scope().use(defnInfo, useAstId, useKind, loc)
-        ty = self.getDefnType(receiverType, True, defnInfo.irDefn, allTypeArgs)
+        ty = self.getDefnType(receiverType, defnInfo.irDefn, allTypeArgs)
         ty = self.upcastExistentialVars(ty, existentialVars, isLvalue, name, loc)
         return ty
 
@@ -1737,7 +1737,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.checkCallAllowed(irDefn, True, useKind, loc)
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
         self.scope().use(defnInfo, useAstId, useKind, loc)
-        return self.getDefnType(receiverType, False, irDefn, allTypeArgs)
+        return self.getDefnType(receiverType, irDefn, allTypeArgs)
 
     def handleOperatorCall(self, name, firstType, secondType, useAstId, loc):
         """Handles a call to an operator.
@@ -1821,7 +1821,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.checkCallAllowed(defnInfo.irDefn, False, useKind, loc)
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
         self.scope().use(defnInfo, useAstId, useKind, loc)
-        ty = self.getDefnType(receiverType, False, defnInfo.irDefn, allTypeArgs)
+        ty = self.getDefnType(receiverType, defnInfo.irDefn, allTypeArgs)
         ty = self.upcastExistentialVars(ty, existentialVars, False, name, loc)
 
         if isAssignment and not ty.isSubtypeOf(firstType):
@@ -1922,8 +1922,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             self.scope().use(defnInfo, matcherAstId, useKind, loc)
             irDefn = defnInfo.irDefn
             self.ensureTypeInfoForDefn(irDefn)
-            returnType = self.getDefnType(receiverType, receiverIsExplicit,
-                                          irDefn, allTypeArgs)
+            returnType = self.getDefnType(receiverType, irDefn, allTypeArgs)
             returnType = self.upcastExistentialVars(returnType, existentialVars,
                                                     False, nameInfo.name, loc)
         else:
@@ -2246,13 +2245,22 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             not receiverIsReceiver):
             raise TypeException(loc, "cannot call initializer function here")
 
-    def getDefnType(self, receiverType, receiverIsExplicit, irDefn, typeArgs):
-        """Gets the type of a definition that was referenced by name.
+    def getDefnType(self, receiverType, irDefn, typeArgs):
+        """Gets the type of a definition in the context where it was referenced.
 
-        For variables and globals, this just returns the type. For fields, this returns the
-        type with type substitution performed with the type arguments and class type parameters.
-        For functions, this returns the return type with type substitution performed with the
-        type arguments and function type parameters. For classes, `receiverType` is returned.
+        For variables and globals, this just returns the type.
+
+        For fields, this performs type substitution using the type arguments of the receiver.
+        If the field is inherited into the receiver class, type substitution will also be
+        performed for the base.
+
+        For non-constructor functions, this performs type substitution using the type arguments
+        passed to the function. If the function is a method, the type arguments on the receiver
+        will also be used. If the method is inherited, type substitution will also be performed
+        for the base.
+
+        For classes, traits, and constructors, `receiverType` is simply returned.
+
         For packages and package prefixes, this returns the package type.
 
         Note that type information may not be available yet for the definition. If this is the
@@ -2260,14 +2268,14 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         in order.
 
         Args:
-            receiverType (Type?): optional type of the receiver of a function or field.
-            receiverIsExplicit (bool): whether a receiver was specified explicitly. If the
-                definition is a field, type substitution is only performed if this is `True`.
-                Type arguments are meaningless if `False`.
+            receiverType (Type?): type of the receiver. This is required for fields, methods,
+                and constructors. It must be `None` otherwise. Must not be `ExistentialType`
+                (use `openExistentialReceiver`).
             irDefn (IrDefinition): the definition that we want to know the type of.
             typeArgs (list(Type)?): an optional list of `Type` arguments applied to a function
                 or class. Used for type substitution in functions and fields.
         """
+        assert not isinstance(receiverType, ir_t.ExistentialType)
         self.ensureTypeInfoForDefn(irDefn)
         if isinstance(irDefn, ir.Function):
             if irDefn.isConstructor():
@@ -2277,11 +2285,14 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 ty = irDefn.returnType.substitute(irDefn.typeParameters, typeArgs)
                 return ty
         elif isinstance(irDefn, ir.Field):
+            assert receiverType is not None
             ty = irDefn.type
-            if receiverIsExplicit and isinstance(receiverType, ir_t.ClassType):
-                fieldClass = self.findBaseForField(receiverType.clas, irDefn)
-                ty = ty.substituteForInheritance(receiverType.clas, fieldClass)
-                ty = ty.substitute(receiverType.clas.typeParameters, receiverType.typeArguments)
+            receiverClassType, _ = receiverType.effectiveClassType()
+            receiverClass = receiverClassType.clas
+            fieldClass = irDefn.definingClass
+            ty = ty.substituteForInheritance(receiverClass, fieldClass)
+            ty = ty.substitute(receiverClass.typeParameters,
+                               receiverClassType.typeArguments)
             return ty
         elif isinstance(irDefn, ir.Variable) or \
              isinstance(irDefn, ir.Global):
@@ -2292,17 +2303,6 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         else:
             assert isinstance(irDefn, ir.Class)
             return receiverType
-
-    def findBaseForField(self, receiverClass, field):
-        """Returns the class that defines `field`, accessed through `receiverClass`.
-
-        This is needed for type substitution, since `field.type` may include type variables
-        from the base.
-        """
-        for clas in receiverClass.bases():
-            if any(True for f in clas.fields if f is field):
-                return clas
-        assert False, "field is not defined in this class or any superclass"
 
     def openExistentialReceiver(self, receiverType):
         """Unwraps a possibly existential type to return the type underneath and the declared

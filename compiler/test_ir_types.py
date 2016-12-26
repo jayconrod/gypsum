@@ -408,3 +408,26 @@ class TestIrTypes(TestCaseWithDefinitions):
         pyx = ClassType(self.P, (VariableType(self.Y), VariableType(self.X)))
         self.assertEquals(pxy, pxy.combine(pxy, NoLoc))
         self.assertEquals(self.P.supertypes[0], pxy.combine(pyx, NoLoc))
+
+    def testEffectiveClassTypeForClassType(self):
+        aTy = ClassType(self.A)
+        self.assertEquals((aTy, []), aTy.effectiveClassType())
+
+    def testEffectiveClassTypeForVariableType(self):
+        aTy = ClassType(self.A)
+        S = self.makeTypeParameter("S", upperBound=aTy, lowerBound=getNothingClassType())
+        sTy = VariableType(S)
+        T = self.makeTypeParameter("T", upperBound=sTy, lowerBound=getNothingClassType())
+        tTy = VariableType(T)
+        self.assertEquals((aTy, []), tTy.effectiveClassType())
+
+    def testEffectiveClassTypeForExistentialType(self):
+        S = self.makeTypeParameter("S", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        sTy = VariableType(S)
+        T = self.makeTypeParameter("T", upperBound=getRootClassType(),
+                                   lowerBound=getNothingClassType())
+        tTy = VariableType(T)
+        pTy = ClassType(self.P, (sTy, tTy))
+        eTy = ExistentialType([S], ExistentialType([T], pTy))
+        self.assertEquals((pTy, [S, T]), eTy.effectiveClassType())

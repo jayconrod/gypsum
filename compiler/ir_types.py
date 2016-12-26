@@ -494,6 +494,33 @@ class ObjectType(Type):
         returns `None`."""
         raise NotImplementedError()
 
+    def effectiveClass(self):
+        """Returns an `ObjectTypeDefn` that this type can be treated as.
+
+        For `ClassType`s, this returns the `clas` property.
+
+        For `VariableType`s, this returns the effective class of the upper bound.
+
+        For `ExistentialType`s, this returns the effective class of the inner type.
+        """
+        raise NotImplementedError()
+
+    def effectiveClassType(self):
+        """Returns a `ClassType` that this type can be treated as.
+
+        For `ClassType`s, this returns the type itself.
+
+        For `VariableType`s, this returns the effective class type of the upper bound.
+
+        For `ExistentialType`s, this returns the effective class type of the inner type.
+        The existential type parameters are also returned.
+
+        Returns:
+            (ClassType, [TypeParameter]): the effective class type and a list of existential
+            type parameters that were opened.
+        """
+        raise NotImplentedError()
+
     def substituteForBase(self, base):
         """Returns the `ClassType` for `base`, which is a supertype of this type, with type
         arguments substituted appropriately.
@@ -562,6 +589,12 @@ class ClassType(ObjectType,):
             return None
         return self.substituteForBase(self.clas.supertypes[0].clas)
 
+    def effectiveClass(self):
+        return self.clas
+
+    def effectiveClassType(self):
+        return self, []
+
     def substitute(self, parameters, replacements):
         return ClassType(self.clas,
                          tuple(arg.substitute(parameters, replacements)
@@ -617,6 +650,12 @@ class VariableType(ObjectType):
             baseType = baseType.typeParameter.upperBound
         assert isinstance(baseType, ClassType)
         return baseType
+
+    def effectiveClass(self):
+        return self.typeParameter.upperBound.effectiveClass()
+
+    def effectiveClassType(self):
+        return self.typeParameter.upperBound.effectiveClassType()
 
     def substitute(self, parameters, replacements):
         assert len(parameters) == len(replacements)
@@ -710,6 +749,13 @@ class ExistentialType(ObjectType):
         if innerBaseType is None:
             return innerBaseType
         return ExistentialType.close(self.variables, innerBaseType)
+
+    def effectiveClass(self):
+        return self.ty.effectiveClass()
+
+    def effectiveClassType(self):
+        effectiveType, openedVariables = self.ty.effectiveClassType()
+        return effectiveType, self.variables + openedVariables
 
     def substitute(self, parameters, replacements):
         subTy = self.ty.substitute(parameters, replacements)

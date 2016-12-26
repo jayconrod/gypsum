@@ -505,9 +505,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                    supertypes=[getRootClassType()],
                                    constructors=[], fields=[],
                                    methods=[], flags=frozenset([PUBLIC]))
-        clas.fields.append(fooPackage.newField(Name(["Bar", "x"]), sourceName="x",
-                                               type=I64Type,
-                                               flags=frozenset([PUBLIC])))
+        fooPackage.addField(clas, Name(["Bar", "x"]), sourceName="x",
+                            type=I64Type, flags=frozenset([PUBLIC]))
         loader = FakePackageLoader([fooPackage])
 
         source = "def f(o: foo.Bar) = o.x"
@@ -521,9 +520,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                    supertypes=[getRootClassType()],
                                    constructors=[], fields=[],
                                    methods=[], flags=frozenset([PUBLIC]))
-        clas.fields.append(fooPackage.newField(Name(["Bar", "x"]), sourceName="x",
-                                               type=I64Type,
-                                               flags=frozenset([PUBLIC])))
+        fooPackage.addField(clas, Name(["Bar", "x"]), sourceName="x",
+                            type=I64Type, flags=frozenset([PUBLIC]))
         loader = FakePackageLoader([fooPackage])
 
         source = "def f(o: foo.Bar) = o.x = 12"
@@ -563,9 +561,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                       flags=frozenset([PUBLIC, METHOD]),
                                       definingClass=clas)
         clas.constructors = [ctor]
-        field = fooPackage.newField(Name(["Bar", "x"]), sourceName="x",
-                                    type=I64Type, flags=frozenset([PUBLIC]))
-        clas.fields = [field]
+        fooPackage.addField(clas, Name(["Bar", "x"]), sourceName="x",
+                            type=I64Type, flags=frozenset([PUBLIC]))
         packageLoader = FakePackageLoader([fooPackage])
 
         source = "class Baz <: foo.Bar\n" + \
@@ -1665,6 +1662,35 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         fooClass = info.package.findClass(name="Foo")
         barClass = info.package.findClass(name="Bar")
         self.assertEquals(ClassType(fooClass, ()), f.returnType)
+
+    def testLoadInheritedParameterizedField(self):
+        source = "class Foo[static +S](value: S)\n" + \
+                 "class Bar[static +T] <: Foo[T]\n" + \
+                 "  def this(value: T) = super(value)\n" + \
+                 "  def get = value"
+        info = self.analyzeFromSource(source)
+        T = info.package.findTypeParameter(name="Bar.T")
+        TType = VariableType(T)
+        get = info.package.findFunction(name="Bar.get")
+        self.assertEquals(TType, get.returnType)
+
+    def testLoadInheritedParameterizedFieldFromTypeParameter(self):
+        source = "class Foo[static +S](value: S)\n" + \
+                 "class Bar[static +T] <: Foo[T]\n" + \
+                 "  def this(value: T) = super(value)\n" + \
+                 "def f[static U <: Bar[String]](obj: U) = obj.value"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(getStringType(), f.returnType)
+
+    def testLoadInheritedParameterizedFieldFromExistential(self):
+        source = "class Foo[static +S](value: S)\n" + \
+                 "class Bar[static +T] <: Foo[T]\n" + \
+                 "  def this(value: T) = super(value)\n" + \
+                 "def f(obj: forsome [X] Bar[X]) = obj.value"
+        info = self.analyzeFromSource(source)
+        f = info.package.findFunction(name="f")
+        self.assertEquals(getRootClassType(), f.returnType)
 
     def testCallInheritedMethod(self):
         source = "class Foo\n" + \
