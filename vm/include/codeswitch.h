@@ -169,7 +169,7 @@ class VM final {
    *   its dependencies.
    */
   Package loadPackageFromStream(std::istream& stream,
-      const std::vector<NativeFunctionSearch>& nativeFunctionSearchorder
+      const std::vector<NativeFunctionSearch>& nativeFunctionSearchOrder
           = std::vector<NativeFunctionSearch>());
 
  private:
