@@ -9,7 +9,18 @@ import sys
 import os
 
 import builtins
-import flags
+from flags import (
+    ABSTRACT,
+    CONSTRUCTOR,
+    EXTERN,
+    METHOD,
+    NATIVE,
+    OVERRIDE,
+    PUBLIC,
+    STATIC,
+    flagBitsToFlagSet,
+    flagSetToFlagBits,
+)
 import ids
 import ir
 import ir_instructions
@@ -138,15 +149,15 @@ class Serializer(object):
         self.writeVbn(len(function.parameterTypes))
         for ty in function.parameterTypes:
             self.writeType(ty)
-        if flags.EXTERN not in function.flags:
+        if EXTERN not in function.flags:
             self.writeDefiningClassId(function.definingClass)
         assert function.overrides is None or \
-            (flags.EXTERN not in function.flags and flags.OVERRIDE in function.flags)
+            (EXTERN not in function.flags and OVERRIDE in function.flags)
         if function.overrides is not None:
             self.writeList(self.writeMethodId, function.overrides)
 
         assert function.blocks is not None or \
-               0 < len(frozenset([flags.ABSTRACT, flags.EXTERN, flags.NATIVE]) & function.flags)
+               0 < len(frozenset([ABSTRACT, EXTERN, NATIVE]) & function.flags)
 
         if function.blocks is not None:
             localsSize = 8 * len(filter(lambda v: v.kind is ir.LOCAL, function.variables))
@@ -306,7 +317,7 @@ class Serializer(object):
         self.writeVbn(index)
 
     def writeFlags(self, flags_var):
-        bits = flags.flagSetToFlagBits(flags_var)
+        bits = flagSetToFlagBits(flags_var)
         self.outFile.write(struct.pack(FLAG_FORMAT, bits))
 
     def writeTypeParameterList(self, list):
@@ -314,7 +325,7 @@ class Serializer(object):
         assert all(p.isForeign() for p in list) or all(not p.isForeign() for p in list)
         def writeId(typeParam):
             self.writeVbn(typeParam.id.externIndex
-                          if flags.EXTERN in typeParam.flags \
+                          if EXTERN in typeParam.flags \
                           else typeParam.id.index)
         self.writeList(writeId, list)
 
@@ -522,23 +533,23 @@ class Deserializer(object):
         function.name = self.readNameIndex()
         function.sourceName = self.readOption(self.readStringIndex)
         function.flags = self.readFlags()
-        assert (flags.EXTERN in function.flags) == (dep is not None)
+        assert (EXTERN in function.flags) == (dep is not None)
         function.typeParameters = self.readList(self.readTypeParameterId, dep)
         function.returnType = self.readType()
         function.parameterTypes = self.readList(self.readType)
-        if flags.EXTERN not in function.flags:
+        if EXTERN not in function.flags:
             function.definingClass = self.readDefiningClassId()
-            if flags.OVERRIDE in function.flags:
+            if OVERRIDE in function.flags:
                 function.overrides = self.readList(self.readMethodId)
-            if frozenset([flags.ABSTRACT, flags.NATIVE]).isdisjoint(function.flags):
+            if frozenset([ABSTRACT, NATIVE]).isdisjoint(function.flags):
                 localsSize = self.readVbn()
                 instructionsSize = self.readVbn()
                 instructionsBuffer = self.inFile.read(instructionsSize)
                 blockOffsets = self.readList(self.readVbn)
                 function.blocks = self.decodeInstructions(instructionsBuffer, blockOffsets)
-        if flags.METHOD in function.flags and \
-           flags.CONSTRUCTOR not in function.flags and \
-           flags.STATIC not in function.flags:
+        if METHOD in function.flags and \
+           CONSTRUCTOR not in function.flags and \
+           STATIC not in function.flags:
             function.overridenBy = {}
 
     def decodeInstructions(self, instructionsBuffer, blockOffsets):
@@ -549,7 +560,7 @@ class Deserializer(object):
         clas.name = self.readNameIndex()
         clas.sourceName = self.readOption(self.readStringIndex)
         clas.flags = self.readFlags()
-        assert (flags.EXTERN in clas.flags) == (dep is not None)
+        assert (EXTERN in clas.flags) == (dep is not None)
         clas.typeParameters = self.readList(self.readTypeParameterId, dep)
         clas.supertypes = self.readList(self.readType)
         clas.fields = self.readFields(clas)
@@ -578,7 +589,7 @@ class Deserializer(object):
         trait.name = self.readNameIndex()
         trait.sourceName = self.readOption(self.readStringIndex)
         trait.flags = self.readFlags()
-        assert (flags.EXTERN in trait.flags) == (dep is not None)
+        assert (EXTERN in trait.flags) == (dep is not None)
         trait.typeParameters = self.readList(self.readTypeParameterId, dep)
         trait.supertypes = self.readList(self.readType)
         trait.methods = self.readList(self.readMethodId, dep)
@@ -614,7 +625,7 @@ class Deserializer(object):
     def readDependency(self, dep):
         for g in dep.externGlobals:
             self.readGlobal(g)
-            assert flags.EXTERN in g.flags
+            assert EXTERN in g.flags
         for f in dep.externFunctions:
             self.readFunction(f, dep)
         for c in dep.externClasses:
@@ -732,7 +743,7 @@ class Deserializer(object):
     def readFlags(self):
         size = struct.calcsize(FLAG_FORMAT)
         bits = struct.unpack(FLAG_FORMAT, self.inFile.read(size))[0]
-        flagSet = flags.flagBitsToFlagSet(bits)
+        flagSet = flagBitsToFlagSet(bits)
         return flagSet
 
     def readList(self, reader, *args):
