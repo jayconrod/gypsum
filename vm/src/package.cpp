@@ -372,14 +372,16 @@ void Package::ensureExports(const Handle<Package>& package) {
     }
   }
 
+  // TODO(#28): type parameters should not be top-level definitions and should not be linked.
+  // For now, they are though, and we link all type parameters, including non-public, since
+  // existential parameters are non-public. Existential types may be used as part of top-level
+  // definition signatures.
   auto typeParameters = handle(package->typeParameters());
   for (length_t i = 0; i < typeParameters->length(); i++) {
     auto typeParameter = handle(typeParameters->get(i));
-    if ((typeParameter->flags() & PUBLIC_FLAG) != 0) {
-      auto name = handle(typeParameter->name());
-      ASSERT(!exports->contains(*name));
-      ExportMap::add(exports, name, typeParameter);
-    }
+    auto name = handle(typeParameter->name());
+    ASSERT(!exports->contains(*name));
+    ExportMap::add(exports, name, typeParameter);
   }
 
   package->setExports(*exports);

@@ -175,9 +175,12 @@ class Package(object):
         for t in self.traits:
             if flags.PUBLIC in t.flags:
                 self.exports[t.name] = t
+        # TODO(#28): type parameters should not be top-level definitions and should not
+        # be linked. For now, they are though, and we link all type parameters, including
+        # non-public, since existential parameters are non-public. Existential types
+        # may be used as part of top-level definition signatures.
         for p in self.typeParameters:
-            if flags.PUBLIC in p.flags:
-                self.exports[p.name] = p
+            self.exports[p.name] = p
 
         return self.exports
 
