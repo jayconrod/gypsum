@@ -755,7 +755,7 @@ class ExistentialType(ObjectType):
 
     def effectiveClassType(self):
         effectiveType, openedVariables = self.ty.effectiveClassType()
-        return effectiveType, self.variables + openedVariables
+        return effectiveType, list(self.variables) + openedVariables
 
     def substitute(self, parameters, replacements):
         subTy = self.ty.substitute(parameters, replacements)

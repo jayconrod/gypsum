@@ -143,37 +143,28 @@ def typeCanBeTested(testType, staticType, existentialVarIds=None):
     Arguments:
         testType (Type): the type we are trying to test dynamically.
         staticType (Type): the statically known type of the thing we are trying to test.
-            `testType` should be a subtype of this (otherwise the test would always fail).
+            `testType` must  be a subtype of this.
 
     Returns:
         (bool): whether or not the type can be tested at run-time.
     """
     if existentialVarIds is None:
+        assert testType.isSubtypeOf(staticType)
         existentialVarIds = frozenset()
 
     if isinstance(testType, ir_t.ClassType):
-        # Peel off existential layers from the static type. We won't be able to test against
-        # any existential variables we see.
-        while isinstance(staticType, ir_t.ExistentialType):
-            staticType = staticType.ty
-
-        # If the static type is a type variable, we just treat it as the upper bound.
-        # TODO: handle dynamic type variables.
-        if isinstance(staticType, ir_t.VariableType):
-            assert STATIC in staticType.typeParameter.flags
-            staticType = staticType.getBaseClassType()
-        assert isinstance(staticType, ir_t.ClassType)
+        staticType, staticExistentialVars = staticType.effectiveClassType()
+        staticExistentialVarIds = [v.id for v in staticExistentialVars]
 
         # When we successfully test the type at run-time, we are effectively down-casting
         # the static type. We still need to verify the down-cast type arguments match the
         # test type arguments or are wildcarded.
         # TODO: handle type parameter variance.
         # TODO: handle dynamic type variables.
-        subTypeArgs = extractTypeArgsForSubtype(testType.clas, staticType)
+        subTypeArgs = \
+            extractTypeArgsForSubtype(testType.clas, staticType, staticExistentialVarIds)
         if subTypeArgs is None:
-            # testType.clas is not derived from staticType.clas. The test will always fail,
-            # but it is safe to do.
-            return True
+            return False
         for sta, tta in zip(subTypeArgs, testType.typeArguments):
             isWildcard = isinstance(tta, ir_t.VariableType) \
                          and tta.typeParameter.id in existentialVarIds
@@ -191,19 +182,41 @@ def typeCanBeTested(testType, staticType, existentialVarIds=None):
         return False
 
 
-def extractTypeArgsForSubtype(clas, supertype):
+def extractTypeArgsForSubtype(clas, supertype, existentialVarIds):
     """Extracts type arguments for a subtype of `supertype` based on `clas`.
+
+    If `supertype` were down-cast to `clas`, this returns the type arguments that correspond
+    to each parameter of `clas`.
+
+    Note that this is not always possible. If `clas` is not derived from `supertype`, or the
+    extracted type arguments would be out of bounds, `None` is returned. Some type parameters
+    may still be unknown, for example, if `supertype` is `Object`. `None` may be returned for
+    these types.
 
     Arguments:
         clas (ObjectTypeDefn): the class or trait we are extracting type arguments for.
         supertype (ClassType): a class type. `clas` should be derived from the class or trait
             this is based on, or `None` will be returned.
+        existentialVarIds (list(DefnId)): a list of ids of existential type parameters that
+            are bound over `supertype`.
 
     Returns:
-        (tuple(Type)?): A tuple of type arguments for `clas`. Once applied, the resulting type
-        will be a subtype of `supertype`. If this is not possible, `None` is returned.
+        (tuple(Type?)?): A tuple of type arguments for `clas`. `None` is returned instead if
+        the extraction cannot be performed. `None` is performed for an individual type
+        argument if it cannot be determined.
     """
+    if clas is getNothingClass():
+        return ()
+    typeMap = {p.id: None for p in clas.typeParameters}
+    baseType = clas.findBaseType(supertype.clas)
+    if baseType is None:
+        return None
+
+    # Extract the type arguments for the base. They will be in `typeMap`.
     def extract(base, sup):
+        if isinstance(sup, ir_t.VariableType) and sup.typeParameter.id in existentialVarIds:
+            return True
+
         if isinstance(base, ir_t.VariableType):
             tpid = base.typeParameter.id
             if tpid in typeMap:
@@ -223,11 +236,22 @@ def extractTypeArgsForSubtype(clas, supertype):
         else:
             return base == sup
 
-    baseType = clas.findBaseType(supertype.clas)
-    if baseType is None:
-        return None
-    typeMap = {p.id: None for p in clas.typeParameters}
     extract(baseType, supertype)
+
+    # Test whether the extracted type arguments are in bounds. We need to do a substitution
+    # on the bounds to test this. See `checkTypeArgumentBounds` for something similar.
+    substitution = [(tp, typeMap[tp.id])
+                    for tp in clas.typeParameters
+                    if typeMap[tp.id] is not None]
+    subParams = [tp for tp, _ in substitution]
+    subArgs = [ta for _, ta in substitution]
+    for tp, ta in substitution:
+        upperBound = tp.upperBound.substitute(subParams, subArgs)
+        lowerBound = tp.lowerBound.substitute(subParams, subArgs)
+        if not ta.isSubtypeOf(upperBound) or not lowerBound.isSubtypeOf(ta):
+            return None
+
+    # Return the extracted types. Some of them may be `None`.
     return tuple(typeMap[p.id] for p in clas.typeParameters)
 
 
@@ -1379,7 +1403,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             elif mode is COMPILE_FOR_MATCH and \
                  not isDestructure and \
                  not exprTy.isSubtypeOf(patTy) and \
-                 not typeCanBeTested(patTy, exprTy):
+                 not (not patTy.isSubtypeOf(exprTy) or typeCanBeTested(patTy, exprTy)):
                 raise TypeException(loc, nameStr + "type cannot be tested at runtime")
             else:
                 return patTy

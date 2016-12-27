@@ -1132,6 +1132,15 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(ClassType(Foo), info.getType(matchCase.pattern.left))
         self.assertEquals(ClassType(Bar), info.getType(matchCase.pattern.right))
 
+    def testMatchExprDisjointType(self):
+        source = "class Foo\n" + \
+                 "class Bar\n" + \
+                 "def f(foo: Foo) =\n" + \
+                 "  match (foo)\n" + \
+                 "    case _: Bar => {}"
+        info = self.analyzeFromSource(source)
+        # pass if no error
+
     def testMatchExprTestStaticAndDynamic(self):
         source = OPTION_SOURCE + \
                  "class Box[static +T]\n" + \
@@ -1194,6 +1203,44 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         f = info.package.findFunction(name="f")
         self.assertEquals(getStringType(), f.returnType)
 
+    def testMatchExprTestStaticAndDynamicResultFail(self):
+        source = OPTION_SOURCE + \
+                 "class Result[static +V, static +E]\n" + \
+                 "class Ok[static +V](value: V) <: Result[V, Nothing]\n" + \
+                 "  static def try-match(result: Result[V, Object]) =\n" + \
+                 "    match (result)\n" + \
+                 "      case ok: Ok[V] => Some[V](ok.value)\n" + \
+                 "      case _ => None\n" + \
+                 "class Err[static +E](error: E) <: Result[Nothing, E]\n" + \
+                 "  static def try-match(result: Result[Object, E]) =\n" + \
+                 "    match (result)\n" + \
+                 "      case err: Err[E] => Some[E](err.error)\n" + \
+                 "      case _ => None"
+        self.assertRaises(TypeException, self.analyzeFromSource, source, name=STD_NAME)
+
+    def testMatchExprTestStaticAndDynamicResultOk(self):
+        source = OPTION_SOURCE + \
+                 "class Result[static +V, static +E]\n" + \
+                 "class Ok[static +V](value: V) <: Result[V, Nothing]\n" + \
+                 "  static def try-match(result: Result[V, _]) =\n" + \
+                 "    match (result)\n" + \
+                 "      case ok: Ok[V] => Some[V](ok.value)\n" + \
+                 "      case _ => None"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        V = info.package.findTypeParameter(name="Ok.V")
+        Option = info.package.findClass(name="Option")
+        tryMatch = info.package.findFunction(name="Ok.try-match")
+        self.assertEquals(ClassType(Option, (VariableType(V),)), tryMatch.returnType)
+
+    def testMatchExprTestStaticAndDynamicBounds(self):
+        source = "class Foo\n" + \
+                 "class Box[static +T]\n" + \
+                 "class FooBox[static +T <: Foo] <: Box[T]\n" + \
+                 "def f(box: Box[Object]) =\n" + \
+                 "  match (box)\n" + \
+                 "    case foo-box: FooBox[Foo] => {}"
+        self.assertRaises(TypeException, self.analyzeFromSource, source)
+
     def testMatchExprTestStaticAndDynamicOption(self):
         source = OPTION_SOURCE + \
                  "class Foo[static F]\n" + \
@@ -1218,12 +1265,6 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "    case n: Nothing => n"
         self.analyzeFromSource(source)
         # pass if no exception is raised
-
-    def testMatchExprWithDisjointType(self):
-        source = "def f(x: String) =\n" + \
-                 "  match (x)\n" + \
-                 "    case _: i64 => x"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testThrowExpr(self):
         info = self.analyzeFromSource("def f(exn: Exception) = throw exn")
