@@ -69,6 +69,27 @@ class TestParser(unittest.TestCase):
                         varDefn(),
                         "var x = y;")
 
+    def testLetDefnMultiple(self):
+        self.checkParseError(varDefn(), "let x = 0, y = 0;")
+
+    def testLetDefnTuplePattern(self):
+        self.checkParse(astVariableDefinition([], "let",
+                                              astTuplePattern([
+                                                  astVariablePattern("x", None),
+                                                  astVariablePattern("y", None)]),
+                                              astVariableExpression("z")),
+                        varDefn(),
+                        "let x, y = z;")
+
+    def testLetDefnTupleExpr(self):
+        self.checkParse(astVariableDefinition([], "let",
+                                              astVariablePattern("x", None),
+                                              astTupleExpression([
+                                                  astVariableExpression("y"),
+                                                  astVariableExpression("z")])),
+                        varDefn(),
+                        "let x = y, z;")
+
     def testLetDefn(self):
         self.checkParse(astVariableDefinition([], "let",
                                               astVariablePattern("x", None),

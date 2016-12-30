@@ -49,7 +49,9 @@ def varDefn():
     def process(parsed, loc):
         [ats, kw, pat, expr, _] = ct.untangle(parsed)
         return ast.VariableDefinition(ats, kw, pat, expr, loc)
-    exprOpt = ct.Opt(keyword("=") + expression() ^ (lambda p, _: p[1]))
+    # `maybeBinopExpr` is used instead of `expression` since we need to exclude assignments
+    # and tuples. Basically, use the same rules as function arguments.
+    exprOpt = ct.Opt(keyword("=") + maybeTupleExpr() ^ (lambda p, _: p[1]))
     kw = keyword("var") | keyword("let")
     return attribs() + kw + ct.Commit(pattern() + exprOpt + semi) ^ process
 
