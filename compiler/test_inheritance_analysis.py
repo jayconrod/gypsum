@@ -386,8 +386,8 @@ class TestInheritanceAnalysis(unittest.TestCase):
         Bar = info.package.findClass(name="Bar")
         Barf = info.package.findFunction(name="Bar.f")
         self.assertEquals([FoofA.id, FoofB.id], [o.id for o in Barf.overrides])
-        self.assertEquals(Barf.id, FoofA.overridenBy[Bar.id].id)
-        self.assertEquals(Barf.id, FoofB.overridenBy[Bar.id].id)
+        self.assertEquals(Barf.id, FoofA.overriddenBy[Bar.id].id)
+        self.assertEquals(Barf.id, FoofB.overriddenBy[Bar.id].id)
 
     def testSameMethodOverridesMultipleMethodsInDifferentClasses(self):
         source = "class A\n" + \
@@ -404,8 +404,8 @@ class TestInheritanceAnalysis(unittest.TestCase):
         Bazf = info.package.findFunction(name="Baz.f")
         Baz = info.package.findClass(name="Baz")
         self.assertEquals([Barf.id, Foof.id], [o.id for o in Bazf.overrides])
-        self.assertEquals(Bazf.id, Foof.overridenBy[Baz.id].id)
-        self.assertEquals(Bazf.id, Barf.overridenBy[Baz.id].id)
+        self.assertEquals(Bazf.id, Foof.overriddenBy[Baz.id].id)
+        self.assertEquals(Bazf.id, Barf.overriddenBy[Baz.id].id)
 
     def testSameMethodOverridesMultipleMethodsInDifferentTraits(self):
         source = "trait Tr1\n" + \
@@ -420,8 +420,8 @@ class TestInheritanceAnalysis(unittest.TestCase):
         Foof = info.package.findFunction(name="Foo.f")
         Foo = info.package.findClass(name="Foo")
         self.assertEquals([Tr1f.id, Tr2f.id], [o.id for o in Foof.overrides])
-        self.assertEquals(Foof.id, Tr1f.overridenBy[Foo.id].id)
-        self.assertEquals(Foof.id, Tr2f.overridenBy[Foo.id].id)
+        self.assertEquals(Foof.id, Tr1f.overriddenBy[Foo.id].id)
+        self.assertEquals(Foof.id, Tr2f.overriddenBy[Foo.id].id)
 
     def testMethodsCannotOverrideStaticMethodsWithOverride(self):
         source = "class Foo\n" + \
@@ -457,7 +457,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
         Bazf = info.package.findFunction(name="Baz.f")
         Baz = info.package.findClass(name="Baz")
         self.assertEquals([Foof.id], [o.id for o in Bazf.overrides])
-        self.assertEquals(Bazf.id, Foof.overridenBy[Baz.id].id)
+        self.assertEquals(Bazf.id, Foof.overriddenBy[Baz.id].id)
 
     def testMethodOverridesNothing(self):
         source = "class Foo\n" + \
@@ -489,7 +489,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
         Barf = info.package.findFunction(name="Bar.f")
         Bar = info.package.findClass(name="Bar")
         self.assertEquals([Foof.id], [o.id for o in Barf.overrides])
-        self.assertEquals(Barf.id, Foof.overridenBy[Bar.id].id)
+        self.assertEquals(Barf.id, Foof.overriddenBy[Bar.id].id)
 
     def testStaticMethodDoesNotOverrideStatic(self):
         source = "class Foo\n" + \
@@ -500,7 +500,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
         Foof = info.package.findFunction(name="Foo.f")
         Barf = info.package.findFunction(name="Bar.f")
         self.assertIsNone(Barf.overrides)
-        self.assertIsNone(Foof.overridenBy)
+        self.assertIsNone(Foof.overriddenBy)
 
     def testStaticMethodDoesNotOverrideNormal(self):
         source = "class Foo\n" + \
@@ -511,7 +511,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
         Foof = info.package.findFunction(name="Foo.f")
         Barf = info.package.findFunction(name="Bar.f")
         self.assertIsNone(Barf.overrides)
-        self.assertEquals({}, Foof.overridenBy)
+        self.assertEquals({}, Foof.overriddenBy)
 
     def testDerivedArrayClassHasArrayFlag(self):
         source = "class Array\n" + \
@@ -594,7 +594,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
         scope = info.getScope(info.ast.modules[0].definitions[1])
         self.assertEquals(1, len([b for b in scope.iterBindings() if b[0] == "to-string"]))
 
-    def testMethodOverridenOnceAlongMultiplePaths(self):
+    def testMethodOverriddenOnceAlongMultiplePaths(self):
         source = "trait Foo\n" + \
                  "class Bar <: Object, Foo\n" + \
                  "  public override def to-string = \"Bar\""
@@ -604,15 +604,15 @@ class TestInheritanceAnalysis(unittest.TestCase):
         BarToString = info.package.findFunction(name="Bar.to-string")
         self.assertEquals(1, len(BarToString.overrides))
         self.assertIs(ObjectToString, BarToString.overrides[0])
-        self.assertIs(BarToString, ObjectToString.overridenBy[Bar.id])
+        self.assertIs(BarToString, ObjectToString.overriddenBy[Bar.id])
 
-    def testAbstractClassMethodNotOverridenInConcreteClass(self):
+    def testAbstractClassMethodNotOverriddenInConcreteClass(self):
         source = "abstract class Foo\n" + \
                  "  abstract def f: unit\n" + \
                  "class Bar <: Foo"
         self.assertRaises(InheritanceException, self.analyzeFromSource, source)
 
-    def testAbstractTraitMethodNotOverridenInConcreteClass(self):
+    def testAbstractTraitMethodNotOverriddenInConcreteClass(self):
         source = "trait Foo\n" + \
                  "  def f: unit\n" + \
                  "class Bar <: Foo"

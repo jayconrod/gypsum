@@ -66,16 +66,16 @@ def analyzeTypes(info):
     analysis.visit(info.ast)
 
     # Check that each overriding function has a return type which is a subtype of the
-    # overriden function. The return type is not used to make override decisions, so this needs
+    # overridden function. The return type is not used to make override decisions, so this needs
     # to be done after overrides are resolved.
     for function in info.package.functions:
         if function.overrides is not None:
             for override in function.overrides:
-                overridenReturnType = override.returnType.substituteForInheritance(
+                overriddenReturnType = override.returnType.substituteForInheritance(
                     function.definingClass, override.definingClass)
-                if not function.returnType.isSubtypeOf(overridenReturnType):
+                if not function.returnType.isSubtypeOf(overriddenReturnType):
                     raise TypeException(function.getLocation(),
-                                        "%s: return type is not subtype of overriden function" %
+                                        "%s: return type is not subtype of overridden function" %
                                         function.name)
 
 

@@ -10,7 +10,7 @@
 // global `Nil` object, which will be a subtype of `List[Nothing]`. Then we won't need `null`.
 class List[static E](value: E, next: List[E]?)
   // All classes inherit a `to-string` method from the root class, `Object`, which can be
-  // overriden. We can call `to-string` on `value`, since we know `E` must be a subtype
+  // overridden. We can call `to-string` on `value`, since we know `E` must be a subtype
   // of `Object`.
   override def to-string: String =
     value.to-string + (if (next !== null) " " + next.to-string else "")

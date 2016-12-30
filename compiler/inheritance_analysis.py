@@ -254,9 +254,9 @@ def copyInheritedDefinitions(info, inheritanceGraph, bases):
     """Resolves overrides and copies inherited definitions from bases to classes and traits.
 
     A method may override methods in inherited scopes if it has the same name and compatible
-    types. Overriden methods are not inherited, so we resolve this first. We build the
+    types. Overridden methods are not inherited, so we resolve this first. We build the
     `overrides` list for functions here. Note that overriding methods must have the
-    `override` attribute, and overriden methods must not be `final`. Note also that return
+    `override` attribute, and overridden methods must not be `final`. Note also that return
     types are not known until after type definition analysis, so return type compatibility
     is checked there.
 
@@ -273,7 +273,7 @@ def copyInheritedDefinitions(info, inheritanceGraph, bases):
         scope = info.getScope(id)
         irScopeDefn = scope.getIrDefn()
         superScopes = [info.getScope(baseId) for baseId in bases[id]]
-        overridenIds = set()
+        overriddenIds = set()
 
         for name, defnInfo in scope.iterBindings():
             if name == "this":
@@ -302,13 +302,13 @@ def copyInheritedDefinitions(info, inheritanceGraph, bases):
                                 raise InheritanceException(irDefn.astDefn.location,
                                                            "%s: cannot override a final method" %
                                                            name)
-                            if id in superIrDefn.overridenBy:
+                            if id in superIrDefn.overriddenBy:
                                 raise InheritanceException(irDefn.astDefn.location,
                                                            "%s: multiple methods in this class override the same base method" %
                                                            name)
                             overrides.append(superIrDefn)
-                            overridenIds.add(superIrDefn.id)
-                            superIrDefn.overridenBy[id] = irDefn
+                            overriddenIds.add(superIrDefn.id)
+                            superIrDefn.overriddenBy[id] = irDefn
             if OVERRIDE in irDefn.flags and len(overrides) == 0:
                 raise InheritanceException(irDefn.astDefn.location,
                                            "%s: doesn't actually override anything" % name)
@@ -324,7 +324,7 @@ def copyInheritedDefinitions(info, inheritanceGraph, bases):
                 if (not defnInfo.isHeritable() or
                     scope.isBound(name, defnInfo.irDefn) or
                     (isinstance(defnInfo.irDefn, ir.IrTopDefn) and
-                     defnInfo.irDefn.id in overridenIds)):
+                     defnInfo.irDefn.id in overriddenIds)):
                     continue
                 if isinstance(irScopeDefn, ir.Class) and \
                    ABSTRACT not in irScopeDefn.flags and \

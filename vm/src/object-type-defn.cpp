@@ -105,7 +105,7 @@ class FlatMethodsBuilder {
       : heap_(heap) { }
 
   /**
-   * Replaces overriden methods with the given method or appends the method onto the end of
+   * Replaces overridden methods with the given method or appends the method onto the end of
    * the flat method list if it overrides nothing.
    */
   void addMethod(const Handle<Function>& method) {
@@ -116,7 +116,7 @@ class FlatMethodsBuilder {
       methodsById_[method->id()] = method;
     } else {
       // This method overrides at least one other method. We may not have inherited the
-      // overriden methods yet though because we may not have found a path to the base yet.
+      // overridden methods yet though because we may not have found a path to the base yet.
       bool didOverrideMethod = false;
       for (auto overrideId : method->findOverriddenMethodIds()) {
         // Replace the method in our method list if we've inherited it.

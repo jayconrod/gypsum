@@ -1,4 +1,4 @@
-// Copyright 2014-2015 Jay Conrod. All rights reserved.
+// Copyright 2014-2016 Jay Conrod. All rights reserved.
 
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
@@ -31,7 +31,7 @@ class BlockVisitorBase {
   void visitPointer(Block** p) { }
 
  protected:
-  // These are helper functions. They can be overriden if needed.
+  // These are helper functions. They can be overridden if needed.
   inline void visitMetaWord(Block* mw);
   inline void visitBlockWithPointerMap(Block* block, Meta* meta);
   inline void visitBlockWithCustomPointers(Block* block, Meta* meta);

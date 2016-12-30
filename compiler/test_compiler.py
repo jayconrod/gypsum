@@ -3816,7 +3816,7 @@ class TestCompiler(TestCaseWithDefinitions):
           parameterTypes=[FooType])
         self.assertEquals(expected, f)
 
-    def testCallOverridenMethodWithTypeArgument(self):
+    def testCallOverriddenMethodWithTypeArgument(self):
         source = "class Foo[static T]\n" + \
                  "  override def to-string = \"Foo\"\n" + \
                  "def f(foo: Foo[Object]) =\n" + \

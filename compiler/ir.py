@@ -560,7 +560,7 @@ class Function(ParameterizedDefn):
             defined in (as opposed to any other class that inherits the method). For
             non-static methods, this could be derived from the receiver type, but there's
             no easy way to get it for static methods.
-        overridenBy ({DefnId, Function}?): a map from class and trait ids to methods. Each
+        overriddenBy ({DefnId, Function}?): a map from class and trait ids to methods. Each
             entry describes an overriding function in a subclass or subtrait. This should only
             be set for non-constructor, non-static methods.
         insts (list[Instruction]?): a list of instructions to insert instead of calling this
@@ -573,7 +573,7 @@ class Function(ParameterizedDefn):
 
     def __init__(self, name, id, sourceName=None, astDefn=None, returnType=None,
                  typeParameters=None, parameterTypes=None, variables=None, blocks=None,
-                 overrides=None, flags=frozenset(), definingClass=None, overridenBy=None,
+                 overrides=None, flags=frozenset(), definingClass=None, overriddenBy=None,
                  insts=None, compileHint=None):
         super(Function, self).__init__(name, id, sourceName, astDefn)
         self.returnType = returnType
@@ -585,7 +585,7 @@ class Function(ParameterizedDefn):
         self.flags = flags
         self.definingClass = definingClass
         self.insts = insts
-        self.overridenBy = overridenBy
+        self.overriddenBy = overriddenBy
         self.compileHint = compileHint
 
     def __repr__(self):
@@ -677,7 +677,7 @@ class Function(ParameterizedDefn):
         return typeParametersAreCompatible and \
                parameterTypesAreCompatible
 
-    def getOverridenMethodIds(self):
+    def getOverriddenMethodIds(self):
         """Returns a set of function ids of the methods that this method overrides.
 
         The functions referenced by ids in the returned set do not override anything. If this
@@ -699,7 +699,7 @@ class Function(ParameterizedDefn):
         else:
             allOverrideIds = set()
             for override in self.overrides:
-                allOverrideIds.update(override.getOverridenMethodIds())
+                allOverrideIds.update(override.getOverriddenMethodIds())
             return allOverrideIds
 
 

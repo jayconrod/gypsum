@@ -151,14 +151,14 @@ def _initialize():
         function = buildFunction(functionData, clas.name.short())
         assert flags.METHOD in function.flags
         function.definingClass = clas
-        function.overridenBy = {}
+        function.overriddenBy = {}
         if "overrides" in functionData:
             function.overrides = []
             for overrideName in functionData["overrides"]:
                 overrideId = getattr(bytecode, overrideName)
                 override = _builtinFunctionIdMap[overrideId]
                 function.overrides.append(override)
-                override.overridenBy[clas.id] = function
+                override.overriddenBy[clas.id] = function
         return function
 
     def buildConstructor(functionData, clas):

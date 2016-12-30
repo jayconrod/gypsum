@@ -491,7 +491,7 @@ class Scope(ast.NodeVisitor):
         """
         function.flags |= frozenset([METHOD])
         function.definingClass = clas
-        function.overridenBy = {}
+        function.overriddenBy = {}
         thisName = function.name.withSuffix(RECEIVER_SUFFIX)
         this = self.info.package.newVariable(
             thisName, sourceName="this", astDefn=function.astDefn,
@@ -1636,7 +1636,7 @@ class NonLocalObjectTypeDefnScope(Scope):
 
         def addMethod(methodDefnInfo):
             assert methodDefnInfo.irDefn.sourceName is not None
-            for overrideId in methodDefnInfo.irDefn.getOverridenMethodIds():
+            for overrideId in methodDefnInfo.irDefn.getOverriddenMethodIds():
                 methodsByOverrideId[overrideId] = methodDefnInfo
 
         for supertype in self.irDefn.supertypes:
@@ -1775,7 +1775,7 @@ class ScopeVisitor(ast.NodeVisitor):
     """Abstract base class for scope analysis related visitor.
 
     This class takes care of the common tasks of entering lexical scopes in the AST. visit
-    methods can be implemented or overriden to provide functionality."""
+    methods can be implemented or overridden to provide functionality."""
 
     def __init__(self, scope):
         self.scope = scope

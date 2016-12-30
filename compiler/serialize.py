@@ -550,7 +550,7 @@ class Deserializer(object):
         if METHOD in function.flags and \
            CONSTRUCTOR not in function.flags and \
            STATIC not in function.flags:
-            function.overridenBy = {}
+            function.overriddenBy = {}
 
     def decodeInstructions(self, instructionsBuffer, blockOffsets):
         # TODO: implement if we ever actually need this.
