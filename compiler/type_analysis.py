@@ -51,6 +51,7 @@ def analyzeTypeDeclarations(info):
     declarationVisitor = DeclarationTypeVisitor(info)
     declarationVisitor.visit(info.ast)
     info.typeCheckFunction = declarationVisitor.checkTypes
+    checkAmbiguousOverloads(info.package)
     info.package.buildNameIndex()
 
 
@@ -121,11 +122,20 @@ def partialFunctionMustMatch(expr, ty, info):
     return any(partialFunctionCaseMustMatch(case, ty, info) for case in expr.cases)
 
 
-def resolveAllOverrides(info):
-    """Iterates over each `NameInfo` in each scope and resolves overrides. This determines
-    whether methods with the same name as inherited methods overload or override."""
-    for scope in info.scopes.values():
-        scope.resolveOverrides()
+def checkAmbiguousOverloads(package):
+    """Checks that there are no functions with the same name and types as other functions.
+
+    This works by checking that all functions have unique names. This works after the type
+    declaration visitor has run, since it renames functions using their type signatures.
+    """
+    names = set()
+    for f in package.functions:
+        if f.name in names:
+            raise TypeException(
+                f.astDefn.location,
+                "%s: function has the same name and type signature as another function" %
+                    f.name)
+        names.add(f.name)
 
 
 def typeCanBeTested(testType, staticType, existentialVarIds=None):

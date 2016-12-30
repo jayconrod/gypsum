@@ -1814,13 +1814,11 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals([fooClass.methods[-1].id],
                           [o.id for o in barClass.methods[-1].overrides])
 
-    @unittest.skip("issues/25")
     def testAmbiguousOverloadWithoutCall(self):
         source = "def f = 12\n" + \
                  "def f = 34\n"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
-    @unittest.skip("issues/25")
     def testAmbiguousOverloadWithoutCallInClass(self):
         source = "class Foo\n" + \
                  "  def f = 12\n" + \
