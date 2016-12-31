@@ -265,7 +265,6 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.assertEquals([T], Tr.typeParameters)
         self.assertEquals([T], f.typeParameters)
         self.assertEquals(frozenset([PUBLIC, STATIC]), T.flags)
-        self.assertIs(Tr, T.clas)
 
     def testDefineAbstractTrait(self):
         source = "abstract trait Tr"
@@ -422,9 +421,8 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource("def f[static T](t: T) =\n" +
                                       "  def g = t")
         g = info.package.findFunction(name="f.g")
-        self.assertEquals(1, len(g.typeParameters))
         T = info.package.findTypeParameter(name="f.T")
-        self.assertIs(T, g.typeParameters[0])
+        self.assertEquals([T], g.typeParameters)
 
     def testFunctionVariantTypeParameter(self):
         self.assertRaises(ScopeException, self.analyzeFromSource, "def f[static +T] = {}")

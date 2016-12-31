@@ -149,7 +149,8 @@ class TestDefn(object):
         """The actual init function intended to be called when a test definition is constructed.
 
         This will call the real init function, and will also set some internal properties."""
-        if isinstance(self, IrTopDefn) and "id" not in kwargs:
+        if (isinstance(self, IrTopDefn) or isinstance(self, TypeParameter)) \
+            and "id" not in kwargs:
             super(TestDefn, self).__init__(name, _id, **kwargs)
         else:
             super(TestDefn, self).__init__(name, **kwargs)

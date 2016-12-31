@@ -990,9 +990,10 @@ class FunctionScope(Scope):
                 raise ScopeException(astDefn.location,
                                      "%s: non-static type parameters not supported yet" % name)
             flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
-            irDefn = self.info.package.addTypeParameter(name, sourceName=astDefn.name,
-                                                        astDefn=astDefn, flags=flags)
-            irScopeDefn.typeParameters.append(irDefn)
+            irDefn = self.info.package.addTypeParameter(irScopeDefn, name,
+                                                        sourceName=astDefn.name,
+                                                        astDefn=astDefn,
+                                                        flags=flags)
         elif isinstance(astDefn, ast.Parameter):
             checkFlags(flags, frozenset(), astDefn.location)
             if isinstance(astDefn.pattern, ast.VariablePattern):
@@ -1290,10 +1291,10 @@ class ClassScope(Scope):
             if STATIC not in flags:
                 raise NotImplementedError()
             flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
-            irDefn = self.info.package.addTypeParameter(name, sourceName=astDefn.name,
-                                                        astDefn=astDefn, flags=flags)
-            irDefn.clas = irScopeDefn
-            irScopeDefn.typeParameters.append(irDefn)
+            irDefn = self.info.package.addTypeParameter(irScopeDefn, name,
+                                                        sourceName=astDefn.name,
+                                                        astDefn=astDefn,
+                                                        flags=flags)
             irScopeDefn.initializer.typeParameters.append(irDefn)
             for ctor in irScopeDefn.constructors:
                 ctor.typeParameters.append(irDefn)
@@ -1448,10 +1449,10 @@ class TraitScope(Scope):
             if STATIC not in flags:
                 raise NotImplementedError()
             flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
-            irDefn = self.info.package.addTypeParameter(name, sourceName=astDefn.name,
-                                                        astDefn=astDefn, flags=flags)
-            irDefn.clas = irScopeDefn
-            irScopeDefn.typeParameters.append(irDefn)
+            irDefn = self.info.package.addTypeParameter(irScopeDefn, name,
+                                                        sourceName=astDefn.name,
+                                                        astDefn=astDefn,
+                                                        flags=flags)
             isVisible = False
         return irDefn, shouldBind, isVisible
 
@@ -1507,7 +1508,7 @@ class ExistentialTypeScope(Scope):
             name = self.makeName(astDefn.name)
             if len(flags) > 0:
                 raise ScopeException(astDefn.location, "invalid flags: %s" % ", ".join(flags))
-            irDefn = self.info.package.addTypeParameter(name, sourceName=astDefn.name,
+            irDefn = self.info.package.addTypeParameter(None, name, sourceName=astDefn.name,
                                                         astDefn=astDefn, flags=flags)
         else:
             raise NotImplementedError()

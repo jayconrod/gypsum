@@ -560,7 +560,7 @@ class TypeVisitorBase(ast.NodeVisitor):
         if not self.info.hasDefnInfo(node):
             paramName = self.info.makeUniqueName(
                 Name(self.scope().prefix + [EXISTENTIAL_SUFFIX, BLANK_SUFFIX]))
-            blankParam = self.info.package.addTypeParameter(paramName, astDefn=node,
+            blankParam = self.info.package.addTypeParameter(None, paramName, astDefn=node,
                                                             upperBound=param.upperBound,
                                                             lowerBound=param.lowerBound)
             defnInfo = compile_info.DefnInfo(blankParam, self.scope().scopeId, isVisible=False)

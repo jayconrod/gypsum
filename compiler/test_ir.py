@@ -115,22 +115,22 @@ class TestIr(utils_test.TestCaseWithDefinitions):
 
     def testMangleFunctionNameClasses(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
-        P = package.addTypeParameter(Name(["P"]))
-        Q = package.addTypeParameter(Name(["Q"]))
-        Local = package.addClass(Name(["local", "Local"]), typeParameters=[P, Q])
+        Local = package.addClass(Name(["local", "Local"]), typeParameters=[])
+        P = package.addTypeParameter(Local, Name(["P"]))
+        Q = package.addTypeParameter(Local, Name(["Q"]))
         otherPackage = ir.Package(name=Name(["foo", "bar", "baz"]))
         otherPackage.id.index = 0
-        S = otherPackage.addTypeParameter(Name(["S"]))
-        T = otherPackage.addTypeParameter(Name(["T"]))
-        Foreign = otherPackage.addClass(Name(["foreign", "Foreign"]), typeParameters=[S, T])
+        Foreign = otherPackage.addClass(Name(["foreign", "Foreign"]), typeParameters=[])
         Foreign.id.packageId = otherPackage.id
+        S = otherPackage.addTypeParameter(Foreign, Name(["S"]))
+        T = otherPackage.addTypeParameter(Foreign, Name(["T"]))
         package.dependencies = [ir.PackageDependency(otherPackage.name, None, None)]
 
-        X = package.addTypeParameter(Name(["X"]), upperBound=getRootClassType(),
+        X = package.addTypeParameter(None, Name(["X"]), upperBound=getRootClassType(),
                                      lowerBound=getNothingClassType(),
                                      flags=frozenset([STATIC]))
         XType = VariableType(X)
-        Y = package.addTypeParameter(Name(["Y"]), upperBound=getRootClassType(),
+        Y = package.addTypeParameter(None, Name(["Y"]), upperBound=getRootClassType(),
                                      lowerBound=getNothingClassType())
         YType = VariableType(Y, frozenset([NULLABLE_TYPE_FLAG]))
         LocalType = ClassType(Local, (XType, YType))
@@ -144,15 +144,15 @@ class TestIr(utils_test.TestCaseWithDefinitions):
 
     def testMangleFunctionNameExistential(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
-        S = package.addTypeParameter(Name(["S"]), upperBound=getRootClassType(),
+        C = package.addClass(Name(["C"]), typeParameters=[])
+        S = package.addTypeParameter(C, Name(["S"]), upperBound=getRootClassType(),
                                      lowerBound=getNothingClassType())
-        T = package.addTypeParameter(Name(["T"]), upperBound=getRootClassType(),
+        T = package.addTypeParameter(C, Name(["T"]), upperBound=getRootClassType(),
                                      lowerBound=getNothingClassType())
-        C = package.addClass(Name(["C"]), typeParameters=[S, T])
-        P = package.addTypeParameter(Name(["P"]), upperBound=getRootClassType(),
+        P = package.addTypeParameter(None, Name(["P"]), upperBound=getRootClassType(),
                                      lowerBound=getNothingClassType())
         PType = VariableType(P)
-        X = package.addTypeParameter(Name(["X"]), upperBound=getRootClassType(),
+        X = package.addTypeParameter(None, Name(["X"]), upperBound=getRootClassType(),
                                      lowerBound=getNothingClassType())
         XType = VariableType(X)
         eXType = ExistentialType((X,), ClassType(C, (PType, XType)))

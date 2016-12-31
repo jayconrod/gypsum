@@ -3,6 +3,9 @@
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
 
+import re
+import StringIO
+
 
 import ast
 import builtins
@@ -20,8 +23,6 @@ from utils import (
     reprFormat
 )
 
-import re
-import StringIO
 
 class Package(object):
     def __init__(self, id=None, name=None, version=None):
@@ -42,13 +43,13 @@ class Package(object):
         self.functions = []
         self.classes = []
         self.traits = []
-        self.typeParameters = []
         self.strings = []
         self.stringIndices = {}
         self.names = None
         self.nameIndices = None
         self.entryFunction = None
         self.initFunction = None
+        self.typeParameters = []
         self.exports = None
 
     def __str__(self):
@@ -66,8 +67,6 @@ class Package(object):
             buf.write("%s\n\n" % c)
         for t in self.traits:
             buf.write("%s\n\n" % t)
-        for p in self.typeParameters:
-            buf.write("%s\n\n" % p)
         buf.write("entry function: %s\n" % self.entryFunction)
         buf.write("init function: %s\n" % self.initFunction)
         return buf.getvalue()
@@ -112,14 +111,18 @@ class Package(object):
         self.traits.append(t)
         return t
 
-    def addTypeParameter(self, name, *args, **kwargs):
+    def addTypeParameter(self, defn, name, **kwargs):
         id = ids.DefnId(self.id, ids.DefnId.TYPE_PARAMETER, len(self.typeParameters))
         if self.names is not None:
             self.findOrAddName(name)
-        p = TypeParameter(name, id, *args, **kwargs)
+        p = TypeParameter(name, id, **kwargs)
         if p.sourceName is not None:
             self.findOrAddString(p.sourceName)
         self.typeParameters.append(p)
+        if defn is not None:
+            defn.typeParameters.append(p)
+            if isinstance(defn, ObjectTypeDefn):
+                p.clas = defn
         return p
 
     def newField(self, name, **kwargs):
@@ -175,12 +178,6 @@ class Package(object):
         for t in self.traits:
             if flags.PUBLIC in t.flags:
                 self.exports[t.name] = t
-        # TODO(#28): type parameters should not be top-level definitions and should not
-        # be linked. For now, they are though, and we link all type parameters, including
-        # non-public, since existential parameters are non-public. Existential types
-        # may be used as part of top-level definition signatures.
-        for p in self.typeParameters:
-            self.exports[p.name] = p
 
         return self.exports
 
@@ -200,8 +197,6 @@ class Package(object):
             assert all(isinstance(c, Class) for c in dep.linkedClasses)
             dep.linkedTraits = [depExports[t.name] for t in dep.externTraits]
             assert all(isinstance(t, Trait) for t in dep.linkedTraits)
-            dep.linkedTypeParameters = [depExports[p.name] for p in dep.externTypeParameters]
-            assert all(isinstance(p, TypeParameter) for p in dep.linkedTypeParameters)
 
         # Link function overrides.
         for f in self.functions:
@@ -271,51 +266,24 @@ class Package(object):
         each(addName, self.classes)
         each(addName, flatMap(lambda c: c.fields, self.classes))
         each(addName, self.traits)
-        each(addName, self.typeParameters)
 
     def findFunction(self, **kwargs):
-        return next(self.find(self.functions, kwargs))
+        return next(_findDefn(self.functions, kwargs))
 
     def findClass(self, **kwargs):
-        return next(self.find(self.classes, kwargs))
+        return next(_findDefn(self.classes, kwargs))
 
     def findTrait(self, **kwargs):
-        return next(self.find(self.traits, kwargs))
+        return next(_findDefn(self.traits, kwargs))
 
     def findGlobal(self, **kwargs):
-        return next(self.find(self.globals, kwargs))
+        return next(_findDefn(self.globals, kwargs))
 
     def findTypeParameter(self, **kwargs):
-        return next(self.find(self.typeParameters, kwargs))
+        return next(_findDefn(self.typeParameters, kwargs))
 
     def findDependency(self, **kwargs):
-        return next(self.find(self.dependencies, kwargs))
-
-    def find(self, defns, kwargs):
-        def matchItem(defn, key, value):
-            if key == "name":
-                if isinstance(value, str):
-                    name = Name.fromString(value)
-                else:
-                    name = value
-                return name == defn.name or \
-                    name == unmangleNameForTest(defn.name) or \
-                    (isinstance(value, str) and defn.sourceName == value)
-            elif key == "flag":
-                return value in defn.flags
-            elif key == "pred":
-                return value(defn)
-            elif key == "clas":
-                 if isinstance(defn, Function):
-                     return defn.definingClass is value
-                 else:
-                     assert isinstance(defn, TypeParameter)
-                     return defn.clas is value
-            else:
-                return getattr(defn, key) == value
-        def matchAll(defn):
-            return all(matchItem(defn, k, v) for k, v in kwargs.iteritems())
-        return (d for d in defns if matchAll(d))
+        return next(_findDefn(self.dependencies, kwargs))
 
     def getDefn(self, id):
         assert id.packageId is self.id
@@ -383,8 +351,6 @@ class PackageDependency(object):
         self.linkedClasses = None
         self.externTraits = []
         self.linkedTraits = None
-        self.externTypeParameters = []
-        self.linkedTypeParameters = None
         self.externMethods = []
 
     @staticmethod
@@ -431,8 +397,6 @@ class PackageDependency(object):
             buf.write("%s\n\n" % c)
         for t in self.externTraits:
             bug.write("%s\n\n" % t)
-        for p in self.externTypeParameters:
-            buf.write("%s\n\n" % p)
         return buf.getvalue()
 
     def __repr__(self):
@@ -493,6 +457,9 @@ class ParameterizedDefn(IrTopDefn):
                    lowerBound.isSubtypeOf(typeArg)
                    for typeArg, lowerBound, upperBound
                    in zip(typeArgs, lowerBounds, upperBounds))
+
+    def findTypeParameter(self, **kwargs):
+        return next(_findDefn(self.typeParameters, kwargs))
 
 
 class Global(IrTopDefn):
@@ -991,16 +958,25 @@ class Trait(ObjectTypeDefn):
                self.flags == other.flags
 
 
-class TypeParameter(IrTopDefn):
-    """Represents a range of possible types between an upper and lower bound.
+class TypeParameter(IrDefinition):
+    """Parameterizes types used in a definition or existential type.
 
-    In source, type parameters are always defined as part of a class or function definition.
-    In IR though, they are global and can be used by multiple definitions (especially
-    definitions which were nested in source).
+    A type parameter represents an "unknown" type, usually as part of a definition. For
+    example, if we are defining a `List` class, we would define a type parameter which
+    represents the type of elements in the list. Classes, traits, and functions are
+    parameterized. Additionally, existential types can define type parameters for locally
+    unknown types.
 
-    Type parameters are referenced through `VariableType`, which represents some type within
-    bounds. Type parameters may have variance, which determines how the subtype relation works
-    for parameterized types.
+    Type parameters are referenced through `VariableType`s. They are only meaningful within
+    the definitions that contain them.
+
+    Each type parameter has an upper and lower bound. These are both non-nullable `ClassType`s
+    or `VariableType`s. These bounds define the subtype relation for variable types. They
+    must not cause the subtype graph to be cyclic, i.e., a type parameter may not be bounded
+    by itself, directly or through a chain of other definitions.
+
+    Note that `TypeParameter` is not a top-level definition. These objects are just values,
+    and they may be copied or re-used as needed. Type parameters are not exported or linked.
 
     Attributes:
         name (Name): the name of the type parameter.
@@ -1013,22 +989,29 @@ class TypeParameter(IrTopDefn):
             type analysis.
         flags (frozenset[flag]): flags indicating how this type parameter may be used. Valid
             flags are `EXTERN`, `CONTRAVARIANT`, `COVARIANT`, `STATIC`.
+        clas (ObjectTypeDefn?): the object type definition that defines this parameter. Used
+            for checking variance.
+        index (int?): an integer that distinguishes this type parameter from others in the
+            same lexical context. Used for serialization, not otherwise meaningful.
     """
 
     def __init__(self, name, id, sourceName=None, astDefn=None,
-                 upperBound=None, lowerBound=None, flags=frozenset(), clas=None):
-        super(TypeParameter, self).__init__(name, id, sourceName, astDefn)
+                 upperBound=None, lowerBound=None, flags=frozenset(),
+                 clas=None, index=None):
+        super(TypeParameter, self).__init__(name, sourceName, astDefn)
+        self.id = id
         self.upperBound = upperBound
         self.lowerBound = lowerBound
         self.flags = flags
-        self.clas = None
+        self.clas = clas
+        self.index = index
 
     def __repr__(self):
         return reprFormat(self, "name", "upperBound", "lowerBound", "flags")
 
     def __str__(self):
-        return "%s type %s%s <: %s >: %s" % \
-            (" ".join(self.flags), self.name, self.id, self.upperBound, self.lowerBound)
+        return "%s type %s <: %s >: %s" % \
+            (" ".join(self.flags), self.name, self.upperBound, self.lowerBound)
 
     def __eq__(self, other):
         return self.name == other.name and \
@@ -1345,6 +1328,33 @@ def unmangleNameForTest(name):
         return component
 
     return Name(map(unmangleComponent, name.components))
+
+
+def _findDefn(defns, kwargs):
+    def matchItem(defn, key, value):
+        if key == "name":
+            if isinstance(value, str):
+                name = Name.fromString(value)
+            else:
+                name = value
+            return name == defn.name or \
+                name == unmangleNameForTest(defn.name) or \
+                (isinstance(value, str) and defn.sourceName == value)
+        elif key == "flag":
+            return value in defn.flags
+        elif key == "pred":
+            return value(defn)
+        elif key == "clas":
+             if isinstance(defn, Function):
+                 return defn.definingClass is value
+             else:
+                 assert isinstance(defn, TypeParameter)
+                 return defn.clas is value
+        else:
+            return getattr(defn, key) == value
+    def matchAll(defn):
+        return all(matchItem(defn, k, v) for k, v in kwargs.iteritems())
+    return (d for d in defns if matchAll(d))
 
 
 __all__ = [

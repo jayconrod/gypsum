@@ -161,7 +161,7 @@ class Type(data.Data):
         if isinstance(self, ExistentialType) and isinstance(other, ExistentialType):
             if len(self.variables) != len(other.variables):
                 return False
-            if all(s.id is t.id for s, t in zip(self.variables, other.variables)) and \
+            if all(s.id == t.id for s, t in zip(self.variables, other.variables)) and \
                self.ty.isEquivalent(other.ty):
                 return True
             if any(not s.isEquivalent(t) for s, t in zip(self.variables, other.variables)):

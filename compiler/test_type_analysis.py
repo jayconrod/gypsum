@@ -472,7 +472,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testCallForeignFunctionWithTypeArg(self):
         source = "var x = foo.bar[String](\"baz\")"
         foo = Package(name=Name(["foo"]))
-        T = foo.addTypeParameter(Name(["T"]), upperBound=getRootClassType(),
+        T = foo.addTypeParameter(None, Name(["T"]), upperBound=getRootClassType(),
                                  lowerBound=getNothingClassType(), flags=frozenset([STATIC]))
         Tty = VariableType(T)
         bar = foo.addFunction(Name(["bar"]), sourceName="bar",
@@ -1520,14 +1520,16 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testForeignProjectedClassTypeWithTypeArgs(self):
         package = Package(name=Name(["foo"]))
-        param = package.addTypeParameter(Name(["Bar", "T"]), upperBound=getRootClassType(),
-                                         lowerBound=getNothingClassType(),
-                                         flags=frozenset([STATIC]))
-        clas = package.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[param],
+        clas = package.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                 supertypes=[getRootClassType()],
                                 constructors=[], fields=[], methods=[],
                                 flags=frozenset([PUBLIC]))
+        package.addTypeParameter(clas, Name(["Bar", "T"]),
+                                 upperBound=getRootClassType(),
+                                 lowerBound=getNothingClassType(),
+                                 flags=frozenset([STATIC]))
         loader = FakePackageLoader([package])
+
         source = "var g: foo.Bar[String]"
         info = self.analyzeFromSource(source, packageLoader=loader)
         expectedType = ClassType(clas, (getStringType(),))
@@ -1536,13 +1538,13 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testForeignProjectedClassTypeWithTypeArgsOutOfBounds(self):
         package = Package(name=Name(["foo"]))
-        param = package.addTypeParameter(Name(["Bar", "T"]), upperBound=getStringType(),
-                                         lowerBound=getNothingClassType(),
-                                         flags=frozenset([STATIC]))
-        clas = package.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[param],
+        clas = package.addClass(Name(["Bar"]), sourceName="Bar", typeParameters=[],
                                 supertypes=[getRootClassType()],
                                 constructors=[], fields=[],
                                 methods=[], flags=frozenset([PUBLIC]))
+        package.addTypeParameter(clas, Name(["Bar", "T"]), upperBound=getStringType(),
+                                 lowerBound=getNothingClassType(),
+                                 flags=frozenset([STATIC]))
         loader = FakePackageLoader([package])
         source = "var g: foo.Bar[Object]"
         self.assertRaises(TypeException, self.analyzeFromSource, source, packageLoader=loader)
@@ -2512,15 +2514,15 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         import sys
         sys.setrecursionlimit(10000)
         std = Package(name=Name(["std"]))
-        OptionT = std.addTypeParameter(Name(["Option", "T"]),
-                                       upperBound=getRootClassType(),
-                                       lowerBound=getNothingClassType(),
-                                       flags=frozenset([STATIC, COVARIANT]))
         Option = std.addClass(Name(["Option"]), sourceName="Option",
-                              typeParameters=[OptionT],
+                              typeParameters=[],
                               supertypes=[getRootClassType()],
                               constructors=[], fields=[],
                               methods=[], flags=frozenset([PUBLIC, ABSTRACT]))
+        OptionT = std.addTypeParameter(Option, Name(["Option", "T"]),
+                                       upperBound=getRootClassType(),
+                                       lowerBound=getNothingClassType(),
+                                       flags=frozenset([STATIC, COVARIANT]))
         OptionType = ClassType.forReceiver(Option)
         OptionIsDefined = std.addFunction(Name(["Option", "is-defined"]),
                                           sourceName="is-defined",
@@ -2537,16 +2539,17 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         Non = std.addGlobal(Name(["None"]), sourceName="None",
                             type=ClassType(Option, (getNothingClassType(),)),
                             flags=frozenset([PUBLIC, LET]))
-        SomeT = std.addTypeParameter(Name(["Some", "T"]),
+        Some = std.addClass(Name(["Some"]), sourceName="Some",
+                            typeParameters=[],
+                            supertypes=[None, getRootClassType()],
+                            constructors=[], fields=[], methods=[],
+                            flags=frozenset([PUBLIC, FINAL]))
+        SomeT = std.addTypeParameter(Some, Name(["Some", "T"]),
                                      upperBound=getRootClassType(),
                                      lowerBound=getNothingClassType(),
                                      flags=frozenset([STATIC, COVARIANT]))
         SomeTType = VariableType(SomeT)
-        Some = std.addClass(Name(["Some"]), sourceName="Some",
-                            typeParameters=[SomeT],
-                            supertypes=[ClassType(Option, (SomeTType,)), getRootClassType()],
-                            constructors=[], fields=[], methods=[],
-                            flags=frozenset([PUBLIC, FINAL]))
+        Some.supertypes[0] = ClassType(Option, (SomeTType,))
         SomeType = ClassType.forReceiver(Some)
         SomeCtor = std.addFunction(Name(["Some", CONSTRUCTOR_SUFFIX]),
                                    returnType=UnitType,
@@ -2555,21 +2558,21 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                                    flags=frozenset([PUBLIC, METHOD, CONSTRUCTOR]),
                                    definingClass=Some)
         Some.constructors.append(SomeCtor)
-        Tuple2T1 = std.addTypeParameter(Name(["Tuple2", "T1"]),
+        Tuple2 = std.addClass(Name(["Tuple2"]), sourceName="Tuple2",
+                              typeParameters=[],
+                              supertypes=[getRootClassType()],
+                              constructors=[], fields=[],
+                              methods=[], flags=frozenset([PUBLIC, FINAL]))
+        Tuple2T1 = std.addTypeParameter(Tuple2, Name(["Tuple2", "T1"]),
                                         upperBound=getRootClassType(),
                                         lowerBound=getNothingClassType(),
                                         flags=frozenset([STATIC, COVARIANT]))
         Tuple2T1Type = VariableType(Tuple2T1)
-        Tuple2T2 = std.addTypeParameter(Name(["Tuple2", "T2"]),
+        Tuple2T2 = std.addTypeParameter(Tuple2, Name(["Tuple2", "T2"]),
                                         upperBound=getRootClassType(),
                                         lowerBound=getNothingClassType(),
                                         flags=frozenset([STATIC, COVARIANT]))
         Tuple2T2Type = VariableType(Tuple2T2)
-        Tuple2 = std.addClass(Name(["Tuple2"]), sourceName="Tuple2",
-                              typeParameters=[Tuple2T1, Tuple2T2],
-                              supertypes=[getRootClassType()],
-                              constructors=[], fields=[],
-                              methods=[], flags=frozenset([PUBLIC, FINAL]))
         Tuple2Type = ClassType.forReceiver(Tuple2)
         Tuple2Ctor = std.addFunction(Name(["Tuple2", CONSTRUCTOR_SUFFIX]),
                                      returnType=UnitType,
