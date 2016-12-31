@@ -77,33 +77,27 @@ def buildSubtypeGraph(info):
         if isinstance(irTypeDefn, ir.ObjectTypeDefn):
             for supertype in irTypeDefn.supertypes:
                 if supertype.isNullable():
-                    raise InheritanceException(irTypeDefn.getLocation(),
-                                               "%s: cannot inherit nullable type" %
-                                               irTypeDefn.name)
+                    raise InheritanceException.fromDefn(irTypeDefn,
+                                                        "cannot inherit nullable type")
                 if supertype.clas is getNothingClass():
-                    raise InheritanceException(irTypeDefn.getLocation(),
-                                               "%s: cannot inherit Nothing" %
-                                               irTypeDefn.name)
+                    raise InheritanceException.fromDefn(irTypeDefn, "cannot inherit Nothing")
                 supertypeId = getIdForType(supertype)
                 if irTypeDefn.id is supertypeId:
-                    raise InheritanceException(irTypeDefn.getLocation(),
-                                               "%s: cannot inherit from itself" %
-                                               irTypeDefn.name)
+                    raise InheritanceException.fromDefn(irTypeDefn,
+                                                        "cannot inherit from itself")
                 if not supertype.clas.isLocal():
                     NonLocalObjectTypeDefnScope.ensureForDefn(supertype.clas, info)
                 subtypeGraph.addEdge(irTypeDefn.id, supertypeId)
         elif isinstance(irTypeDefn, ir.TypeParameter):
             upperBoundId = getIdForType(irTypeDefn.upperBound)
             if irTypeDefn.id is upperBoundId:
-                raise InheritanceException(irTypeDefn.getLocation(),
-                                           "%s: cannot be upper bounded by itself" %
-                                           irTypeDefn.name)
+                raise InheritanceException.fromDefn(irTypeDefn,
+                                                    "cannot be upper bounded by itself")
             subtypeGraph.addEdge(irTypeDefn.id, upperBoundId)
             lowerBoundId = getIdForType(irTypeDefn.lowerBound)
             if irTypeDefn.id is lowerBoundId:
-                raise InheritanceException(irTypeDefn.getLocation(),
-                                           "%s: cannot be lower bounded by itself" %
-                                           irTypeDefn.name)
+                raise InheritanceException.fromDefn(irTypeDefn,
+                                                    "cannot be lower bounded by itself")
             subtypeGraph.addEdge(lowerBoundId, irTypeDefn.id)
         else:
             raise NotImplementedError()
@@ -166,9 +160,9 @@ def buildFullTypeLists(info, inheritanceGraph):
         explicitInheritedIds = set()
         for supertype in irDefn.supertypes:
             if supertype.clas.id in explicitInheritedIds:
-                raise InheritanceException(irDefn.getLocation(),
-                                           "%s: inherited same definition more than once: %s" %
-                                           (irDefn.name, supertype.clas.name))
+                raise InheritanceException.fromDefn(irDefn,
+                                                    "inherited same definition more than once: %s" %
+                                                    supertype.clas.getSourceName())
             explicitInheritedIds.add(supertype.clas.id)
 
         # Ensure that the first inherited type is from a class. This need not be explicit in
@@ -197,31 +191,31 @@ def buildFullTypeLists(info, inheritanceGraph):
 
             # Perform some basic checks.
             if FINAL in irSuperDefn.flags:
-                raise InheritanceException(irDefn.getLocation(),
-                                           "%s: cannot inherit from final class %s" %
-                                           (irDefn.name, irSuperDefn.name))
+                raise InheritanceException.fromDefn(irDefn,
+                                                    "cannot inherit from final class: %s" %
+                                                    irSuperDefn.getSourceName())
 
             if not isFirstSupertype and isinstance(irSuperDefn, ir.Class):
-                raise InheritanceException(irDefn.getLocation(),
-                                           "%s: only first supertype may be a class" %
-                                           irDefn.name)
+                raise InheritanceException.fromDefn(irDefn,
+                                                    "only first supertype may be a class")
             irSuperClass = irSuperDefn \
                            if isinstance(irSuperDefn, ir.Class) \
                            else irSuperDefn.supertypes[0].clas
             if not baseClassType.clas.isDerivedFrom(irSuperClass):
-                raise InheritanceException(irDefn.getLocation(),
-                                           "%s: base class %s of supertype %s not a superclass of base class %s" %
-                                           (irDefn.name, irSuperClass.name,
-                                            supertype, baseClassType.clas.name))
+                raise InheritanceException.fromDefn(irDefn,
+                                                    "base class %s of supertype %s not a superclass of base class %s" %
+                                                    (irSuperClass.getSourceName(),
+                                                     supertype,
+                                                     baseClassType.clas.getSourceName()))
             isFirstSupertype = False
 
             if irSuperDefn.id in inheritedTypeMap:
                 # We have already inherited this type along a different path. We do not need
                 # to copy bindings.
                 if inheritedTypeMap[irSuperDefn.id] != supertype:
-                    raise InheritanceException(irDefn.getLocation(),
-                                               "%s: inherited %s multiple times with different types" %
-                                               (irDefn.name, irSuperDefn.name))
+                    raise InheritanceException.fromDefn(irDefn,
+                                                        "inherited %s multiple times with different types" %
+                                                        irSuperDefn.getSourceName())
             else:
                 # We have not inherited this type yet.
                 inheritedTypeMap[irSuperDefn.id] = supertype
@@ -237,9 +231,9 @@ def buildFullTypeLists(info, inheritanceGraph):
                     if irUberDefn.id in inheritedTypeMap:
                         # We have already inherited this definition along a different path.
                         if inheritedTypeMap[irUberDefn.id] != substitutedUbertype:
-                            raise InheritanceException(irDefn.getLocation(),
-                                                       "%s: inherited %s multiple times with different types" %
-                                                       (irDefn.name, irUberDefn.name))
+                            raise InheritanceException.fromDefn(irDefn,
+                                                                "inherited %s multiple times with different types" %
+                                                                irUberDefn.getSourceName())
                     else:
                         # We have not inherited this definition yet.
                         inheritedTypeMap[irUberDefn.id] = substitutedUbertype
@@ -286,8 +280,8 @@ def copyInheritedDefinitions(info, inheritanceGraph, bases):
                 if nameInfo is None or not nameInfo.isHeritable():
                     continue
                 if not nameInfo.isOverloadable(defnInfo):
-                    raise InheritanceException(irDefn.astDefn.location,
-                                               "%s: cannot overload definition in base" % name)
+                    raise InheritanceException.fromDefn(irDefn,
+                                                        "cannot overload definition in base")
                 if isinstance(irDefn, ir.Function) and \
                    not irDefn.isConstructor() and \
                    not STATIC in irDefn.flags:
@@ -299,23 +293,20 @@ def copyInheritedDefinitions(info, inheritanceGraph, bases):
                         inheritedIds.add(superIrDefn.id)
                         if irDefn.mayOverride(superIrDefn):
                             if superIrDefn.isFinal():
-                                raise InheritanceException(irDefn.astDefn.location,
-                                                           "%s: cannot override a final method" %
-                                                           name)
+                                raise InheritanceException.fromDefn(irDefn,
+                                                                    "cannot override a final method")
                             if id in superIrDefn.overriddenBy:
-                                raise InheritanceException(irDefn.astDefn.location,
-                                                           "%s: multiple methods in this class override the same base method" %
-                                                           name)
+                                raise InheritanceException.fromDefn(irDefn,
+                                                                    "multiple methods in this class override the same base method")
                             overrides.append(superIrDefn)
                             overriddenIds.add(superIrDefn.id)
                             superIrDefn.overriddenBy[id] = irDefn
             if OVERRIDE in irDefn.flags and len(overrides) == 0:
-                raise InheritanceException(irDefn.astDefn.location,
-                                           "%s: doesn't actually override anything" % name)
+                raise InheritanceException.fromDefn(irDefn,
+                                                    "doesn't actually override anything")
             if OVERRIDE not in irDefn.flags and len(overrides) > 0:
-                raise InheritanceException(irDefn.astDefn.location,
-                                           "%s: overrides methods without `override` attribute" %
-                                           name)
+                raise InheritanceException.fromDefn(irDefn,
+                                                    "overrides methods without `override` attribute")
             if len(overrides) > 0:
                 irDefn.overrides = overrides
 
@@ -330,9 +321,9 @@ def copyInheritedDefinitions(info, inheritanceGraph, bases):
                    ABSTRACT not in irScopeDefn.flags and \
                    isinstance(defnInfo.irDefn, ir.Function) and \
                    ABSTRACT in defnInfo.irDefn.flags:
-                    raise InheritanceException(irScopeDefn.astDefn.location,
-                                               "%s: concrete class does not override abstract method %s" %
-                                               (irScopeDefn.name, defnInfo.irDefn.name))
+                    raise InheritanceException.fromDefn(irScopeDefn,
+                                                        "concrete class does not override abstract method: %s" %
+                                                        defnInfo.irDefn.getSourceName())
                 scope.bind(name, defnInfo.inherit(scope.scopeId))
 
         if isinstance(irScopeDefn, ir.Class):

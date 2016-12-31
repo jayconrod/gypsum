@@ -462,6 +462,9 @@ class IrDefinition(object):
     def getLocation(self):
         return self.astDefn.location if self.astDefn is not None else None
 
+    def getSourceName(self):
+        return self.sourceName if self.sourceName is not None else str(self.name)
+
 
 class IrTopDefn(IrDefinition):
     def __init__(self, name, id, sourceName, astDefn):

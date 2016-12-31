@@ -4,6 +4,9 @@
 # the GPL license that can be found in the LICENSE.txt file.
 
 
+from location import NoLoc
+
+
 class CompileException(Exception):
     def __init__(self, location, message):
         self.location = location
@@ -12,6 +15,19 @@ class CompileException(Exception):
     def __str__(self):
         locStr = str(self.location) if self.location is not None else "<unknown>"
         return "%s: %s error: %s" % (self.location, self.kind, self.message)
+
+    @classmethod
+    def fromDefn(cls, defn, message):
+        loc = defn.getLocation()
+        sourceName = defn.getSourceName()
+        messageWithName = sourceName + ": " + message
+        return cls(loc, messageWithName)
+
+    @classmethod
+    def fromUse(cls, loc, defn, message):
+        sourceName = defn.getSourceName()
+        messageWithName = sourceName + ": " + message
+        return cls(loc, messageWithName)
 
 
 class PackageException(CompileException):

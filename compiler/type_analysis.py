@@ -75,9 +75,8 @@ def analyzeTypes(info):
                 overriddenReturnType = override.returnType.substituteForInheritance(
                     function.definingClass, override.definingClass)
                 if not function.returnType.isSubtypeOf(overriddenReturnType):
-                    raise TypeException(function.getLocation(),
-                                        "%s: return type is not subtype of overridden function" %
-                                        function.name)
+                    raise TypeException.fromDefn(function,
+                                                 "return type is not subtype of overridden function")
 
 
 def patternMustMatch(pat, ty, info):
@@ -131,10 +130,8 @@ def checkAmbiguousOverloads(package):
     names = set()
     for f in package.functions:
         if f.name in names:
-            raise TypeException(
-                f.astDefn.location,
-                "%s: function has the same name and type signature as another function" %
-                    f.name)
+            raise TypeException.fromDefn(
+                f, "function has the same name and type signature as another function")
         names.add(f.name)
 
 
@@ -276,7 +273,7 @@ def checkTypeArgumentBounds(typeArgs, typeParams, locs):
         upperBound = tp.upperBound.substitute(typeParams, typeArgs)
         lowerBound = tp.lowerBound.substitute(typeParams, typeArgs)
         if not ta.isSubtypeOf(upperBound) or not lowerBound.isSubtypeOf(ta):
-            raise TypeException(loc, "%s: type argument out of bounds" % tp.sourceName)
+            raise TypeException(loc, "%s: type argument out of bounds" % tp.getSourceName())
 
 
 class TypeVisitorBase(ast.NodeVisitor):
@@ -621,8 +618,8 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         list here."""
         for tp, loc in self.typeParamsToCheck:
             if not tp.lowerBound.isSubtypeOf(tp.upperBound):
-                raise TypeException(loc,
-                                    "%s: lower bound is not subtype of upper bound" % tp.name)
+                raise TypeException.fromUse(loc, tp,
+                                            "lower bound is not subtype of upper bound")
 
         for typeArgs, typeParams, locs in self.typeArgsToCheck:
             checkTypeArgumentBounds(typeArgs, typeParams, locs)
@@ -2486,7 +2483,7 @@ class FunctionState(object):
     def handleReturn(self, returnType):
         if self.declaredReturnType:
             if not returnType.isSubtypeOf(self.declaredReturnType):
-                raise TypeException(self.irDefn.getLocation(), "incorrect return type")
+                raise TypeException.fromDefn(self.irDefn, "incorrect return type")
             return self.declaredReturnType
         elif self.bodyReturnType is None:
             self.bodyReturnType = returnType

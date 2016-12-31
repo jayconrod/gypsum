@@ -257,9 +257,9 @@ class CompileVisitor(ast.NodeVisitor):
                                  len(ctor.parameterTypes) == 1]
             assert len(defaultSuperCtors) <= 1
             if len(defaultSuperCtors) == 0:
-                raise SemanticException(self.function.definingClass.getLocation(),
-                                        "no default constructor in superclass %s" %
-                                        superclass.name)
+                raise SemanticException.fromDefn(self.function.definingClass,
+                                                 "no default constructor in superclass: %s" %
+                                                 superclass.getSourceName())
             self.loadThis()
             self.buildStaticTypeArguments(supertype.typeArguments)
             self.callg(defaultSuperCtors[0])

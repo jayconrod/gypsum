@@ -671,24 +671,21 @@ class Scope(ast.NodeVisitor):
 
         if hasattr(irDefn, "flags"):
             if PRIVATE in irDefn.flags and not self.isWithin(defnInfo.inheritedScopeId):
-                raise ScopeException(loc,
-                                     "%s: definition is private and cannot be used here" %
-                                     irDefn.name)
+                raise ScopeException.fromDefn(irDefn,
+                                              "definition is private and cannot be used here")
             if PROTECTED in irDefn.flags and not self.isWithin(defnInfo.scopeId):
-                raise ScopeException(loc,
-                                     "%s: definition is protected and cannot be used here" %
-                                     irDefn.name)
+                raise ScopeException.fromDefn(irDefn,
+                                              "definition is protected and cannot be used here")
             if STATIC not in irDefn.flags and \
                useKind is USE_AS_VALUE and \
                self.isStaticWithin(defnInfo.scopeId):
-                raise ScopeException(loc,
-                                     "%s: definition is non-static, accessed from a static scope" %
-                                     irDefn.name)
+                raise ScopeException.fromUse(loc, irDefn,
+                                             "definition is non-static, accessed from a static scope")
 
         if useKind is USE_AS_CONSTRUCTOR and \
            ABSTRACT in irDefn.definingClass.flags:
-            raise ScopeException(loc, "%s: cannot instantiate abstract class" %
-                                 irDefn.definingClass.name)
+            raise ScopeException.fromUse(loc, irDefn.definingClass,
+                                         "cannot instantiate abstract class")
 
         useInfo = UseInfo(defnInfo, self.scopeId, useKind)
         self.info.setUseInfo(useAstId, useInfo)
