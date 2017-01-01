@@ -1,4 +1,4 @@
-Copyright 2014, Jay Conrod. All rights reserved.
+Copyright 2014-2017, Jay Conrod. All rights reserved.
 
 The Gypsum bootstrap compiler in the `compiler` directory is licensed
 under the GNU General Public License v3, which can be found in

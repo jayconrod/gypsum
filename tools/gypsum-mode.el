@@ -1,6 +1,6 @@
 ;;; gypsum-mode.el --- Syntax highlighting for Gypsum
 
-;; Copyright 2014-2016, Jay Conrod, all rights reserved.
+;; Copyright Jay Conrod, all rights reserved.
 
 ;; Author: Jay Conrod <jayconrod@gmail.com>
 ;; Description: Syntax highlighting for Gypsum
