@@ -278,7 +278,7 @@ class Scope(ast.NodeVisitor):
 
     def getDefnInfo(self):
         scope = self.topLocalScope()
-        return self.info.getDefnInfo(scope.ast)
+        return self.info.getDefnInfo(scope.ast) if self.info.hasDefnInfo(scope.ast) else None
 
     def getClass(self):
         return None
@@ -289,7 +289,8 @@ class Scope(ast.NodeVisitor):
         return scope.ast
 
     def getIrDefn(self):
-        return self.getDefnInfo().irDefn
+        defnInfo = self.getDefnInfo()
+        return defnInfo.irDefn if defnInfo is not None else None
 
     def makeName(self, short):
         return Name(self.prefix + [short])
@@ -860,7 +861,9 @@ class Scope(ast.NodeVisitor):
 
     def newScopeForExistential(self, prefix, ast):
         """Creates a new scope for an existential type."""
-        return ExistentialTypeScope(prefix, ast, self)
+        irDefn = self.getIrDefn()
+        index = len(irDefn.typeParameters) if isinstance(irDefn, ir.ParameterizedDefn) else 0
+        return ExistentialTypeScope(prefix, ast, self, index)
 
     def getOrCreateScope(self, shortName, ast, create):
         if ast.id in self.childScopes:
@@ -1498,9 +1501,10 @@ class TraitScope(Scope):
 
 
 class ExistentialTypeScope(Scope):
-    def __init__(self, prefix, ast, parent):
+    def __init__(self, prefix, ast, parent, index):
         super(ExistentialTypeScope, self).__init__(prefix, ast, ScopeId(ast.id),
                                                    parent, parent.info)
+        self.index = index
 
     def createIrDefn(self, astDefn, astVarDefn):
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
@@ -1509,7 +1513,9 @@ class ExistentialTypeScope(Scope):
             if len(flags) > 0:
                 raise ScopeException(astDefn.location, "invalid flags: %s" % ", ".join(flags))
             irDefn = self.info.package.addTypeParameter(None, name, sourceName=astDefn.name,
-                                                        astDefn=astDefn, flags=flags)
+                                                        astDefn=astDefn, flags=flags,
+                                                        index=self.index)
+            self.index += 1
         else:
             raise NotImplementedError()
 
@@ -1554,6 +1560,9 @@ class ExistentialTypeScope(Scope):
     def newScopeForTrait(self):
         # Not syntactically possible.
         raise NotImplementedError()
+
+    def newScopeForExistential(self, prefix, ast):
+        return ExistentialTypeScope(prefix, ast, self, self.index)
 
 
 class BuiltinGlobalScope(Scope):

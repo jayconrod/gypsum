@@ -115,6 +115,8 @@ class Package(object):
         id = ids.DefnId(self.id, ids.DefnId.TYPE_PARAMETER, len(self.typeParameters))
         if self.names is not None:
             self.findOrAddName(name)
+        if "index" not in kwargs and defn is not None:
+            kwargs["index"] = len(defn.typeParameters)
         p = TypeParameter(name, id, **kwargs)
         if p.sourceName is not None:
             self.findOrAddString(p.sourceName)
