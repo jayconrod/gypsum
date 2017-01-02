@@ -71,8 +71,6 @@ class Externalizer(object):
             externDefns = dep.externClasses
         elif isinstance(defn, ir.Trait):
             externDefns = dep.externTraits
-        elif isinstance(defn, ir.TypeParameter):
-            externDefns = dep.externTypeParameters
         else:
             raise NotImplementedError
 
@@ -91,22 +89,22 @@ class Externalizer(object):
             self.externalizeType(defn.type)
         elif isinstance(defn, ir.Function):
             externDefn = ir.Function(defn.name, id, astDefn=defn.astDefn,
+                                     typeParameters=defn.typeParameters,
                                      returnType=defn.returnType,
                                      parameterTypes=defn.parameterTypes,
                                      flags=externFlags)
             externDefns.append(externDefn)
             self.externalizeType(defn.returnType)
-            externDefn.typeParameters = [self.externalizeDefn(param)
-                                         for param in defn.typeParameters]
+            each(self.externalizeBounds, defn.typeParameters)
             each(self.externalizeType, defn.parameterTypes)
         elif isinstance(defn, ir.Class):
             externDefn = ir.Class(defn.name, id, astDefn=defn.astDefn,
+                                  typeParameters=defn.typeParameters,
                                   supertypes=defn.supertypes,
                                   elementType=defn.elementType,
                                   flags=externFlags)
             externDefns.append(externDefn)
-            externDefn.typeParameters = [self.externalizeDefn(param)
-                                         for param in defn.typeParameters]
+            each(self.externalizeBounds, defn.typeParameters)
             each(self.externalizeType, defn.supertypes)
             externDefn.constructors = [self.externalizeMethod(ctor, dep)
                                        for ctor in defn.constructors
@@ -122,37 +120,32 @@ class Externalizer(object):
                 self.externalizeType(externDefn.elementType)
         elif isinstance(defn, ir.Trait):
             externDefn = ir.Trait(defn.name, id, astDefn=defn.astDefn,
+                                  typeParameters=defn.typeParameters,
                                   supertypes=defn.supertypes,
                                   flags=externFlags)
             externDefns.append(externDefn)
-            externDefn.typeParameters = [self.externalizeDefn(param)
-                                         for param in defn.typeParameters]
+            each(self.externalizeBounds, defn.typeParameters)
             each(self.externalizeType, defn.supertypes)
             externDefn.methods = [self.externalizeMethod(m, dep)
                                   for m in defn.methods
                                   if flags.PUBLIC in m.flags]
-        elif isinstance(defn, ir.TypeParameter):
-            externDefn = ir.TypeParameter(defn.name, id, astDefn=defn.astDefn,
-                                          upperBound=defn.upperBound,
-                                          lowerBound=defn.lowerBound,
-                                          flags=externFlags)
-            externDefns.append(externDefn)
-            self.externalizeType(externDefn.upperBound)
-            self.externalizeType(externDefn.lowerBound)
         else:
             raise NotImplementedError
 
         return externDefn
 
+    def externalizeBounds(self, typeParam):
+        self.externalizeType(typeParam.upperBound)
+        self.externalizeType(typeParam.lowerBound)
+
     def externalizeType(self, ty):
         if isinstance(ty, ir_types.ClassType):
             self.externalizeDefn(ty.clas)
             each(self.externalizeType, ty.typeArguments)
-        elif isinstance(ty, ir_types.VariableType) and \
-             ty.typeParameter.isForeign():
-            self.externalizeDefn(ty.typeParameter)
+        elif isinstance(ty, ir_types.VariableType):
+            self.externalizeBounds(ty.typeParameter)
         elif isinstance(ty, ir_types.ExistentialType):
-            each(self.externalizeDefn, ty.variables)
+            each(self.externalizeBounds, ty.variables)
             self.externalizeType(ty.ty)
 
     def externalizeMethod(self, method, dep):
@@ -160,11 +153,12 @@ class Externalizer(object):
         id = ids.DefnId(ids.TARGET_PACKAGE_ID, ids.DefnId.FUNCTION, len(dep.externMethods))
         externFlags = method.flags | frozenset([flags.EXTERN])
         externMethod = ir.Function(method.name, id, astDefn=method.astDefn,
+                                   typeParameters=method.typeParameters,
                                    returnType=method.returnType,
                                    parameterTypes=method.parameterTypes,
                                    flags=externFlags)
         dep.externMethods.append(externMethod)
         self.externalizeType(method.returnType)
-        externMethod.typeParameters = map(self.externalizeDefn, method.typeParameters)
+        each(self.externalizeBounds, method.typeParameters)
         each(self.externalizeType, method.parameterTypes)
         return externMethod
