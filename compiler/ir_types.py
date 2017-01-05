@@ -641,7 +641,7 @@ class VariableType(ObjectType):
 
     def __eq__(self, other):
         return self.__class__ is other.__class__ and \
-               self.typeParameter is other.typeParameter and \
+               self.typeParameter == other.typeParameter and \
                self.flags == other.flags
 
     def getBaseClassType(self):
@@ -739,8 +739,7 @@ class ExistentialType(ObjectType):
 
     def __eq__(self, other):
         return self.__class__ is other.__class__ and \
-            len(self.variables) == len(other.variables) and \
-            all(s.id is t.id for s, t in zip(self.variables, other.variables)) and \
+            self.variables == other.variables and \
             self.ty == other.ty and \
             self.flags == other.flags
 

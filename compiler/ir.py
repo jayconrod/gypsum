@@ -268,6 +268,7 @@ class Package(object):
         each(addName, self.classes)
         each(addName, flatMap(lambda c: c.fields, self.classes))
         each(addName, self.traits)
+        each(addName, self.typeParameters)
 
     def findFunction(self, **kwargs):
         return next(_findDefn(self.functions, kwargs))

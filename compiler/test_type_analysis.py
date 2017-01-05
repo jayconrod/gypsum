@@ -1679,7 +1679,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         Box = info.package.findClass(name="Box")
         X = info.package.findTypeParameter(name=Name(["f", EXISTENTIAL_SUFFIX, "X"]))
         f = info.package.findFunction(name="f")
-        self.assertEquals(ExistentialType([X], ClassType(Box, (VariableType(X),))),
+        self.assertEquals(ExistentialType((X,), ClassType(Box, (VariableType(X),))),
                           f.parameterTypes[0])
         argType = info.getType(info.ast.modules[0].definitions[2].body.arguments[0])
         self.assertEquals(ClassType(Box, (getRootClassType(),)), argType)

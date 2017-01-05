@@ -49,6 +49,17 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         des.deserialize()
         return des.package
 
+    def checkType(self, ty, package=None):
+        self.file.bytes = bytearray()
+        self.file.readPtr = 0
+        if package is not None:
+            self.ser.package = package
+            self.des.package = package
+
+        self.ser.writeType(ty)
+        tyOut = self.des.readType()
+        self.assertEquals(ty, tyOut)
+
     def testWriteVbn(self):
         def checkVbn(n, bytes):
             self.file.bytes = bytearray()
@@ -129,40 +140,35 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         flagSetOut = self.des.readFlags()
         self.assertEquals(flagSet, flagSetOut)
 
-    def testRewriteType(self):
-        def checkType(ty):
-            self.file.bytes = bytearray()
-            self.file.readPtr = 0
-            self.ser.writeType(ty)
-            tyOut = self.des.readType()
-            self.assertEquals(ty, tyOut)
+    def testRewritePrimitiveTypes(self):
+        self.checkType(ir_types.UnitType)
+        self.checkType(ir_types.BooleanType)
+        self.checkType(ir_types.I8Type)
+        self.checkType(ir_types.I16Type)
+        self.checkType(ir_types.I16Type)
+        self.checkType(ir_types.I32Type)
+        self.checkType(ir_types.I64Type)
+        self.checkType(ir_types.F32Type)
+        self.checkType(ir_types.F64Type)
 
+    def testRewriteSimpleClassType(self):
         package = ir.Package(id=ids.TARGET_PACKAGE_ID)
-        package.classes = self.des.createEmptyClassList(4, package.id)
-        package.typeParameters = self.des.createEmptyTypeParameterList(3, package.id)
-        self.ser.package = package
-        self.des.package = package
+        C = package.addClass(name=Name(["C"]))
+        self.checkType(ir_types.ClassType(C), package)
 
-        checkType(ir_types.UnitType)
-        checkType(ir_types.BooleanType)
-        checkType(ir_types.I8Type)
-        checkType(ir_types.I16Type)
-        checkType(ir_types.I16Type)
-        checkType(ir_types.I32Type)
-        checkType(ir_types.I64Type)
-        checkType(ir_types.F32Type)
-        checkType(ir_types.F64Type)
+    def testRewriteNullableClassType(self):
+        package = ir.Package(id=ids.TARGET_PACKAGE_ID)
+        C = package.addClass(name=Name(["C"]))
+        ty = ir_types.ClassType(C, (), frozenset([ir_types.NULLABLE_TYPE_FLAG]))
+        self.checkType(ty, package)
 
-        nullFlags = frozenset([ir_types.NULLABLE_TYPE_FLAG])
-        checkType(ir_types.ClassType(package.classes[0]))
-        checkType(ir_types.ClassType(package.classes[1], (), nullFlags))
-        checkType(ir_types.ClassType(package.classes[2],
-                                     (ir_types.ClassType(package.classes[3]),
-                                      ir_types.VariableType(package.typeParameters[1]))))
-        checkType(ir_types.VariableType(package.typeParameters[1], nullFlags))
-        checkType(ir_types.ExistentialType((package.typeParameters[2],),
-                                           (ir_types.VariableType(package.typeParameters[2],
-                                                                  nullFlags))))
+    def testRewriteClassTypeWithArgs(self):
+        package = ir.Package(id=ids.TARGET_PACKAGE_ID)
+        C = package.addClass(Name(["C"]), typeParameters=[])
+        S = package.addTypeParameter(C, Name(["C", "S"]))
+        T = package.addTypeParameter(C, Name(["C", "T"]))
+        self.des.typeParameters = [S, T]
+        self.checkType(ir_types.ClassType.forReceiver(C), package)
 
     def testRewriteExternClassType(self):
         package = ir.Package(id=ids.TARGET_PACKAGE_ID)
@@ -186,6 +192,51 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         self.des.package = package
         outType = self.des.readType()
         self.assertEquals(externClassType, outType)
+
+    def testRewriteNestedExistentialClassType(self):
+        package = ir.Package(id=ids.TARGET_PACKAGE_ID)
+        C = package.addClass(Name(["C"]), typeParameters=[], fields=[])
+        T = package.addTypeParameter(C, Name(["C", "T"]),
+                                     upperBound=ir_types.getRootClassType(),
+                                     lowerBound=ir_types.getNothingClassType(),
+                                     flags=frozenset([STATIC]))
+        X = package.addTypeParameter(None, Name(["X"]),
+                                     upperBound=ir_types.VariableType(T),
+                                     lowerBound=ir_types.getNothingClassType(),
+                                     flags=frozenset([STATIC]),
+                                     index=1)
+        Y = package.addTypeParameter(None, Name(["Y"]),
+                                     upperBound=ir_types.VariableType(X),
+                                     lowerBound=ir_types.getNothingClassType(),
+                                     flags=frozenset([STATIC]),
+                                     index=2)
+        package.buildNameIndex()
+        self.des.typeParameters = [T]
+        ty = ir_types.ExistentialType(
+            [X],
+            ir_types.ExistentialType(
+                [Y],
+                ir_types.ClassType(C, (ir_types.VariableType(Y),))))
+        self.checkType(ty, package)
+
+    def testRewriteSimpleTraitType(self):
+        package = ir.Package(id=ids.TARGET_PACKAGE_ID)
+        Tr = package.addTrait(name=Name(["Tr"]))
+        self.checkType(ir_types.ClassType(Tr), package)
+
+    def testRewriteTraitTypeWithArgs(self):
+        package = ir.Package(id=ids.TARGET_PACKAGE_ID)
+        Tr = package.addTrait(Name(["Tr"]), typeParameters=[])
+        S = package.addTypeParameter(Tr, Name(["Tr", "S"]))
+        T = package.addTypeParameter(Tr, Name(["Tr", "T"]))
+        self.des.typeParameters = [S, T]
+        self.checkType(ir_types.ClassType.forReceiver(Tr), package)
+
+    def testRewriteVariableType(self):
+        package = ir.Package(id=ids.TARGET_PACKAGE_ID)
+        T = package.addTypeParameter(None, Name(["T"]), index=4)
+        self.des.typeParameters = [None, None, None, None, T]
+        self.checkType(ir_types.VariableType(T), package)
 
     def testRewriteName(self):
         package = ir.Package()
@@ -234,42 +285,19 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
     def testRewriteTypeParameter(self):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
         package.buildNameIndex()
-        typeParam = package.addTypeParameter(Name(["T"]),
+        typeParam = package.addTypeParameter(None, Name(["T"]),
                                              upperBound=ir_types.getRootClassType(),
                                              lowerBound=ir_types.getNothingClassType(),
-                                             flags=frozenset([STATIC]))
+                                             flags=frozenset([STATIC]), index=0)
         self.ser.package = package
         self.ser.writeTypeParameter(typeParam)
-        outTypeParam = ir.TypeParameter(None, typeParam.id)
         self.des.package = package
-        self.des.readTypeParameter(outTypeParam)
+        outTypeParam = self.des.readTypeParameter()
         self.assertEquals(typeParam, outTypeParam)
-
-    def testRewriteForeignTypeParameter(self):
-        package = ir.Package(ids.TARGET_PACKAGE_ID)
-        package.buildNameIndex()
-        otherPackage = ir.Package()
-        typeParam = otherPackage.addTypeParameter(Name(["T"]),
-                                                  upperBound=ir_types.getRootClassType(),
-                                                  lowerBound=ir_types.getNothingClassType(),
-                                                  flags=frozenset([STATIC]))
-        loader = utils_test.FakePackageLoader([otherPackage])
-        externalizer = externalization.Externalizer(package, loader)
-        foreignTypeParam = externalizer.externalizeDefn(typeParam)
-        self.ser.package = package
-        self.ser.writeTypeParameter(foreignTypeParam)
-        outTypeParam = ir.TypeParameter(None, foreignTypeParam.id)
-        self.des.package = package
-        self.des.readTypeParameter(outTypeParam)
-        self.assertEquals(foreignTypeParam, outTypeParam)
 
     def testRewriteClass(self):
         package = ir.Package(id=ids.TARGET_PACKAGE_ID)
         package.buildNameIndex()
-        typeParam = package.addTypeParameter(Name(["Foo", "T"]),
-                                             upperBound=ir_types.getRootClassType(),
-                                             lowerBound=ir_types.getNothingClassType(),
-                                             flags=frozenset([STATIC]))
         rootType = ir_types.getRootClassType()
         trait = package.addTrait(Name(["Tr"]),
                                  typeParameters=[], supertypes=[rootType], flags=frozenset([]))
@@ -282,11 +310,15 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         trait.methods = [traitMethod]
         field = package.newField(Name(["Foo", "x"]),
                                  type=ir_types.I64Type, flags=frozenset([PRIVATE]))
-        clas = package.addClass(Name(["Foo"]), typeParameters=[typeParam],
+        clas = package.addClass(Name(["Foo"]), typeParameters=[],
                                 supertypes=[rootType, traitType],
-                                constructors=[], fields=[field],
-                                methods=[], elementType=ir_types.VariableType(typeParam),
+                                constructors=[], fields=[field], methods=[],
                                 flags=frozenset([PUBLIC, FINAL, ARRAY]))
+        typeParam = package.addTypeParameter(clas, Name(["Foo", "T"]),
+                                             upperBound=ir_types.getRootClassType(),
+                                             lowerBound=ir_types.getNothingClassType(),
+                                             flags=frozenset([STATIC]))
+        clas.elementType = ir_types.VariableType(typeParam)
         ty = ir_types.ClassType(clas)
         constructor = package.addFunction(Name(["Foo", CONSTRUCTOR_SUFFIX]),
                                           returnType=ir_types.UnitType, typeParameters=[],
@@ -331,14 +363,13 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
                                                flags=frozenset([PUBLIC, METHOD, ABSTRACT]))
         trait.methods = [traitMethod]
 
-        clas = otherPackage.addClass(Name(["C"]), supertypes=[],
+        clas = otherPackage.addClass(Name(["C"]), typeParameters=[], supertypes=[],
                                      elementType=ir_types.I8Type,
                                      flags=frozenset([PUBLIC, ARRAY, FINAL]))
-        T = otherPackage.addTypeParameter(Name(["C", "T"]),
+        T = otherPackage.addTypeParameter(clas, Name(["C", "T"]),
                                           upperBound=ir_types.getRootClassType(),
                                           lowerBound=ir_types.getNothingClassType(),
                                           flags=frozenset([PUBLIC, STATIC]))
-        clas.typeParameters = [T]
         classType = ir_types.ClassType(clas, (ir_types.VariableType(T),))
         init = otherPackage.addFunction(Name(["C", CLASS_INIT_SUFFIX]),
                                         returnType=ir_types.UnitType,
@@ -399,12 +430,12 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
         package.buildNameIndex()
         rootType = ir_types.getRootClassType()
-        typeParam = package.addTypeParameter(Name(["Tr", "T"]),
+        trait = package.addTrait(Name(["Tr"]), typeParameters=[],
+                                 supertypes=[rootType], flags=frozenset([PUBLIC]))
+        typeParam = package.addTypeParameter(trait, Name(["Tr", "T"]),
                                              upperBound=rootType,
                                              lowerBound=ir_types.getNothingClassType(),
                                              flags=frozenset([STATIC]))
-        trait = package.addTrait(Name(["Tr"]), typeParameters=[typeParam],
-                                 supertypes=[rootType], flags=frozenset([PUBLIC]))
         traitType = ir_types.ClassType.forReceiver(trait)
         traitMethod = package.addFunction(Name(["Tr", "m"]), returnType=ir_types.UnitType,
                                           typeParameters=[typeParam],
@@ -426,12 +457,12 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         otherPackage.buildNameIndex()
 
         rootType = ir_types.getRootClassType()
-        T = otherPackage.addTypeParameter(Name(["Tr", "T"]),
+        trait = otherPackage.addTrait(Name(["Tr"]), typeParameters=[],
+                                      supertypes=[rootType], flags=frozenset([PUBLIC]))
+        T = otherPackage.addTypeParameter(trait, Name(["Tr", "T"]),
                                           upperBound=rootType,
                                           lowerBound=ir_types.getNothingClassType(),
                                           flags=frozenset([PUBLIC, STATIC]))
-        trait = otherPackage.addTrait(Name(["Tr"]), typeParameters=[T],
-                                      supertypes=[rootType], flags=frozenset([PUBLIC]))
         traitType = ir_types.ClassType.forReceiver(trait)
         traitMethod = otherPackage.addFunction(Name(["Tr", "m"]),
                                                returnType=ir_types.UnitType,

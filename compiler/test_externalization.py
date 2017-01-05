@@ -233,7 +233,7 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
                                                    upperBound=self.classTy,
                                                    lowerBound=self.classTy,
                                                    flags=frozenset([PUBLIC, STATIC]))
-        self.externalizer.externalizeBounds(param)
+        self.externalizer.externalizeTypeParameter(param)
         self.assertIsNotNone(param.upperBound.clas.id.externIndex)
 
     def testExternalizeBuiltinDefn(self):

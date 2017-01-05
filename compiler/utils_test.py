@@ -162,7 +162,8 @@ class TestDefn(object):
         return "%s(%s)" % (self.__class__.__name__, ", ".join(pairStrs))
 
     def __eq__(self, other):
-        if self.__class__.__bases__[1] is not other.__class__:
+        if self.__class__ is not other.__class__ and \
+           self.__class__.__bases__[1] is not other.__class__:
             # This assertion should throw.
             self.test.assertEquals(self.__class__.__bases__[1], other.__class__)
             return False
