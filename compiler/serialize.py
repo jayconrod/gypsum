@@ -152,6 +152,9 @@ class Serializer(object):
             (EXTERN not in function.flags and OVERRIDE in function.flags)
         if function.overrides is not None:
             self.writeList(self.writeMethodId, function.overrides)
+        assert (function.instTypes is None) == (function.blocks is None)
+        if function.instTypes:
+            self.writeList(self.writeType, function.instTypes)
 
         assert function.blocks is not None or \
                0 < len(frozenset([ABSTRACT, EXTERN, NATIVE]) & function.flags)
@@ -518,6 +521,7 @@ class Deserializer(object):
             if OVERRIDE in function.flags:
                 function.overrides = self.readList(self.readMethodId)
             if frozenset([ABSTRACT, NATIVE]).isdisjoint(function.flags):
+                function.instTypes = self.readList(self.readType)
                 localsSize = self.readVbn()
                 instructionsSize = self.readVbn()
                 instructionsBuffer = self.inFile.read(instructionsSize)

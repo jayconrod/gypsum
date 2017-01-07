@@ -8,7 +8,13 @@ import unittest
 
 import builtins
 import bytecode
-import externalization
+from compile_info import CompileInfo
+from externalization import (
+    externalizeDefn,
+    externalizeMethod,
+    externalizeType,
+    externalizeTypeParameter,
+)
 from flags import (
     ARRAY,
     CONSTRUCTOR,
@@ -36,7 +42,7 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
         self.nothingClassType = ir_types.getNothingClassType()
         self.otherPackage = ir.Package()
         self.packageLoader = utils_test.FakePackageLoader([self.otherPackage])
-        self.externalizer = externalization.Externalizer(self.package, self.packageLoader)
+        self.info = CompileInfo(None, self.package, self.packageLoader)
 
         field = self.otherPackage.newField(Name(["x"]), type=ir_types.I64Type,
                                            flags=frozenset([PUBLIC]))
@@ -81,7 +87,7 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
     def testExternalizeGlobal(self):
         globl = self.otherPackage.addGlobal(Name(["g"]), type=self.classTy,
                                             flags=frozenset([PUBLIC]))
-        externGlobal = self.externalizer.externalizeDefn(globl)
+        externGlobal = externalizeDefn(self.info, globl)
         expected = self.makeGlobal(Name(["g"]), id=globl.id, type=self.classTy,
                                    flags=frozenset([PUBLIC, EXTERN]))
         self.assertEquals(expected, externGlobal)
@@ -98,7 +104,7 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
                                                flags=frozenset([STATIC]))
         TTy = ir_types.VariableType(T)
         function.parameterTypes[0] = TTy
-        externFunction = self.externalizer.externalizeDefn(function)
+        externFunction = externalizeDefn(self.info, function)
         expected = ir.Function(Name(["f"]), function.id, returnType=self.classTy,
                                typeParameters=[T],
                                parameterTypes=[TTy],
@@ -148,7 +154,7 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
         builtinMethod = \
             builtins.getBuiltinFunctionById(bytecode.BUILTIN_ROOT_CLASS_TO_STRING_ID)
         clas.methods = [method, privateMethod, builtinMethod]
-        externClass = self.externalizer.externalizeDefn(clas)
+        externClass = externalizeDefn(self.info, clas)
         expected = ir.Class(Name(["C"]), clas.id, typeParameters=[T],
                             supertypes=[self.rootClassType],
                             elementType=TTy,
@@ -187,7 +193,7 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
                                                  type=ir_types.I32Type,
                                                  flags=frozenset([ARRAY, LET, PRIVATE]))
         clas.fields = [lengthField]
-        externClass = self.externalizer.externalizeDefn(clas)
+        externClass = externalizeDefn(self.info, clas)
         self.assertEquals([lengthField], externClass.fields)
 
     def testExternalizeTrait(self):
@@ -211,7 +217,7 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
                                                       parameterTypes=[traitType],
                                                       flags=frozenset([PRIVATE, METHOD]))
         trait.methods = [method, privateMethod]
-        externTrait = self.externalizer.externalizeDefn(trait)
+        externTrait = externalizeDefn(self.info, trait)
         expected = ir.Trait(Name(["Tr"]), trait.id, typeParameters=[T],
                             supertypes=[self.rootClassType],
                             flags=frozenset([PUBLIC, EXTERN]))
@@ -225,7 +231,7 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
 
     def testExternalizeBuiltinMethodName(self):
         method = builtins.getBuiltinFunctionById(bytecode.BUILTIN_ROOT_CLASS_EQ_OP_ID)
-        externMethod = self.externalizer.externalizeMethod(method, self.dep)
+        externMethod = externalizeMethod(self.info, method, self.dep)
         self.assertIn(method.name.short(), self.package.strings)
 
     def testExternalizeTypeParameter(self):
@@ -233,24 +239,24 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
                                                    upperBound=self.classTy,
                                                    lowerBound=self.classTy,
                                                    flags=frozenset([PUBLIC, STATIC]))
-        self.externalizer.externalizeTypeParameter(param)
+        externalizeTypeParameter(self.info, param)
         self.assertIsNotNone(param.upperBound.clas.id.externIndex)
 
     def testExternalizeBuiltinDefn(self):
         rootClass = builtins.getRootClass()
-        externClass = self.externalizer.externalizeDefn(rootClass)
+        externClass = externalizeDefn(self.info, rootClass)
         self.assertIs(rootClass, externClass)
 
     def testExternalizeLocalDefn(self):
         localGlobal = self.package.addGlobal(Name(["g"]), type=ir_types.UnitType)
-        externGlobal = self.externalizer.externalizeDefn(localGlobal)
+        externGlobal = externalizeDefn(self.info, localGlobal)
         self.assertIs(localGlobal, externGlobal)
 
     def testExternalizeVariableType(self):
         T = self.otherPackage.addTypeParameter(None, Name(["T"]),
                                                upperBound=self.classTy,
                                                lowerBound=self.classTy)
-        self.externalizer.externalizeType(ir_types.VariableType(T))
+        externalizeType(self.info, ir_types.VariableType(T))
         self.assertIsNotNone(self.clas.id.externIndex)
 
     def testExternalizeClassType(self):
@@ -259,7 +265,7 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
                                        supertypes=[ir_types.getRootClassType()],
                                        constructors=[], fields=[], methods=[],
                                        flags=frozenset([PUBLIC]))
-        self.externalizer.externalizeType(ir_types.ClassType(C))
+        externalizeType(self.info, ir_types.ClassType(C))
         self.assertIsNotNone(C.id.externIndex)
 
     def testExternalizeLocalClassTypeWithForeignArg(self):
@@ -274,5 +280,5 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
                                           upperBound=ir_types.getRootClassType(),
                                           lowerBound=ir_types.getNothingClassType())
         CFType = ir_types.ClassType(C, (ir_types.ClassType(F),))
-        self.externalizer.externalizeType(CFType)
+        externalizeType(self.info, CFType)
         self.assertIsNotNone(F.id.externIndex)

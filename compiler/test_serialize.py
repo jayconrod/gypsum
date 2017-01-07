@@ -8,7 +8,8 @@ import unittest
 
 import builtins
 import bytecode
-import externalization
+from compile_info import CompileInfo
+from externalization import externalizeDefn
 from flags import ABSTRACT, ARRAY, CONSTRUCTOR, EXTERN, FINAL, LET, METHOD, NATIVE, OVERRIDE, PRIVATE, PUBLIC, STATIC
 import ids
 import ir
@@ -126,8 +127,9 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
                                           typeParameters=[], parameterTypes=[],
                                           flags=frozenset([PUBLIC, METHOD]))
         loader = utils_test.FakePackageLoader([otherPackage])
-        externalizer = externalization.Externalizer(package, loader)
-        externMethod = externalizer.externalizeDefn(method)
+        info = CompileInfo(None, package, loader)
+
+        externMethod = externalizeDefn(info, method)
         self.ser.package = package
         self.ser.writeMethodId(externMethod)
         self.des.package = package
@@ -179,8 +181,8 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
                                        supertypes=[ir_types.getRootClassType()],
                                        constructors=[], fields=[],
                                        methods=[], flags=frozenset([PUBLIC]))
-        externalizer = externalization.Externalizer(package, loader)
-        externClass = externalizer.externalizeDefn(depClass)
+        info = CompileInfo(None, package, loader)
+        externClass = externalizeDefn(info, depClass)
         self.assertIn(EXTERN, externClass.flags)
         self.assertIs(depPackage, package.dependencies[0].package)
         self.assertIs(externClass, package.dependencies[0].externClasses[0])
@@ -336,8 +338,8 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
                                                typeParameters=[],
                                                parameterTypes=[ir_types.getRootClassType()],
                                                flags=frozenset([PUBLIC, METHOD]))
-        externalizer = externalization.Externalizer(package, loader)
-        externMethod = externalizer.externalizeDefn(otherMethod)
+        info = CompileInfo(None, package, loader)
+        externMethod = externalizeDefn(info, otherMethod)
         builtinMethod = builtins.getBuiltinFunctionById(bytecode.BUILTIN_ROOT_CLASS_TO_STRING_ID)
         clas.methods = [localMethod, externMethod, builtinMethod]
 
@@ -401,8 +403,8 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
         package.buildNameIndex()
         externLoader = utils_test.FakePackageLoader([externPackage])
-        externalizer = externalization.Externalizer(package, externLoader)
-        externClass = externalizer.externalizeDefn(foreignClass)
+        info = CompileInfo(None, package, externLoader)
+        externClass = externalizeDefn(info, foreignClass)
 
         # Serialize and deserialize the package.
         self.ser.package = package
@@ -478,8 +480,8 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         package = ir.Package(ids.TARGET_PACKAGE_ID)
         package.buildNameIndex()
         externLoader = utils_test.FakePackageLoader([externPackage])
-        externalizer = externalization.Externalizer(package, externLoader)
-        externTrait = externalizer.externalizeDefn(foreignTrait)
+        info = CompileInfo(None, package, externLoader)
+        externTrait = externalizeDefn(info, foreignTrait)
 
         # Serialize and deserialize the package.
         self.ser.package = package

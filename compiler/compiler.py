@@ -8,6 +8,7 @@ from functools import partial
 
 import ast
 from bytecode import W8, W16, W32, W64, BUILTIN_TYPE_CLASS_ID, BUILTIN_TYPE_CTOR_ID, instInfoByCode, BUILTIN_MATCH_EXCEPTION_CLASS_ID, BUILTIN_MATCH_EXCEPTION_CTOR_ID, BUILTIN_STRING_EQ_OP_ID
+from externalization import externalizeType
 from ir import IrTopDefn, Class, Field, Function, Global, LOCAL, Package, Trait, Variable
 from ir_types import Type, NoType, UnitType, BooleanType, I8Type, I16Type, I32Type, I64Type, F32Type, F64Type, ObjectType, ClassType, VariableType, ExistentialType, NULLABLE_TYPE_FLAG, getExceptionClassType, getClassFromType, getStringType, getRootClassType
 import ir_instructions
@@ -1804,11 +1805,27 @@ class CompileVisitor(ast.NodeVisitor):
             self.add(inst())
 
     def findOrAddType(self, ty):
+        """Add the given type to the list of types referenced by instructions if it is
+        not already present.
+
+        We keep a list of types referenced by instructions for each function. Instead of
+        encoding types in the instruction stream, we just encode an index into this list.
+        Since types are frequently used multiple times, we deduplicate entries in this list
+        to save space. We also externalize these types, although it's very likely they have
+        been externalized already.
+
+        Args:
+            ty (Type): a type that will be referenced by instructions.
+
+        Returns:
+            (int): the index of the type. Instructions may encode this.
+        """
         try:
             return self.types.index(ty)
         except ValueError:
             index = len(self.types)
             self.types.append(ty)
+            externalizeType(self.info, ty)
             return index
 
     def getScopeId(self):
