@@ -539,6 +539,9 @@ class Function(ParameterizedDefn):
         insts (list[Instruction]?): a list of instructions to insert instead of calling this
             function. This is set for some (not all) builtin functions. For instance, the `+`
             method of `i64` has a list containing an `addi64` instruction.
+        instTypes (list[Type]?): a list of types referenced by `insts`. Used for things like
+            casting and pattern matching. Generated during semantic analysis along with
+            `insts`. This does not affect the function's type signature.
         compileHint (symbol?): if set, the compiler will generate instructions for a specific
             kind of function (for example, an array getter) instead of generating instructions
             from a function body (which may not be present).
@@ -547,7 +550,7 @@ class Function(ParameterizedDefn):
     def __init__(self, name, id, sourceName=None, astDefn=None, returnType=None,
                  typeParameters=None, parameterTypes=None, variables=None, blocks=None,
                  overrides=None, flags=frozenset(), definingClass=None, overriddenBy=None,
-                 insts=None, compileHint=None):
+                 insts=None, instTypes=None, compileHint=None):
         super(Function, self).__init__(name, id, sourceName, astDefn)
         self.returnType = returnType
         self.typeParameters = typeParameters
@@ -558,6 +561,7 @@ class Function(ParameterizedDefn):
         self.flags = flags
         self.definingClass = definingClass
         self.insts = insts
+        self.instTypes = instTypes
         self.overriddenBy = overriddenBy
         self.compileHint = compileHint
 
@@ -602,6 +606,7 @@ class Function(ParameterizedDefn):
                self.flags == other.flags and \
                self.definingClass is other.definingClass and \
                self.insts == other.insts and \
+               self.instTypes == other.instTypes and \
                self.compileHint is other.compileHint
 
     def canCallWith(self, typeArgs, argTypes):

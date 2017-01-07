@@ -81,7 +81,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def makeSimpleFunction(self, name, retTy, blocks,
                            typeParameters=None, parameterTypes=None,
-                           variables=None, flags=None):
+                           variables=None, instTypes=None, flags=None):
         blocks = [BasicBlock(i, insts) for i, insts in enumerate(blocks)]
         params = {"returnType": retTy, "blocks": blocks}
         if typeParameters is not None:
@@ -90,6 +90,8 @@ class TestCompiler(TestCaseWithDefinitions):
             params["parameterTypes"] = parameterTypes
         if variables is not None:
             params["variables"] = variables
+        if instTypes is not None:
+            params["instTypes"] = instTypes
         if flags is not None:
             params["flags"] = flags
         return self.makeFunction(name, **params)
@@ -188,15 +190,17 @@ class TestCompiler(TestCaseWithDefinitions):
     def testVarWithSimpleCast(self):
         package = self.compileFromSource("def f = { var x: Object = \"foo\"; x; }")
         fooIndex = package.findString("foo")
-        self.checkFunction(package,
-                           self.makeSimpleFunction("f", getRootClassType(), [[
-                               string(fooIndex),
-                               tycs(getRootClass()),
-                               cast(),
-                               stlocal(-1),
-                               ldlocal(-1),
-                               ret()]],
-                            variables=[self.makeVariable("f.x", type=getRootClassType())]))
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", getRootClassType(), [[
+                string(fooIndex),
+                tys(0),
+                cast(),
+                stlocal(-1),
+                ldlocal(-1),
+                ret()
+            ]],
+            variables=[self.makeVariable("f.x", type=getRootClassType())],
+            instTypes=[getRootClassType()]))
 
     def testVarWithTypeParameterCast(self):
         source = "class Foo[static +T]\n" + \
@@ -205,18 +209,19 @@ class TestCompiler(TestCaseWithDefinitions):
         Foo = package.findClass(name="Foo")
         xType = ClassType(Foo, (getStringType(),))
         yType = ClassType(Foo, (getRootClassType(),))
-        expected = self.makeSimpleFunction("f", yType, [[
-            ldlocal(0),
-            tycs(getRootClass()),
-            tycs(Foo),
-            cast(),
-            stlocal(-1),
-            ldlocal(-1),
-            ret()]],
-          parameterTypes=[xType],
-          variables=[self.makeVariable("f.x", type=xType, kind=PARAMETER, flags=frozenset([LET])),
-                     self.makeVariable("f.y", type=yType)])
-        self.assertEquals(expected, package.findFunction(name="f"))
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", yType, [[
+                ldlocal(0),
+                tys(0),
+                cast(),
+                stlocal(-1),
+                ldlocal(-1),
+                ret()
+            ]],
+            parameterTypes=[xType],
+            variables=[self.makeVariable("f.x", type=xType, kind=PARAMETER, flags=frozenset([LET])),
+                       self.makeVariable("f.y", type=yType)],
+            instTypes=[ClassType(Foo, (getRootClassType(),))]))
 
     def testBlankVar(self):
         self.checkFunction("def f = { var _ = 12; {}; }",
@@ -410,17 +415,20 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testAssignVarWithSimpleCast(self):
         package = self.compileFromSource("def f(s: String, var o: Object) = { o = s; {}; }")
-        expected = self.makeSimpleFunction("f", UnitType, [[
-            ldlocal(0),
-            tycs(getRootClass()),
-            cast(),
-            stlocal(1),
-            unit(),
-            ret()]],
-          parameterTypes=[getStringType(), getRootClassType()],
-          variables=[self.makeVariable("f.s", type=getStringType(),
-                                       kind=PARAMETER, flags=frozenset([LET])),
-                     self.makeVariable("f.o", type=getRootClassType(), kind=PARAMETER)])
+        expected = self.makeSimpleFunction(
+            "f", UnitType, [[
+                ldlocal(0),
+                tys(0),
+                cast(),
+                stlocal(1),
+                unit(),
+                ret()
+            ]],
+            instTypes=[getRootClassType()],
+            parameterTypes=[getStringType(), getRootClassType()],
+            variables=[self.makeVariable("f.s", type=getStringType(),
+                                         kind=PARAMETER, flags=frozenset([LET])),
+                       self.makeVariable("f.o", type=getRootClassType(), kind=PARAMETER)])
         self.assertEquals(expected, package.findFunction(name="f"))
 
     def testAssignVarWithTypeParameterCast(self):
@@ -430,19 +438,20 @@ class TestCompiler(TestCaseWithDefinitions):
         Foo = package.findClass(name="Foo")
         xType = ClassType(Foo, (getStringType(),))
         yType = ClassType(Foo, (getRootClassType(),))
-        expected = self.makeSimpleFunction("f", UnitType, [[
-            ldlocal(0),
-            tycs(getRootClass()),
-            tycs(Foo),
-            cast(),
-            stlocal(1),
-            unit(),
-            ret()]],
-          parameterTypes=[xType, yType],
-          variables=[self.makeVariable("f.x", type=xType, kind=PARAMETER,
-                                       flags=frozenset([LET])),
-                     self.makeVariable("f.y", type=yType, kind=PARAMETER)])
-        self.assertEquals(expected, package.findFunction(name="f"))
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", UnitType, [[
+                ldlocal(0),
+                tys(0),
+                cast(),
+                stlocal(1),
+                unit(),
+                ret()
+            ]],
+            parameterTypes=[xType, yType],
+            variables=[self.makeVariable("f.x", type=xType, kind=PARAMETER,
+                                         flags=frozenset([LET])),
+                       self.makeVariable("f.y", type=yType, kind=PARAMETER)],
+            instTypes=[ClassType(Foo, (getRootClassType(),))]))
 
     def testAssignShortProps(self):
         package = self.compileFromSource("class Foo\n" +
@@ -919,20 +928,22 @@ class TestCompiler(TestCaseWithDefinitions):
         field1NameIndex = package.findName(tupleClass.fields[0].name)
         fooIndex = package.findString("foo")
         barIndex = package.findString("bar")
-        expected = self.makeSimpleFunction("f", getStringType(), [[
-                       tycs(stringClass),
-                       tycs(stringClass),
-                       allocobj(tupleClass),
-                       dup(),
-                       string(fooIndex),
-                       string(barIndex),
-                       tycs(getStringClass()),
-                       tycs(getStringClass()),
-                       callg(tupleClass.constructors[0]),
-                       drop(),
-                       ldf(tupleClass, field1NameIndex),
-                       ret()]])
-        self.assertEquals(expected, package.findFunction(name="f"))
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", getStringType(), [[
+                tys(0),
+                tys(0),
+                allocobj(tupleClass),
+                dup(),
+                string(fooIndex),
+                string(barIndex),
+                tys(0),
+                tys(0),
+                callg(tupleClass.constructors[0]),
+                drop(),
+                ldf(tupleClass, field1NameIndex),
+                ret()
+            ]],
+            instTypes=[getStringType()]))
 
     def testIfExpr(self):
         self.checkFunction("def f = if (true) 12 else 34",
@@ -1050,29 +1061,27 @@ class TestCompiler(TestCaseWithDefinitions):
         Foo = package.findClass(name="Foo")
         X = package.findTypeParameter(pred=lambda tp: STATIC not in tp.flags)
         yType = ExistentialType((X,), ClassType(Foo, (VariableType(X),)))
-        self.checkFunction(package,
-                           self.makeSimpleFunction("f", I64Type, [[
-                               ldlocal(0),
-                               tyvd(X),
-                               tyvd(X),
-                               tycd(Foo),
-                               tyxd(1),
-                               castcbr(1, 2),
-                             ], [
-                               stlocal(-1),
-                               i64(12),
-                               branch(3),
-                             ], [
-                               drop(),
-                               i64(34),
-                               branch(3),
-                             ], [
-                               ret(),
-                             ]],
-                             variables=[self.makeVariable("f.x", type=getRootClassType(),
-                                                          kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]), type=yType,
-                                                          kind=LOCAL, flags=frozenset([LET]))]))
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", I64Type, [[
+                ldlocal(0),
+                tyd(0),
+                castcbr(1, 2),
+            ], [
+                stlocal(-1),
+                i64(12),
+                branch(3),
+            ], [
+                drop(),
+                i64(34),
+                branch(3),
+            ], [
+                ret(),
+            ]],
+            variables=[self.makeVariable("f.x", type=getRootClassType(),
+                                         kind=PARAMETER, flags=frozenset([LET])),
+                       self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]), type=yType,
+                                         kind=LOCAL, flags=frozenset([LET]))],
+            instTypes=[yType]))
 
     def testMatchExprWithLocalTraitType(self):
         source = "trait Foo\n" + \
@@ -1082,26 +1091,27 @@ class TestCompiler(TestCaseWithDefinitions):
                  "    case _ => 34"
         package = self.compileFromSource(source)
         Foo = package.findTrait(name="Foo")
-        self.checkFunction(package,
-                           self.makeSimpleFunction("f", I64Type, [[
-                               ldlocal(0),
-                               tytd(Foo),
-                               castcbr(1, 2),
-                             ], [
-                               stlocal(-1),
-                               i64(12),
-                               branch(3),
-                             ], [
-                               drop(),
-                               i64(34),
-                               branch(3),
-                             ], [
-                               ret(),
-                             ]],
-                             variables=[self.makeVariable("f.x", type=getRootClassType(),
-                                                          kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]), type=ClassType(Foo),
-                                                          kind=LOCAL, flags=frozenset([LET]))]))
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", I64Type, [[
+                ldlocal(0),
+                tyd(0),
+                castcbr(1, 2),
+            ], [
+                stlocal(-1),
+                i64(12),
+                branch(3),
+            ], [
+                drop(),
+                i64(34),
+                branch(3),
+            ], [
+                ret(),
+            ]],
+            variables=[self.makeVariable("f.x", type=getRootClassType(),
+                                         kind=PARAMETER, flags=frozenset([LET])),
+                       self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]), type=ClassType(Foo),
+                                         kind=LOCAL, flags=frozenset([LET]))],
+            instTypes=[ClassType(Foo)]))
 
     def testMatchExprWithForeignTraitType(self):
         foo = Package(name=Name(["foo"]))
@@ -1115,26 +1125,27 @@ class TestCompiler(TestCaseWithDefinitions):
                  "    case y: foo.Foo => 12\n" + \
                  "    case _ => 34"
         package = self.compileFromSource(source, packageLoader=loader)
-        self.checkFunction(package,
-                           self.makeSimpleFunction("f", I64Type, [[
-                               ldlocal(0),
-                               tytdf(Foo),
-                               castcbr(1, 2),
-                             ], [
-                               stlocal(-1),
-                               i64(12),
-                               branch(3),
-                             ], [
-                               drop(),
-                               i64(34),
-                               branch(3),
-                             ], [
-                               ret(),
-                             ]],
-                             variables=[self.makeVariable("f.x", type=getRootClassType(),
-                                                          kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]), type=ClassType(Foo),
-                                                          kind=LOCAL, flags=frozenset([LET]))]))
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", I64Type, [[
+                ldlocal(0),
+                tyd(0),
+                castcbr(1, 2),
+            ], [
+                stlocal(-1),
+                i64(12),
+                branch(3),
+            ], [
+                drop(),
+                i64(34),
+                branch(3),
+            ], [
+                ret(),
+            ]],
+            variables=[self.makeVariable("f.x", type=getRootClassType(),
+                                         kind=PARAMETER, flags=frozenset([LET])),
+                       self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]), type=ClassType(Foo),
+                                         kind=LOCAL, flags=frozenset([LET]))],
+            instTypes=[ClassType(Foo)]))
 
     def testMatchExprWithVarWithExistentialType(self):
         source = "class Foo[static T]\n" + \
@@ -1146,40 +1157,38 @@ class TestCompiler(TestCaseWithDefinitions):
         Foo = package.findClass(name="Foo")
         X = package.findTypeParameter(name=Name(["f", LOCAL_SUFFIX, EXISTENTIAL_SUFFIX, "X"]))
         yType = ExistentialType((X,), ClassType(Foo, (VariableType(X),)))
-        self.checkFunction(package,
-                           self.makeSimpleFunction("f", I64Type, [[
-                               ldlocal(0),
-                               tyvd(X),
-                               tyvd(X),
-                               tycd(Foo),
-                               tyxd(1),
-                               castcbr(1, 2),
-                             ], [
-                               stlocal(-1),
-                               i64(12),
-                               branch(3),
-                             ], [
-                               drop(),
-                               i64(34),
-                               branch(3),
-                             ], [
-                               ret(),
-                             ]],
-                             variables=[self.makeVariable("f.x", type=getRootClassType(),
-                                                          kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]),
-                                                          type=yType,
-                                                          kind=LOCAL,
-                                                          flags=frozenset([LET]))]))
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", I64Type, [[
+                ldlocal(0),
+                tyd(0),
+                castcbr(1, 2),
+            ], [
+                stlocal(-1),
+                i64(12),
+                branch(3),
+            ], [
+                drop(),
+                i64(34),
+                branch(3),
+            ], [
+                ret(),
+            ]],
+            variables=[self.makeVariable("f.x", type=getRootClassType(),
+                                         kind=PARAMETER, flags=frozenset([LET])),
+                       self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]),
+                                         type=yType,
+                                         kind=LOCAL,
+                                         flags=frozenset([LET]))],
+            instTypes=[yType]))
 
     def testMatchExprWithVarWithExistentialForeignTypeArg(self):
         foo = Package(name=Name(["foo"]))
-        T = foo.addTypeParameter(Name(["Foo", "T"]), upperBound=getRootClassType(),
-                                 lowerBound=getNothingClassType(), flags=frozenset([PUBLIC]))
         Foo = foo.addClass(Name(["Foo"]), sourceName="Foo",
-                           typeParameters=[T], supertypes=[getRootClassType()],
+                           typeParameters=[], supertypes=[getRootClassType()],
                            constructors=[], fields=[],
                            methods=[], flags=frozenset([PUBLIC]))
+        T = foo.addTypeParameter(Foo, Name(["Foo", "T"]), upperBound=getRootClassType(),
+                                 lowerBound=getNothingClassType(), flags=frozenset([PUBLIC]))
         loader = FakePackageLoader([foo])
 
         source = "def f(x: Object) =\n" + \
@@ -1189,31 +1198,29 @@ class TestCompiler(TestCaseWithDefinitions):
         package = self.compileFromSource(source, packageLoader=loader)
         X = package.findTypeParameter(name=Name(["f", LOCAL_SUFFIX, EXISTENTIAL_SUFFIX, "X"]))
         yType = ExistentialType((X,), ClassType(Foo, (VariableType(X),)))
-        self.checkFunction(package,
-                           self.makeSimpleFunction("f", I64Type, [[
-                               ldlocal(0),
-                               tyvd(X),
-                               tyvd(X),
-                               tycdf(Foo),
-                               tyxd(1),
-                               castcbr(1, 2),
-                             ], [
-                               stlocal(-1),
-                               i64(12),
-                               branch(3),
-                             ], [
-                               drop(),
-                               i64(34),
-                               branch(3),
-                             ], [
-                               ret(),
-                             ]],
-                             variables=[self.makeVariable("f.x", type=getRootClassType(),
-                                                          kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]),
-                                                          type=yType,
-                                                          kind=LOCAL,
-                                                          flags=frozenset([LET]))]))
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", I64Type, [[
+                ldlocal(0),
+                tyd(0),
+                castcbr(1, 2),
+            ], [
+                stlocal(-1),
+                i64(12),
+                branch(3),
+            ], [
+                drop(),
+                i64(34),
+                branch(3),
+            ], [
+                ret(),
+            ]],
+            variables=[self.makeVariable("f.x", type=getRootClassType(),
+                                         kind=PARAMETER, flags=frozenset([LET])),
+                       self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]),
+                                         type=yType,
+                                         kind=LOCAL,
+                                         flags=frozenset([LET]))],
+            instTypes=[yType]))
 
     def testMatchExprWithIntShadow(self):
         source = "def f(x: i64) =\n" + \
@@ -1300,25 +1307,26 @@ class TestCompiler(TestCaseWithDefinitions):
                  "  match (o)\n" + \
                  "    case _: String => 1\n" + \
                  "    case _ => 2"
-        self.checkFunction(source,
-                           self.makeSimpleFunction("f", I64Type, [[
-                               ldlocal(0),
-                               tycd(getStringClass()),
-                               castcbr(1, 2),
-                             ], [
-                               drop(),
-                               i64(1),
-                               branch(3),
-                             ], [
-                               drop(),
-                               i64(2),
-                               branch(3)
-                             ], [
-                               ret(),
-                             ]],
-                             variables=[self.makeVariable("f.o", type=getRootClassType(),
-                                                          kind=PARAMETER,
-                                                          flags=frozenset([LET]))]))
+        self.checkFunction(source, self.makeSimpleFunction(
+            "f", I64Type, [[
+                ldlocal(0),
+                tyd(0),
+                castcbr(1, 2),
+            ], [
+                drop(),
+                i64(1),
+                branch(3),
+            ], [
+                drop(),
+                i64(2),
+                branch(3)
+            ], [
+                ret(),
+            ]],
+            variables=[self.makeVariable("f.o", type=getRootClassType(),
+                                         kind=PARAMETER,
+                                         flags=frozenset([LET]))],
+            instTypes=[getStringType()]))
 
     def testMatchExprWithBlankPatternSupertype(self):
         source = "def f(s: String) =\n" + \
@@ -1481,46 +1489,47 @@ class TestCompiler(TestCaseWithDefinitions):
         isDefined = package.findFunction(name="Option.is-defined")
         get = package.findFunction(name="Option.get")
         noIndex = package.findString("no")
-        self.checkFunction(package,
-                           self.makeSimpleFunction("f", stringType, [[
-                               # block 0 []
-                               ldlocal(0),
-                               dup(),
-                               tycs(getRootClass()),
-                               callg(tryMatch),
-                               dup(),
-                               tycs(getRootClass()),
-                               callv(isDefined),
-                               branchif(1, 3),
-                             ], [
-                               # block 1 [some value]
-                               tycs(getRootClass()),
-                               callv(get),
-                               tycd(getStringClass()),
-                               castcbr(2, 3),
-                             ], [
-                               # block 2 [string value]
-                               stlocal(-1),
-                               drop(),
-                               ldlocal(-1),
-                               branch(5),
-                             ], [
-                               # block 3 [obj value]
-                               drop(),
-                               branch(4),
-                             ], [
-                               # block 4 [value]
-                               drop(),
-                               string(noIndex),
-                               branch(5),
-                             ], [
-                               # block 5 [result]
-                               ret(),
-                             ]],
-                             variables=[self.makeVariable("f.obj", type=getRootClassType(),
-                                                          kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "x"]), type=stringType, kind=LOCAL,
-                                                          flags=frozenset([LET]))]))
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", stringType, [[
+                # block 0 []
+                ldlocal(0),
+                dup(),
+                tys(0),
+                callg(tryMatch),
+                dup(),
+                tys(0),
+                callv(isDefined),
+                branchif(1, 3),
+            ], [
+                # block 1 [some value]
+                tys(0),
+                callv(get),
+                tyd(1),
+                castcbr(2, 3),
+            ], [
+                # block 2 [string value]
+                stlocal(-1),
+                drop(),
+                ldlocal(-1),
+                branch(5),
+            ], [
+                # block 3 [obj value]
+                drop(),
+                branch(4),
+            ], [
+                # block 4 [value]
+                drop(),
+                string(noIndex),
+                branch(5),
+            ], [
+                # block 5 [result]
+                ret(),
+            ]],
+            variables=[self.makeVariable("f.obj", type=getRootClassType(),
+                                         kind=PARAMETER, flags=frozenset([LET])),
+                       self.makeVariable(Name(["f", LOCAL_SUFFIX, "x"]), type=stringType, kind=LOCAL,
+                                         flags=frozenset([LET]))],
+            instTypes=[getRootClassType(), getStringType()]))
 
     def testMatchDestructureSomeTupleFromFunction(self):
         source = TUPLE_SOURCE + \
@@ -1538,51 +1547,48 @@ class TestCompiler(TestCaseWithDefinitions):
         Tuple2 = package.findClass(name="Tuple2")
         field1NameIndex = package.findName(Tuple2.fields[0].name)
         field2NameIndex = package.findName(Tuple2.fields[1].name)
-        self.checkFunction(package,
-                           self.makeSimpleFunction("f", I64Type, [[
-                               # block 0 []
-                               ldlocal(0),
-                               dup(),
-                               callg(Matcher),
-                               dup(),
-                               tycs(getStringClass()),
-                               tycs(getStringClass()),
-                               tycs(Tuple2),
-                               callv(isDefined),
-                               branchif(1, 2),
-                             ], [
-                               # block 1 [some value]
-                               tycs(getStringClass()),
-                               tycs(getStringClass()),
-                               tycs(Tuple2),
-                               callv(get),
-                               dup(),
-                               ldf(Tuple2, field1NameIndex),
-                               stlocal(-1),
-                               ldf(Tuple2, field2NameIndex),
-                               stlocal(-2),
-                               drop(),
-                               i64(12),
-                               branch(4),
-                             ], [
-                               # block 2 [none value]
-                               drop(),
-                               branch(3),
-                             ], [
-                               # block 3 [value]
-                               drop(),
-                               i64(34),
-                               branch(4),
-                             ], [
-                               # block 4 [result]
-                               ret(),
-                             ]],
-                             variables=[self.makeVariable("f.obj", type=getRootClassType(),
-                                                          kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "x"]), type=getStringType(),
-                                                          kind=LOCAL, flags=frozenset([LET])),
-                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]), type=getStringType(),
-                                                          kind=LOCAL, flags=frozenset([LET]))]))
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", I64Type, [[
+                # block 0 []
+                ldlocal(0),
+                dup(),
+                callg(Matcher),
+                dup(),
+                tys(0),
+                callv(isDefined),
+                branchif(1, 2),
+            ], [
+                # block 1 [some value]
+                tys(0),
+                callv(get),
+                dup(),
+                ldf(Tuple2, field1NameIndex),
+                stlocal(-1),
+                ldf(Tuple2, field2NameIndex),
+                stlocal(-2),
+                drop(),
+                i64(12),
+                branch(4),
+            ], [
+                # block 2 [none value]
+                drop(),
+                branch(3),
+            ], [
+                # block 3 [value]
+                drop(),
+                i64(34),
+                branch(4),
+            ], [
+                # block 4 [result]
+                ret(),
+            ]],
+            variables=[self.makeVariable("f.obj", type=getRootClassType(),
+                                         kind=PARAMETER, flags=frozenset([LET])),
+                       self.makeVariable(Name(["f", LOCAL_SUFFIX, "x"]), type=getStringType(),
+                                         kind=LOCAL, flags=frozenset([LET])),
+                       self.makeVariable(Name(["f", LOCAL_SUFFIX, "y"]), type=getStringType(),
+                                         kind=LOCAL, flags=frozenset([LET]))],
+            instTypes=[ClassType(Tuple2, (getStringType(), getStringType()))]))
 
     def testMatchExprDestructureFromMethod(self):
         source = OPTION_SOURCE + \
@@ -1597,46 +1603,48 @@ class TestCompiler(TestCaseWithDefinitions):
         Matcher = Foo.findMethodBySourceName("Matcher")
         isDefined = package.findFunction(name="Option.is-defined")
         get = package.findFunction(name="Option.get")
-        self.checkFunction(package,
-                           self.makeSimpleFunction("Foo.f", I64Type, [[
-                               # block 0 []
-                               ldlocal(1),
-                               ldlocal(0),
-                               dupi(1),
-                               callv(Matcher),
-                               dup(),
-                               tycs(getStringClass()),
-                               callv(isDefined),
-                               branchif(1, 2),
-                             ], [
-                               # block 1 [some value]
-                               tycs(getStringClass()),
-                               callv(get),
-                               stlocal(-1),
-                               drop(),
-                               i64(12),
-                               branch(4),
-                             ], [
-                               # block 2 [none value]
-                               drop(),
-                               branch(3),
-                             ], [
-                               # block 3 [value]
-                               drop(),
-                               i64(34),
-                               branch(4),
-                             ], [
-                               # block 4 [result]
-                               ret(),
-                             ]],
-                             variables=[self.makeVariable(Name(["Foo", "f", RECEIVER_SUFFIX]),
-                                                          type=ClassType(Foo),
-                                                          kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable("Foo.f.obj", type=getRootClassType(),
-                                                          kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable(Name(["Foo", "f", LOCAL_SUFFIX, "x"]), type=getStringType(),
-                                                          kind=LOCAL, flags=frozenset([LET]))],
-                             flags=frozenset([METHOD])))
+        self.checkFunction(package, self.makeSimpleFunction(
+            "Foo.f", I64Type, [[
+                # block 0 []
+                ldlocal(1),
+                ldlocal(0),
+                dupi(1),
+                callv(Matcher),
+                dup(),
+                tys(0),
+                callv(isDefined),
+                branchif(1, 2),
+            ], [
+                # block 1 [some value]
+                tys(0),
+                callv(get),
+                stlocal(-1),
+                drop(),
+                i64(12),
+                branch(4),
+            ], [
+                # block 2 [none value]
+                drop(),
+                branch(3),
+            ], [
+                # block 3 [value]
+                drop(),
+                i64(34),
+                branch(4),
+            ], [
+                # block 4 [result]
+                ret(),
+            ]],
+            variables=[self.makeVariable(Name(["Foo", "f", RECEIVER_SUFFIX]),
+                                         type=ClassType(Foo),
+                                         kind=PARAMETER, flags=frozenset([LET])),
+                       self.makeVariable("Foo.f.obj", type=getRootClassType(),
+                                         kind=PARAMETER, flags=frozenset([LET])),
+                       self.makeVariable(Name(["Foo", "f", LOCAL_SUFFIX, "x"]), type=getStringType(),
+                                         kind=LOCAL, flags=frozenset([LET]))],
+            flags=frozenset([METHOD]),
+            instTypes=[getStringType()]))
+
 
     def testMatchExprUnaryWithFunction(self):
         source = OPTION_SOURCE + \
@@ -1652,41 +1660,42 @@ class TestCompiler(TestCaseWithDefinitions):
         get = package.findFunction(name="Option.get")
         objectType = getRootClassType()
         stringType = getStringType()
-        self.checkFunction(package,
-                           self.makeSimpleFunction("f", I64Type, [[
-                               # block 0 []
-                               ldlocal(0),
-                               dup(),
-                               callg(matcher),
-                               dup(),
-                               tycs(getStringClass()),
-                               callv(isDefined),
-                               branchif(1, 2),
-                             ], [
-                               # block 1 [some value]
-                               tycs(getStringClass()),
-                               callv(get),
-                               stlocal(-1),
-                               drop(),
-                               i64(12),
-                               branch(4),
-                             ], [
-                               # block 2 [none value]
-                               drop(),
-                               branch(3),
-                             ], [
-                               # block 3 [value]
-                               drop(),
-                               i64(34),
-                               branch(4),
-                             ], [
-                               # block 4 [result]
-                               ret(),
-                             ]],
-                             variables=[self.makeVariable(Name(["f", "obj"]), type=objectType,
-                                                          kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "s"]), type=stringType,
-                                                          kind=LOCAL, flags=frozenset([LET]))]))
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", I64Type, [[
+                # block 0 []
+                ldlocal(0),
+                dup(),
+                callg(matcher),
+                dup(),
+                tys(0),
+                callv(isDefined),
+                branchif(1, 2),
+            ], [
+                # block 1 [some value]
+                tys(0),
+                callv(get),
+                stlocal(-1),
+                drop(),
+                i64(12),
+                branch(4),
+            ], [
+                # block 2 [none value]
+                drop(),
+                branch(3),
+            ], [
+                # block 3 [value]
+                drop(),
+                i64(34),
+                branch(4),
+            ], [
+                # block 4 [result]
+                ret(),
+            ]],
+            variables=[self.makeVariable(Name(["f", "obj"]), type=objectType,
+                                         kind=PARAMETER, flags=frozenset([LET])),
+                       self.makeVariable(Name(["f", LOCAL_SUFFIX, "s"]), type=stringType,
+                                         kind=LOCAL, flags=frozenset([LET]))],
+            instTypes=[stringType]))
 
     def testMatchExprBinaryWithStaticMethod(self):
         source = OPTION_SOURCE + \
@@ -1710,51 +1719,48 @@ class TestCompiler(TestCaseWithDefinitions):
         field1NameIndex = package.findName(Tuple.fields[0].name)
         field2NameIndex = package.findName(Tuple.fields[1].name)
         objectType = getRootClassType()
-        self.checkFunction(package,
-                           self.makeSimpleFunction("f", I64Type, [[
-                               # block 0 []
-                               ldlocal(0),
-                               dup(),
-                               callg(matcher),
-                               dup(),
-                               tycs(Foo),
-                               tycs(Bar),
-                               tycs(Tuple),
-                               callv(isDefined),
-                               branchif(1, 2),
-                             ], [
-                               # block 1 [some value]
-                               tycs(Foo),
-                               tycs(Bar),
-                               tycs(Tuple),
-                               callv(get),
-                               dup(),
-                               ldf(Tuple, field1NameIndex),
-                               stlocal(-1),
-                               ldf(Tuple, field2NameIndex),
-                               stlocal(-2),
-                               drop(),
-                               i64(12),
-                               branch(4),
-                             ], [
-                               # block 2 [none value]
-                               drop(),
-                               branch(3),
-                             ], [
-                               # block 3 [value]
-                               drop(),
-                               i64(34),
-                               branch(4),
-                             ], [
-                               # block 4 [result]
-                               ret(),
-                             ]],
-                             variables=[self.makeVariable(Name(["f", "obj"]), type=objectType,
-                                                          kind=PARAMETER, flags=frozenset([LET])),
-                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "a"]), type=ClassType(Foo),
-                                                          kind=LOCAL, flags=frozenset([LET])),
-                                        self.makeVariable(Name(["f", LOCAL_SUFFIX, "b"]), type=ClassType(Bar),
-                                                          kind=LOCAL, flags=frozenset([LET]))]))
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", I64Type, [[
+                # block 0 []
+                ldlocal(0),
+                dup(),
+                callg(matcher),
+                dup(),
+                tys(0),
+                callv(isDefined),
+                branchif(1, 2),
+            ], [
+                # block 1 [some value]
+                tys(0),
+                callv(get),
+                dup(),
+                ldf(Tuple, field1NameIndex),
+                stlocal(-1),
+                ldf(Tuple, field2NameIndex),
+                stlocal(-2),
+                drop(),
+                i64(12),
+                branch(4),
+            ], [
+                # block 2 [none value]
+                drop(),
+                branch(3),
+            ], [
+                # block 3 [value]
+                drop(),
+                i64(34),
+                branch(4),
+            ], [
+                # block 4 [result]
+                ret(),
+            ]],
+            variables=[self.makeVariable(Name(["f", "obj"]), type=objectType,
+                                         kind=PARAMETER, flags=frozenset([LET])),
+                       self.makeVariable(Name(["f", LOCAL_SUFFIX, "a"]), type=ClassType(Foo),
+                                         kind=LOCAL, flags=frozenset([LET])),
+                       self.makeVariable(Name(["f", LOCAL_SUFFIX, "b"]), type=ClassType(Bar),
+                                         kind=LOCAL, flags=frozenset([LET]))],
+            instTypes=[ClassType(Tuple, (ClassType(Foo), ClassType(Bar)))]))
 
     def testMatchAllCasesTerminate(self):
         source = "def f =\n" + \
@@ -3153,25 +3159,30 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testForeignFunctionCallWithTypeArg(self):
         foo = Package(name=Name(["foo"]))
-        T = foo.addTypeParameter(Name(["foo", "T"]), upperBound=getRootClassType(),
+        bar = foo.addFunction(Name(["bar"]), sourceName="bar",
+                              returnType=None, typeParameters=[],
+                              parameterTypes=[None], flags=frozenset([PUBLIC]))
+        T = foo.addTypeParameter(bar, Name(["foo", "T"]), upperBound=getRootClassType(),
                                  lowerBound=getNothingClassType(), flags=frozenset([STATIC]))
         Tty = VariableType(T)
-        bar = foo.addFunction(Name(["bar"]), sourceName="bar",
-                              returnType=Tty, typeParameters=[T],
-                              parameterTypes=[Tty], flags=frozenset([PUBLIC]))
+        bar.returnType = Tty
+        bar.parameterTypes[0] = Tty
         loader = FakePackageLoader([foo])
+
         source = "def f(s: String) = foo.bar[String](s)"
         package = self.compileFromSource(source, packageLoader=loader)
-        stringTy = getStringType()
-        self.checkFunction(package,
-                           self.makeSimpleFunction("f", stringTy, [[
-                               ldlocal(0),
-                               tycs(getStringClass()),
-                               callgf(bar),
-                               ret()]],
-                             parameterTypes=[stringTy],
-                             variables=[self.makeVariable("f.s", type=stringTy,
-                                                          kind=PARAMETER, flags=frozenset([LET]))]))
+        stringType = getStringType()
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", stringType, [[
+                ldlocal(0),
+                tys(0),
+                callgf(bar),
+                ret()
+            ]],
+            parameterTypes=[stringType],
+            variables=[self.makeVariable("f.s", type=stringType,
+                                         kind=PARAMETER, flags=frozenset([LET]))],
+            instTypes=[stringType]))
 
     def testFunctionCallWithForeignTypeArg(self):
         fooPackage = Package(name=Name(["foo"]))
@@ -3186,16 +3197,17 @@ class TestCompiler(TestCaseWithDefinitions):
                  "def f(o: foo.Bar) = id[foo.Bar](o)"
         package = self.compileFromSource(source, packageLoader=loader)
         idFunction = package.findFunction(name="id")
-        self.checkFunction(package,
-                           self.makeSimpleFunction("f", barType, [[
-                               ldlocal(0),
-                               tycsf(barClass),
-                               callg(idFunction),
-                               ret(),
-                             ]],
-                             parameterTypes=[barType],
-                             variables=[self.makeVariable("f.o", type=barType,
-                                                          kind=PARAMETER, flags=frozenset([LET]))]))
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", barType, [[
+                ldlocal(0),
+                tys(0),
+                callg(idFunction),
+                ret(),
+            ]],
+            parameterTypes=[barType],
+            variables=[self.makeVariable("f.o", type=barType,
+                                         kind=PARAMETER, flags=frozenset([LET]))],
+            instTypes=[barType]))
 
     def testMatchForeignType(self):
         # try-catch is used for now, since full pattern matching hasn't been implemented yet.
@@ -3213,26 +3225,27 @@ class TestCompiler(TestCaseWithDefinitions):
         package = self.compileFromSource(source, packageLoader=loader)
 
         barType = ClassType(clas)
-        self.checkFunction(package,
-                           self.makeSimpleFunction("f", UnitType, [[
-                               pushtry(1, 2),
-                             ], [
-                               unit(),
-                               poptry(4),
-                             ], [
-                               tycdf(clas),
-                               castcbr(3, 5),
-                             ], [
-                               stlocal(-1),
-                               unit(),
-                               branch(4),
-                             ], [
-                               ret(),
-                             ], [
-                               throw(),
-                             ]],
-                             variables=[self.makeVariable(Name(["f", LOCAL_SUFFIX, "x"]), type=barType,
-                                                          kind=LOCAL, flags=frozenset([LET]))]))
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", UnitType, [[
+                pushtry(1, 2),
+            ], [
+                unit(),
+                poptry(4),
+            ], [
+                tyd(0),
+                castcbr(3, 5),
+            ], [
+                stlocal(-1),
+                unit(),
+                branch(4),
+            ], [
+                ret(),
+            ], [
+                throw(),
+            ]],
+            variables=[self.makeVariable(Name(["f", LOCAL_SUFFIX, "x"]), type=barType,
+                                         kind=LOCAL, flags=frozenset([LET]))],
+            instTypes=[ClassType(clas)]))
 
     def testInitializer(self):
         source = "class Foo\n" + \
@@ -3666,15 +3679,17 @@ class TestCompiler(TestCaseWithDefinitions):
         Cty = ClassType(C)
         id = package.findFunction(name="id")
         f = package.findFunction(name="f")
-        expected = self.makeSimpleFunction("f", Cty, [[
-                       ldlocal(0),
-                       tycs(C),
-                       callg(id),
-                       ret()]],
-                     variables=[self.makeVariable("f.o", type=Cty,
-                                                  kind=PARAMETER, flags=frozenset([LET]))],
-                     parameterTypes=[Cty])
-        self.assertEquals(expected, f)
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", Cty, [[
+                ldlocal(0),
+                tys(0),
+                callg(id),
+                ret()
+            ]],
+            variables=[self.makeVariable("f.o", type=Cty,
+                                         kind=PARAMETER, flags=frozenset([LET]))],
+            parameterTypes=[Cty],
+            instTypes=[Cty]))
 
     def testCallWithStaticLocalTraitTypeArgument(self):
         source = "trait Foo\n" + \
@@ -3684,14 +3699,15 @@ class TestCompiler(TestCaseWithDefinitions):
         id = package.findFunction(name="id")
         Foo = package.findTrait(name="Foo")
         FooType = ClassType.forReceiver(Foo)
-        self.checkFunction(package,
-                           self.makeSimpleFunction("f", FooType, [[
-                               ldlocal(0),
-                               tyts(Foo),
-                               callg(id),
-                               ret()]],
-                             variables=[self.makeVariable("f.o", type=FooType,
-                                        kind=PARAMETER, flags=frozenset([LET]))]))
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", FooType, [[
+                ldlocal(0),
+                tys(0),
+                callg(id),
+                ret()]],
+            variables=[self.makeVariable("f.o", type=FooType,
+                                         kind=PARAMETER, flags=frozenset([LET]))],
+            instTypes=[FooType]))
 
     def testCallWithStaticForeignTraitTypeArgument(self):
         foo = Package(name=Name(["foo"]))
@@ -3705,14 +3721,16 @@ class TestCompiler(TestCaseWithDefinitions):
         package = self.compileFromSource(source, packageLoader=loader)
         id = package.findFunction(name="id")
         FooType = ClassType.forReceiver(Foo)
-        self.checkFunction(package,
-                           self.makeSimpleFunction("f", FooType, [[
-                               ldlocal(0),
-                               tytsf(Foo),
-                               callg(id),
-                               ret()]],
-                             variables=[self.makeVariable("f.o", type=FooType,
-                                        kind=PARAMETER, flags=frozenset([LET]))]))
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", FooType, [[
+                ldlocal(0),
+                tys(0),
+                callg(id),
+                ret()
+            ]],
+            variables=[self.makeVariable("f.o", type=FooType,
+                                         kind=PARAMETER, flags=frozenset([LET]))],
+            instTypes=[FooType]))
 
     def testCallWithStaticVariableTypeArgument(self):
         source = "def id-outer[static TO](x: TO) = id-inner[TO](x)\n" + \
@@ -3722,16 +3740,18 @@ class TestCompiler(TestCaseWithDefinitions):
         Tty = VariableType(T)
         inner = package.findFunction(name="id-inner")
         outer = package.findFunction(name="id-outer")
-        expected = self.makeSimpleFunction("id-outer", Tty, [[
-            ldlocal(0),
-            tyvs(T),
-            callg(inner),
-            ret()]],
-          variables=[self.makeVariable("id-outer.x", type=Tty,
-                                       kind=PARAMETER, flags=frozenset([LET]))],
-          typeParameters=[T],
-          parameterTypes=[Tty])
-        self.assertEquals(expected, outer)
+        self.checkFunction(package, self.makeSimpleFunction(
+            "id-outer", Tty, [[
+                ldlocal(0),
+                tys(0),
+                callg(inner),
+                ret()
+            ]],
+            variables=[self.makeVariable("id-outer.x", type=Tty,
+                                         kind=PARAMETER, flags=frozenset([LET]))],
+            typeParameters=[T],
+            parameterTypes=[Tty],
+            instTypes=[Tty]))
 
     def testCallWithExplicitTypeArgument(self):
         source = "def id-outer[static T](x: T) =\n" + \
@@ -3742,16 +3762,18 @@ class TestCompiler(TestCaseWithDefinitions):
         Tty = VariableType(T)
         idOuter = package.findFunction(name="id-outer")
         idInner = package.findFunction(name="id-outer.id-inner")
-        expected = self.makeSimpleFunction("id-outer", Tty, [[
-            ldlocal(0),
-            tyvs(T),
-            callg(idInner),
-            ret()]],
-          variables=[self.makeVariable("id-outer.x", type=Tty,
-                                       kind=PARAMETER, flags=frozenset([LET]))],
-          typeParameters=[T],
-          parameterTypes=[Tty])
-        self.assertEquals(expected, idOuter)
+        self.checkFunction(package, self.makeSimpleFunction(
+            "id-outer", Tty, [[
+                ldlocal(0),
+                tys(0),
+                callg(idInner),
+                ret()
+            ]],
+            variables=[self.makeVariable("id-outer.x", type=Tty,
+                                         kind=PARAMETER, flags=frozenset([LET]))],
+            typeParameters=[T],
+            parameterTypes=[Tty],
+            instTypes=[Tty]))
 
     def testCallWithImplicitTypeArgument(self):
         source = "def id-outer[static T](x: T) =\n" + \
@@ -3765,35 +3787,37 @@ class TestCompiler(TestCaseWithDefinitions):
         xNameIndex = package.findName(contextClass.fields[0].name)
         closureClass = package.findClass(name=Name(["id-outer", "id-inner", CLOSURE_SUFFIX]))
         idInner = package.findFunction(name="id-outer.id-inner")
-        expected = self.makeSimpleFunction("id-outer", Tty, [[
-            tyvs(T),
-            allocobj(contextClass),
-            dup(),
-            tyvs(T),
-            callg(contextClass.constructors[0]),
-            drop(),
-            stlocal(-1),
-            ldlocal(0),
-            ldlocal(-1),
-            stf(contextClass, xNameIndex),
-            tyvs(T),
-            allocobj(closureClass),
-            dup(),
-            ldlocal(-1),
-            tyvs(T),
-            callg(closureClass.constructors[0]),
-            drop(),
-            stlocal(-2),
-            ldlocal(-2),
-            tyvs(T),
-            callv(idInner),
-            ret()]],
-          variables=[self.makeVariable(Name(["id-outer", CONTEXT_SUFFIX]),
-                                       type=ClassType(contextClass)),
-                     self.makeVariable("id-outer.id-inner", type=ClassType(closureClass))],
-          typeParameters=[T],
-          parameterTypes=[Tty])
-        self.assertEquals(expected, idOuter)
+        self.checkFunction(package, self.makeSimpleFunction(
+            "id-outer", Tty, [[
+                tys(0),
+                allocobj(contextClass),
+                dup(),
+                tys(0),
+                callg(contextClass.constructors[0]),
+                drop(),
+                stlocal(-1),
+                ldlocal(0),
+                ldlocal(-1),
+                stf(contextClass, xNameIndex),
+                tys(0),
+                allocobj(closureClass),
+                dup(),
+                ldlocal(-1),
+                tys(0),
+                callg(closureClass.constructors[0]),
+                drop(),
+                stlocal(-2),
+                ldlocal(-2),
+                tys(0),
+                callv(idInner),
+                ret()
+            ]],
+            variables=[self.makeVariable(Name(["id-outer", CONTEXT_SUFFIX]),
+                                         type=ClassType(contextClass)),
+                       self.makeVariable("id-outer.id-inner", type=ClassType(closureClass))],
+            typeParameters=[T],
+            parameterTypes=[Tty],
+            instTypes=[Tty]))
 
     def testCallInheritedMethodWithoutTypeArgument(self):
         source = "class Foo[static T]\n" + \
@@ -3827,41 +3851,46 @@ class TestCompiler(TestCaseWithDefinitions):
         Foo = package.findClass(name="Foo")
         FooType = ClassType(Foo, (getRootClassType(),))
         toString = Foo.findMethodBySourceName("to-string")
-        expected = self.makeSimpleFunction("f", UnitType, [[
-            ldlocal(0),
-            tycs(getRootClass()),
-            callv(toString),
-            drop(),
-            unit(),
-            ret()]],
-          variables=[self.makeVariable("f.foo", type=FooType,
-                                       kind=PARAMETER, flags=frozenset([LET]))],
-          parameterTypes=[FooType])
-        self.assertEquals(expected, f)
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", UnitType,
+            [[
+                ldlocal(0),
+                tys(0),
+                callv(toString),
+                drop(),
+                unit(),
+                ret()
+            ]],
+            variables=[self.makeVariable("f.foo", type=FooType,
+                                         kind=PARAMETER, flags=frozenset([LET]))],
+            parameterTypes=[FooType],
+            instTypes=[getRootClassType()]))
 
     def testConstructorCallInitializerInClassWithStaticTypeArgs(self):
         source = "class C[static T]"
         package = self.compileFromSource(source)
         C = package.findClass(name="C")
-        T = package.findTypeParameter(name="C.T")
+        T = C.findTypeParameter(name="C.T")
         Ctype = ClassType(C, (VariableType(T),))
-        expectedCtor = self.makeSimpleFunction(Name(["C", CONSTRUCTOR_SUFFIX]), UnitType, [[
-            ldlocal(0),
-            callg(getBuiltinFunctionById(BUILTIN_ROOT_CLASS_CTOR_ID)),
-            drop(),
-            ldlocal(0),
-            tyvs(T),
-            callg(C.initializer),
-            drop(),
-            unit(),
-            ret()]],
-          variables=[self.makeVariable(Name(["C", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
-                                       type=Ctype,
-                                       kind=PARAMETER, flags=frozenset([LET]))],
-          typeParameters=[T],
-          parameterTypes=[Ctype],
-          flags=frozenset([METHOD, CONSTRUCTOR]))
-        self.assertEquals(expectedCtor, C.constructors[0])
+        self.checkFunction(package, self.makeSimpleFunction(
+            Name(["C", CONSTRUCTOR_SUFFIX]), UnitType, [[
+                ldlocal(0),
+                callg(getBuiltinFunctionById(BUILTIN_ROOT_CLASS_CTOR_ID)),
+                drop(),
+                ldlocal(0),
+                tys(0),
+                callg(C.initializer),
+                drop(),
+                unit(),
+                ret()
+            ]],
+            variables=[self.makeVariable(Name(["C", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
+                                         type=Ctype,
+                                         kind=PARAMETER, flags=frozenset([LET]))],
+            typeParameters=[T],
+            parameterTypes=[Ctype],
+            flags=frozenset([METHOD, CONSTRUCTOR]),
+            instTypes=[VariableType(T)]))
 
     def testCallClassMethodsWithStaticTypeArgs(self):
         source = "class C\n" + \
@@ -3878,18 +3907,21 @@ class TestCompiler(TestCaseWithDefinitions):
         get = package.findFunction(name="Box.get")
         set = package.findFunction(name="Box.set")
         f = package.findFunction(name="f")
-        expectedF = self.makeSimpleFunction("f", UnitType, [[
-            ldlocal(0),
-            ldlocal(0),
-            tycs(C),
-            callv(get),
-            tycs(C),
-            callv(set),
-            ret()]],
-          variables=[self.makeVariable("f.box", type=boxType,
-                                       kind=PARAMETER, flags=frozenset([LET]))],
-          parameterTypes=[boxType])
-        self.assertEquals(expectedF, f)
+        self.checkFunction(package, self.makeSimpleFunction(
+            "f", UnitType,
+            [[
+                ldlocal(0),
+                ldlocal(0),
+                tys(0),
+                callv(get),
+                tys(0),
+                callv(set),
+                ret()
+            ]],
+            variables=[self.makeVariable("f.box", type=boxType,
+                                         kind=PARAMETER, flags=frozenset([LET]))],
+            parameterTypes=[boxType],
+            instTypes=[ClassType(C)]))
 
     def testCallStaticMethodFromMethod(self):
         source = "class Foo\n" + \
@@ -3966,17 +3998,20 @@ class TestCompiler(TestCaseWithDefinitions):
         Foo = package.findClass(name="Foo")
         ctor = Foo.constructors[0]
         self.checkFunction(package,
-                           self.makeSimpleFunction("f", UnitType, [[
-                               i32(3),
-                               tycs(getStringClass()),
-                               allocarr(Foo),
-                               i64(12),
-                               tycs(getStringClass()),
-                               callg(ctor),
-                               drop(),
-                               unit(),
-                               ret(),
-                             ]]))
+                           self.makeSimpleFunction(
+                               "f", UnitType,
+                               [[
+                                   i32(3),
+                                   tys(0),
+                                   allocarr(Foo),
+                                   i64(12),
+                                   tys(0),
+                                   callg(ctor),
+                                   drop(),
+                                   unit(),
+                                   ret(),
+                               ]],
+                               instTypes=[getStringType()]))
 
     def testAllocateForeignArrayForValue(self):
         fooPackage = Package(name=Name(["foo"]))
@@ -4136,25 +4171,24 @@ class TestCompiler(TestCaseWithDefinitions):
         package = self.compileFromSource(source)
         foo = package.findClass(name="Foo")
         bar = package.findClass(name="Bar")
-        self.checkFunction(package,
-                           self.makeSimpleFunction(Name(["Bar", CONSTRUCTOR_SUFFIX]),
-                                                   UnitType,
-                                                   [[
-                                                       ldlocal(0),
-                                                       tycs(getNothingClass()),
-                                                       callg(foo.constructors[0]),
-                                                       drop(),
-                                                       ldlocal(0),
-                                                       callg(bar.initializer),
-                                                       drop(),
-                                                       unit(),
-                                                       ret(),
-                                                   ]],
-                                                   variables=[self.makeVariable(Name(["Bar", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
-                                                                                type=ClassType(bar),
-                                                                                kind=PARAMETER,
-                                                                                flags=frozenset([LET]))],
-                                                   flags=frozenset([METHOD, CONSTRUCTOR])))
+        self.checkFunction(package, self.makeSimpleFunction(
+            Name(["Bar", CONSTRUCTOR_SUFFIX]), UnitType, [[
+                ldlocal(0),
+                tys(0),
+                callg(foo.constructors[0]),
+                drop(),
+                ldlocal(0),
+                callg(bar.initializer),
+                drop(),
+                unit(),
+                ret(),
+            ]],
+            variables=[self.makeVariable(Name(["Bar", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
+                                         type=ClassType(bar),
+                                         kind=PARAMETER,
+                                         flags=frozenset([LET]))],
+            flags=frozenset([METHOD, CONSTRUCTOR]),
+            instTypes=[getNothingClassType()]))
 
     def testStringLengthCantBeWritten(self):
         source = "def f =\n" + \

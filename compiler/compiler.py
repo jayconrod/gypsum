@@ -98,6 +98,7 @@ class CompileVisitor(ast.NodeVisitor):
         assert self.astDefn is not None or self.compileHint is not None
         self.info = info
         self.blocks = []
+        self.types = []
         self.stackHeights = []
         self.nextBlockId = Counter()
         self.currentBlock = None
@@ -144,6 +145,7 @@ class CompileVisitor(ast.NodeVisitor):
         # Sort the blocks in reverse-post-order and remove any unreachable blocks.
         self.orderBlocks()
         self.function.blocks = self.blocks
+        self.function.instTypes = self.types
 
     def compileWithHint(self):
         if self.compileHint is CONTEXT_CONSTRUCTOR_HINT:
@@ -333,7 +335,7 @@ class CompileVisitor(ast.NodeVisitor):
                 assert failBlock is not None
                 successBlock = self.newBlock()
                 ty = self.info.getType(pat)
-                self.buildType(self.info.getType(pat), pat.location)
+                self.buildType(self.info.getType(pat))
                 self.castcbr(successBlock.id, failBlock.id)
                 self.setCurrentBlock(successBlock)
         elif mode is COMPILE_FOR_UNINITIALIZED:
@@ -350,7 +352,7 @@ class CompileVisitor(ast.NodeVisitor):
             self.drop()
         else:
             assert patTy.isSubtypeOf(ty)
-            self.buildType(patTy, pat.ty.location)
+            self.buildType(patTy)
             castBlock = self.newBlock()
             self.castcbr(castBlock.id, failBlock.id)
             self.setCurrentBlock(castBlock)
@@ -391,7 +393,7 @@ class CompileVisitor(ast.NodeVisitor):
         else:
             erasedTupleTypeArgs = tuple(VariableType(p) for p in tupleClass.typeParameters)
             erasedTupleType = ClassType(tupleClass, erasedTupleTypeArgs)
-            self.buildType(erasedTupleType, pat.location)
+            self.buildType(erasedTupleType)
             isTupleBlock = self.newBlock()
             self.castcbr(isTupleBlock.id, failBlock.id)
             self.setCurrentBlock(isTupleBlock)
@@ -1766,74 +1768,25 @@ class CompileVisitor(ast.NodeVisitor):
         else:
             self.buildCallNamedMethod(getRootClassType(), "===", COMPILE_FOR_VALUE)
 
-    def buildType(self, ty, loc):
+    def buildType(self, ty):
         """Builds a type on the static type argument stack and simultaneously builds an
         equivalent Type object on the value stack. This is useful for checked casts and other
         type tests."""
-        if isinstance(ty, ClassType):
-            assert len(ty.clas.typeParameters) == len(ty.typeArguments)
-            for param, arg in zip(ty.clas.typeParameters, ty.typeArguments):
-                self.buildType(arg, loc)
-            if isinstance(ty.clas, Class):
-                if ty.clas.isForeign():
-                    self.tycdf(ty.clas)
-                else:
-                    self.tycd(ty.clas)
-            else:
-                assert isinstance(ty.clas, Trait)
-                if ty.clas.isForeign():
-                    self.tytdf(ty.clas)
-                else:
-                    self.tytd(ty.clas)
-            if ty.isNullable():
-                self.tyflagd(1)
-        elif isinstance(ty, VariableType):
-            if ty.typeParameter.isForeign():
-                self.tyvdf(ty.typeParameter)
-            else:
-                self.tyvd(ty.typeParameter)
-        else:
-            assert isinstance(ty, ExistentialType)
-            for v in ty.variables:
-                self.buildType(VariableType(v), loc)
-            self.buildType(ty.ty, loc)
-            self.tyxd(len(ty.variables))
+        index = self.findOrAddType(ty)
+        self.tyd(index)
 
     def buildImplicitStaticTypeArguments(self, typeParams):
         for param in typeParams:
-            assert not param.isForeign()
-            self.tyvs(param)
+            assert self.function.typeParameters[param.index] is param
+            self.buildStaticTypeArguments(VariableType(p) for p in typeParams)
 
     def buildStaticTypeArguments(self, types):
         for ty in types:
             self.buildStaticTypeArgument(ty)
 
     def buildStaticTypeArgument(self, ty):
-        if isinstance(ty, ClassType):
-            for arg in ty.typeArguments:
-                self.buildStaticTypeArgument(arg)
-            if isinstance(ty.clas, Class):
-                if ty.clas.isForeign():
-                    self.tycsf(ty.clas)
-                else:
-                    self.tycs(ty.clas)
-            else:
-                assert isinstance(ty.clas, Trait)
-                if ty.clas.isForeign():
-                    self.tytsf(ty.clas)
-                else:
-                    self.tyts(ty.clas)
-            if ty.isNullable():
-                self.tyflags(1)
-        elif isinstance(ty, VariableType):
-            assert not ty.typeParameter.isForeign()
-            self.tyvs(ty.typeParameter)
-        else:
-            assert isinstance(ty, ExistentialType)
-            for v in ty.variables:
-                self.buildStaticTypeArgument(VariableType(v))
-            self.buildStaticTypeArgument(ty.ty)
-            self.tyxs(len(ty.variables))
+        index = self.findOrAddType(ty)
+        self.tys(index)
 
     def buildCast(self, ty):
         self.buildStaticTypeArgument(ty)
@@ -1849,6 +1802,14 @@ class CompileVisitor(ast.NodeVisitor):
         for instName in insts:
             inst = getattr(ir_instructions, instName)
             self.add(inst())
+
+    def findOrAddType(self, ty):
+        try:
+            return self.types.index(ty)
+        except ValueError:
+            index = len(self.types)
+            self.types.append(ty)
+            return index
 
     def getScopeId(self):
         if isinstance(self.astDefn, ast.PrimaryConstructorDefinition):
