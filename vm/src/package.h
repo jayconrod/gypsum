@@ -30,7 +30,6 @@ class PackageDependency;
 class PackageVersion;
 class String;
 class Trait;
-class TypeParameter;
 
 typedef BlockHashMap<Name, Block> ExportMap;
 
@@ -84,11 +83,6 @@ class Package: public Object {
   BlockArray<Trait>* traits() const { return traits_.get(); }
   void setTraits(BlockArray<Trait>* newTraits) { traits_.set(this, newTraits); }
   Trait* getTrait(length_t index) const;
-  BlockArray<TypeParameter>* typeParameters() const { return typeParameters_.get(); }
-  void setTypeParameters(BlockArray<TypeParameter>* newTypeParameters) {
-    typeParameters_.set(this, newTypeParameters);
-  }
-  TypeParameter* getTypeParameter(length_t index) const;
   DEFINE_INL_ACCESSORS2(length_t, entryFunctionIndex, setEntryFunctionIndex)
   Function* entryFunction() const;
   DEFINE_INL_ACCESSORS2(length_t, initFunctionIndex, setInitFunctionIndex)
@@ -195,7 +189,6 @@ class Package: public Object {
   Ptr<BlockArray<Function>> functions_;
   Ptr<BlockArray<Class>> classes_;
   Ptr<BlockArray<Trait>> traits_;
-  Ptr<BlockArray<TypeParameter>> typeParameters_;
   length_t entryFunctionIndex_;
   length_t initFunctionIndex_;
   Ptr<ExportMap> exports_;
@@ -260,8 +253,6 @@ class PackageDependency: public Block {
                     BlockArray<Class>* linkedClasses,
                     BlockArray<Trait>* externTraits,
                     BlockArray<Trait>* linkedTraits,
-                    BlockArray<TypeParameter>* externTypeParameters,
-                    BlockArray<TypeParameter>* linkedTypeParameters,
                     BlockArray<Function>* externMethods);
   static Local<PackageDependency> create(
       Heap* heap,
@@ -276,8 +267,6 @@ class PackageDependency: public Block {
       const Handle<BlockArray<Class>>& linkedClasses,
       const Handle<BlockArray<Trait>>& externTraits,
       const Handle<BlockArray<Trait>>& linkedTraits,
-      const Handle<BlockArray<TypeParameter>>& externTypeParameters,
-      const Handle<BlockArray<TypeParameter>>& linkedTypeParameters,
       const Handle<BlockArray<Function>>& externMethods);
   static Local<PackageDependency> create(Heap* heap,
                                          const Handle<Name>& name,
@@ -287,7 +276,6 @@ class PackageDependency: public Block {
                                          length_t functionCount,
                                          length_t classCount,
                                          length_t traitCount,
-                                         length_t typeParameterCount,
                                          length_t methodCount);
 
   static bool parseNameAndVersion(Heap* heap,
@@ -313,16 +301,6 @@ class PackageDependency: public Block {
   BlockArray<Trait>* externTraits() const { return externTraits_.get(); }
   BlockArray<Trait>* linkedTraits() const { return linkedTraits_.get(); }
   void setLinkedTraits(BlockArray<Trait>* linkedTraits);
-  BlockArray<TypeParameter>* externTypeParameters() const {
-    return externTypeParameters_.get();
-  }
-  void setExternTypeParameters(BlockArray<TypeParameter>* externTypeParameters) {
-    externTypeParameters_.set(this, externTypeParameters);
-  }
-  BlockArray<TypeParameter>* linkedTypeParameters() const {
-    return linkedTypeParameters_.get();
-  }
-  void setLinkedTypeParameters(BlockArray<TypeParameter>* linkedTypeParameters);
   BlockArray<Function>* externMethods() const { return externMethods_.get(); }
 
   bool isSatisfiedBy(const Package* package) const {
@@ -345,8 +323,6 @@ class PackageDependency: public Block {
   Ptr<BlockArray<Class>> linkedClasses_;
   Ptr<BlockArray<Trait>> externTraits_;
   Ptr<BlockArray<Trait>> linkedTraits_;
-  Ptr<BlockArray<TypeParameter>> externTypeParameters_;
-  Ptr<BlockArray<TypeParameter>> linkedTypeParameters_;
   Ptr<BlockArray<Function>> externMethods_;
   // Update PACKAGE_DEPENDENCY_POINTER_LIST if pointers change.
 };
