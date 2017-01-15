@@ -1568,21 +1568,6 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "var g: (i64, i64)"
         self.assertRaises(TypeException, self.analyzeFromSource, source, name=STD_NAME)
 
-    def testBlankTypeAlone(self):
-        source = "var g: _"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
-
-    def testBlankTypeFunctionArg(self):
-        source = "def f[static T] = {}\n" + \
-                 "var g = f[_]"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
-
-    def testBlankTypeScopePrefix(self):
-        source = "class Foo[static T]\n" + \
-                 "  static def f = 12\n" + \
-                 "var g = Foo[_].f()"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
-
     def testBlankTypeClassArg(self):
         source = "class Foo[static T <: String]\n" + \
                  "var g: Foo[_]"

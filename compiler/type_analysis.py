@@ -539,36 +539,6 @@ class TypeVisitorBase(ast.NodeVisitor):
             type."""
         raise NotImplementedError()
 
-    def introduceExistentialTypeParameter(self, param, node):
-        """Introduces an existential type parameter based on a class type parameter.
-
-        This method may be called multiple times. A new type parameter will only be added the
-        first time. After that, the same type parameter will be returned.
-
-        Args:
-            param (ir.TypeParameter): a type parameter belonging to a class. The returned
-                type parameter will have the same bounds.
-            node (ast.BlankType): the node which causes this type parameter to be added.
-                `DefnInfo` will be created (if it doesn't already exist) with this node's id
-                as the key. The node's location may also be used for error reporting.
-
-        Returns:
-            (ir.TypeParameter, ir.VariableType): the introduced type parameter and a variable
-            type which wraps it.
-        """
-        assert isinstance(node, ast.BlankType)
-        if not self.info.hasDefnInfo(node):
-            paramName = self.info.makeUniqueName(
-                Name(self.scope().prefix + [EXISTENTIAL_SUFFIX, BLANK_SUFFIX]))
-            blankParam = self.info.package.addTypeParameter(None, paramName, astDefn=node,
-                                                            upperBound=param.upperBound,
-                                                            lowerBound=param.lowerBound)
-            defnInfo = compile_info.DefnInfo(blankParam, self.scope().scopeId, isVisible=False)
-            self.info.setDefnInfo(node, defnInfo)
-        else:
-            blankParam = self.info.getDefnInfo(node).irDefn
-        return blankParam, ir_t.VariableType(blankParam)
-
     def handleResult(self, node, result, *unusedArgs, **unusedKwargs):
         if result is not None:
             assert not self.info.hasType(node) or self.info.getType(node) == result
@@ -812,16 +782,19 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         typeParams = ir.getExplicitTypeParameters(irClass)
         assert len(typeParams) == len(nodes)
         typeArgs = []
-        introducedTypeParams = []
+        blankParams = []
         for param, node in zip(typeParams, nodes):
             if isinstance(node, ast.BlankType):
-                introducedTypeParam, arg = self.introduceExistentialTypeParameter(param, node)
-                introducedTypeParams.append(introducedTypeParam)
+                blankParam = self.info.getDefnInfo(node).irDefn
+                blankParams.append(blankParam)
+                blankParam.upperBound = param.upperBound
+                blankParam.lowerBound = param.lowerBound
+                arg = ir_t.VariableType(blankParam)
             else:
                 arg = self.visit(node)
             typeArgs.append(arg)
         self.typeArgsToCheck.append((typeArgs, typeParams, [n.location for n in nodes]))
-        return tuple(typeArgs), tuple(introducedTypeParams)
+        return tuple(typeArgs), tuple(blankParams)
 
     def setMethodReceiverType(self, irFunction):
         assert irFunction.variables[0].name.short() == RECEIVER_SUFFIX
@@ -1421,18 +1394,23 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         typeParams = ir.getExplicitTypeParameters(irClass)
         assert len(typeParams) == len(astTypeArgs)
         irTypeArgs = []
-        introducedTypeParams = []
+        blankParams = []
         for tp, ata in zip(typeParams, astTypeArgs):
             if isinstance(ata, ast.BlankType):
-                tp, ty = self.introduceExistentialTypeParameter(tp, ata)
-                introducedTypeParams.append(tp)
+                blankParam = self.info.getDefnInfo(ata).irDefn
+                blankParams.append(blankParam)
+                if blankParam.upperBound is None:
+                    blankParam.upperBound = tp.upperBound
+                if blankParam.lowerBound is None:
+                    blankParam.lowerBound = tp.lowerBound
+                ty = ir_t.VariableType(blankParam)
             else:
                 with VarianceScope.forArgument(self, tp.variance()):
                     ty = self.visit(ata)
             irTypeArgs.append(ty)
 
         checkTypeArgumentBounds(irTypeArgs, typeParams, [n.location for n in astTypeArgs])
-        return tuple(irTypeArgs), tuple(introducedTypeParams)
+        return tuple(irTypeArgs), tuple(blankParams)
 
     def handleFunctionCommon(self, node, astReturnType, astBody):
         defnInfo = self.info.getDefnInfo(node)

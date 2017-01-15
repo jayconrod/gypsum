@@ -19,6 +19,7 @@ from utils_test import FakePackageLoader, TestCaseWithDefinitions
 from location import NoLoc
 from name import (
     ARRAY_LENGTH_SUFFIX,
+    BLANK_SUFFIX,
     CLASS_INIT_SUFFIX,
     CONSTRUCTOR_SUFFIX,
     EXISTENTIAL_SUFFIX,
@@ -569,6 +570,34 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
     def testExistentialTypeWithFlags(self):
         source = "let x: forsome [static +X] X"
         self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
+    def testBlankTypeAlone(self):
+        source = "let x: _"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
+    def testClassBlankType(self):
+        source = "let x: Foo[_, _]"
+        info = self.analyzeFromSource(source)
+        astType = info.ast.modules[0].definitions[0].pattern.ty
+        scope = info.getScope(astType)
+        self.assertTrue(isinstance(scope, ExistentialTypeScope))
+        for i in xrange(2):
+            blank = info.getDefnInfo(astType.typeArguments[i]).irDefn
+            expected = self.makeTypeParameter(Name([EXISTENTIAL_SUFFIX, BLANK_SUFFIX]),
+                                              flags=frozenset(), index=i)
+            self.assertEquals(expected, blank)
+
+    def testTupleBlankType(self):
+        source = "let x: (_, _)"
+        info = self.analyzeFromSource(source)
+        astType = info.ast.modules[0].definitions[0].pattern.ty
+        scope = info.getScope(astType)
+        self.assertTrue(isinstance(scope, ExistentialTypeScope))
+        for i in xrange(2):
+            blank = info.getDefnInfo(astType.types[i]).irDefn
+            expected = self.makeTypeParameter(Name([EXISTENTIAL_SUFFIX, BLANK_SUFFIX]),
+                                              flags=frozenset(), index=i)
+            self.assertEquals(expected, blank)
 
     def testTypeParameterIndices(self):
         source = "class Foo[static A]\n" + \
