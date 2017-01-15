@@ -1504,6 +1504,7 @@ class ExistentialTypeScope(Scope):
     def __init__(self, prefix, ast, parent, index):
         super(ExistentialTypeScope, self).__init__(prefix, ast, ScopeId(ast.id),
                                                    parent, parent.info)
+        assert type(index) is int
         self.index = index
 
     def createIrDefn(self, astDefn, astVarDefn):

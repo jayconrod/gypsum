@@ -437,6 +437,7 @@ class IrTopDefn(IrDefinition):
     def __init__(self, name, id, sourceName, astDefn):
         super(IrTopDefn, self).__init__(name, sourceName, astDefn)
         self.id = id
+        self.isExternalized = False
 
     def isBuiltin(self):
         return self.id.isBuiltin()
@@ -1013,6 +1014,11 @@ class TypeParameter(IrDefinition):
         self.flags = flags
         self.clas = clas
         self.index = index
+        # HACK: in externalization, we can't skip a local type parameter because type parameters
+        # don't have a concept of local or foreign. They can have cyclic references with other
+        # type parameters (T <: S, S >: T), which causes infinite loops. Setting this field
+        # helps us break out of that.
+        self.isExternalized = False
 
     def __repr__(self):
         return reprFormat(self, "name", "upperBound", "lowerBound", "flags")

@@ -194,6 +194,7 @@ class CompileVisitor(ast.NodeVisitor):
             self.ret()
 
         self.function.blocks = self.blocks
+        self.function.instTypes = self.types
 
     def getParametersAndStatements(self):
         if isinstance(self.astDefn, ast.FunctionDefinition):

@@ -282,3 +282,12 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
         CFType = ir_types.ClassType(C, (ir_types.ClassType(F),))
         externalizeType(self.info, CFType)
         self.assertIsNotNone(F.id.externIndex)
+
+    def testExternalizeCyclicTypeParameters(self):
+        S = self.package.addTypeParameter(None, Name(["S"]),
+                                          upperBound=ir_types.getRootClassType())
+        T = self.package.addTypeParameter(None, Name(["T"]),
+                                          upperBound=ir_types.VariableType(S))
+        S.lowerBound = ir_types.VariableType(T)
+        externalizeTypeParameter(self.info, S)
+        # pass if we don't stack overflow.

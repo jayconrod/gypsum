@@ -48,7 +48,7 @@ def externalize(info):
 def externalizeDefn(info, defn):
     if not defn.isForeign():
         return defn
-    assert isinstance(defn, ir.TypeParameter) or flags.PUBLIC in defn.flags
+    assert flags.PUBLIC in defn.flags
     id = defn.id
 
     # Make sure we have a dependency on the package that contains this definition.
@@ -67,7 +67,7 @@ def externalizeDefn(info, defn):
     elif isinstance(defn, ir.Trait):
         externDefns = dep.externTraits
     else:
-        raise NotImplementedError
+        raise NotImplementedError()
 
     # Base case: we already externalized this definition, so re-use that.
     if id.externIndex is not None:
@@ -141,6 +141,9 @@ def externalizeDefn(info, defn):
 
 
 def externalizeTypeParameter(info, typeParam):
+    if typeParam.isExternalized:
+        return
+    typeParam.isExternalized = True
     info.package.findOrAddName(typeParam.name)
     externalizeType(info, typeParam.upperBound)
     externalizeType(info, typeParam.lowerBound)
