@@ -1092,14 +1092,13 @@ Local<Field> Loader::readField() {
 
 
 Local<TypeParameter> Loader::readTypeParameter() {
-  auto name = readNameId();
-  auto sourceName = readSourceName();
-  auto flags = readValue<u32>();
-  auto upperBound = readType();
-  auto lowerBound = readType();
-
-  auto tp = TypeParameter::create(heap(), name, sourceName, flags, upperBound, lowerBound);
+  auto tp = TypeParameter::create(heap());
   typeParameterStack_.push_back(tp);
+  tp->setName(*readNameId());
+  tp->setSourceName(readSourceName().getOrNull());
+  tp->setFlags(readValue<u32>());
+  tp->setUpperBound(*readType());
+  tp->setLowerBound(*readType());
   return tp;
 }
 

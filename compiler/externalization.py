@@ -94,9 +94,6 @@ def externalizeDefn(info, defn):
             externalizeTypeParameter(info, p)
         for t in defn.parameterTypes:
             externalizeType(info, t)
-        if defn.instTypes is not None:
-            for t in defn.instTypes:
-                externalizeType(info, t)
     elif isinstance(defn, ir.Class):
         externDefn = ir.Class(defn.name, id, astDefn=defn.astDefn,
                               typeParameters=defn.typeParameters,

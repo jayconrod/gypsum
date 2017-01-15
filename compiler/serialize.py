@@ -143,9 +143,7 @@ class Serializer(object):
         self.writeFlags(function.flags)
         self.writeList(self.writeTypeParameter, function.typeParameters)
         self.writeType(function.returnType)
-        self.writeVbn(len(function.parameterTypes))
-        for ty in function.parameterTypes:
-            self.writeType(ty)
+        self.writeList(self.writeType, function.parameterTypes)
         if EXTERN not in function.flags:
             self.writeDefiningClassId(function.definingClass)
         assert function.overrides is None or \
@@ -153,7 +151,7 @@ class Serializer(object):
         if function.overrides is not None:
             self.writeList(self.writeMethodId, function.overrides)
         assert (function.instTypes is None) == (function.blocks is None)
-        if function.instTypes:
+        if function.instTypes is not None:
             self.writeList(self.writeType, function.instTypes)
 
         assert function.blocks is not None or \
@@ -165,9 +163,7 @@ class Serializer(object):
             instructions, blockOffsetTable = self.encodeInstructions(function)
             self.writeVbn(len(instructions))
             self.outFile.write(instructions)
-            self.writeVbn(len(blockOffsetTable))
-            for offset in blockOffsetTable:
-                self.writeVbn(offset)
+            self.writeList(self.writeVbn, blockOffsetTable)
 
     def encodeInstructions(self, function):
         buf = bytearray()
@@ -580,18 +576,15 @@ class Deserializer(object):
         del self.typeParameters[:]
 
     def readTypeParameter(self):
+        index = len(self.typeParameters)
         name = self.readNameIndex()
         sourceName = self.readOption(self.readStringIndex)
         flags = self.readFlags()
-        upperBound = self.readType()
-        lowerBound = self.readType()
-        index = len(self.typeParameters)
-        p = ir.TypeParameter(name=name, id=None, sourceName=sourceName,
-                             upperBound=upperBound,
-                             lowerBound=lowerBound,
-                             flags=flags,
-                             index=index)
+        p = ir.TypeParameter(name=name, id=None,
+                             sourceName=sourceName, flags=flags, index=index)
         self.typeParameters.append(p)
+        p.upperBound = self.readType()
+        p.lowerBound = self.readType()
         return p
 
     def readDependencyHeader(self, index):
