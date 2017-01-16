@@ -28,6 +28,12 @@ def indexSame(haystack, needle):
     return -1
 
 
+def oneOrNone(iterable):
+    lst = list(iterable)
+    assert len(lst) <= 1
+    return lst[0] if len(lst) == 1 else None
+
+
 def align(n, alignment):
     return (n + alignment - 1) & ~(alignment - 1)
 

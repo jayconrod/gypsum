@@ -18,9 +18,10 @@ import bytecode
 from utils import (
     each,
     flatMap,
-    indexSame,
     hashList,
-    reprFormat
+    indexSame,
+    oneOrNone,
+    reprFormat,
 )
 
 
@@ -271,22 +272,22 @@ class Package(object):
         each(addName, self.typeParameters)
 
     def findFunction(self, **kwargs):
-        return next(_findDefn(self.functions, kwargs))
+        return oneOrNone(_findDefn(self.functions, kwargs))
 
     def findClass(self, **kwargs):
-        return next(_findDefn(self.classes, kwargs))
+        return oneOrNone(_findDefn(self.classes, kwargs))
 
     def findTrait(self, **kwargs):
-        return next(_findDefn(self.traits, kwargs))
+        return oneOrNone(_findDefn(self.traits, kwargs))
 
     def findGlobal(self, **kwargs):
-        return next(_findDefn(self.globals, kwargs))
+        return oneOrNone(_findDefn(self.globals, kwargs))
 
     def findTypeParameter(self, **kwargs):
-        return next(_findDefn(self.typeParameters, kwargs))
+        return oneOrNone(_findDefn(self.typeParameters, kwargs))
 
     def findDependency(self, **kwargs):
-        return next(_findDefn(self.dependencies, kwargs))
+        return oneOrNone(_findDefn(self.dependencies, kwargs))
 
     def getDefn(self, id):
         assert id.packageId is self.id
