@@ -1132,6 +1132,18 @@ class FunctionScope(Scope):
                                                     constructors=[], fields=[],
                                                     methods=[], flags=frozenset())
         closureInfo.irClosureClass = irClosureClass
+
+        # Add a function trait as a supertype if the function has a small number of
+        # non-primitive parameters.
+        # TODO(#33): when we have variadic type parameters, we won't need to check this.
+        functionTrait = self.info.getFunctionTrait(len(irDefn.parameterTypes))
+        if functionTrait is not None and \
+           all(t.isObject() for t in irDefn.parameterTypes) and \
+           irDefn.returnType.isObject():
+            functionTraitType = ClassType(functionTrait, tuple(irDefn.parameterTypes))
+            irClosureClass.supertypes.append(functionTraitType)
+
+        # Create the constructor.
         irClosureType = ClassType(irClosureClass)
         ctorName = closureName.withSuffix(CONSTRUCTOR_SUFFIX)
         ctorReceiverName = ctorName.withSuffix(RECEIVER_SUFFIX)

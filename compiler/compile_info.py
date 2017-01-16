@@ -67,27 +67,37 @@ class CompileInfo(object):
             return NOSTD_MODE
 
     def getStdClass(self, name, loc):
-        langMode = self.languageMode()
-        if langMode is NOSTD_MODE:
-            raise errors.TypeException(loc, "%s: not available without std library" % name)
-        elif langMode is NORMAL_MODE:
-            package = self.packageLoader.loadPackage(STD_NAME, location.NoLoc)
-        else:
-            assert langMode is STD_MODE
-            package = self.package
-
+        package = self._getStdPackage(loc)
         clas = package.findClass(name=name)
-
-        if langMode is NORMAL_MODE:
+        if clas is None:
+            raise errors.ScopeException(loc, "%s: class not found in std" % name)
+        if self.languageMode() is NORMAL_MODE:
             self.setStdExternInfo(clas.id, clas)
             for ctor in clas.constructors:
                 self.setStdExternInfo(ctor.id, ctor)
-
         return clas
 
+    def getStdTrait(self, name, loc):
+        package = self._getStdPackage(loc)
+        trait = package.findTrait(name=name)
+        if trait is None:
+            raise errors.ScopeException(loc, "%s: trait not found in std" % name)
+        if trait is not None and self.languageMode() is NORMAL_MODE:
+            self.setStdExternInfo(trait.id, trait)
+        return trait
+
     def getTupleClass(self, n, loc):
+        # TODO(#33): remove this method when we have variadic type parameters.
         name = "Tuple%d" % n
         return self.getStdClass(name, loc)
+
+    def getFunctionTrait(self, n):
+        # TODO(#33): remove this method when we have variadic type parameters.
+        name = "Function%d" % n
+        try:
+            return self.getStdTrait(name, location.NoLoc)
+        except errors.ScopeException:
+            return None
 
     def makeUniqueName(self, name):
         assert '$' in name.short()
@@ -96,6 +106,17 @@ class CompileInfo(object):
         short = "%s_%d" % (name.short(), self.generatedNames[name])
         self.generatedNames[name] += 1
         return Name(name.components[:-1] + [short])
+
+    def _getStdPackage(self, loc):
+        langMode = self.languageMode()
+        if langMode is NOSTD_MODE:
+            raise errors.ScopeException(
+                loc, "language feature not available without std library")
+        elif langMode is NORMAL_MODE:
+            return self.packageLoader.loadPackage(STD_NAME, loc)
+        else:
+            assert langMode is STD_MODE
+            return self.package
 
 
 _dictNames = [("Scope", "scopes", (ids.ScopeId, ids.AstId, ids.DefnId, ids.PackageId)),

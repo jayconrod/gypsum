@@ -31,6 +31,14 @@ OPTION_SOURCE = "public abstract class Option[static +T]\n" + \
 
 TUPLE_SOURCE = "class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n"
 
+FUNCTION_SOURCE = "trait Function0[static +R]\n" + \
+                  "  public def call: R\n" + \
+                  "trait Function1[static +R, static -P1]\n" + \
+                  "  public def call(p1: P1): R\n" + \
+                  "trait Function2[static +R, static -P1, static -P2]\n" + \
+                  "  public def call(p1: P1, p2: P2): R\n"
+
+
 class TestCaseWithDefinitions(unittest.TestCase):
     def setUp(self):
         self.globalCounter = Counter()

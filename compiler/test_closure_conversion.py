@@ -7,7 +7,7 @@
 import unittest
 
 from builtins import *
-from compile_info import CompileInfo
+from compile_info import CompileInfo, STD_NAME
 from errors import *
 from flags import LET
 from ids import *
@@ -19,7 +19,11 @@ from lexer import *
 from parser import *
 from scope_analysis import *
 from type_analysis import *
-from utils_test import FakePackageLoader, TestCaseWithDefinitions
+from utils_test import (
+    FUNCTION_SOURCE,
+    FakePackageLoader,
+    TestCaseWithDefinitions,
+)
 from name import (
     CLOSURE_SUFFIX,
     CONTEXT_SUFFIX,
@@ -29,12 +33,14 @@ from name import (
 
 
 class TestClosureConversion(TestCaseWithDefinitions):
-    def analyzeFromSource(self, source):
+    def analyzeFromSource(self, source, name=None):
         filename = "(test)"
         rawTokens = lex(filename, source)
         layoutTokens = layout(rawTokens)
         ast = parse(filename, layoutTokens)
-        package = Package(TARGET_PACKAGE_ID)
+        if name is None:
+            name = Name(["test"])
+        package = Package(TARGET_PACKAGE_ID, name=name)
         packageLoader = FakePackageLoader([])
         info = CompileInfo(ast, package, packageLoader, isUsingStd=False)
         analyzeDeclarations(info)
@@ -127,3 +133,49 @@ class TestClosureConversion(TestCaseWithDefinitions):
         self.assertEquals([self.makeField(Name(["C", "f", "g", CLOSURE_SUFFIX, CONTEXT_SUFFIX]),
                                           type=ClassType(fContextClass))],
                           gClosureClass.fields)
+
+    def testFunctionTraitNotUsedWithoutStd(self):
+        source = "def f(x: i64) =\n" + \
+                 "  def g = {x; Object();}\n" + \
+                 "  {}"
+        info = self.analyzeFromSource(source)
+        gClosureClass = info.package.findClass(name=Name(["f", "g", CLOSURE_SUFFIX]))
+        self.assertEquals([getRootClassType()], gClosureClass.supertypes)
+
+    def testFunctionTraitUsedWithFewObjectParams(self):
+        source = FUNCTION_SOURCE + \
+                 "def f(x: i64) =\n" + \
+                 "  def g(a: Object, b: Object) = {x; Object();}\n" + \
+                 "  {}"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        gClosureClass = info.package.findClass(name=Name(["f", "g", CLOSURE_SUFFIX]))
+        functionTrait = info.package.findTrait(name="Function2")
+        functionTraitType = ClassType(functionTrait, (getRootClassType(), getRootClassType()))
+        self.assertEquals([getRootClassType(), functionTraitType], gClosureClass.supertypes)
+
+    def testFunctionTraitNotUsedWithPrimitiveParams(self):
+        source = FUNCTION_SOURCE + \
+                 "def f(x: i64) =\n" + \
+                 "  def g(a: i64) = {x; Object();}\n" + \
+                 "  {}"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        gClosureClass = info.package.findClass(name=Name(["f", "g", CLOSURE_SUFFIX]))
+        self.assertEquals([getRootClassType()], gClosureClass.supertypes)
+
+    def testFunctionTraitNotUsedWithPrimitiveReturn(self):
+        source = FUNCTION_SOURCE + \
+                 "def f(x: i64) =\n" + \
+                 "  def g = x\n" + \
+                 "  {}"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        gClosureClass = info.package.findClass(name=Name(["f", "g", CLOSURE_SUFFIX]))
+        self.assertEquals([getRootClassType()], gClosureClass.supertypes)
+
+    def testFunctionTraitNotUsedWithManyParams(self):
+        source = FUNCTION_SOURCE + \
+                 "def f(x: i64) =\n" + \
+                 "  def g(a: Object, b: Object, c: Object) = {x; Object();}\n" + \
+                 "  {}"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        gClosureClass = info.package.findClass(name=Name(["f", "g", CLOSURE_SUFFIX]))
+        self.assertEquals([getRootClassType()], gClosureClass.supertypes)

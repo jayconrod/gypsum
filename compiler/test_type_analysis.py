@@ -104,12 +104,12 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testTupleParamWithBadElement(self):
         source = TUPLE_SOURCE + \
                  "def f((x: String, \"bar\")) = x"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
     def testTupleParamWithPrimitiveElement(self):
         source = TUPLE_SOURCE + \
                  "def f((x: String, 12)) = x"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
     def testTupleParamWithUntypedElement(self):
         source = TUPLE_SOURCE + \
@@ -865,7 +865,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertRaises(TypeException, self.analyzeFromSource, source, name=STD_NAME)
 
     def testTupleExprNoStd(self):
-        self.assertRaises(TypeException, self.analyzeFromSource, "let x = \"foo\", \"bar\"")
+        self.assertRaises(ScopeException, self.analyzeFromSource, "let x = \"foo\", \"bar\"")
 
     def testIfExpr(self):
         info = self.analyzeFromSource("def f = if (true) 12 else 34")
@@ -1551,7 +1551,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testTupleTypeNoStd(self):
         source = "var g: (Object, Object)"
-        self.assertRaises(TypeException, self.analyzeFromSource, source)
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
     def testTupleTypeStd(self):
         source = TUPLE_SOURCE + \
