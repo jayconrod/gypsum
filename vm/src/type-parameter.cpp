@@ -37,14 +37,12 @@ void* TypeParameter::operator new (size_t, Heap* heap) {
 
 
 TypeParameter::TypeParameter(
-    DefnId id,
     Name* name,
     String* sourceName,
     u32 flags,
     Type* upperBound,
     Type* lowerBound)
     : Block(TYPE_PARAMETER_BLOCK_TYPE),
-      id_(id),
       name_(this, name),
       sourceName_(this, sourceName),
       flags_(flags),
@@ -52,21 +50,20 @@ TypeParameter::TypeParameter(
       lowerBound_(this, lowerBound) { }
 
 
-Local<TypeParameter> TypeParameter::create(Heap* heap, DefnId id) {
+Local<TypeParameter> TypeParameter::create(Heap* heap) {
   RETRY_WITH_GC(heap, return Local<TypeParameter>(
-      new(heap) TypeParameter(id, nullptr, nullptr, 0, nullptr, nullptr)));
+      new(heap) TypeParameter(nullptr, nullptr, 0, nullptr, nullptr)));
 }
 
 
 Local<TypeParameter> TypeParameter::create(Heap* heap,
-                                           DefnId id,
                                            const Handle<Name>& name,
                                            const Handle<String>& sourceName,
                                            u32 flags,
                                            const Handle<Type>& upperBound,
                                            const Handle<Type>& lowerBound) {
   RETRY_WITH_GC(heap, return Local<TypeParameter>(new(heap) TypeParameter(
-      id, *name, sourceName.getOrNull(), flags,
+      *name, sourceName.getOrNull(), flags,
       upperBound.getOrNull(), lowerBound.getOrNull())));
 }
 
@@ -142,7 +139,6 @@ Variance TypeParameter::variance() const {
 
 ostream& operator << (ostream& os, const TypeParameter* tp) {
   os << brief(tp)
-     << "\n  id: " << tp->id()
      << "\n  name: " << brief(tp->name())
      << "\n  source name: " << brief(tp->sourceName())
      << "\n  upper bound: " << brief(tp->upperBound())

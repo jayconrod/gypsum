@@ -41,11 +41,13 @@ void* Type::operator new (size_t, void* place, length_t length) {
 }
 
 
-Type::Type(Form primitive, Flags flags)
+Type::Type(Form form, Flags flags)
     : Object(TYPE_BLOCK_TYPE),
-      form_(primitive),
+      form_(form),
       flags_(flags) {
   ASSERT(length_ == 0);
+  ASSERT((FIRST_PRIMITIVE_TYPE <= form && form <= LAST_PRIMITIVE_TYPE) ||
+         (FIRST_SPECIAL_TYPE <= form && form <= LAST_SPECIAL_TYPE));
 }
 
 
@@ -54,6 +56,7 @@ Type::Type(Class* clas, Flags flags)
       form_(CLASS_TYPE),
       flags_(flags) {
   ASSERT(length_ == 1);
+  ASSERT(clas != nullptr);
   // The class may not be initialized yet, so we can't check its parameter count.
   elements_[0].set(this, clas);
 }
@@ -64,6 +67,7 @@ Type::Type(Class* clas, const vector<Local<Type>>& typeArgs, Flags flags)
       form_(CLASS_TYPE),
       flags_(flags) {
   ASSERT(length_ == 1 + typeArgs.size());
+  ASSERT(clas != nullptr);
   // The class may not be initialized yet, so we can't check its parameter count.
   elements_[0].set(this, clas);
   for (length_t i = 0; i < typeArgs.size(); i++) {
@@ -77,6 +81,7 @@ Type::Type(Trait* trait, Flags flags)
       form_(TRAIT_TYPE),
       flags_(flags) {
   ASSERT(length_ == 1);
+  ASSERT(trait != nullptr);
   // This trait may not be initialized yet, so we can't check its parameter count.
   elements_[0].set(this, trait);
 }
@@ -87,6 +92,7 @@ Type::Type(Trait* trait, const vector<Local<Type>>& typeArgs, Flags flags)
       form_(TRAIT_TYPE),
       flags_(flags) {
   ASSERT(length_ == 1 + typeArgs.size());
+  ASSERT(trait != nullptr);
   // This trait may not be initialzied yet, so we can't check its parameter count.
   elements_[0].set(this, trait);
   for (length_t i = 0; i < typeArgs.size(); i++) {
@@ -100,6 +106,7 @@ Type::Type(ObjectTypeDefn* classOrTrait, const vector<Local<Type>>& typeArgs, Fl
       form_(isa<Class>(classOrTrait) ? CLASS_TYPE : TRAIT_TYPE),
       flags_(flags) {
   ASSERT(length_ == 1 + typeArgs.size());
+  ASSERT(classOrTrait != nullptr);
   // This definition may not be initialized yet, so we can't check its parameter count.
   elements_[0].set(this, classOrTrait);
   for (length_t i = 0; i < typeArgs.size(); i++) {
@@ -113,6 +120,7 @@ Type::Type(TypeParameter* param, Flags flags)
       form_(VARIABLE_TYPE),
       flags_(flags) {
   ASSERT(length_ == 1);
+  ASSERT(param != nullptr);
   elements_[0].set(this, param);
 }
 
@@ -122,6 +130,7 @@ Type::Type(const vector<Local<TypeParameter>>& variables, Type* type)
       form_(EXISTENTIAL_TYPE),
       flags_(NO_FLAGS) {
   ASSERT(length_ == 1 + variables.size());
+  ASSERT(type != nullptr);
   elements_[0].set(this, type);
   for (length_t i = 0; i < variables.size(); i++) {
     elements_[i + 1].set(this, *variables[i]);

@@ -376,8 +376,10 @@ const word_t className::kPointerMap = className::buildPointerMap(); \
 const u8 kGarbageByte = 0xA5;
 #if WORDSIZE == 32
 const word_t kGarbageWord = 0xDEADBEEF;
+const word_t kGarbageHandle = 0xDEADCAFE;
 #else
-const word_t kGarbageWord = 0xDEADBEEF0BADC0DEULL;
+const word_t kGarbageWord = 0xDEADBEEFDEADBEEFULL;
+const word_t kGarbageHandle = 0xDEADCAFEDEADCAFEULL;
 #endif
 
 }

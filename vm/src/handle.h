@@ -42,6 +42,12 @@ class Handle {
       : slot_(slot) { }
   Handle(const Handle& h) = delete;
 
+  #ifdef DEBUG
+  ~Handle() {
+    slot_ = reinterpret_cast<T**>(kGarbageHandle);
+  }
+  #endif
+
   T** slot_;
 };
 

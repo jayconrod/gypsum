@@ -53,8 +53,8 @@ TEST(TestMangleFunctionNameClasses) {
   auto lower = handle(Type::nothingType(roots));
 
   auto package = Package::create(heap, 0);
-  auto P = TypeParameter::create(heap, PID(0), NAME("P"), STR("P"), NO_FLAGS, upper, lower);
-  auto Q = TypeParameter::create(heap, PID(1), NAME("Q"), STR("Q"), NO_FLAGS, upper, lower);
+  auto P = TypeParameter::create(heap, NAME("P"), STR("P"), NO_FLAGS, upper, lower);
+  auto Q = TypeParameter::create(heap, NAME("Q"), STR("Q"), NO_FLAGS, upper, lower);
   auto localClass = Class::create(heap, CID(0));
   localClass->setName(*NAME("local.Local"));
   localClass->setPackage(*package);
@@ -63,8 +63,8 @@ TEST(TestMangleFunctionNameClasses) {
   localTypeParameters->set(1, *Q);
   auto otherPackage = Package::create(heap, 1);
   otherPackage->setName(*NAME("foo.bar.baz"));
-  auto S = TypeParameter::create(heap, PID(2), NAME("S"), STR("S"), NO_FLAGS, upper, lower);
-  auto T = TypeParameter::create(heap, PID(3), NAME("T"), STR("T"), NO_FLAGS, upper, lower);
+  auto S = TypeParameter::create(heap, NAME("S"), STR("S"), NO_FLAGS, upper, lower);
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), NO_FLAGS, upper, lower);
   auto foreignClass = Class::create(heap, CID(1));
   foreignClass->setName(*NAME("foreign.Foreign"));
   auto foreignTypeParameters = BlockArray<TypeParameter>::create(heap, 2);
@@ -72,9 +72,9 @@ TEST(TestMangleFunctionNameClasses) {
   foreignTypeParameters->set(1, *T);
   foreignClass->setPackage(*otherPackage);
 
-  auto X = TypeParameter::create(heap, PID(4), NAME("X"), STR("X"), STATIC_FLAG, upper, lower);
+  auto X = TypeParameter::create(heap, NAME("X"), STR("X"), STATIC_FLAG, upper, lower);
   auto XType = Type::create(heap, X);
-  auto Y = TypeParameter::create(heap, PID(5), NAME("Y"), STR("Y"), NO_FLAGS, upper, lower);
+  auto Y = TypeParameter::create(heap, NAME("Y"), STR("Y"), NO_FLAGS, upper, lower);
   auto YType = Type::create(heap, Y, Type::NULLABLE_FLAG);
   auto localType = Type::create(heap, localClass, vector<Local<Type>>{XType, YType});
   auto foreignType = Type::create(heap, foreignClass, vector<Local<Type>>{YType, XType},
@@ -107,8 +107,8 @@ TEST(MangleFunctionNameExistential) {
   auto lower = handle(Type::nothingType(roots));
 
   auto package = Package::create(heap, 0);
-  auto S = TypeParameter::create(heap, PID(0), NAME("S"), STR("S"), NO_FLAGS, upper, lower);
-  auto T = TypeParameter::create(heap, PID(0), NAME("T"), STR("T"), NO_FLAGS, upper, lower);
+  auto S = TypeParameter::create(heap, NAME("S"), STR("S"), NO_FLAGS, upper, lower);
+  auto T = TypeParameter::create(heap, NAME("T"), STR("T"), NO_FLAGS, upper, lower);
   auto C = Class::create(heap, CID0);
   C->setName(*NAME("C"));
   C->setPackage(*package);
@@ -116,9 +116,9 @@ TEST(MangleFunctionNameExistential) {
   CTypeParameters->set(0, *S);
   CTypeParameters->set(1, *T);
   C->setTypeParameters(*CTypeParameters);
-  auto P = TypeParameter::create(heap, PID(2), NAME("P"), STR("P"), NO_FLAGS, upper, lower);
+  auto P = TypeParameter::create(heap, NAME("P"), STR("P"), NO_FLAGS, upper, lower);
   auto PType = Type::create(heap, P);
-  auto X = TypeParameter::create(heap, PID(3), NAME("X"), STR("X"), NO_FLAGS, upper, lower);
+  auto X = TypeParameter::create(heap, NAME("X"), STR("X"), NO_FLAGS, upper, lower);
   auto XType = Type::create(heap, X);
   auto eXType = Type::create(heap, vector<Local<TypeParameter>>{X},
                              Type::create(heap, C, vector<Local<Type>>{PType, XType}));

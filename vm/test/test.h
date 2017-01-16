@@ -113,8 +113,6 @@ void Test ## name ::test()
 #define CID0 CID(0)
 #define TID(n) DefnId(DefnId::TRAIT, kIdNotSet, n)
 #define TID0 TID(0)
-#define PID(n) DefnId(DefnId::TYPE_PARAMETER, kIdNotSet, n)
-#define PID0 PID(0)
 
 
 // Ugly hack: bypass member protection for classes included after this. The "correct" way would

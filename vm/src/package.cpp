@@ -47,7 +47,6 @@ namespace internal {
   F(Package, functions_) \
   F(Package, classes_) \
   F(Package, traits_) \
-  F(Package, typeParameters_) \
   F(Package, exports_) \
   F(Package, globalNameIndex_)  \
   F(Package, globalSourceNameIndex_) \
@@ -110,7 +109,7 @@ class Loader {
   void readClass(const Local<Class>& clas);
   void readTrait(const Local<Trait>& trait);
   Local<Field> readField();
-  void readTypeParameter(const Local<TypeParameter>& typeParam);
+  Local<TypeParameter> readTypeParameter();
   Local<Type> readType();
 
   template <typename T>
@@ -121,6 +120,8 @@ class Loader {
   Local<String> readSourceName();
   Local<String> readStringId();
 
+  template <typename T>
+  vector<T> readVectorList(T (Loader::*reader)());
   template <typename T>
   Local<BlockArray<T>> readBlockList(Local<T> (Loader::*reader)());
   template <typename T, typename Reader>
@@ -137,13 +138,13 @@ class Loader {
   length_t readLengthVbn();
   id_t readIdVbn();
 
-  virtual Local<TypeParameter> getTypeParameter(length_t index) const = 0;
   virtual Local<Function> readIdAndGetMethod() = 0;
 
  protected:
   LoadState* loadState_;
   istream& stream_;
   Persistent<Package> package_;
+  vector<Persistent<TypeParameter>> typeParameterStack_;
   bool isLinked_ = false;
 };
 
@@ -164,7 +165,6 @@ class PackageLoader: public Loader {
   Persistent<Package> load();
 
  protected:
-  virtual Local<TypeParameter> getTypeParameter(length_t index) const;
   virtual Local<Function> readIdAndGetMethod();
 
  private:
@@ -199,7 +199,6 @@ class DependencyLoader: public Loader {
  protected:
   void readExternFunction(const Handle<Function>& func);
 
-  virtual Local<TypeParameter> getTypeParameter(length_t index) const;
   virtual Local<Function> readIdAndGetMethod();
 
  private:
@@ -219,9 +218,6 @@ Package::Package(VM* vm, id_t id)
       functions_(this, reinterpret_cast<BlockArray<Function>*>(vm->roots()->emptyBlockArray())),
       classes_(this, reinterpret_cast<BlockArray<Class>*>(vm->roots()->emptyBlockArray())),
       traits_(this, reinterpret_cast<BlockArray<Trait>*>(vm->roots()->emptyBlockArray())),
-      typeParameters_(this,
-                      reinterpret_cast<BlockArray<TypeParameter>*>(
-                          vm->roots()->emptyBlockArray())),
       entryFunctionIndex_(kIndexNotSet),
       initFunctionIndex_(kIndexNotSet),
       nativeLibrary_(nullptr),
@@ -302,11 +298,6 @@ Trait* Package::getTrait(length_t index) const {
 }
 
 
-TypeParameter* Package::getTypeParameter(length_t index) const {
-  return block_cast<TypeParameter>(typeParameters()->get(index));
-}
-
-
 Function* Package::entryFunction() const {
   auto index = entryFunctionIndex();
   if (index == kLengthNotSet)
@@ -370,18 +361,6 @@ void Package::ensureExports(const Handle<Package>& package) {
       ASSERT(!exports->contains(*name));
       ExportMap::add(exports, name, trait);
     }
-  }
-
-  // TODO(#28): type parameters should not be top-level definitions and should not be linked.
-  // For now, they are though, and we link all type parameters, including non-public, since
-  // existential parameters are non-public. Existential types may be used as part of top-level
-  // definition signatures.
-  auto typeParameters = handle(package->typeParameters());
-  for (length_t i = 0; i < typeParameters->length(); i++) {
-    auto typeParameter = handle(typeParameters->get(i));
-    auto name = handle(typeParameter->name());
-    ASSERT(!exports->contains(*name));
-    ExportMap::add(exports, name, typeParameter);
   }
 
   package->setExports(*exports);
@@ -638,24 +617,6 @@ void Package::link(const Handle<Package>& package) {
       }
     }
     dependency->setLinkedTraits(*linkedTraits);
-
-    ASSERT(dependency->linkedTypeParameters() == nullptr);
-    auto externTypeParameters = handle(dependency->externTypeParameters());
-    auto typeParameterCount = externTypeParameters->length();
-    auto linkedTypeParameters = BlockArray<TypeParameter>::create(heap, typeParameterCount);
-    {
-      AllowAllocationScope noAllocation(heap, false);
-      for (length_t j = 0; j < typeParameterCount; j++) {
-        auto externTypeParameter = externTypeParameters->get(j);
-        auto name = externTypeParameter->name();
-        auto linkedTypeParameter = depExports->getOrElse(name, nullptr);
-        if (!linkedTypeParameter || !isa<TypeParameter>(linkedTypeParameter)) {
-          throw Error("link error");
-        }
-        linkedTypeParameters->set(j, block_cast<TypeParameter>(linkedTypeParameter));
-      }
-    }
-    dependency->setLinkedTypeParameters(*linkedTypeParameters);
   }
 }
 
@@ -670,7 +631,6 @@ ostream& operator << (ostream& os, const Package* pkg) {
      << "\n  globals: " << brief(pkg->globals())
      << "\n  classes: " << brief(pkg->classes())
      << "\n  traits: " << brief(pkg->traits())
-     << "\n  type parameters: " << brief(pkg->typeParameters())
      << "\n  entry function index: " << pkg->entryFunctionIndex()
      << "\n  init function index: " << pkg->initFunctionIndex()
      << "\n  exports: " << brief(pkg->exports())
@@ -780,8 +740,6 @@ ostream& operator << (ostream& os, const PackageVersion* version) {
   F(PackageDependency, linkedClasses_)        \
   F(PackageDependency, externTraits_)         \
   F(PackageDependency, linkedTraits_)         \
-  F(PackageDependency, externTypeParameters_) \
-  F(PackageDependency, linkedTypeParameters_) \
   F(PackageDependency, externMethods_)        \
 
 DEFINE_POINTER_MAP(PackageDependency, PACKAGE_DEPENDENCY_POINTER_LIST)
@@ -800,8 +758,6 @@ PackageDependency::PackageDependency(Name* name,
                                      BlockArray<Class>* linkedClasses,
                                      BlockArray<Trait>* externTraits,
                                      BlockArray<Trait>* linkedTraits,
-                                     BlockArray<TypeParameter>* externTypeParameters,
-                                     BlockArray<TypeParameter>* linkedTypeParameters,
                                      BlockArray<Function>* externMethods)
     : Block(PACKAGE_DEPENDENCY_BLOCK_TYPE),
       name_(this, name),
@@ -815,8 +771,6 @@ PackageDependency::PackageDependency(Name* name,
       linkedClasses_(this, linkedClasses),
       externTraits_(this, externTraits),
       linkedTraits_(this, linkedTraits),
-      externTypeParameters_(this, externTypeParameters),
-      linkedTypeParameters_(this, linkedTypeParameters),
       externMethods_(this, externMethods) {
   ASSERT(minVersion == nullptr || maxVersion == nullptr ||
          minVersion->compare(maxVersion) <= 0);
@@ -824,8 +778,6 @@ PackageDependency::PackageDependency(Name* name,
   ASSERT(linkedFunctions == nullptr || externFunctions->length() == linkedFunctions->length());
   ASSERT(linkedClasses == nullptr || externClasses->length() == linkedClasses->length());
   ASSERT(linkedTraits == nullptr || externTraits->length() == linkedTraits->length());
-  ASSERT(linkedTypeParameters == nullptr ||
-         externTypeParameters->length() == linkedTypeParameters->length());
 }
 
 
@@ -842,8 +794,6 @@ Local<PackageDependency> PackageDependency::create(
     const Handle<BlockArray<Class>>& linkedClasses,
     const Handle<BlockArray<Trait>>& externTraits,
     const Handle<BlockArray<Trait>>& linkedTraits,
-    const Handle<BlockArray<TypeParameter>>& externTypeParameters,
-    const Handle<BlockArray<TypeParameter>>& linkedTypeParameters,
     const Handle<BlockArray<Function>>& externMethods) {
   RETRY_WITH_GC(heap, return Local<PackageDependency>(new(heap) PackageDependency(
       *name, minVersion.getOrNull(), maxVersion.getOrNull(),
@@ -851,7 +801,6 @@ Local<PackageDependency> PackageDependency::create(
       *externFunctions, linkedFunctions.getOrNull(),
       *externClasses, linkedClasses.getOrNull(),
       *externTraits, linkedTraits.getOrNull(),
-      *externTypeParameters, linkedTypeParameters.getOrNull(),
       *externMethods)));
 }
 
@@ -864,13 +813,11 @@ Local<PackageDependency> PackageDependency::create(Heap* heap,
                                                    length_t functionCount,
                                                    length_t classCount,
                                                    length_t traitCount,
-                                                   length_t typeParameterCount,
                                                    length_t methodCount) {
   auto externGlobals = BlockArray<Global>::create(heap, globalCount);
   auto externFunctions = BlockArray<Function>::create(heap, functionCount);
   auto externClasses = BlockArray<Class>::create(heap, classCount);
   auto externTraits = BlockArray<Trait>::create(heap, traitCount);
-  auto externTypeParameters = BlockArray<TypeParameter>::create(heap, typeParameterCount);
   auto externMethods = BlockArray<Function>::create(heap, methodCount);
   RETRY_WITH_GC(heap, return Local<PackageDependency>(new(heap) PackageDependency(
       *name, minVersion.getOrNull(), maxVersion.getOrNull(),
@@ -878,7 +825,6 @@ Local<PackageDependency> PackageDependency::create(Heap* heap,
       *externFunctions, nullptr,
       *externClasses, nullptr,
       *externTraits, nullptr,
-      *externTypeParameters, nullptr,
       *externMethods)));
 }
 
@@ -964,13 +910,6 @@ void PackageDependency::setLinkedTraits(BlockArray<Trait>* linkedTraits) {
 }
 
 
-void PackageDependency::setLinkedTypeParameters(
-    BlockArray<TypeParameter>* linkedTypeParameters) {
-  ASSERT(externTypeParameters_.get()->length() == linkedTypeParameters->length());
-  linkedTypeParameters_.set(this, linkedTypeParameters);
-}
-
-
 bool PackageDependency::isSatisfiedBy(const Name* name,
                                       const PackageVersion* version) const {
   return this->name()->equals(name) &&
@@ -993,8 +932,6 @@ ostream& operator << (ostream& os, const PackageDependency* dep) {
      << "\n  linkedClasses: " << brief(dep->linkedClasses())
      << "\n  externTraits: " << brief(dep->externTraits())
      << "\n  linkedTraits: " << brief(dep->linkedTraits())
-     << "\n  externTypeParameters: " << brief(dep->externTypeParameters())
-     << "\n  linkedTypeParameters: " << brief(dep->linkedTypeParameters())
      << "\n  externMethods: " << brief(dep->externMethods());
   return os;
 }
@@ -1018,6 +955,8 @@ Local<Global> Loader::readGlobal(DefnId id) {
 
 
 void Loader::readFunction(DefnId id, Local<Function>* function, vector<DefnId>* overrides) {
+  ASSERT(typeParameterStack_.empty());
+
   Local<Name> name;
   Local<String> sourceName;
   u32 flags;
@@ -1037,10 +976,12 @@ void Loader::readFunction(DefnId id, Local<Function>* function, vector<DefnId>* 
     }
   }
 
+  Local<BlockArray<Type>> instTypes;
   word_t localsSize = kNotSet;
   Local<LengthArray> blockOffsets;
   vector<u8> instructions;
   if ((flags & (ABSTRACT_FLAG | EXTERN_FLAG | NATIVE_FLAG)) == 0) {
+    instTypes = readBlockList<Type>(&Loader::readType);
     localsSize = readWordVbn();
     auto instructionsSize = readLengthVbn();
     instructions = readData(instructionsSize);
@@ -1057,7 +998,8 @@ void Loader::readFunction(DefnId id, Local<Function>* function, vector<DefnId>* 
                                returnType, parameterTypes, definingClass,
                                localsSize, instructions, blockOffsets,
                                package_, Local<BlockArray<Function>>() /* overrides */,
-                               nullptr /* nativeFunction */);
+                               instTypes, nullptr /* nativeFunction */);
+  typeParameterStack_.clear();
 }
 
 
@@ -1071,12 +1013,7 @@ void Loader::readFunctionHeader(Local<Name>* name,
   *name = readNameId();
   *sourceName = readSourceName();
   *flags = readValue<u32>();
-
-  *typeParameters = readBlockList<TypeParameter>([this]() {
-    auto index = readLengthVbn();
-    return getTypeParameter(index);
-  });
-
+  *typeParameters = readBlockList<TypeParameter>(&Loader::readTypeParameter);
   *returnType = readType();
   *parameterTypes = readBlockList<Type>(&Loader::readType);
 
@@ -1089,17 +1026,13 @@ void Loader::readFunctionHeader(Local<Name>* name,
 
 
 void Loader::readClass(const Local<Class>& clas) {
+  ASSERT(typeParameterStack_.empty());
+
   auto name = readNameId();
   auto sourceName = readSourceName();
   auto flags = readValue<u32>();
-
-  auto typeParameters = readBlockList<TypeParameter>([this]() {
-    auto index = readLengthVbn();
-    return getTypeParameter(index);
-  });
-
+  auto typeParameters = readBlockList<TypeParameter>(&Loader::readTypeParameter);
   auto supertypes = readBlockList<Type>(&Loader::readType);
-
   auto fieldCount = readLengthVbn();
   auto fields = BlockArray<Field>::create(heap(), fieldCount);
   for (length_t i = 0; i < fieldCount; i++) {
@@ -1121,19 +1054,18 @@ void Loader::readClass(const Local<Class>& clas) {
   clas->setConstructors(*constructors);
   clas->setMethods(*methods);
   clas->setElementType(elementType.getOrNull());
+
+  typeParameterStack_.clear();
 }
 
 
 void Loader::readTrait(const Local<Trait>& trait) {
+  ASSERT(typeParameterStack_.empty());
+
   auto name = readNameId();
   auto sourceName = readSourceName();
   auto flags = readValue<u32>();
-
-  auto typeParams = readBlockList<TypeParameter>([this]() {
-    auto index = readLengthVbn();
-    return getTypeParameter(index);
-  });
-
+  auto typeParams = readBlockList<TypeParameter>(&Loader::readTypeParameter);
   auto supertypes = readBlockList<Type>(&Loader::readType);
   auto methods = readBlockList<Function>([this]() { return readIdAndGetMethod(); });
 
@@ -1143,6 +1075,8 @@ void Loader::readTrait(const Local<Trait>& trait) {
   trait->setTypeParameters(*typeParams);
   trait->setSupertypes(*supertypes);
   trait->setMethods(*methods);
+
+  typeParameterStack_.clear();
 }
 
 
@@ -1157,17 +1091,15 @@ Local<Field> Loader::readField() {
 }
 
 
-void Loader::readTypeParameter(const Local<TypeParameter>& param) {
-  auto name = readNameId();
-  auto sourceName = readSourceName();
-  auto flags = readValue<u32>();
-  auto upperBound = readType();
-  auto lowerBound = readType();
-  param->setName(*name);
-  param->setSourceName(sourceName.getOrNull());
-  param->setFlags(flags);
-  param->setUpperBound(*upperBound);
-  param->setLowerBound(*lowerBound);
+Local<TypeParameter> Loader::readTypeParameter() {
+  auto tp = TypeParameter::create(heap());
+  typeParameterStack_.push_back(tp);
+  tp->setName(*readNameId());
+  tp->setSourceName(readSourceName().getOrNull());
+  tp->setFlags(readValue<u32>());
+  tp->setUpperBound(*readType());
+  tp->setLowerBound(*readType());
+  return tp;
 }
 
 
@@ -1265,59 +1197,19 @@ Local<Type> Loader::readType() {
 
     return Type::create(heap(), trait, typeArgs, flags);
   } else if (form == Type::VARIABLE_TYPE) {
-    auto depIndex = readVbn();
-    auto defnIndex = readVbn();
-
-    Local<TypeParameter> param;
-    if (depIndex == kLocalPackageId) {
-      if (defnIndex < 0 || defnIndex >= package_->typeParameters()->length()) {
-        throw Error("invalid definition index");
-      }
-      param = handle(package_->typeParameters()->get(defnIndex));
-    } else {
-      if (depIndex < 0 || depIndex >= package_->dependencies()->length()) {
-        throw Error("invalid package index");
-      }
-      auto dep = handle(package_->dependencies()->get(depIndex));
-      if (defnIndex < 0 || defnIndex >= dep->externTypeParameters()->length()) {
-        throw Error("invalid definition index");
-      }
-      param = handle(isLinked_ ?
-          dep->linkedTypeParameters()->get(defnIndex) :
-          dep->externTypeParameters()->get(defnIndex));
+    auto index = readLengthVbn();
+    if (index < 0 || index >= typeParameterStack_.size()) {
+      throw Error("invalid variable type index");
     }
-
-    return Type::create(heap(), param, flags);
+    auto tp = typeParameterStack_[index];
+    return Type::create(heap(), tp, flags);
   } else {
     ASSERT(form == Type::EXISTENTIAL_TYPE);
-    auto length = readLengthVbn();
-    vector<Local<TypeParameter>> variables;
-    variables.reserve(length);
-    for (length_t i = 0; i < length; i++) {
-      auto depIndex = readVbn();
-      auto defnIndex = readVbn();
-
-      Local<TypeParameter> param;
-      if (depIndex == kLocalPackageId) {
-        if (defnIndex < 0 || defnIndex >= package_->typeParameters()->length()) {
-          throw Error("invalid definition index");
-        }
-        param = handle(package_->typeParameters()->get(defnIndex));
-      } else {
-        if (depIndex < 0 || depIndex >= package_->dependencies()->length()) {
-          throw Error("invalid package index");
-        }
-        auto dep = handle(package_->dependencies()->get(depIndex));
-        if (defnIndex < 0 || defnIndex >= dep->externTypeParameters()->length()) {
-          throw Error("invalid definition index");
-        }
-        param = handle(isLinked_ ?
-            dep->linkedTypeParameters()->get(defnIndex) :
-            dep->externTypeParameters()->get(defnIndex));
-      }
-      variables.push_back(param);
-    }
+    auto variables = readVectorList<Local<TypeParameter>>(&Loader::readTypeParameter);
     auto innerType = readType();
+    typeParameterStack_.erase(
+        typeParameterStack_.end() - variables.size(),
+        typeParameterStack_.end());
     return Type::create(heap(), variables, innerType);
   }
 }
@@ -1379,6 +1271,18 @@ Local<String> Loader::readStringId() {
     throw Error("string index out of bounds");
   }
   return handle(package_->strings()->get(index));
+}
+
+
+template <typename T>
+vector<T> Loader::readVectorList(T (Loader::*reader)()) {
+  auto length = readLengthVbn();
+  vector<T> vec;
+  vec.reserve(length);
+  for (length_t i = 0; i < length; i++) {
+    vec.push_back((this->*reader)());
+  }
+  return vec;
 }
 
 
@@ -1501,7 +1405,7 @@ Persistent<Package> PackageLoader::load() {
       throw Error("package file is corrupt");
     auto majorVersion = readValue<u16>();
     auto minorVersion = readValue<u16>();
-    if (majorVersion != 0 || minorVersion != 21)
+    if (majorVersion != 0 || minorVersion != 22)
       throw Error("package file has wrong format version");
 
     auto flags = readValue<u64>();
@@ -1544,17 +1448,6 @@ Persistent<Package> PackageLoader::load() {
       traitArray->set(i, *trait);
     }
     package_->setTraits(*traitArray);
-
-    auto typeParameterCount = readLength();
-    auto typeParametersArray =
-        BlockArray<TypeParameter>::create(heap(), typeParameterCount);
-    for (length_t i = 0; i < typeParameterCount; i++) {
-      // Type parameters are also pre-allocated.
-      DefnId id(DefnId::TYPE_PARAMETER, package_->id(), i, false /* isLocal */);
-      auto param = TypeParameter::create(heap(), id);
-      typeParametersArray->set(i, *param);
-    }
-    package_->setTypeParameters(*typeParametersArray);
 
     auto depCount = readLength();
     auto depArray = BlockArray<PackageDependency>::create(heap(), depCount);
@@ -1646,11 +1539,6 @@ Persistent<Package> PackageLoader::load() {
       readTrait(trait);
     }
 
-    for (length_t i = 0; i < typeParameterCount; i++) {
-      auto param = handle(typeParametersArray->get(i));
-      readTypeParameter(param);
-    }
-
     package_->setNativeFunctionSearchOrder(*loadState_->nativeFunctionSearchOrder);
     if (hasNativeFunctions && package_->mayLoadFunctionsFromNativeLibrary()) {
       loadNativeLibrary();
@@ -1664,14 +1552,6 @@ Persistent<Package> PackageLoader::load() {
   loadState_->loadingPackages.pop_back();
 
   return package_;
-}
-
-
-Local<TypeParameter> PackageLoader::getTypeParameter(length_t index) const {
-  if (index >= package()->typeParameters()->length()) {
-    throw Error("type parameter index out of range");
-  }
-  return handle(package()->typeParameters()->get(index));
 }
 
 
@@ -1756,12 +1636,11 @@ Local<PackageDependency> PackageLoader::readDependencyHeader(id_t depIndex) {
   auto classCount = readLengthVbn();
   auto traitCount = readLengthVbn();
   auto methodCount = readLengthVbn();
-  auto typeParameterCount = readLengthVbn();
 
   auto dep = PackageDependency::create(heap(), name, minVersion, maxVersion,
                                        globalCount, functionCount,
                                        classCount, traitCount,
-                                       typeParameterCount, methodCount);
+                                       methodCount);
 
   // We need to pre-allocate methods, classes, traits, type parameters so that other definitions
   // and types can refer to them. Normally, functions can't be preallocated since they have
@@ -1785,13 +1664,6 @@ Local<PackageDependency> PackageLoader::readDependencyHeader(id_t depIndex) {
     DefnId id(DefnId::FUNCTION, depIndex, i, true /* isLocal */);
     auto f = Function::create(heap(), id);
     externMethods->set(i, *f);
-  }
-
-  auto externTypeParameters = handle(dep->externTypeParameters());
-  for (length_t i = 0; i < typeParameterCount; i++) {
-    DefnId id(DefnId::TYPE_PARAMETER, depIndex, i, true /* isLocal */);
-    auto p = TypeParameter::create(heap(), id);
-    externTypeParameters->set(i, *p);
   }
 
   return dep;
@@ -1847,6 +1719,8 @@ void PackageLoader::linkFunctionOverrides(
 
 
 void DependencyLoader::readExternFunction(const Handle<Function>& func) {
+  ASSERT(typeParameterStack_.empty());
+
   Local<Name> name;
   Local<String> sourceName;
   u32 flags;
@@ -1869,6 +1743,7 @@ void DependencyLoader::readExternFunction(const Handle<Function>& func) {
   if ((flags & EXTERN_FLAG) == 0) {
     throw Error("invalid function");
   }
+  typeParameterStack_.clear();
 }
 
 
@@ -1913,22 +1788,6 @@ void DependencyLoader::readDependencyBody() {
     if ((m->flags() & mask) != mask)
       throw Error("dependency method is not extern");
   }
-
-  auto typeParameters = handle(dep_->externTypeParameters());
-  for (length_t i = 0; i < typeParameters->length(); i++) {
-    auto p = handle(typeParameters->get(i));
-    readTypeParameter(p);
-    if ((p->flags() & EXTERN_FLAG) == 0)
-      throw Error("dependency type parameter is not extern");
-  }
-}
-
-
-Local<TypeParameter> DependencyLoader::getTypeParameter(length_t index) const {
-  if (index >= dep_->externTypeParameters()->length()) {
-    throw Error("type parameter index out of range");
-  }
-  return handle(dep_->externTypeParameters()->get(index));
 }
 
 

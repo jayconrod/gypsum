@@ -18,7 +18,7 @@ from flags import *
 from graph import Graph
 from ids import AstId, DefnId, PackageId, ScopeId, BUILTIN_SCOPE_ID, GLOBAL_SCOPE_ID, PACKAGE_SCOPE_ID
 import ir
-from ir_types import getRootClassType, ClassType, UnitType, I32Type
+from ir_types import getRootClassType, getNothingClassType, ClassType, UnitType, I32Type
 from location import Location, NoLoc
 from builtins import registerBuiltins, getBuiltinClasses, getNothingClass
 from utils import Counter, each
@@ -26,6 +26,7 @@ from bytecode import BUILTIN_ROOT_CLASS_ID
 from name import (
     ANON_PARAMETER_SUFFIX,
     ARRAY_LENGTH_SUFFIX,
+    BLANK_SUFFIX,
     CLASS_INIT_SUFFIX,
     CLOSURE_SUFFIX,
     CONSTRUCTOR_SUFFIX,
@@ -278,7 +279,7 @@ class Scope(ast.NodeVisitor):
 
     def getDefnInfo(self):
         scope = self.topLocalScope()
-        return self.info.getDefnInfo(scope.ast)
+        return self.info.getDefnInfo(scope.ast) if self.info.hasDefnInfo(scope.ast) else None
 
     def getClass(self):
         return None
@@ -289,7 +290,8 @@ class Scope(ast.NodeVisitor):
         return scope.ast
 
     def getIrDefn(self):
-        return self.getDefnInfo().irDefn
+        defnInfo = self.getDefnInfo()
+        return defnInfo.irDefn if defnInfo is not None else None
 
     def makeName(self, short):
         return Name(self.prefix + [short])
@@ -860,7 +862,9 @@ class Scope(ast.NodeVisitor):
 
     def newScopeForExistential(self, prefix, ast):
         """Creates a new scope for an existential type."""
-        return ExistentialTypeScope(prefix, ast, self)
+        irDefn = self.getIrDefn()
+        index = len(irDefn.typeParameters) if isinstance(irDefn, ir.ParameterizedDefn) else 0
+        return ExistentialTypeScope(prefix, ast, self, index)
 
     def getOrCreateScope(self, shortName, ast, create):
         if ast.id in self.childScopes:
@@ -886,14 +890,15 @@ class GlobalScope(Scope):
         super(GlobalScope, self).__init__([], astModule, GLOBAL_SCOPE_ID, parent, parent.info)
 
     def createIrDefn(self, astDefn, astVarDefn):
-        name = self.makeName(astDefn.name)
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         shouldBind = True
         if isinstance(astDefn, ast.VariablePattern):
+            name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([LET, PUBLIC, PROTECTED]), astDefn.location)
             irDefn = self.info.package.addGlobal(name, sourceName=astDefn.name, astDefn=astDefn,
                                                  flags=flags)
         elif isinstance(astDefn, ast.FunctionDefinition):
+            name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([PUBLIC, NATIVE]), astDefn.location)
             if astDefn.body is None and NATIVE not in flags:
                 raise ScopeException(astDefn.location,
@@ -915,6 +920,8 @@ class GlobalScope(Scope):
             irDefn, shouldBind = self.createIrClassDefn(astDefn)
         elif isinstance(astDefn, ast.TraitDefinition):
             irDefn, shouldBind = self.createIrTraitDefn(astDefn)
+        elif isinstance(astDefn, ast.BlankType):
+            raise ScopeException(astDefn.location, "blank type not allowed here")
         else:
             raise NotImplementedError()
         return irDefn, shouldBind, True
@@ -990,9 +997,10 @@ class FunctionScope(Scope):
                 raise ScopeException(astDefn.location,
                                      "%s: non-static type parameters not supported yet" % name)
             flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
-            irDefn = self.info.package.addTypeParameter(name, sourceName=astDefn.name,
-                                                        astDefn=astDefn, flags=flags)
-            irScopeDefn.typeParameters.append(irDefn)
+            irDefn = self.info.package.addTypeParameter(irScopeDefn, name,
+                                                        sourceName=astDefn.name,
+                                                        astDefn=astDefn,
+                                                        flags=flags)
         elif isinstance(astDefn, ast.Parameter):
             checkFlags(flags, frozenset(), astDefn.location)
             if isinstance(astDefn.pattern, ast.VariablePattern):
@@ -1029,6 +1037,8 @@ class FunctionScope(Scope):
                                                    variables=[], flags=flags)
         elif isinstance(astDefn, ast.ClassDefinition):
             irDefn, shouldBind = self.createIrClassDefn(astDefn)
+        elif isinstance(astDefn, ast.BlankType):
+            raise ScopeException(astDefn.location, "blank type not allowed here")
         else:
             raise NotImplementedError()
         isVisible = False
@@ -1290,10 +1300,10 @@ class ClassScope(Scope):
             if STATIC not in flags:
                 raise NotImplementedError()
             flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
-            irDefn = self.info.package.addTypeParameter(name, sourceName=astDefn.name,
-                                                        astDefn=astDefn, flags=flags)
-            irDefn.clas = irScopeDefn
-            irScopeDefn.typeParameters.append(irDefn)
+            irDefn = self.info.package.addTypeParameter(irScopeDefn, name,
+                                                        sourceName=astDefn.name,
+                                                        astDefn=astDefn,
+                                                        flags=flags)
             irScopeDefn.initializer.typeParameters.append(irDefn)
             for ctor in irScopeDefn.constructors:
                 ctor.typeParameters.append(irDefn)
@@ -1325,8 +1335,7 @@ class ClassScope(Scope):
                                                 type=I32Type,
                                                 flags=frozenset([PRIVATE, LET, ARRAY]))
             shouldBind = False
-        else:
-            assert isinstance(astDefn, ast.ArrayAccessorDefinition)
+        elif isinstance(astDefn, ast.ArrayAccessorDefinition):
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([FINAL, PUBLIC, PROTECTED, PRIVATE, OVERRIDE]),
                        astDefn.location)
@@ -1339,6 +1348,10 @@ class ClassScope(Scope):
                                                    flags=flags)
             self.makeMethod(irDefn, irScopeDefn)
             irScopeDefn.methods.append(irDefn)
+        elif isinstance(astDefn, ast.BlankType):
+            raise ScopeException(astDefn.location, "blank type not allowed here")
+        else:
+            raise NotImplementedError()
         return irDefn, shouldBind, isVisible
 
     def canImport(self, defnInfo):
@@ -1441,18 +1454,21 @@ class TraitScope(Scope):
                                                        variables=[], flags=flags)
                 self.makeMethod(irDefn, irScopeDefn)
             irScopeDefn.methods.append(irDefn)
-        else:
-            assert isinstance(astDefn, ast.TypeParameter)
+        elif isinstance(astDefn, ast.TypeParameter):
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([STATIC, COVARIANT, CONTRAVARIANT]), astDefn.location)
             if STATIC not in flags:
                 raise NotImplementedError()
             flags |= irScopeDefn.flags & frozenset([PUBLIC, PROTECTED, PRIVATE])
-            irDefn = self.info.package.addTypeParameter(name, sourceName=astDefn.name,
-                                                        astDefn=astDefn, flags=flags)
-            irDefn.clas = irScopeDefn
-            irScopeDefn.typeParameters.append(irDefn)
+            irDefn = self.info.package.addTypeParameter(irScopeDefn, name,
+                                                        sourceName=astDefn.name,
+                                                        astDefn=astDefn,
+                                                        flags=flags)
             isVisible = False
+        elif isinstance(astDefn, ast.BlankType):
+            raise ScopeException(astDefn.location, "blank type not allowed here")
+        else:
+            raise NotImplementedError()
         return irDefn, shouldBind, isVisible
 
     def canImport(self, defnInfo):
@@ -1497,22 +1513,34 @@ class TraitScope(Scope):
 
 
 class ExistentialTypeScope(Scope):
-    def __init__(self, prefix, ast, parent):
+    def __init__(self, prefix, ast, parent, index):
         super(ExistentialTypeScope, self).__init__(prefix, ast, ScopeId(ast.id),
                                                    parent, parent.info)
+        assert type(index) is int
+        self.index = index
 
     def createIrDefn(self, astDefn, astVarDefn):
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
+        shouldBind = True
         if isinstance(astDefn, ast.TypeParameter):
             name = self.makeName(astDefn.name)
             if len(flags) > 0:
                 raise ScopeException(astDefn.location, "invalid flags: %s" % ", ".join(flags))
-            irDefn = self.info.package.addTypeParameter(name, sourceName=astDefn.name,
-                                                        astDefn=astDefn, flags=flags)
+            irDefn = self.info.package.addTypeParameter(None, name, sourceName=astDefn.name,
+                                                        astDefn=astDefn, flags=flags,
+                                                        index=self.index)
+            self.index += 1
+        elif isinstance(astDefn, ast.BlankType):
+            name = self.info.makeUniqueName(self.makeName(BLANK_SUFFIX))
+            irDefn = self.info.package.addTypeParameter(None, name,
+                                                        astDefn=astDefn,
+                                                        flags=flags,
+                                                        index=self.index)
+            self.index += 1
+            shouldBind = False
         else:
             raise NotImplementedError()
 
-        shouldBind = True
         isVisible = False
         return irDefn, shouldBind, isVisible
 
@@ -1553,6 +1581,9 @@ class ExistentialTypeScope(Scope):
     def newScopeForTrait(self):
         # Not syntactically possible.
         raise NotImplementedError()
+
+    def newScopeForExistential(self, prefix, ast):
+        return ExistentialTypeScope(prefix, ast, self, self.index)
 
 
 class BuiltinGlobalScope(Scope):
@@ -1820,6 +1851,13 @@ class ScopeVisitor(ast.NodeVisitor):
         # Avoid passing `astVarDefn` to type visiting methods.
         self.visitChildren(node)
 
+    def visitDestructurePattern(self, node, astVarDefn):
+        # Avoid passing `astVarDefn` to type visiting methods.
+        for p in node.prefix:
+            self.visit(p)
+        for p in node.patterns:
+            self.visit(p, astVarDefn)
+
     def visitBlockExpression(self, node):
         if isinstance(self.scope.ast, ast.FunctionDefinition) and \
            self.scope.ast.body is node:
@@ -1836,6 +1874,23 @@ class ScopeVisitor(ast.NodeVisitor):
         if node.condition is not None:
             visitor.visit(node.condition)
         visitor.visit(node.expression)
+
+    def visitClassType(self, node):
+        if any(isinstance(arg, ast.BlankType) for arg in node.typeArguments):
+            scope = self.scope.scopeForExistential(node)
+            visitor = self.createChildVisitor(scope)
+        else:
+            scope = self.scope
+            visitor = self
+        visitor.visitChildren(node)
+
+    def visitTupleType(self, node):
+        if any(isinstance(arg, ast.BlankType) for arg in node.types):
+            scope = self.scope.scopeForExistential(node)
+            visitor = self.createChildVisitor(scope)
+        else:
+            visitor = self
+        visitor.visitChildren(node)
 
     def visitExistentialType(self, node):
         scope = self.scope.scopeForExistential(node)
@@ -1893,6 +1948,9 @@ class DeclarationVisitor(ScopeVisitor):
         if node.ty is not None:
             self.visit(node.ty)
         self.scope.declare(node, astVarDefn)
+
+    def visitBlankType(self, node):
+        self.scope.declare(node)
 
 
 def getFlagsFromAstDefn(astDefn, astVarDefn):

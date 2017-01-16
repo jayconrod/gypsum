@@ -148,11 +148,13 @@ static Local<Package> createTestPackage(Heap* heap) {
   auto functions = BlockArray<Function>::create(heap, 1);
   Local<BlockArray<TypeParameter>> emptyTypeParameters(
       reinterpret_cast<BlockArray<TypeParameter>*>(roots->emptyBlockArray()));
+  Local<BlockArray<Type>> emptyInstTypes(
+      reinterpret_cast<BlockArray<Type>*>(roots->emptyBlockArray()));
   auto function = Function::create(heap, FID0, NAME("foo"), STR("foo"),
                                    0, emptyTypeParameters, returnType, parameterTypes,
                                    Local<ObjectTypeDefn>(), 2 * kWordSize, instList,
                                    blockOffsetList, package, Local<BlockArray<Function>>(),
-                                   nullptr);
+                                   emptyInstTypes, nullptr);
   functions->set(0, *function);
   package->setFunctions(*functions);
   package->setEntryFunctionIndex(0);
@@ -194,6 +196,7 @@ TEST(BlockVisitorFunction) {
   auto instructionsSize = function->instructionsSize();
   auto blockOffsets = function->blockOffsets();
   auto overrides = function->overrides();
+  auto instTypes = function->instTypes();
   auto stackPointerMap = function->stackPointerMap();
   auto nativeFunction = function->nativeFunction();
 
@@ -217,32 +220,11 @@ TEST(BlockVisitorFunction) {
   ASSERT_PTR_VISITED(blockOffsets);
   ASSERT_PTR_VISITED(package);
   ASSERT_PTR_VISITED(overrides);
+  ASSERT_PTR_VISITED(instTypes);
   ASSERT_PTR_VISITED(stackPointerMap);
   ASSERT_NOT_VISITED(nativeFunction);
   #undef ASSERT_NOT_VISITED
   #undef ASSERT_PTR_VISITED
-
-  // word_t expected[] = {
-  //     FUNCTION_BLOCK_TYPE << 2,
-  //     0,  // DefnId
-  //     0,  // DefnId
-  //     reinterpret_cast<word_t>(name) + 4,
-  //     reinterpret_cast<word_t>(sourceName) + 4,
-  //     0,  // flags
-  //     0,
-  //     reinterpret_cast<word_t>(typeParameters) + 4,
-  //     reinterpret_cast<word_t>(returnType) + 4,
-  //     reinterpret_cast<word_t>(parameterTypes) + 4,
-  //     reinterpret_cast<word_t>(definingClass) + 4,
-  //     localsSize,
-  //     instructionsSize,
-  //     reinterpret_cast<word_t>(blockOffsets) + 4,
-  //     reinterpret_cast<word_t>(package) + 4,
-  //     4,
-  //     0,
-  // };
-  // for (word_t i = 0; i < ARRAY_LENGTH(expected); i++)
-  //   ASSERT_EQ(expected[i], reinterpret_cast<word_t*>(function)[i]);
 }
 
 

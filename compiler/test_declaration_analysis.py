@@ -19,6 +19,7 @@ from utils_test import FakePackageLoader, TestCaseWithDefinitions
 from location import NoLoc
 from name import (
     ARRAY_LENGTH_SUFFIX,
+    BLANK_SUFFIX,
     CLASS_INIT_SUFFIX,
     CONSTRUCTOR_SUFFIX,
     EXISTENTIAL_SUFFIX,
@@ -265,7 +266,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.assertEquals([T], Tr.typeParameters)
         self.assertEquals([T], f.typeParameters)
         self.assertEquals(frozenset([PUBLIC, STATIC]), T.flags)
-        self.assertIs(Tr, T.clas)
+        self.assertEquals(0, T.index)
 
     def testDefineAbstractTrait(self):
         source = "abstract trait Tr"
@@ -417,14 +418,14 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         f = info.package.findFunction(name="f")
         self.assertEquals(1, len(f.typeParameters))
         self.assertIs(T, f.typeParameters[0])
+        self.assertEquals(0, T.index)
 
     def testFunctionOuterTypeParameter(self):
         info = self.analyzeFromSource("def f[static T](t: T) =\n" +
                                       "  def g = t")
         g = info.package.findFunction(name="f.g")
-        self.assertEquals(1, len(g.typeParameters))
         T = info.package.findTypeParameter(name="f.T")
-        self.assertIs(T, g.typeParameters[0])
+        self.assertEquals([T], g.typeParameters)
 
     def testFunctionVariantTypeParameter(self):
         self.assertRaises(ScopeException, self.analyzeFromSource, "def f[static +T] = {}")
@@ -446,6 +447,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.assertEquals([T], Box.constructors[0].typeParameters)
         self.assertEquals([T], get.typeParameters)
         self.assertEquals([T], set.typeParameters)
+        self.assertEquals(0, T.index)
 
     def testClassVariantTypeParameter(self):
         source = "class Foo[static +S, static -T, static U]"
@@ -455,6 +457,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.assertEquals(frozenset([COVARIANT, STATIC]), S.flags)
         self.assertEquals(frozenset([CONTRAVARIANT, STATIC]), T.flags)
         self.assertEquals(frozenset([STATIC]), U.flags)
+        self.assertEquals([0, 1, 2], [p.index for p in Foo.typeParameters])
 
     def testBuiltinConflict(self):
         self.analyzeFromSource("let String = 42")
@@ -560,12 +563,52 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         scope = info.getScope(astType)
         self.assertTrue(isinstance(scope, ExistentialTypeScope))
         X = info.getDefnInfo(astType.typeParameters[0]).irDefn
-        expected = self.makeTypeParameter(Name([EXISTENTIAL_SUFFIX, "X"]), flags=frozenset())
+        expected = self.makeTypeParameter(Name([EXISTENTIAL_SUFFIX, "X"]),
+                                          flags=frozenset(), index=0)
         self.assertEquals(expected, X)
 
     def testExistentialTypeWithFlags(self):
         source = "let x: forsome [static +X] X"
         self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
+    def testBlankTypeAlone(self):
+        source = "let x: _"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+
+    def testClassBlankType(self):
+        source = "let x: Foo[_, _]"
+        info = self.analyzeFromSource(source)
+        astType = info.ast.modules[0].definitions[0].pattern.ty
+        scope = info.getScope(astType)
+        self.assertTrue(isinstance(scope, ExistentialTypeScope))
+        for i in xrange(2):
+            blank = info.getDefnInfo(astType.typeArguments[i]).irDefn
+            expected = self.makeTypeParameter(Name([EXISTENTIAL_SUFFIX, BLANK_SUFFIX]),
+                                              flags=frozenset(), index=i)
+            self.assertEquals(expected, blank)
+
+    def testTupleBlankType(self):
+        source = "let x: (_, _)"
+        info = self.analyzeFromSource(source)
+        astType = info.ast.modules[0].definitions[0].pattern.ty
+        scope = info.getScope(astType)
+        self.assertTrue(isinstance(scope, ExistentialTypeScope))
+        for i in xrange(2):
+            blank = info.getDefnInfo(astType.types[i]).irDefn
+            expected = self.makeTypeParameter(Name([EXISTENTIAL_SUFFIX, BLANK_SUFFIX]),
+                                              flags=frozenset(), index=i)
+            self.assertEquals(expected, blank)
+
+    def testTypeParameterIndices(self):
+        source = "class Foo[static A]\n" + \
+                 "  def m[static B](x: forsome [C] forsome [D] D) = {}\n"
+        info = self.analyzeFromSource(source)
+        A = info.package.findTypeParameter(name="Foo.A")
+        B = info.package.findTypeParameter(name="Foo.m.B")
+        C = info.package.findTypeParameter(name=Name(["Foo", "m", EXISTENTIAL_SUFFIX, "C"]))
+        D = info.package.findTypeParameter(name=Name(["Foo", "m", EXISTENTIAL_SUFFIX,
+                                                      EXISTENTIAL_SUFFIX, "D"]))
+        self.assertEquals([0, 1, 2, 3], [p.index for p in [A, B, C, D]])
 
 
 class TestPackageScope(unittest.TestCase):

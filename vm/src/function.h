@@ -47,6 +47,7 @@ class Function: public Block {
            LengthArray* blockOffsets,
            Package* package,
            BlockArray<Function>* overrides,
+           BlockArray<Type>* instTypes,
            StackPointerMap* stackPointerMap,
            NativeFunction nativeFunction);
   static Local<Function> create(Heap* heap, DefnId id);
@@ -64,6 +65,7 @@ class Function: public Block {
                                 const Handle<LengthArray>& blockOffsets,
                                 const Handle<Package>& package,
                                 const Handle<BlockArray<Function>>& overrides,
+                                const Handle<BlockArray<Type>>& instTypes,
                                 NativeFunction nativeFunction);
 
   static word_t sizeForFunction(length_t instructionsSize);
@@ -119,6 +121,9 @@ class Function: public Block {
   BlockArray<Function>* overrides() const { return overrides_.get(); }
   void setOverrides(BlockArray<Function>* newOverrides) { overrides_.set(this, newOverrides); }
 
+  BlockArray<Type>* instTypes() const { return instTypes_.get(); }
+  void setInstTypes(BlockArray<Type>* newInstTypes) { instTypes_.set(this, newInstTypes); }
+
   StackPointerMap* stackPointerMap() const { return stackPointerMap_.get(); }
   void setStackPointerMap(StackPointerMap* newStackPointerMap) {
     stackPointerMap_.set(this, newStackPointerMap);
@@ -168,6 +173,7 @@ class Function: public Block {
   Ptr<LengthArray> blockOffsets_;
   Ptr<Package> package_;
   Ptr<BlockArray<Function>> overrides_;
+  Ptr<BlockArray<Type>> instTypes_;
   Ptr<StackPointerMap> stackPointerMap_;
   NativeFunction nativeFunction_;
   // Update FUNCTION_POINTER_LIST if pointer members change.

@@ -39,6 +39,7 @@ namespace internal {
   F(Function, blockOffsets_)     \
   F(Function, package_)          \
   F(Function, overrides_)        \
+  F(Function, instTypes_)        \
   F(Function, stackPointerMap_)  \
 
 
@@ -69,6 +70,7 @@ Function::Function(DefnId id,
                    LengthArray* blockOffsets,
                    Package* package,
                    BlockArray<Function>* overrides,
+                   BlockArray<Type>* instTypes,
                    StackPointerMap* stackPointerMap,
                    NativeFunction nativeFunction)
     : Block(FUNCTION_BLOCK_TYPE),
@@ -86,6 +88,7 @@ Function::Function(DefnId id,
       blockOffsets_(this, blockOffsets),
       package_(this, package),
       overrides_(this, overrides),
+      instTypes_(this, instTypes),
       stackPointerMap_(this, stackPointerMap),
       nativeFunction_(nullptr) {
   ASSERT(instructionsSize_ <= kMaxLength);
@@ -96,7 +99,7 @@ Function::Function(DefnId id,
 Local<Function> Function::create(Heap* heap, DefnId id) {
   RETRY_WITH_GC(heap, return Local<Function>(new(heap, 0) Function(
       id, nullptr, nullptr, 0, nullptr, nullptr, nullptr, nullptr,
-      0, vector<u8>{}, nullptr, nullptr, nullptr, nullptr, nullptr)));
+      0, vector<u8>{}, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr)));
 }
 
 
@@ -114,11 +117,13 @@ Local<Function> Function::create(Heap* heap,
                                  const Handle<LengthArray>& blockOffsets,
                                  const Handle<Package>& package,
                                  const Handle<BlockArray<Function>>& overrides,
+                                 const Handle<BlockArray<Type>>& instTypes,
                                  NativeFunction nativeFunction) {
   RETRY_WITH_GC(heap, return Local<Function>(new(heap, instructions.size()) Function(
       id, *name, sourceName.getOrNull(), flags, *typeParameters, *returnType, *parameterTypes,
       definingClass.getOrNull(), localsSize, instructions, blockOffsets.getOrNull(),
-      package.getOrNull(), overrides.getOrNull(), nullptr, nativeFunction)));
+      package.getOrNull(), overrides.getOrNull(), instTypes.getOrNull(),
+      nullptr, nativeFunction)));
 }
 
 
@@ -218,6 +223,7 @@ ostream& operator << (ostream& os, const Function* fn) {
      << "\n  block offsets: " << brief(fn->blockOffsets())
      << "\n  package: " << brief(fn->package())
      << "\n  overrides: " << brief(fn->overrides())
+     << "\n  inst types: " << brief(fn->instTypes())
      << "\n  stack pointer map: " << brief(fn->stackPointerMap());
   return os;
 }
@@ -671,217 +677,16 @@ Local<StackPointerMap> StackPointerMap::buildFrom(Heap* heap, const Local<Functi
           break;
         }
 
-        case TYCS: {
-          i64 classId = readVbn(bytecode, &pcOffset);
-          Local<Class> clas;
-          if (isBuiltinId(classId)) {
-            clas = handle(roots->getBuiltinClass(static_cast<BuiltinId>(classId)));
-          } else {
-            clas = handle(package->getClass(classId));
-          }
-          vector<Local<Type>> typeArgs;
-          currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
-          auto type = Type::create(heap, clas, typeArgs);
+        case TYS: {
+          i64 index = readVbn(bytecode, &pcOffset);
+          auto type = handle(function->instTypes()->get(index));
           currentMap.pushTypeArg(type);
           break;
         }
 
-        case TYCSF: {
-          auto depIndex = readVbn(bytecode, &pcOffset);
-          auto externIndex = readVbn(bytecode, &pcOffset);
-          auto clas = handle(package->dependencies()->get(depIndex)
-              ->linkedClasses()->get(externIndex));
-          vector<Local<Type>> typeArgs;
-          currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
-          auto type = Type::create(heap, clas, typeArgs);
-          currentMap.pushTypeArg(type);
-          break;
-        }
-
-        case TYCD: {
-          i64 classId = readVbn(bytecode, &pcOffset);
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
-          Local<Class> clas;
-          if (isBuiltinId(classId)) {
-            clas = handle(roots->getBuiltinClass(static_cast<BuiltinId>(classId)));
-          } else {
-            clas = handle(package->getClass(classId));
-          }
-          vector<Local<Type>> typeArgs;
-          currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
-          currentMap.pop(clas->typeParameterCount());
-          auto type = Type::create(heap, clas, typeArgs);
-          currentMap.pushTypeArg(type);
-          auto valueType = handle(roots->getBuiltinType(BUILTIN_TYPE_CLASS_ID));
-          currentMap.push(valueType);
-          break;
-        }
-
-        case TYCDF: {
-          auto depIndex = readVbn(bytecode, &pcOffset);
-          auto externIndex = readVbn(bytecode, &pcOffset);
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
-          auto clas = handle(package->dependencies()->get(depIndex)
-              ->linkedClasses()->get(externIndex));
-          vector<Local<Type>> typeArgs;
-          currentMap.popTypeArgs(clas->typeParameterCount(), &typeArgs);
-          currentMap.pop(clas->typeParameterCount());
-          auto type = Type::create(heap, clas, typeArgs);
-          currentMap.pushTypeArg(type);
-          auto valueType = handle(roots->getBuiltinType(BUILTIN_TYPE_CLASS_ID));
-          currentMap.push(valueType);
-          break;
-        }
-
-        case TYTS: {
-          i64 traitId = readVbn(bytecode, &pcOffset);
-          Local<Trait> trait;
-          if (isBuiltinId(traitId)) {
-            trait = handle(roots->getBuiltinTrait(static_cast<BuiltinId>(traitId)));
-          } else {
-            trait = handle(package->getTrait(traitId));
-          }
-          vector<Local<Type>> typeArgs;
-          currentMap.popTypeArgs(trait->typeParameterCount(), &typeArgs);
-          auto type = Type::create(heap, trait, typeArgs);
-          currentMap.pushTypeArg(type);
-          break;
-        }
-
-        case TYTSF: {
-          auto depIndex = readVbn(bytecode, &pcOffset);
-          auto externIndex = readVbn(bytecode, &pcOffset);
-          auto trait = handle(package->dependencies()->get(depIndex)
-              ->linkedTraits()->get(externIndex));
-          vector<Local<Type>> typeArgs;
-          currentMap.popTypeArgs(trait->typeParameterCount(), &typeArgs);
-          auto type = Type::create(heap, trait, typeArgs);
-          currentMap.pushTypeArg(type);
-          break;
-        }
-
-        case TYTD: {
-          i64 traitId = readVbn(bytecode, &pcOffset);
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
-          Local<Trait> trait;
-          if (isBuiltinId(traitId)) {
-            trait = handle(roots->getBuiltinTrait(static_cast<BuiltinId>(traitId)));
-          } else {
-            trait = handle(package->getTrait(traitId));
-          }
-          vector<Local<Type>> typeArgs;
-          currentMap.popTypeArgs(trait->typeParameterCount(), &typeArgs);
-          currentMap.pop(trait->typeParameterCount());
-          auto type = Type::create(heap, trait, typeArgs);
-          currentMap.pushTypeArg(type);
-          auto valueType = handle(roots->getBuiltinType(BUILTIN_TYPE_CLASS_ID));
-          currentMap.push(valueType);
-          break;
-        }
-
-        case TYTDF: {
-          auto depIndex = readVbn(bytecode, &pcOffset);
-          auto externIndex = readVbn(bytecode, &pcOffset);
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
-          auto trait = handle(package->dependencies()->get(depIndex)
-              ->linkedTraits()->get(externIndex));
-          vector<Local<Type>> typeArgs;
-          currentMap.popTypeArgs(trait->typeParameterCount(), &typeArgs);
-          currentMap.pop(trait->typeParameterCount());
-          auto type = Type::create(heap, trait, typeArgs);
-          currentMap.pushTypeArg(type);
-          auto valueType = handle(roots->getBuiltinType(BUILTIN_TYPE_CLASS_ID));
-          currentMap.push(valueType);
-          break;
-        }
-
-        case TYVS: {
-          auto typeParamId = readVbn(bytecode, &pcOffset);
-          ASSERT(!isBuiltinId(typeParamId));
-          Local<TypeParameter> param(package->getTypeParameter(typeParamId));
-          auto type = Type::create(heap, param, Type::NO_FLAGS);
-          currentMap.pushTypeArg(type);
-          break;
-        }
-
-        case TYVD: {
-          auto typeParamId = readVbn(bytecode, &pcOffset);
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
-          auto typeParam = handle(package->getTypeParameter(typeParamId));
-          auto type = Type::create(heap, typeParam);
-          currentMap.pushTypeArg(type);
-          auto valueType = handle(roots->getBuiltinType(BUILTIN_TYPE_CLASS_ID));
-          currentMap.push(valueType);
-          break;
-        }
-
-        case TYVDF: {
-          auto depIndex = readVbn(bytecode, &pcOffset);
-          auto externIndex = readVbn(bytecode, &pcOffset);
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
-          auto param = handle(package->dependencies()->get(depIndex)
-              ->linkedTypeParameters()->get(externIndex));
-          auto type = Type::create(heap, param);
-          currentMap.pushTypeArg(type);
-          auto valueType = handle(roots->getBuiltinType(BUILTIN_TYPE_CLASS_ID));
-          currentMap.push(valueType);
-          break;
-        }
-
-        case TYFLAGS: {
-          auto rawFlags = readVbn(bytecode, &pcOffset);
-          auto flags = static_cast<Type::Flags>(rawFlags);
-          ASSERT(flags == rawFlags && (flags & Type::FLAGS_MASK) == flags);
-          auto type = Type::createWithFlags(heap, currentMap.popTypeArg(), flags);
-          currentMap.pushTypeArg(type);
-          break;
-        }
-
-        case TYFLAGD: {
-          auto rawFlags = readVbn(bytecode, &pcOffset);
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
-          auto flags = static_cast<Type::Flags>(rawFlags);
-          ASSERT(flags == rawFlags && flags < Type::LAST_FLAG);
-          auto type = Type::createWithFlags(heap, currentMap.popTypeArg(), flags);
-          currentMap.pop();
-          currentMap.pushTypeArg(type);
-          auto valueType = handle(roots->getBuiltinType(BUILTIN_TYPE_CLASS_ID));
-          currentMap.push(valueType);
-          break;
-        }
-
-        case TYXS: {
-          auto count = toLength(readVbn(bytecode, &pcOffset));
-          auto innerType = currentMap.popTypeArg();
-          vector<Local<TypeParameter>> variables(count);
-          for (length_t i = 0; i < count; i++) {
-            auto varType = currentMap.popTypeArg();
-            variables[count - i - 1] = handle(varType->asVariable());
-          }
-          auto type = Type::create(heap, variables, innerType);
-          currentMap.pushTypeArg(type);
-          break;
-        }
-
-        case TYXD: {
-          auto count = toLength(readVbn(bytecode, &pcOffset));
-          currentMap.pcOffset = pcOffset;
-          maps.push_back(currentMap);
-          auto innerType = currentMap.popTypeArg();
-          vector<Local<TypeParameter>> variables(count);
-          for (length_t i = 0; i < count; i++) {
-            auto varType = currentMap.popTypeArg();
-            variables[count - i - 1] = handle(varType->asVariable());
-          }
-          currentMap.pop(count + 1);
-          auto type = Type::create(heap, variables, innerType);
+        case TYD: {
+          i64 index = readVbn(bytecode, &pcOffset);
+          auto type = handle(function->instTypes()->get(index));
           currentMap.pushTypeArg(type);
           auto valueType = handle(roots->getBuiltinType(BUILTIN_TYPE_CLASS_ID));
           currentMap.push(valueType);
