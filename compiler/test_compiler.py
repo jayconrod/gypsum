@@ -4221,3 +4221,32 @@ class TestCompiler(TestCaseWithDefinitions):
                                                             type=getStringType(),
                                                             kind=LOCAL,
                                                             flags=frozenset([LET]))]))
+
+    def testCtorCallInitTwoParams(self):
+        source = "class C[static S, static T]"
+        package = self.compileFromSource(source)
+        C = package.findClass(name="C")
+        init = package.findFunction(name=Name(["C", CLASS_INIT_SUFFIX]))
+        S = C.findTypeParameter(name="S")
+        T = C.findTypeParameter(name="T")
+        self.checkFunction(package, self.makeSimpleFunction(
+            Name(["C", CONSTRUCTOR_SUFFIX]),
+            UnitType,
+            [[
+                ldlocal(0),
+                callg(getBuiltinFunctionById(BUILTIN_ROOT_CLASS_CTOR_ID)),
+                drop(),
+                ldlocal(0),
+                tys(0),
+                tys(1),
+                callg(init),
+                drop(),
+                unit(),
+                ret(),
+            ]],
+            variables=[self.makeVariable(
+                Name(["C", CONSTRUCTOR_SUFFIX, RECEIVER_SUFFIX]),
+                type=ClassType.forReceiver(C),
+                kind=PARAMETER,
+                flags=frozenset([LET]))],
+            instTypes=[VariableType(S), VariableType(T)]))

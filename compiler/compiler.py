@@ -1778,9 +1778,8 @@ class CompileVisitor(ast.NodeVisitor):
         self.tyd(index)
 
     def buildImplicitStaticTypeArguments(self, typeParams):
-        for param in typeParams:
-            assert self.function.typeParameters[param.index] is param
-            self.buildStaticTypeArguments(VariableType(p) for p in typeParams)
+        assert all(self.function.typeParameters[p.index] for p in typeParams)
+        self.buildStaticTypeArguments(VariableType(p) for p in typeParams)
 
     def buildStaticTypeArguments(self, types):
         for ty in types:

@@ -144,7 +144,7 @@ class Loader {
   LoadState* loadState_;
   istream& stream_;
   Persistent<Package> package_;
-  vector<Local<TypeParameter>> typeParameterStack_;
+  vector<Persistent<TypeParameter>> typeParameterStack_;
   bool isLinked_ = false;
 };
 
@@ -1276,7 +1276,6 @@ Local<String> Loader::readStringId() {
 
 template <typename T>
 vector<T> Loader::readVectorList(T (Loader::*reader)()) {
-  HandleScope handleScope(vm());
   auto length = readLengthVbn();
   vector<T> vec;
   vec.reserve(length);

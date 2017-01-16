@@ -68,7 +68,9 @@ class Type: public Object {
     LAST_PRIMITIVE_TYPE = F64_TYPE,
     FIRST_OBJECT_TYPE = CLASS_TYPE,
     LAST_OBJECT_TYPE = EXTERN_VARIABLE_TYPE,
-    LAST_TYPE = LABEL_TYPE
+    FIRST_SPECIAL_TYPE = LABEL_TYPE,
+    LAST_SPECIAL_TYPE = NO_TYPE,
+    LAST_TYPE = NO_TYPE
   };
 
   enum Flags {
@@ -84,7 +86,7 @@ class Type: public Object {
   static word_t sizeForLength(length_t length);
   void* operator new (size_t, Heap* heap, length_t length);
   void* operator new (size_t, void* place, length_t length);
-  explicit Type(Form primitive, Flags flags = NO_FLAGS);
+  explicit Type(Form form, Flags flags = NO_FLAGS);
   explicit Type(Class* clas, Flags flags = NO_FLAGS);
   Type(Class* clas, const std::vector<Local<Type>>& typeArgs, Flags flags = NO_FLAGS);
   explicit Type(Trait* trait, Flags flags = NO_FLAGS);
