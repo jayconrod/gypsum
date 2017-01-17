@@ -6,4 +6,4 @@
 
 public class IOException <: Exception
 
-public class StreamClosedException <: IOException
+public class ClosedException <: IOException

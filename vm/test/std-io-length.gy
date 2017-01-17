@@ -5,14 +5,14 @@
 
 
 import std.I8Array
-import std.io.File, FileInputStream, InputStream
+import std.io.File, FileReader, Reader
 
-def read-stream(stream: InputStream): i64 =
+def read-all(reader: Reader): i64 =
   var total-length = 0i64
   let buffer = new(4096i32) I8Array()
   var done = false
   while (!done)
-    let length = stream.read(buffer, 0i32, buffer.length)
+    let length = reader.read(buffer, 0i32, buffer.length)
     if (length == 0i32)
       done = true
       {}
@@ -23,7 +23,7 @@ def read-stream(stream: InputStream): i64 =
 
 def main =
   let file = File("/bin/ls")
-  let file-stream = FileInputStream(file)
-  let length = read-stream(file-stream)
+  let file-reader = FileReader(file)
+  let length = read-all(file-reader)
   if (file.size != length)
     throw Exception()

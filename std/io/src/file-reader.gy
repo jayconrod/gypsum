@@ -8,13 +8,7 @@ import std.I8Array,
     List,
     utf8-to-string
 
-public trait InputStream
-  public abstract def close: unit
-  public abstract def is-closed: boolean
-  public abstract def read(buffer: I8Array, offset: i32, count: i32): i32
-
-
-public final class FileInputStream <: InputStream
+public final class FileReader <: Reader, Closeable
   private var fd: i32
 
   public def this(file: File) =
@@ -34,7 +28,7 @@ public final class FileInputStream <: InputStream
 
   public override def read(buffer: I8Array, offset: i32, count: i32): i32 =
     if (is-closed)
-      throw StreamClosedException()
+      throw ClosedException()
     read-fd(fd, buffer, offset, count)
 
   private static native def open-fd(path: String): i32
@@ -46,13 +40,13 @@ public final class FileInputStream <: InputStream
 
 class Chunk(buffer: I8Array, length: i32)
 
-public def read-stream(stream: InputStream): I8Array =
+public def read-all(reader: Reader): I8Array =
   let chunks = List[Chunk]()
   var total-length = 0i32
   var done = false
   while (!done)
     let buffer = new(8192i32) I8Array()
-    let length = stream.read(buffer, 0i32, buffer.length)
+    let length = reader.read(buffer, 0i32, buffer.length)
     if (length == 0i32)
       done = true
       {}
@@ -74,20 +68,20 @@ public def read-stream(stream: InputStream): I8Array =
     chunk-index += 1i32
   full-buffer
 
-public def read-stream-as-string(stream: InputStream): String =
-  let utf8-bytes = read-stream(stream)
+public def read-all-as-string(reader: Reader): String =
+  let utf8-bytes = read-all(reader)
   utf8-to-string(utf8-bytes)
 
 public def read-file(file-name: String): I8Array =
-  let stream = FileInputStream(file-name)
+  let reader = FileReader(file-name)
   try
-    read-stream(stream)
+    read-all(reader)
   finally
-    stream.close
+    reader.close
 
 public def read-file-as-string(file-name: String): String =
-  let stream = FileInputStream(file-name)
+  let reader = FileReader(file-name)
   try
-    read-stream-as-string(stream)
+    read-all-as-string(reader)
   finally
-    stream.close
+    reader.close
