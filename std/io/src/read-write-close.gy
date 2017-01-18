@@ -7,22 +7,12 @@
 public let EOF = -1i32
 
 public trait Reader
-  public def read: i32 =
-    let buffer = new(1i32) I8Array()
-    let count = read(buffer)
-    if (count == 1i32) buffer.get(0i32).to-i32 else EOF
-
   public def read(buffer: I8Array): i32 = read(buffer, 0i32, buffer.length)
 
   public def read(buffer: I8Array, offset: i32, count: i32): i32
 
 
 public trait Writer
-  public def write(b: i8): unit =
-    let buffer = new(1i32) I8Array()
-    buffer.set(0i32, b)
-    write(buffer)
-
   public def write(buffer: I8Array): unit = write(buffer, 0i32, buffer.length)
 
   public def write(buffer: I8Array, offset: i32, count: i32): unit
