@@ -171,14 +171,9 @@ def encodeString(inStr):
 
 
 def openCommonFile(name):
-    """The compiler may be packaged using pyinstaller. We need to be able to open resource files
-    both in that configuration and in the test configuration (regular Python files). pyinstaller
-    unpacks scripts and resources to a temp folder whose name is in sys._MEIPASS2."""
-    if hasattr(sys, "_MEIPASS"):
-        common = sys._MEIPASS
-    else:
-        common = os.path.join(os.path.dirname(__file__), "..", "common")
-    return open(os.path.join(common, name))
+    dir_name = os.path.dirname(__file__)
+    file_name = os.path.join(dir_name, name)
+    return open(file_name)
 
 
 class Counter(object):

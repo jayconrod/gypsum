@@ -3,7 +3,6 @@
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
 
-
 import argparse
 import os
 import os.path
@@ -129,7 +128,3 @@ def main():
         else:
             sys.stderr.write("%s: error: %s\n" % (sourceFileName, str(err)))
         sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()
