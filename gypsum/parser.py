@@ -792,6 +792,3 @@ def postProcessBinary(combine, ast, loc):
                 loc = result.location.combine(subast.location)
                 result = combine(op, subast, result, loc)
             return result
-
-
-__all__ = ["parse", "symbol", "operator", "semi"]

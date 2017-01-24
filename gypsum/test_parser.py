@@ -6,15 +6,13 @@
 
 import unittest
 
-execfile("parser.py")
-
-
 import ast
+from combinators import Phrase, Reader
 from errors import *
 from layout import layout
 from lexer import *
 from location import Location
-from combinators import *
+from parser import *
 
 
 # This code defines functions which call AST constructors with a dummy location. This is a hack

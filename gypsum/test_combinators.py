@@ -6,10 +6,9 @@
 
 import unittest
 
-execfile("combinators.py")
-
-from tok import *
+from combinators import *
 from lexer import *
+from tok import *
 
 symbol = Tag(SYMBOL)
 
