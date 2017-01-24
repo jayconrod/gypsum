@@ -57,3 +57,7 @@ class TestUtils(unittest.TestCase):
                  (r'"\U10000"', '\U10000')]
         for expected, str in pairs:
             self.assertEquals(expected, encodeString(str))
+
+
+if __name__ == "__main__":
+    unittest.main()

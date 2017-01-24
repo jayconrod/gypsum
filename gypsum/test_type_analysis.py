@@ -2586,3 +2586,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertIn(OptionIsDefined.name, stdExternInfoNames)
         self.assertIn(OptionGet.name, stdExternInfoNames)
         self.assertIn(Tuple2.name, stdExternInfoNames)
+
+
+if __name__ == "__main__":
+    unittest.main()

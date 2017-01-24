@@ -718,3 +718,7 @@ class TestPackageScope(unittest.TestCase):
         defnInfo = classScope.lookupFromSelf("x", NoLoc).getDefnInfo()
         self.assertIs(publicField, defnInfo.irDefn)
         self.assertRaises(ScopeException, classScope.lookupFromSelf, "y", NoLoc)
+
+
+if __name__ == "__main__":
+    unittest.main()

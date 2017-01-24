@@ -179,3 +179,7 @@ class TestClosureConversion(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source, name=STD_NAME)
         gClosureClass = info.package.findClass(name=Name(["f", "g", CLOSURE_SUFFIX]))
         self.assertEquals([getRootClassType()], gClosureClass.supertypes)
+
+
+if __name__ == "__main__":
+    unittest.main()

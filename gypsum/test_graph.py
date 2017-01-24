@@ -30,3 +30,7 @@ class TestGraph(unittest.TestCase):
                   [(1, 2), (2, 3), (2, 4), (3, 5), (4, 5)])
         sort = G.topologicalSort()
         self.assertTrue([1, 2, 3, 4, 5] == sort or [1, 2, 4, 3, 5] == sort)
+
+
+if __name__ == "__main__":
+    unittest.main()

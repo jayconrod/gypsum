@@ -291,3 +291,7 @@ class TestExternalization(utils_test.TestCaseWithDefinitions):
         S.lowerBound = ir_types.VariableType(T)
         externalizeTypeParameter(self.info, S)
         # pass if we don't stack overflow.
+
+
+if __name__ == "__main__":
+    unittest.main()

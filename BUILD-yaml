@@ -1,0 +1,7 @@
+# Bazel file for PyYAML external dependency
+
+py_library(
+    name = "yaml",
+    srcs = glob(["*.py"]),
+    visibility = ["//visibility:public"],
+)

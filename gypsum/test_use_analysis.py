@@ -353,3 +353,7 @@ class TestUseAnalysis(TestCaseWithDefinitions):
                  "    match (obj)\n" + \
                  "      case _ => x"
         self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
+
+
+if __name__ == "__main__":
+    unittest.main()

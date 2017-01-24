@@ -500,3 +500,7 @@ class TestSerialize(utils_test.TestCaseWithDefinitions):
         self.assertEquals(externTrait.supertypes, rewrittenTrait.supertypes)
         self.assertEquals(len(externTrait.methods), len(rewrittenTrait.methods))
         self.assertEquals(externTrait.flags, rewrittenTrait.flags)
+
+
+if __name__ == "__main__":
+    unittest.main()

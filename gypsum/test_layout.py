@@ -201,3 +201,7 @@ class TestLayout(unittest.TestCase):
                          "def f =\n" +
                          "  while (a)\n" +
                          "  {}")
+
+
+if __name__ == "__main__":
+    unittest.main()

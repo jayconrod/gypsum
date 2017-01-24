@@ -97,3 +97,7 @@ class TestLexer(unittest.TestCase):
     def testError(self):
         with self.assertRaises(LexException):
             lex("test", "`")
+
+
+if __name__ == "__main__":
+    unittest.main()

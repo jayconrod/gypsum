@@ -159,3 +159,7 @@ class TestCombinators(unittest.TestCase):
     def testUntangle(self):
         tangled = (1, (2, (3, 4), 5))
         self.assertEqual([1, 2, 3, 4, 5], untangle(tangled))
+
+
+if __name__ == "__main__":
+    unittest.main()

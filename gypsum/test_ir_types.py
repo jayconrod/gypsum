@@ -455,3 +455,7 @@ class TestIrTypes(unittest.TestCase):
         pTy = ClassType(self.P, (sTy, tTy))
         eTy = ExistentialType([S], ExistentialType([T], pTy))
         self.assertEquals((pTy, [S, T]), eTy.effectiveClassType())
+
+
+if __name__ == "__main__":
+    unittest.main()

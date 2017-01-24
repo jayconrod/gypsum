@@ -4250,3 +4250,7 @@ class TestCompiler(TestCaseWithDefinitions):
                 kind=PARAMETER,
                 flags=frozenset([LET]))],
             instTypes=[VariableType(S), VariableType(T)]))
+
+
+if __name__ == "__main__":
+    unittest.main()

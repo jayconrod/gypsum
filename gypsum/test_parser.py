@@ -1080,3 +1080,7 @@ class TestParser(unittest.TestCase):
     # Symbols
     def testQuotedSymbol(self):
         self.checkParse("fo`o", symbol, r"`fo\`o`")
+
+
+if __name__ == "__main__":
+    unittest.main()

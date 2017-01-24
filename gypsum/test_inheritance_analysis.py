@@ -617,3 +617,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
                  "  def f: unit\n" + \
                  "class Bar <: Foo"
         self.assertRaises(InheritanceException, self.analyzeFromSource, source)
+
+
+if __name__ == "__main__":
+    unittest.main()

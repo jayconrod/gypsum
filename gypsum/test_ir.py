@@ -223,3 +223,7 @@ class TestPackageDependency(unittest.TestCase):
                                         ir.PackageVersion([1, 2]),
                                         ir.PackageVersion([3, 4]))
         self.assertNameAndVersionEquals(expected, dep)
+
+
+if __name__ == "__main__":
+    unittest.main()
