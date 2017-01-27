@@ -16,6 +16,14 @@ filegroup(
 
 GYPSUM_DEPS = ["@yaml//:yaml"]
 
+py_binary(
+    name = "compiler",
+    srcs = [":sources"],
+    deps = GYPSUM_DEPS,
+    main = "__main__.py",
+    visibility = ["//visibility:public"],
+)
+
 [py_test(
     name = test_file[:-3],
     size = "small",
