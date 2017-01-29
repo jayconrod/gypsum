@@ -6,6 +6,7 @@
 
 #include "type-parameter.h"
 
+#include <algorithm>
 #include <unordered_set>
 #include "block.h"
 #include "flags.h"
@@ -15,7 +16,10 @@
 #include "string.h"
 #include "type.h"
 
-using namespace std;
+using std::any_of;
+using std::ostream;
+using std::unordered_set;
+using std::vector;
 
 namespace codeswitch {
 namespace internal {

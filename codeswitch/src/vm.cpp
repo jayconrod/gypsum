@@ -67,14 +67,18 @@ VM::VM(const VMOptions& vmOptions)
     }
   #endif
 
-  if (shouldVerifyHeap())
-    heap()->verify();
+  #ifdef DEBUG
+    if (shouldVerifyHeap())
+      heap()->verify();
+  #endif
 }
 
 
 VM::~VM() {
-  if (shouldVerifyHeap())
-    heap()->verify();
+  #ifdef DEBUG
+    if (shouldVerifyHeap())
+      heap()->verify();
+  #endif
 }
 
 

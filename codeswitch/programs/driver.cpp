@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <functional>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <vector>
@@ -17,6 +18,7 @@
 
 namespace placeholders = std::placeholders;
 
+using std::back_inserter;
 using std::cerr;
 using std::move;
 using std::endl;
@@ -76,7 +78,7 @@ static bool processArgs(int argc, char* argv[]) {
   char* CS_PACKAGE_PATH = getenv("CS_PACKAGE_PATH");
   if (CS_PACKAGE_PATH != nullptr) {
     auto paths = split(CS_PACKAGE_PATH, ':');
-    move(paths.begin(), paths.end(), packagePaths.end());
+    move(paths.begin(), paths.end(), back_inserter(packagePaths));
   }
 
   for (int i = 1; i < argc; i++) {
