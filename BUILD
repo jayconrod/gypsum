@@ -9,3 +9,8 @@ python_dist(
     srcs=["//gypsum:sources"],
     data=["//gypsum:common"],
 )
+
+exports_files(
+    glob(["common/*"]),
+    visibility = ["//visibility:public"],
+)
