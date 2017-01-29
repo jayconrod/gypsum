@@ -125,7 +125,7 @@ class FakePackageLoader(BasePackageLoader):
             self.loadedIds.add(package.id)
             for dep in package.dependencies:
                 dep.package = self.loadPackage(dep.name, loc)
-            self.runLoadHooks(package)
+            self._runLoadHooks(package)
         return package
 
     def getLoadedPackages(self):

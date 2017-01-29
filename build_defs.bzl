@@ -69,8 +69,8 @@ Args:
 gy_package = rule(
     implementation = _gy_package_impl,
     attrs = {
-        "package_name": attr.string(mandatory=True),
-        "version": attr.string(mandatory=True),
+        "package_name": attr.string(default="default"),
+        "version": attr.string(default="1"),
         "srcs": attr.label_list(allow_files=True),
         "deps": attr.label_list(allow_files=True),
         "flags": attr.string_list(),

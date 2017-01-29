@@ -41,8 +41,7 @@ def main():
     cmdline.add_argument("-v", "--package-version", action="store", type=PackageVersion.fromString,
                          default=PackageVersion([0]),
                          help="Version of the package being compiled")
-    cmdline.add_argument("-d", "--depends", action="append", type=PackageDependency.fromString,
-                         default=[],
+    cmdline.add_argument("-d", "--depends", action="append", type=str, default=[],
                          help="Additional package dependencies")
     cmdline.add_argument("--no-std", action="store_true",
                          help="Do not add a dependency on the standard library")
@@ -69,8 +68,6 @@ def main():
                          help="Print compiler stack on error")
     args = cmdline.parse_args()
 
-    loader = PackageLoader(args.package_path if len(args.package_path) > 0 else None)
-
     try:
         astModules = []
         for sourceFileName in args.sources:
@@ -96,7 +93,11 @@ def main():
         astPackage.id = AstId(-1)
 
         package = Package(TARGET_PACKAGE_ID, args.package_name, args.package_version)
-        package.dependencies.extend(args.depends)
+        loader = PackageLoader(args.package_path if len(args.package_path) > 0 else None)
+        loader.ensurePackageInfo()
+        if len(args.depends) > 0:
+            depPackages = loader.loadPackageFiles(args.depends)
+            each(package.ensureDependency, depPackages)
         isUsingStd = not args.no_std
         if isUsingStd:
             stdPackage = loader.loadPackage(STD_NAME, NoLoc)
