@@ -950,6 +950,9 @@ class Object: public Reference {
   /** Returns the class this object is an instance of. */
   Class clas() const;
 
+  /** Calls the `to-string` method of this object and returns the result. */
+  String toString();
+
   /**
    * Loads the value stored in a field of the object.
    *
@@ -1298,6 +1301,7 @@ class Exception final {
   Exception& operator = (Exception&&) = default;
   ~Exception() = default;
 
+  const char* message();
   Object& get();
   const Object& get() const;
 

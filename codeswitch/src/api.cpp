@@ -1022,6 +1022,11 @@ Class Object::clas() const {
 }
 
 
+String Object::toString() {
+  return callMethod("to-string").asString();
+}
+
+
 Value Object::getField(const Field& field) const {
   API_CHECK_SELF(Object);
   API_CHECK_SELF(Field);
@@ -1296,6 +1301,11 @@ const char* Error::message() const {
 
 Exception::Exception(Object&& exception)
     : exception_(move(exception)) { }
+
+
+const char* Exception::message() {
+  return exception_.toString().toStdString().c_str();
+}
 
 
 Object& Exception::get() {
