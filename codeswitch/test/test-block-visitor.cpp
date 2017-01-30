@@ -6,6 +6,7 @@
 
 #include "test.h"
 
+#include <algorithm>
 #include <cstring>
 #include "array.h"
 #include "block.h"
