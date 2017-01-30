@@ -11,10 +11,14 @@
 #include <string>
 #include <vector>
 #include <cerrno>
+#include <cstdlib>
 #include <cstring>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+
+#include "codeswitch.h"
+
 #include "error.h"
 
 #ifndef TEST_PROGRAMS
@@ -28,12 +32,15 @@ static bool shouldFork = true;
 static bool verbose = false;
 
 void usage(const char* name) {
-  cerr << "usage: " << name << ": [-nofork] [-verbose] [name]" << endl;
+  cerr << "usage: " << name << ": [-P dir] [-nofork] [-verbose] [name]" << endl;
   _exit(0);
 }
 
 
 void processArguments(int argc, char* argv[]) {
+  char* CS_PACKAGE_PATH = getenv("CS_PACKAGE_PATH");
+  string packagePaths = CS_PACKAGE_PATH != nullptr ? CS_PACKAGE_PATH : "";
+  auto packagePathSep = "";
   for (int i = 1; i < argc; i++) {
     string arg(argv[i]);
     if (!arg.empty() && arg[0] == '-') {
@@ -41,6 +48,13 @@ void processArguments(int argc, char* argv[]) {
         shouldFork = false;
       } else if (arg == "-verbose") {
         verbose = true;
+      } else if (arg == "-P") {
+        if (i + 1 == argc) {
+          usage(argv[0]);
+        }
+        packagePaths += packagePathSep;
+        packagePaths += argv[++i];
+        packagePathSep = ":";
       } else {
         usage(argv[0]);
       }
@@ -52,6 +66,7 @@ void processArguments(int argc, char* argv[]) {
       }
     }
   }
+  setenv("CS_PACKAGE_PATH", packagePaths.c_str(), 1 /*overwrite*/);
 }
 
 
@@ -147,6 +162,12 @@ int main(int argc, char* argv[]) {
         } catch (TestException& exn) {
           cerr << '\n' << test->name() << ": test error: " << exn.message() << endl;
           _exit(1);
+        } catch (codeswitch::Exception& exn) {
+          cerr << '\n' << test->name() << ": test exception: " << exn.message() << endl;
+          _exit(1);
+        } catch (codeswitch::Error& exn) {
+          cerr << '\n' << test->name() << ": test error: " << exn.message() << endl;
+          _exit(2);
         } catch (codeswitch::internal::Error& exn) {
           cerr << '\n' << test->name() << ": internal error: " << exn.message() << endl;
           _exit(2);
@@ -190,6 +211,14 @@ int main(int argc, char* argv[]) {
         cerr << '\n' << test->name() << ": test error: " << exn.message() << endl;
         failCount++;
         code = 'F';
+      } catch (codeswitch::Exception& exn) {
+        cerr << '\n' << test->name() << ": test exception: " << exn.message() << endl;
+        failCount++;
+        code = 'F';
+      } catch (codeswitch::Error& exn) {
+        cerr << '\n' << test->name() << ": test error: " << exn.message() << endl;
+        errorCount++;
+        code = 'E';
       } catch (codeswitch::internal::Error& exn) {
         cerr << '\n' << test->name() << ": internal error: " << exn.message() << endl;
         errorCount++;

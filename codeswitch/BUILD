@@ -1,4 +1,5 @@
-load(":build_defs.bzl", "py_gen_file")
+load("//:build_defs.bzl", "gy_package")
+load(":build_defs.bzl", "py_gen_file", "gy_test_name")
 
 config_setting(
     name = "linux-x64",
@@ -20,6 +21,13 @@ config_setting(
         "compilation_mode": "dbg",
     }
 )
+
+CODESWITCH_COPTS = [
+    "-std=c++11",
+    "-iquote", "codeswitch/src",
+    "-iquote", "$(GENDIR)/codeswitch/src",
+    "-Wno-invalid-offsetof",
+]
 
 cc_library(
     name = "codeswitch_lib",
@@ -56,12 +64,7 @@ cc_library(
             "//conditions:default": [],
         }
     ),
-    copts = [
-        "-std=c++11",
-        "-iquote", "codeswitch/src",
-        "-iquote", "$(GENDIR)/codeswitch/src",
-        "-Wno-invalid-offsetof",
-    ],
+    copts = CODESWITCH_COPTS,
     linkopts = ["-ldl"],
     visibility = ["//visibility:public"],
 )
@@ -100,4 +103,37 @@ py_gen_file(
     script = "src/gen_roots_builtins_cpp.py",
     data = "//:common/builtins.yaml",
     out = "src/roots_builtins.cpp",
+)
+
+GYPSUM_TESTS = [(f, gy_test_name(f)) for f in glob(["test/*.gy"], exclude=["test/std-io-length.gy"])]
+
+
+cc_test(
+    name = "codeswitch_test",
+    size = "small",
+    srcs = glob(["test/*.cpp", "test/*.h", "src/*.h"])
+        + [":test/%s_resource" % t for (_, t) in GYPSUM_TESTS],
+    deps = [":codeswitch_lib"],
+    data = ["//std"],
+    copts = CODESWITCH_COPTS + ["-iquote", "codeswitch/test"],
+    args = ["-P", "std", "-nofork", "-verbose", "Dict"],
+)
+
+[gy_package(
+    name = "test/%s_package" % t,
+    package_name = "test." + t,
+    srcs = [f],
+    deps = ["//std"],
+) for f, t in GYPSUM_TESTS]
+[genrule(
+    name = "test/%s_resource" % t,
+    srcs = [":test/%s_package" % t],
+    tools = [":test/mktest"],
+    outs = ["test/%s_resource.cpp" % t],
+    cmd = "python $(location :test/mktest) %s $< $@" % t,
+) for _, t in GYPSUM_TESTS]
+
+py_binary(
+    name = "test/mktest",
+    srcs = ["test/mktest.py"],
 )

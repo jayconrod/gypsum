@@ -52,6 +52,12 @@ def _gy_package_impl(ctx):
         arguments=args,
         executable=ctx.executable._gy_compiler,
         progress_message="Compiling Gypsum package %s" % ctx.outputs.out.path)
+    runfiles = ctx.runfiles(files = [ctx.outputs.out], collect_data = True)
+    return struct(
+        label = ctx.label,
+        files = set([ctx.outputs.out]),
+        runfiles = runfiles,
+    )
 
 
 """Builds a CodeSwitch package from Gypsum source code.

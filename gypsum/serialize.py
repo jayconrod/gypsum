@@ -58,6 +58,12 @@ def deserialize(fileName, packageLoader):
         raise IOError(exn)
 
 
+def deserializeNameAndVersion(fileName):
+    with open(fileName, "rb") as inFile:
+        deserializer = Deserializer(inFile, None)
+        return deserializer.deserializeNameAndVersion()
+
+
 HEADER_FORMAT = "<Ihhqiiiiiiiii"
 MAGIC = 0x676b7073
 MAJOR_VERSION = 0
@@ -395,6 +401,10 @@ class Deserializer(object):
         self.entryFunctionIndex = None
         self.initFunctionIndex = None
         self.typeParameters = []
+
+    def deserializeNameAndVersion(self):
+        self.readHeader()
+        return self.package.name, self.package.version
 
     def deserialize(self):
         self.readHeader()

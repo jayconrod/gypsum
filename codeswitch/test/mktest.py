@@ -10,18 +10,16 @@ import os.path
 import re
 import sys
 
-if len(sys.argv) != 3:
-    sys.stderr.write("usage: %s testname in.gy out.cpp\n" % sys.argv[0])
+if len(sys.argv) != 4:
+    sys.stderr.write("usage: %s testname in.csp out.cpp\n" % sys.argv[0])
     sys.exit(1)
 
-inFileName = sys.argv[1]
-outFileName = sys.argv[2]
+testName = sys.argv[1]
+inFileName = sys.argv[2]
+outFileName = sys.argv[3]
 
 with open(inFileName) as inFile:
     contents = inFile.read()
-
-testName = os.path.splitext(os.path.basename(inFileName))[0]
-testName = re.sub(r"(?:^|(-))([a-zA-Z0-9])", lambda m: m.group(2).upper(), testName)
 
 with open(outFileName, "w") as outFile:
     outFile.write("""// DO NOT MODIFY

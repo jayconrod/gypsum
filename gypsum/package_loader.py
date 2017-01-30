@@ -180,59 +180,44 @@ class PackageLoader(BasePackageLoader):
         Raises:
             PackageException: if a package cannot be located or if a different package with
                 the same name as one of the loaded packages is already loaded.
-            OSError: if there is an I/O error loading the package.
+            OSError, IOError: if there is an I/O error loading the package.
         """
-        loadedPackages = []
-        packagesWithInfo = []
-        dependencyLists = {}
-        newInfo = {}
+        # Make a list of package names we will load and create info where necessary. We may
+        # have already loaded some of these packages.
+        names = []
         for fileName in fileNames:
             if fileName in self.packageInfoByFile:
+                # We've either indexed or loaded this package already.
                 info = self.packageInfoByFile[fileName]
-                if info.package is None:
-                    package = serialize.deserialize(fileName, self)
-                    self._checkPackageMatchesInfo(info, package, NoLoc)
-                    loadedPackages.append(package)
-                    packagesWithInfo.append(package)
-                    dependencyLists[fileName] = package.dependencies
+                assert self.packageInfoByName[info.name] is info
+                names.append(info.name)
             else:
-                package = serialize.deserialize(fileName, self)
-                if package.name in self.packageInfoByName:
-                    raise errors.PackageException(
-                        NoLoc, "%s: already loaded from different file" % package.name)
-                info = PackageLoader.Info(package.name, package.version, fileName, package)
-                loadedPackages.append(package)
-                newInfo[package.name] = info
-                dependencyLists[fileName] = package.dependencies
-
-        for fileName, deps in dependencyLists.iteritems():
-            for dep in deps:
-                if dep.name in self.packageInfoByName:
-                    depPackage = self.packageInfoByName[dep.name].package
-                elif dep.name in newInfo:
-                    depPackage = newInfo[dep.name].package
+                # We have never heard of this package before. We need to load some metadata
+                # to see what it is.
+                name, version = serialize.deserializeNameAndVersion(fileName)
+                names.append(name)
+                if name in self.packageInfoByName:
+                    # We've indexed a package of the same name.
+                    info = self.packageInfoByName[name]
+                    if info.package is not None:
+                        # We already loaded a package of the same name.
+                        raise errors.PackageException(
+                            NoLoc, "%s: already loaded a different package" % name)
+                    else:
+                        # We didn't load it yet. Update the info to point to the new file.
+                        info.version = version
+                        del self.packageInfoByFile[info.fileName]
+                        info.fileName = fileName
+                        self.packageInfoByFile[fileName] = info
                 else:
-                    depPackage = None
-                if depPackage is None:
-                    raise errors.PackageException(
-                        NoLoc, "%s: could not load dependency: %s" % (fileName, dep.name))
-                if ((dep.minVersion is not None and depPackage.version < dep.minVersion) or
-                    (dep.maxVersion is not None and depPackage.version > dep.maxVersion)):
-                    raise errors.PackageException(
-                        NoLoc, "%s: dependency has bad version: %s" % (dep.name, dep.version))
+                    # We've never heard of this package. Create new info.
+                    info = PackageLoader.Info(name, version, fileName)
+                    self.packageInfoByName[name] = info
+                    self.packageInfoByFile[fileName] = info
+                info = PackageLoader.Info(name, version, fileName)
 
-        for info in newInfo.itervalues():
-            self.packageInfoByName[info.name] = info
-            self.packageInfoById[info.package.id] = info
-            self.packageInfoByFile[info.fileName] = info
-        for package in packagesWithInfo:
-            info = self.packageInfoByName[package.name]
-            assert info.package is None
-            info.package = package
-            self.packageInfoById[package.id] = info
-        for package in loadedPackages:
-            self._runLoadHooks(package)
-        return [self.packageInfoByFile[fileName].package for fileName in fileNames]
+        # Load the packages, if they're not loaded already.
+        return map(self.loadPackage, names)
 
     def getLoadedPackages(self):
         return [packageInfo.package for packageInfo in self.packageInfoById.itervalues()]
