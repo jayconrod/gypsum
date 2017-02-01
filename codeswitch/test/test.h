@@ -9,6 +9,9 @@
 
 #include <string>
 #include <exception>
+#include <vector>
+
+#include "codeswitch.h"
 
 class TestException: public std::exception {
  public:
@@ -61,6 +64,14 @@ inline void assertFalse(bool result, const std::string& message) {
 }
 
 
+inline codeswitch::VMOptions getDefaultVMOptions() {
+  codeswitch::VMOptions opts;
+  opts.nativeFunctionSearchOrder =
+      std::vector<codeswitch::NativeFunctionSearch>{codeswitch::SEARCH_LINKED_FUNCTIONS};
+  return opts;
+}
+
+
 #define S(x) #x
 #define S_(x) S(x)
 #define MESSAGE(msg) __FILE__ ":" S_(__LINE__) ": " msg
@@ -96,7 +107,7 @@ void Test ## name ::test()
 
 
 #define TEST_PROLOGUE \
-  VM vm; \
+  VM vm(getDefaultVMOptions()); \
   Heap* heap = vm.heap(); \
   HandleScope handleScope(&vm); \
   AllowAllocationScope allowAllocation(heap, true); \

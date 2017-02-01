@@ -65,11 +65,14 @@ def _gy_package_impl(ctx):
 Note that the package name and version determine the output file name.
 
 Args:
+    name: label for the target.
     package_name: the CodeSwitch package name.
     version: the CodeSwitch package version.
     srcs: a list of Gypsum sources. The order will be preserved.
     deps: a list of CodeSwitch packages that the package being compiled depends on directly.
         Indirect dependencies do not need to be listed.
+    native_lib: a label for a `cc_library` containing implementations of native functions
+        in this package.
     flags: additional flags to pass to the Gypsum compiler.
 """
 gy_package = rule(
@@ -79,6 +82,7 @@ gy_package = rule(
         "version": attr.string(default="1"),
         "srcs": attr.label_list(allow_files=True),
         "deps": attr.label_list(allow_files=True),
+        "native_lib": attr.label(),
         "flags": attr.string_list(),
         "_gy_compiler": attr.label(
             executable=True, cfg="host", default=Label("//gypsum:compiler")),

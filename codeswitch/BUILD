@@ -105,25 +105,24 @@ py_gen_file(
     out = "src/roots_builtins.cpp",
 )
 
-GYPSUM_TESTS = [(f, gy_test_name(f)) for f in glob(["test/*.gy"], exclude=["test/std-io-length.gy"])]
-
+GYPSUM_TESTS = [(f, gy_test_name(f)) for f in glob(["test/*.gy"])]
 
 cc_test(
     name = "codeswitch_test",
     size = "small",
     srcs = glob(["test/*.cpp", "test/*.h", "src/*.h"])
         + [":test/%s_resource" % t for (_, t) in GYPSUM_TESTS],
-    deps = [":codeswitch_lib"],
-    data = ["//std"],
+    deps = [":codeswitch_lib", "//std/io:std.io-1"],
+    data = ["//std", "//std/io"],
     copts = CODESWITCH_COPTS + ["-iquote", "codeswitch/test"],
-    args = ["-P", "std", "-nofork", "-verbose", "Dict"],
+    args = ["-P", "std", "-P", "std/io"],
 )
 
 [gy_package(
     name = "test/%s_package" % t,
     package_name = "test." + t,
     srcs = [f],
-    deps = ["//std"],
+    deps = ["//std", "//std/io"],
 ) for f, t in GYPSUM_TESTS]
 [genrule(
     name = "test/%s_resource" % t,
