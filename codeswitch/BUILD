@@ -1,5 +1,5 @@
 load("//:build_defs.bzl", "gy_package")
-load(":build_defs.bzl", "py_gen_file", "gy_test_name")
+load(":build_defs.bzl", "py_gen_file", "doxygen_archive", "gy_test_name")
 
 config_setting(
     name = "linux-x64",
@@ -75,6 +75,12 @@ cc_binary(
     deps = [":codeswitch"],
     copts = ["-std=c++11"],
     visibility = ["//visibility:public"],
+)
+
+doxygen_archive(
+    name = "codeswitch_doc",
+    doxyfile = "include/Doxyfile",
+    srcs = glob(["include/*.h", "include/*.md"]),
 )
 
 py_gen_file(
