@@ -35,9 +35,11 @@ def _gy_package_impl(ctx):
     out_files = [pkg_file]
     runfile_links = {}
     if ctx.attr.native_lib:
-        native_lib_file = [f for f in ctx.files.native_lib if f.extension == "so"][0]
+        exts = ["so", "dylib"]
+        native_lib_file = [f for f in ctx.files.native_lib if f.extension in exts][0]
         pkg_dir = _dirname(pkg_file.short_path)
-        link_path = "%s/lib%s-%s.so" % (pkg_dir, ctx.attr.package_name, ctx.attr.package_version)
+        link_path = "%s/lib%s-%s.%s" % (
+            pkg_dir, ctx.attr.package_name, ctx.attr.package_version, native_lib_file.extension)
         runfile_links[link_path] = native_lib_file
     runfiles = ctx.runfiles(
         files = out_files,
