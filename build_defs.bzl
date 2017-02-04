@@ -54,31 +54,25 @@ def _compile_gy_package(ctx, src_files, dep_files, flags, pkg_file):
     )
 
 
-def _symlink(ctx, src, dst_path):
-    dst = ctx.new_file(dst_path)
-    command = ("pwd && mkdir -p $(dirname '%s') && ln -s $(readlink -e '%s') '%s'"
-               % (dst.path, src.path, dst.path))
-    ctx.action(
-        inputs = [src],
-        outputs = [dst],
-        command = command,
-        progress_message = "Creating link"
-    )
-    return dst
-
-
 def _gy_package_impl(ctx):
     _compile_gy_package(ctx, ctx.files.srcs, ctx.files.deps, ctx.attr.flags, ctx.outputs.out)
-    out_files = [ctx.outputs.out]
-    run_files = [ctx.outputs.out]
+    pkg_file = ctx.outputs.out
+    out_files = [pkg_file]
+    runfile_links = {}
     if ctx.attr.native_lib:
-        native_lib_file = [f for f in ctx.files.native_lib if f.path.endswith(".so")][0]
-        native_lib_name = "lib%s-%s.so" % (ctx.attr.package_name, ctx.attr.version)
-        run_files.append(_symlink(ctx, native_lib_file, native_lib_name))
+        native_lib_file = [f for f in ctx.files.native_lib if f.extension == "so"][0]
+        pkg_dir = _dirname(pkg_file.short_path)
+        link_path = "%s/lib%s-%s.so" % (pkg_dir, ctx.attr.package_name, ctx.attr.version)
+        runfile_links[link_path] = native_lib_file
+    runfiles = ctx.runfiles(
+        files = out_files,
+        symlinks = runfile_links,
+        collect_data = True
+    )
     return struct(
         label = ctx.label,
         files = set(out_files),
-        runfiles = ctx.runfiles(files = run_files, collect_data = True),
+        runfiles = runfiles,
     )
 
 
@@ -111,3 +105,10 @@ gy_package = rule(
     },
     outputs = {"out": "%{package_name}-%{version}.csp"},
 )
+
+def _dirname(path):
+    index = path.rfind("/")
+    if index == -1:
+        return "."
+    else:
+        return path[:index]
