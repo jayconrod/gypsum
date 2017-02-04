@@ -159,6 +159,7 @@ cc_test(
     data = [":test.ApiByName"],
     copts = [
         "-std=c++11",
+        "-iquote", "codeswitch/src",
         "-iquote", "codeswitch/test",
     ],
     args = ["codeswitch", "std"],
@@ -182,6 +183,7 @@ cc_test(
     data = [":test.ApiElements"],
     copts = [
         "-std=c++11",
+        "-iquote", "codeswitch/src",
         "-iquote", "codeswitch/test",
     ],
     args = ["codeswitch", "std"],
