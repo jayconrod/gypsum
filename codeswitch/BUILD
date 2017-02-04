@@ -110,12 +110,24 @@ GYPSUM_TESTS = [(f, gy_test_name(f)) for f in glob(["test/*.gy"])]
 cc_test(
     name = "codeswitch_test",
     size = "small",
-    srcs = glob(["test/*.cpp", "test/*.h", "src/*.h"])
+    srcs = glob(["test/*.cpp", "test/*.h", "src/*.h"], exclude=["test.h", "test.cpp"])
         + [":test/%s_resource" % t for (_, t) in GYPSUM_TESTS],
-    deps = [":codeswitch_lib", "//std/io:std.io-1"],
+    deps = [
+        ":codeswitch_lib",
+        ":codeswitch_test_lib",
+        "//std/io:std.io-1"
+    ],
     data = ["//std", "//std/io"],
     copts = CODESWITCH_COPTS + ["-iquote", "codeswitch/test"],
     args = ["-P", "std", "-P", "std/io"],
+)
+
+cc_library(
+    name = "codeswitch_test_lib",
+    srcs = ["test/test.cpp"],
+    hdrs = ["test/test.h"],
+    deps = [":codeswitch_lib"],
+    testonly = True,
 )
 
 [gy_package(
@@ -135,4 +147,112 @@ cc_test(
 py_binary(
     name = "test/mktest",
     srcs = ["test/mktest.py"],
+)
+
+cc_test(
+    name = "ApiByName",
+    size = "small",
+    srcs = ["test/ApiByName/ApiByName.cpp"],
+    deps = [
+        ":codeswitch_lib",
+        ":codeswitch_test_lib",
+    ],
+    data = [":test.ApiByName"],
+    copts = [
+        "-std=c++11",
+        "-iquote", "codeswitch/test",
+    ],
+    args = ["codeswitch", "std"],
+)
+
+gy_package(
+    name = "test.ApiByName",
+    package_name = "test.ApiByName",
+    srcs = ["test/ApiByName/ApiByName.gy"],
+    deps = ["//std"],
+)
+
+cc_test(
+    name = "ApiElements",
+    size = "small",
+    srcs = ["test/ApiElements/ApiElements.cpp"],
+    deps = [
+        ":codeswitch_lib",
+        ":codeswitch_test_lib",
+    ],
+    data = [":test.ApiElements"],
+    copts = [
+        "-std=c++11",
+        "-iquote", "codeswitch/test",
+    ],
+    args = ["codeswitch", "std"],
+)
+
+gy_package(
+    name = "test.ApiElements",
+    package_name = "test.ApiElements",
+    srcs = ["test/ApiElements/ApiElements.gy"],
+    deps = ["//std"],
+)
+
+cc_test(
+    name = "NativeCalls",
+    size = "small",
+    srcs = ["test/NativeCalls/NativeCalls.cpp"],
+    deps = [
+        ":codeswitch_lib",
+        ":codeswitch_test_lib",
+        ":NativeCalls-static",
+    ],
+    data = [
+        ":test.NativeCalls.sharedlib",
+        ":test.NativeCalls.staticlib",
+        ":test.NativeCalls.registered",
+    ],
+    copts = [
+        "-std=c++11",
+        "-iquote", "codeswitch/src",
+        "-iquote", "codeswitch/test",
+    ],
+    args = ["codeswitch", "std"],
+)
+
+gy_package(
+    name = "test.NativeCalls.sharedlib",
+    package_name = "test.NativeCalls.sharedlib",
+    srcs = ["test/NativeCalls/sharedlib.gy"],
+    deps = ["//std"],
+    native_lib = ":test.NativeCalls.sharedlib-native",
+    testonly = 1,
+)
+
+cc_library(
+    name = "test.NativeCalls.sharedlib-native",
+    srcs = ["test/NativeCalls/sharedlib.cpp"],
+    deps = [":codeswitch_lib"],
+    testonly = 1,
+    linkstatic = 0,
+)
+
+gy_package(
+    name = "test.NativeCalls.staticlib",
+    package_name = "test.NativeCalls.staticlib",
+    srcs = ["test/NativeCalls/staticlib.gy"],
+    deps = ["//std"],
+    testonly = 1,
+)
+
+cc_library(
+    name = "NativeCalls-static",
+    srcs = ["test/NativeCalls/staticlib.cpp"],
+    deps = [":codeswitch_lib"],
+    testonly = 1,
+)
+
+gy_package(
+    name = "test.NativeCalls.registered",
+    package_name = "test.NativeCalls.registered",
+    srcs = ["test/NativeCalls/registered.gy"],
+    deps = ["//std"],
+    testonly = 1,
 )

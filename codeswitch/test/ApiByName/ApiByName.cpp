@@ -23,17 +23,13 @@ using codeswitch::VM;
 using codeswitch::VMOptions;
 
 
-static string dirName(const string& path) {
-  auto pos = path.find_last_of('/');
-  return pos != string::npos ? path.substr(0, pos) : path;
-}
-
-
 int main(int argc, char* argv[]) {
   VMOptions vmOptions;
-  vmOptions.packageSearchPaths.push_back(dirName(argv[0]));
+  for (int i = 1; i < argc; i++) {
+    vmOptions.packageSearchPaths.push_back(argv[i]);
+  }
   VM vm(vmOptions);
-  auto packageName = Name::fromStringForPackage(String(&vm, "ApiByName"));
+  auto packageName = Name::fromStringForPackage(String(&vm, "test.ApiByName"));
   auto package = vm.loadPackage(packageName);
   ASSERT_TRUE(package);
 

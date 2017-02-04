@@ -9,6 +9,6 @@
 #include <codeswitch.h>
 
 extern "C" __attribute__((visibility("default")))
-int64_t NativeCalls__staticlib___f(codeswitch::VM* vm) {
+int64_t test__NativeCalls__staticlib___f(codeswitch::VM* vm) {
   return 34;
 }
