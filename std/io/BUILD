@@ -8,11 +8,11 @@ gy_package(
     version = "1",
     srcs = glob(["src/*.gy"]),
     deps = ["//std"],
-    native_lib = ":std.io-1",
+    native_lib = ":std.io-native",
 )
 
 cc_library(
-    name = "std.io-1",
+    name = "std.io-native",
     srcs = glob(["src/*.cpp"]),
     deps = ["//codeswitch:codeswitch_lib"],
 )

@@ -115,7 +115,6 @@ cc_test(
     deps = [
         ":codeswitch_lib",
         ":codeswitch_test_lib",
-        "//std/io:std.io-1"
     ],
     data = ["//std", "//std/io"],
     copts = CODESWITCH_COPTS + ["-iquote", "codeswitch/test"],

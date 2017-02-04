@@ -70,15 +70,15 @@ def _symlink(ctx, src, dst_path):
 def _gy_package_impl(ctx):
     _compile_gy_package(ctx, ctx.files.srcs, ctx.files.deps, ctx.attr.flags, ctx.outputs.out)
     out_files = [ctx.outputs.out]
+    run_files = [ctx.outputs.out]
     if ctx.attr.native_lib:
         native_lib_file = [f for f in ctx.files.native_lib if f.path.endswith(".so")][0]
         native_lib_name = "lib%s-%s.so" % (ctx.attr.package_name, ctx.attr.version)
-        out_files.append(_symlink(ctx, native_lib_file, native_lib_name))
-    runfiles = ctx.runfiles(files = out_files, collect_data = True)
+        run_files.append(_symlink(ctx, native_lib_file, native_lib_name))
     return struct(
         label = ctx.label,
         files = set(out_files),
-        runfiles = runfiles,
+        runfiles = ctx.runfiles(files = run_files, collect_data = True),
     )
 
 

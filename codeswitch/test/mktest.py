@@ -36,7 +36,7 @@ with open(outFileName, "w") as outFile:
 using codeswitch::Error;
 using codeswitch::Exception;
 using codeswitch::NativeFunctionSearch;
-using codeswitch::SEARCH_LINKED_FUNCTIONS;
+using codeswitch::SEARCH_LIBRARY_FUNCTIONS;
 using codeswitch::VM;
 using codeswitch::VMOptions;
 using std::ios;
@@ -70,7 +70,7 @@ TEST({testName}) {{
   for (auto& path : split(getenv("CS_PACKAGE_PATH"), ':'))
     vmOptions.packageSearchPaths.push_back(path);
   vmOptions.nativeFunctionSearchOrder =
-    vector<NativeFunctionSearch>{{SEARCH_LINKED_FUNCTIONS}};
+    vector<NativeFunctionSearch>{{SEARCH_LIBRARY_FUNCTIONS}};
   VM vm(vmOptions);
   auto package = vm.loadPackageFromStream(stream);
   auto function = package.entryFunction();
