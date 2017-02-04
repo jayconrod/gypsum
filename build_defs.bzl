@@ -30,32 +30,54 @@ def python_dist(package_name,
         message="Packaging " + package_name)
 
 
-def _gy_package_impl(ctx):
+def _compile_gy_package(ctx, src_files, dep_files, flags, pkg_file):
     args = [
         "--package-name", ctx.attr.package_name,
         "--package-version", ctx.attr.version,
         "--output", ctx.outputs.out.path,
     ]
     inputs = []
-    for dep in ctx.attr.deps:
-        for file_ in dep.files:
-            args.append("--depends")
-            args.append(file_.path)
-            inputs.append(file_)
-    for src in ctx.files.srcs:
-        args.append(src.path)
-        inputs.append(src)
-    args.extend(ctx.attr.flags)
+    for f in dep_files:
+        args.append("--depends")
+        args.append(f.path)
+        inputs.append(f)
+    for f in src_files:
+        args.append(f.path)
+        inputs.append(f)
+    args.extend(flags)
     ctx.action(
-        inputs=inputs,
-        outputs=[ctx.outputs.out],
-        arguments=args,
-        executable=ctx.executable._gy_compiler,
-        progress_message="Compiling Gypsum package %s" % ctx.outputs.out.path)
-    runfiles = ctx.runfiles(files = [ctx.outputs.out], collect_data = True)
+        inputs = inputs,
+        outputs = [pkg_file],
+        arguments = args,
+        executable = ctx.executable._gy_compiler,
+        progress_message = "Compiling Gypsum package %s" % pkg_file.path
+    )
+
+
+def _symlink(ctx, src, dst_path):
+    dst = ctx.new_file(dst_path)
+    command = ("pwd && mkdir -p $(dirname '%s') && ln -s $(readlink -e '%s') '%s'"
+               % (dst.path, src.path, dst.path))
+    ctx.action(
+        inputs = [src],
+        outputs = [dst],
+        command = command,
+        progress_message = "Creating link"
+    )
+    return dst
+
+
+def _gy_package_impl(ctx):
+    _compile_gy_package(ctx, ctx.files.srcs, ctx.files.deps, ctx.attr.flags, ctx.outputs.out)
+    out_files = [ctx.outputs.out]
+    if ctx.attr.native_lib:
+        native_lib_file = [f for f in ctx.files.native_lib if f.path.endswith(".so")][0]
+        native_lib_name = "lib%s-%s.so" % (ctx.attr.package_name, ctx.attr.version)
+        out_files.append(_symlink(ctx, native_lib_file, native_lib_name))
+    runfiles = ctx.runfiles(files = out_files, collect_data = True)
     return struct(
         label = ctx.label,
-        files = set([ctx.outputs.out]),
+        files = set(out_files),
         runfiles = runfiles,
     )
 
