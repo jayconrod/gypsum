@@ -30,7 +30,7 @@ CODESWITCH_COPTS = [
 ]
 
 cc_library(
-    name = "codeswitch_lib",
+    name = "codeswitch",
     srcs = glob(["src/*.h", "src/*.cpp"]) + [
         ":src/builtins.h",
         ":src/flags.h",
@@ -70,9 +70,9 @@ cc_library(
 )
 
 cc_binary(
-    name = "codeswitch",
+    name = "codeswitch_cmd",
     srcs = ["programs/driver.cpp"],
-    deps = [":codeswitch_lib"],
+    deps = [":codeswitch"],
     copts = ["-std=c++11"],
     visibility = ["//visibility:public"],
 )
@@ -113,7 +113,7 @@ cc_test(
     srcs = glob(["test/*.cpp", "test/*.h", "src/*.h"], exclude=["test.h", "test.cpp"])
         + [":test/%s_resource" % t for (_, t) in GYPSUM_TESTS],
     deps = [
-        ":codeswitch_lib",
+        ":codeswitch",
         ":codeswitch_test_lib",
     ],
     data = ["//std", "//std/io"],
@@ -125,7 +125,7 @@ cc_library(
     name = "codeswitch_test_lib",
     srcs = ["test/test.cpp"],
     hdrs = ["test/test.h"],
-    deps = [":codeswitch_lib"],
+    deps = [":codeswitch"],
     testonly = True,
 )
 
@@ -153,7 +153,7 @@ cc_test(
     size = "small",
     srcs = ["test/ApiByName/ApiByName.cpp"],
     deps = [
-        ":codeswitch_lib",
+        ":codeswitch",
         ":codeswitch_test_lib",
     ],
     data = [":test.ApiByName"],
@@ -176,7 +176,7 @@ cc_test(
     size = "small",
     srcs = ["test/ApiElements/ApiElements.cpp"],
     deps = [
-        ":codeswitch_lib",
+        ":codeswitch",
         ":codeswitch_test_lib",
     ],
     data = [":test.ApiElements"],
@@ -199,7 +199,7 @@ cc_test(
     size = "small",
     srcs = ["test/NativeCalls/NativeCalls.cpp"],
     deps = [
-        ":codeswitch_lib",
+        ":codeswitch",
         ":codeswitch_test_lib",
         ":NativeCalls-static",
     ],
@@ -228,7 +228,7 @@ gy_package(
 cc_library(
     name = "test.NativeCalls.sharedlib-native",
     srcs = ["test/NativeCalls/sharedlib.cpp"],
-    deps = [":codeswitch_lib"],
+    deps = [":codeswitch"],
     testonly = 1,
     linkstatic = 0,
 )
@@ -244,7 +244,7 @@ gy_package(
 cc_library(
     name = "NativeCalls-static",
     srcs = ["test/NativeCalls/staticlib.cpp"],
-    deps = [":codeswitch_lib"],
+    deps = [":codeswitch"],
     testonly = 1,
 )
 

@@ -4,7 +4,8 @@
 # the GPL license that can be found in the LICENSE.txt file.
 
 
-# Don't run this script directly. Instead, run:
+# This script builds an installable source distribution for the Gypsum
+# compiler. Don't run this directly. Instead, run:
 #     bazel build //:gypsum
 
 from setuptools import setup, find_packages
