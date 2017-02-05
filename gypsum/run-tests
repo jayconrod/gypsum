@@ -1,0 +1,78 @@
+#!/usr/bin/env python2.7
+# -*- mode: python; -*-
+
+# Copyright Jay Conrod. All rights reserved.
+#
+# This file is part of Gypsum. Use of this source code is governed by
+# the GPL license that can be found in the LICENSE.txt file.
+
+import os
+import os.path
+import re
+import subprocess
+import sys
+import time
+
+if len(sys.argv) != 1:
+    sys.stderr.write("usage: %s\n" % sys.argv[1])
+    sys.exit(1)
+
+# Start the clock. We'll report elapsed time at the end.
+startTime = time.time()
+
+# Change to directory containing this script.
+scriptDir = os.path.split(sys.argv[0])[0]
+if len(scriptDir) > 0:
+    os.chdir(scriptDir)
+
+# Locate all of the test suites.
+testSuites = []
+for fileName in os.listdir("."):
+    if not (fileName.startswith("test_") and fileName.endswith(".py")):
+        continue
+    moduleName = fileName[:-3]  # remove .py extension
+    with open(fileName) as testFile:
+        for line in testFile:
+            m = re.match("^class\s*([A-Za-z0-9_]+)\(.*TestCase", line)
+            if m:
+                suiteName = m.group(1)
+                testSuites.append((moduleName, suiteName))
+
+testSuites.sort()
+
+# Execute all of the suites concurrently, buffering their output.
+processes = []
+null = open("/dev/null")
+for moduleName, suiteName in testSuites:
+    process = subprocess.Popen(["python", "-m", "unittest", moduleName + "." + suiteName],
+                               bufsize=(1024 * 1024),
+                               stdin=null, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    process.moduleName = moduleName
+    process.suiteName = suiteName
+    processes.append(process)
+
+processCount = len(processes)
+success = True
+while processCount > 0:
+    (pid, code) = os.wait()
+    process = next(p for p in processes if p.pid == pid)
+    stdout, stderr = process.communicate()
+    prefix = "%s.%s" % (process.moduleName, process.suiteName)
+    if len(stdout) > 0:
+        sys.stdout.write("%s: %s\n" % (prefix, stdout))
+    if len(stderr) > 0:
+        sys.stderr.write("%s: %s\n" % (prefix, stderr))
+    if len(stdout) == 0 and len(stderr) == 0:
+        sys.stdout.write("%s: finished\n" % prefix)
+    success &= code == 0
+    processCount -= 1
+
+# Report elapsed time.
+elapsedTime = time.time() - startTime
+sys.stdout.write("Total elapsed time: %0.3f s\n" % elapsedTime)
+if success:
+    sys.stdout.write("All tests passed.\n")
+    sys.exit(0)
+else:
+    sys.stdout.write("Some tests failed.\n")
+    sys.exit(1)

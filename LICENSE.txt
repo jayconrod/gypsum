@@ -1,11 +1,12 @@
 Copyright 2014-2017, Jay Conrod. All rights reserved.
 
-The Gypsum bootstrap compiler in the `compiler` directory is licensed
+The Gypsum bootstrap compiler in the `gypsum` directory is licensed
 under the GNU General Public License v3, which can be found in
-compiler/LICENSE.txt.
+gypsum/LICENSE.txt.
 
-The CodeSwitch virtual machine in the `vm` directory is licensed under
-a 3-clause BSD license, which can be found in vm/LICENSE.txt.
+The CodeSwitch virtual machine in the `codeswitch` directory is
+licensed under a 3-clause BSD license, which can be found in
+codeswitch/LICENSE.txt.
 
 gypsum-mode.el is licensed under a 3-clause BSD license, which can be
 found in tools/gypsum-mode.el itself.

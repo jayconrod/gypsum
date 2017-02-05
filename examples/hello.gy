@@ -14,13 +14,3 @@ def main =
 
   // `print` writes a string to stdout.
   print("Hello, world!\n")
-  print("What is your name?\n> ")
-
-  // `read` reads a line from stdin. It is a nullary function, i.e., it has no parameters. To
-  // call a nullary function, we can just name it; we don't need to write an empty argument
-  // list. Here, we store the result of `read` in a new variable. The type of `name` is
-  // inferred automatically.
-  var name = read
-
-  // String concatentation is done with the + operator.
-  print("Hello, " + name + ". Nice to meet you.\n")
