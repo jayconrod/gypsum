@@ -14,7 +14,7 @@ namespace codeswitch {
 namespace internal {
 
 class Class;
-class DefnId;
+struct DefnId;
 class Field;
 class Function;
 class Type;

@@ -1198,7 +1198,7 @@ Local<Type> Loader::readType() {
     return Type::create(heap(), trait, typeArgs, flags);
   } else if (form == Type::VARIABLE_TYPE) {
     auto index = readLengthVbn();
-    if (index < 0 || index >= typeParameterStack_.size()) {
+    if (index >= typeParameterStack_.size()) {
       throw Error("invalid variable type index");
     }
     auto tp = typeParameterStack_[index];
@@ -1244,13 +1244,13 @@ Local<ObjectTypeDefn> Loader::readDefiningClass() {
     return Local<ObjectTypeDefn>();
   } else if (code == 1) {
     auto index = readLengthVbn();
-    if (index < 0 || index >= package_->classes()->length()) {
+    if (index >= package_->classes()->length()) {
       throw Error("defining class index out of bounds");
     }
     return handle(package_->classes()->get(index));
   } else if (code == 2) {
     auto index = readLengthVbn();
-    if (index < 0 || index >= package_->traits()->length()) {
+    if (index >= package_->traits()->length()) {
       throw Error("defining trait index out of bounds");
     }
     return handle(package_->traits()->get(index));

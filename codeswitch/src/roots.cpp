@@ -272,7 +272,7 @@ Meta* Roots::getMetaForBlockType(int type) {
 
 bool Roots::isValidBuiltinClassId(BuiltinId id) const {
   auto index = builtinIdToIndex(id);
-  return 0 <= index && index < builtinClasses_.size();
+  return index < builtinClasses_.size();
 }
 
 
@@ -283,7 +283,7 @@ bool Roots::isValidBuiltinTraitId(BuiltinId id) const {
 
 bool Roots::isValidBuiltinFunctionId(BuiltinId id) const {
   auto index = builtinIdToIndex(id);
-  return 0 <= index && index < builtinFunctions_.size();
+  return index < builtinFunctions_.size();
 }
 
 

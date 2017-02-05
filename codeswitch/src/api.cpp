@@ -887,7 +887,7 @@ Value CallBuilder::call() {
   try {
     result = interpreter.call(impl_->function_);
   } catch (i::Exception& exception) {
-    throw Exception(move(wrap<Object, i::Object>(exception.get())));
+    throw Exception(wrap<Object, i::Object>(exception.get()));
   }
 
   // Return the result as a value. If this was a constructor call, return the receiver instead
@@ -934,7 +934,7 @@ Name Name::fromStringForPackage(const String& str) {
 
 
 Name Name::fromStringForPackage(VM* vm, const string& str) {
-  return fromStringForPackage(vm, str);
+  return fromStringForPackage(String(vm, str));
 }
 
 
@@ -947,7 +947,7 @@ String::String(VM* vm, const string& str) {
   i::AllowAllocationScope allowAlloc(heap, true);
   i::HandleScope handleScope(&vm->impl_->vm);
   i::Local<i::String> istr = i::String::fromUtf8String(heap, str);
-  *this = move(wrap<String, i::String>(istr));
+  *this = wrap<String, i::String>(istr);
 }
 
 

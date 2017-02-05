@@ -14,7 +14,7 @@ namespace codeswitch {
 namespace internal {
 
 template <class T> class BlockArray;
-class DefnId;
+struct DefnId;
 class Function;
 class Type;
 class TypeParameter;
