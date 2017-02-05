@@ -23,13 +23,15 @@ def python_dist(package_name,
     out = "%s-%s.tar.gz" % (package_name, package_version)
     cmd = ("python $(location %s) sdist --formats gztar -d $(@D)" % setup)
     native.genrule(
-        name=package_name,
-        srcs=inputs,
-        outs=[out],
-        cmd=cmd,
-        message="Packaging " + package_name,
-        visibility=visibility,
-        tags=tags)
+        name = package_name,
+        srcs = inputs,
+        outs = [out],
+        cmd = cmd,
+        message = "Packaging " + package_name,
+        output_to_bindir = True,
+        visibility = visibility,
+        tags = tags
+    )
 
 
 _shared_lib_exts = ["so", "dylib"]
