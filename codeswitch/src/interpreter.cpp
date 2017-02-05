@@ -868,6 +868,7 @@ void Interpreter::handleBuiltin(BuiltinId id) {
 
     case BUILTIN_STRING_FROM_CODE_POINTS_ID: {
       String* result = nullptr;
+      Object* exn = nullptr;
       try {
         GCSafeScope gcSafe(this);
         HandleScope handleScope(vm_);
@@ -877,18 +878,21 @@ void Interpreter::handleBuiltin(BuiltinId id) {
           auto exnClass = handle(
               vm_->roots()->getBuiltinClass(BUILTIN_ILLEGAL_ARGUMENT_EXCEPTION_CLASS_ID));
           auto exnMeta = Class::ensureInstanceMeta(exnClass);
-          auto exn = Object::create(vm_->heap(), exnMeta);
-          doThrow(*exn);
-          break;
+          exn = *Object::create(vm_->heap(), exnMeta);
+        } else {
+          auto chars = reinterpret_cast<const u32*>(array->elementsBase());
+          result = *String::create(vm_->heap(), array->elementsLength(), chars);
         }
-        auto chars = reinterpret_cast<const u32*>(array->elementsBase());
-        result = *String::create(vm_->heap(), array->elementsLength(), chars);
       } catch (AllocationError& e) {
         doThrow(threadBindle_->takeOutOfMemoryException());
         break;
       }
-      pop<Block*>();  // array
-      push<Block*>(result);
+      if (exn != nullptr) {
+        doThrow(exn);
+      } else {
+        pop<Block*>();  // array
+        push<Block*>(result);
+      }
       break;
     }
 
@@ -983,15 +987,14 @@ void Interpreter::handleBuiltin(BuiltinId id) {
       string stlString;
       getline(cin, stlString);
       String* result = nullptr;
+      Object* exn = nullptr;
       try {
         GCSafeScope gcSafe(this);
         HandleScope handleScope(vm_);
         if (!cin.good()) {
           auto clas = handle(vm_->roots()->getBuiltinClass(BUILTIN_EXCEPTION_CLASS_ID));
           auto meta = Class::ensureInstanceMeta(clas);
-          auto exn = Object::create(vm_->heap(), meta);
-          doThrow(*exn);
-          break;
+          exn = *Object::create(vm_->heap(), meta);
         } else {
           result = *String::fromUtf8String(vm_->heap(),
                                            reinterpret_cast<const u8*>(stlString.data()),
@@ -1001,7 +1004,11 @@ void Interpreter::handleBuiltin(BuiltinId id) {
         doThrow(threadBindle_->takeOutOfMemoryException());
         break;
       }
-      push<Block*>(result);
+      if (exn != nullptr) {
+        doThrow(exn);
+      } else {
+        push<Block*>(result);
+      }
       break;
     }
 
