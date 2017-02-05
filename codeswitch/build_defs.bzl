@@ -34,7 +34,7 @@ def _doxygen_archive_impl(ctx):
     out_dir_path = out_file.short_path[:-len(".tar.gz")]
     commands = [
         "mkdir -p %s" % out_dir_path,
-        "out_dir_path=$(readlink -e %s)" % out_dir_path,
+        "out_dir_path=$(cd %s; pwd)" % out_dir_path,
         "pushd %s" % doxyfile.dirname,
         "sed -e \"s:@@OUTPUT_DIRECTORY@@:$out_dir_path/codeswitch-api/:\" <%s | doxygen -" %
             doxyfile.basename,

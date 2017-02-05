@@ -20,6 +20,7 @@ py_binary(
     name = "compiler",
     srcs = [":sources"],
     deps = GYPSUM_DEPS,
+    data = [":common"],
     main = "__main__.py",
     visibility = ["//visibility:public"],
 )
@@ -33,4 +34,5 @@ py_binary(
         ":sources",
     ],
     deps = GYPSUM_DEPS,
+    data = [":common"],
 ) for test_file in glob(["test_*.py"])]

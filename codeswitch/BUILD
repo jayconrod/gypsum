@@ -48,7 +48,7 @@ cc_library(
                 "src/posix/*",
                 "src/osx/*",
                 "src/x64/*",
-                "src/linux-x64/*"
+                "src/osx-x64/*"
             ]),
         },
         no_match_error = "unsupported platform",
@@ -77,10 +77,13 @@ cc_binary(
     visibility = ["//visibility:public"],
 )
 
+# This only works if Doxygen is installed.
+# It must be run manually.
 doxygen_archive(
     name = "codeswitch_doc",
     doxyfile = "include/Doxyfile",
     srcs = glob(["include/*.h", "include/*.md"]),
+    tags = ["manual"],
 )
 
 py_gen_file(

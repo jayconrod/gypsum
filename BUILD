@@ -8,6 +8,7 @@ python_dist(
     setup = "setup.py",
     srcs = ["//gypsum:sources"],
     data = ["//gypsum:common"],
+    tags = ["manual"],
 )
 
 exports_files(

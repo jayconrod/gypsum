@@ -6,7 +6,8 @@ def python_dist(package_name,
                 srcs,
                 data=(),
                 manifest=None,
-                visibility=None):
+                visibility=None,
+                tags=None):
     """Runs a setup.py script to create a Python source distribution archive.
 
     Args:
@@ -26,7 +27,9 @@ def python_dist(package_name,
         srcs=inputs,
         outs=[out],
         cmd=cmd,
-        message="Packaging " + package_name)
+        message="Packaging " + package_name,
+        visibility=visibility,
+        tags=tags)
 
 
 _shared_lib_exts = ["so", "dylib"]
@@ -50,23 +53,11 @@ def _gy_package_impl(ctx):
     _compile_gy_package(ctx, ctx.files.srcs, ctx.files.deps, ctx.attr.flags, pkg_file)
 
     # Prepare runfiles.
-    out_files = [pkg_file]
-    runfile_links = {}
-    if ctx.attr.native_lib:
-        native_lib_file = [f for f in ctx.files.native_lib if f.extension in _shared_lib_exts][0]
-        pkg_dir = _dirname(pkg_file.short_path)
-        link_path = "%s/lib%s-%s.%s" % (
-            pkg_dir, ctx.attr.package_name, ctx.attr.package_version, native_lib_file.extension)
-        runfile_links[link_path] = native_lib_file
-    runfiles = ctx.runfiles(
-        files = out_files,
-        symlinks = runfile_links,
-        collect_data = True
-    )
+    runfiles = _prepare_gy_runfiles(ctx, pkg_file, [])
 
     return struct(
         label = ctx.label,
-        files = set(out_files),
+        files = set([pkg_file]),
         runfiles = runfiles,
     )
 
@@ -90,6 +81,7 @@ gy_package = rule(
     implementation = _gy_package_impl,
     attrs = _gy_attrs,
     outputs = {"pkg": "%{package_name}-%{package_version}.csp"},
+    fragments = ["cpp"],
 )
 
 
@@ -99,18 +91,7 @@ def _gy_binary_impl(ctx):
     _compile_gy_package(ctx, ctx.files.srcs, ctx.files.deps, ctx.attr.flags, pkg_file)
 
     # Prepare runfiles.
-    runfile_links = {}
-    if ctx.attr.native_lib:
-        native_lib_file = [f for f in ctx.files.native_lib if f.extension in _shared_lib_exts][0]
-        pkg_dir = _dirname(pkg_file.short_path)
-        link_path = "%s/%s-%s.%s" % (
-            pkg_dir, ctx.attr.package_name, ctx.attr.package_version, native_lib_file.extension)
-        runfile_links[link_path] = native_lib_file
-    runfiles = ctx.runfiles(
-        files = [ctx.file._codeswitch_cmd, pkg_file],
-        symlinks = runfile_links,
-        collect_data = True
-    )
+    runfiles = _prepare_gy_runfiles(ctx, pkg_file, [ctx.file._codeswitch_cmd])
 
     # Generate runner script.
     dep_dirs = set([_dirname(d.short_path) for d in ctx.files.deps])
@@ -158,6 +139,7 @@ gy_binary = rule(
     outputs = {
         "pkg": "%{package_name}-%{package_version}.csp",
     },
+    fragments = ["cpp"],
 )
 
 
@@ -182,6 +164,24 @@ def _compile_gy_package(ctx, src_files, dep_files, flags, pkg_file):
         arguments = args,
         executable = ctx.executable._gy_compiler,
         progress_message = "Compiling Gypsum package %s" % pkg_file.path
+    )
+
+
+def _prepare_gy_runfiles(ctx, pkg_file, other_files):
+    runfile_links = {}
+    if ctx.attr.native_lib:
+        # cc_library produces .so on all platforms, but we want .dylib on macOS.
+        native_lib_file = [f for f in ctx.files.native_lib if f.extension == "so"][0]
+        pkg_dir = _dirname(pkg_file.short_path)
+        cpu = ctx.fragments.cpp.cpu
+        lib_ext = "dylib" if cpu == "darwin" else "so"
+        link_path = "%s/lib%s-%s.%s" % (
+            pkg_dir, ctx.attr.package_name, ctx.attr.package_version, lib_ext)
+        runfile_links[link_path] = native_lib_file
+    return ctx.runfiles(
+        files = [pkg_file] + other_files,
+        symlinks = runfile_links,
+        collect_data = True
     )
 
 
