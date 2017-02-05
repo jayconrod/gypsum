@@ -237,7 +237,7 @@ vector<Persistent<Package>> Package::load(
   auto dirName = pathDirName(fileName);
   ifstream file(fileName.c_str(), ios::binary);
   if (!file.good())
-    throw Error("could not open package file");
+    throw Error(fileName + ": could not open package file");
   file.exceptions(ios::failbit | ios::badbit | ios::eofbit);
 
   auto packages = load(vm, idCounter, file, dirName, nativeFunctionSearchOrder);
