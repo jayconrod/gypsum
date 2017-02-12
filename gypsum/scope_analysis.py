@@ -66,6 +66,8 @@ def analyzeDeclarations(info):
     visitor = DeclarationVisitor(globalScope)
     visitor.visitChildren(info.ast)
 
+    globalScope.copyBindingsFromModules()
+
     def processImportsForScope(scope):
         scope.processImports()
         for child in scope.childScopes.itervalues():
@@ -296,17 +298,47 @@ class Scope(ast.NodeVisitor):
     def makeName(self, short):
         return Name(self.prefix + [short])
 
-    def declare(self, astDefn, astVarDefn=None):
-        """Creates an IR definition to the package, adds it to the package, and
-        adds DefinitionInfo."""
-        # Create the definition, and add it to the package.
-        irDefn, shouldBind, isVisible = self.createIrDefn(astDefn, astVarDefn)
-        if irDefn is None:
-            return
+    def createIrDefn(self, astDefn, astVarDefn=None):
+        """Creates one or more IR definitions and adds them to the package. A primary definition
+        is returned that may be bound.
 
+        Args:
+            astDefn (ast.Node): the definition or pattern being compiled.
+            astVarDefn (ast.Node?): if `astDefn` is a pattern that is part of a variable
+                definition, this is the variable definition. Needed for flags.
+
+        Return:
+            (ir.IrDefinition, bool, bool): returns a definition, a Boolean indicating whether
+            the definition should be bound in a scope, and a Boolean indicating whether the
+            definition should be visible in other scopes.
+        """
+        raise NotImplementedError()
+
+    def declare(self, astDefn, astVarDefn, irDefn, shouldBind, isVisible):
+        """Declares the given definition in the current scope.
+
+        Creates `DefnInfo` for the definition and adds it to `CompileInfo` at `astId`. Also
+        records the current scope at `astId`. Optionally adds the definition to this
+        scope's bindings.
+
+        Args:
+            astDefn (ast.Node): AST node the definition was created from. Used to locate
+                the definition in later passes.
+            astVarDefn (ast.Node?): if the definition was created from a pattern inside a
+                variable definition, this is the node for the variable definition.
+            irDefn (ir.Definition): the definition being declared. Must already be added to
+                the package.
+            shouldBind (bool): whether to bind the definition's source name to the definition
+                in this scope.
+            isVisible (bool): whether the definition is visible in other scopes. For example,
+                class members are visible, but type parameters are not.
+            loc (Location): used for error messages.
+
+        Raises:
+            ScopeException: if the definition's source name is already bound to another
+                definition and the definitions can't be overloaded.
+        """
         # Connect it with the AST so we can find it again.
-        if astVarDefn is not None:
-            irDefn.astVarDefn = astVarDefn
         inheritanceDepth = 0 if isHeritable(irDefn) else NOT_HERITABLE
         defnInfo = DefnInfo(irDefn, self.scopeId, isVisible, self.scopeId, inheritanceDepth)
         self.info.setDefnInfo(astDefn, defnInfo)
@@ -416,11 +448,9 @@ class Scope(ast.NodeVisitor):
         self.bindings[name].addOverload(defnInfo)
 
     def iterBindings(self):
-        """Returns a iterator, which returns (str, DefnInfo, int) pairs for each binding.
+        """Returns a iterator, which returns (str, DefnInfo) pairs for each binding.
 
-        The str is the name, and the int indicates how many classes the definition was inherited
-        through (0 indicates it was inherited from this class). For overloaded functions, this
-        will return the same name more than once."""
+        For overloaded functions, this will return the same name more than once."""
         for name, nameInfo in self.bindings.iteritems():
             for defnInfo in nameInfo.overloads:
                 yield (name, defnInfo)
@@ -439,7 +469,7 @@ class Scope(ast.NodeVisitor):
         """Returns a list of type parameters implied by this scope and outer scopes. These
         can be used when declaring or calling functions or classes. Outer-most type parameters
         are listed first."""
-        if self.scopeId in [BUILTIN_SCOPE_ID, GLOBAL_SCOPE_ID, PACKAGE_SCOPE_ID]:
+        if self.isStatic():
             return []
         else:
             return list(self.getIrDefn().typeParameters)
@@ -680,7 +710,7 @@ class Scope(ast.NodeVisitor):
                                               "definition is protected and cannot be used here")
             if STATIC not in irDefn.flags and \
                useKind is USE_AS_VALUE and \
-               self.isStaticWithin(defnInfo.scopeId):
+               self.isStaticWithin(self.info.getScope(defnInfo.scopeId)):
                 raise ScopeException.fromUse(loc, irDefn,
                                              "definition is non-static, accessed from a static scope")
 
@@ -712,6 +742,12 @@ class Scope(ast.NodeVisitor):
         """Returns true if this scope is in a package other than the one being compiled."""
         return False
 
+    def isStatic(self):
+        """Returns true if the contents of this scope are visible from all scopes. For example,
+        global, module, package, and builtin scopes are static. Function, class, and trait
+        scopes are not."""
+        raise NotImplementedError()
+
     def isWithin(self, scopeOrId):
         id = scopeOrId.scopeId if isinstance(scopeOrId, Scope) else scopeOrId
         current = self
@@ -719,13 +755,13 @@ class Scope(ast.NodeVisitor):
             current = current.parent
         return current is not None
 
-    def isStaticWithin(self, scopeOrId):
+    # TODO: rename this method to something less terrible and misleading
+    def isStaticWithin(self, scope):
         """Returns true if this scope is within the given scope and at least one top-level
         scope between the current scope and the given scope (including the current scope but
         not the given scope) is defined by a static definition. If this is true, then
         non-static definitions bound in the given scope cannot be used in this scope."""
-        id = scopeOrId.scopeId if isinstance(scopeOrId, Scope) else scopeOrId
-        if self.scopeId is id or self.scopeId is GLOBAL_SCOPE_ID:
+        if self is scope or scope.isStatic():
             return False
 
         current = self
@@ -736,9 +772,9 @@ class Scope(ast.NodeVisitor):
             if not current.isLocal():
                 isStatic |= STATIC in self.getIrDefn().flags
             current = current.parent
-            isWithin |= current.scopeId is id
-            isGlobal |= isinstance(current, GlobalScope)
-            if current.scopeId is id or isWithin or isGlobal:
+            isWithin |= current.scopeId is scope.scopeId
+            isGlobal |= current.isStatic()
+            if current is scope or isWithin or isGlobal:
                 break
 
         return isWithin and isStatic and not isGlobal
@@ -889,13 +925,59 @@ class GlobalScope(Scope):
     def __init__(self, astModule, parent):
         super(GlobalScope, self).__init__([], astModule, GLOBAL_SCOPE_ID, parent, parent.info)
 
+    def copyBindingsFromModules(self):
+        """Copies bindings from `ModuleScope`s.
+
+        This makes global definitions visible across files. When we walk the AST, global
+        definitions are bound in their own `ModuleScope`s, along with global imports. This
+        method is called before imports are bound, so only the definition bindings are
+        copied.
+
+        We do this instead of simply binding global definitions in the global scope because
+        that would let imports shadow global definitions instead of overloading with them,
+        which would be confusing.
+
+        Raises:
+            ScopeException: if definitions in different files are bound with the same name
+                and cannot be overloaded.
+        """
+        for child in self.childScopes.itervalues():
+            for name, defnInfo in child.iterBindings():
+                if self.isBound(name) and not self.getDefinition(name).isOverloadable(defnInfo):
+                    raise ScopeException.fromDefn(defnInfo.irDefn,
+                                                  "already declared in another module")
+                self.bind(name, defnInfo)
+                self.define(name)
+
+    def isStatic(self):
+        return True
+
+    def isDefinedAutomatically(self, astDefn):
+        return True
+
+    def findEnclosingClass(self):
+        return None
+
+    def requiresCapture(self):
+        return False
+
+    def newLocalScope(self, prefix, ast):
+        return ModuleScope(ast, self)
+
+
+class ModuleScope(Scope):
+    def __init__(self, astModule, parent):
+        super(ModuleScope, self).__init__(
+            [], astModule, ScopeId(astModule.id), parent, parent.info)
+
     def createIrDefn(self, astDefn, astVarDefn):
         flags = getFlagsFromAstDefn(astDefn, astVarDefn)
         shouldBind = True
         if isinstance(astDefn, ast.VariablePattern):
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([LET, PUBLIC, PROTECTED]), astDefn.location)
-            irDefn = self.info.package.addGlobal(name, sourceName=astDefn.name, astDefn=astDefn,
+            irDefn = self.info.package.addGlobal(name, sourceName=astDefn.name,
+                                                 astDefn=astDefn, astVarDefn=astVarDefn,
                                                  flags=flags)
         elif isinstance(astDefn, ast.FunctionDefinition):
             name = self.makeName(astDefn.name)
@@ -926,6 +1008,9 @@ class GlobalScope(Scope):
             raise NotImplementedError()
         return irDefn, shouldBind, True
 
+    def isStatic(self):
+        return True
+
     def isDefinedAutomatically(self, astDefn):
         return True
 
@@ -934,18 +1019,6 @@ class GlobalScope(Scope):
 
     def requiresCapture(self):
         return False
-
-    def captureScopeContext(self):
-        raise NotImplementedError("global scope does not need a context")
-
-    def captureInContext(self, irDefn, irContextClass):
-        raise NotImplementedError("global definitions can't be captured")
-
-    def makeClosure(self):
-        raise NotImplementedError("global scopes can't capture anything")
-
-    def newLocalScope(self, prefix, ast):
-        raise NotImplementedError("global scopes can't have local contexts")
 
     def newScopeForFunction(self, prefix, ast):
         return FunctionScope(prefix, ast, self)
@@ -1010,7 +1083,9 @@ class FunctionScope(Scope):
             else:
                 name = self.info.makeUniqueName(self.makeName(ANON_PARAMETER_SUFFIX))
                 irDefn = self.info.package.addVariable(
-                    irScopeDefn, name, astDefn=astDefn, kind=ir.PARAMETER, flags=flags)
+                    irScopeDefn, name,
+                    astDefn=astDefn, astVarDefn=astVarDefn,
+                    kind=ir.PARAMETER, flags=flags)
                 shouldBind = False
         elif isinstance(astDefn, ast.VariablePattern):
             name = self.makeName(astDefn.name)
@@ -1019,7 +1094,8 @@ class FunctionScope(Scope):
                           astVarDefn.pattern is astDefn
             kind = ir.PARAMETER if isParameter else ir.LOCAL
             irDefn = self.info.package.addVariable(
-                irScopeDefn, name, sourceName=astDefn.name, astDefn=astDefn,
+                irScopeDefn, name, sourceName=astDefn.name,
+                astDefn=astDefn, astVarDefn=astVarDefn,
                 kind=kind, flags=flags)
         elif isinstance(astDefn, ast.FunctionDefinition):
             name = self.makeName(astDefn.name)
@@ -1043,6 +1119,9 @@ class FunctionScope(Scope):
             raise NotImplementedError()
         isVisible = False
         return irDefn, shouldBind, isVisible
+
+    def isStatic(self):
+        return False
 
     def isDefinedAutomatically(self, astDefn):
         return isinstance(astDefn, ast.ClassDefinition) or \
@@ -1178,7 +1257,8 @@ class FunctionScope(Scope):
         # If the parent is a function scope, define a local variable to hold the closure.
         if isinstance(self.parent, FunctionScope):
             irClosureVar = self.info.package.addVariable(
-                self.parent.getIrDefn(), irDefn.name, astDefn=irDefn.astDefn,
+                self.parent.getIrDefn(), irDefn.name,
+                astDefn=irDefn.astDefn,
                 type=irClosureType, kind=ir.LOCAL)
             closureInfo.irClosureVar = irClosureVar
 
@@ -1242,7 +1322,8 @@ class ClassScope(Scope):
             name = self.makeName(astDefn.name)
             checkFlags(flags, frozenset([LET, PUBLIC, PROTECTED, PRIVATE]), astDefn.location)
             irDefn = self.info.package.addField(irScopeDefn, name, sourceName=astDefn.name,
-                                                astDefn=astDefn, flags=flags)
+                                                astDefn=astDefn, astVarDefn=astVarDefn,
+                                                flags=flags)
         elif isinstance(astDefn, ast.FunctionDefinition):
             implicitTypeParams = self.getImplicitTypeParameters()
             if astDefn.body is not None:
@@ -1332,7 +1413,8 @@ class ClassScope(Scope):
                     Name(self.prefix + [CONSTRUCTOR_SUFFIX, ANON_PARAMETER_SUFFIX]))
             irCtor = self.info.getDefnInfo(self.ast.constructor).irDefn
             irDefn = self.info.package.addVariable(
-                irCtor, name, sourceName=astDefn.pattern.name, astDefn=astDefn,
+                irCtor, name, sourceName=astDefn.pattern.name,
+                astDefn=astDefn, astVarDefn=astVarDefn,
                 kind=ir.PARAMETER, flags=frozenset([LET]))
             shouldBind = False
         elif isinstance(astDefn, ast.ClassDefinition):
@@ -1344,6 +1426,7 @@ class ClassScope(Scope):
                 irScopeDefn.flags |= frozenset([ARRAY_FINAL])
             name = self.makeName(ARRAY_LENGTH_SUFFIX)
             irDefn = self.info.package.addField(irScopeDefn, name, astDefn=astDefn,
+                                                astVarDefn=astVarDefn,
                                                 type=I32Type,
                                                 flags=frozenset([PRIVATE, LET, ARRAY]))
             shouldBind = False
@@ -1371,6 +1454,9 @@ class ClassScope(Scope):
             return False
         flags = defnInfo.irDefn.flags
         return PRIVATE not in flags and PROTECTED not in flags and STATIC in flags
+
+    def isStatic(self):
+        return False
 
     def isDefinedAutomatically(self, astDefn):
         return isinstance(astDefn, ast.PrimaryConstructorDefinition) or \
@@ -1489,6 +1575,9 @@ class TraitScope(Scope):
         flags = defnInfo.irDefn.flags
         return PRIVATE not in flags and PROTECTED not in flags and STATIC in flags
 
+    def isStatic(self):
+        return False
+
     def isDefinedAutomatically(self, astDefn):
         return isinstance(astDefn, ast.FunctionDefinition)
 
@@ -1556,6 +1645,9 @@ class ExistentialTypeScope(Scope):
         isVisible = False
         return irDefn, shouldBind, isVisible
 
+    def isStatic(self):
+        return True
+
     def isDefinedAutomatically(self, astDefn):
         return True
 
@@ -1565,34 +1657,6 @@ class ExistentialTypeScope(Scope):
     def requiresCapture(self):
         # Types in this scope may be used by inner (existential) scopes.
         return False
-
-    def captureScopeContext(self):
-        # Nothing can be captured.
-        raise NotImplementedError()
-
-    def captureInContext(self, defnInfo, irContextClass):
-        # Nothing can be captured.
-        raise NotImplementedError()
-
-    def makeClosure(self):
-        # Nothing can be captured.
-        raise NotImplementedError()
-
-    def newLocalScope(self, prefix, ast):
-        # Not syntactically possible.
-        raise NotImplementedError()
-
-    def newScopeForFunction(self):
-        # Not syntactically possible.
-        raise NotImplementedError()
-
-    def newScopeForClass(self):
-        # Not syntactically possible.
-        raise NotImplementedError()
-
-    def newScopeForTrait(self):
-        # Not syntactically possible.
-        raise NotImplementedError()
 
     def newScopeForExistential(self, prefix, ast):
         return ExistentialTypeScope(prefix, ast, self, self.index)
@@ -1611,6 +1675,9 @@ class BuiltinGlobalScope(Scope):
             self.bind(name.short(), defnInfo)
             self.define(name.short())
         registerBuiltins(bind)
+
+    def isStatic(self):
+        return True
 
     def requiresCapture(self):
         return False
@@ -1703,6 +1770,9 @@ class NonLocalObjectTypeDefnScope(Scope):
             self.define(name)
             self.flatMethods.append(methodDefnInfo)
 
+    def isStatic(self):
+        return False
+
 
 class BuiltinClassScope(NonLocalObjectTypeDefnScope):
     def __init__(self, classDefnInfo, info):
@@ -1780,6 +1850,9 @@ class PackageScope(Scope):
     def isForeign(self):
         return self.package is not None
 
+    def isStatic(self):
+        return True
+
     def scopeForPrefix(self, component, loc):
         if component in self.prefixScopes:
             return self.prefixScopes[component]
@@ -1824,6 +1897,11 @@ class ScopeVisitor(ast.NodeVisitor):
     def createChildVisitor(self, scope):
         """Create a new visitor for a descendant scope. Subclasses must override."""
         raise NotImplementedError()
+
+    def visitModule(self, node):
+        scope = self.scope.localScope(node)
+        visitor = self.createChildVisitor(scope)
+        visitor.visitChildren(node)
 
     def visitVariableDefinition(self, node):
         if node.expression is not None:
@@ -1922,47 +2000,52 @@ class DeclarationVisitor(ScopeVisitor):
     def createChildVisitor(self, scope):
         return DeclarationVisitor(scope)
 
+    def declare(self, astDefn, astVarDefn=None):
+        irDefn, shouldBind, isVisible = self.scope.createIrDefn(astDefn, astVarDefn)
+        if irDefn is not None:
+            self.scope.declare(astDefn, astVarDefn, irDefn, shouldBind, isVisible)
+
     def visitFunctionDefinition(self, node):
-        self.scope.declare(node)
+        self.declare(node)
         super(DeclarationVisitor, self).visitFunctionDefinition(node)
 
     def visitClassDefinition(self, node):
-        self.scope.declare(node)
+        self.declare(node)
         super(DeclarationVisitor, self).visitClassDefinition(node)
 
     def visitTraitDefinition(self, node):
-        self.scope.declare(node)
+        self.declare(node)
         super(DeclarationVisitor, self).visitTraitDefinition(node)
 
     def visitPrimaryConstructorDefinition(self, node):
-        self.scope.declare(node)
+        self.declare(node)
         self.visitChildren(node)
 
     def visitArrayElementsStatement(self, node):
-        self.scope.declare(node)
+        self.declare(node)
         self.visitChildren(node)
 
     def visitArrayAccessorDefinition(self, node):
-        self.scope.declare(node)
+        self.declare(node)
 
     def visitImportStatement(self, node):
         self.scope.addImport(node)
 
     def visitTypeParameter(self, node):
-        self.scope.declare(node)
+        self.declare(node)
         super(DeclarationVisitor, self).visitTypeParameter(node)
 
     def visitParameter(self, node):
-        self.scope.declare(node)
+        self.declare(node)
         super(DeclarationVisitor, self).visitParameter(node)
 
     def visitVariablePattern(self, node, astVarDefn):
         if node.ty is not None:
             self.visit(node.ty)
-        self.scope.declare(node, astVarDefn)
+        self.declare(node, astVarDefn)
 
     def visitBlankType(self, node):
-        self.scope.declare(node)
+        self.declare(node)
 
 
 def getFlagsFromAstDefn(astDefn, astVarDefn):

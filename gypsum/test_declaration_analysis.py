@@ -6,6 +6,7 @@
 
 import unittest
 
+import ast
 from lexer import *
 from layout import layout
 from parser import *
@@ -49,25 +50,29 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource("var a = 12")
         ast = info.ast
         astDefn = ast.modules[0].definitions[0].pattern
-        self.assertEquals(DefnInfo(self.makeGlobal("a"), GLOBAL_SCOPE_ID, True),
+        scopeId = info.getScope(ast.modules[0]).scopeId
+        self.assertEquals(DefnInfo(self.makeGlobal("a"), scopeId, True),
                           info.getDefnInfo(astDefn))
 
     def testDefineGlobalConst(self):
         info = self.analyzeFromSource("let a = 12")
         ast = info.ast
         astDefn = ast.modules[0].definitions[0].pattern
+        scopeId = info.getScope(ast.modules[0]).scopeId
         self.assertEquals(DefnInfo(self.makeGlobal("a", flags=frozenset([LET])),
-                                   GLOBAL_SCOPE_ID, True),
+                                   scopeId, True),
                           info.getDefnInfo(astDefn))
 
     def testDefineGlobalFunction(self):
         info = self.analyzeFromSource("def f = 12")
         ast = info.ast
         astDefn = ast.modules[0].definitions[0]
+        scope = info.getScope(info.ast.modules[0])
         defnInfo = info.getDefnInfo(astDefn)
         expected = self.makeFunction("f")
 
-        self.assertEquals(DefnInfo(expected, GLOBAL_SCOPE_ID, True), info.getDefnInfo(astDefn))
+        self.assertEquals(DefnInfo(expected, scope.scopeId, True), info.getDefnInfo(astDefn))
+        self.assertTrue(scope.isDefined("f"))
         self.assertTrue(info.getScope(GLOBAL_SCOPE_ID).isDefined("f"))
 
     def testDefineGlobalClass(self):
@@ -75,9 +80,12 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         ast = info.ast
         astDefn = ast.modules[0].definitions[0]
         defnInfo = info.getDefnInfo(astDefn)
+        scope = info.getScope(ast.modules[0])
+        scopeId = scope.scopeId
         irClass = defnInfo.irDefn
         self.assertEquals(Name(["C"]), irClass.name)
-        self.assertEquals(GLOBAL_SCOPE_ID, defnInfo.scopeId)
+        self.assertEquals(scopeId, defnInfo.scopeId)
+        self.assertTrue(scope.isDefined("C"))
         self.assertTrue(info.getScope(GLOBAL_SCOPE_ID).isDefined("C"))
         self.assertTrue(irClass.initializer is not None)
         self.assertEquals(1, len(irClass.constructors))
@@ -238,10 +246,13 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource("public trait Tr")
         astDefn = info.ast.modules[0].definitions[0]
         defnInfo = info.getDefnInfo(astDefn)
+        scope = info.getScope(info.ast.modules[0])
+        scopeId = scope.scopeId
         irTrait = defnInfo.irDefn
         self.assertEquals(Name(["Tr"]), irTrait.name)
         self.assertEquals(frozenset([PUBLIC]), irTrait.flags)
-        self.assertEquals(GLOBAL_SCOPE_ID, defnInfo.scopeId)
+        self.assertEquals(scopeId, defnInfo.scopeId)
+        self.assertTrue(scope.isDefined("Tr"))
         self.assertTrue(info.getScope(GLOBAL_SCOPE_ID).isDefined("Tr"))
 
     def testDefineTraitFunction(self):
@@ -494,11 +505,11 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                  "def x(y: i64) = y"
         info = self.analyzeFromSource(source)
         m = info.package.findFunction(name="Foo.m")
-        scope = info.getScope(GLOBAL_SCOPE_ID)
+        scope = info.getScope(info.ast.modules[0])
         nameInfo = scope.lookupFromSelf("x", NoLoc)
         self.assertTrue(nameInfo.isOverloaded())
         importedDefnInfo = next(di for di in nameInfo.iterOverloads() if di.irDefn is m)
-        self.assertEquals(GLOBAL_SCOPE_ID, importedDefnInfo.scopeId)
+        self.assertEquals(scope.scopeId, importedDefnInfo.scopeId)
         self.assertFalse(importedDefnInfo.isVisible)
         self.assertIsNone(importedDefnInfo.importedTypeArguments)
 
@@ -508,14 +519,34 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         foo.addGlobal(Name(["baz"]), sourceName="baz", flags=frozenset([LET]))
         source = "import foo._"
         info = self.analyzeFromSource(source, packageLoader=FakePackageLoader([foo]))
-        scope = info.getScope(GLOBAL_SCOPE_ID)
+        scope = info.getScope(info.ast.modules[0])
         self.assertFalse(scope.isBound("baz"))
         scope.define("bar")
         nameInfo = scope.lookupFromSelf("bar", NoLoc)
         importedDefnInfo = nameInfo.getDefnInfo()
-        self.assertEquals(GLOBAL_SCOPE_ID, importedDefnInfo.scopeId)
+        self.assertEquals(scope.scopeId, importedDefnInfo.scopeId)
         self.assertFalse(importedDefnInfo.isVisible)
         self.assertIsNone(importedDefnInfo.importedTypeArguments)
+
+    def testImportGlobalFromPackageMultipleModules(self):
+        foo = Package(name=Name(["foo"]))
+        foo.addGlobal(Name(["bar"]), sourceName="bar", flags=frozenset([PUBLIC, LET]))
+        loader = FakePackageLoader([foo])
+
+        source1 = "import foo.bar"
+        mod1 = self.parseFromSource(source1)
+        source2 = "import foo.bar\n" + \
+                  "let baz = 12"
+        mod2 = self.parseFromSource(source2)
+        astt = ast.Package([mod1, mod2], NoLoc)
+        astt.id = AstId(-1)
+        package = Package(id=TARGET_PACKAGE_ID)
+        info = CompileInfo(astt, package, loader, isUsingStd=False)
+        analyzeDeclarations(info)
+
+        baz = info.package.findGlobal(name="baz")
+        bazScope = info.getScope(baz.astDefn)
+        self.assertIs(info.getScope(mod2), bazScope)
 
     def testImportFromGlobal(self):
         source = "let x = 12\n" + \

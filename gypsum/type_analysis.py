@@ -967,7 +967,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             for tp in irTrait.typeParameters:
                 self.checkPublicTypeParameter(tp, node.name, node.location)
             for sty in irTrait.supertypes:
-                self.chechPublicType(sty, node.name, node.location)
+                self.checkPublicType(sty, node.name, node.location)
 
     def visitPrimaryConstructorDefinition(self, node):
         self.handleFunctionCommon(node, None, None)
@@ -2400,8 +2400,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             scope = scope.parent
         if frozenset([PUBLIC, PROTECTED]).isdisjoint(irDefn.flags):
             return False
-        while not isinstance(scope, scope_analysis.GlobalScope):
-            if not isinstance(scope, scope_analysis.ClassScope):
+        while not scope.isStatic():
+            if not isinstance(scope, scope_analysis.ClassScope) and \
+               not isinstance(scope, scope_analysis.TraitScope):
                 return False
             clas = scope.getIrDefn()
             if frozenset([PUBLIC, PROTECTED]).isdisjoint(clas.flags):

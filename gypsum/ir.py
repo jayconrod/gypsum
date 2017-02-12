@@ -475,13 +475,17 @@ class Global(IrTopDefn):
         id (DefnId): unique identifier for the global.
         sourceName (str?): name of the definition in source code
         astDefn (ast.Node?): the location in source code where the global is defined.
+        astVarDefn (ast.Node?): the location in source code of the variable definition
+            containing the field definition.
         type (Type?): the type of the global. May be `None` before type analysis.
         flags (frozenset[flag]): flags indicating how this global may be used. Valid flags are
             `EXTERN`, `LET`, `PUBLIC`.
     """
 
-    def __init__(self, name, id, sourceName=None, astDefn=None, type=None, flags=frozenset()):
+    def __init__(self, name, id, sourceName=None, astDefn=None, astVarDefn=None,
+                 type=None, flags=frozenset()):
         super(Global, self).__init__(name, id, sourceName, astDefn)
+        self.astVarDefn = astVarDefn
         self.type = type
         self.flags = flags
 
@@ -1089,9 +1093,10 @@ LOCAL = "local"
 PARAMETER = "parameter"
 
 class Variable(IrDefinition):
-    def __init__(self, name, sourceName=None, astDefn=None, type=None, kind=LOCAL,
-                 flags=frozenset()):
+    def __init__(self, name, sourceName=None, astDefn=None, astVarDefn=None,
+                 type=None, kind=LOCAL, flags=frozenset()):
         super(Variable, self).__init__(name, sourceName, astDefn)
+        self.astVarDefn = astVarDefn
         self.type = type
         self.kind = kind
         self.flags = flags
@@ -1117,6 +1122,8 @@ class Field(IrDefinition):
         name (Name): the name of the field.
         sourceName (str?): name of the definition in source code
         astDefn (ast.Node?): the location in source code where the field is defined.
+        astVarDefn (ast.Node?): the location in source code of the variable definition
+            containing the field definition.
         type (Type?): the type of the field. May be `None` before type analysis.
         flags (frozenset[flag]): flags indicating how this field is used. Valid flags are
             `LET`, `PUBLIC`, `PROTECTED`, `PRIVATE`, `STATIC`.
@@ -1127,9 +1134,10 @@ class Field(IrDefinition):
             instructions. This will usually be `None` before semantic analysis.
     """
 
-    def __init__(self, name, sourceName=None, astDefn=None, type=None, flags=frozenset(),
-                 definingClass=None, index=None):
+    def __init__(self, name, sourceName=None, astDefn=None, astVarDefn=None, type=None,
+                 flags=frozenset(), definingClass=None, index=None):
         super(Field, self).__init__(name, sourceName, astDefn)
+        self.astVarDefn = astVarDefn
         self.type = type
         self.flags = flags
         self.definingClass = definingClass
