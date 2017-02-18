@@ -4,9 +4,7 @@
 // source code is governed by the 3-clause BSD license that can be
 // found in the LICENSE.txt file.
 
-import std.I8Array,
-    List,
-    utf8-to-string
+import std.I8Array, List
 
 public final class FileReader <: Reader, Closeable
   private var fd: i32
@@ -70,7 +68,7 @@ public def read-all(reader: Reader): I8Array =
 
 public def read-all-as-string(reader: Reader): String =
   let utf8-bytes = read-all(reader)
-  utf8-to-string(utf8-bytes)
+  String.from-utf8(utf8-bytes)
 
 public def read-file(file-name: String): I8Array =
   let reader = FileReader(file-name)

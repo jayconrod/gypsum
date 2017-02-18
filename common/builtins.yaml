@@ -193,7 +193,7 @@
     - name: length
       type: i32
       flags: [PUBLIC, LET, ARRAY]
-  elements: i32
+  elements: i8
   methods:
     - name: to-string
       id: BUILTIN_STRING_TO_STRING_ID
@@ -204,7 +204,7 @@
       overrides: [BUILTIN_ROOT_CLASS_TO_STRING_ID]
     - name: get
       id: BUILTIN_STRING_GET_ID
-      returnType: i32
+      returnType: i8
       parameterTypes:
         - String
         - i32
@@ -212,8 +212,8 @@
       insts:
         - swap
         - lde
-    - name: from-code-points
-      id: BUILTIN_STRING_FROM_CODE_POINTS_ID
+    - name: from-utf8
+      id: BUILTIN_STRING_FROM_UTF8_ID
       returnType: String
       parameterTypes:
         - Object

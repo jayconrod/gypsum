@@ -28,12 +28,12 @@ TEST(BadPackageNames) {
   ASSERT_FALSE(Name::fromString(heap, STR(".b"), Name::PACKAGE_NAME));
 
   auto longLength = Name::kMaxComponentLength + 1;
-  vector<u8> longNameChars(longLength, 'a');
+  vector<char> longNameChars(longLength, 'a');
   auto longNameStr = String::fromUtf8String(heap, longNameChars.data(), longLength);
   ASSERT_FALSE(Name::fromString(heap, longNameStr, Name::PACKAGE_NAME));
 
   auto longCount = Name::kMaxComponentCount + 1;
-  vector<u8> longCountChars(longCount * 2 - 1);
+  vector<char> longCountChars(longCount * 2 - 1);
   for (size_t i = 0; i + 1 < longCountChars.size(); i += 2) {
     longCountChars[i] = 'a';
     longCountChars[i + 1] = '.';

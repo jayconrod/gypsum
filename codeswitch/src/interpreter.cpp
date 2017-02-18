@@ -866,7 +866,7 @@ void Interpreter::handleBuiltin(BuiltinId id) {
       break;
     }
 
-    case BUILTIN_STRING_FROM_CODE_POINTS_ID: {
+    case BUILTIN_STRING_FROM_UTF8_ID: {
       String* result = nullptr;
       Object* exn = nullptr;
       try {
@@ -874,13 +874,13 @@ void Interpreter::handleBuiltin(BuiltinId id) {
         HandleScope handleScope(vm_);
         auto array = handle(mem<Object*>(stack_->sp() + kPrepareForGCSize));
         auto clas = handle(array->meta()->clas());
-        if (!clas->elementType() || !clas->elementType()->isI32()) {
+        if (!clas->elementType() || !clas->elementType()->isI8()) {
           auto exnClass = handle(
               vm_->roots()->getBuiltinClass(BUILTIN_ILLEGAL_ARGUMENT_EXCEPTION_CLASS_ID));
           auto exnMeta = Class::ensureInstanceMeta(exnClass);
           exn = *Object::create(vm_->heap(), exnMeta);
         } else {
-          auto chars = reinterpret_cast<const u32*>(array->elementsBase());
+          auto chars = reinterpret_cast<const char*>(array->elementsBase());
           result = *String::create(vm_->heap(), array->elementsLength(), chars);
         }
       } catch (AllocationError& e) {
@@ -991,14 +991,14 @@ void Interpreter::handleBuiltin(BuiltinId id) {
       try {
         GCSafeScope gcSafe(this);
         HandleScope handleScope(vm_);
-        if (!cin.good()) {
+        if (!cin.good() || stlString.size() > kMaxLength) {
           auto clas = handle(vm_->roots()->getBuiltinClass(BUILTIN_EXCEPTION_CLASS_ID));
           auto meta = Class::ensureInstanceMeta(clas);
           exn = *Object::create(vm_->heap(), meta);
         } else {
           result = *String::fromUtf8String(vm_->heap(),
-                                           reinterpret_cast<const u8*>(stlString.data()),
-                                           stlString.length());
+                                           stlString.data(),
+                                           static_cast<length_t>(stlString.length()));
         }
       } catch (AllocationError& e) {
         doThrow(threadBindle_->takeOutOfMemoryException());
@@ -1337,10 +1337,7 @@ void Interpreter::intToString() {
     stringstream stream;
     stream << value;
     auto stlString = stream.str();
-    auto size = stlString.length();   // same as length since these should be ascii chars
-    result = *String::fromUtf8String(vm_->heap(),
-                                     reinterpret_cast<const u8*>(stlString.data()),
-                                     size, size);
+    result = *String::fromUtf8String(vm_->heap(), stlString);
   } catch (AllocationError& e) {
     doThrow(threadBindle_->takeOutOfMemoryException());
     return;
@@ -1361,10 +1358,7 @@ void Interpreter::floatToString() {
     stringstream stream;
     stream << value;
     auto stlString = stream.str();
-    auto size = stlString.length();
-    result = *String::fromUtf8String(vm_->heap(),
-                                     reinterpret_cast<const u8*>(stlString.data()),
-                                     size, size);
+    result = *String::fromUtf8String(vm_->heap(), stlString);
   } catch (AllocationError& e) {
     doThrow(threadBindle_->takeOutOfMemoryException());
     return;

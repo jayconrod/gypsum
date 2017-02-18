@@ -939,9 +939,8 @@ ostream& operator << (ostream& os, const PackageDependency* dep) {
 
 Local<String> Loader::readString() {
   auto length = readLengthVbn();
-  auto size = readLengthVbn();
-  vector<u8> utf8Chars = readData(size);
-  return String::fromUtf8String(heap(), utf8Chars.data(), length, size);
+  auto utf8Chars = readData(length);
+  return String::fromUtf8String(heap(), utf8Chars.data(), length);
 }
 
 
@@ -1405,7 +1404,7 @@ Persistent<Package> PackageLoader::load() {
       throw Error("package file is corrupt");
     auto majorVersion = readValue<u16>();
     auto minorVersion = readValue<u16>();
-    if (majorVersion != 0 || minorVersion != 22)
+    if (majorVersion != 0 || minorVersion != 23)
       throw Error("package file has wrong format version");
 
     auto flags = readValue<u64>();

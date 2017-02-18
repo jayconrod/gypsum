@@ -67,7 +67,7 @@ def deserializeNameAndVersion(fileName):
 HEADER_FORMAT = "<Ihhqiiiiiiiii"
 MAGIC = 0x676b7073
 MAJOR_VERSION = 0
-MINOR_VERSION = 22
+MINOR_VERSION = 23
 
 FLAG_FORMAT = "<i"
 
@@ -126,11 +126,9 @@ class Serializer(object):
         self.outFile.seek(0, os.SEEK_END)
 
     def writeString(self, s):
-        length = len(s)
         encoded = s.encode("utf-8")
-        size = len(encoded)
+        length = len(encoded)
         self.writeVbn(length)
-        self.writeVbn(size)
         self.outFile.write(encoded)
 
     def writeStringIndex(self, s):
@@ -499,8 +497,7 @@ class Deserializer(object):
 
     def readString(self):
         length = self.readVbn()
-        size = self.readVbn()
-        encoded = self.inFile.read(size)
+        encoded = self.inFile.read(length)
         return encoded.decode("utf-8")
 
     def readStringIndex(self):

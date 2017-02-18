@@ -38,7 +38,7 @@ TEST(BadPackageVersions) {
   ASSERT_FALSE(PackageVersion::fromString(heap, bigVersionStr));
 
   auto longCount = PackageVersion::kMaxComponentCount + 1;
-  vector<u8> longCountChars(2 * longCount - 1);
+  vector<char> longCountChars(2 * longCount - 1);
   for (size_t i = 0; i + 1 < longCountChars.size(); i += 2) {
     longCountChars[i] = '1';
     longCountChars[i + 1] = '.';

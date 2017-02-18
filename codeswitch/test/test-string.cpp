@@ -15,8 +15,6 @@
 #include "string.h"
 #include "vm.h"
 
-#define STR(s) String::fromUtf8CString(heap, s)
-
 using namespace std;
 using namespace codeswitch::internal;
 
@@ -27,19 +25,14 @@ TEST(StringFromUtf8) {
   AllowAllocationScope allowAllocation(vm.heap(), true);
   HandleScope handleScope(&vm);
   const u8 chars[] = { 0x66, 0x6f, 0x6f, 0xe2, 0x98, 0x83, 0x00 };
-  word_t size = sizeof(chars) - 1;
-  word_t length = 4;
-  const u32 expected[] = { 0x66, 0x6f, 0x6f, 0x2603 };
+  length_t length = sizeof(chars) - 1;
   auto str1 = STR(reinterpret_cast<const char*>(chars));
-  auto str2 = String::fromUtf8String(vm.heap(), chars, size);
-  auto str3 = String::fromUtf8String(vm.heap(), chars, length, size);
+  auto str2 = String::fromUtf8String(vm.heap(), chars, length);
   ASSERT_EQ(length, str1->length());
   ASSERT_EQ(length, str2->length());
-  ASSERT_EQ(length, str3->length());
   for (word_t i = 0; i < length; i++) {
-    ASSERT_EQ(expected[i], str1->get(i));
-    ASSERT_EQ(expected[i], str2->get(i));
-    ASSERT_EQ(expected[i], str3->get(i));
+    ASSERT_EQ(chars[i], str1->get(i));
+    ASSERT_EQ(chars[i], str2->get(i));
   }
 }
 
@@ -48,18 +41,17 @@ TEST(StringToStl) {
   VM vm;
   AllowAllocationScope allowAllocation(vm.heap(), true);
   HandleScope handleScope(&vm);
-  const u32 chars[] = { 0x66, 0x6f, 0x6f, 0x2603 };
-  const u8 expected[] = { 0x66, 0x6f, 0x6f, 0xe2, 0x98, 0x83 };
-  auto str = new(vm.heap(), 4) String(chars);
-  ASSERT_EQ(4, str->length());
-  ASSERT_EQ(6, str->utf8EncodedSize());
+  const u8 chars[] = { 0x66, 0x6f, 0x6f, 0xe2, 0x98, 0x83 };
+  length_t length = sizeof(chars);
+  auto str = new(vm.heap(), length) String(reinterpret_cast<const char*>(chars));
+  ASSERT_EQ(length, str->length());
   auto stlVec = str->toUtf8StlVector();
   auto stlStr = str->toUtf8StlString();
-  ASSERT_EQ(6, stlVec.size());
-  ASSERT_EQ(6, stlStr.length());
-  for (int i = 0; i < 6; i++) {
-    ASSERT_EQ(expected[i], stlVec[i]);
-    ASSERT_EQ(expected[i], static_cast<u8>(stlStr[i]));
+  ASSERT_EQ(length, stlVec.size());
+  ASSERT_EQ(length, stlStr.length());
+  for (length_t i = 0; i < length; i++) {
+    ASSERT_EQ(chars[i], stlVec[i]);
+    ASSERT_EQ(chars[i], static_cast<u8>(stlStr[i]));
   }
 }
 

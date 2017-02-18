@@ -9,7 +9,7 @@ def main =
   var sum = 0i32
   var i = 0i32
   while (i < s.length)
-    sum += s.get(i)
+    sum += s.get(i).to-i32
     i += 1i32
   if (sum != 532i32)
     throw Exception()

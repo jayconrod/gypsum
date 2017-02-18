@@ -59,8 +59,7 @@ TEST(HashMapStress) {
   {
     HandleScope handleScope(&vm);
     for (length_t i = 0; i < repetitions; i++) {
-      u32 ch = static_cast<u32>(i);
-      auto s = String::create(heap, 1, &ch);
+      auto s = String::fromUtf8String(heap, to_string(i));
       strings->set(i, *s);
     }
   }

@@ -26,28 +26,31 @@ class String: public Object {
 
   static word_t sizeForLength(length_t length);
   void* operator new (size_t, Heap* heap, length_t length);
-  explicit String(const u32* chars);
-  static Local<String> create(Heap* heap, length_t length, const u32* chars);
-  static String* rawFromUtf8CString(Heap* heap, const char* utf8Chars);
-  static Local<String> fromUtf8CString(Heap* heap, const char* utf8Chars);
+  explicit String(const u8* chars);
+  explicit String(const char* chars);
+  static Local<String> create(Heap* heap, length_t length, const u8* chars);
+  static Local<String> create(Heap* heap, length_t length, const char* chars);
+  static String* rawFromUtf8CString(Heap* heap, const u8* utf8Chars);
+  static String* rawFromUtf8CString(Heap* heap, const char* chars);
+  static Local<String> fromUtf8CString(Heap* heap, const u8* utf8Chars);
   static Local<String> fromUtf8String(Heap* heap, const std::string& stlString);
-  static Local<String> fromUtf8String(Heap* heap, const u8* utf8Chars, word_t size);
-  static Local<String> fromUtf8String(Heap* heap, const u8* utf8Chars,
-                                      length_t length, word_t size);
+  static Local<String> fromUtf8String(Heap* heap, const u8* utf8Chars, length_t length);
+  static Local<String> fromUtf8CString(Heap* heap, const char* utf8Chars);
+  static Local<String> fromUtf8String(Heap* heap, const char* utf8Chars, length_t length);
 
   length_t length() const { return length_; }
   bool isEmpty() const { return length() == 0; }
-  const u32* chars() const { return chars_; }
-  u32 get(length_t index) const {
+  const u8* chars() const { return chars_; }
+  u8 get(length_t index) const {
     ASSERT(index < length_);
     return chars_[index];
   }
 
-  word_t utf8EncodedSize() const;
   std::vector<u8> toUtf8StlVector() const;
   std::string toUtf8StlString() const;
 
   bool equals(const String* other) const;
+  bool equals(const u8* other) const;
   bool equals(const char* other) const;
   int compare(String* other) const;
   u32 hashCode() const;
@@ -59,13 +62,13 @@ class String: public Object {
   static Local<String> substring(const Handle<String>& string,
                                  length_t begin, length_t end);
 
-  length_t find(u32 needle, length_t start = 0) const;
+  length_t find(u8 needle, length_t start = 0) const;
   length_t find(String* needle, length_t start = 0) const;
 
-  length_t count(u32 needle) const;
+  length_t count(u8 needle) const;
   length_t count(String* needle) const;
 
-  static Local<BlockArray<String>> split(Heap* heap, const Handle<String>& string, u32 sep);
+  static Local<BlockArray<String>> split(Heap* heap, const Handle<String>& string, u8 sep);
   static Local<BlockArray<String>> split(Heap* heap,
                                          const Handle<String>& string,
                                          const Handle<String>& sep);
@@ -77,12 +80,12 @@ class String: public Object {
   bool tryToI32(i32* n) const;
 
   // Note: iterators contain raw pointers. They should not be used across allocations.
-  class iterator: public std::iterator<std::random_access_iterator_tag, u32> {
+  class iterator: public std::iterator<std::random_access_iterator_tag, u8> {
    public:
     iterator(const String* str, length_t index)
         : str_(str), index_(index) { }
 
-    u32 operator * () const;
+    u8 operator * () const;
     bool operator == (const iterator& other) const;
     bool operator != (const iterator& other) const;
     bool operator < (const iterator& other) const;
@@ -118,7 +121,7 @@ class String: public Object {
   static const word_t kPointerMap = 0;
 
   length_t length_;
-  u32 chars_[0];
+  u8 chars_[0];
 };
 
 std::ostream& operator << (std::ostream& os, const String* str);

@@ -22,7 +22,7 @@ namespace internal {
 
 word_t String::sizeForLength(length_t length) {
   ASSERT(length <= kMaxLength);
-  return elementsOffset(sizeof(String), sizeof(u32)) + length * sizeof(u32);
+  return elementsOffset(sizeof(String), sizeof(u8)) + length;
 }
 
 
@@ -35,9 +35,15 @@ void* String::operator new (size_t, Heap* heap, length_t length) {
 }
 
 
-String::String(const u32* chars)
+String::String(const u8* chars)
     : Object(STRING_BLOCK_TYPE) {
   copy_n(chars, length_, chars_);
+}
+
+
+String::String(const char* chars)
+    : Object(STRING_BLOCK_TYPE) {
+  copy_n(reinterpret_cast<const u8*>(chars), length_, chars_);
 }
 
 
@@ -45,7 +51,12 @@ String::String()
     : Object(STRING_BLOCK_TYPE) { }
 
 
-Local<String> String::create(Heap* heap, length_t length, const u32* chars) {
+Local<String> String::create(Heap* heap, length_t length, const u8* chars) {
+  RETRY_WITH_GC(heap, return Local<String>(new(heap, length) String(chars)));
+}
+
+
+Local<String> String::create(Heap* heap, length_t length, const char* chars) {
   RETRY_WITH_GC(heap, return Local<String>(new(heap, length) String(chars)));
 }
 
@@ -55,100 +66,52 @@ Local<String> String::create(Heap* heap, length_t length) {
 }
 
 
-String* String::rawFromUtf8CString(Heap* heap, const char* utf8Chars) {
-  word_t size = strlen(utf8Chars);
-  length_t length = 0;
-  auto p = reinterpret_cast<const u8*>(utf8Chars);
-  auto end = p + size;
-  while (p != end) {
-    auto ch = utf8Decode(&p, end);
-    if (ch == UTF8_DECODE_ERROR)
-      throw Error("invalid utf8 string");
-    length++;
-  }
-  auto string = new(heap, length) String;
-  auto chars = string->chars_;
-  p = reinterpret_cast<const u8*>(utf8Chars);
-  for (length_t i = 0; i < length; i++) {
-    auto ch = utf8Decode(&p, end);
-    ASSERT(ch != UTF8_DECODE_ERROR);
-    chars[i] = ch;
-  }
-  return string;
+String* String::rawFromUtf8CString(Heap* heap, const u8* chars) {
+  length_t length = strlen(reinterpret_cast<const char*>(chars));
+  ASSERT(length <= kMaxLength);
+  return new(heap, length) String(chars);
+}
+
+
+String* String::rawFromUtf8CString(Heap* heap, const char* chars) {
+  return rawFromUtf8CString(heap, reinterpret_cast<const u8*>(chars));
+}
+
+
+Local<String> String::fromUtf8CString(Heap* heap, const u8* chars) {
+  length_t length = strnlen(reinterpret_cast<const char*>(chars), kMaxLength);
+  return create(heap, length, chars);
 }
 
 
 Local<String> String::fromUtf8String(Heap* heap, const std::string& stlString) {
-  const u8* chars = reinterpret_cast<const u8*>(stlString.data());
-  word_t size = stlString.size();
-  return fromUtf8String(heap, chars, size);
+  ASSERT(stlString.size() <= kMaxLength);
+  return create(heap, stlString.size(), stlString.data());
 }
 
 
-Local<String> String::fromUtf8String(Heap* heap, const u8* utf8Chars,
-                                     length_t length, word_t size) {
-  auto string = String::create(heap, length);
-  u32* chars = string->chars_;
-  auto end = utf8Chars + size;
-  length_t i;
-  for (i = 0; i < length; i++) {
-    auto ch = utf8Decode(&utf8Chars, end);
-    if (ch == UTF8_DECODE_ERROR)
-      throw Error("invalid utf8 string");
-    chars[i] = ch;
-  }
-  if (utf8Chars != end)
-    throw Error("invalid utf8 string");
-  return string;
+Local<String> String::fromUtf8String(Heap* heap, const u8* chars, length_t length) {
+  return create(heap, length, chars);
 }
 
 
 Local<String> String::fromUtf8CString(Heap* heap, const char* utf8Chars) {
-  word_t size = strlen(utf8Chars);
-  return fromUtf8String(heap, reinterpret_cast<const u8*>(utf8Chars), size);
+  return fromUtf8CString(heap, reinterpret_cast<const u8*>(utf8Chars));
 }
 
 
-Local<String> String::fromUtf8String(Heap* heap, const u8* utf8Chars, word_t size) {
-  length_t length = 0;
-  auto p = utf8Chars;
-  auto end = p + size;
-  while (p != end) {
-    auto ch = utf8Decode(&p, end);
-    if (ch == UTF8_DECODE_ERROR)
-      throw Error("invalid utf8 string");
-    length++;
-  }
-  return fromUtf8String(heap, utf8Chars, length, size);
-}
-
-
-word_t String::utf8EncodedSize() const {
-  word_t size = 0;
-  for (length_t i = 0; i < length(); i++) {
-    size += utf8EncodeSize(get(i));
-  }
-  return size;
+Local<String> String::fromUtf8String(Heap* heap, const char* utf8Chars, length_t length) {
+  return fromUtf8String(heap, reinterpret_cast<const u8*>(utf8Chars), length);
 }
 
 
 vector<u8> String::toUtf8StlVector() const {
-  word_t size = utf8EncodedSize();
-  vector<u8> utf8Chars(size);
-  auto p = utf8Chars.data();
-  auto end = p + size;
-  for (length_t i = 0; i < length(); i++) {
-    utf8Encode(get(i), &p);
-  }
-  ASSERT(p == end);
-  return utf8Chars;
+  return vector<u8>(chars_, chars_ + length_);
 }
 
 
-
 string String::toUtf8StlString() const {
-  vector<u8> utf8Chars = toUtf8StlVector();
-  return string(reinterpret_cast<char*>(utf8Chars.data()), utf8Chars.size());
+  return string(reinterpret_cast<const char*>(chars_), length_);
 }
 
 
@@ -163,13 +126,18 @@ bool String::equals(const String* other) const {
 }
 
 
-bool String::equals(const char* other) const {
+bool String::equals(const u8* other) const {
   length_t i;
   for (i = 0; i < length() && other[i] != '\0'; i++) {
-    if (get(i) != static_cast<u32>(other[i]))
+    if (get(i) != other[i])
       return false;
   }
   return other[i] == '\0';
+}
+
+
+bool String::equals(const char* other) const {
+  return equals(reinterpret_cast<const u8*>(other));
 }
 
 
@@ -232,7 +200,7 @@ Local<String> String::substring(const Handle<String>& string,
 }
 
 
-length_t String::find(u32 needle, length_t start) const {
+length_t String::find(u8 needle, length_t start) const {
   ASSERT(start <= length());
 
   for (length_t i = start; i < length(); i++) {
@@ -261,7 +229,7 @@ length_t String::find(String* needle, length_t start) const {
 }
 
 
-length_t String::count(u32 needle) const {
+length_t String::count(u8 needle) const {
   length_t pos = 0;
   length_t count = 0;
   while ((pos = find(needle, pos)) != kIndexNotSet) {
@@ -289,7 +257,7 @@ length_t String::count(String* needle) const {
 }
 
 
-Local<BlockArray<String>> String::split(Heap* heap, const Handle<String>& string, u32 sep) {
+Local<BlockArray<String>> String::split(Heap* heap, const Handle<String>& string, u8 sep) {
   auto count = string->count(sep);
   auto pieces = BlockArray<String>::create(heap, count + 1);
   length_t pos = 0;
@@ -383,7 +351,7 @@ bool String::tryToI32(i32* n) const {
   i64 limit = sign < 0 ? -static_cast<i64>(INT32_MIN) : INT32_MAX;
   for (length_t i = start; i < length(); i++) {
     auto d = get(i);
-    if (!inRange<u32>(d, '0', '9'))
+    if (!inRange<u8>(d, '0', '9'))
       return false;
     auto v = d - '0';
     value = 10 * value + v;
@@ -396,7 +364,7 @@ bool String::tryToI32(i32* n) const {
 }
 
 
-u32 String::iterator::operator * () const {
+u8 String::iterator::operator * () const {
   return str_->get(index_);
 }
 
