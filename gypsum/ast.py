@@ -808,22 +808,17 @@ class TryCatchExpression(Expression):
 
 
 class LambdaExpression(Expression):
-    def __init__(self, name, typeParameters, parameters, body, location):
+    def __init__(self, parameters, body, location):
         super(LambdaExpression, self).__init__(location)
-        self.name = name
-        self.typeParameters = typeParameters
         self.parameters = parameters
         self.body = body
 
     def __repr__(self):
-        return "LambdaExpression(%s, %s, %s, %s)" % \
-            (repr(self.name), repr(self.typeParameters), repr(self.parameters), repr(self.body))
-
-    def data(self):
-        return self.name
+        return "LambdaExpression(%s, %s)" % \
+            (repr(self.parameters), repr(self.body))
 
     def children(self):
-        return self.typeParameters + self.parameters + [self.body]
+        return self.parameters + [self.body]
 
 
 class ReturnExpression(Expression):

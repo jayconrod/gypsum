@@ -990,41 +990,17 @@ class TestParser(unittest.TestCase):
                           "try x")
 
     def testLambdaExpr(self):
-        self.checkParse(astLambdaExpression(None,
-                                            [],
-                                            [astVariablePattern("x", None),
-                                             astVariablePattern("y", None)],
-                                            astVariableExpression("x")),
-                        expression(),
-                        "lambda (x, y) x")
+        self.checkParse(
+            astLambdaExpression([astParameter([], None, astVariablePattern("x", None)),
+                                 astParameter([], None, astVariablePattern("y", None))],
+                                astVariableExpression("x")),
+            expression(),
+            "lambda (x, y) x")
 
-    def testLambdaSimple(self):
-        self.checkParse(astLambdaExpression(None,
-                                            [],
-                                            [],
-                                            astVariableExpression("x")),
+    def testLambdaNoArgs(self):
+        self.checkParse(astLambdaExpression([], astVariableExpression("x")),
                         expression(),
-                        "lambda () x")
-
-    def testLambdaExprWithTypeParams(self):
-        self.checkParse(astLambdaExpression(None,
-                                            [astTypeParameter([], None, "S", None, None),
-                                             astTypeParameter([], None, "T", None, None)],
-                                            [astVariablePattern("x", astClassType([], "S", [], set())),
-                                             astVariablePattern("y", astClassType([], "T", [], set()))],
-                                            astVariableExpression("x")),
-                        expression(),
-                        "lambda [S, T](x: S, y: T) x")
-
-    def testLambdaExprWithName(self):
-        self.checkParse(astLambdaExpression("f",
-                                            [astTypeParameter([], None, "T", None, None)],
-                                            [astVariablePattern("x", astClassType([], "T", [], set()))],
-                                            astCallExpression(astVariableExpression("f"),
-                                                              None,
-                                                              [astVariableExpression("x")])),
-                        expression(),
-                        "lambda f[T](x: T) f(x)")
+                        "lambda x")
 
     def testReturnExpr(self):
         self.checkParse(astReturnExpression(astVariableExpression("x")),

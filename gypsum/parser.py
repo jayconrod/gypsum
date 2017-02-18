@@ -575,9 +575,16 @@ def catchHandler():
 
 def lambdaExpr():
     def process(parsed, loc):
+        [_, ps, e] = ct.untangle(parsed)
+        return ast.LambdaExpression(ps, e, loc)
+    return keyword("lambda") + ct.Commit(parameters() + ct.Lazy(expression)) ^ process
+
+
+
+    def process(parsed, loc):
         [_, n, tps, _, ps, _, b] = ct.untangle(parsed)
         return ast.LambdaExpression(n, tps, ps, b, loc)
-    return keyword("lambda") + ct.Commit(ct.Opt(symbol) + typeParameters() + keyword("(") + \
+    return keyword("lambda") + ct.Commit(ct.Opt(symbol) + keyword("(") + \
         ct.RepSep(simplePattern(), keyword(",")) + keyword(")") + ct.Lazy(expression)) ^ process
 
 
