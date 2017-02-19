@@ -20,7 +20,13 @@ from scope_analysis import *
 from type_analysis import *
 from flags import *
 from builtins import getRootClass, getStringClass, getNothingClass, getExceptionClass
-from utils_test import FakePackageLoader, TestCaseWithDefinitions, OPTION_SOURCE, TUPLE_SOURCE
+from utils_test import (
+    FUNCTION_SOURCE,
+    FakePackageLoader,
+    OPTION_SOURCE,
+    TUPLE_SOURCE,
+    TestCaseWithDefinitions,
+)
 from name import (
     CLASS_INIT_SUFFIX,
     CONSTRUCTOR_SUFFIX,
@@ -1330,6 +1336,88 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testWhileExprNonBooleanCondition(self):
         self.assertRaises(TypeException, self.analyzeFromSource, "def f = while (-1) 12")
+
+    def testLambdaExpressionPrimitive(self):
+        source = "let f = lambda (x: i32) x"
+        info = self.analyzeFromSource(source)
+        astLambda = info.ast.modules[0].definitions[0].expression
+        irFunction = info.getDefnInfo(astLambda).irDefn
+        irClosureClass = info.getClosureInfo(astLambda).irClosureClass
+        lambdaType = ClassType.forReceiver(irClosureClass)
+        self.assertEquals(
+            self.makeFunction(
+                Name([LAMBDA_SUFFIX]),
+                typeParameters=[],
+                returnType=I32Type,
+                parameterTypes=[lambdaType, I32Type]),
+            irFunction)
+        self.assertEquals(lambdaType, info.getType(astLambda))
+
+    def testLambdaExpressionPrimitiveCapture(self):
+        source = "def add(x: i32) = lambda (y: i32) x + y"
+        info = self.analyzeFromSource(source)
+        astLambda = info.ast.modules[0].definitions[0].body
+        irFunction = info.getDefnInfo(astLambda).irDefn
+        irClosureClass = info.getClosureInfo(astLambda).irClosureClass
+        lambdaType = ClassType.forReceiver(irClosureClass)
+        self.assertEquals(
+            self.makeFunction(
+                Name(["add", LAMBDA_SUFFIX]),
+                typeParameters=[],
+                returnType=I32Type,
+                parameterTypes=[lambdaType, I32Type]),
+            irFunction)
+        self.assertEquals(
+            self.makeVariable(
+                Name(["add", LAMBDA_SUFFIX, RECEIVER_SUFFIX]),
+                type=lambdaType, kind=PARAMETER, flags=frozenset([LET])),
+            irFunction.variables[0])
+        self.assertEquals(lambdaType, info.getType(astLambda))
+
+    def testLambdaExpressionObject(self):
+        source = FUNCTION_SOURCE + \
+                 "let f = lambda (o: Object) o.to-string"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        astLambda = info.ast.modules[0].definitions[-1].expression
+        irFunction = info.getDefnInfo(astLambda).irDefn
+        irClosureClass = info.getClosureInfo(astLambda).irClosureClass
+        lambdaType = ClassType.forReceiver(irClosureClass)
+        self.assertEquals(
+            self.makeFunction(
+                Name([LAMBDA_SUFFIX]),
+                typeParameters=[],
+                returnType=getStringType(),
+                parameterTypes=[lambdaType, getRootClassType()]),
+            irFunction)
+        self.assertEquals(lambdaType, info.getType(astLambda))
+        functionTrait = info.package.findTrait(name="Function1")
+        functionType = ClassType(functionTrait, (getStringType(), getRootClassType()))
+        self.assertTrue(lambdaType.isSubtypeOf(functionType))
+
+    def testLambdaExpressionParameterized(self):
+        source = FUNCTION_SOURCE + \
+                 "def f[static T] = lambda (x: T) x\n" + \
+                 "let g = f[String]"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        astLambda = info.ast.modules[0].definitions[-2].body
+        T = info.package.findTypeParameter(name="f.T")
+        TType = VariableType(T)
+        irFunction = info.getDefnInfo(astLambda).irDefn
+        irClosureClass = info.getClosureInfo(astLambda).irClosureClass
+        lambdaType = ClassType.forReceiver(irClosureClass)
+        self.assertEquals(
+            self.makeFunction(
+                Name(["f", LAMBDA_SUFFIX]),
+                typeParameters=[T],
+                returnType=TType,
+                parameterTypes=[lambdaType, TType]),
+            irFunction)
+        functionTrait = info.package.findTrait(name="Function1")
+        parameterizedFunctionType = ClassType(functionTrait, (TType, TType))
+        self.assertTrue(lambdaType.isSubtypeOf(parameterizedFunctionType))
+        specializedFunctionType = ClassType(functionTrait, (getStringType(), getStringType()))
+        g = info.package.findGlobal(name="g")
+        self.assertTrue(g.type.isSubtypeOf(specializedFunctionType))
 
     def testReturnExpression(self):
         info = self.analyzeFromSource("def f = return 12")

@@ -775,6 +775,12 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         if isParam:
             raise TypeException(node.location, "binary pattern can't be used in a parameter")
 
+    def visitLambdaExpression(self, node):
+        irFunction = self.info.getDefnInfo(node).irDefn
+        self.maybeRename(irFunction)
+        irFunction.parameterTypes = map(self.visit, node.parameters)
+        self.visit(node.body)
+
     def visitDefault(self, node):
         self.visitChildren(node)
 
@@ -1314,6 +1320,14 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 raise TypeException(node.condition.location, "condition must have boolean type")
         ty = self.visit(node.expression)
         return ty
+
+    def visitLambdaExpression(self, node):
+        each(self.visit, node.parameters)
+        irFunction = self.info.getDefnInfo(node).irDefn
+        irFunction.returnType = self.visit(node.body)
+        self.info.getScope(node).makeClosure()
+        closureClass = self.info.getClosureInfo(node).irClosureClass
+        return ir_t.ClassType.forReceiver(closureClass)
 
     def visitReturnExpression(self, node):
         if not self.isAnalyzingFunction() or \
