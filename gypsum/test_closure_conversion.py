@@ -150,7 +150,8 @@ class TestClosureConversion(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source, name=STD_NAME)
         gClosureClass = info.package.findClass(name=Name(["f", "g", CLOSURE_SUFFIX]))
         functionTrait = info.package.findTrait(name="Function2")
-        functionTraitType = ClassType(functionTrait, (getRootClassType(), getRootClassType()))
+        rootType = getRootClassType()
+        functionTraitType = ClassType(functionTrait, (rootType, rootType, rootType))
         self.assertEquals([getRootClassType(), functionTraitType], gClosureClass.supertypes)
 
     def testFunctionTraitNotUsedWithPrimitiveParams(self):

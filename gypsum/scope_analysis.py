@@ -1243,7 +1243,8 @@ class FunctionScope(Scope):
         if functionTrait is not None and \
            all(t.isObject() for t in irDefn.parameterTypes) and \
            irDefn.returnType.isObject():
-            functionTraitType = ClassType(functionTrait, tuple(irDefn.parameterTypes))
+            functionTraitTypeArgs = (irDefn.returnType,) + tuple(irDefn.parameterTypes)
+            functionTraitType = ClassType(functionTrait, functionTraitTypeArgs)
             irClosureClass.supertypes.append(functionTraitType)
 
         # Create the constructor.
