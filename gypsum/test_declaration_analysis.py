@@ -314,6 +314,27 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.assertIs(info.getScope(ast.modules[0].definitions[0].body.catchHandler.cases[0].id),
                       info.getScope(defnInfo.scopeId))
 
+    def testLambdaExpr(self):
+        source = "let f = lambda (x) { let y = x; y; }"
+        info = self.analyzeFromSource(source)
+        astLambda = info.ast.modules[0].definitions[0].expression
+        irDefn = info.getDefnInfo(astLambda).irDefn
+        self.assertEquals(
+            self.makeFunction(
+                Name([LAMBDA_SUFFIX]),
+                variables=[
+                    self.makeVariable(
+                        Name([LAMBDA_SUFFIX, "x"]), kind=PARAMETER, flags=frozenset([LET])),
+                    self.makeVariable(
+                        Name([LAMBDA_SUFFIX, LOCAL_SUFFIX, "y"]),
+                        kind=LOCAL, flags=frozenset([LET]))],
+                flags=frozenset()),
+            irDefn)
+        lambdaScope = info.getScope(astLambda)
+        self.assertTrue(lambdaScope.isBound("x"))
+        localScope = info.getScope(astLambda.body)
+        self.assertTrue(localScope.isBound("y"))
+
     def testOverloadedFunctions(self):
         self.analyzeFromSource("def f = 12; def f(x: i32) = x")
 
