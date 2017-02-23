@@ -3061,6 +3061,206 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret(),
                              ]]))
 
+    def testLambda(self):
+        source = "def f = lambda (x: i32) x"
+        package = self.compileFromSource(source)
+        lambdaClass = package.findClass(name=Name(["f", LAMBDA_SUFFIX, CLOSURE_SUFFIX]))
+        lambdaType = ClassType.forReceiver(lambdaClass)
+        self.checkFunction(
+            package,
+            self.makeSimpleFunction("f", lambdaType, [[
+                allocobj(lambdaClass),
+                dup(),
+                callg(lambdaClass.constructors[0]),
+                drop(),
+                ret(),
+            ]]))
+        self.checkFunction(
+            package,
+            self.makeSimpleFunction(
+                Name(["f", LAMBDA_SUFFIX]),
+                I32Type,
+                [[
+                    ldlocal(1),
+                    ret(),
+                ]],
+                parameterTypes=[lambdaType, I32Type],
+                variables=[
+                    self.makeVariable(
+                        Name(["f", LAMBDA_SUFFIX, RECEIVER_SUFFIX]),
+                        kind=PARAMETER, type=lambdaType, flags=frozenset([LET])),
+                    self.makeVariable(
+                        Name(["f", LAMBDA_SUFFIX, "x"]),
+                        kind=PARAMETER, type=I32Type, flags=frozenset([LET]))]))
+
+    def testLambdaCapture(self):
+        source = "def f(x: i32) = lambda (y: i32) x + y"
+        package = self.compileFromSource(source)
+        lambdaClass = package.findClass(name=Name(["f", LAMBDA_SUFFIX, CLOSURE_SUFFIX]))
+        lambdaType = ClassType.forReceiver(lambdaClass)
+        contextClass = package.findClass(name=Name(["f", CONTEXT_SUFFIX]))
+        contextType = ClassType.forReceiver(contextClass)
+        xNameIndex = package.findName(contextClass.fields[0].name)
+        contextNameIndex = package.findName(lambdaClass.fields[0].name)
+        self.checkFunction(
+            package,
+            self.makeSimpleFunction(
+                "f",
+                lambdaType,
+                [[
+                    allocobj(contextClass),
+                    dup(),
+                    callg(contextClass.constructors[0]),
+                    drop(),
+                    stlocal(-1),
+                    ldlocal(0),
+                    ldlocal(-1),
+                    stf(contextClass, xNameIndex),
+                    allocobj(lambdaClass),
+                    dup(),
+                    ldlocal(-1),
+                    callg(lambdaClass.constructors[0]),
+                    drop(),
+                    ret(),
+                ]],
+                parameterTypes=[I32Type],
+                variables=[
+                    self.makeVariable(
+                        Name(["f", CONTEXT_SUFFIX]),
+                        kind=LOCAL, type=contextType, flags=frozenset())]))
+        self.checkFunction(
+            package,
+            self.makeSimpleFunction(
+                Name(["f", LAMBDA_SUFFIX]),
+                I32Type,
+                [[
+                    ldlocal(0),
+                    ldf(lambdaClass, contextNameIndex),
+                    ldf(contextClass, xNameIndex),
+                    ldlocal(1),
+                    addi32(),
+                    ret(),
+                ]],
+                parameterTypes=[lambdaType, I32Type],
+                variables=[
+                    self.makeVariable(
+                        Name(["f", LAMBDA_SUFFIX, RECEIVER_SUFFIX]),
+                        kind=PARAMETER, type=lambdaType, flags=frozenset([LET])),
+                    self.makeVariable(
+                        Name(["f", LAMBDA_SUFFIX, "y"]),
+                        kind=PARAMETER, type=I32Type, flags=frozenset([LET]))]))
+
+    def testLambdaParameterized(self):
+        source = "def f[static T] = lambda (x: T) x"
+        package = self.compileFromSource(source)
+        fT = package.findTypeParameter(name="f.T")
+        fTType = VariableType(fT)
+        lambdaClass = package.findClass(name=Name(["f", LAMBDA_SUFFIX, CLOSURE_SUFFIX]))
+        lT = lambdaClass.typeParameters[0]
+        lTType = VariableType(lT)
+        self.checkFunction(
+            package,
+            self.makeSimpleFunction(
+                "f",
+                ClassType(lambdaClass, (fTType,)),
+                [[
+                    tys(0),
+                    allocobj(lambdaClass),
+                    dup(),
+                    tys(0),
+                    callg(lambdaClass.constructors[0]),
+                    drop(),
+                    ret(),
+                ]],
+                typeParameters=[fT],
+                instTypes=[fTType]))
+        self.checkFunction(
+            package,
+            self.makeSimpleFunction(
+                Name(["f", LAMBDA_SUFFIX]),
+                lTType,
+                [[
+                    ldlocal(1),
+                    ret(),
+                ]],
+                typeParameters=[lT],
+                parameterTypes=[ClassType.forReceiver(lambdaClass), lTType],
+                variables=[
+                    self.makeVariable(
+                        Name(["f", LAMBDA_SUFFIX, RECEIVER_SUFFIX]),
+                        kind=PARAMETER,
+                        type=ClassType.forReceiver(lambdaClass),
+                        flags=frozenset([LET])),
+                    self.makeVariable(
+                        Name(["f", LAMBDA_SUFFIX, "x"]),
+                        kind=PARAMETER,
+                        type=lTType,
+                        flags=frozenset([LET]))]))
+
+    def testLambdaNestedCapture(self):
+        source = "def f = lambda (x: i32) lambda (y: i32) x + y"
+        package = self.compileFromSource(source)
+        outerLambdaClass = package.findClass(name=Name(["f", LAMBDA_SUFFIX, CLOSURE_SUFFIX]))
+        outerLambdaType = ClassType.forReceiver(outerLambdaClass)
+        outerContextClass = package.findClass(name=Name(["f", LAMBDA_SUFFIX, CONTEXT_SUFFIX]))
+        outerContextType = ClassType.forReceiver(outerContextClass)
+        xNameIndex = package.findName(outerContextClass.fields[0].name)
+        innerLambdaClass = package.findClass(
+            name=Name(["f", LAMBDA_SUFFIX, LAMBDA_SUFFIX, CLOSURE_SUFFIX]))
+        innerLambdaType = ClassType.forReceiver(innerLambdaClass)
+        outerContextNameIndex = package.findName(innerLambdaClass.fields[0].name)
+        self.checkFunction(
+            package,
+            self.makeSimpleFunction(
+                Name(["f", LAMBDA_SUFFIX]),
+                innerLambdaType,
+                [[
+                    allocobj(outerContextClass),
+                    dup(),
+                    callg(outerContextClass.constructors[0]),
+                    drop(),
+                    stlocal(-1),
+                    ldlocal(1),
+                    ldlocal(-1),
+                    stf(outerContextClass, xNameIndex),
+                    allocobj(innerLambdaClass),
+                    dup(),
+                    ldlocal(-1),
+                    callg(innerLambdaClass.constructors[0]),
+                    drop(),
+                    ret(),
+                ]],
+                parameterTypes=[outerLambdaType, I32Type],
+                variables=[
+                    self.makeVariable(
+                        Name(["f", LAMBDA_SUFFIX, RECEIVER_SUFFIX]),
+                        kind=PARAMETER, type=outerLambdaType, flags=frozenset([LET])),
+                    self.makeVariable(
+                        Name(["f", LAMBDA_SUFFIX, CONTEXT_SUFFIX]),
+                        kind=LOCAL, type=outerContextType, flags=frozenset())]))
+        self.checkFunction(
+            package,
+            self.makeSimpleFunction(
+                Name(["f", LAMBDA_SUFFIX, LAMBDA_SUFFIX]),
+                I32Type,
+                [[
+                    ldlocal(0),
+                    ldf(innerLambdaClass, outerContextNameIndex),
+                    ldf(outerContextClass, xNameIndex),
+                    ldlocal(1),
+                    addi32(),
+                    ret(),
+                ]],
+                parameterTypes=[innerLambdaType, I32Type],
+                variables=[
+                    self.makeVariable(
+                        Name(["f", LAMBDA_SUFFIX, LAMBDA_SUFFIX, RECEIVER_SUFFIX]),
+                        kind=PARAMETER, type=innerLambdaType, flags=frozenset([LET])),
+                    self.makeVariable(
+                        Name(["f", LAMBDA_SUFFIX, LAMBDA_SUFFIX, "y"]),
+                        kind=PARAMETER, type=I32Type, flags=frozenset([LET])),
+                ]))
+
     def testUnreachableTry(self):
         exnTy = ClassType(getExceptionClass())
         self.checkFunction("def f =\n" +

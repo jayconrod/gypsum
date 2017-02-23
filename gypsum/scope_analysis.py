@@ -857,6 +857,7 @@ class Scope(ast.NodeVisitor):
 
         Returns the field containing the captured context."""
         assert not self.isLocal()
+        assert scopeId is not self.scopeId
         closureInfo = self.info.getClosureInfo(self.scopeId)
         if scopeId not in closureInfo.irClosureContexts:
             irClosureClass = closureInfo.irClosureClass
@@ -1279,8 +1280,10 @@ class FunctionScope(Scope):
         irDefn.definingClass = irClosureClass
         irClosureClass.methods.append(irDefn)
 
-        # If the parent is a function scope, define a local variable to hold the closure.
-        if isinstance(self.parent, FunctionScope):
+        # If this is a function definition and the parent is a function scope, define a local
+        # variable to hold the closure.
+        if isinstance(self.ast, ast.FunctionDefinition) and \
+           isinstance(self.parent, FunctionScope):
             irClosureVar = self.info.package.addVariable(
                 self.parent.getIrDefn(), irDefn.name,
                 astDefn=irDefn.astDefn,

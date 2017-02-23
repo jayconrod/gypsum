@@ -197,7 +197,8 @@ class CompileVisitor(ast.NodeVisitor):
         self.function.instTypes = self.types
 
     def getParametersAndStatements(self):
-        if isinstance(self.astDefn, ast.FunctionDefinition):
+        if isinstance(self.astDefn, ast.FunctionDefinition) or \
+           isinstance(self.astDefn, ast.LambdaExpression):
             if self.astDefn.body is None:
                 assert ABSTRACT in self.function.flags or NATIVE in self.function.flags
                 return None, None
@@ -1106,6 +1107,11 @@ class CompileVisitor(ast.NodeVisitor):
         self.branch(doneBlock.id)
         self.detach()
 
+    def visitLambdaExpression(self, expr, mode):
+        closureInfo = self.info.getClosureInfo(expr)
+        assert closureInfo.irClosureClass is not None
+        self.buildClosure(closureInfo, mode)
+
     def visitReturnExpression(self, expr, mode):
         tryState = self.tryStateStack[-1] if len(self.tryStateStack) > 0 else None
         hasFinally = tryState is not None and tryState.hasFinally()
@@ -1452,22 +1458,27 @@ class CompileVisitor(ast.NodeVisitor):
                 if closureClass is None or \
                    closureClass is self.info.getDefnInfo(self.astDefn).irDefn:
                     continue
-                assert not closureClass.isForeign() and len(closureClass.constructors) == 1
-                closureCtor = closureClass.constructors[0]
-                assert closureClass.typeParameters == closureCtor.typeParameters
-                capturedScopeIds = closureInfo.capturedScopeIds()
-                assert len(closureCtor.parameterTypes) == len(capturedScopeIds) + 1
-                self.buildImplicitStaticTypeArguments(closureClass.typeParameters)
-                self.allocobj(closureClass)
-                self.dup()
-                for id in capturedScopeIds:
-                    self.loadContext(id)
-                self.buildImplicitStaticTypeArguments(closureCtor.typeParameters)
-                self.callg(closureCtor)
-                self.drop()
+                self.buildClosure(closureInfo, COMPILE_FOR_VALUE)
                 self.storeVariable(closureInfo.irClosureVar)
             elif isinstance(stmt, ast.ClassDefinition):
                 raise NotImplementedError
+
+    def buildClosure(self, closureInfo, mode):
+        closureClass = closureInfo.irClosureClass
+        assert not closureClass.isForeign() and len(closureClass.constructors) == 1
+        closureCtor = closureClass.constructors[0]
+        assert closureClass.typeParameters == closureCtor.typeParameters
+        capturedScopeIds = closureInfo.capturedScopeIds()
+        assert len(closureCtor.parameterTypes) == len(capturedScopeIds) + 1
+        self.buildImplicitStaticTypeArguments(closureClass.typeParameters)
+        self.allocobj(closureClass)
+        if mode is COMPILE_FOR_VALUE:
+            self.dup()
+        for id in capturedScopeIds:
+            self.loadContext(id)
+        self.buildImplicitStaticTypeArguments(closureCtor.typeParameters)
+        self.callg(closureCtor)
+        self.drop()
 
     def buildLiteral(self, lit):
         if isinstance(lit, ast.IntegerLiteral):

@@ -245,7 +245,10 @@ class ClosureInfo(data.Data):
             (irClosureClassStr, irClosureContextsStr, repr(self.irClosureVar))
 
     def capturedScopeIds(self):
-        return sorted(self.irClosureContexts.keys())
+        return sorted(scopeId
+                      for scopeId, slot
+                      in self.irClosureContexts.iteritems()
+                      if isinstance(slot, ir.Field))
 
 
 NOT_HERITABLE = -1
