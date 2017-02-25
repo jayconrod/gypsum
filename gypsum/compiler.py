@@ -549,18 +549,25 @@ class CompileVisitor(ast.NodeVisitor):
         self.buildLoadOrNullaryCall(expr, mode, receiverIsExplicit=True)
 
     def visitCallExpression(self, expr, mode):
-        if not isinstance(expr.callee, ast.VariableExpression) and \
-           not isinstance(expr.callee, ast.PropertyExpression):
-            raise SemanticException(expr.location, "uncallable expression")
-
-        useInfo = self.info.getUseInfo(expr)
         callInfo = self.info.getCallInfo(expr) if self.info.hasCallInfo(expr) else None
-        if isinstance(expr.callee, ast.PropertyExpression) and \
-           not self.info.hasScopePrefixInfo(expr.callee.receiver):
-            receiver = expr.callee.receiver
+        useInfo = self.info.getUseInfo(expr)
+        if isinstance(expr.callee, ast.VariableExpression) or \
+           isinstance(expr.callee, ast.PropertyExpression):
+            # Named function or method. The name is not evaluated.
+            # TODO(#46): variable or property expressions could be callable closures.
+            if isinstance(expr.callee, ast.PropertyExpression) and \
+               not self.info.hasScopePrefixInfo(expr.callee.receiver):
+                receiver = expr.callee.receiver
+            else:
+                receiver = None
+            self.buildCall(useInfo, callInfo, receiver, expr.arguments, mode)
+        elif isinstance(expr.callee, ast.ThisExpression) or \
+             isinstance(expr.callee, ast.SuperExpression):
+            raise SemanticException(expr.location, "cannot call constructor from this location")
         else:
-            receiver = None
-        self.buildCall(useInfo, callInfo, receiver, expr.arguments, mode)
+            # Callable expression. This does need to be evaluated.
+            self.visit(expr.callee, COMPILE_FOR_VALUE)
+            self.buildCall(useInfo, callInfo, self.HAVE_RECEIVER, expr.arguments, mode)
 
     def visitCallThisExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)

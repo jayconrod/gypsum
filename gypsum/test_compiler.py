@@ -3707,7 +3707,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                                           type=closureType,
                                                           kind=PARAMETER, flags=frozenset([LET]))],
                              parameterTypes=[closureType],
-                             flags=frozenset([METHOD])))
+                             flags=frozenset([METHOD, PUBLIC, FINAL])))
 
     def testCallClosure(self):
         source = "def foo(x: i64) =\n" + \
@@ -3737,11 +3737,31 @@ class TestCompiler(TestCaseWithDefinitions):
                                drop(),
                                stlocal(-2),
                                ldlocal(-2),
-                               callv(bar),
+                               callg(bar),
                                ret()]],
                              variables=[self.makeVariable(Name(["foo", CONTEXT_SUFFIX]), type=contextType),
                                         self.makeVariable("foo.bar", type=closureType)],
                              parameterTypes=[I64Type]))
+
+    def testCallLambda(self):
+        source = "def f = (lambda (x: i64) x)(12)"
+        package = self.compileFromSource(source)
+        closureClass = package.findClass(name=Name(["f", LAMBDA_SUFFIX, CLOSURE_SUFFIX]))
+        lambdaFunction = package.findFunction(name=Name(["f", LAMBDA_SUFFIX]))
+        self.checkFunction(
+            package,
+            self.makeSimpleFunction(
+                "f",
+                I64Type,
+                [[
+                    allocobj(closureClass),
+                    dup(),
+                    callg(closureClass.constructors[0]),
+                    drop(),
+                    i64(12),
+                    callg(lambdaFunction),
+                    ret(),
+                ]]))
 
     def testCallAlternateCtor(self):
         source = "class Foo(a: i64)\n" + \
@@ -4009,7 +4029,7 @@ class TestCompiler(TestCaseWithDefinitions):
                 stlocal(-2),
                 ldlocal(-2),
                 tys(0),
-                callv(idInner),
+                callg(idInner),
                 ret()
             ]],
             variables=[self.makeVariable(Name(["id-outer", CONTEXT_SUFFIX]),

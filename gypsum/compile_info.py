@@ -366,6 +366,10 @@ class CallInfo(data.Data):
         # TODO: this may be `None` for calls to closure functions, since they are regular
         # functions during type analysis. Closure conversion should add this.
         "receiverType",
+
+        # bool: Whether the callee needs to be fully evaluated. This is true for things like
+        # closures and bound methods. False for named functions and methods.
+        "calleeIsValue",
     ]
 
 

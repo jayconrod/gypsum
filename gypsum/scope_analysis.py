@@ -1275,7 +1275,7 @@ class FunctionScope(Scope):
         # We don't use `makeMethod`, since it's intended to be used before type analysis, but
         # we do most of the same things.
         assert not irDefn.isMethod()
-        extraFlags = [METHOD]
+        extraFlags = [METHOD, PUBLIC, FINAL]
         if callMethod is not None:
             extraFlags.append(OVERRIDE)
             irDefn.overrides = [callMethod]

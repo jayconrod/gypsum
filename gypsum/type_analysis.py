@@ -1595,7 +1595,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, receiverType,
                                                             None, None, loc)
         self.checkCallAllowed(defnInfo.irDefn, True, USE_AS_VALUE, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType, False))
         scope.use(defnInfo, useAstId, USE_AS_VALUE, loc)
         return self.getDefnType(receiverType, defnInfo.irDefn, allTypeArgs)
 
@@ -1655,7 +1655,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                                                 typeArgs, None, loc)
 
         self.checkCallAllowed(defnInfo.irDefn, False, USE_AS_VALUE, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType, False))
         self.scope().use(defnInfo, useAstId, USE_AS_VALUE, loc)
         return self.getDefnType(receiverType, defnInfo.irDefn, allTypeArgs)
 
@@ -1716,7 +1716,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             raise TypeException(loc, "%s: cannot access without receiver" % name)
 
         self.checkCallAllowed(defnInfo.irDefn, receiverIsReceiver, useKind, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType, False))
         self.scope().use(defnInfo, useAstId, useKind, loc)
         ty = self.getDefnType(receiverType, defnInfo.irDefn, allTypeArgs)
         ty = self.upcastExistentialVars(ty, existentialVars, isLvalue, name, loc)
@@ -1759,7 +1759,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                                                 typeArgs, argTypes, loc)
         irDefn = defnInfo.irDefn
         self.checkCallAllowed(irDefn, True, useKind, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType, False))
         self.scope().use(defnInfo, useAstId, useKind, loc)
         return self.getDefnType(receiverType, irDefn, allTypeArgs)
 
@@ -1843,7 +1843,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
         # Record information and return the resulting type.
         self.checkCallAllowed(defnInfo.irDefn, False, useKind, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType, False))
         self.scope().use(defnInfo, useAstId, useKind, loc)
         ty = self.getDefnType(receiverType, defnInfo.irDefn, allTypeArgs)
         ty = self.upcastExistentialVars(ty, existentialVars, False, name, loc)
@@ -1885,7 +1885,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, objectType,
                                                             None, argTypes, loc)
         self.checkCallAllowed(defnInfo.irDefn, False, USE_AS_CONSTRUCTOR, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, None))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, None, False))
         self.scope().use(defnInfo, useAstId, USE_AS_CONSTRUCTOR, loc)
 
     def handleValueCall(self, calleeType, typeArgs, argTypes, useAstId, loc):
@@ -1920,9 +1920,11 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         if not clas.name.short().startswith(CLOSURE_SUFFIX + "_"):
             # Regular object. Look for a "call" method.
             scope = self.getScopeForDefn(clas)
-            return self.handlePropertyCall("call", scope, calleeType, typeArgs, argTypes,
-                                           hasReceiver=True, receiverIsReceiver=False,
-                                           isLvalue=False, useAstId=useAstId, loc=loc)
+            ty = self.handlePropertyCall("call", scope, calleeType, typeArgs, argTypes,
+                                         hasReceiver=True, receiverIsReceiver=False,
+                                         isLvalue=False, useAstId=useAstId, loc=loc)
+            self.info.getCallInfo(useAstId).calleeIsValue = True  # hack
+            return ty
         else:
             # Synthetic closure class. There should only be one method defined in that class
             # (others are inherited). Call that.
@@ -1939,7 +1941,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                                          typeArgs, argTypes, loc)
             useKind = USE_AS_PROPERTY
             self.checkCallAllowed(calleeMethod, False, useKind, loc)
-            self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
+            self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType, True))
             self.scope().use(calleeDefnInfo, useAstId, useKind, loc)
             ty = self.getDefnType(receiverType, calleeMethod, allTypeArgs)
             ty = self.upcastExistentialVars(
@@ -2000,7 +2002,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, receiverType,
                                                                 typeArgs, [exprType], loc)
             self.checkCallAllowed(defnInfo.irDefn, False, useKind, loc)
-            self.info.setCallInfo(matcherAstId, CallInfo(allTypeArgs, receiverType))
+            self.info.setCallInfo(matcherAstId, CallInfo(allTypeArgs, receiverType, False))
             self.scope().use(defnInfo, matcherAstId, useKind, loc)
             irDefn = defnInfo.irDefn
             self.ensureTypeInfoForDefn(irDefn)
