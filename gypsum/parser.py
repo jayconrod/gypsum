@@ -464,9 +464,9 @@ def superExpr():
 
 
 def groupExpr():
-    def process(parsed, _):
+    def process(parsed, loc):
         [_, e, _] = ct.untangle(parsed)
-        return e
+        return ast.GroupExpression(e, loc)
     return keyword("(") + ct.Lazy(expression) + keyword(")") ^ process
 
 

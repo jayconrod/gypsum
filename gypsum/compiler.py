@@ -1150,6 +1150,9 @@ class CompileVisitor(ast.NodeVisitor):
             self.ret()
         self.setUnreachable()
 
+    def visitGroupExpression(self, expr, mode):
+        self.visit(expr.expression, mode)
+
     def dropForEffect(self, mode):
         if mode is COMPILE_FOR_EFFECT:
             self.drop()

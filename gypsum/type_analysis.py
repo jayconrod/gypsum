@@ -1341,6 +1341,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.checkAndHandleReturnType(retTy, node.location)
         return ir_t.NoType
 
+    def visitGroupExpression(self, node):
+        return self.visit(node.expression)
+
     def visitClassType(self, node):
         ty = super(DefinitionTypeVisitor, self).visitClassType(node)
         if isinstance(ty, ir_t.VariableType):

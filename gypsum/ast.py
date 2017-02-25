@@ -833,6 +833,18 @@ class ReturnExpression(Expression):
         return [self.expression]
 
 
+class GroupExpression(Expression):
+    def __init__(self, expression, location):
+        super(GroupExpression, self).__init__(location)
+        self.expression = expression
+
+    def __repr__(self):
+        return "GroupExpression(%s)" % repr(self.expression)
+
+    def children(self):
+        return [self.expression]
+
+
 class Literal(Node):
     pass
 

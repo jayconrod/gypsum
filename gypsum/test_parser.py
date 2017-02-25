@@ -749,10 +749,13 @@ class TestParser(unittest.TestCase):
             "lambda f()")
 
     def testCallLambda2(self):
-        self.checkParse(astCallExpression(astLambdaExpression([], astVariableExpression("x")),
-                                          None, []),
-                        expression(),
-                        "(lambda x)()")
+        self.checkParse(
+            astCallExpression(
+                astGroupExpression(astLambdaExpression([], astVariableExpression("x"))),
+                None,
+                []),
+            expression(),
+            "(lambda x)()")
 
     def testFunctionValue1(self):
         self.checkParse(astFunctionValueExpression(astPropertyExpression(astVariableExpression("o"),
@@ -760,19 +763,32 @@ class TestParser(unittest.TestCase):
                         expression(), "o.f _")
 
     def testTupleExprs(self):
-        self.checkParse(astTupleExpression([astVariableExpression("a"),
-                                            astVariableExpression("b")]),
-                        expression(), "a, b")
-        self.checkParse(astTupleExpression([astVariableExpression("a"),
-                                            astTupleExpression([astVariableExpression("b"),
-                                                                astVariableExpression("c")]),
-                                            astVariableExpression("d")]),
-                        expression(), "a, (b, c), d")
-        self.checkParse(astCallExpression(astVariableExpression("a"),
-                                          None,
-                                          [astTupleExpression([astVariableExpression("b"),
-                                                               astVariableExpression("c")])]),
-                        expression(), "a((b, c))")
+        self.checkParse(
+            astTupleExpression([
+                astVariableExpression("a"),
+                astVariableExpression("b")]),
+            expression(),
+            "a, b")
+        self.checkParse(
+            astTupleExpression([
+                astVariableExpression("a"),
+                astGroupExpression(
+                    astTupleExpression([
+                        astVariableExpression("b"),
+                        astVariableExpression("c")])),
+                astVariableExpression("d")]),
+            expression(),
+            "a, (b, c), d")
+        self.checkParse(
+            astCallExpression(
+                astVariableExpression("a"),
+                None,
+                [astGroupExpression(
+                    astTupleExpression([
+                        astVariableExpression("b"),
+                        astVariableExpression("c")]))]),
+            expression(),
+            "a((b, c))")
 
     def testUnaryExpr(self):
         self.checkParse(astUnaryExpression("-", astVariableExpression("x")),
@@ -1019,12 +1035,17 @@ class TestParser(unittest.TestCase):
                         expression(), "return x")
 
     def testGroupExpr(self):
-        self.checkParse(astBinaryExpression("*",
-                                            astBinaryExpression("+",
-                                                                astVariableExpression("x"),
-                                                                astVariableExpression("y")),
-                                            astVariableExpression("z")),
-                        expression(), "(x + y) * z")
+        self.checkParse(
+            astBinaryExpression(
+                "*",
+                astGroupExpression(
+                    astBinaryExpression(
+                        "+",
+                        astVariableExpression("x"),
+                        astVariableExpression("y"))),
+                astVariableExpression("z")),
+            expression(),
+            "(x + y) * z")
 
     def testNewArrayExpr(self):
         self.checkParse(astNewArrayExpression(astLiteralExpression(astIntegerLiteral(123, 64)),
