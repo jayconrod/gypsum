@@ -724,6 +724,26 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(I64Type, info.package.findFunction(name="g").returnType)
         self.assertEquals(I64Type, info.getType(info.ast.modules[0].definitions[1].body))
 
+    @unittest.skip("blocked by #45: can't use more than one definition at a node")
+    def testCallVariableValue(self):
+        source = "let f = lambda true\n" + \
+                 "let g = f()"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(BooleanType, info.package.findGlobal(name="g").type)
+
+    @unittest.skip("blocked by #45: can't use more than one definition at a node")
+    def testCallFieldValue(self):
+        source = FUNCTION_SOURCE + \
+                 "class Box(f: Function1[String, String])\n" + \
+                 "def f(box: Box, s: String) = box.f(s)"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(getStringType(), info.package.findFunction(name="f").returnType)
+
+    def testCallLambdaValue(self):
+        source = "let x = (lambda (y: i64) y)(12)"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(I64Type, info.package.findGlobal(name="x").type)
+
     def testCallWrongNumberOfArgs(self):
         source = "def f(x: i32, y: boolean) = x\n" + \
                  "def g = f(1)\n"

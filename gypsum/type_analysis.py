@@ -24,6 +24,7 @@ from flags import ARRAY, COVARIANT, CONTRAVARIANT, CONSTRUCTOR, INITIALIZER, MET
 import scope_analysis
 from name import (
     BLANK_SUFFIX,
+    CLOSURE_SUFFIX,
     CONSTRUCTOR_SUFFIX,
     EXISTENTIAL_SUFFIX,
     Name,
@@ -1214,8 +1215,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                     node.id, node.location)
             ty = ir_t.UnitType
         else:
-            # TODO: callable expression
-            raise NotImplementedError
+            functionType = self.visit(node.callee)
+            ty = self.handleValueCall(functionType, typeArgs, argTypes, node.id, node.location)
         return ty
 
     def visitNewArrayExpression(self, node):
@@ -1886,6 +1887,64 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.checkCallAllowed(defnInfo.irDefn, False, USE_AS_CONSTRUCTOR, loc)
         self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, None))
         self.scope().use(defnInfo, useAstId, USE_AS_CONSTRUCTOR, loc)
+
+    def handleValueCall(self, calleeType, typeArgs, argTypes, useAstId, loc):
+        """Handles a call to a value.
+
+        This is used for calling lambdas, bound methods, closures, and objects with "call"
+        methods. If the value is an instance of a synthetic closure class, this will call
+        the sole method in that class. If the value is an object with one or more methods
+        named `call`, this will be handled as a property call to one of those methods.
+
+        Args:
+            calleeType (Type): the type of the value being called.
+            typeArgs (list(Type)?): type arguments passes as part of the call. Should be `None`
+                if no type arguments were explicitly passed.
+            argTypes (list(Type)?): types of arguments passed as part of the call. Should be
+                `None` if no arguments were explicitly passed.
+            useAstId (AstId): the AST id where the symbol is referenced. Used to save info.
+            loc (Location): the location of the reference in source code. Used in errors.
+
+        Returns:
+            (Type): returned type of the called method with type substitution performed.
+
+        Raises:
+            ScopeException: if the value was a regular object without a `call` method.
+            TypeException: if the value is uncallable or if there was a type mismatch with
+                the arguments.
+        """
+        receiverType, existentialVars = self.openExistentialReceiver(calleeType)
+        if not isinstance(receiverType, ir_t.ObjectType):
+            raise TypeException(loc, "uncallable type: %s" % str(calleeType))
+        clas = calleeType.effectiveClass()
+        if not clas.name.short().startswith(CLOSURE_SUFFIX + "_"):
+            # Regular object. Look for a "call" method.
+            scope = self.getScopeForDefn(clas)
+            return self.handlePropertyCall("call", scope, calleeType, typeArgs, argTypes,
+                                           hasReceiver=True, receiverIsReceiver=False,
+                                           isLvalue=False, useAstId=useAstId, loc=loc)
+        else:
+            # Synthetic closure class. There should only be one method defined in that class
+            # (others are inherited). Call that.
+            definedMethods = [m for m in clas.methods if m.definingClass is clas]
+            if len(definedMethods) != 1:
+                raise TypeException(loc, "closure has %d defined methods; expected 1" %
+                                    len(definedMethods))
+            assert len(definedMethods) == 1
+            calleeMethod = definedMethods[0]
+            calleeDefnInfo = self.info.getDefnInfo(calleeMethod)
+            calleeNameInfo = scope_analysis.NameInfo("call")
+            calleeNameInfo.addOverload(calleeDefnInfo)
+            _, allTypeArgs = self.chooseDefnFromNameInfo(calleeNameInfo, receiverType,
+                                                         typeArgs, argTypes, loc)
+            useKind = USE_AS_PROPERTY
+            self.checkCallAllowed(calleeMethod, False, useKind, loc)
+            self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
+            self.scope().use(calleeDefnInfo, useAstId, useKind, loc)
+            ty = self.getDefnType(receiverType, calleeMethod, allTypeArgs)
+            ty = self.upcastExistentialVars(
+                ty, existentialVars, False, calleeMethod.sourceName, loc)
+            return ty
 
     def handleDestructure(self, nameInfo, receiverType, receiverIsExplicit,
                           typeArgs, exprType, subPatterns, mode, useAstId, matcherAstId, loc):

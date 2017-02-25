@@ -20,7 +20,7 @@ from ids import AstId, DefnId, PackageId, ScopeId, BUILTIN_SCOPE_ID, GLOBAL_SCOP
 import ir
 from ir_types import getRootClassType, getNothingClassType, ClassType, UnitType, I32Type
 from location import Location, NoLoc
-from builtins import registerBuiltins, getBuiltinClasses, getNothingClass
+from builtins import registerBuiltins, getBuiltinClasses, getNothingClass, getRootClass
 from utils import Counter, each
 from bytecode import BUILTIN_ROOT_CLASS_ID
 from name import (
@@ -1232,21 +1232,27 @@ class FunctionScope(Scope):
         closureName = self.info.makeUniqueName(irDefn.name.withSuffix(CLOSURE_SUFFIX))
         irClosureClass = self.info.package.addClass(closureName,
                                                     typeParameters=list(implicitTypeParams),
-                                                    supertypes=[getRootClassType()],
+                                                    supertypes=[],
                                                     constructors=[], fields=[],
                                                     methods=[], flags=frozenset())
         closureInfo.irClosureClass = irClosureClass
 
-        # Add a function trait as a supertype if the function has a small number of
-        # non-primitive parameters.
-        # TODO(#33): when we have variadic type parameters, we won't need to check this.
+        # Inherit from the root class.
+        irClosureClass.supertypes.append(getRootClassType())
+        rootClass = getRootClass()
+        irClosureClass.methods = list(rootClass.methods)
+
+        # If the function conforms to a Function trait, inherit from that, too.
         functionTrait = self.info.getFunctionTrait(len(irDefn.parameterTypes))
+        callMethod = None
         if functionTrait is not None and \
            all(t.isObject() for t in irDefn.parameterTypes) and \
            irDefn.returnType.isObject():
             functionTraitTypeArgs = (irDefn.returnType,) + tuple(irDefn.parameterTypes)
             functionTraitType = ClassType(functionTrait, functionTraitTypeArgs)
             irClosureClass.supertypes.append(functionTraitType)
+            callMethod = functionTrait.findMethodBySourceName("call")
+            assert callMethod is not None
 
         # Create the constructor.
         irClosureType = ClassType(irClosureClass)
@@ -1269,7 +1275,11 @@ class FunctionScope(Scope):
         # We don't use `makeMethod`, since it's intended to be used before type analysis, but
         # we do most of the same things.
         assert not irDefn.isMethod()
-        irDefn.flags |= frozenset([METHOD])
+        extraFlags = [METHOD]
+        if callMethod is not None:
+            extraFlags.append(OVERRIDE)
+            irDefn.overrides = [callMethod]
+        irDefn.flags |= frozenset(extraFlags)
         thisType = ClassType.forReceiver(irClosureClass)
         thisName = irDefn.name.withSuffix(RECEIVER_SUFFIX)
         this = self.info.package.newVariable(

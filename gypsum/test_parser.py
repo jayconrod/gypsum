@@ -742,6 +742,18 @@ class TestParser(unittest.TestCase):
                                           []),
                         expression(), "o.f()")
 
+    def testCallLambda1(self):
+        self.checkParse(
+            astLambdaExpression([], astCallExpression(astVariableExpression("f"), None, [])),
+            expression(),
+            "lambda f()")
+
+    def testCallLambda2(self):
+        self.checkParse(astCallExpression(astLambdaExpression([], astVariableExpression("x")),
+                                          None, []),
+                        expression(),
+                        "(lambda x)()")
+
     def testFunctionValue1(self):
         self.checkParse(astFunctionValueExpression(astPropertyExpression(astVariableExpression("o"),
                                                                          "f")),
