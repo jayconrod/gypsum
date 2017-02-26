@@ -725,17 +725,30 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(I64Type, info.getType(info.ast.modules[0].definitions[1].body))
 
     @unittest.skip("blocked by #45: can't use more than one definition at a node")
-    def testCallVariableValue(self):
+    def testCallVariable(self):
         source = "let f = lambda true\n" + \
                  "let g = f()"
         info = self.analyzeFromSource(source)
         self.assertEquals(BooleanType, info.package.findGlobal(name="g").type)
 
+    def testCallVariableValue(self):
+        source = "let f = lambda true\n" + \
+                 "let g = (f)()"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(BooleanType, info.package.findGlobal(name="g").type)
+
     @unittest.skip("blocked by #45: can't use more than one definition at a node")
-    def testCallFieldValue(self):
+    def testCallField(self):
         source = FUNCTION_SOURCE + \
                  "class Box(f: Function1[String, String])\n" + \
                  "def f(box: Box, s: String) = box.f(s)"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(getStringType(), info.package.findFunction(name="f").returnType)
+
+    def testCallFieldValue(self):
+        source = FUNCTION_SOURCE + \
+                 "class Box(f: Function1[String, String])\n" + \
+                 "def f(box: Box, s: String) = (box.f)(s)"
         info = self.analyzeFromSource(source)
         self.assertEquals(getStringType(), info.package.findFunction(name="f").returnType)
 
@@ -743,6 +756,11 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "let x = (lambda (y: i64) y)(12)"
         info = self.analyzeFromSource(source)
         self.assertEquals(I64Type, info.package.findGlobal(name="x").type)
+
+    def testCallLambdaWithImplicitTypeArgument(self):
+        source = "def f[static T] = (lambda (x: i64) x)(12)"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(I64Type, info.package.findFunction(name="f").returnType)
 
     def testCallWrongNumberOfArgs(self):
         source = "def f(x: i32, y: boolean) = x\n" + \
@@ -1064,6 +1082,16 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(getStringType(), info.getType(matchCase.pattern.patterns[0]))
         self.assertEquals(getStringType(), info.getType(matchCase.pattern.patterns[1]))
         self.assertEquals(getStringType(), f.returnType)
+
+    @unittest.skip("blocked by #45: can't use more than one definition at a node")
+    def testMatchExprDestructureWithClosureMatcher(self):
+        source = OPTION_SOURCE + \
+                 "let Matcher = lambda (x: Object) None\n" + \
+                 "def f(x: Object) =\n" + \
+                 "  match (x)\n" + \
+                 "    case Matcher(a) => a"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        self.fail("TODO")
 
     def testMatchExprDestructureWithBadMatcherFunctionArgs(self):
         source = OPTION_SOURCE + \
@@ -1507,6 +1535,13 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "def f(box: forsome [X] Box[X]) = { box.value = 12; {}; }"
         self.analyzeFromSource(source)
         # pass if no error
+
+    def testExistentialCallValue(self):
+        source = FUNCTION_SOURCE + \
+                 "def f(g: forsome [R <: String, P >: String] Function1[R, P]) =\n" + \
+                 "  (g)(\"foo\")"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(getStringType(), info.package.findFunction(name="f").returnType)
 
     def testDestructureMatchOnExistentialValue(self):
         source = OPTION_SOURCE + \

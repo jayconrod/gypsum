@@ -25,7 +25,13 @@ from lexer import *
 from parser import *
 from scope_analysis import *
 from type_analysis import *
-from utils_test import FakePackageLoader, OPTION_SOURCE, TestCaseWithDefinitions, TUPLE_SOURCE
+from utils_test import (
+    FUNCTION_SOURCE,
+    FakePackageLoader,
+    OPTION_SOURCE,
+    TUPLE_SOURCE,
+    TestCaseWithDefinitions,
+)
 import ast
 import ir_instructions
 from name import (
@@ -3762,6 +3768,63 @@ class TestCompiler(TestCaseWithDefinitions):
                     callg(lambdaFunction),
                     ret(),
                 ]]))
+
+    def testCallLambdaWithImplicitTypeArgument(self):
+        source = "def f[static T] = (lambda (x: i64) x)(12)"
+        package = self.compileFromSource(source)
+        closureClass = package.findClass(name=Name(["f", LAMBDA_SUFFIX, CLOSURE_SUFFIX]))
+        lambdaFunction = package.findFunction(name=Name(["f", LAMBDA_SUFFIX]))
+        T = package.findTypeParameter(name="f.T")
+        TType = VariableType(T)
+        self.checkFunction(
+            package,
+            self.makeSimpleFunction(
+                "f",
+                I64Type,
+                [[
+                    tys(0),
+                    allocobj(closureClass),
+                    dup(),
+                    tys(0),
+                    callg(closureClass.constructors[0]),
+                    drop(),
+                    i64(12),
+                    tys(0),
+                    callg(lambdaFunction),
+                    ret(),
+                ]],
+                typeParameters=[T],
+                instTypes=[TType]))
+
+    def testCallExistentialValue(self):
+        source = FUNCTION_SOURCE + \
+                 "def f(g: forsome [R <: String, P >: String] Function1[R, P]) =\n" + \
+                 "  (g)(\"foo\")"
+        package = self.compileFromSource(source)
+        stringType = getStringType()
+        fooIndex = package.findString("foo")
+        R = package.findTypeParameter(name=Name(["f", EXISTENTIAL_SUFFIX, "R"]))
+        RType = VariableType(R)
+        P = package.findTypeParameter(name=Name(["f", EXISTENTIAL_SUFFIX, "P"]))
+        PType = VariableType(P)
+        Function1 = package.findTrait(name="Function1")
+        gType = ExistentialType((R, P), ClassType(Function1, (RType, PType)))
+        callMethod = package.findFunction(name="Function1.call")
+        self.checkFunction(
+            package,
+            self.makeSimpleFunction(
+                "f",
+                stringType,
+                [[
+                    ldlocal(0),
+                    string(fooIndex),
+                    tys(0),
+                    tys(1),
+                    callv(callMethod),
+                    ret(),
+                ]],
+                variables=[self.makeVariable("f.g", type=gType, kind=PARAMETER, flags=frozenset([LET]))],
+                instTypes=[RType, PType]))
 
     def testCallAlternateCtor(self):
         source = "class Foo(a: i64)\n" + \

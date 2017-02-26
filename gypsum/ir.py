@@ -1175,11 +1175,14 @@ def getExplicitTypeParameterCount(irDefn):
         if irDefn.definingClass is not None:
             return len(irDefn.typeParameters) - len(irDefn.definingClass.typeParameters)
         elif irDefn.astDefn is not None:
-            # Local functions may still have implicit type parameters. We peek at the AST,
-            # to count the explicit type parameters, which is kind of a hack. Works as long
-            # as we can't import local functions from other packages, since we wouldn't
-            # have an AST.
-            return len(irDefn.astDefn.typeParameters)
+            if isinstance(irDefn.astDefn, ast.FunctionDefinition):
+                # Local functions may still have implicit type parameters. We peek at the AST,
+                # to count the explicit type parameters, which is kind of a hack. Works as long
+                # as we can't import local functions from other packages, since we wouldn't
+                # have an AST.
+                return len(irDefn.astDefn.typeParameters)
+            else:
+                return 0
         else:
             return len(irDefn.typeParameters)
     else:

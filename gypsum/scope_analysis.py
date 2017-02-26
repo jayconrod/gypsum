@@ -1243,16 +1243,19 @@ class FunctionScope(Scope):
         irClosureClass.methods = list(rootClass.methods)
 
         # If the function conforms to a Function trait, inherit from that, too.
-        functionTrait = self.info.getFunctionTrait(len(irDefn.parameterTypes))
+        hasTypeParameters = ir.getExplicitTypeParameterCount(irDefn) > 0
         callMethod = None
-        if functionTrait is not None and \
+        if not hasTypeParameters and \
            all(t.isObject() for t in irDefn.parameterTypes) and \
            irDefn.returnType.isObject():
-            functionTraitTypeArgs = (irDefn.returnType,) + tuple(irDefn.parameterTypes)
-            functionTraitType = ClassType(functionTrait, functionTraitTypeArgs)
-            irClosureClass.supertypes.append(functionTraitType)
-            callMethod = functionTrait.findMethodBySourceName("call")
-            assert callMethod is not None
+            functionTrait = self.info.getFunctionTrait(len(irDefn.parameterTypes))
+            if functionTrait is not None:
+                functionTraitTypeArgs = (irDefn.returnType,) + tuple(irDefn.parameterTypes)
+                functionTraitType = ClassType(functionTrait, functionTraitTypeArgs)
+                irClosureClass.supertypes.append(functionTraitType)
+                callMethod = functionTrait.findMethodBySourceName("call")
+                assert callMethod is not None
+                self.info.setStdExternInfo(callMethod.id, callMethod)
 
         # Create the constructor.
         irClosureType = ClassType(irClosureClass)
