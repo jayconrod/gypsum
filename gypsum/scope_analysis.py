@@ -1248,7 +1248,7 @@ class FunctionScope(Scope):
         if not hasTypeParameters and \
            all(t.isObject() for t in irDefn.parameterTypes) and \
            irDefn.returnType.isObject():
-            functionTrait = self.info.getFunctionTrait(len(irDefn.parameterTypes))
+            functionTrait = self.info.getFunctionTraitOrNone(len(irDefn.parameterTypes))
             if functionTrait is not None:
                 functionTraitTypeArgs = (irDefn.returnType,) + tuple(irDefn.parameterTypes)
                 functionTraitType = ClassType(functionTrait, functionTraitTypeArgs)

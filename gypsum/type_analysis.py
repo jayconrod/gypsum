@@ -409,6 +409,20 @@ class TypeVisitorBase(ast.NodeVisitor):
         innerType = self.visit(node.type)
         return ir_t.ExistentialType(variables, innerType)
 
+    def visitFunctionType(self, node):
+        n = len(node.parameterTypes)
+        trait = self.info.getFunctionTrait(n, node.location)
+        parameterTypes = tuple(map(self.visit, node.parameterTypes))
+        returnType = self.visit(node.returnType)
+        for i in xrange(n):
+            if not parameterTypes[i].isObject():
+                raise TypeException(node.parameterTypes[i].location,
+                                    "non-object type used as function parameter type")
+        if not returnType.isObject():
+            raise TypeException(node.returnType.location,
+                                "non-object type used as function return type")
+        return ir_t.ClassType(trait, (returnType,) + parameterTypes)
+
     def visitIntegerLiteral(self, node):
         typeMap = { 8: ir_t.I8Type, 16: ir_t.I16Type, 32: ir_t.I32Type, 64: ir_t.I64Type }
         if node.width not in typeMap:

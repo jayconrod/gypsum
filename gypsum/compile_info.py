@@ -91,7 +91,12 @@ class CompileInfo(object):
         name = "Tuple%d" % n
         return self.getStdClass(name, loc)
 
-    def getFunctionTrait(self, n):
+    def getFunctionTrait(self, n, loc):
+        # TODO(#33): remove this method when we have variadic type parameters.
+        name = "Function%d" % n
+        return self.getStdTrait(name, loc)
+
+    def getFunctionTraitOrNone(self, n):
         # TODO(#33): remove this method when we have variadic type parameters.
         name = "Function%d" % n
         try:

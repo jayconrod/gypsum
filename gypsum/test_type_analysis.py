@@ -1467,6 +1467,12 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         g = info.package.findGlobal(name="g")
         self.assertTrue(g.type.isSubtypeOf(specializedFunctionType))
 
+    def testLambdaExpressionFunctionType(self):
+        source = FUNCTION_SOURCE + \
+                 "let g: String -> Object = lambda (x: String) x"
+        self.analyzeFromSource(source, name=STD_NAME)
+        # pass if no error
+
     def testReturnExpression(self):
         info = self.analyzeFromSource("def f = return 12")
         self.assertEquals(NoType, info.getType(info.ast.modules[0].definitions[0].body))
@@ -1745,6 +1751,19 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         expected = ExistentialType((X,), VariableType(X, frozenset([NULLABLE_TYPE_FLAG])))
         self.assertEquals(expected, ty)
         self.assertTrue(ty.isNullable())
+
+    def testFunctionType(self):
+        source = FUNCTION_SOURCE + \
+                 "let g: String -> Object"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        ty = info.package.findGlobal(name="g").type
+        fnTrait = info.package.findTrait(name="Function1")
+        self.assertEquals(ClassType(fnTrait, (getRootClassType(), getStringType())), ty)
+
+    def testFunctionTypePrimitive(self):
+        source = FUNCTION_SOURCE + \
+                 "let g: i32 -> boolean"
+        self.assertRaises(TypeException, self.analyzeFromSource, source, name=STD_NAME)
 
     # Closures
     def testFunctionContextFields(self):

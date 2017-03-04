@@ -526,6 +526,19 @@ class ExistentialType(Type):
         return self.typeParameters + [self.type]
 
 
+class FunctionType(Type):
+    def __init__(self, parameterTypes, returnType, location):
+        super(FunctionType, self).__init__(location)
+        self.parameterTypes = parameterTypes
+        self.returnType = returnType
+
+    def __repr__(self):
+        return "FunctionType(%s, %s)" % (repr(self.parameterTypes), repr(self.returnType))
+
+    def children(self):
+        return self.parameterTypes + [self.returnType]
+
+
 class Expression(Node):
     pass
 

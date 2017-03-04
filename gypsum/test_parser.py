@@ -606,6 +606,15 @@ class TestParser(unittest.TestCase):
                         ty(),
                         "(A, B[C])?")
 
+    def testTupleTypeEmpty(self):
+        self.assertRaises(ParseException, self.parseFromSource, ty(), "()")
+
+    def testTupleTypeOne(self):
+        self.checkParse(astI32Type(), ty(), "(i32)")
+
+    def testTupleTypeOneNullable(self):
+        self.assertRaises(ParseException, self.parseFromSource, ty(), "(i32)?")
+
     def testBlankType(self):
         self.checkParse(astBlankType(), ty(), "_")
 
@@ -617,6 +626,51 @@ class TestParser(unittest.TestCase):
                                            astClassType([], "T1", [], set())),
                         ty(),
                         "forsome [T1 <: U >: L, T2] T1")
+
+    def testFunctionTypeNullary(self):
+        self.checkParse(
+            astFunctionType([], astI32Type()),
+            ty(),
+            "() -> i32")
+
+    def testFunctionTypeUnary(self):
+        self.checkParse(
+            astFunctionType([astI8Type()], astI32Type()),
+            ty(),
+            "i8 -> i32")
+
+    def testFunctionTypeUnaryGrouped(self):
+        self.checkParse(
+            astFunctionType([astI8Type()], astI32Type()),
+            ty(),
+            "(i8) -> i32")
+
+    def testFunctionTypeBinary(self):
+        self.checkParse(
+            astFunctionType([astI8Type(), astI16Type()], astI32Type()),
+            ty(),
+            "(i8, i16) -> i32")
+
+    def testFunctionTypeBinaryNullable(self):
+        self.assertRaises(ParseException, self.parseFromSource, ty(), "(i8, i16)? -> i32")
+
+    def testFunctionTypeCurried(self):
+        self.checkParse(
+            astFunctionType(
+                [astI8Type()],
+                astFunctionType([astI16Type()], astI32Type())),
+            ty(),
+            "i8 -> i16 -> i32")
+
+    def testFunctionTypeCurriedMultiArgs(self):
+        self.checkParse(
+            astFunctionType(
+                [astI8Type(), astI16Type()],
+                astFunctionType(
+                    [astI32Type(), astI64Type()],
+                    astTupleType([astBooleanType(), astUnitType()], set()))),
+            ty(),
+            "(i8, i16) -> (i32, i64) -> (boolean, unit)")
 
     # Expressions
     def testIntExpr(self):

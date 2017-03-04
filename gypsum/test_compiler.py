@@ -3769,6 +3769,35 @@ class TestCompiler(TestCaseWithDefinitions):
                     ret(),
                 ]]))
 
+    def testCallFunctionTrait(self):
+        source = FUNCTION_SOURCE + \
+                 "def f(g: String -> Object, s: String): Object = (g)(s)"
+        package = self.compileFromSource(source, name=STD_NAME)
+        objectType = getRootClassType()
+        stringType = getStringType()
+        functionTrait = package.findTrait(name="Function1")
+        callMethod = package.findFunction(name="Function1.call")
+        functionType = ClassType(functionTrait, (objectType, stringType))
+        self.checkFunction(
+            package,
+            self.makeSimpleFunction(
+                "f",
+                objectType,
+                [[
+                    ldlocal(0),
+                    ldlocal(1),
+                    tys(0),
+                    tys(1),
+                    callv(callMethod),
+                    ret(),
+                ]],
+                variables=[
+                    self.makeVariable(
+                        name="f.g", type=functionType, kind=PARAMETER, flags=frozenset([LET])),
+                    self.makeVariable(
+                        name="f.s", type=stringType, kind=PARAMETER, flags=frozenset([LET]))],
+                instTypes=[objectType, stringType]))
+
     def testCallLambdaWithImplicitTypeArgument(self):
         source = "def f[static T] = (lambda (x: i64) x)(12)"
         package = self.compileFromSource(source)
