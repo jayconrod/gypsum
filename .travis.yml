@@ -1,0 +1,38 @@
+os:
+  - linux
+  - osx
+
+language: c++
+
+before_install:
+  - |
+    if [ "${TRAVIS_OS_NAME}" == "osx" ]]; then
+      BAZEL_OS=darwin
+    else
+      BAZEL_OS=linux
+    fi
+    BAZEL_URL="https://github.com/bazelbuild/bazel/releases/download/0.4.4/bazel-0.4.4-installer-$BAZEL_OS-x86_64.sh"
+    wget -O install.sh "$BAZEL_URL"
+    chmod +x install.sh
+    ./install.sh --user
+    rm -f install.sh
+
+script:
+ - |
+    bazel \
+      --output_base=$HOME/.cache/bazel \
+      --batch \
+      --host_jvm_args=-Xmx500m \
+      --host_jvm_args=-Xms500m \
+      test \
+      --verbose_failures \
+      --sandbox_debug \
+      --test_output=errors \
+      --test_strategy=standalone \
+      --spawn_strategy=standalone \
+      --genrule_strategy=standalone \
+      --local_resources=400,1,1.0 \
+      //...
+
+notifications:
+  email: false
