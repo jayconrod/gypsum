@@ -301,21 +301,42 @@ def scopePrefixComponent():
 
 # Types
 def ty():
-    def process(parsed, loc):
-        parsed = ct.untangle(parsed)
-        if len(parsed) == 2:
-            return parsed[0]
+    def notEmptyTuple(t):
+        return not (isinstance(t, ast.TupleType) and len(t.types) == 0)
+    return ct.If(maybeFunctionType(), notEmptyTuple)
+
+
+def maybeFunctionType():
+    arrowSuffix = keyword("->") + ct.Commit(simpleType()) ^ (lambda p, loc: p[1])
+
+    def combine(left, right, loc):
+        if isinstance(left, list):
+            return left + [right]
         else:
-            sty = parsed[0]
-            tps = parsed[3]
-            return ast.ExistentialType(sty, tps, loc)
+            return [left, right]
 
-    return simpleType() + ct.Opt(keyword("forsome") + \
-        ct.Commit(keyword("[") + ct.Rep1Sep(ct.Lazy(typeParameter), keyword(",")) +
-        keyword("]"))) ^ process
+    def postprocess(parsed, loc):
+        if not isinstance(parsed, list):
+            return parsed
+        n = len(parsed)
+        assert n >= 2
+        fnType = parsed[n - 1]
+        for i in xrange(n - 2, -1, -1):
+            parsedType = parsed[i]
+            if isinstance(parsedType, ast.TupleType):
+                if len(parsedType.flags) > 0:
+                    return ct.FailValue("function parameter list can't be nullable")
+                argTypes = parsedType.types
+            else:
+                argTypes = [parsedType]
+            loc = parsedType.location.combine(fnType.location)
+            fnType = ast.FunctionType(argTypes, fnType, loc)
+        return fnType
+
+    return ct.LeftRec(simpleType(), arrowSuffix, combine) ^ postprocess
 
 
-def ty():
+def simpleType():
     return (keyword("unit") ^ (lambda _, loc: ast.UnitType(loc))) | \
            (keyword("i8") ^ (lambda _, loc: ast.I8Type(loc))) | \
            (keyword("i16") ^ (lambda _, loc: ast.I16Type(loc))) | \
@@ -336,11 +357,14 @@ def tyOpt():
 
 def tupleType():
     def process(parsed, loc):
-        _, first, _, rest, _, nullFlag = ct.untangle(parsed)
+        _, tys, _, nullFlag = ct.untangle(parsed)
         flags = set([nullFlag]) if nullFlag else set()
-        return ast.TupleType([first] + rest, flags, loc)
-    return keyword("(") + ct.Commit(ct.Lazy(ty) + keyword(",") +
-        ct.Rep1Sep(ct.Lazy(ty), keyword(",")) + keyword(")") +
+        if len(tys) == 1:
+            if nullFlag:
+                return ct.FailValue("unexpected '?'")
+            return tys[0]
+        return ast.TupleType(tys, flags, loc)
+    return keyword("(") + ct.Commit(ct.RepSep(ct.Lazy(ty), keyword(",")) + keyword(")") +
         ct.Opt(ct.Reserved(OPERATOR, "?"))) ^ process
 
 
@@ -464,9 +488,9 @@ def superExpr():
 
 
 def groupExpr():
-    def process(parsed, _):
+    def process(parsed, loc):
         [_, e, _] = ct.untangle(parsed)
-        return e
+        return ast.GroupExpression(e, loc)
     return keyword("(") + ct.Lazy(expression) + keyword(")") ^ process
 
 
@@ -575,9 +599,16 @@ def catchHandler():
 
 def lambdaExpr():
     def process(parsed, loc):
+        [_, ps, e] = ct.untangle(parsed)
+        return ast.LambdaExpression(ps, e, loc)
+    return keyword("lambda") + ct.Commit(parameters() + ct.Lazy(expression)) ^ process
+
+
+
+    def process(parsed, loc):
         [_, n, tps, _, ps, _, b] = ct.untangle(parsed)
         return ast.LambdaExpression(n, tps, ps, b, loc)
-    return keyword("lambda") + ct.Commit(ct.Opt(symbol) + typeParameters() + keyword("(") + \
+    return keyword("lambda") + ct.Commit(ct.Opt(symbol) + keyword("(") + \
         ct.RepSep(simplePattern(), keyword(",")) + keyword(")") + ct.Lazy(expression)) ^ process
 
 

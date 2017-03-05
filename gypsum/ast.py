@@ -526,6 +526,19 @@ class ExistentialType(Type):
         return self.typeParameters + [self.type]
 
 
+class FunctionType(Type):
+    def __init__(self, parameterTypes, returnType, location):
+        super(FunctionType, self).__init__(location)
+        self.parameterTypes = parameterTypes
+        self.returnType = returnType
+
+    def __repr__(self):
+        return "FunctionType(%s, %s)" % (repr(self.parameterTypes), repr(self.returnType))
+
+    def children(self):
+        return self.parameterTypes + [self.returnType]
+
+
 class Expression(Node):
     pass
 
@@ -808,22 +821,17 @@ class TryCatchExpression(Expression):
 
 
 class LambdaExpression(Expression):
-    def __init__(self, name, typeParameters, parameters, body, location):
+    def __init__(self, parameters, body, location):
         super(LambdaExpression, self).__init__(location)
-        self.name = name
-        self.typeParameters = typeParameters
         self.parameters = parameters
         self.body = body
 
     def __repr__(self):
-        return "LambdaExpression(%s, %s, %s, %s)" % \
-            (repr(self.name), repr(self.typeParameters), repr(self.parameters), repr(self.body))
-
-    def data(self):
-        return self.name
+        return "LambdaExpression(%s, %s)" % \
+            (repr(self.parameters), repr(self.body))
 
     def children(self):
-        return self.typeParameters + self.parameters + [self.body]
+        return self.parameters + [self.body]
 
 
 class ReturnExpression(Expression):
@@ -833,6 +841,18 @@ class ReturnExpression(Expression):
 
     def __repr__(self):
         return "ReturnExpression(%s)" % repr(self.expression)
+
+    def children(self):
+        return [self.expression]
+
+
+class GroupExpression(Expression):
+    def __init__(self, expression, location):
+        super(GroupExpression, self).__init__(location)
+        self.expression = expression
+
+    def __repr__(self):
+        return "GroupExpression(%s)" % repr(self.expression)
 
     def children(self):
         return [self.expression]

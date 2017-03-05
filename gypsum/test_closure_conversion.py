@@ -150,7 +150,8 @@ class TestClosureConversion(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source, name=STD_NAME)
         gClosureClass = info.package.findClass(name=Name(["f", "g", CLOSURE_SUFFIX]))
         functionTrait = info.package.findTrait(name="Function2")
-        functionTraitType = ClassType(functionTrait, (getRootClassType(), getRootClassType()))
+        rootType = getRootClassType()
+        functionTraitType = ClassType(functionTrait, (rootType, rootType, rootType))
         self.assertEquals([getRootClassType(), functionTraitType], gClosureClass.supertypes)
 
     def testFunctionTraitNotUsedWithPrimitiveParams(self):
@@ -175,6 +176,35 @@ class TestClosureConversion(TestCaseWithDefinitions):
         source = FUNCTION_SOURCE + \
                  "def f(x: i64) =\n" + \
                  "  def g(a: Object, b: Object, c: Object) = {x; Object();}\n" + \
+                 "  {}"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        gClosureClass = info.package.findClass(name=Name(["f", "g", CLOSURE_SUFFIX]))
+        self.assertEquals([getRootClassType()], gClosureClass.supertypes)
+
+    def testClosureMethodFlagsPrimitive(self):
+        source = "def f(x: i64) =\n" + \
+                 "  def g = x\n" + \
+                 "  {}"
+        info = self.analyzeFromSource(source)
+        g = info.package.findFunction(name="f.g")
+        self.assertEquals(frozenset([PUBLIC, METHOD, FINAL]), g.flags)
+
+    def testClosureMethodFlagsFunction(self):
+        source = FUNCTION_SOURCE + \
+                 "def f(s: String) =\n" + \
+                 "  def g = s\n" + \
+                 "  {}"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        g = info.package.findFunction(name="f.g")
+        call = info.package.findFunction(name="Function0.call")
+        self.assertEquals(frozenset([PUBLIC, METHOD, FINAL, OVERRIDE]), g.flags)
+        self.assertEquals(1, len(g.overrides))
+        self.assertIs(call, g.overrides[0])
+
+    def testClosureWithTypeParametersNotFunction(self):
+        source = FUNCTION_SOURCE + \
+                 "def f(s: String) =\n" + \
+                 "  def g[static T] = s\n" + \
                  "  {}"
         info = self.analyzeFromSource(source, name=STD_NAME)
         gClosureClass = info.package.findClass(name=Name(["f", "g", CLOSURE_SUFFIX]))

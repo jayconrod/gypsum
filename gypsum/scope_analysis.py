@@ -20,7 +20,7 @@ from ids import AstId, DefnId, PackageId, ScopeId, BUILTIN_SCOPE_ID, GLOBAL_SCOP
 import ir
 from ir_types import getRootClassType, getNothingClassType, ClassType, UnitType, I32Type
 from location import Location, NoLoc
-from builtins import registerBuiltins, getBuiltinClasses, getNothingClass
+from builtins import registerBuiltins, getBuiltinClasses, getNothingClass, getRootClass
 from utils import Counter, each
 from bytecode import BUILTIN_ROOT_CLASS_ID
 from name import (
@@ -32,6 +32,7 @@ from name import (
     CONSTRUCTOR_SUFFIX,
     CONTEXT_SUFFIX,
     EXISTENTIAL_SUFFIX,
+    LAMBDA_SUFFIX,
     LOCAL_SUFFIX,
     Name,
     RECEIVER_SUFFIX,
@@ -514,6 +515,22 @@ class Scope(ast.NodeVisitor):
                                             methods=[], flags=flags)
         return irDefn, True
 
+    def createLambda(self, astDefn, flags):
+        """Convenience method for creating a function definition for a lambda.
+
+        Lambda should not be bound in any scope, since they don't have names.
+
+        All lambdas get converted to closures, since `Function`s are not first-class values.
+        We need to treat them as objects. However, that happens during type definition
+        analysis, not here.
+        """
+        name = self.info.makeUniqueName(self.makeName(LAMBDA_SUFFIX))
+        return self.info.package.addFunction(
+            name, astDefn=astDefn,
+            typeParameters=self.getImplicitTypeParameters(),
+            variables=[],
+            flags=flags)
+
     def makeMethod(self, function, clas):
         """Convenience method which turns a function into a method.
 
@@ -840,6 +857,7 @@ class Scope(ast.NodeVisitor):
 
         Returns the field containing the captured context."""
         assert not self.isLocal()
+        assert scopeId is not self.scopeId
         closureInfo = self.info.getClosureInfo(self.scopeId)
         if scopeId not in closureInfo.irClosureContexts:
             irClosureClass = closureInfo.irClosureClass
@@ -1002,6 +1020,9 @@ class ModuleScope(Scope):
             irDefn, shouldBind = self.createIrClassDefn(astDefn)
         elif isinstance(astDefn, ast.TraitDefinition):
             irDefn, shouldBind = self.createIrTraitDefn(astDefn)
+        elif isinstance(astDefn, ast.LambdaExpression):
+            irDefn = self.createLambda(astDefn, flags)
+            shouldBind = False
         elif isinstance(astDefn, ast.BlankType):
             raise ScopeException(astDefn.location, "blank type not allowed here")
         else:
@@ -1031,8 +1052,9 @@ class ModuleScope(Scope):
 
 
 class FunctionScope(Scope):
-    def __init__(self, prefix, ast, parent):
-        super(FunctionScope, self).__init__(prefix, ast, ScopeId(ast.id), parent, parent.info)
+    def __init__(self, prefix, astDefn, parent):
+        super(FunctionScope, self).__init__(
+            prefix, astDefn, ScopeId(astDefn.id), parent, parent.info)
         self.info.setScope(self.getIrDefn().id, self)
 
     def configureAsMethod(self, astClassScopeId, irClassDefn):
@@ -1113,6 +1135,9 @@ class FunctionScope(Scope):
                                                    variables=[], flags=flags)
         elif isinstance(astDefn, ast.ClassDefinition):
             irDefn, shouldBind = self.createIrClassDefn(astDefn)
+        elif isinstance(astDefn, ast.LambdaExpression):
+            irDefn = self.createLambda(astDefn, flags)
+            shouldBind = False
         elif isinstance(astDefn, ast.BlankType):
             raise ScopeException(astDefn.location, "blank type not allowed here")
         else:
@@ -1207,20 +1232,30 @@ class FunctionScope(Scope):
         closureName = self.info.makeUniqueName(irDefn.name.withSuffix(CLOSURE_SUFFIX))
         irClosureClass = self.info.package.addClass(closureName,
                                                     typeParameters=list(implicitTypeParams),
-                                                    supertypes=[getRootClassType()],
+                                                    supertypes=[],
                                                     constructors=[], fields=[],
                                                     methods=[], flags=frozenset())
         closureInfo.irClosureClass = irClosureClass
 
-        # Add a function trait as a supertype if the function has a small number of
-        # non-primitive parameters.
-        # TODO(#33): when we have variadic type parameters, we won't need to check this.
-        functionTrait = self.info.getFunctionTrait(len(irDefn.parameterTypes))
-        if functionTrait is not None and \
+        # Inherit from the root class.
+        irClosureClass.supertypes.append(getRootClassType())
+        rootClass = getRootClass()
+        irClosureClass.methods = list(rootClass.methods)
+
+        # If the function conforms to a Function trait, inherit from that, too.
+        hasTypeParameters = ir.getExplicitTypeParameterCount(irDefn) > 0
+        callMethod = None
+        if not hasTypeParameters and \
            all(t.isObject() for t in irDefn.parameterTypes) and \
            irDefn.returnType.isObject():
-            functionTraitType = ClassType(functionTrait, tuple(irDefn.parameterTypes))
-            irClosureClass.supertypes.append(functionTraitType)
+            functionTrait = self.info.getFunctionTraitOrNone(len(irDefn.parameterTypes))
+            if functionTrait is not None:
+                functionTraitTypeArgs = (irDefn.returnType,) + tuple(irDefn.parameterTypes)
+                functionTraitType = ClassType(functionTrait, functionTraitTypeArgs)
+                irClosureClass.supertypes.append(functionTraitType)
+                callMethod = functionTrait.findMethodBySourceName("call")
+                assert callMethod is not None
+                self.info.setStdExternInfo(callMethod.id, callMethod)
 
         # Create the constructor.
         irClosureType = ClassType(irClosureClass)
@@ -1243,7 +1278,11 @@ class FunctionScope(Scope):
         # We don't use `makeMethod`, since it's intended to be used before type analysis, but
         # we do most of the same things.
         assert not irDefn.isMethod()
-        irDefn.flags |= frozenset([METHOD])
+        extraFlags = [METHOD, PUBLIC, FINAL]
+        if callMethod is not None:
+            extraFlags.append(OVERRIDE)
+            irDefn.overrides = [callMethod]
+        irDefn.flags |= frozenset(extraFlags)
         thisType = ClassType.forReceiver(irClosureClass)
         thisName = irDefn.name.withSuffix(RECEIVER_SUFFIX)
         this = self.info.package.newVariable(
@@ -1254,8 +1293,10 @@ class FunctionScope(Scope):
         irDefn.definingClass = irClosureClass
         irClosureClass.methods.append(irDefn)
 
-        # If the parent is a function scope, define a local variable to hold the closure.
-        if isinstance(self.parent, FunctionScope):
+        # If this is a function definition and the parent is a function scope, define a local
+        # variable to hold the closure.
+        if isinstance(self.ast, ast.FunctionDefinition) and \
+           isinstance(self.parent, FunctionScope):
             irClosureVar = self.info.package.addVariable(
                 self.parent.getIrDefn(), irDefn.name,
                 astDefn=irDefn.astDefn,
@@ -1443,6 +1484,9 @@ class ClassScope(Scope):
                                                    flags=flags)
             self.makeMethod(irDefn, irScopeDefn)
             irScopeDefn.methods.append(irDefn)
+        elif isinstance(astDefn, ast.LambdaExpression):
+            irDefn = self.createLambda(astDefn, flags)
+            shouldBind = False
         elif isinstance(astDefn, ast.BlankType):
             raise ScopeException(astDefn.location, "blank type not allowed here")
         else:
@@ -1563,6 +1607,9 @@ class TraitScope(Scope):
                                                         astDefn=astDefn,
                                                         flags=flags)
             isVisible = False
+        elif isinstance(astDefn, ast.LambdaExpression):
+            irDefn = self.createLambda(astDefn, flags)
+            shouldBind = False
         elif isinstance(astDefn, ast.BlankType):
             raise ScopeException(astDefn.location, "blank type not allowed here")
         else:
@@ -1948,6 +1995,11 @@ class ScopeVisitor(ast.NodeVisitor):
         for p in node.patterns:
             self.visit(p, astVarDefn)
 
+    def visitLambdaExpression(self, node):
+        scope = self.scope.scopeForFunction(LAMBDA_SUFFIX, node)
+        visitor = self.createChildVisitor(scope)
+        visitor.visitChildren(node)
+
     def visitBlockExpression(self, node):
         if isinstance(self.scope.ast, ast.FunctionDefinition) and \
            self.scope.ast.body is node:
@@ -2043,6 +2095,10 @@ class DeclarationVisitor(ScopeVisitor):
         if node.ty is not None:
             self.visit(node.ty)
         self.declare(node, astVarDefn)
+
+    def visitLambdaExpression(self, node):
+        self.declare(node)
+        super(DeclarationVisitor, self).visitLambdaExpression(node)
 
     def visitBlankType(self, node):
         self.declare(node)

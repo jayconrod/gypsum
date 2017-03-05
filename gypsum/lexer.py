@@ -26,6 +26,7 @@ __expressions = [
   (r"<:",  RESERVED),
   (r">:",  RESERVED),
   (r"=>",  RESERVED),
+  (r"->",  RESERVED),
   (r"_",   RESERVED),
   (r"\.",  RESERVED),
   (r",",   RESERVED),

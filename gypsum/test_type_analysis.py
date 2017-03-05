@@ -20,7 +20,13 @@ from scope_analysis import *
 from type_analysis import *
 from flags import *
 from builtins import getRootClass, getStringClass, getNothingClass, getExceptionClass
-from utils_test import FakePackageLoader, TestCaseWithDefinitions, OPTION_SOURCE, TUPLE_SOURCE
+from utils_test import (
+    FUNCTION_SOURCE,
+    FakePackageLoader,
+    OPTION_SOURCE,
+    TUPLE_SOURCE,
+    TestCaseWithDefinitions,
+)
 from name import (
     CLASS_INIT_SUFFIX,
     CONSTRUCTOR_SUFFIX,
@@ -718,6 +724,44 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(I64Type, info.package.findFunction(name="g").returnType)
         self.assertEquals(I64Type, info.getType(info.ast.modules[0].definitions[1].body))
 
+    @unittest.skip("blocked by #45: can't use more than one definition at a node")
+    def testCallVariable(self):
+        source = "let f = lambda true\n" + \
+                 "let g = f()"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(BooleanType, info.package.findGlobal(name="g").type)
+
+    def testCallVariableValue(self):
+        source = "let f = lambda true\n" + \
+                 "let g = (f)()"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(BooleanType, info.package.findGlobal(name="g").type)
+
+    @unittest.skip("blocked by #45: can't use more than one definition at a node")
+    def testCallField(self):
+        source = FUNCTION_SOURCE + \
+                 "class Box(f: Function1[String, String])\n" + \
+                 "def f(box: Box, s: String) = box.f(s)"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(getStringType(), info.package.findFunction(name="f").returnType)
+
+    def testCallFieldValue(self):
+        source = FUNCTION_SOURCE + \
+                 "class Box(f: Function1[String, String])\n" + \
+                 "def f(box: Box, s: String) = (box.f)(s)"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(getStringType(), info.package.findFunction(name="f").returnType)
+
+    def testCallLambdaValue(self):
+        source = "let x = (lambda (y: i64) y)(12)"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(I64Type, info.package.findGlobal(name="x").type)
+
+    def testCallLambdaWithImplicitTypeArgument(self):
+        source = "def f[static T] = (lambda (x: i64) x)(12)"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(I64Type, info.package.findFunction(name="f").returnType)
+
     def testCallWrongNumberOfArgs(self):
         source = "def f(x: i32, y: boolean) = x\n" + \
                  "def g = f(1)\n"
@@ -1039,6 +1083,16 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(getStringType(), info.getType(matchCase.pattern.patterns[1]))
         self.assertEquals(getStringType(), f.returnType)
 
+    @unittest.skip("blocked by #45: can't use more than one definition at a node")
+    def testMatchExprDestructureWithClosureMatcher(self):
+        source = OPTION_SOURCE + \
+                 "let Matcher = lambda (x: Object) None\n" + \
+                 "def f(x: Object) =\n" + \
+                 "  match (x)\n" + \
+                 "    case Matcher(a) => a"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        self.fail("TODO")
+
     def testMatchExprDestructureWithBadMatcherFunctionArgs(self):
         source = OPTION_SOURCE + \
                  "def Matcher: Option[String] = Some[String](\"matched\")\n" + \
@@ -1331,6 +1385,94 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testWhileExprNonBooleanCondition(self):
         self.assertRaises(TypeException, self.analyzeFromSource, "def f = while (-1) 12")
 
+    def testLambdaExpressionPrimitive(self):
+        source = "let f = lambda (x: i32) x"
+        info = self.analyzeFromSource(source)
+        astLambda = info.ast.modules[0].definitions[0].expression
+        irFunction = info.getDefnInfo(astLambda).irDefn
+        irClosureClass = info.getClosureInfo(astLambda).irClosureClass
+        lambdaType = ClassType.forReceiver(irClosureClass)
+        self.assertEquals(
+            self.makeFunction(
+                Name([LAMBDA_SUFFIX]),
+                typeParameters=[],
+                returnType=I32Type,
+                parameterTypes=[lambdaType, I32Type]),
+            irFunction)
+        self.assertEquals(lambdaType, info.getType(astLambda))
+
+    def testLambdaExpressionPrimitiveCapture(self):
+        source = "def add(x: i32) = lambda (y: i32) x + y"
+        info = self.analyzeFromSource(source)
+        astLambda = info.ast.modules[0].definitions[0].body
+        irFunction = info.getDefnInfo(astLambda).irDefn
+        irClosureClass = info.getClosureInfo(astLambda).irClosureClass
+        lambdaType = ClassType.forReceiver(irClosureClass)
+        self.assertEquals(
+            self.makeFunction(
+                Name(["add", LAMBDA_SUFFIX]),
+                typeParameters=[],
+                returnType=I32Type,
+                parameterTypes=[lambdaType, I32Type]),
+            irFunction)
+        self.assertEquals(
+            self.makeVariable(
+                Name(["add", LAMBDA_SUFFIX, RECEIVER_SUFFIX]),
+                type=lambdaType, kind=PARAMETER, flags=frozenset([LET])),
+            irFunction.variables[0])
+        self.assertEquals(lambdaType, info.getType(astLambda))
+
+    def testLambdaExpressionObject(self):
+        source = FUNCTION_SOURCE + \
+                 "let f = lambda (o: Object) o.to-string"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        astLambda = info.ast.modules[0].definitions[-1].expression
+        irFunction = info.getDefnInfo(astLambda).irDefn
+        irClosureClass = info.getClosureInfo(astLambda).irClosureClass
+        lambdaType = ClassType.forReceiver(irClosureClass)
+        self.assertEquals(
+            self.makeFunction(
+                Name([LAMBDA_SUFFIX]),
+                typeParameters=[],
+                returnType=getStringType(),
+                parameterTypes=[lambdaType, getRootClassType()]),
+            irFunction)
+        self.assertEquals(lambdaType, info.getType(astLambda))
+        functionTrait = info.package.findTrait(name="Function1")
+        functionType = ClassType(functionTrait, (getStringType(), getRootClassType()))
+        self.assertTrue(lambdaType.isSubtypeOf(functionType))
+
+    def testLambdaExpressionParameterized(self):
+        source = FUNCTION_SOURCE + \
+                 "def f[static T] = lambda (x: T) x\n" + \
+                 "let g = f[String]"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        astLambda = info.ast.modules[0].definitions[-2].body
+        T = info.package.findTypeParameter(name="f.T")
+        TType = VariableType(T)
+        irFunction = info.getDefnInfo(astLambda).irDefn
+        irClosureClass = info.getClosureInfo(astLambda).irClosureClass
+        lambdaType = ClassType.forReceiver(irClosureClass)
+        self.assertEquals(
+            self.makeFunction(
+                Name(["f", LAMBDA_SUFFIX]),
+                typeParameters=[T],
+                returnType=TType,
+                parameterTypes=[lambdaType, TType]),
+            irFunction)
+        functionTrait = info.package.findTrait(name="Function1")
+        parameterizedFunctionType = ClassType(functionTrait, (TType, TType))
+        self.assertTrue(lambdaType.isSubtypeOf(parameterizedFunctionType))
+        specializedFunctionType = ClassType(functionTrait, (getStringType(), getStringType()))
+        g = info.package.findGlobal(name="g")
+        self.assertTrue(g.type.isSubtypeOf(specializedFunctionType))
+
+    def testLambdaExpressionFunctionType(self):
+        source = FUNCTION_SOURCE + \
+                 "let g: String -> Object = lambda (x: String) x"
+        self.analyzeFromSource(source, name=STD_NAME)
+        # pass if no error
+
     def testReturnExpression(self):
         info = self.analyzeFromSource("def f = return 12")
         self.assertEquals(NoType, info.getType(info.ast.modules[0].definitions[0].body))
@@ -1399,6 +1541,13 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "def f(box: forsome [X] Box[X]) = { box.value = 12; {}; }"
         self.analyzeFromSource(source)
         # pass if no error
+
+    def testExistentialCallValue(self):
+        source = FUNCTION_SOURCE + \
+                 "def f(g: forsome [R <: String, P >: String] Function1[R, P]) =\n" + \
+                 "  (g)(\"foo\")"
+        info = self.analyzeFromSource(source)
+        self.assertEquals(getStringType(), info.package.findFunction(name="f").returnType)
 
     def testDestructureMatchOnExistentialValue(self):
         source = OPTION_SOURCE + \
@@ -1602,6 +1751,19 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         expected = ExistentialType((X,), VariableType(X, frozenset([NULLABLE_TYPE_FLAG])))
         self.assertEquals(expected, ty)
         self.assertTrue(ty.isNullable())
+
+    def testFunctionType(self):
+        source = FUNCTION_SOURCE + \
+                 "let g: String -> Object"
+        info = self.analyzeFromSource(source, name=STD_NAME)
+        ty = info.package.findGlobal(name="g").type
+        fnTrait = info.package.findTrait(name="Function1")
+        self.assertEquals(ClassType(fnTrait, (getRootClassType(), getStringType())), ty)
+
+    def testFunctionTypePrimitive(self):
+        source = FUNCTION_SOURCE + \
+                 "let g: i32 -> boolean"
+        self.assertRaises(TypeException, self.analyzeFromSource, source, name=STD_NAME)
 
     # Closures
     def testFunctionContextFields(self):

@@ -91,7 +91,12 @@ class CompileInfo(object):
         name = "Tuple%d" % n
         return self.getStdClass(name, loc)
 
-    def getFunctionTrait(self, n):
+    def getFunctionTrait(self, n, loc):
+        # TODO(#33): remove this method when we have variadic type parameters.
+        name = "Function%d" % n
+        return self.getStdTrait(name, loc)
+
+    def getFunctionTraitOrNone(self, n):
         # TODO(#33): remove this method when we have variadic type parameters.
         name = "Function%d" % n
         try:
@@ -245,7 +250,10 @@ class ClosureInfo(data.Data):
             (irClosureClassStr, irClosureContextsStr, repr(self.irClosureVar))
 
     def capturedScopeIds(self):
-        return sorted(self.irClosureContexts.keys())
+        return sorted(scopeId
+                      for scopeId, slot
+                      in self.irClosureContexts.iteritems()
+                      if isinstance(slot, ir.Field))
 
 
 NOT_HERITABLE = -1
@@ -363,6 +371,10 @@ class CallInfo(data.Data):
         # TODO: this may be `None` for calls to closure functions, since they are regular
         # functions during type analysis. Closure conversion should add this.
         "receiverType",
+
+        # bool: Whether the callee needs to be fully evaluated. This is true for things like
+        # closures and bound methods. False for named functions and methods.
+        "calleeIsValue",
     ]
 
 

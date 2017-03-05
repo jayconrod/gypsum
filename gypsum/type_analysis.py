@@ -24,6 +24,7 @@ from flags import ARRAY, COVARIANT, CONTRAVARIANT, CONSTRUCTOR, INITIALIZER, MET
 import scope_analysis
 from name import (
     BLANK_SUFFIX,
+    CLOSURE_SUFFIX,
     CONSTRUCTOR_SUFFIX,
     EXISTENTIAL_SUFFIX,
     Name,
@@ -408,6 +409,20 @@ class TypeVisitorBase(ast.NodeVisitor):
         innerType = self.visit(node.type)
         return ir_t.ExistentialType(variables, innerType)
 
+    def visitFunctionType(self, node):
+        n = len(node.parameterTypes)
+        trait = self.info.getFunctionTrait(n, node.location)
+        parameterTypes = tuple(map(self.visit, node.parameterTypes))
+        returnType = self.visit(node.returnType)
+        for i in xrange(n):
+            if not parameterTypes[i].isObject():
+                raise TypeException(node.parameterTypes[i].location,
+                                    "non-object type used as function parameter type")
+        if not returnType.isObject():
+            raise TypeException(node.returnType.location,
+                                "non-object type used as function return type")
+        return ir_t.ClassType(trait, (returnType,) + parameterTypes)
+
     def visitIntegerLiteral(self, node):
         typeMap = { 8: ir_t.I8Type, 16: ir_t.I16Type, 32: ir_t.I32Type, 64: ir_t.I64Type }
         if node.width not in typeMap:
@@ -774,6 +789,12 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         # is returned.
         if isParam:
             raise TypeException(node.location, "binary pattern can't be used in a parameter")
+
+    def visitLambdaExpression(self, node):
+        irFunction = self.info.getDefnInfo(node).irDefn
+        self.maybeRename(irFunction)
+        irFunction.parameterTypes = map(self.visit, node.parameters)
+        self.visit(node.body)
 
     def visitDefault(self, node):
         self.visitChildren(node)
@@ -1208,8 +1229,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                     node.id, node.location)
             ty = ir_t.UnitType
         else:
-            # TODO: callable expression
-            raise NotImplementedError
+            functionType = self.visit(node.callee)
+            ty = self.handleValueCall(functionType, typeArgs, argTypes, node.id, node.location)
         return ty
 
     def visitNewArrayExpression(self, node):
@@ -1315,6 +1336,14 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         ty = self.visit(node.expression)
         return ty
 
+    def visitLambdaExpression(self, node):
+        each(self.visit, node.parameters)
+        irFunction = self.info.getDefnInfo(node).irDefn
+        irFunction.returnType = self.visit(node.body)
+        self.info.getScope(node).makeClosure()
+        closureClass = self.info.getClosureInfo(node).irClosureClass
+        return ir_t.ClassType.forReceiver(closureClass)
+
     def visitReturnExpression(self, node):
         if not self.isAnalyzingFunction() or \
            (self.functionStack[-1].irDefn.isConstructor() and node.expression is not None):
@@ -1325,6 +1354,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             retTy = self.visit(node.expression)
         self.checkAndHandleReturnType(retTy, node.location)
         return ir_t.NoType
+
+    def visitGroupExpression(self, node):
+        return self.visit(node.expression)
 
     def visitClassType(self, node):
         ty = super(DefinitionTypeVisitor, self).visitClassType(node)
@@ -1580,7 +1612,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, receiverType,
                                                             None, None, loc)
         self.checkCallAllowed(defnInfo.irDefn, True, USE_AS_VALUE, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType, False))
         scope.use(defnInfo, useAstId, USE_AS_VALUE, loc)
         return self.getDefnType(receiverType, defnInfo.irDefn, allTypeArgs)
 
@@ -1640,7 +1672,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                                                 typeArgs, None, loc)
 
         self.checkCallAllowed(defnInfo.irDefn, False, USE_AS_VALUE, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType, False))
         self.scope().use(defnInfo, useAstId, USE_AS_VALUE, loc)
         return self.getDefnType(receiverType, defnInfo.irDefn, allTypeArgs)
 
@@ -1701,7 +1733,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             raise TypeException(loc, "%s: cannot access without receiver" % name)
 
         self.checkCallAllowed(defnInfo.irDefn, receiverIsReceiver, useKind, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType, False))
         self.scope().use(defnInfo, useAstId, useKind, loc)
         ty = self.getDefnType(receiverType, defnInfo.irDefn, allTypeArgs)
         ty = self.upcastExistentialVars(ty, existentialVars, isLvalue, name, loc)
@@ -1744,7 +1776,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                                                 typeArgs, argTypes, loc)
         irDefn = defnInfo.irDefn
         self.checkCallAllowed(irDefn, True, useKind, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType, False))
         self.scope().use(defnInfo, useAstId, useKind, loc)
         return self.getDefnType(receiverType, irDefn, allTypeArgs)
 
@@ -1828,7 +1860,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
         # Record information and return the resulting type.
         self.checkCallAllowed(defnInfo.irDefn, False, useKind, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType, False))
         self.scope().use(defnInfo, useAstId, useKind, loc)
         ty = self.getDefnType(receiverType, defnInfo.irDefn, allTypeArgs)
         ty = self.upcastExistentialVars(ty, existentialVars, False, name, loc)
@@ -1870,8 +1902,68 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, objectType,
                                                             None, argTypes, loc)
         self.checkCallAllowed(defnInfo.irDefn, False, USE_AS_CONSTRUCTOR, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, None))
+        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, None, False))
         self.scope().use(defnInfo, useAstId, USE_AS_CONSTRUCTOR, loc)
+
+    def handleValueCall(self, calleeType, typeArgs, argTypes, useAstId, loc):
+        """Handles a call to a value.
+
+        This is used for calling lambdas, bound methods, closures, and objects with "call"
+        methods. If the value is an instance of a synthetic closure class, this will call
+        the sole method in that class. If the value is an object with one or more methods
+        named `call`, this will be handled as a property call to one of those methods.
+
+        Args:
+            calleeType (Type): the type of the value being called.
+            typeArgs (list(Type)?): type arguments passes as part of the call. Should be `None`
+                if no type arguments were explicitly passed.
+            argTypes (list(Type)?): types of arguments passed as part of the call. Should be
+                `None` if no arguments were explicitly passed.
+            useAstId (AstId): the AST id where the symbol is referenced. Used to save info.
+            loc (Location): the location of the reference in source code. Used in errors.
+
+        Returns:
+            (Type): returned type of the called method with type substitution performed.
+
+        Raises:
+            ScopeException: if the value was a regular object without a `call` method.
+            TypeException: if the value is uncallable or if there was a type mismatch with
+                the arguments.
+        """
+        receiverType, existentialVars = self.openExistentialReceiver(calleeType)
+        if not isinstance(receiverType, ir_t.ObjectType):
+            raise TypeException(loc, "uncallable type: %s" % str(calleeType))
+        clas = calleeType.effectiveClass()
+        if not clas.name.short().startswith(CLOSURE_SUFFIX + "_"):
+            # Regular object. Look for a "call" method.
+            scope = self.getScopeForDefn(clas)
+            ty = self.handlePropertyCall("call", scope, calleeType, typeArgs, argTypes,
+                                         hasReceiver=True, receiverIsReceiver=False,
+                                         isLvalue=False, useAstId=useAstId, loc=loc)
+            self.info.getCallInfo(useAstId).calleeIsValue = True  # hack
+            return ty
+        else:
+            # Synthetic closure class. There should only be one method defined in that class
+            # (others are inherited). Call that.
+            definedMethods = [m for m in clas.methods if m.definingClass is clas]
+            if len(definedMethods) != 1:
+                raise TypeException(loc, "closure has %d defined methods; expected 1" %
+                                    len(definedMethods))
+            assert len(definedMethods) == 1
+            calleeMethod = definedMethods[0]
+            calleeDefnInfo = self.info.getDefnInfo(calleeMethod)
+            calleeNameInfo = scope_analysis.NameInfo("call")
+            calleeNameInfo.addOverload(calleeDefnInfo)
+            _, allTypeArgs = self.chooseDefnFromNameInfo(calleeNameInfo, receiverType,
+                                                         typeArgs, argTypes, loc)
+            useKind = USE_AS_PROPERTY
+            self.checkCallAllowed(calleeMethod, False, useKind, loc)
+            self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType, True))
+            self.scope().use(calleeDefnInfo, useAstId, useKind, loc)
+            ty = self.getDefnType(receiverType, calleeMethod, allTypeArgs)
+            ty = self.upcastExistentialVars(
+                ty, existentialVars, False, calleeMethod.sourceName, loc)
+            return ty
 
     def handleDestructure(self, nameInfo, receiverType, receiverIsExplicit,
                           typeArgs, exprType, subPatterns, mode, useAstId, matcherAstId, loc):
@@ -1927,7 +2019,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, receiverType,
                                                                 typeArgs, [exprType], loc)
             self.checkCallAllowed(defnInfo.irDefn, False, useKind, loc)
-            self.info.setCallInfo(matcherAstId, CallInfo(allTypeArgs, receiverType))
+            self.info.setCallInfo(matcherAstId, CallInfo(allTypeArgs, receiverType, False))
             self.scope().use(defnInfo, matcherAstId, useKind, loc)
             irDefn = defnInfo.irDefn
             self.ensureTypeInfoForDefn(irDefn)

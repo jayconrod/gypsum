@@ -197,7 +197,8 @@ class CompileVisitor(ast.NodeVisitor):
         self.function.instTypes = self.types
 
     def getParametersAndStatements(self):
-        if isinstance(self.astDefn, ast.FunctionDefinition):
+        if isinstance(self.astDefn, ast.FunctionDefinition) or \
+           isinstance(self.astDefn, ast.LambdaExpression):
             if self.astDefn.body is None:
                 assert ABSTRACT in self.function.flags or NATIVE in self.function.flags
                 return None, None
@@ -548,18 +549,25 @@ class CompileVisitor(ast.NodeVisitor):
         self.buildLoadOrNullaryCall(expr, mode, receiverIsExplicit=True)
 
     def visitCallExpression(self, expr, mode):
-        if not isinstance(expr.callee, ast.VariableExpression) and \
-           not isinstance(expr.callee, ast.PropertyExpression):
-            raise SemanticException(expr.location, "uncallable expression")
-
-        useInfo = self.info.getUseInfo(expr)
         callInfo = self.info.getCallInfo(expr) if self.info.hasCallInfo(expr) else None
-        if isinstance(expr.callee, ast.PropertyExpression) and \
-           not self.info.hasScopePrefixInfo(expr.callee.receiver):
-            receiver = expr.callee.receiver
+        useInfo = self.info.getUseInfo(expr)
+        if isinstance(expr.callee, ast.VariableExpression) or \
+           isinstance(expr.callee, ast.PropertyExpression):
+            # Named function or method. The name is not evaluated.
+            # TODO(#46): variable or property expressions could be callable closures.
+            if isinstance(expr.callee, ast.PropertyExpression) and \
+               not self.info.hasScopePrefixInfo(expr.callee.receiver):
+                receiver = expr.callee.receiver
+            else:
+                receiver = None
+            self.buildCall(useInfo, callInfo, receiver, expr.arguments, mode)
+        elif isinstance(expr.callee, ast.ThisExpression) or \
+             isinstance(expr.callee, ast.SuperExpression):
+            raise SemanticException(expr.location, "cannot call constructor from this location")
         else:
-            receiver = None
-        self.buildCall(useInfo, callInfo, receiver, expr.arguments, mode)
+            # Callable expression. This does need to be evaluated.
+            self.visit(expr.callee, COMPILE_FOR_VALUE)
+            self.buildCall(useInfo, callInfo, self.HAVE_RECEIVER, expr.arguments, mode)
 
     def visitCallThisExpression(self, expr, mode):
         useInfo = self.info.getUseInfo(expr)
@@ -1106,6 +1114,11 @@ class CompileVisitor(ast.NodeVisitor):
         self.branch(doneBlock.id)
         self.detach()
 
+    def visitLambdaExpression(self, expr, mode):
+        closureInfo = self.info.getClosureInfo(expr)
+        assert closureInfo.irClosureClass is not None
+        self.buildClosure(closureInfo, mode)
+
     def visitReturnExpression(self, expr, mode):
         tryState = self.tryStateStack[-1] if len(self.tryStateStack) > 0 else None
         hasFinally = tryState is not None and tryState.hasFinally()
@@ -1136,6 +1149,9 @@ class CompileVisitor(ast.NodeVisitor):
         else:
             self.ret()
         self.setUnreachable()
+
+    def visitGroupExpression(self, expr, mode):
+        self.visit(expr.expression, mode)
 
     def dropForEffect(self, mode):
         if mode is COMPILE_FOR_EFFECT:
@@ -1452,22 +1468,27 @@ class CompileVisitor(ast.NodeVisitor):
                 if closureClass is None or \
                    closureClass is self.info.getDefnInfo(self.astDefn).irDefn:
                     continue
-                assert not closureClass.isForeign() and len(closureClass.constructors) == 1
-                closureCtor = closureClass.constructors[0]
-                assert closureClass.typeParameters == closureCtor.typeParameters
-                capturedScopeIds = closureInfo.capturedScopeIds()
-                assert len(closureCtor.parameterTypes) == len(capturedScopeIds) + 1
-                self.buildImplicitStaticTypeArguments(closureClass.typeParameters)
-                self.allocobj(closureClass)
-                self.dup()
-                for id in capturedScopeIds:
-                    self.loadContext(id)
-                self.buildImplicitStaticTypeArguments(closureCtor.typeParameters)
-                self.callg(closureCtor)
-                self.drop()
+                self.buildClosure(closureInfo, COMPILE_FOR_VALUE)
                 self.storeVariable(closureInfo.irClosureVar)
             elif isinstance(stmt, ast.ClassDefinition):
                 raise NotImplementedError
+
+    def buildClosure(self, closureInfo, mode):
+        closureClass = closureInfo.irClosureClass
+        assert not closureClass.isForeign() and len(closureClass.constructors) == 1
+        closureCtor = closureClass.constructors[0]
+        assert closureClass.typeParameters == closureCtor.typeParameters
+        capturedScopeIds = closureInfo.capturedScopeIds()
+        assert len(closureCtor.parameterTypes) == len(capturedScopeIds) + 1
+        self.buildImplicitStaticTypeArguments(closureClass.typeParameters)
+        self.allocobj(closureClass)
+        if mode is COMPILE_FOR_VALUE:
+            self.dup()
+        for id in capturedScopeIds:
+            self.loadContext(id)
+        self.buildImplicitStaticTypeArguments(closureCtor.typeParameters)
+        self.callg(closureCtor)
+        self.drop()
 
     def buildLiteral(self, lit):
         if isinstance(lit, ast.IntegerLiteral):

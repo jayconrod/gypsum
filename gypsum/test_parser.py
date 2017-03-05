@@ -606,6 +606,15 @@ class TestParser(unittest.TestCase):
                         ty(),
                         "(A, B[C])?")
 
+    def testTupleTypeEmpty(self):
+        self.assertRaises(ParseException, self.parseFromSource, ty(), "()")
+
+    def testTupleTypeOne(self):
+        self.checkParse(astI32Type(), ty(), "(i32)")
+
+    def testTupleTypeOneNullable(self):
+        self.assertRaises(ParseException, self.parseFromSource, ty(), "(i32)?")
+
     def testBlankType(self):
         self.checkParse(astBlankType(), ty(), "_")
 
@@ -617,6 +626,51 @@ class TestParser(unittest.TestCase):
                                            astClassType([], "T1", [], set())),
                         ty(),
                         "forsome [T1 <: U >: L, T2] T1")
+
+    def testFunctionTypeNullary(self):
+        self.checkParse(
+            astFunctionType([], astI32Type()),
+            ty(),
+            "() -> i32")
+
+    def testFunctionTypeUnary(self):
+        self.checkParse(
+            astFunctionType([astI8Type()], astI32Type()),
+            ty(),
+            "i8 -> i32")
+
+    def testFunctionTypeUnaryGrouped(self):
+        self.checkParse(
+            astFunctionType([astI8Type()], astI32Type()),
+            ty(),
+            "(i8) -> i32")
+
+    def testFunctionTypeBinary(self):
+        self.checkParse(
+            astFunctionType([astI8Type(), astI16Type()], astI32Type()),
+            ty(),
+            "(i8, i16) -> i32")
+
+    def testFunctionTypeBinaryNullable(self):
+        self.assertRaises(ParseException, self.parseFromSource, ty(), "(i8, i16)? -> i32")
+
+    def testFunctionTypeCurried(self):
+        self.checkParse(
+            astFunctionType(
+                [astI8Type()],
+                astFunctionType([astI16Type()], astI32Type())),
+            ty(),
+            "i8 -> i16 -> i32")
+
+    def testFunctionTypeCurriedMultiArgs(self):
+        self.checkParse(
+            astFunctionType(
+                [astI8Type(), astI16Type()],
+                astFunctionType(
+                    [astI32Type(), astI64Type()],
+                    astTupleType([astBooleanType(), astUnitType()], set()))),
+            ty(),
+            "(i8, i16) -> (i32, i64) -> (boolean, unit)")
 
     # Expressions
     def testIntExpr(self):
@@ -742,25 +796,53 @@ class TestParser(unittest.TestCase):
                                           []),
                         expression(), "o.f()")
 
+    def testCallLambda1(self):
+        self.checkParse(
+            astLambdaExpression([], astCallExpression(astVariableExpression("f"), None, [])),
+            expression(),
+            "lambda f()")
+
+    def testCallLambda2(self):
+        self.checkParse(
+            astCallExpression(
+                astGroupExpression(astLambdaExpression([], astVariableExpression("x"))),
+                None,
+                []),
+            expression(),
+            "(lambda x)()")
+
     def testFunctionValue1(self):
         self.checkParse(astFunctionValueExpression(astPropertyExpression(astVariableExpression("o"),
                                                                          "f")),
                         expression(), "o.f _")
 
     def testTupleExprs(self):
-        self.checkParse(astTupleExpression([astVariableExpression("a"),
-                                            astVariableExpression("b")]),
-                        expression(), "a, b")
-        self.checkParse(astTupleExpression([astVariableExpression("a"),
-                                            astTupleExpression([astVariableExpression("b"),
-                                                                astVariableExpression("c")]),
-                                            astVariableExpression("d")]),
-                        expression(), "a, (b, c), d")
-        self.checkParse(astCallExpression(astVariableExpression("a"),
-                                          None,
-                                          [astTupleExpression([astVariableExpression("b"),
-                                                               astVariableExpression("c")])]),
-                        expression(), "a((b, c))")
+        self.checkParse(
+            astTupleExpression([
+                astVariableExpression("a"),
+                astVariableExpression("b")]),
+            expression(),
+            "a, b")
+        self.checkParse(
+            astTupleExpression([
+                astVariableExpression("a"),
+                astGroupExpression(
+                    astTupleExpression([
+                        astVariableExpression("b"),
+                        astVariableExpression("c")])),
+                astVariableExpression("d")]),
+            expression(),
+            "a, (b, c), d")
+        self.checkParse(
+            astCallExpression(
+                astVariableExpression("a"),
+                None,
+                [astGroupExpression(
+                    astTupleExpression([
+                        astVariableExpression("b"),
+                        astVariableExpression("c")]))]),
+            expression(),
+            "a((b, c))")
 
     def testUnaryExpr(self):
         self.checkParse(astUnaryExpression("-", astVariableExpression("x")),
@@ -990,53 +1072,34 @@ class TestParser(unittest.TestCase):
                           "try x")
 
     def testLambdaExpr(self):
-        self.checkParse(astLambdaExpression(None,
-                                            [],
-                                            [astVariablePattern("x", None),
-                                             astVariablePattern("y", None)],
-                                            astVariableExpression("x")),
-                        expression(),
-                        "lambda (x, y) x")
+        self.checkParse(
+            astLambdaExpression([astParameter([], None, astVariablePattern("x", None)),
+                                 astParameter([], None, astVariablePattern("y", None))],
+                                astVariableExpression("x")),
+            expression(),
+            "lambda (x, y) x")
 
-    def testLambdaSimple(self):
-        self.checkParse(astLambdaExpression(None,
-                                            [],
-                                            [],
-                                            astVariableExpression("x")),
+    def testLambdaNoArgs(self):
+        self.checkParse(astLambdaExpression([], astVariableExpression("x")),
                         expression(),
-                        "lambda () x")
-
-    def testLambdaExprWithTypeParams(self):
-        self.checkParse(astLambdaExpression(None,
-                                            [astTypeParameter([], None, "S", None, None),
-                                             astTypeParameter([], None, "T", None, None)],
-                                            [astVariablePattern("x", astClassType([], "S", [], set())),
-                                             astVariablePattern("y", astClassType([], "T", [], set()))],
-                                            astVariableExpression("x")),
-                        expression(),
-                        "lambda [S, T](x: S, y: T) x")
-
-    def testLambdaExprWithName(self):
-        self.checkParse(astLambdaExpression("f",
-                                            [astTypeParameter([], None, "T", None, None)],
-                                            [astVariablePattern("x", astClassType([], "T", [], set()))],
-                                            astCallExpression(astVariableExpression("f"),
-                                                              None,
-                                                              [astVariableExpression("x")])),
-                        expression(),
-                        "lambda f[T](x: T) f(x)")
+                        "lambda x")
 
     def testReturnExpr(self):
         self.checkParse(astReturnExpression(astVariableExpression("x")),
                         expression(), "return x")
 
     def testGroupExpr(self):
-        self.checkParse(astBinaryExpression("*",
-                                            astBinaryExpression("+",
-                                                                astVariableExpression("x"),
-                                                                astVariableExpression("y")),
-                                            astVariableExpression("z")),
-                        expression(), "(x + y) * z")
+        self.checkParse(
+            astBinaryExpression(
+                "*",
+                astGroupExpression(
+                    astBinaryExpression(
+                        "+",
+                        astVariableExpression("x"),
+                        astVariableExpression("y"))),
+                astVariableExpression("z")),
+            expression(),
+            "(x + y) * z")
 
     def testNewArrayExpr(self):
         self.checkParse(astNewArrayExpression(astLiteralExpression(astIntegerLiteral(123, 64)),
