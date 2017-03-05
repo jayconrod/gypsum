@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/jayconrod/gypsum.svg?branch=master)](https://travis-ci.org/jayconrod/gypsum)
+
 # Introduction
 
 Gypsum is an experimental new programming language. In the future, it
