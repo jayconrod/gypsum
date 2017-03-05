@@ -1,3 +1,6 @@
+# Bazel links against newer versions of glibcxx
+dist: trusty
+
 os:
   - linux
   - osx
@@ -6,7 +9,7 @@ language: c++
 
 before_install:
   - |
-    if [ "${TRAVIS_OS_NAME}" == "osx" ]]; then
+    if [[ "${TRAVIS_OS_NAME}" == "osx" ]]; then
       BAZEL_OS=darwin
     else
       BAZEL_OS=linux
