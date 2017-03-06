@@ -29,7 +29,7 @@ def py_gen_file(name, script, data, out):
 
 
 def _doxygen_archive_impl(ctx):
-    doxyfile = ctx.files.doxyfile[0]
+    doxyfile = ctx.file.doxyfile
     out_file = ctx.outputs.out
     out_dir_path = out_file.short_path[:-len(".tar.gz")]
     commands = [
@@ -58,7 +58,7 @@ Args:
 doxygen_archive = rule(
     implementation = _doxygen_archive_impl,
     attrs = {
-        "doxyfile": attr.label(mandatory = True, allow_files = True),
+        "doxyfile": attr.label(mandatory = True, allow_files = True, single_file = True),
         "srcs": attr.label_list(mandatory = True, allow_files = True),
     },
     outputs = {
