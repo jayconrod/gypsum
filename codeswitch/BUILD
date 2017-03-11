@@ -1,4 +1,4 @@
-load("//:build_defs.bzl", "gy_package")
+load("//:build_defs.bzl", "gy_library")
 load(":build_defs.bzl", "py_gen_file", "doxygen_archive", "gy_test_name")
 
 config_setting(
@@ -138,7 +138,7 @@ cc_library(
     testonly = True,
 )
 
-[gy_package(
+[gy_library(
     name = "test/%s_package" % t,
     package_name = "test." + t,
     srcs = [f],
@@ -174,7 +174,7 @@ cc_test(
     args = ["codeswitch", "std"],
 )
 
-gy_package(
+gy_library(
     name = "test.ApiByName",
     package_name = "test.ApiByName",
     srcs = ["test/ApiByName/ApiByName.gy"],
@@ -198,7 +198,7 @@ cc_test(
     args = ["codeswitch", "std"],
 )
 
-gy_package(
+gy_library(
     name = "test.ApiElements",
     package_name = "test.ApiElements",
     srcs = ["test/ApiElements/ApiElements.gy"],
@@ -227,7 +227,7 @@ cc_test(
     args = ["codeswitch", "std"],
 )
 
-gy_package(
+gy_library(
     name = "test.NativeCalls.sharedlib",
     package_name = "test.NativeCalls.sharedlib",
     srcs = ["test/NativeCalls/sharedlib.gy"],
@@ -244,7 +244,7 @@ cc_library(
     linkstatic = 0,
 )
 
-gy_package(
+gy_library(
     name = "test.NativeCalls.staticlib",
     package_name = "test.NativeCalls.staticlib",
     srcs = ["test/NativeCalls/staticlib.gy"],
@@ -259,7 +259,7 @@ cc_library(
     testonly = 1,
 )
 
-gy_package(
+gy_library(
     name = "test.NativeCalls.registered",
     package_name = "test.NativeCalls.registered",
     srcs = ["test/NativeCalls/registered.gy"],

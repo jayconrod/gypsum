@@ -53,7 +53,7 @@ _gy_attrs = {
 }
 
 
-def _gy_package_impl(ctx):
+def _gy_library_impl(ctx):
     """Builds a CodeSwitch package from Gypsum source code.
 
     Note that the package name and version determine the output file name.
@@ -70,13 +70,12 @@ def _gy_package_impl(ctx):
             in this package.
         flags: additional flags to pass to the Gypsum compiler.
     """
-    pkg_file = ctx.outputs.pkg
-    _compile_gy_package(ctx, ctx.files.srcs, ctx.files.deps, ctx.attr.flags, pkg_file)
+    _compile_gy_package(ctx)
     return _prepare_gy_providers(ctx)
 
 
-gy_package = rule(
-    implementation = _gy_package_impl,
+gy_library = rule(
+    implementation = _gy_library_impl,
     attrs = _gy_attrs,
     outputs = {"pkg": "%{package_name}-%{package_version}.csp"},
     fragments = ["cpp"],
@@ -99,7 +98,7 @@ def _gy_binary_impl(ctx):
         flags: additional flags to pass to the Gypsum compiler.
     """
     # Build package
-    _compile_gy_package(ctx, ctx.files.srcs, ctx.files.deps, ctx.attr.flags, ctx.outputs.pkg)
+    _compile_gy_package(ctx)
     providers = _prepare_gy_providers(ctx)
 
     # Generate runner script.
@@ -134,33 +133,33 @@ gy_binary = rule(
 )
 
 
-def _compile_gy_package(ctx, src_files, dep_files, flags, pkg_file):
+def _compile_gy_package(ctx):
     args = [
         "--package-name", ctx.attr.package_name,
         "--package-version", ctx.attr.package_version,
         "--output", ctx.outputs.pkg.path,
     ]
     inputs = []
-    for f in dep_files:
+    for f in ctx.files.deps:
         args.append("--depends")
         args.append(f.path)
         inputs.append(f)
-    for f in src_files:
-        args.append(f.path)
-        inputs.append(f)
-    args.extend(flags)
+    args += [f.path for f in ctx.files.srcs]
+    inputs += ctx.files.srcs
+    args += ctx.attr.flags
     ctx.action(
         inputs = inputs,
-        outputs = [pkg_file],
+        outputs = [ctx.outputs.pkg],
         arguments = args,
         executable = ctx.executable._gy_compiler,
-        progress_message = "Compiling Gypsum package %s" % pkg_file.path
+        progress_message = "Compiling Gypsum package %s" % ctx.outputs.pkg.path,
     )
 
 
 def _prepare_gy_providers(ctx):
     files = [ctx.outputs.pkg]
-    transitive_pkg_dirs = set([_short_dirname(ctx.outputs.pkg)])
+    pkg_dir_name = _short_dirname(ctx.outputs.pkg)
+    transitive_pkg_dirs = set([pkg_dir_name])
     symlinks = {}
 
     package_name = ctx.attr.package_name
@@ -172,9 +171,7 @@ def _prepare_gy_providers(ctx):
         files.append(native_lib_file)
         cpu = ctx.fragments.cpp.cpu
         lib_ext = "dylib" if cpu == "darwin" else "so"
-        dir_name = _short_dirname(native_lib_file)
-        transitive_pkg_dirs += [dir_name]
-        link_path = "%s/lib%s-%s.%s" % (dir_name, package_name, package_version, lib_ext)
+        link_path = "%s/lib%s-%s.%s" % (pkg_dir_name, package_name, package_version, lib_ext)
         if link_path != native_lib_file.short_path:
             symlinks[link_path] = native_lib_file
     gy = _gy_provider(
@@ -184,8 +181,8 @@ def _prepare_gy_providers(ctx):
         native_lib_file = native_lib_file,
     )
 
-    if hasattr(ctx, "_codeswitch_cmd"):
-        files += ctx.attr._codeswitch_cmd
+    if hasattr(ctx.attr, "_codeswitch_cmd"):
+        files.append(ctx.file._codeswitch_cmd)
     runfiles = ctx.runfiles(
         files = files,
         collect_data = True,
@@ -197,8 +194,9 @@ def _prepare_gy_providers(ctx):
 
     return struct(
         gy = gy,
+        transitive_pkg_dirs = transitive_pkg_dirs,
         runfiles = runfiles,
-        transitive_pkg_dirs = transitive_pkg_dirs)
+    )
 
 
 def _short_dirname(f):

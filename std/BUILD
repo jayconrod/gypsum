@@ -1,8 +1,8 @@
-load("//:build_defs.bzl", "gy_package")
+load("//:build_defs.bzl", "gy_library")
 
 package(default_visibility = ["//visibility:public"])
 
-gy_package(
+gy_library(
     name = "std",
     package_name = "std",
     package_version = "0",
