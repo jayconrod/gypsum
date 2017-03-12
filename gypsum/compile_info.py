@@ -142,9 +142,9 @@ def _addDictMethods(elemName, dictName, types):
             if ids.AstId in types:
                 return astId
             elif ids.DefnId in types and astId in self.defnInfo:
-                return self.defnInfo[astId].irDefn.id
+                return self.defnInfo[astId][0].irDefn.id
             elif ids.ScopeId in types and astId in self.scopes:
-                return self.scopes[astId].scopeId
+                return self.scopes[astId][0].scopeId
             return astId
         elif isinstance(key, ir.IrDefinition):
             defnId = key.id
@@ -154,35 +154,59 @@ def _addDictMethods(elemName, dictName, types):
                 return defnId
             elif ids.ScopeId in types:
                 if defnId in self.scopes:
-                    return self.scopes[defnId].scopeId
+                    return self.scopes[defnId][0].scopeId
                 elif key.astDefn is not None and key.astDefn.id in self.scopes:
-                    return self.scopes[key.astDefn.id].scopeId
+                    return self.scopes[key.astDefn.id][0].scopeId
             return defnId
         elif isinstance(key, ir.Package):
             packageId = key.id
             if ids.PackageId in types:
                 return packageId
             elif ids.ScopeId in types:
-                return self.scopes[packageId].scopeId
+                return self.scopes[packageId][0].scopeId
         return key
-
-    def get(self, key):
-        key = cleanKey(self, key)
-        assert any(isinstance(key, type) for type in types)
-        return getattr(self, dictName)[key]
-    setattr(CompileInfo, "get" + elemName, get)
-
-    def set(self, key, value):
-        key = cleanKey(self, key)
-        assert any(isinstance(key, type) for type in types)
-        getattr(self, dictName)[key] = value
-    setattr(CompileInfo, "set" + elemName, set)
 
     def has(self, key):
         key = cleanKey(self, key)
         assert any(isinstance(key, type) for type in types)
         return key in getattr(self, dictName)
     setattr(CompileInfo, "has" + elemName, has)
+
+    def get(self, key):
+        key = cleanKey(self, key)
+        assert any(isinstance(key, type) for type in types)
+        values = getattr(self, dictName)[key]
+        assert len(values) == 1
+        return values[0]
+    setattr(CompileInfo, "get" + elemName, get)
+
+    def getAll(self, key):
+        key = cleanKey(self, key)
+        assert any(isinstance(key, type) for type in types)
+        return getattr(self, dictName)[key]
+    setattr(CompileInfo, "getAll" + elemName, getAll)
+
+    def set(self, key, value):
+        key = cleanKey(self, key)
+        assert any(isinstance(key, type) for type in types)
+        getattr(self, dictName)[key] = [value]
+    setattr(CompileInfo, "set" + elemName, set)
+
+    def add(self, key, value):
+        key = cleanKey(self, key)
+        assert any(isinstance(key, type) for type in types)
+        table = getattr(self, dictName)
+        if key not in table:
+            table[key] = []
+        table[key].append(value)
+    setattr(CompileInfo, "add" + elemName, add)
+
+    def iter(self):
+        table = getattr(self, dictName)
+        for vs in table.itervalues():
+            for v in vs:
+                yield v
+    setattr(CompileInfo, "iter" + elemName, iter)
 
 for _elemName, _dictName, _types in _dictNames:
     _addDictMethods(_elemName, _dictName, _types)

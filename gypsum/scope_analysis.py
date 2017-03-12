@@ -150,14 +150,14 @@ def convertClosures(info):
           closure-g.apply()
     """
     # Do the actual closure conversion.
-    for useInfo in info.useInfo.itervalues():
+    for useInfo in info.iterUseInfo():
         if useInfo.shouldCapture(info):
             useScope = info.getScope(useInfo.useScopeId)
             useScope.capture(useInfo)
 
     # We are done modifying scopes, and we made a mess. Call finish on scopes in no
     # particular order.
-    for scope in info.scopes.values():
+    for scope in info.iterScope():
         scope.finish()
 
 
@@ -1221,7 +1221,7 @@ class FunctionScope(Scope):
     def makeClosure(self):
         # Check if the function is already a closure.
         assert not self.isLocal()
-        closureInfo = self.info.closureInfo[self.scopeId]
+        closureInfo = self.info.getClosureInfo(self.scopeId)
         if closureInfo.irClosureClass:
             return
         irDefn = self.getIrDefn()

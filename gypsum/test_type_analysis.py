@@ -2743,7 +2743,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "    case _ => false"
         info = self.analyzeFromSource(source, packageLoader=packageLoader, isUsingStd=True)
 
-        stdExternInfoNames = [defn.name for defn in info.stdExternInfo.itervalues()]
+        stdExternInfoNames = [defn.name for defn in info.iterStdExternInfo()]
         self.assertIn(Option.name, stdExternInfoNames)
         self.assertIn(OptionIsDefined.name, stdExternInfoNames)
         self.assertIn(OptionGet.name, stdExternInfoNames)
