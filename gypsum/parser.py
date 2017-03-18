@@ -14,10 +14,14 @@ from utils import tryDecodeString
 
 
 # Main function
+_memoizedModule = None
+
 def parse(filename, tokens):
+    global _memoizedModule
     reader = ct.Reader(filename, tokens)
-    parser = module()
-    result = parser(reader)
+    if _memoizedModule is None:
+        _memoizedModule = module()
+    result = _memoizedModule(reader)
     if not result:
         raise ParseException(result.location, result.message)
     else:
