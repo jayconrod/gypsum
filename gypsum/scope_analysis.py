@@ -150,14 +150,14 @@ def convertClosures(info):
           closure-g.apply()
     """
     # Do the actual closure conversion.
-    for useInfo in info.useInfo.itervalues():
+    for useInfo in info.iterUseInfo():
         if useInfo.shouldCapture(info):
             useScope = info.getScope(useInfo.useScopeId)
             useScope.capture(useInfo)
 
     # We are done modifying scopes, and we made a mess. Call finish on scopes in no
     # particular order.
-    for scope in info.scopes.values():
+    for scope in info.iterScope():
         scope.finish()
 
 
@@ -218,6 +218,14 @@ class NameInfo(object):
 
     def isFunction(self):
         return self.isOverloaded() or isinstance(self.getDefnInfo().irDefn, ir.Function)
+
+    def isValue(self):
+        if self.isOverloaded():
+            return False
+        irDefn = self.getDefnInfo().irDefn
+        return (isinstance(irDefn, ir.Global) or
+                isinstance(irDefn, ir.Field) or
+                isinstance(irDefn, ir.Variable))
 
     def isScope(self):
         return self.isClass() or self.isPackagePrefix() or self.isPackage()
@@ -737,7 +745,19 @@ class Scope(ast.NodeVisitor):
                                          "cannot instantiate abstract class")
 
         useInfo = UseInfo(defnInfo, self.scopeId, useKind)
-        self.info.setUseInfo(useAstId, useInfo)
+
+        # Hack: Avoid inserting duplicate UseInfo, as some callers expect only one entry.
+        # `use` may be called multiple times with the same info because type declaration
+        # analysis and type use analysis sometimes run the same code.
+        if self.info.hasUseInfo(useAstId) and hasattr(irDefn, "id"):
+            matches = [u for u in self.info.getAllUseInfo(useAstId)
+                       if u.defnInfo.irDefn.id is irDefn.id]
+            assert all(u == useInfo for u in matches)
+        else:
+            matches = ()
+        if len(matches) == 0:
+            self.info.addUseInfo(useAstId, useInfo)
+
         return useInfo
 
     def isLocal(self):
@@ -1221,7 +1241,7 @@ class FunctionScope(Scope):
     def makeClosure(self):
         # Check if the function is already a closure.
         assert not self.isLocal()
-        closureInfo = self.info.closureInfo[self.scopeId]
+        closureInfo = self.info.getClosureInfo(self.scopeId)
         if closureInfo.irClosureClass:
             return
         irDefn = self.getIrDefn()
@@ -1236,6 +1256,7 @@ class FunctionScope(Scope):
                                                     constructors=[], fields=[],
                                                     methods=[], flags=frozenset())
         closureInfo.irClosureClass = irClosureClass
+        self.info.setScope(irClosureClass.id, self)
 
         # Inherit from the root class.
         irClosureClass.supertypes.append(getRootClassType())

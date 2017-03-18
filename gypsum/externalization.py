@@ -23,7 +23,7 @@ def externalize(info):
     packages (not in the dependency list). This externalization step detects these foreign
     definitions, creates "extern" stubs, and records them.
     """
-    for useInfo in info.useInfo.itervalues():
+    for useInfo in info.iterUseInfo():
         defn = useInfo.defnInfo.irDefn
         if isinstance(defn, ir.Package):
             info.package.ensureDependency(defn)
@@ -39,9 +39,9 @@ def externalize(info):
     each(externalizeInheritedMethods, info.package.classes)
     each(externalizeInheritedMethods, info.package.traits)
 
-    for t in info.typeInfo.itervalues():
+    for t in info.iterType():
         externalizeType(info, t)
-    for d in info.stdExternInfo.itervalues():
+    for d in info.iterStdExternInfo():
         externalizeDefn(info, d)
 
 

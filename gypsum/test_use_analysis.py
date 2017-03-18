@@ -315,7 +315,8 @@ class TestUseAnalysis(TestCaseWithDefinitions):
                  "class Bar[static +T](value: T)"
         info = self.analyzeFromSourceWithTypes(source)
         T = info.package.findTypeParameter(name="Bar.T")
-        use = info.getUseInfo(info.ast.modules[0].definitions[1].constructor.parameters[0].pattern.ty)
+        astTy = info.ast.modules[0].definitions[1].constructor.parameters[0].pattern.ty
+        use = info.getUseInfo(astTy)
         self.assertIs(T, use.defnInfo.irDefn)
 
     def testUseTypeParameterInLaterPrimaryCtorField(self):
