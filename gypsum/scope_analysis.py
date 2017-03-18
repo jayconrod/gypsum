@@ -219,6 +219,14 @@ class NameInfo(object):
     def isFunction(self):
         return self.isOverloaded() or isinstance(self.getDefnInfo().irDefn, ir.Function)
 
+    def isValue(self):
+        if self.isOverloaded():
+            return False
+        irDefn = self.getDefnInfo().irDefn
+        return (isinstance(irDefn, ir.Global) or
+                isinstance(irDefn, ir.Field) or
+                isinstance(irDefn, ir.Variable))
+
     def isScope(self):
         return self.isClass() or self.isPackagePrefix() or self.isPackage()
 
@@ -737,7 +745,19 @@ class Scope(ast.NodeVisitor):
                                          "cannot instantiate abstract class")
 
         useInfo = UseInfo(defnInfo, self.scopeId, useKind)
-        self.info.setUseInfo(useAstId, useInfo)
+
+        # Hack: Avoid inserting duplicate UseInfo, as some callers expect only one entry.
+        # `use` may be called multiple times with the same info because type declaration
+        # analysis and type use analysis sometimes run the same code.
+        if self.info.hasUseInfo(useAstId) and hasattr(irDefn, "id"):
+            matches = [u for u in self.info.getAllUseInfo(useAstId)
+                       if u.defnInfo.irDefn.id is irDefn.id]
+            assert all(u == useInfo for u in matches)
+        else:
+            matches = ()
+        if len(matches) == 0:
+            self.info.addUseInfo(useAstId, useInfo)
+
         return useInfo
 
     def isLocal(self):
@@ -1236,6 +1256,7 @@ class FunctionScope(Scope):
                                                     constructors=[], fields=[],
                                                     methods=[], flags=frozenset())
         closureInfo.irClosureClass = irClosureClass
+        self.info.setScope(irClosureClass.id, self)
 
         # Inherit from the root class.
         irClosureClass.supertypes.append(getRootClassType())

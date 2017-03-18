@@ -3769,9 +3769,55 @@ class TestCompiler(TestCaseWithDefinitions):
                     ret(),
                 ]]))
 
+    def testCallGlobal(self):
+        source = "let g = lambda (x: i64) x\n" + \
+                 "def f = g(12)"
+        package = self.compileFromSource(source)
+        g = package.findGlobal(name="g")
+        call = package.findFunction(name=Name([LAMBDA_SUFFIX]))
+        self.checkFunction(
+            package,
+            self.makeSimpleFunction(
+                "f",
+                I64Type,
+                [[
+                    ldg(g),
+                    i64(12),
+                    callg(call),
+                    ret(),
+                ]]))
+
+    def testCallField(self):
+        source = FUNCTION_SOURCE + \
+                 "class C(f: String -> Object)\n" + \
+                 "def f(c: C) = c.f(\"foo\")"
+        package = self.compileFromSource(source, name=STD_NAME)
+        C = package.findClass(name="C")
+        CType = ClassType.forReceiver(C)
+        fNameIndex = package.findName(C.fields[0].name)
+        fooIndex = package.findString("foo")
+        call = package.findFunction(name=Name(["Function1", "call"]))
+        self.checkFunction(
+            package,
+            self.makeSimpleFunction(
+                "f",
+                getRootClassType(),
+                [[
+                    ldlocal(0),
+                    ldf(C, fNameIndex),
+                    string(fooIndex),
+                    tys(0),
+                    tys(1),
+                    callv(call),
+                    ret(),
+                ]],
+                variables=[self.makeVariable(
+                    name="f.c", type=CType, kind=PARAMETER, flags=frozenset([LET]))],
+                instTypes=[getRootClassType(), getStringType()]))
+
     def testCallFunctionTrait(self):
         source = FUNCTION_SOURCE + \
-                 "def f(g: String -> Object, s: String): Object = (g)(s)"
+                 "def f(g: String -> Object, s: String): Object = g(s)"
         package = self.compileFromSource(source, name=STD_NAME)
         objectType = getRootClassType()
         stringType = getStringType()
@@ -3828,7 +3874,7 @@ class TestCompiler(TestCaseWithDefinitions):
     def testCallExistentialValue(self):
         source = FUNCTION_SOURCE + \
                  "def f(g: forsome [R <: String, P >: String] Function1[R, P]) =\n" + \
-                 "  (g)(\"foo\")"
+                 "  g(\"foo\")"
         package = self.compileFromSource(source)
         stringType = getStringType()
         fooIndex = package.findString("foo")

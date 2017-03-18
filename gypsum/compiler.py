@@ -494,12 +494,12 @@ class CompileVisitor(ast.NodeVisitor):
             return
         assert mode is COMPILE_FOR_MATCH
 
-        if self.info.hasUseInfo(pat) and \
-           not isinstance(self.info.getUseInfo(pat).defnInfo.irDefn, Class):
+        if self.info.hasUseInfo(pat.matcherId) and \
+           not isinstance(self.info.getUseInfo(pat.matcherId).defnInfo.irDefn, Class):
             self.buildLoadOrNullaryCall(pat, COMPILE_FOR_VALUE)
 
-        irDefn = self.info.getUseInfo(pat.matcherId).defnInfo.irDefn
-        callInfo = self.info.getCallInfo(pat.matcherId)
+        irDefn = self.info.getUseInfo(pat).defnInfo.irDefn
+        callInfo = self.info.getCallInfo(pat)
         self.buildDestructure(irDefn, callInfo.receiverType, False, callInfo.typeArguments,
                               [pat.pattern], failBlock, pat.location)
 
@@ -510,12 +510,12 @@ class CompileVisitor(ast.NodeVisitor):
             return
         assert mode is COMPILE_FOR_MATCH
 
-        if self.info.hasUseInfo(pat) and \
-           not isinstance(self.info.getUseInfo(pat).defnInfo.irDefn, Class):
+        if self.info.hasUseInfo(pat.matcherId) and \
+           not isinstance(self.info.getUseInfo(pat.matcherId).defnInfo.irDefn, Class):
             self.buildLoadOrNullaryCall(pat, COMPILE_FOR_VALUE)
 
-        irDefn = self.info.getUseInfo(pat.matcherId).defnInfo.irDefn
-        callInfo = self.info.getCallInfo(pat.matcherId)
+        irDefn = self.info.getUseInfo(pat).defnInfo.irDefn
+        callInfo = self.info.getCallInfo(pat)
         subPatterns = [pat.left, pat.right]
         self.buildDestructure(irDefn, callInfo.receiverType, False, callInfo.typeArguments,
                               subPatterns, failBlock, pat.location)
@@ -551,10 +551,9 @@ class CompileVisitor(ast.NodeVisitor):
     def visitCallExpression(self, expr, mode):
         callInfo = self.info.getCallInfo(expr) if self.info.hasCallInfo(expr) else None
         useInfo = self.info.getUseInfo(expr)
-        if isinstance(expr.callee, ast.VariableExpression) or \
-           isinstance(expr.callee, ast.PropertyExpression):
-            # Named function or method. The name is not evaluated.
-            # TODO(#46): variable or property expressions could be callable closures.
+        if (not callInfo.calleeIsValue and \
+            (isinstance(expr.callee, ast.VariableExpression) or
+             isinstance(expr.callee, ast.PropertyExpression))):
             if isinstance(expr.callee, ast.PropertyExpression) and \
                not self.info.hasScopePrefixInfo(expr.callee.receiver):
                 receiver = expr.callee.receiver

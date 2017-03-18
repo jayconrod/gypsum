@@ -724,12 +724,18 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(I64Type, info.package.findFunction(name="g").returnType)
         self.assertEquals(I64Type, info.getType(info.ast.modules[0].definitions[1].body))
 
-    @unittest.skip("blocked by #45: can't use more than one definition at a node")
     def testCallVariable(self):
         source = "let f = lambda true\n" + \
                  "let g = f()"
         info = self.analyzeFromSource(source)
+        f = info.package.findGlobal(name="f")
+        g = info.package.findGlobal(name="g")
         self.assertEquals(BooleanType, info.package.findGlobal(name="g").type)
+        astCall = info.ast.modules[0].definitions[-1].expression
+        self.assertIs(f, info.getUseInfo(astCall.callee).defnInfo.irDefn)
+        call = info.package.findFunction(name=Name([LAMBDA_SUFFIX]))
+        self.assertIs(call, info.getUseInfo(astCall).defnInfo.irDefn)
+        self.assertTrue(info.hasCallInfo(astCall))
 
     def testCallVariableValue(self):
         source = "let f = lambda true\n" + \
@@ -737,13 +743,19 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource(source)
         self.assertEquals(BooleanType, info.package.findGlobal(name="g").type)
 
-    @unittest.skip("blocked by #45: can't use more than one definition at a node")
     def testCallField(self):
         source = FUNCTION_SOURCE + \
                  "class Box(f: Function1[String, String])\n" + \
-                 "def f(box: Box, s: String) = box.f(s)"
+                 "def g(box: Box, s: String) = box.f(s)"
         info = self.analyzeFromSource(source)
-        self.assertEquals(getStringType(), info.package.findFunction(name="f").returnType)
+        Box = info.package.findClass(name="Box")
+        f = Box.findFieldBySourceName("f")
+        self.assertEquals(getStringType(), info.package.findFunction(name="g").returnType)
+        astCall = info.ast.modules[0].definitions[-1].body
+        self.assertEquals(f.name, info.getUseInfo(astCall.callee).defnInfo.irDefn.name)
+        call = info.package.findFunction(name="Function1.call")
+        self.assertIs(call, info.getUseInfo(astCall).defnInfo.irDefn)
+        self.assertTrue(info.hasCallInfo(astCall))
 
     def testCallFieldValue(self):
         source = FUNCTION_SOURCE + \
@@ -1083,7 +1095,6 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(getStringType(), info.getType(matchCase.pattern.patterns[1]))
         self.assertEquals(getStringType(), f.returnType)
 
-    @unittest.skip("blocked by #45: can't use more than one definition at a node")
     def testMatchExprDestructureWithClosureMatcher(self):
         source = OPTION_SOURCE + \
                  "let Matcher = lambda (x: Object) None\n" + \
@@ -1091,7 +1102,13 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  match (x)\n" + \
                  "    case Matcher(a) => a"
         info = self.analyzeFromSource(source, name=STD_NAME)
-        self.fail("TODO")
+        Matcher = info.package.findGlobal(name="Matcher")
+        call = info.package.findFunction(name=Name([LAMBDA_SUFFIX]))
+        astDestructure = (
+            info.ast.modules[0].definitions[-1].body.statements[0].matcher.cases[0].pattern)
+        self.assertIs(Matcher.id, info.getUseInfo(astDestructure.prefix[0]).defnInfo.irDefn.id)
+        self.assertIs(call.id, info.getUseInfo(astDestructure).defnInfo.irDefn.id)
+        self.assertTrue(info.hasCallInfo(astDestructure))
 
     def testMatchExprDestructureWithBadMatcherFunctionArgs(self):
         source = OPTION_SOURCE + \

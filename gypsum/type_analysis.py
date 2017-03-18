@@ -952,7 +952,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             superScope = self.getScopeForDefn(ir_t.getClassFromType(supertype))
             self.handlePropertyCall(CONSTRUCTOR_SUFFIX, superScope, supertype,
                                     None, superArgTypes, True, True, False,
-                                    node.id, node.location)
+                                    node.id, node.id, node.location)
 
         irInitializer = irClass.initializer
         irInitializer.parameterTypes = [thisType]
@@ -1081,9 +1081,11 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         if len(node.prefix) > 0:
             hasReceiver = not self.info.hasScopePrefixInfo(node.prefix[-1])
             patTy = self.handlePropertyCall(node.name, scope, receiverType, None, None,
-                                            hasReceiver, False, False, node.id, node.location)
+                                            hasReceiver, False, False,
+                                            None, node.id, node.location)
         else:
-            patTy = self.handleUnprefixedCall(node.name, None, None, node.id, node.location)
+            patTy = self.handleUnprefixedCall(
+                node.name, None, None, None, node.id, node.location)
         return patTy
 
     def visitDestructurePattern(self, node, exprTy, mode):
@@ -1108,14 +1110,14 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         nameInfo = self.scope().lookupFromSelf(node.operator, node.location)
         return self.handleDestructure(nameInfo, receiverType, False, None,
                                       exprTy, [node.pattern], mode,
-                                      node.id, node.matcherId, node.location)
+                                      node.matcherId, node.id, node.location)
 
     def visitBinaryPattern(self, node, exprTy, mode):
         receiverType = self.getReceiverType() if self.hasReceiverType() else None
         nameInfo = self.scope().lookupFromSelf(node.operator, node.location)
         return self.handleDestructure(nameInfo, receiverType, False, None,
                                       exprTy, [node.left, node.right], mode,
-                                      node.id, node.matcherId, node.location)
+                                      node.matcherId, node.id, node.location)
 
     def visitLiteralExpression(self, node):
         ty = self.visit(node.literal)
@@ -1184,7 +1186,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                  isinstance(node.receiver, ast.SuperExpression)
             ty = self.handlePropertyCall(node.propertyName, receiverScope, receiverType,
                                          None, None, hasReceiver, receiverIsReceiver,
-                                         isLvalue, node.id, node.location)
+                                         isLvalue, None, node.id, node.location)
         return ty
 
     def visitCallExpression(self, node, mayBePrefix=False):
@@ -1201,7 +1203,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                                      node.id, node.location)
             else:
                 ty = self.handleUnprefixedCall(node.callee.name, typeArgs, argTypes,
-                                               node.id, node.location)
+                                               node.callee, node.id, node.location)
         elif isinstance(node.callee, ast.PropertyExpression):
             receiverType = self.visitPossiblePrefix(node.callee.receiver)
             if self.info.hasScopePrefixInfo(node.callee.receiver):
@@ -1219,14 +1221,15 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             else:
                 ty = self.handlePropertyCall(node.callee.propertyName, receiverScope,
                                              receiverType, typeArgs, argTypes,
-                                             hasReceiver, False, False, node.id, node.location)
+                                             hasReceiver, False, False,
+                                             node.callee.id, node.id, node.location)
         elif isinstance(node.callee, ast.ThisExpression) or \
              isinstance(node.callee, ast.SuperExpression):
             receiverType = self.visit(node.callee)
             receiverScope = self.getScopeForDefn(ir_t.getClassFromType(receiverType))
             self.handlePropertyCall(CONSTRUCTOR_SUFFIX, receiverScope, receiverType,
                                     typeArgs, argTypes, True, True, False,
-                                    node.id, node.location)
+                                    None, node.id, node.location)
             ty = ir_t.UnitType
         else:
             functionType = self.visit(node.callee)
@@ -1584,7 +1587,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                        if prefix[i].typeArguments is not None \
                        else None
             ty = self.handlePropertyCall(prefix[i].name, scope, receiverType, typeArgs, None,
-                                         True, False, False, prefix[i].id, prefix[i].location)
+                                         True, False, False,
+                                         None, prefix[i].id, prefix[i].location)
             self.info.setType(prefix[i], ty)
             i += 1
 
@@ -1678,7 +1682,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def handlePropertyCall(self, name, receiverScope, receiverType,
                            typeArgs, argTypes, hasReceiver, receiverIsReceiver,
-                           isLvalue, useAstId, loc):
+                           isLvalue, calleeAstId, callAstId, loc):
         """Handles a reference to a property inside an object or a scope.
 
         This can be used for methods, fields, and inner-class constructors with an explicit
@@ -1701,7 +1705,11 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             isLvalue (bool): whether the property is being assigned to. Normally, the type of
                 a field or return type of a method may be upcast, but this is not true
                 during assignments.
-            useAstId (AstId): the AST id where the symbol is referenced. Used to save info.
+            calleeAstId (AstId?): the AST id of the property being called. `UseInfo` will be
+                recorded here if this is a value (closure). May be `None` in cases where
+                a value call is impossible (for example, constructor call).
+            callAstId (AstId): the AST id of the call expression. `UseInfo` and `CallInfo`
+                will be recorded for whatever definition was called.
             loc (Location): the location of the reference in source code. Used in errors.
 
         Returns:
@@ -1715,7 +1723,13 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         useKind = USE_AS_PROPERTY
         receiverType, existentialVars = self.openExistentialReceiver(receiverType)
 
-        if nameInfo.isClass() and argTypes is not None:
+        if nameInfo.isValue() and argTypes is not None:
+            assert calleeAstId is not None
+            defnInfo = nameInfo.getDefnInfo()
+            calleeType = defnInfo.irDefn.type
+            self.scope().use(defnInfo, calleeAstId, useKind, loc)
+            return self.handleValueCall(calleeType, typeArgs, argTypes, callAstId, loc)
+        elif nameInfo.isClass() and argTypes is not None:
             defnInfo, allTypeArgs, receiverType  = self.chooseConstructorFromNameInfo(
                 nameInfo, typeArgs, argTypes, loc)
             useKind = USE_AS_CONSTRUCTOR
@@ -1733,13 +1747,13 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             raise TypeException(loc, "%s: cannot access without receiver" % name)
 
         self.checkCallAllowed(defnInfo.irDefn, receiverIsReceiver, useKind, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType, False))
-        self.scope().use(defnInfo, useAstId, useKind, loc)
+        self.info.setCallInfo(callAstId, CallInfo(allTypeArgs, receiverType, False))
+        self.scope().use(defnInfo, callAstId, useKind, loc)
         ty = self.getDefnType(receiverType, defnInfo.irDefn, allTypeArgs)
         ty = self.upcastExistentialVars(ty, existentialVars, isLvalue, name, loc)
         return ty
 
-    def handleUnprefixedCall(self, name, typeArgs, argTypes, useAstId, loc):
+    def handleUnprefixedCall(self, name, typeArgs, argTypes, calleeAstId, callAstId, loc):
         """Handles a call with arguments or type arguments without a prefix.
 
         This can be used for function calls or method calls with implicit receivers. Either
@@ -1748,15 +1762,21 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
         Args:
             name: the name of the symbol being referenced.
-            typeArgs: a list of `Type` arguments passed as part of the call or `None`. Must
+            typeArgs (list(Type)?): type arguments passed as part of the call or `None`. Must
                 not be `None` if `argTypes` is `None`.
-            argTypes: a list of `Type`s of arguments passed as part of the call. May be `None`.
-                Must not be `None` if `typeArgs` is `None`.
-            useAstId: the AST id where the symbol is referenced. Used to save info.
-            loc: the location of the reference in source code. Used in errors.
+            argTypes (list(Type)?): types of actual arguments passed as part of the call. Must
+                not be `None` if `typeArgs` is `None`.
+            calleeAstId (AstId?): the AST id of the value being called. `UseInfo` will be
+                recorded here if this is actually a value (closure). May be `None` in cases
+                where a value call is impossible (for example, no arguments).
+            callAstId (AstId): the AST id of the call expression. `UseInfo` and `CallInfo`
+                will be recorded for whatever definition is called.
+            useAstId (AstId): the AST id where the symbol is referenced. Used to save info.
+            loc (Location): the location of the reference in source code. Used in errors.
 
         Returns:
-            The `Type` of the definition that was referenced (with type substitution performed).
+            (Type): the type of the definition that was referenced (with type substitution
+            performed).
 
         Raises:
             ScopeException: if a definition with this name can't be found or used.
@@ -1766,7 +1786,12 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         useKind = USE_AS_VALUE
         nameInfo = self.scope().lookupFromSelf(name, loc)
 
-        if nameInfo.isClass() and argTypes is not None:
+        if nameInfo.isValue() and argTypes is not None:
+            defnInfo = nameInfo.getDefnInfo()
+            calleeType = defnInfo.irDefn.type
+            self.scope().use(defnInfo, calleeAstId, useKind, loc)
+            return self.handleValueCall(calleeType, typeArgs, argTypes, callAstId, loc)
+        elif nameInfo.isClass() and argTypes is not None:
             defnInfo, allTypeArgs, receiverType = self.chooseConstructorFromNameInfo(
                 nameInfo, typeArgs, argTypes, loc)
             useKind = USE_AS_CONSTRUCTOR
@@ -1776,8 +1801,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                                                 typeArgs, argTypes, loc)
         irDefn = defnInfo.irDefn
         self.checkCallAllowed(irDefn, True, useKind, loc)
-        self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType, False))
-        self.scope().use(defnInfo, useAstId, useKind, loc)
+        self.info.setCallInfo(callAstId, CallInfo(allTypeArgs, receiverType, False))
+        self.scope().use(defnInfo, callAstId, useKind, loc)
         return self.getDefnType(receiverType, irDefn, allTypeArgs)
 
     def handleOperatorCall(self, name, firstType, secondType, useAstId, loc):
@@ -1939,7 +1964,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             scope = self.getScopeForDefn(clas)
             ty = self.handlePropertyCall("call", scope, calleeType, typeArgs, argTypes,
                                          hasReceiver=True, receiverIsReceiver=False,
-                                         isLvalue=False, useAstId=useAstId, loc=loc)
+                                         isLvalue=False, calleeAstId=None,
+                                         callAstId=useAstId, loc=loc)
             self.info.getCallInfo(useAstId).calleeIsValue = True  # hack
             return ty
         else:
@@ -1966,7 +1992,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             return ty
 
     def handleDestructure(self, nameInfo, receiverType, receiverIsExplicit,
-                          typeArgs, exprType, subPatterns, mode, useAstId, matcherAstId, loc):
+                          typeArgs, exprType, subPatterns, mode, matcherAstId, useAstId, loc):
         """Handles a destructuring pattern match.
 
         A destructuring pattern match works by passing the object being matched to a matcher
@@ -1998,10 +2024,11 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             The match result should have the same number of types (single type or tuple type)
             as the number of sub-patterns in this list.
         mode (symbol): compilation mode for patterns.
-        useAstId (AstId): id of the definition that contains the matcher method. Used to
-            record `UseInfo` and `CallInfo`.
-        matcherAstId (AstId): id of the matcher method itself. Some patterns (like
-            `UnaryPattern`) have a separate id just for this.
+        matcherAstid (AstId): id of the part of the pattern that references the matcher. Used to
+            record `UseInfo`. Some patterns (like `UnaryPattern`) have a separate id just
+            for this.
+        useAstId (AstId): id of the destructuring pattern. Used to record `UseInfo` and
+            `CallInfo` for the function or method called during the match.
         loc (Location): location of the match in source code. Used for error reporting.
 
         Returns:
@@ -2019,8 +2046,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             defnInfo, allTypeArgs = self.chooseDefnFromNameInfo(nameInfo, receiverType,
                                                                 typeArgs, [exprType], loc)
             self.checkCallAllowed(defnInfo.irDefn, False, useKind, loc)
-            self.info.setCallInfo(matcherAstId, CallInfo(allTypeArgs, receiverType, False))
-            self.scope().use(defnInfo, matcherAstId, useKind, loc)
+            self.info.setCallInfo(useAstId, CallInfo(allTypeArgs, receiverType, False))
+            self.scope().use(defnInfo, useAstId, useKind, loc)
             irDefn = defnInfo.irDefn
             self.ensureTypeInfoForDefn(irDefn)
             returnType = self.getDefnType(receiverType, irDefn, allTypeArgs)
@@ -2029,7 +2056,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         else:
             # The name refers to a matcher scope or definition.
             matcherDefnInfo = nameInfo.getDefnInfo()
-            self.scope().use(matcherDefnInfo, useAstId, useKind, loc)
+            self.scope().use(matcherDefnInfo, matcherAstId, useKind, loc)
             matcherIrDefn = matcherDefnInfo.irDefn
             self.ensureTypeInfoForDefn(matcherIrDefn)
             if isinstance(matcherIrDefn, ir.Global) or \
@@ -2051,7 +2078,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                         nameInfo.name)
                 matcherScopeId = self.getScopeForDefn(matcherIrDefn).scopeId
                 matcherScopePrefixInfo = ScopePrefixInfo(matcherIrDefn, matcherScopeId)
-                self.info.setScopePrefixInfo(useAstId, matcherScopePrefixInfo)
+                self.info.setScopePrefixInfo(matcherAstId, matcherScopePrefixInfo)
                 matcherReceiverType = ir_t.ClassType(matcherIrDefn, callTypeArgs)
                 matcherHasReceiver = False
                 matcherClass = matcherIrDefn
@@ -2059,15 +2086,23 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 raise TypeException(loc, "%s: cannot use this definition for matching" %
                                     nameInfo.name)
 
-            # Lookup the try-match method.
+            # Lookup the try-match method. If that's not present, treat the matcher as a
+            # closure.
             matcherScope = self.getScopeForDefn(matcherClass)
             try:
                 returnType = self.handlePropertyCall("try-match", matcherScope,
                                                      matcherReceiverType, None, [exprType],
                                                      matcherHasReceiver, False, False,
-                                                     matcherAstId, loc)
+                                                     None, useAstId, loc)
             except ScopeException:
-                raise TypeException(loc, "cannot match without `try-match` method")
+                if not matcherHasReceiver:
+                    raise TypeException(loc, "cannot match without `try-match` method")
+                try:
+                    returnType = self.handleValueCall(matcherIrDefn.type, None, [exprType],
+                                                      useAstId, loc)
+                except ScopeException:
+                    raise TypeException(
+                        loc, "cannot match without `try-match` method or callable object")
 
         # Determine the expression types of the sub-patterns, based on what the matcher returns.
         # If there is one pattern, it should return Option[T1], and T1 is the expression type
