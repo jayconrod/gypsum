@@ -14,7 +14,7 @@ before_install:
     else
       BAZEL_OS=linux
     fi
-    BAZEL_URL="https://github.com/bazelbuild/bazel/releases/download/0.4.4/bazel-0.4.4-installer-$BAZEL_OS-x86_64.sh"
+    BAZEL_URL="https://github.com/bazelbuild/bazel/releases/download/0.4.5/bazel-0.4.5-installer-$BAZEL_OS-x86_64.sh"
     wget -O install.sh "$BAZEL_URL"
     chmod +x install.sh
     ./install.sh --user
