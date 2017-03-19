@@ -97,6 +97,7 @@ _decodeEscapeChars = {'n': '\n',
                       'v': '\v'}
 _encodeEscapeChars = {v: k for k, v in _decodeEscapeChars.iteritems()}
 
+
 def tryDecodeString(inStr):
     assert len(inStr) >= 2 and inStr[0] in '"`' and inStr[-1] in '"`' and inStr[0] == inStr[-1]
     outBuf = StringIO()
@@ -150,6 +151,13 @@ def tryDecodeString(inStr):
     return outStr
 
 
+def decodeString(inStr):
+    outStr = tryDecodeString(inStr)
+    if outStr is None:
+        raise ValueError("could not decode string: %s" % inStr)
+    return outStr
+
+
 def encodeString(inStr):
     outBuf = StringIO()
     outBuf.write('"')
@@ -196,6 +204,6 @@ COMPILE_FOR_MATCH = "compile-for-match"
 COMPILE_FOR_UNINITIALIZED = "compile-for-uninitialized"
 
 
-__all__ = ["each", "encodeString", "tryDecodeString", "openCommonFile", "Counter", "hashList",
-           "COMPILE_FOR_VALUE", "COMPILE_FOR_EFFECT", "COMPILE_FOR_MATCH",
-           "COMPILE_FOR_UNINITIALIZED"]
+__all__ = ["decodeString", "each", "encodeString", "tryDecodeString", "openCommonFile",
+           "Counter", "hashList", "COMPILE_FOR_VALUE", "COMPILE_FOR_EFFECT",
+           "COMPILE_FOR_MATCH", "COMPILE_FOR_UNINITIALIZED"]

@@ -18,11 +18,19 @@ GYPSUM_DEPS = ["@yaml//:yaml"]
 
 py_binary(
     name = "compiler",
-    srcs = [":sources"],
-    deps = GYPSUM_DEPS,
+    srcs = ["__main__.py"],
+    deps = [":gypsum"],
     data = [":common"],
     main = "__main__.py",
     visibility = ["//visibility:public"],
+)
+
+py_library(
+    name = "gypsum",
+    srcs = glob(["*.py"], exclude=["test_*.py", "utils_test.py", "__main__.py"]),
+    deps = GYPSUM_DEPS,
+    data = [":common"],
+    visibility = ["//:__subpackages__"],
 )
 
 [py_test(
