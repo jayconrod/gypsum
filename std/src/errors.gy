@@ -8,6 +8,8 @@ public class AssertionException <: Exception
 
 public class IllegalArgumentException <: Exception
 
+public class IllegalStateException <: Exception
+
 public class NoSuchElementException <: Exception
 
 public class UnimplementedException <: Exception

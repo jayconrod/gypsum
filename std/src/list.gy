@@ -5,7 +5,7 @@
 // found in the LICENSE.txt file.
 
 
-public class List[static T]
+public class List[static T] <: Iter[T]
   private var length_: i32
   private var capacity: i32
   private var elements: Array[T]
@@ -77,3 +77,18 @@ public class List[static T]
       s += get(i).to-string
       i += 1i32
     s + "]"
+
+  override public def iter: Iterator[T] = ListIterator[T](this)
+
+
+class ListIterator[static T](list: List[T]) <: Iterator[T]
+  private var index = 0i32
+
+  public override def has-next = index < list.length
+
+  public override def next =
+    if (!has-next)
+      throw IllegalStateException()
+    let e = list.get(index)
+    index += 1i32
+    e
