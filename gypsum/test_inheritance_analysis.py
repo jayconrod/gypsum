@@ -43,7 +43,8 @@ class TestInheritanceAnalysis(unittest.TestCase):
         return info
 
     def testNoBaseClass(self):
-        info = self.analyzeFromSource("class Foo")
+        source = "class Foo"
+        info = self.analyzeFromSource(source)
         clas = info.package.findClass(name="Foo")
         self.assertEquals([getRootClassType()], clas.supertypes)
 
@@ -107,7 +108,8 @@ class TestInheritanceAnalysis(unittest.TestCase):
                           zzyzxClass.supertypes)
 
     def testInheritFromException(self):
-        info = self.analyzeFromSource("class Foo <: Exception")
+        source = "class Foo <: Exception"
+        info = self.analyzeFromSource(source)
         clas = info.package.findClass(name="Foo")
         self.assertEquals([getExceptionClassType(), getRootClassType()], clas.supertypes)
 
@@ -161,7 +163,8 @@ class TestInheritanceAnalysis(unittest.TestCase):
         self.assertRaises(InheritanceException, self.analyzeFromSource, source)
 
     def testTraitNoSupertypes(self):
-        info = self.analyzeFromSource("trait Foo")
+        source = "trait Foo"
+        info = self.analyzeFromSource(source)
         trait = info.package.findTrait(name="Foo")
         self.assertEquals([getRootClassType()], trait.supertypes)
 
@@ -318,7 +321,8 @@ class TestInheritanceAnalysis(unittest.TestCase):
         self.assertTrue(barScope.isBound("x"))
 
     def testInheritedBuiltinDefinitionsAreBound(self):
-        info = self.analyzeFromSource("class Foo")
+        source = "class Foo"
+        info = self.analyzeFromSource(source)
         scope = info.getScope(info.ast.modules[0].definitions[0])
         self.assertTrue(scope.isBound("typeof"))
 

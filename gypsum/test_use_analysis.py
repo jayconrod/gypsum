@@ -47,17 +47,20 @@ class TestUseAnalysis(TestCaseWithDefinitions):
         return info
 
     def testUndefinedReference(self):
-        info = self.analyzeFromSource("var x = y")
+        source = "var x = y"
+        info = self.analyzeFromSource(source)
         self.assertRaises(ScopeException,
                           info.getScope(GLOBAL_SCOPE_ID).lookupFromSelf, "y", NoLoc)
 
     def testUseVarBeforeDefinition(self):
-        info = self.analyzeFromSource("def f = { var x = y; var y = 12; }")
+        source = "def f = { var x = y; var y = 12; }"
+        info = self.analyzeFromSource(source)
         scope = info.getScope(info.ast.modules[0].definitions[0])
         self.assertRaises(ScopeException, scope.lookupFromSelf, "y", NoLoc)
 
     def testUseFunctionBeforeDefinition(self):
-        info = self.analyzeFromSource("def f = g; def g = 12;")
+        source = "def f = g; def g = 12;"
+        info = self.analyzeFromSource(source)
         gDefnInfo = info.getDefnInfo(info.ast.modules[0].definitions[1])
         gNameInfo = info.getScope(info.ast.modules[0].definitions[0]).lookupFromSelf("g", NoLoc)
         self.assertIs(gDefnInfo, gNameInfo.getDefnInfo())
@@ -73,13 +76,15 @@ class TestUseAnalysis(TestCaseWithDefinitions):
         self.assertIs(iDefnInfo, iNameInfo.getDefnInfo())
 
     def testUseClassBeforeDefinition(self):
-        info = self.analyzeFromSource("def f = C; class C;")
+        source = "def f = C; class C;"
+        info = self.analyzeFromSource(source)
         cDefnInfo = info.getDefnInfo(info.ast.modules[0].definitions[1])
         cNameInfo = info.getScope(GLOBAL_SCOPE_ID).lookupFromSelf("C", NoLoc)
         self.assertIs(cDefnInfo, cNameInfo.getDefnInfo())
 
     def testUseInLocalScope(self):
-        info = self.analyzeFromSource("def f(x: i64) = { { x; }; };")
+        source = "def f(x: i64) = { { x; }; };"
+        info = self.analyzeFromSource(source)
         fScope = info.getScope(info.ast.modules[0].definitions[0])
         fScope.define("x")
         xDefnInfo = info.getDefnInfo(info.ast.modules[0].definitions[0].parameters[0].pattern)
@@ -88,7 +93,8 @@ class TestUseAnalysis(TestCaseWithDefinitions):
         self.assertIs(xDefnInfo, xNameInfo.getDefnInfo())
 
     def testUseThisInInitializer(self):
-        info = self.analyzeFromSource("class Foo { var x = this; };")
+        source = "class Foo { var x = this; };"
+        info = self.analyzeFromSource(source)
         classScope = info.getScope(info.ast.modules[0].definitions[0])
         thisNameInfo = classScope.lookupFromSelf("this", NoLoc)
         self.assertEquals(DefnInfo(self.makeVariable(Name(["Foo", CLASS_INIT_SUFFIX, RECEIVER_SUFFIX]),
