@@ -53,7 +53,7 @@ class TestClosureConversion(TestCaseWithDefinitions):
     def testUseFunctionVarInFunction(self):
         source = "def f =\n" + \
                  "  var x = 12\n" + \
-                 "  def g = x\n"
+                 "  def g = x"
         info = self.analyzeFromSource(source)
         fAst = info.ast.modules[0].definitions[0]
         fScopeId = info.getScope(info.getDefnInfo(fAst).irDefn).scopeId
@@ -92,7 +92,7 @@ class TestClosureConversion(TestCaseWithDefinitions):
     def testUseMethodInMethod(self):
         source = "class C\n" + \
                  "  def f = 12\n" + \
-                 "  def g = f\n"
+                 "  def g = f"
         info = self.analyzeFromSource(source)
         cAst = info.ast.modules[0].definitions[0]
         C = info.package.findClass(name="C")
@@ -136,7 +136,9 @@ class TestClosureConversion(TestCaseWithDefinitions):
 
     def testFunctionTraitNotUsedWithoutStd(self):
         source = "def f(x: i64) =\n" + \
-                 "  def g = {x; Object();}\n" + \
+                 "  def g =\n" + \
+                 "    x\n" + \
+                 "    Object()\n" + \
                  "  {}"
         info = self.analyzeFromSource(source)
         gClosureClass = info.package.findClass(name=Name(["f", "g", CLOSURE_SUFFIX]))
@@ -145,7 +147,9 @@ class TestClosureConversion(TestCaseWithDefinitions):
     def testFunctionTraitUsedWithFewObjectParams(self):
         source = FUNCTION_SOURCE + \
                  "def f(x: i64) =\n" + \
-                 "  def g(a: Object, b: Object) = {x; Object();}\n" + \
+                 "  def g(a: Object, b: Object) =\n" + \
+                 "    x\n" + \
+                 "    Object()\n" + \
                  "  {}"
         info = self.analyzeFromSource(source, name=STD_NAME)
         gClosureClass = info.package.findClass(name=Name(["f", "g", CLOSURE_SUFFIX]))
@@ -157,7 +161,9 @@ class TestClosureConversion(TestCaseWithDefinitions):
     def testFunctionTraitNotUsedWithPrimitiveParams(self):
         source = FUNCTION_SOURCE + \
                  "def f(x: i64) =\n" + \
-                 "  def g(a: i64) = {x; Object();}\n" + \
+                 "  def g(a: i64) =\n" + \
+                 "    x\n" + \
+                 "    Object()\n" + \
                  "  {}"
         info = self.analyzeFromSource(source, name=STD_NAME)
         gClosureClass = info.package.findClass(name=Name(["f", "g", CLOSURE_SUFFIX]))
@@ -175,7 +181,9 @@ class TestClosureConversion(TestCaseWithDefinitions):
     def testFunctionTraitNotUsedWithManyParams(self):
         source = FUNCTION_SOURCE + \
                  "def f(x: i64) =\n" + \
-                 "  def g(a: Object, b: Object, c: Object) = {x; Object();}\n" + \
+                 "  def g(a: Object, b: Object, c: Object) =\n" + \
+                 "    x\n" + \
+                 "    Object()\n" + \
                  "  {}"
         info = self.analyzeFromSource(source, name=STD_NAME)
         gClosureClass = info.package.findClass(name=Name(["f", "g", CLOSURE_SUFFIX]))

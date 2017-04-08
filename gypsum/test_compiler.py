@@ -210,7 +210,9 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testVarWithTypeParameterCast(self):
         source = "class Foo[static +T]\n" + \
-                 "def f(x: Foo[String]) = { var y: Foo[Object] = x; y; }"
+                 "def f(x: Foo[String]) =\n" + \
+                 "  var y: Foo[Object] = x\n" + \
+                 "  y"
         package = self.compileFromSource(source)
         Foo = package.findClass(name="Foo")
         xType = ClassType(Foo, (getStringType(),))
@@ -270,7 +272,9 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testStoreGlobal(self):
         source = "var x: i64\n" + \
-                 "def f = { x = 12; {}; }"
+                 "def f =\n" + \
+                 "  x = 12\n" + \
+                 "  {}"
         package = self.compileFromSource(source)
         x = package.findGlobal(name="x")
         f = package.findFunction(name="f")
@@ -320,7 +324,8 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret()]]))
 
     def testConstMustBeAssigned(self):
-        source = "def f = { let x: i64; }"
+        source = "def f =\n" + \
+                 "  let x: i64"
         self.assertRaises(SemanticException, self.compileFromSource, source)
 
     def testSimpleParameter(self):
@@ -405,7 +410,9 @@ class TestCompiler(TestCaseWithDefinitions):
         self.assertRaises(SemanticException, self.compileFromSource, source)
 
     def testAssignParam(self):
-        source = "def f(x: i64) = {x = 12; {};}"
+        source = "def f(x: i64) =\n" + \
+                 "  x = 12\n" + \
+                 "  {}"
         self.assertRaises(SemanticException, self.compileFromSource, source)
 
     def testAssignVarParam(self):
@@ -439,7 +446,9 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testAssignVarWithTypeParameterCast(self):
         source = "class Foo[static +T]\n" + \
-                 "def f(x: Foo[String], var y: Foo[Object]) = { y = x; {}; }"
+                 "def f(x: Foo[String], var y: Foo[Object]) =\n" + \
+                 "  y = x\n" + \
+                 "  {}"
         package = self.compileFromSource(source)
         Foo = package.findClass(name="Foo")
         xType = ClassType(Foo, (getStringType(),))
@@ -574,7 +583,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testLoadInheritedField(self):
         source = "class Foo\n" + \
-                 "  let x = 12i64\n" + \
+                 "  let x = 12\n" + \
                  "class Bar <: Foo\n" + \
                  "def f(bar: Bar) =\n" + \
                  "  bar.x"
@@ -673,7 +682,8 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testLoadNonNullableObject(self):
         source = "class Foo\n" + \
-                 "  def this = { this.x = this; }\n" + \
+                 "  def this =\n" + \
+                 "    this.x = this\n" + \
                  "  var x: Object\n" + \
                  "def f = Foo().x"
         package = self.compileFromSource(source)
@@ -693,7 +703,7 @@ class TestCompiler(TestCaseWithDefinitions):
         source = "class Foo\n" + \
                  "  def this = {}\n" + \
                  "  var x: Object?\n" + \
-                 " def f = Foo().x"
+                 "def f = Foo().x"
         package = self.compileFromSource(source)
         Foo = package.findClass(name="Foo")
         xNameIndex = package.findName(Foo.fields[0].name)
@@ -866,7 +876,7 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]]))
 
     def testOverloadedUnaryOperatorFunction(self):
-        source = "def ~ (x: String) = \"foo\"\n" + \
+        source = "def ~(x: String) = \"foo\"\n" + \
                  "def f = ~\"bar\""
         package = self.compileFromSource(source)
         Tilde = package.findFunction(name="~")
@@ -879,7 +889,7 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]]))
 
     def testOverloadedUnaryOperatorConstructor(self):
-        source = "class ~ (x: String)\n" + \
+        source = "class ~(x: String)\n" + \
                  "def f = ~\"foo\""
         package = self.compileFromSource(source)
         Tilde = package.findClass(name="~")
@@ -895,7 +905,7 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]]))
 
     def testOverloadedBinaryOperatorFunction(self):
-        source = "def @ (x: i64, y: String) = x.to-string + \"@\" + y\n" + \
+        source = "def @(x: i64, y: String) = x.to-string + \"@\" + y\n" + \
                  "def f = 12 @ \"foo\""
         package = self.compileFromSource(source)
         At = package.findFunction(name="@")
@@ -909,7 +919,7 @@ class TestCompiler(TestCaseWithDefinitions):
                            ]]))
 
     def testOverloadedBinaryOperatorConstructor(self):
-        source = "class @ (x: i64, y: String)\n" + \
+        source = "class @(x: i64, y: String)\n" + \
                  "def f = 12 @ \"foo\""
         package = self.compileFromSource(source)
         At = package.findClass(name="@")
@@ -1371,7 +1381,9 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]]))
 
     def testMatchExprWithStringLiteral(self):
-        source = "def f = match (\"foo\") { case \"bar\" => 12; case _ => 34; }"
+        source = "def f = match (\"foo\")\n" + \
+                 "  case \"bar\" => 12\n" + \
+                 "  case _ => 34"
         package = self.compileFromSource(source)
         fooIndex = package.findString("foo")
         barIndex = package.findString("bar")
@@ -1654,7 +1666,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testMatchExprUnaryWithFunction(self):
         source = OPTION_SOURCE + \
-                 "def ~ (obj: Object) = Some[String](\"foo\")\n" + \
+                 "def ~(obj: Object) = Some[String](\"foo\")\n" + \
                  "def f(obj: Object) =\n" + \
                  "  match (obj)\n" + \
                  "    case ~s => 12\n" + \
@@ -2300,10 +2312,9 @@ class TestCompiler(TestCaseWithDefinitions):
         source = "def f =\n" + \
                  "  try\n" + \
                  "    {}\n" + \
-                 "  catch\n" + \
-                 "    case x =>\n" + \
-                 "      x = Exception()\n" + \
-                 "      {}"
+                 "  catch (x)\n" + \
+                 "    x = Exception()\n" + \
+                 "    {}"
         self.assertRaises(SemanticException, self.compileFromSource, source)
 
     def testThrow(self):
@@ -2425,7 +2436,7 @@ class TestCompiler(TestCaseWithDefinitions):
                  "  try\n" + \
                  "    100 + (200 + return 12)\n" + \
                  "  finally\n" + \
-                 "    g = 34\n"
+                 "    g = 34"
         package = self.compileFromSource(source)
         g = package.findGlobal(name="g")
         self.checkFunction(source,
@@ -2629,8 +2640,7 @@ class TestCompiler(TestCaseWithDefinitions):
                  "      {}\n" + \
                  "    finally 34\n" + \
                  "    56\n" + \
-                 "  catch\n" + \
-                 "    case _ => 78"
+                 "  catch (_) 78"
         self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                # block 0 [...]
@@ -2680,8 +2690,7 @@ class TestCompiler(TestCaseWithDefinitions):
                  "  try\n" + \
                  "    try\n" + \
                  "      return 1\n" + \
-                 "    catch\n" + \
-                 "      case _ => 2\n" + \
+                 "    catch (_) 2\n" + \
                  "  finally\n" + \
                  "    3"
         self.checkFunction(source,
@@ -2751,8 +2760,7 @@ class TestCompiler(TestCaseWithDefinitions):
                  "        return 1\n" + \
                  "      finally\n" + \
                  "        3\n" + \
-                 "    catch\n" + \
-                 "      case _ => return 4\n" + \
+                 "    catch (_) return 4\n" + \
                  "  finally\n" + \
                  "    5"
         self.checkFunction(source,
@@ -3321,7 +3329,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testNullaryCall(self):
         source = "def f: i64 = 12\n" + \
-                 "def g: i64 = f\n"
+                 "def g: i64 = f"
         package = self.compileFromSource(source)
         f = package.findFunction(name="f")
         g = package.findFunction(name="g")
@@ -3333,7 +3341,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testFunctionCall(self):
         source = "def f(x: i64, y: i64): i64 = x\n" + \
-                 "def g: i64 = f(12, 34)\n"
+                 "def g: i64 = f(12, 34)"
         package = self.compileFromSource(source)
         f = package.findFunction(name="f")
         g = package.findFunction(name="g")
@@ -3426,8 +3434,7 @@ class TestCompiler(TestCaseWithDefinitions):
         loader = FakePackageLoader([fooPackage])
 
         source = "def f =\n" + \
-                 "  try {} catch\n" + \
-                 "    case x: foo.Bar => {}"
+                 "  try {} catch (x: foo.Bar) {}"
         package = self.compileFromSource(source, packageLoader=loader)
 
         barType = ClassType(clas)
@@ -3568,7 +3575,7 @@ class TestCompiler(TestCaseWithDefinitions):
     def testNullaryCtor(self):
         source = "class Foo\n" + \
                  "  def this = {}\n" + \
-                 "def f = Foo()\n"
+                 "def f = Foo()"
         package = self.makePackage(source)
         clas = package.findClass(name="Foo")
         objType = ClassType(clas, ())
@@ -3630,7 +3637,7 @@ class TestCompiler(TestCaseWithDefinitions):
     def testCtorWithArgs(self):
         source = "class Foo\n" + \
                  "  def this(x: i64, y: i64) = {}\n" + \
-                 "def f = Foo(1, 2)\n"
+                 "def f = Foo(1, 2)"
         package = self.compileFromSource(source)
         clas = package.classes[0]
         objType = ClassType(clas, ())
@@ -4351,7 +4358,9 @@ class TestCompiler(TestCaseWithDefinitions):
     def testAllocateLocalArrayForEffect(self):
         source = "final class Foo[static T](x: i64)\n" + \
                  "  arrayelements T, get, set, length\n" + \
-                 "def f = { new(3i32) Foo[String](12); {}; }"
+                 "def f =\n" + \
+                 "  new(3i32) Foo[String](12)\n" + \
+                 "  {}"
         package = self.compileFromSource(source)
         Foo = package.findClass(name="Foo")
         ctor = Foo.constructors[0]
@@ -4411,7 +4420,7 @@ class TestCompiler(TestCaseWithDefinitions):
                  "    if (false)\n" + \
                  "      3\n" + \
                  "    else\n" + \
-                 "      4\n"
+                 "      4"
         self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                true(),
