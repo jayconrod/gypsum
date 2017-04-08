@@ -1,5 +1,10 @@
 from gypsum import ast
+from gypsum import errors
 from gypsum import utils
+
+class FormatException(errors.CompileException):
+    kind = "format"
+
 
 class Format(object):
     def __init__(self,
@@ -78,7 +83,7 @@ class Formatter(ast.NodeVisitor):
             if node.superclass:
                 self.visit(node.superclass)
                 if node.superArgs:
-                    self._writeTypeArguments(node.superArgs)
+                    self._writeArguments(node.superArgs)
                 if node.supertraits:
                     self._write(", ")
             if node.supertraits:
@@ -179,7 +184,7 @@ class Formatter(ast.NodeVisitor):
 
     def visitUnaryPattern(self, node):
         self._write(node.operator)
-        sefl.visit(node.pattern)
+        self.visit(node.pattern)
 
     def visitBinaryPattern(self, node):
         self.visit(node.left)
@@ -254,6 +259,12 @@ class Formatter(ast.NodeVisitor):
         self._write("super")
 
     def visitBlockExpression(self, node):
+        if (len(node.statements) == 1 and
+            isinstance(node.statements[0], ast.BlockExpression) and
+            len(node.statements[0].statements) != 0):
+            raise FormatException(node.location,
+                                  "block expression only contains block expression")
+
         if len(node.statements) == 0:
             self._write("{}")
         else:
@@ -415,7 +426,7 @@ class Formatter(ast.NodeVisitor):
         self._writeList(args, "(", ", ", ")", writeEmpty=True)
 
     def _writeTypeFlags(self, flags):
-        self._writeList(flags, "", "", "")
+        utils.each(self._write, flags)
 
     def _writePrefix(self, prefix):
         if not prefix:
