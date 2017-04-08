@@ -53,13 +53,16 @@ class TestUseAnalysis(TestCaseWithDefinitions):
                           info.getScope(GLOBAL_SCOPE_ID).lookupFromSelf, "y", NoLoc)
 
     def testUseVarBeforeDefinition(self):
-        source = "def f = { var x = y; var y = 12; }"
+        source = "def f =\n" + \
+                 "  var x = y\n" + \
+                 "  var y = 12"
         info = self.analyzeFromSource(source)
         scope = info.getScope(info.ast.modules[0].definitions[0])
         self.assertRaises(ScopeException, scope.lookupFromSelf, "y", NoLoc)
 
     def testUseFunctionBeforeDefinition(self):
-        source = "def f = g; def g = 12;"
+        source = "def f = g\n" + \
+                 "def g = 12"
         info = self.analyzeFromSource(source)
         gDefnInfo = info.getDefnInfo(info.ast.modules[0].definitions[1])
         gNameInfo = info.getScope(info.ast.modules[0].definitions[0]).lookupFromSelf("g", NoLoc)
@@ -76,24 +79,29 @@ class TestUseAnalysis(TestCaseWithDefinitions):
         self.assertIs(iDefnInfo, iNameInfo.getDefnInfo())
 
     def testUseClassBeforeDefinition(self):
-        source = "def f = C; class C;"
+        source = "def f = C\n" + \
+                 "class C"
         info = self.analyzeFromSource(source)
         cDefnInfo = info.getDefnInfo(info.ast.modules[0].definitions[1])
         cNameInfo = info.getScope(GLOBAL_SCOPE_ID).lookupFromSelf("C", NoLoc)
         self.assertIs(cDefnInfo, cNameInfo.getDefnInfo())
 
     def testUseInLocalScope(self):
-        source = "def f(x: i64) = { { x; }; };"
+        source = "def f(x: i64) =\n" + \
+                 "  if (true)\n" + \
+                 "    x"
         info = self.analyzeFromSource(source)
-        fScope = info.getScope(info.ast.modules[0].definitions[0])
+        fAst = info.ast.modules[0].definitions[0]
+        fScope = info.getScope(fAst)
         fScope.define("x")
-        xDefnInfo = info.getDefnInfo(info.ast.modules[0].definitions[0].parameters[0].pattern)
-        localScope = info.getScope(info.ast.modules[0].definitions[0].body.statements[0])
+        xDefnInfo = info.getDefnInfo(fAst.parameters[0].pattern)
+        localScope = info.getScope(fAst.body.statements[0].trueExpr)
         xNameInfo = localScope.lookupFromSelf("x", NoLoc)
         self.assertIs(xDefnInfo, xNameInfo.getDefnInfo())
 
     def testUseThisInInitializer(self):
-        source = "class Foo { var x = this; };"
+        source = "class Foo\n" + \
+                 "  var x = this"
         info = self.analyzeFromSource(source)
         classScope = info.getScope(info.ast.modules[0].definitions[0])
         thisNameInfo = classScope.lookupFromSelf("this", NoLoc)
@@ -119,7 +127,7 @@ class TestUseAnalysis(TestCaseWithDefinitions):
     def testUsePrivateSibling(self):
         source = "class C\n" + \
                  "  private def f = {}\n" + \
-                 "  def g = f\n"
+                 "  def g = f"
         info = self.analyzeFromSourceWithTypes(source)
         use = info.getUseInfo(info.ast.modules[0].definitions[0].members[1].body)
         self.assertEquals(info.getScope(info.ast.modules[0].definitions[0].members[1]).scopeId,
@@ -156,7 +164,7 @@ class TestUseAnalysis(TestCaseWithDefinitions):
     def testUseProtectedSibling(self):
         source = "class C\n" + \
                  "  protected def f = {}\n" + \
-                 "  def g = f\n"
+                 "  def g = f"
         info = self.analyzeFromSourceWithTypes(source)
         useScopeAst = info.ast.modules[0].definitions[0].members[1]
         use = info.getUseInfo(useScopeAst.body)
@@ -167,7 +175,7 @@ class TestUseAnalysis(TestCaseWithDefinitions):
         source = "class A\n" + \
                  "  protected def f = {}\n" + \
                  "class B <: A\n" + \
-                 "  def g = f\n"
+                 "  def g = f"
         info = self.analyzeFromSourceWithTypes(source)
         useScopeAst = info.ast.modules[0].definitions[1].members[0]
         use = info.getUseInfo(useScopeAst.body)

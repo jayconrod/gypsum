@@ -538,7 +538,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
                  "class B[static T] <: A[T]\n" + \
                  "  def this(value: T) = super(value)\n" + \
                  "class C[static U] <: B[U]\n" + \
-                 "  def this(value: U) = super(value)\n"
+                 "  def this(value: U) = super(value)"
         info = self.analyzeFromSource(source)
         scope = info.getScope(info.ast.modules[0].definitions[0])
         self.assertEquals(1, len(scope.getDefinition(CONSTRUCTOR_SUFFIX).overloads))

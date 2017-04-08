@@ -158,7 +158,8 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                           info.getDefnInfo(astDefn))
 
     def testDefineFunctionVar(self):
-        source = "def f = { var x = 12; }"
+        source = "def f =\n" + \
+                 "  var x = 12"
         info = self.analyzeFromSource(source)
         ast = info.ast
         astDefn = ast.modules[0].definitions[0].body.statements[0].pattern
@@ -167,7 +168,8 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                           info.getDefnInfo(astDefn))
 
     def testDefineFunctionConst(self):
-        source = "def f = { let x = 12; }"
+        source = "def f =\n" + \
+                 "  let x = 12"
         info = self.analyzeFromSource(source)
         ast = info.ast
         astDefn = ast.modules[0].definitions[0].body.statements[0].pattern
@@ -177,7 +179,8 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                           info.getDefnInfo(astDefn))
 
     def testDefineFunctionFunction(self):
-        source = "def f = { def g = 12; };"
+        source = "def f =\n" + \
+                 "  def g = 12"
         info = self.analyzeFromSource(source)
         ast = info.ast
         astDefn = ast.modules[0].definitions[0].body.statements[0]
@@ -186,7 +189,8 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.assertEquals(DefnInfo(expected, scopeId, False), info.getDefnInfo(astDefn))
 
     def testDefineFunctionClass(self):
-        source = "def f = { class C {}; };"
+        source = "def f =\n" + \
+                 "  class C"
         info = self.analyzeFromSource(source)
         ast = info.ast
         astDefn = ast.modules[0].definitions[0].body.statements[0]
@@ -196,7 +200,8 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.assertEquals(scopeId, defnInfo.scopeId)
 
     def testDefineClassVar(self):
-        source = "class C { var x: i32; };"
+        source = "class C\n" + \
+                 "  var x: i32"
         info = self.analyzeFromSource(source)
         ast = info.ast
         astDefn = ast.modules[0].definitions[0].members[0].pattern
@@ -205,7 +210,8 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                           info.getDefnInfo(astDefn))
 
     def testDefineClassConst(self):
-        source = "class C { let x: i32; };"
+        source = "class C\n" + \
+                 "  let x: i32"
         info = self.analyzeFromSource(source)
         ast = info.ast
         astDefn = ast.modules[0].definitions[0].members[0].pattern
@@ -215,7 +221,10 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                           info.getDefnInfo(astDefn))
 
     def testDefineClassVarWithLocals(self):
-        source = "class C() { var x = { var y = 12; y; }; };"
+        source = "class C()\n" + \
+                 "  var x =\n" + \
+                 "    var y = 12\n" + \
+                 "    y"
         info = self.analyzeFromSource(source)
         irInitializer = info.package.findClass(name="C").initializer
         self.assertEquals([self.makeVariable(Name(["C", CLASS_INIT_SUFFIX, RECEIVER_SUFFIX]),
@@ -224,7 +233,8 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                           irInitializer.variables)
 
     def testDefineClassFunction(self):
-        source = "class C { def f = 12; };"
+        source = "class C\n" + \
+                 "  def f = 12"
         info = self.analyzeFromSource(source)
         ast = info.ast
         astDefn = ast.modules[0].definitions[0].members[0]
@@ -241,7 +251,8 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.assertEquals(expectedClosureInfo, info.getClosureInfo(scopeId))
 
     def testDefineClassStaticFunction(self):
-        source = "class C { static def f = 12; };"
+        source = "class C\n" + \
+                 "  static def f = 12"
         info = self.analyzeFromSource(source)
         astDefn = info.ast.modules[0].definitions[0].members[0]
         scopeId = info.getScope(info.ast.modules[0].definitions[0]).scopeId
@@ -251,7 +262,8 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
 
     @unittest.skip("inner classes not supported yet")
     def testDefineClassClass(self):
-        source = "class C { class D; };"
+        source = "class C\n" + \
+                 "  class D"
         info = self.analyzeFromSource(source)
         ast = info.ast
         astDefn = ast.modules[0].definitions[0].members[0]
@@ -331,7 +343,9 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                       info.getScope(defnInfo.scopeId))
 
     def testLambdaExpr(self):
-        source = "let f = lambda (x) { let y = x; y; }"
+        source = "let f = lambda (x)\n" + \
+                 "  let y = x\n" + \
+                 "  y"
         info = self.analyzeFromSource(source)
         astLambda = info.ast.modules[0].definitions[0].expression
         irDefn = info.getDefnInfo(astLambda).irDefn
@@ -674,7 +688,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
 
     def testTypeParameterIndices(self):
         source = "class Foo[static A]\n" + \
-                 "  def m[static B](x: forsome [C] forsome [D] D) = {}\n"
+                 "  def m[static B](x: forsome [C] forsome [D] D) = {}"
         info = self.analyzeFromSource(source)
         A = info.package.findTypeParameter(name="Foo.A")
         B = info.package.findTypeParameter(name="Foo.m.B")
