@@ -17,7 +17,16 @@ from flags import ABSTRACT, STATIC, LET, ARRAY, NATIVE
 from errors import SemanticException
 from builtins import getTypeClass, getExceptionClass, getRootClass, getStringClass, getBuiltinFunctionById, getBuiltinClassById
 import type_analysis
-from utils import Counter, COMPILE_FOR_EFFECT, COMPILE_FOR_VALUE, COMPILE_FOR_UNINITIALIZED, COMPILE_FOR_MATCH, each
+from utils import (
+    COMPILE_FOR_EFFECT,
+    COMPILE_FOR_MATCH,
+    COMPILE_FOR_UNINITIALIZED,
+    COMPILE_FOR_VALUE,
+    Counter,
+    each,
+    iterOpt,
+    listOpt,
+)
 from name import (
     PACKAGE_INIT_NAME,
     RECEIVER_SUFFIX,
@@ -202,14 +211,14 @@ class CompileVisitor(ast.NodeVisitor):
             if self.astDefn.body is None:
                 assert ABSTRACT in self.function.flags or NATIVE in self.function.flags
                 return None, None
-            parameters = self.astDefn.parameters
+            parameters = listOpt(self.astDefn.parameters)
             if isinstance(self.astDefn.body, ast.BlockExpression):
                 statements = self.astDefn.body.statements
             else:
                 statements = [self.astDefn.body]
         elif isinstance(self.astDefn, ast.ClassDefinition):
             parameters = []
-            statements = self.astDefn.members
+            statements = listOpt(self.astDefn.members)
         else:
             assert isinstance(self.astDefn, ast.PrimaryConstructorDefinition)
             parameters = self.astDefn.parameters
@@ -519,6 +528,9 @@ class CompileVisitor(ast.NodeVisitor):
         subPatterns = [pat.left, pat.right]
         self.buildDestructure(irDefn, callInfo.receiverType, False, callInfo.typeArguments,
                               subPatterns, failBlock, pat.location)
+
+    def visitGroupPattern(self, pat, mode, ty=None, failBlock=None):
+        self.visit(pat.pattern, mode, ty, failBlock)
 
     def visitLiteralExpression(self, expr, mode):
         self.buildLiteral(expr.literal)
@@ -1253,7 +1265,7 @@ class CompileVisitor(ast.NodeVisitor):
 
     def unpackParameters(self, parameters):
         implicitParameterCount = 1 if self.function.isMethod() else 0
-        for index, param in enumerate(parameters):
+        for index, param in enumerate(iterOpt(parameters)):
             self.unpackParameter(param, index + implicitParameterCount)
 
     def unpackParameter(self, param, index):
@@ -1396,6 +1408,11 @@ class CompileVisitor(ast.NodeVisitor):
             self.stg(globl)
 
     def loadContext(self, scopeId):
+        if isinstance(self.astDefn, ast.PrimaryConstructorDefinition) and \
+           scopeId is self.getScopeId():
+            self.loadThis()
+            return
+
         closureInfo = self.info.getClosureInfo(self.getScopeId())
         loc = closureInfo.irClosureContexts[scopeId]
         if isinstance(loc, Variable):

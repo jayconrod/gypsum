@@ -34,6 +34,14 @@ def oneOrNone(iterable):
     return lst[0] if len(lst) == 1 else None
 
 
+def iterOpt(opt):
+    return iter(opt) if opt is not None else iter(())
+
+
+def listOpt(opt):
+    return opt if opt is not None else []
+
+
 def align(n, alignment):
     return (n + alignment - 1) & ~(alignment - 1)
 
@@ -206,4 +214,4 @@ COMPILE_FOR_UNINITIALIZED = "compile-for-uninitialized"
 
 __all__ = ["decodeString", "each", "encodeString", "tryDecodeString", "openCommonFile",
            "Counter", "hashList", "COMPILE_FOR_VALUE", "COMPILE_FOR_EFFECT",
-           "COMPILE_FOR_MATCH", "COMPILE_FOR_UNINITIALIZED"]
+           "COMPILE_FOR_MATCH", "COMPILE_FOR_UNINITIALIZED", "iterOpt", "listOpt"]

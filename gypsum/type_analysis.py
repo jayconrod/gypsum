@@ -18,6 +18,7 @@ from utils import (
     COMPILE_FOR_VALUE,
     each,
     flatMap,
+    iterOpt,
 )
 from compile_info import USE_AS_VALUE, USE_AS_TYPE, USE_AS_PROPERTY, USE_AS_CONSTRUCTOR, NORMAL_MODE, STD_MODE, NOSTD_MODE, CallInfo, ScopePrefixInfo
 from flags import ARRAY, COVARIANT, CONTRAVARIANT, CONSTRUCTOR, INITIALIZER, METHOD, PROTECTED, PUBLIC, STATIC
@@ -102,6 +103,8 @@ def patternMustMatch(pat, ty, info):
     elif isinstance(pat, ast.BlankPattern):
         patTy = None if pat.ty is None else info.getType(pat.ty)
         return patTy is None or ty.isSubtypeOf(patTy)
+    elif isinstance(pat, ast.GroupPattern):
+        return patternMustMatch(pat.pattern, ty, info)
     else:
         return False
 
@@ -404,8 +407,8 @@ class TypeVisitorBase(ast.NodeVisitor):
         raise TypeException(node.location, "blank type can only be used as a type argument")
 
     def visitExistentialType(self, node):
-        each(self.visit, node.typeParameters)
-        variables = tuple(self.info.getDefnInfo(v).irDefn for v in node.typeParameters)
+        each(self.visit, iterOpt(node.typeParameters))
+        variables = tuple(self.info.getDefnInfo(v).irDefn for v in iterOpt(node.typeParameters))
         innerType = self.visit(node.type)
         return ir_t.ExistentialType(variables, innerType)
 
@@ -620,12 +623,12 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         self.maybeRename(irFunction)
         if irFunction.isMethod():
             self.setMethodReceiverType(irFunction)
-        for param in node.typeParameters:
+        for param in iterOpt(node.typeParameters):
             self.visit(param)
         irFunction.parameterTypes = []
         if irFunction.isMethod():
             irFunction.parameterTypes.append(self.getReceiverType())
-        irFunction.parameterTypes.extend(map(self.visit, node.parameters))
+        irFunction.parameterTypes.extend(map(self.visit, iterOpt(node.parameters)))
 
         with self.renameFunction(irFunction):
             each(self.maybeRename, irFunction.typeParameters)
@@ -637,13 +640,14 @@ class DeclarationTypeVisitor(TypeVisitorBase):
     def visitPrimaryConstructorDefinition(self, node):
         irFunction = self.info.getDefnInfo(node).irDefn
         self.maybeRename(irFunction)
-        irFunction.parameterTypes = [self.getReceiverType()] + map(self.visit, node.parameters)
+        irFunction.parameterTypes = ([self.getReceiverType()] +
+                                     map(self.visit, iterOpt(node.parameters)))
         self.setMethodReceiverType(irFunction)
 
     def visitClassDefinition(self, node):
         irClass = self.info.getDefnInfo(node).irDefn
         self.maybeRename(irClass)
-        for param in node.typeParameters:
+        for param in iterOpt(node.typeParameters):
             self.visit(param)
         if node.constructor is not None:
             self.visit(node.constructor)
@@ -659,7 +663,7 @@ class DeclarationTypeVisitor(TypeVisitorBase):
             raise TypeException(node.location,
                                 "%s: cannot derive from array class and declare new fields" %
                                 node.name)
-        for member in node.members:
+        for member in iterOpt(node.members):
             self.visit(member)
         if not node.hasConstructors():
             defaultCtor = irClass.constructors[0]
@@ -673,13 +677,13 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         irTrait = self.info.getDefnInfo(node).irDefn
         self.maybeRename(irTrait)
         # TODO: when traits have fields, check that superclass is not array class
-        for param in node.typeParameters:
+        for param in iterOpt(node.typeParameters):
             self.visit(param)
         if node.supertypes is None:
             irTrait.supertypes = [ir_t.getRootClassType()]
         else:
             irTrait.supertypes = map(self.visit, node.supertypes)
-        for member in node.members:
+        for member in iterOpt(node.members):
             self.visit(member)
 
     def visitArrayElementsStatement(self, node):
@@ -790,10 +794,13 @@ class DeclarationTypeVisitor(TypeVisitorBase):
         if isParam:
             raise TypeException(node.location, "binary pattern can't be used in a parameter")
 
+    def visitGroupPattern(self, node, isParam=False):
+        return self.visit(node.pattern, isParam)
+
     def visitLambdaExpression(self, node):
         irFunction = self.info.getDefnInfo(node).irDefn
         self.maybeRename(irFunction)
-        irFunction.parameterTypes = map(self.visit, node.parameters)
+        irFunction.parameterTypes = map(self.visit, iterOpt(node.parameters))
         self.visit(node.body)
 
     def visitDefault(self, node):
@@ -912,15 +919,15 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         if self.isExternallyVisible(irDefn):
             self.checkPublicType(irDefn.returnType, node.name, node.location)
             each(lambda p: self.checkPublicTypeParameter(p, node.name, node.location),
-                 irDefn.typeParameters)
+                 iterOpt(irDefn.typeParameters))
             each(lambda ty: self.checkPublicType(ty, node.name, node.location),
-                 irDefn.parameterTypes)
+                 iterOpt(irDefn.parameterTypes))
 
     def visitClassDefinition(self, node):
         irClass = self.info.getDefnInfo(node).irDefn
         thisType = ir_t.ClassType.forReceiver(irClass)
 
-        for typeParam in node.typeParameters:
+        for typeParam in iterOpt(node.typeParameters):
             self.visit(typeParam)
 
         if node.constructor is not None:
@@ -959,7 +966,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         irInitializer.variables[0].type = thisType
         irInitializer.returnType = ir_t.UnitType
 
-        for member in node.members:
+        for member in iterOpt(node.members):
             if isinstance(member, ast.VariableDefinition):
                 variance = ir_t.INVARIANT if member.keyword == "var" else COVARIANT
                 with VarianceScope(self, variance, irClass):
@@ -969,7 +976,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
         if self.isExternallyVisible(irClass):
             each(lambda p: self.checkPublicTypeParameter(p, node.name, node.location),
-                 irClass.typeParameters)
+                 iterOpt(irClass.typeParameters))
             if node.constructor is not None:
                 ctor = self.info.getDefnInfo(node.constructor).irDefn
                 each(lambda arg: self.checkPublicType(arg, node.name, node.location),
@@ -981,13 +988,13 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         irTrait = self.info.getDefnInfo(node).irDefn
         thisType = ir_t.ClassType.forReceiver(irTrait)
 
-        each(self.visit, node.typeParameters)
-        each(self.visit, node.members)
+        each(self.visit, iterOpt(node.typeParameters))
+        each(self.visit, iterOpt(node.members))
 
         if self.isExternallyVisible(irTrait):
-            for tp in irTrait.typeParameters:
+            for tp in iterOpt(irTrait.typeParameters):
                 self.checkPublicTypeParameter(tp, node.name, node.location)
-            for sty in irTrait.supertypes:
+            for sty in iterOpt(irTrait.supertypes):
                 self.checkPublicType(sty, node.name, node.location)
 
     def visitPrimaryConstructorDefinition(self, node):
@@ -1118,6 +1125,9 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         return self.handleDestructure(nameInfo, receiverType, False, None,
                                       exprTy, [node.left, node.right], mode,
                                       node.matcherId, node.id, node.location)
+
+    def visitGroupPattern(self, node, exprTy, mode):
+        return self.visit(node.pattern, exprTy, mode)
 
     def visitLiteralExpression(self, node):
         ty = self.visit(node.literal)
@@ -1340,7 +1350,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         return ty
 
     def visitLambdaExpression(self, node):
-        each(self.visit, node.parameters)
+        each(self.visit, iterOpt(node.parameters))
         irFunction = self.info.getDefnInfo(node).irDefn
         irFunction.returnType = self.visit(node.body)
         self.info.getScope(node).makeClosure()
@@ -1471,7 +1481,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             else:
                 vscope = VarianceScope.clear(self)
             with vscope:
-                for param in node.parameters:
+                for param in iterOpt(node.parameters):
                     self.visit(param)
 
             # Process return type, if specified.

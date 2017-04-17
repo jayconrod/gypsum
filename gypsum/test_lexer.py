@@ -34,51 +34,68 @@ class TestLexer(unittest.TestCase):
 
     def testBasic(self):
         text = "var x"
-        self.checkTags([RESERVED, SPACE, SYMBOL], text)
+        self.checkTags([VAR, SPACE, SYMBOL], text)
         self.checkText(["var", " ", "x"], text)
 
     def testOperators(self):
         for op in ["|", "&&", "<=", "::", "=="]:
             self.checkTags([OPERATOR], op)
 
-    def testReservedOperators(self):
-        for op in ["=", "=>", "<:", ">:", ":"]:
-            self.checkTags([RESERVED], op)
+    def testPunctuation(self):
+        cases = [
+            (LBRACK, "["),
+            (RBRACK, "]"),
+            (LPAREN, "("),
+            (RPAREN, ")"),
+            (LBRACE, "{"),
+            (RBRACE, "}"),
+            (SUBTYPE, "<:"),
+            (SUPERTYPE, ">:"),
+            (BIG_ARROW, "=>"),
+            (SMALL_ARROW, "->"),
+            (UNDERSCORE, "_"),
+            (DOT, "."),
+            (COMMA, ","),
+            (COLON, ":"),
+            (SEMI, ";"),
+            (EQ, "="),
+        ]
+        for tag, text in cases:
+            self.checkTag(tag, text)
 
     def testSymbols(self):
         for sym in ["a", "a0_", "_a", "__", "_0", "A_0", "A-0"]:
             self.checkTags([SYMBOL], sym)
-        self.checkTags([RESERVED], "_")
 
     def testQuotedSymbol(self):
-        self.checkTags([SYMBOL], r"`fo\`o`")
+        self.checkTag(SYMBOL, r"`fo\`o`")
 
     def testIntegers(self):
         for i in ["0", "1", "123", "-1", "-123", "-0"]:
-            self.checkTags([INTEGER], i)
+            self.checkTag(INTEGER, i)
 
     def testSizedIntegers(self):
         for i in ["0i8", "12i16", "123i64", "-1i32", "-123i8", "-0i32"]:
-            self.checkTags([INTEGER], i)
+            self.checkTag(INTEGER, i)
 
     def testHexIntegers(self):
         for i in ["0x0", "0xabc", "0xABC", "0XAb0", "-0xAb1", "0xAb1i32", "-0xAb1i32"]:
-            self.checkTags([INTEGER], i)
+            self.checkTag(INTEGER, i)
 
     def testBinaryIntegers(self):
         for i in ["0b0", "0b1000101", "-0b1", "0b1i32", "-0b1i16"]:
-            self.checkTags([INTEGER], i)
+            self.checkTag(INTEGER, i)
 
     def testFloats(self):
         for i in ["1.", ".1", "123.45", "-1.", "-.1", "+.1",
                   "1.2e3", "-1.2E34", "9e8", "-9e+8", "-9e-8", "1.2f32", "-1e2f64", "-1f64"]:
-            self.checkTags([FLOAT], i)
+            self.checkTag(FLOAT, i)
 
     def testStrings(self):
-        self.checkTags([STRING], '""')
-        self.checkTags([STRING], '"foo"')
+        self.checkTag(STRING, '""')
+        self.checkTag(STRING, '"foo"')
         self.checkTags([STRING, INTEGER, STRING], '"foo"123"bar"')
-        self.checkTags([STRING], r'"foo\"123\"bar"')
+        self.checkTag(STRING, r'"foo\"123\"bar"')
 
     def testNewline(self):
         text = "a \n b"

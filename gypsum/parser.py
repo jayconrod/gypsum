@@ -3,638 +3,793 @@
 # This file is part of Gypsum. Use of this source code is governed by
 # the GPL license that can be found in the LICENSE.txt file.
 
-
 import re
 
 import ast
-import combinators as ct
 from errors import ParseException
-from tok import *
+from location import NoLoc
+from tok import (
+    ARRAYELEMENTS,
+    AS,
+    ATTRIB,
+    BIG_ARROW,
+    BOOLEAN,
+    BREAK,
+    CASE,
+    CATCH,
+    CLASS,
+    COLON,
+    COMMA,
+    COMMENT,
+    CONTINUE,
+    DEF,
+    DOT,
+    ELSE,
+    EOF,
+    EQ,
+    F32,
+    F64,
+    FALSE,
+    FINALLY,
+    FLOAT,
+    FORSOME,
+    I16,
+    I32,
+    I64,
+    I8,
+    IF,
+    IMPLICIT_LBRACE,
+    IMPLICIT_RBRACE,
+    IMPLICIT_SEMI,
+    IMPORT,
+    INTEGER,
+    LAMBDA,
+    LBRACE,
+    LBRACK,
+    LET,
+    LPAREN,
+    MATCH,
+    NEW,
+    NEWLINE,
+    NULL,
+    OPERATOR,
+    RBRACE,
+    RBRACK,
+    RETURN,
+    RPAREN,
+    SEMI,
+    SMALL_ARROW,
+    SPACE,
+    STRING,
+    SUBTYPE,
+    SUPER,
+    SUPERTYPE,
+    SYMBOL,
+    THIS,
+    THROW,
+    TRAIT,
+    TRUE,
+    TRY,
+    Token,
+    UNDERSCORE,
+    UNIT,
+    VAR,
+    WHILE,
+)
 from utils import tryDecodeString
 
 
-# Main function
-_memoizedModule = None
+def parse(fileName, tokens):
+    parser = Parser(fileName, tokens)
+    module = parser.module()
+    if not parser.atEnd():
+        raise ParseException(parser.location, "garbage at end of input")
+    ast.addNodeIds(module)
+    return module
 
-def parse(filename, tokens):
-    global _memoizedModule
-    reader = ct.Reader(filename, tokens)
-    if _memoizedModule is None:
-        _memoizedModule = module()
-    result = _memoizedModule(reader)
-    if not result:
-        raise ParseException(result.location, result.message)
-    else:
-        ast.addNodeIds(result.value)
-        return result.value
+class Parser(object):
+    def __init__(self, fileName, tokens):
+        self.fileName = fileName
+        self.tokens = tokens
+        self.pos = 0
+        self.location = None
 
+        eofLoc = self.tokens[-1].location if len(self.tokens) > 0 else NoLoc
+        self.tokens.append(Token(EOF, EOF, eofLoc))
 
-# Top level
-def module():
-    def process(parsed, loc):
-        return ast.Module(parsed, loc)
-    return ct.Phrase(ct.Rep(definition() | importStmt())) ^ process
+    BINOP_LEVELS = [
+        "",  # other
+        "*/%",
+        "+-",
+        ":",
+        "=!",
+        "<>",
+        "&",
+        "^",
+        "|",
+    ]
+    BINOP_OTHER_LEVEL = 0
+    BINOP_LOGIC_AND_LEVEL = len(BINOP_LEVELS) + 1
+    BINOP_LOGIC_OR_LEVEL = BINOP_LOGIC_AND_LEVEL + 1
+    BINOP_ASSIGN_LEVEL = BINOP_LOGIC_OR_LEVEL + 1
+    LAST_BINOP_LEVEL = BINOP_ASSIGN_LEVEL
 
+    LEFT_ASSOC = "left associative"
+    RIGHT_ASSOC = "right associative"
 
-# Definitions
-def definition():
-    return varDefn() | functionDefn() | classDefn() | traitDefn()
+    EXPR_START_TOKENS = (
+        LBRACK,
+        LPAREN,
+        LBRACE,
+        IF,
+        ELSE,
+        WHILE,
+        BREAK,
+        CONTINUE,
+        MATCH,
+        THROW,
+        TRY,
+        NEW,
+        LAMBDA,
+        RETURN,
+        TRUE,
+        FALSE,
+        THIS,
+        SUPER,
+        NULL,
+        SYMBOL,
+        OPERATOR,
+        INTEGER,
+        FLOAT,
+        STRING
+    )
 
+    # Top level
+    def module(self):
+        l = self._peek().location
+        defns = self._parseList(self.defnOrImport, "definition")
+        return ast.Module(defns, self._location(l))
 
-def attribs():
-    return ct.Rep(attrib())
-
-
-def attrib():
-    return ct.Tag(ATTRIB) ^ (lambda name, loc: ast.Attribute(name, loc))
-
-
-def varDefn():
-    def process(parsed, loc):
-        [ats, kw, pat, expr, _] = ct.untangle(parsed)
-        return ast.VariableDefinition(ats, kw, pat, expr, loc)
-    # `maybeBinopExpr` is used instead of `expression` since we need to exclude assignments
-    # and tuples. Basically, use the same rules as function arguments.
-    exprOpt = ct.Opt(keyword("=") + maybeTupleExpr() ^ (lambda p, _: p[1]))
-    kw = keyword("var") | keyword("let")
-    return attribs() + kw + ct.Commit(pattern() + exprOpt + semi) ^ process
-
-
-def functionDefn():
-    def process(parsed, loc):
-        [ats, _, name, tps, ps, rty, body, _] = ct.untangle(parsed)
-        return ast.FunctionDefinition(ats, name, tps, ps, rty, body, loc)
-    functionName = keyword("this") | identifier
-    bodyOpt = ct.Opt(keyword("=") + expression() ^ (lambda p, _: p[1]))
-    return attribs() + keyword("def") + ct.Commit(functionName + typeParameters() + parameters() +
-        tyOpt() + bodyOpt + semi) ^ process
-
-
-def classDefn():
-    def processArgs(parsed, _):
-        return ct.untangle(parsed)[1] if parsed is not None else None
-    superclassArgs = ct.Opt(keyword("(") + ct.RepSep(maybeBinopExpr(), keyword(",")) + keyword(")")) ^ processArgs
-    def processSupertraits(parsed, _):
-        return ct.untangle(parsed)[1] if parsed is not None else None
-    supertraits = ct.Opt(keyword(",") + ct.Rep1Sep(ty(), keyword(","))) ^ processSupertraits
-    def processSupertypes(parsed, _):
-        return tuple(ct.untangle(parsed)[1:]) if parsed is not None else (None, None, None)
-    supertypes = ct.Opt(keyword("<:") + ty() + superclassArgs + supertraits) ^ processSupertypes
-
-    def process(parsed, loc):
-        [ats, _, name, tps, ctor, scl, sargs, strs, ms, _] = ct.untangle(parsed)
-        return ast.ClassDefinition(ats, name, tps, ctor, scl, sargs, strs, ms, loc)
-    return attribs() + keyword("class") + ct.Commit(identifier + typeParameters() +
-           constructor() + supertypes + classBody() + semi) ^ process
-
-
-def constructor():
-    def process(parsed, loc):
-        [ats, _, params, _] = ct.untangle(parsed)
-        return ast.PrimaryConstructorDefinition(ats, params, loc)
-    return ct.Opt(attribs() + keyword("(") + \
-               ct.Commit(ct.RepSep(parameter(), keyword(",")) + keyword(")")) ^ process)
-
-
-def superclass():
-    def processArgs(parsed, loc):
-        return ct.untangle(parsed)[1] if parsed is not None else None
-    args = ct.Opt(keyword("(") + ct.RepSep(maybeBinopExpr(), keyword(",")) + keyword(")")) ^ processArgs
-    def process(parsed, loc):
-        if parsed is None:
-            return None, None
+    def defnOrImport(self):
+        if self._peekTag() is IMPORT:
+            return self.importStmt()
         else:
-            [_, supertype, args] = ct.untangle(parsed)
-            return supertype, args
-    return ct.Opt(keyword("<:") + ty() + args) ^ process
+            return self.defn()
 
+    def importStmt(self):
+        l = self._nextTag(IMPORT).location
+        prefix = self.scopePrefix()
+        if self._peekTag() is DOT:
+            self._next()
+            self._nextTag(UNDERSCORE)
+            self.semi()
+            return ast.ImportStatement(prefix, None, self._location(l))
 
-def traitDefn():
-    def processSupertypes(parsed, _):
-        return ct.untangle(parsed)[1] if parsed else None
-    traitSupertypes = ct.Opt(keyword("<:") + supertypes()) ^ processSupertypes
-    def process(parsed, loc):
-        [ats, _, name, tps, sts, ms, _] = ct.untangle(parsed)
+        if len(prefix) == 1:
+            raise ParseException(
+                prefix[0].location,
+                "import statement requires a prefix before symbol to import")
+        lastComponent = prefix.pop()
+        if lastComponent.typeArguments is not None:
+            raise ParseException(
+                lastComponent.location,
+                "type arguments can't be at the end of an import statement")
+
+        bindings = []
+        if self._peekTag() is AS:
+            self._next()
+            asName = self.ident()
+            bindings.append(ast.ImportBinding(
+                lastComponent.name, asName, self._location(lastComponent.location)))
+        else:
+            bindings.append(ast.ImportBinding(lastComponent.name, None, lastComponent.location))
+        while self._peekTag() is COMMA:
+            self._next()
+            name = self.ident()
+            bl = self.location
+            if self._peekTag() is AS:
+                self._next()
+                asName = self.ident()
+            else:
+                asName = None
+            bindings.append(ast.ImportBinding(name, asName, self._location(bl)))
+        self.semi()
+
+        return ast.ImportStatement(prefix, bindings, self._location(l))
+
+    # Definitions
+    def defn(self):
+        l = self._peek().location
+        ats = self.attribs()
+        tag = self._peek().tag
+        if tag in (LET, VAR):
+            return self.varDefn(l, ats)
+        elif tag is DEF:
+            return self.functionDefn(l, ats)
+        elif tag is CLASS:
+            return self.classDefn(l, ats)
+        elif tag is TRAIT:
+            return self.traitDefn(l, ats)
+        elif tag is ARRAYELEMENTS:
+            return self.arrayElementsStmt(l, ats)
+        else:
+            self._error("definition")
+
+    def varDefn(self, l, ats):
+        tok = self._next()
+        if tok.tag not in (LET, VAR):
+            self._error("let or var")
+        var = tok.text
+        pat = self.pattern()
+        if self._peekTag() is EQ:
+            self._next()
+            # Use maybeTupleExpr instead of expr to avoid assignments.
+            e = self.maybeTupleExpr()
+        else:
+            e = None
+        self.semi()
+        return ast.VariableDefinition(ats, var, pat, e, self._location(l))
+
+    def functionDefn(self, l, ats):
+        self._nextTag(DEF)
+        if self._peekTag() not in (SYMBOL, OPERATOR, THIS):
+            self._error("function name")
+        name = self._next().text
+        tps = self._parseOption(LBRACK, self.typeParameters)
+        ps = self._parseOption(LPAREN, self.parameters)
+        if self._peekTag() is COLON:
+            self._next()
+            rty = self.ty()
+        else:
+            rty = None
+        if self._peekTag() is EQ:
+            self._next()
+            body = self.expr()
+        else:
+            body = None
+        self.semi()
+        return ast.FunctionDefinition(ats, name, tps, ps, rty, body, self._location(l))
+
+    def classDefn(self, l, ats):
+        self._nextTag(CLASS)
+        name = self.ident()
+        tps = self._parseOption(LBRACK, self.typeParameters)
+        ctor = self.constructor()
+        if self._peekTag() is SUBTYPE:
+            self._next()
+            scl = self.ty()
+            sargs = self._parseOption(LPAREN, self.arguments)
+            if self._peekTag() is COMMA:
+                self._next()
+                strs = self._parseRepSep(self.ty, COMMA)
+            else:
+                strs = None
+        else:
+            scl = None
+            sargs = None
+            strs = None
+        ms = self._classBody("class body")
+        self.semi()
+        loc = self._location(l)
+        return ast.ClassDefinition(ats, name, tps, ctor, scl, sargs, strs, ms, loc)
+
+    def traitDefn(self, l, ats):
+        self._nextTag(TRAIT)
+        name = self.ident()
+        tps = self._parseOption(LBRACK, self.typeParameters)
+        if self._peekTag() is SUBTYPE:
+            self._next()
+            sts = [self.ty()]
+            while self._peekTag() is COMMA:
+                self._next()
+                sts.append(self.ty())
+        else:
+            sts = None
+        ms = self._classBody("trait body")
+        self.semi()
+        loc = self._location(l)
         return ast.TraitDefinition(ats, name, tps, sts, ms, loc)
-    return attribs() + keyword("trait") + ct.Commit(identifier + typeParameters() +
-           traitSupertypes + classBody() + semi) ^ process
 
+    def arrayElementsStmt(self, l, ats):
+        l = self._nextTag(ARRAYELEMENTS).location
+        ety = self.ty()
+        self._nextTag(COMMA)
+        getDefn = self.arrayAccessorDefn()
+        self._nextTag(COMMA)
+        setDefn = self.arrayAccessorDefn()
+        self._nextTag(COMMA)
+        lengthDefn = self.arrayAccessorDefn()
+        self.semi()
+        loc = self._location(l)
+        return ast.ArrayElementsStatement(ats, ety, getDefn, setDefn, lengthDefn, loc)
 
-def supertypes():
-    return ct.Rep1Sep(classType(), keyword(","))
+    def arrayAccessorDefn(self):
+        l = self._peek().location
+        ats = self.attribs()
+        name = self.ident()
+        return ast.ArrayAccessorDefinition(ats, name, self._location(l))
 
+    def constructor(self):
+        if self._peekTag() not in (ATTRIB, LPAREN):
+            return None
+        l = self._peek().location
+        ats = self.attribs()
+        params = self.parameters()
+        return ast.PrimaryConstructorDefinition(ats, params, self._location(l))
 
-def classBody():
-    def process(parsed, loc):
-        return parsed if parsed is not None else []
-    return ct.Opt(layoutBlock(ct.Rep(ct.Lazy(classMember)))) ^ process
+    def _classBody(self, label):
+        if self._peekTag() in (LBRACE, IMPLICIT_LBRACE):
+            return self._parseBlock(self.defnOrImport, label)
+        else:
+            return None
 
+    # Patterns
+    def pattern(self):
+        return self.maybeTuplePattern()
 
-def classMember():
-    return definition() | importStmt() | arrayElementsStmt()
+    def maybeTuplePattern(self):
+        l = self._peek().location
+        elems = self._parseRepSep(self.maybeBinopPattern, COMMA)
+        return elems[0] if len(elems) == 1 else ast.TuplePattern(elems, self._location(l))
 
+    def maybeBinopPattern(self):
+        return self._parseBinop(self.simplePattern, ast.BinaryPattern, self.LAST_BINOP_LEVEL)
 
-def importStmt():
-    def processBinding(parsed, loc):
-        name = parsed[0]
-        asName = parsed[1][1] if parsed[1] is not None else None
-        return ast.ImportBinding(name, asName, loc)
-    importBinding = symbol + ct.Opt(keyword("as") + symbol) ^ processBinding
+    def simplePattern(self):
+        tag = self._peekTag()
+        if tag is SYMBOL:
+            return self.prefixedPattern()
+        elif tag is UNDERSCORE:
+            return self.blankPattern()
+        elif tag in (TRUE, FALSE, NULL, INTEGER, FLOAT, STRING):
+            return self.literalPattern()
+        elif tag is OPERATOR:
+            return self.unopPattern()
+        elif tag is LPAREN:
+            return self.groupPattern()
+        else:
+            self._error("pattern")
 
-    def processSuffixEmpty(parsed, loc):
-        return lambda prefix: None
-    importSuffixEmpty = keyword(".") + keyword("_") ^ processSuffixEmpty
-
-    def processSuffixAs(parsed, loc):
-        firstAsName = parsed[0][1] if parsed[0] is not None else None
-        laterBindings = [p[1] for p in parsed[1]]
-        def processFn(prefix):
-            if len(prefix) == 1:
-                raise ParseException(prefix[0].location,
-                                     "import statement requires a prefix before symbol to import")
-            lastComponent = prefix.pop()
-            if lastComponent.typeArguments is not None:
-                raise ParseException(lastComponent.location,
-                                     "type arguments can't be at the end of an import statement")
-            firstBinding = ast.ImportBinding(lastComponent.name, firstAsName,
-                                                lastComponent.location)
-            return [firstBinding] + laterBindings
-        return processFn
-    importSuffixAs = ct.Opt(keyword("as") + symbol) + ct.Rep(keyword(",") + importBinding) ^ \
-      processSuffixAs
-
-    importSuffix = (importSuffixEmpty | importSuffixAs) + semi
-
-    def process(parsed, loc):
-        _, prefix, suffixFn, _ = ct.untangle(parsed)
-        bindings = suffixFn(prefix)
-        return ast.ImportStatement(prefix, bindings, loc)
-    return keyword("import") + ct.Commit(scopePrefix() + importSuffix) ^ process
-
-
-def arrayElementsStmt():
-    def process(parsed, loc):
-        [attrs, _, elementType, _, getName, _, setName, _, lengthName, _] = ct.untangle(parsed)
-        return ast.ArrayElementsStatement(attrs, elementType,
-                                             getName, setName, lengthName, loc)
-    return attribs() + keyword("arrayelements") + ct.Commit(ty() + keyword(",") +
-        arrayAccessorDefn() + keyword(",") + arrayAccessorDefn() + keyword(",") +
-        arrayAccessorDefn() + semi) ^ process
-
-
-def arrayAccessorDefn():
-    def process(parsed, loc):
-        attribs, name = parsed
-        return ast.ArrayAccessorDefinition(attribs, name, loc)
-    return attribs() + identifier ^ process
-
-
-def typeParameters():
-    def process(parsed, _):
-        return ct.untangle(parsed)[1] if parsed else []
-    return ct.Opt(keyword("[") + ct.Rep1Sep(typeParameter(), keyword(",")) + keyword("]")) ^ process
-
-
-def typeParameter():
-    def process(parsed, loc):
-        [ats, var, name, upper, lower] = ct.untangle(parsed)
-        return ast.TypeParameter(ats, var, name, upper, lower, loc)
-    variance = ct.Opt(ct.Reserved(OPERATOR, "+") | ct.Reserved(OPERATOR, "-"))
-    upperBound = ct.Opt(keyword("<:") + ty() ^ (lambda p, _: p[1]))
-    lowerBound = ct.Opt(keyword(">:") + ty() ^ (lambda p, _: p[1]))
-    return attribs() + variance + symbol + upperBound + lowerBound ^ process
-
-
-def parameters():
-    def process(parsed, _):
-        return ct.untangle(parsed)[1] if parsed else []
-    return ct.Opt(keyword("(") + ct.Rep1Sep(parameter(), keyword(",")) + keyword(")")) ^ process
-
-
-def parameter():
-    def process(parsed, loc):
-        [ats, var, pat] = ct.untangle(parsed)
-        return ast.Parameter(ats, var, pat, loc)
-    return attribs() + ct.Opt(keyword("var")) + simplePattern() ^ process
-
-
-# Patterns
-def pattern():
-    def process(parsed, loc):
-        return parsed[0] if len(parsed) == 1 else ast.TuplePattern(parsed, loc)
-    return ct.Rep1Sep(maybeBinopPattern(), keyword(",")) ^ process
-
-
-def maybeBinopPattern():
-    return buildBinaryParser(simplePattern(), ast.BinaryPattern)
-
-
-def simplePattern():
-    return prefixedPattern() | \
-           blankPattern() | \
-           litPattern() | \
-           unopPattern() | \
-           groupPattern()
-
-
-def prefixedPattern():
-    def process(parsed, loc):
-        prefix, suffix = parsed
-        if len(prefix) == 1 and (suffix is None or isinstance(suffix, ast.Type)):
+    def prefixedPattern(self):
+        l = self._peek().location
+        prefix = self.scopePrefix()
+        tag = self._peekTag()
+        if tag is LPAREN:
+            args = self._parseList(
+                self.simplePattern, "pattern arguments", LPAREN, COMMA, RPAREN)
+            ty = None
+        elif tag is COLON:
+            self._next()
+            ty = self.ty()
+            args = None
+        else:
+            args = None
+            ty = None
+        loc = self._location(l)
+        if len(prefix) == 1 and args is None:
             mayHaveTypeArgs = False
-            result = ast.VariablePattern(prefix[0].name, suffix, loc)
-        elif suffix is None:
+            result = ast.VariablePattern(prefix[0].name, ty, loc)
+        elif args is None and ty is None:
             mayHaveTypeArgs = False
             result = ast.ValuePattern(prefix[:-1], prefix[-1].name, loc)
-        elif isinstance(suffix, list):
+        elif args is not None:
             mayHaveTypeArgs = True
-            result = ast.DestructurePattern(prefix, suffix, loc)
+            result = ast.DestructurePattern(prefix, args, loc)
         else:
-            return ct.FailValue("invalid variable, value, or destructure pattern")
+            raise ParseException(loc, "invalid variable, value, or destructure pattern")
         if not mayHaveTypeArgs and prefix[-1].typeArguments is not None:
-            return ct.FailValue("can't have type arguments at end of variable or value pattern")
+            raise ParseException(
+                loc, "can't have type arguments at end of variable or value pattern")
         return result
 
-    def processSuffix(parsed, loc):
-        return ct.untangle(parsed)[1]
-    argumentSuffix = (keyword("(") + ct.Rep1Sep(ct.Lazy(simplePattern), keyword(",")) +
-                      keyword(")") ^ processSuffix)
-    typeSuffix = keyword(":") + ty() ^ processSuffix
-    suffix = argumentSuffix | typeSuffix
-
-    return scopePrefix() + ct.Opt(suffix) ^ process
-
-
-def blankPattern():
-    def process(parsed, loc):
-        _, parsedTy = parsed
-        ty = parsedTy[1] if parsedTy else None
-        return ast.BlankPattern(ty, loc)
-    return keyword("_") + ct.Opt(keyword(":") + ty()) ^ process
-
-
-def litPattern():
-    return literal() ^ ast.LiteralPattern
-
-
-def unopPattern():
-    def process(parsed, loc):
-        op, pat = parsed
-        return ast.UnaryPattern(op, pat, loc)
-    return unaryOperator + ct.Lazy(simplePattern) ^ process
-
-
-def groupPattern():
-    def process(parsed, loc):
-        _, p, _ = ct.untangle(parsed)
-        return p
-    return keyword("(") + ct.Commit(ct.Lazy(pattern) + keyword(")")) ^ process
-
-
-# Scope prefix
-def scopePrefix():
-    return ct.Rep1Sep(scopePrefixComponent(), keyword("."))
-
-
-def scopePrefixComponent():
-    def process(parsed, loc):
-        name, args = parsed
-        return ast.ScopePrefixComponent(name, args, loc)
-    return symbol + typeArguments() ^ process
-
-
-# Types
-def ty():
-    def notEmptyTuple(t):
-        return not (isinstance(t, ast.TupleType) and len(t.types) == 0)
-    return ct.If(maybeFunctionType(), notEmptyTuple)
-
-
-def maybeFunctionType():
-    arrowSuffix = keyword("->") + ct.Commit(simpleType()) ^ (lambda p, loc: p[1])
-
-    def combine(left, right, loc):
-        if isinstance(left, list):
-            return left + [right]
+    def blankPattern(self):
+        l = self._nextTag(UNDERSCORE).location
+        if self._peekTag() is COLON:
+            self._next()
+            ty = self.ty()
         else:
-            return [left, right]
+            ty = None
+        return ast.BlankPattern(ty, self._location(l))
 
-    def postprocess(parsed, loc):
-        if not isinstance(parsed, list):
-            return parsed
-        n = len(parsed)
-        assert n >= 2
-        fnType = parsed[n - 1]
-        for i in xrange(n - 2, -1, -1):
-            parsedType = parsed[i]
-            if isinstance(parsedType, ast.TupleType):
-                if len(parsedType.flags) > 0:
-                    return ct.FailValue("function parameter list can't be nullable")
-                argTypes = parsedType.types
+    def unopPattern(self):
+        tok = self._nextTag(OPERATOR)
+        pat = self.simplePattern()
+        return ast.UnaryPattern(tok.text, pat, self._location(tok.location))
+
+    def literalPattern(self):
+        lit = self.literal()
+        return ast.LiteralPattern(lit, lit.location)
+
+    def groupPattern(self):
+        l = self._nextTag(LPAREN)
+        pat = self.pattern()
+        self._nextTag(RPAREN)
+        return ast.GroupPattern(pat, self._location(l.location))
+
+    # Types
+    def ty(self):
+        l = self._peek().location
+        t = self.maybeFunctionType()
+        if isinstance(t, ast.TupleType) and len(t.types) == 0:
+            raise ParseException(l, "expected type but found ()")
+        return t
+
+    def maybeFunctionType(self):
+        fnTypes = self._parseRepSep(self.simpleType, SMALL_ARROW)
+
+        ty = fnTypes.pop()
+        while len(fnTypes) > 0:
+            pty = fnTypes.pop()
+            if isinstance(pty, ast.TupleType):
+                if len(pty.flags) > 0:
+                    raise ParseException(
+                        pty.location, "function parameter list can't be nullable")
+                ptys = pty.types
             else:
-                argTypes = [parsedType]
-            loc = parsedType.location.combine(fnType.location)
-            fnType = ast.FunctionType(argTypes, fnType, loc)
-        return fnType
+                ptys = [pty]
+            loc = pty.location.combine(ty.location)
+            ty = ast.FunctionType(ptys, ty, loc)
+        return ty
 
-    return ct.LeftRec(simpleType(), arrowSuffix, combine) ^ postprocess
+    def simpleType(self):
+        tok = self._peek()
+        if tok.tag is UNIT:
+            t = ast.UnitType(tok.location)
+        elif tok.tag is I8:
+            t = ast.I8Type(tok.location)
+        elif tok.tag is I16:
+            t = ast.I16Type(tok.location)
+        elif tok.tag is I32:
+            t = ast.I32Type(tok.location)
+        elif tok.tag is I64:
+            t = ast.I64Type(tok.location)
+        elif tok.tag is F32:
+            t = ast.F32Type(tok.location)
+        elif tok.tag is F64:
+            t = ast.F64Type(tok.location)
+        elif tok.tag is BOOLEAN:
+            t = ast.BooleanType(tok.location)
+        elif tok.tag is UNDERSCORE:
+            t = ast.BlankType(tok.location)
+        elif tok.tag is LPAREN:
+            return self.tupleType()
+        elif tok.tag is SYMBOL:
+            return self.classType()
+        elif tok.tag is FORSOME:
+            return self.existentialType()
+        else:
+            self._error("type")
+        self._next()
+        return t
 
-
-def simpleType():
-    return (keyword("unit") ^ (lambda _, loc: ast.UnitType(loc))) | \
-           (keyword("i8") ^ (lambda _, loc: ast.I8Type(loc))) | \
-           (keyword("i16") ^ (lambda _, loc: ast.I16Type(loc))) | \
-           (keyword("i32") ^ (lambda _, loc: ast.I32Type(loc))) | \
-           (keyword("i64") ^ (lambda _, loc: ast.I64Type(loc))) | \
-           (keyword("f32") ^ (lambda _, loc: ast.F32Type(loc))) | \
-           (keyword("f64") ^ (lambda _, loc: ast.F64Type(loc))) | \
-           (keyword("boolean") ^ (lambda _, loc: ast.BooleanType(loc))) | \
-           (keyword("_") ^ (lambda _, loc: ast.BlankType(loc))) | \
-           tupleType() | \
-           classType() | \
-           existentialType()
-
-
-def tyOpt():
-    return ct.Opt(keyword(":") + ty() ^ (lambda p, _: p[1]))
-
-
-def tupleType():
-    def process(parsed, loc):
-        _, tys, _, nullFlag = ct.untangle(parsed)
-        flags = set([nullFlag]) if nullFlag else set()
+    def tupleType(self):
+        l = self._peek().location
+        tys = self._parseList(self.ty, "type", LPAREN, COMMA, RPAREN)
+        loc = self._location(l)
+        # Don't check for empty tuple, since this is needed for nullary function types.
+        # We check for empty tuples in ty() instead.
         if len(tys) == 1:
-            if nullFlag:
-                return ct.FailValue("unexpected '?'")
             return tys[0]
+        flags = self.typeFlags()
         return ast.TupleType(tys, flags, loc)
-    return keyword("(") + ct.Commit(ct.RepSep(ct.Lazy(ty), keyword(",")) + keyword(")") +
-        ct.Opt(ct.Reserved(OPERATOR, "?"))) ^ process
 
-
-def classType():
-    def process(parsed, loc):
-        prefixComponents, nullFlag = ct.untangle(parsed)
+    def classType(self):
+        l = self._peek().location
+        prefixComponents = self.scopePrefix()
         prefix = prefixComponents[:-1]
         last = prefixComponents[-1]
         name = last.name
         typeArgs = last.typeArguments if last.typeArguments is not None else []
-        flags = set([nullFlag]) if nullFlag is not None else set()
-        return ast.ClassType(prefix, name, typeArgs, flags, loc)
-    return scopePrefix() + ct.Opt(ct.Reserved(OPERATOR, "?")) ^ process
+        flags = self.typeFlags()
+        return ast.ClassType(prefix, name, typeArgs, flags, self._location(l))
 
+    def existentialType(self):
+        l = self._nextTag(FORSOME)
+        tps = self.typeParameters()
+        t = self.ty()
+        return ast.ExistentialType(tps, t, self._location(l.location))
 
-def existentialType():
-    def process(parsed, loc):
-        _, _, tps, _, ty = ct.untangle(parsed)
-        return ast.ExistentialType(tps, ty, loc)
-    return keyword("forsome") + ct.Commit(keyword("[") + \
-        ct.Rep1Sep(ct.Lazy(typeParameter), keyword(",")) + keyword("]") + \
-        ct.Lazy(ty)) ^ process
+    def typeFlags(self):
+        tok = self._peek()
+        flags = set()
+        if tok.tag is OPERATOR and tok.text == "?":
+            self._next()
+            flags.add("?")
+        return flags
 
+    # Expressions
+    def expr(self):
+        es = self._parseRepSep(self.maybeTupleExpr, EQ)
+        e = es.pop()
+        while len(es) > 0:
+            l = es.pop()
+            e = ast.AssignExpression(l, e, l.location.combine(e.location))
+        return e
 
-def typeArguments():
-    def process(parsed, _):
-        return ct.untangle(parsed)[1] if parsed else None
-    return ct.Opt(keyword("[") + ct.Rep1Sep(ct.Lazy(ty), keyword(",")) + keyword("]")) ^ process
+    def maybeTupleExpr(self):
+        l = self._peek().location
+        elems = self._parseRepSep(self.maybeBinopExpr, COMMA)
+        return elems[0] if len(elems) == 1 else ast.TupleExpression(elems, self._location(l))
 
+    def maybeBinopExpr(self):
+        return self._parseBinop(self.maybeCallExpr, ast.BinaryExpression, self.LAST_BINOP_LEVEL)
 
-# Expressions
-def expression():
-    def combine(left, right, loc):
-        return ast.AssignExpression(left, right, loc)
-    rhs = keyword("=") + ct.Lazy(expression) ^ (lambda p, _: p[1])
-    return ct.LeftRec(maybeTupleExpr(), rhs, combine)
+    def _precedence(self, op):
+        """Returns the precedence level of an operator.
 
+        Precedence is mostly determined by the first character in the operator name, with a few
+        exceptions. See BINOP_LEVELS for a list of precedence levels. If the operator name ends
+        with '=', and does not start with '=', and the operator is not one of "<=", ">=", "!=",
+        or "!==", the operator is considered an assignment and has a low precedence. The
+        operators "&&" and "||" have their own special precedence levels, just above assignment.
 
-def maybeTupleExpr():
-    def process(parsed, loc):
-        return parsed[0] if len(parsed) == 1 else ast.TupleExpression(parsed, loc)
-    return ct.Rep1Sep(maybeBinopExpr(), keyword(",")) ^ process
+        Args:
+            op: the name of an operator (str).
 
-
-def maybeBinopExpr():
-    return buildBinaryParser(maybeCallExpr(), ast.BinaryExpression)
-
-
-def maybeCallExpr():
-    return ct.LeftRec(receiverExpr(), callSuffix(), processCall)
-
-def callSuffix():
-    methodNameOpt = ct.Opt(keyword(".") + symbol ^ (lambda p, _: p[1]))
-    getMethodOpt = ct.Opt(keyword("_")) ^ (lambda p, _: bool(p))
-    return methodNameOpt + typeArguments() + argumentsOpt() + getMethodOpt
-
-def argumentsOpt():
-    def process(parsed, _):
-        return ct.untangle(parsed)[1] if parsed else None
-    return ct.Opt(keyword("(") + ct.RepSep(ct.Lazy(maybeBinopExpr), keyword(",")) +
-                      keyword(")")) ^ process
-
-def processCall(receiver, parsed, loc):
-    [methodName, typeArguments, arguments, isGetMethod] = ct.untangle(parsed)
-    if isGetMethod:
-        if methodName is None or \
-           typeArguments is not None or \
-           arguments is not None:
-            return ct.FailValue()
-        return ast.FunctionValueExpression(ast.PropertyExpression(receiver, methodName, loc), loc)
-    elif methodName is not None or \
-         typeArguments is not None or \
-         arguments is not None:
-        hasArguments = typeArguments is not None or arguments is not None
-        if methodName is not None:
-            method = ast.PropertyExpression(receiver, methodName, loc)
+        Returns:
+            An integer indicating the precedence of the operator. Lower numbers indicate higher
+            precedence.
+        """
+        if (op[-1] == "=" and
+            not (len(op) > 1 and op[0] == "=") and
+            op not in ("<=", ">=", "!=", "!==")):
+            return self.BINOP_ASSIGN_LEVEL
+        elif op == "&&":
+            return self.BINOP_LOGIC_AND_LEVEL
+        elif op == "||":
+            return self.BINOP_LOGIC_OR_LEVEL
         else:
-            method = receiver
-        if hasArguments:
-            return ast.CallExpression(method, typeArguments, arguments, loc)
+            for prec, level in enumerate(self.BINOP_LEVELS):
+                if op[0] in level:
+                    return prec
+            return self.BINOP_OTHER_LEVEL
+
+    def _associativity(self, op):
+        """Returns the associativity of an operator.
+
+        All operators have right associativity, except those that end with ':', which have left
+        associativity.
+
+        Returns:
+            LEFT_ASSOC or RIGHT_ASSOC.
+        """
+        return self.RIGHT_ASSOC if op[-1] == ":" else self.LEFT_ASSOC
+
+    def maybeCallExpr(self):
+        e = self.receiverExpr()
+        tag = self._peek().tag
+        while tag in (DOT, LBRACK, LPAREN):
+            if tag is DOT:
+                self._next()
+                name = self.symbol()
+                callee = ast.PropertyExpression(e, name, e.location.combine(self.location))
+            else:
+                callee = e
+            typeArgs = self._parseOption(LBRACK, self.typeArguments)
+            args = self._parseOption(LPAREN, self.arguments)
+            if typeArgs is not None or args is not None:
+                e = ast.CallExpression(callee, typeArgs, args, self._location(e.location))
+            else:
+                e = callee
+            tag = self._peek().tag
+        return e
+
+    def receiverExpr(self):
+        tag = self._peek().tag
+        if tag is OPERATOR:
+            return self.unaryExpr()
+        elif tag in (INTEGER, FLOAT, STRING, TRUE, FALSE, NULL):
+            return self.literalExpr()
+        elif tag is SYMBOL:
+            return self.varExpr()
+        elif tag is THIS:
+            return self.thisExpr()
+        elif tag is SUPER:
+            return self.superExpr()
+        elif tag is LPAREN:
+            return self.groupExpr()
+        elif tag is NEW:
+            return self.newArrayExpr()
+        elif tag is IF:
+            return self.ifExpr()
+        elif tag is WHILE:
+            return self.whileExpr()
+        elif tag is BREAK:
+            return self.breakExpr()
+        elif tag is CONTINUE:
+            return self.continueExpr()
+        elif tag is MATCH:
+            return self.matchExpr()
+        elif tag is THROW:
+            return self.throwExpr()
+        elif tag is TRY:
+            return self.tryExpr()
+        elif tag in (LBRACE, IMPLICIT_LBRACE):
+            return self.blockExpr()
+        elif tag is LAMBDA:
+            return self.lambdaExpr()
+        elif tag is RETURN:
+            return self.returnExpr()
         else:
-            return method
-    else:
-        return ct.FailValue("not a call")
+            self._error("expression")
 
+    def unaryExpr(self):
+        op = self._nextTag(OPERATOR, "expression")
+        e = self.maybeCallExpr()
+        return ast.UnaryExpression(op.text, e, op.location.combine(e.location))
 
-def receiverExpr():
-    return unaryExpr() | \
-           literalExpr() | \
-           varExpr() | \
-           thisExpr() | \
-           superExpr() | \
-           groupExpr() | \
-           newArrayExpr() | \
-           ifExpr() | \
-           whileExpr() | \
-           breakExpr() | \
-           continueExpr() | \
-           matchExpr() | \
-           throwExpr() | \
-           tryCatchExpr() | \
-           blockExpr() | \
-           lambdaExpr() | \
-           returnExpr()
+    def literalExpr(self):
+        lit = self.literal()
+        return ast.LiteralExpression(lit, lit.location)
 
+    def varExpr(self):
+        sym = self.symbol()
+        return ast.VariableExpression(sym, self.location)
 
-def literalExpr():
-    return literal() ^ (lambda lit, loc: ast.LiteralExpression(lit, loc))
+    def thisExpr(self):
+        self._nextTag(THIS)
+        return ast.ThisExpression(self.location)
 
+    def superExpr(self):
+        self._nextTag(SUPER)
+        return ast.SuperExpression(self.location)
 
-def varExpr():
-    return symbol ^ (lambda name, loc: ast.VariableExpression(name, loc))
+    def groupExpr(self):
+        l = self._nextTag(LPAREN)
+        e = self.expr()
+        r = self._nextTag(RPAREN)
+        return ast.GroupExpression(e, l.location.combine(r.location))
 
+    def newArrayExpr(self):
+        l = self._nextTag(NEW)
+        self._nextTag(LPAREN)
+        length = self.expr()
+        self._nextTag(RPAREN)
+        ty = self.ty()
+        args = self._parseOption(LPAREN, self.arguments)
+        return ast.NewArrayExpression(length, ty, args, self._location(l.location))
 
-def thisExpr():
-    return keyword("this") ^ (lambda _, loc: ast.ThisExpression(loc))
-
-
-def superExpr():
-    return keyword("super") ^ (lambda _, loc: ast.SuperExpression(loc))
-
-
-def groupExpr():
-    def process(parsed, loc):
-        [_, e, _] = ct.untangle(parsed)
-        return ast.GroupExpression(e, loc)
-    return keyword("(") + ct.Lazy(expression) + keyword(")") ^ process
-
-
-def newArrayExpr():
-    def process(parsed, loc):
-        [_, _, length, _, ty, args] = ct.untangle(parsed)
-        return ast.NewArrayExpression(length, ty, args, loc)
-    return keyword("new") + ct.Commit(keyword("(") + ct.Lazy(expression) + keyword(")") +
-        ty() + argumentsOpt()) ^ process
-
-
-def blockExpr():
-    def process(stmts, loc):
-        return ast.BlockExpression(stmts, loc)
-    return layoutBlock(ct.Rep(ct.Lazy(statement)) ^ process)
-
-
-def unaryExpr():
-    def process(parsed, loc):
-        (op, e) = parsed
-        return ast.UnaryExpression(op, e, loc)
-    return unaryOperator + ct.Commit(ct.Lazy(maybeCallExpr)) ^ process
-
-
-def ifExpr():
-    def process(parsed, loc):
-        [_, _, c, _, t, f] = ct.untangle(parsed)
-        return ast.IfExpression(c, t, f, loc)
-    elseClause = ct.Opt(keyword("else") + ct.Commit(ct.Lazy(expression))) ^ \
-        (lambda p, _: p[1] if p else None)
-    return keyword("if") + ct.Commit(keyword("(") + ct.Lazy(expression) + keyword(")") + \
-        ct.Lazy(expression) + elseClause) ^ process
-
-
-def whileExpr():
-    def process(parsed, loc):
-        [_, _, c, _, b] = ct.untangle(parsed)
-        return ast.WhileExpression(c, b, loc)
-    return keyword("while") + ct.Commit(keyword("(") + ct.Lazy(expression) + keyword(")") + \
-        ct.Lazy(expression)) ^ process
-
-
-def breakExpr():
-    return keyword("break") ^ (lambda _, loc: ast.BreakExpression(loc))
-
-
-def continueExpr():
-    return keyword("continue") ^ (lambda _, loc: ast.ContinueExpression(loc))
-
-
-def partialFnExpr():
-    def process(cases, loc):
-        return ast.PartialFunctionExpression(cases, loc)
-    return layoutBlock(ct.Rep1(partialFunctionCase()) ^ process)
-
-
-def partialFunctionCase():
-    def process(parsed, loc):
-        [_, p, c, _, e, _] = ct.untangle(parsed)
-        return ast.PartialFunctionCase(p, c, e, loc)
-    conditionOpt = ct.Opt(keyword("if") + ct.Lazy(expression)) ^ (lambda p, _: p[1] if p else None)
-    return keyword("case") + ct.Commit(pattern() + conditionOpt + keyword("=>") + \
-        ct.Lazy(expression) + semi) ^ process
-
-
-def matchExpr():
-    def process(parsed, loc):
-        [_, _, e, _, m] = ct.untangle(parsed)
-        return ast.MatchExpression(e, m, loc)
-    return keyword("match") + ct.Commit(keyword("(") + ct.Lazy(expression) + keyword(")") + \
-        partialFnExpr()) ^ process
-
-
-def throwExpr():
-    def process(parsed, loc):
-        (_, x) = parsed
-        return ast.ThrowExpression(x, loc)
-    return keyword("throw") + ct.Commit(ct.Lazy(expression)) ^ process
-
-
-def tryCatchExpr():
-    def process(parsed, loc):
-        [_, e, c, f] = ct.untangle(parsed)
-        if c is None and f is None:
-            return ct.FailValue("expected 'catch' or 'finally' in 'try'-expression")
+    def ifExpr(self):
+        l = self._nextTag(IF)
+        self._nextTag(LPAREN)
+        condExpr = self.expr()
+        self._nextTag(RPAREN)
+        trueExpr = self.expr()
+        if self._peekTag() is ELSE:
+            self._next()
+            falseExpr = self.expr()
         else:
-            return ast.TryCatchExpression(e, c, f, loc)
+            falseExpr = None
+        return ast.IfExpression(condExpr, trueExpr, falseExpr, self._location(l.location))
 
-    finallyOpt = ct.Opt(keyword("finally") + ct.Lazy(expression)) ^ (lambda p, _: p[1] if p else None)
-    return keyword("try") + ct.Commit(ct.Lazy(expression) + catchHandler() + finallyOpt) ^ process
+    def whileExpr(self):
+        l = self._nextTag(WHILE)
+        self._nextTag(LPAREN)
+        condExpr = self.expr()
+        self._nextTag(RPAREN)
+        bodyExpr = self.expr()
+        return ast.WhileExpression(condExpr, bodyExpr, self._location(l.location))
 
+    def breakExpr(self):
+        self._nextTag(BREAK)
+        return ast.BreakExpression(self.location)
 
-def catchHandler():
-    def processSimple(parsed, loc):
-        [_, p, _, e] = ct.untangle(parsed)
-        return ast.PartialFunctionExpression([ast.PartialFunctionCase(p, None, e, loc)], loc)
-    simpleHandler = keyword("(") + ct.Commit(pattern() + keyword(")") + \
-                    ct.Lazy(expression)) ^ processSimple
+    def continueExpr(self):
+        self._nextTag(CONTINUE)
+        return ast.ContinueExpression(self.location)
 
-    matchHandler = partialFnExpr()
+    def matchExpr(self):
+        l = self._nextTag(MATCH)
+        self._nextTag(LPAREN)
+        e = self.expr()
+        self._nextTag(RPAREN)
+        m = self.partialFnExpr()
+        return ast.MatchExpression(e, m, self._location(l.location))
 
-    def process(parsed, _):
-        return parsed[1]
-    return ct.Opt(keyword("catch") + ct.Commit(simpleHandler | matchHandler) ^ process)
+    def partialFnExpr(self):
+        l = self._peek().location
+        cases = self._parseBlock(self.partialFnCase, "partial function expression")
+        return ast.PartialFunctionExpression(cases, self._location(l))
 
+    def partialFnCase(self):
+        l = self._nextTag(CASE)
+        p = self.pattern()
+        if self._peekTag() is IF:
+            self._next()
+            c = self.expr()
+        else:
+            c = None
+        self._nextTag(BIG_ARROW)
+        e = self.expr()
+        self.semi()
+        return ast.PartialFunctionCase(p, c, e, self._location(l.location))
 
-def lambdaExpr():
-    def process(parsed, loc):
-        [_, ps, e] = ct.untangle(parsed)
-        return ast.LambdaExpression(ps, e, loc)
-    return keyword("lambda") + ct.Commit(parameters() + ct.Lazy(expression)) ^ process
+    def throwExpr(self):
+        l = self._nextTag(THROW)
+        e = self.expr()
+        return ast.ThrowExpression(e, self._location(l.location))
 
+    def tryExpr(self):
+        l = self._nextTag(TRY)
+        e = self.expr()
+        catchOpt = self._parseOption(CATCH, self.catchHandler)
+        finallyOpt = self._parseOption(FINALLY, self.finallyHandler)
+        if catchOpt is None and finallyOpt is None:
+            self._error("catch or finally")
+        return ast.TryCatchExpression(e, catchOpt, finallyOpt, self._location(l.location))
 
+    def catchHandler(self):
+        l = self._nextTag(CATCH)
+        if self._peekTag() is LPAREN:
+            self._next()
+            p = self.pattern()
+            self._nextTag(RPAREN)
+            e = self.expr()
+            loc = self._location(l.location)
+            case = ast.PartialFunctionCase(p, None, e, loc)
+            return ast.PartialFunctionExpression([case], loc)
+        else:
+            handler = self.partialFnExpr()
+            handler.location = self._location(l.location)
+            return handler
 
-    def process(parsed, loc):
-        [_, n, tps, _, ps, _, b] = ct.untangle(parsed)
-        return ast.LambdaExpression(n, tps, ps, b, loc)
-    return keyword("lambda") + ct.Commit(ct.Opt(symbol) + keyword("(") + \
-        ct.RepSep(simplePattern(), keyword(",")) + keyword(")") + ct.Lazy(expression)) ^ process
+    def finallyHandler(self):
+        self._nextTag(FINALLY)
+        return self.expr()
 
+    def blockExpr(self):
+        l = self._peek().location
+        stmts = self._parseBlock(self.blockStmt, "block expression")
+        return ast.BlockExpression(stmts, self._location(l))
 
-def returnExpr():
-    def process(parsed, loc):
-        (_, e) = parsed
-        return ast.ReturnExpression(e, loc)
-    return keyword("return") + ct.Opt(ct.Lazy(expression)) ^ process
+    def blockStmt(self):
+        tag = self._peekTag()
+        if tag in (ATTRIB, VAR, LET, DEF, CLASS, TRAIT, ARRAYELEMENTS):
+            return self.defn()
+        elif tag is IMPORT:
+            return self.importStmt()
+        else:
+            e = self.expr()
+            self.semi()
+            return e
 
+    def lambdaExpr(self):
+        l = self._nextTag(LAMBDA)
+        params = self._parseOption(LPAREN, self.parameters)
+        e = self.expr()
+        return ast.LambdaExpression(params, e, self._location(l.location))
 
-def statement():
-    return definition() | importStmt() | ((expression() + semi) ^ (lambda p, _: p[0]))
+    def returnExpr(self):
+        l = self._nextTag(RETURN)
+        if self._peekTag() in self.EXPR_START_TOKENS:
+            e = self.expr()
+        else:
+            e = None
+        return ast.ReturnExpression(e, self._location(l.location))
 
+    # Literals
+    def literal(self):
+        tok = self._peek()
+        if tok.tag is INTEGER:
+            return self.intLiteral()
+        elif tok.tag is FLOAT:
+            return self.floatLiteral()
+        elif tok.tag is STRING:
+            return self.stringLiteral()
+        elif tok.tag is TRUE:
+            lit = ast.BooleanLiteral(True, tok.location)
+        elif tok.tag is FALSE:
+            lit = ast.BooleanLiteral(False, tok.location)
+        elif tok.tag is NULL:
+            lit = ast.NullLiteral(tok.location)
+        else:
+            self._error("literal")
+        self._next()
+        return lit
 
-# Literals
-def literal():
-    return intLiteral() | floatLiteral() | booleanLiteral() | nullLiteral() | stringLiteral()
-
-
-def intLiteral():
-    def process(text, loc):
-        m = re.match("([+-]?)(0[BbXx])?([0-9A-Fa-f]+)(?:i([0-9]+))?", text)
+    def intLiteral(self):
+        tok = self._nextTag(INTEGER)
+        m = re.match("([+-]?)(0[BbXx])?([0-9A-Fa-f]+)(?:i([0-9]+))?", tok.text)
         if m.group(1) == '-':
             sign = -1
         else:
@@ -653,177 +808,228 @@ def intLiteral():
             width = 64
         else:
             width = int(m.group(4))
-        return ast.IntegerLiteral(value, width, loc)
+        return ast.IntegerLiteral(value, width, tok.location)
 
-    return ct.Tag(INTEGER) ^ process
-
-
-def floatLiteral():
-    def process(text, loc):
-        m = re.match("([^f]*)(?:f([0-9]+))?", text)
+    def floatLiteral(self):
+        tok = self._nextTag(FLOAT)
+        m = re.match("([^f]*)(?:f([0-9]+))?", tok.text)
         value = float(m.group(1))
         width = int(m.group(2)) if m.group(2) is not None else 64
-        return ast.FloatLiteral(value, width, loc)
+        return ast.FloatLiteral(value, width, tok.location)
 
-    return ct.Tag(FLOAT) ^ process
-
-
-def booleanLiteral():
-    return (keyword("true") ^ (lambda _, loc: ast.BooleanLiteral(True, loc))) | \
-           (keyword("false") ^ (lambda _, loc: ast.BooleanLiteral(False, loc)))
-
-
-def nullLiteral():
-    return keyword("null") ^ (lambda _, loc: ast.NullLiteral(loc))
-
-
-def stringLiteral():
-    def process(text, loc):
-        value = tryDecodeString(text)
+    def stringLiteral(self):
+        tok = self._nextTag(STRING)
+        value = tryDecodeString(tok.text)
         if value is None:
-            return ct.FailValue("invalid string")
-        return ast.StringLiteral(value, loc)
-    return ct.Tag(STRING) ^ process
+            raise ParseException(tok.location, "could not understand string: %s" % tok.text)
+        return ast.StringLiteral(value, tok.location)
 
+    # Miscellaneous
+    def scopePrefix(self):
+        components = [self.scopePrefixComponent()]
+        while self._peekTag() is DOT:
+            # Hack: peek two tokens forward to look for _ in import statements.
+            if self.pos + 1 < len(self.tokens) and self.tokens[self.pos + 1].tag is UNDERSCORE:
+                return components
+            self._next()
+            components.append(self.scopePrefixComponent())
+        return components
 
-# Basic parsers
-def keyword(kw):
-    return ct.Reserved(RESERVED, kw)
+    def scopePrefixComponent(self):
+        l = self._peek().location
+        name = self.symbol()
+        typeArgs = self._parseOption(LBRACK, self.typeArguments)
+        return ast.ScopePrefixComponent(name, typeArgs, self._location(l))
 
-def layoutBlock(contents):
-    def process(parsed, loc):
-        [_, ast, _] = ct.untangle(parsed)
-        return ast
-    return ((keyword("{") + contents + keyword("}")) |
-            (ct.Reserved(INTERNAL, "{") + contents + ct.Reserved(INTERNAL, "}"))) ^ process
+    def typeParameters(self):
+        return self._parseList(self.typeParameter, "type parameter", LBRACK, COMMA, RBRACK)
 
-def processSymbol(sym, loc):
-    if sym.startswith("`"):
-        sym = tryDecodeString(sym)
-        if sym is None:
-            return ct.FailValue("invalid symbol")
-    return sym
+    def typeParameter(self):
+        l = self._peek().location
+        ats = self.attribs()
+        variance = None
+        if self._peekTag() is OPERATOR:
+            tok = self._next()
+            if tok.text != "+" and tok.text != "-":
+                self._error("+, -, or symbol")
+            variance = tok.text
+        name = self.symbol()
+        upperBound = None
+        if self._peekTag() is SUBTYPE:
+            self._next()
+            upperBound = self.ty()
+        lowerBound = None
+        if self._peekTag() is SUPERTYPE:
+            self._next()
+            lowerBound = self.ty()
+        loc = self._location(l)
+        return ast.TypeParameter(ats, variance, name, upperBound, lowerBound, loc)
 
-symbol = ct.Tag(SYMBOL) ^ processSymbol
-operator = ct.Tag(OPERATOR)
-unaryOperator = ct.If(operator, lambda op: op in ["!", "-", "+", "~"])
-identifier = symbol | operator
+    def parameters(self):
+        return self._parseList(self.parameter, "parameter", LPAREN, COMMA, RPAREN)
 
-semi = keyword(";") | ct.Reserved(INTERNAL, ";")
+    def parameter(self):
+        l = self._peek().location
+        ats = self.attribs()
+        var = None
+        if self._peekTag() is VAR:
+            var = self._next().text
+        pat = self.simplePattern()
+        return ast.Parameter(ats, var, pat, self._location(l))
 
-# Utilities for building binary expressions and patterns.
-BINOP_LEVELS = [
-    [],   # other
-    ["*", "/", "%"],
-    ["+", "-"],
-    [":"],
-    ["=", "!"],
-    ["<", ">"],
-    ["&"],
-    ["^"],
-    ["|"],
-]
-BINOP_OTHER_LEVEL = 0
-BINOP_LOGIC_AND_LEVEL = len(BINOP_LEVELS)
-BINOP_LOGIC_OR_LEVEL = BINOP_LOGIC_AND_LEVEL + 1
-BINOP_ASSIGN_LEVEL = BINOP_LOGIC_OR_LEVEL + 1
-NUM_BINOP_LEVELS = BINOP_ASSIGN_LEVEL + 1
+    def typeArguments(self):
+        return self._parseList(self.ty, "type arguments", LBRACK, COMMA, RBRACK)
 
-def precedenceOf(op):
-    """Returns the precedence level of an operator.
+    def arguments(self):
+        return self._parseList(self.maybeBinopExpr, "arguments", LPAREN, COMMA, RPAREN)
 
-    Precedence is mostly determined by the first character in the operator name, with a few
-    exceptions. See BINOP_LEVELS for a list of precedence levels. If the operator name ends
-    with '=', and does not start with '=', and the operator is not one of "<=", ">=", "!=",
-    or "!==", the operator is considered an assignment and has a low precedence. The operators
-    "&&" and "||" have their own special precedence levels, just above assignment.
+    def attribs(self):
+        ats = []
+        while self._peekTag() is ATTRIB:
+            tok = self._next()
+            ats.append(ast.Attribute(tok.text, tok.location))
+        return ats
 
-    Args:
-        op: the name of an operator (str).
-
-    Returns:
-        An integer indicating the precedence of the operator. Lower numbers indicate higher
-        precedence.
-    """
-    if op[-1] == "=" and \
-       not (len(op) > 1 and op[0] == "=") and \
-       op not in ["<=", ">=", "!=", "!=="]:
-        return BINOP_ASSIGN_LEVEL
-    elif op == "&&":
-        return BINOP_LOGIC_AND_LEVEL
-    elif op == "||":
-        return BINOP_LOGIC_OR_LEVEL
-    else:
-        for i in range(0, len(BINOP_LEVELS)):
-            if op[0] in BINOP_LEVELS[i]:
-                return i
-        return BINOP_OTHER_LEVEL
-
-LEFT_ASSOC = "left"
-RIGHT_ASSOC = "right"
-def associativityOf(op):
-    """Returns the associativity of an operator.
-
-    All operators have right associativity, except those that end with ':', which have left
-    associativity.
-
-    Returns:
-        LEFT_ASSOC or RIGHT_ASSOC.
-    """
-    return RIGHT_ASSOC if op[-1] == ":" else LEFT_ASSOC
-
-def buildBinaryParser(term, combine):
-    """Builds a parser for binary operators at the same level of precedence.
-
-    Used to build binary expressions and patterns.
-
-    Args:
-        term: a parser for the sub-expressions that make up a binary expression. Usually this
-            is a parser for simple expressions like literals or variables.
-        level: an integer indicating the precedence level to build for.
-        combine: a function `(str, ast.Node, ast.Node, Location => ast.Node)` which combines
-            two nodes produced by `term` with an operator and a location into a new node.
-
-    Returns:
-        A parser for binary operator expressions at this level of precedence.
-    """
-    postprocess = lambda ast, loc: postProcessBinary(combine, ast, loc)
-    parser = term
-    for level in xrange(0, NUM_BINOP_LEVELS):
-        parser = ct.LeftRec(parser, binarySuffix(parser, level), processBinary) ^ postprocess
-    return parser
-
-def binarySuffix(term, level):
-    return ct.If(operator, lambda op: precedenceOf(op) == level) + ct.Commit(term)
-
-def processBinary(left, parsed, _):
-    (op, right) = parsed
-    if not isinstance(left, list):
-        left = [(None, left)]
-    return left + [(op, right)]
-
-def postProcessBinary(combine, ast, loc):
-    if not isinstance(ast, list):
-        return ast
-    else:
-        assert len(ast) > 1
-        associativity = associativityOf(ast[1][0])
-        if associativity is LEFT_ASSOC:
-            result = ast[0][1]
-            for i in range(1, len(ast)):
-                (op, subast) = ast[i]
-                if associativityOf(op) is not LEFT_ASSOC:
-                    return ct.FailValue("left and right associativie operators are mixed together")
-                loc = result.location.combine(subast.location)
-                result = combine(op, result, subast, loc)
-            return result
+    def ident(self):
+        tag = self._peekTag()
+        if tag is SYMBOL:
+            return self.symbol()
+        elif tag is OPERATOR:
+            return self._next().text
         else:
-            result = ast[-1][1]
-            for i in range(-1, -len(ast), -1):
-                op = ast[i][0]
-                subast = ast[i-1][1]
-                if associativityOf(op) is not RIGHT_ASSOC:
-                    return ct.FailValue("left and right associativie operators are mixed together")
-                loc = result.location.combine(subast.location)
-                result = combine(op, subast, result, loc)
-            return result
+            self._error("identifier")
+
+    def symbol(self):
+        sym = self._nextTag(SYMBOL).text
+        if sym.startswith("`"):
+            sym = tryDecodeString(sym)
+            if sym is None:
+                raise ParseException(self.location, "invalid symbol")
+        return sym
+
+    def semi(self):
+        if self._peekTag() not in (SEMI, IMPLICIT_SEMI):
+            self._error(";")
+        self._next()
+
+    # Utility methods
+    def atEnd(self):
+        return self.pos >= len(self.tokens) - 1
+
+    def _parseBinop(self, simpleParser, astCtor, level):
+        if level == 0:
+            termParser = simpleParser
+        else:
+            termParser = lambda: self._parseBinop(simpleParser, astCtor, level - 1)
+        terms = [termParser()]
+        ops = []
+        tok = self._peek()
+        while tok.tag is OPERATOR and self._precedence(tok.text) == level:
+            self._next()
+            ops.append(tok)
+            terms.append(termParser())
+            tok = self._peek()
+        if len(terms) == 1:
+            return terms[0]
+
+        associativity = self._associativity(ops[0].text)
+        if associativity is self.LEFT_ASSOC:
+            e = terms[0]
+            for i, op in enumerate(ops):
+                term = terms[i + 1]
+                if self._associativity(op.text) is not self.LEFT_ASSOC:
+                    raise ParseException(
+                        op.location, "left and right associative operators are mixed together")
+                loc = e.location.combine(term.location)
+                e = astCtor(op.text, e, term, loc)
+        else:
+            e = terms[-1]
+            for i in xrange(len(ops) - 1, -1, -1):
+                op = ops[i]
+                term = terms[i]
+                if self._associativity(op.text) is not self.RIGHT_ASSOC:
+                    raise ParseException(
+                        op.location, "left and right associative operators are mixed together")
+                loc = term.location.combine(e.location)
+                e = astCtor(op.text, term, e, loc)
+        return e
+
+    def _parseOption(self, hintTag, parser):
+        if self._peekTag() is hintTag:
+            return parser()
+        else:
+            return None
+
+    def _parseBlock(self, parser, label):
+        if self._peekTag() is LBRACE:
+            end = RBRACE
+        elif self._peekTag() is IMPLICIT_LBRACE:
+            end = IMPLICIT_RBRACE
+        else:
+            self._error(label)
+        self._next()
+        elems = []
+        while self._peekTag() is not end:
+            elems.append(parser())
+        self._nextTag(end)
+        return elems
+
+    def _parseList(self, parser, label, left=None, sep=None, right=EOF):
+        if left:
+            if self._peekTag() is left:
+                self._next()
+            else:
+                self._error(label)
+        elems = []
+        first = True
+        while True:
+            if self._peekTag() is right:
+                self._next()
+                break
+            if not first and sep:
+                if self._peekTag() is not sep:
+                    self._error(sep)
+                self._next()
+            if self._peekTag() is right:
+                self._next()
+                break
+            elem = parser()
+            elems.append(elem)
+            first = False
+        return elems
+
+    def _parseRepSep(self, parser, sep):
+        elems = [parser()]
+        while self._peekTag() is sep:
+            self._next()
+            elems.append(parser())
+        return elems
+
+    def _peekTag(self):
+        return self._peek().tag
+
+    def _peekOpLevel(self):
+        pass
+
+    def _peek(self):
+        return self.tokens[self.pos]
+
+    def _next(self):
+        tok = self.tokens[self.pos]
+        self.pos += 1
+        self.location = tok.location
+        return tok
+
+    def _nextTag(self, expectedTag, expectedText=None):
+        if expectedText is None:
+            expectedText = expectedTag
+        if not self._peekTag() is expectedTag:
+            self._error(expectedText)
+        return self._next()
+
+    def _error(self, expected):
+        tok = self._peek()
+        raise ParseException(tok.location, "expected %s but found %s" % (expected, tok.text))
+
+    def _location(self, begin):
+        return begin.combine(self.location)

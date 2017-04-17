@@ -29,7 +29,17 @@
 
 import re
 
-from tok import Token, SYMBOL, OPERATOR, NEWLINE, SPACE, COMMENT, INTERNAL
+from tok import (
+    COMMENT,
+    IMPLICIT_LBRACE,
+    IMPLICIT_RBRACE,
+    IMPLICIT_SEMI,
+    NEWLINE,
+    OPERATOR,
+    SPACE,
+    SYMBOL,
+    Token,
+)
 
 def layout(tokensIn, skipAnalysis=False):
     if skipAnalysis:
@@ -67,9 +77,9 @@ def layout(tokensIn, skipAnalysis=False):
             indentStack.pop()
             patterns.pop()
             if tokensOut[-1].text != ";":
-                tokensOut.append(Token(";", INTERNAL, loc))
+                tokensOut.append(Token(";", IMPLICIT_SEMI, loc))
             if indent < indentStack[-1] or text != "}":
-                tokensOut.append(Token("}", INTERNAL, loc))
+                tokensOut.append(Token("}", IMPLICIT_RBRACE, loc))
 
     for pos in range(0, len(tokensIn)):
         token = tokensIn[pos]
@@ -101,18 +111,18 @@ def layout(tokensIn, skipAnalysis=False):
                 if indent < indentStack[-1]:
                     dedent(indent, token.text, token.location)
                     if tokensOut[-1].text != ";" and token.text not in ["else", "catch", "finally"]:
-                        tokensOut.append(Token(";", INTERNAL, token.location))
+                        tokensOut.append(Token(";", IMPLICIT_SEMI, token.location))
                 elif indent == indentStack[-1]:
                     if len(tokensOut) > 1 and \
                        tokensOut[-1].text != ";" and \
                        (token.text != "{" or not patterns.match()):
-                        tokensOut.append(Token(";", INTERNAL, token.location))
+                        tokensOut.append(Token(";", IMPLICIT_SEMI, token.location))
                         patterns.reset()
                 else:
                     assert indent > indentStack[-1]
                     if patterns.match() or (len(tokensOut) > 0 and tokensOut[-1].text == "{"):
                         if tokensOut[-1].text != "{":
-                            tokensOut.append(Token("{", INTERNAL, token.location))
+                            tokensOut.append(Token("{", IMPLICIT_LBRACE, token.location))
                             patterns.reset()
                         patterns.push()
                         indentStack.append(indent)
@@ -135,11 +145,11 @@ def layout(tokensIn, skipAnalysis=False):
                 tokensOut.append(token)
 
     if len(tokensOut) > 0 and tokensOut[-1].text != ";":
-        tokensOut.append(Token(";", INTERNAL, tokensOut[-1].location))
+        tokensOut.append(Token(";", IMPLICIT_SEMI, tokensOut[-1].location))
     if len(indentStack) > 1:
         dedent(indentStack[0], None, tokensOut[-1].location)
     if len(tokensOut) > 0 and tokensOut[-1].text != ";":
-        tokensOut.append(Token(";", INTERNAL, tokensOut[-1].location))
+        tokensOut.append(Token(";", IMPLICIT_SEMI, tokensOut[-1].location))
 
     return tokensOut
 

@@ -1060,7 +1060,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(ClassType(tupleClass, (getStringType(), getStringType())),
                           info.getType(matchAst.matcher.cases[0].pattern))
         self.assertEquals(getStringType(),
-                          info.getType(matchAst.matcher.cases[0].pattern.patterns[0]))
+                          info.getType(matchAst.matcher.cases[0].pattern.pattern.patterns[0]))
         self.assertEquals(getStringType(), info.getType(matchAst.matcher.cases[0].expression))
 
     def testMatchExprValue(self):

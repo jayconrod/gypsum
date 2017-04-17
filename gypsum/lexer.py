@@ -10,66 +10,64 @@ from errors import LexException
 from location import Location
 from tok import *
 
-__opchars = r"[!#%&*+\-/:<=>?@\\^|~]"
-
-__expressions = [
+_expressions = [
   (r"\r?\n", NEWLINE),
   (r"[\t ]+", SPACE),
   (r"//[^\r\n]*", COMMENT),
 
-  (r"\[",  RESERVED),
-  (r"\]",  RESERVED),
-  (r"\(",  RESERVED),
-  (r"\)",  RESERVED),
-  (r"\{",  RESERVED),
-  (r"\}",  RESERVED),
-  (r"<:",  RESERVED),
-  (r">:",  RESERVED),
-  (r"=>",  RESERVED),
-  (r"->",  RESERVED),
-  (r"_",   RESERVED),
-  (r"\.",  RESERVED),
-  (r",",   RESERVED),
-  (r":",   RESERVED),
-  (r";",   RESERVED),
-  (r"=",   RESERVED),
+  (r"\[",  LBRACK),
+  (r"\]",  RBRACK),
+  (r"\(",  LPAREN),
+  (r"\)",  RPAREN),
+  (r"\{",  LBRACE),
+  (r"\}",  RBRACE),
+  (r"<:",  SUBTYPE),
+  (r">:",  SUPERTYPE),
+  (r"=>",  BIG_ARROW),
+  (r"->",  SMALL_ARROW),
+  (r"_",   UNDERSCORE),
+  (r"\.",  DOT),
+  (r",",   COMMA),
+  (r":",   COLON),
+  (r";",   SEMI),
+  (r"=",   EQ),
 
-  (r"var", RESERVED),
-  (r"let", RESERVED),
-  (r"def", RESERVED),
-  (r"class", RESERVED),
-  (r"trait", RESERVED),
-  (r"arrayelements", RESERVED),
-  (r"import", RESERVED),
-  (r"as", RESERVED),
-  (r"if", RESERVED),
-  (r"else", RESERVED),
-  (r"while", RESERVED),
-  (r"break", RESERVED),
-  (r"continue", RESERVED),
-  (r"case", RESERVED),
-  (r"match", RESERVED),
-  (r"throw", RESERVED),
-  (r"try", RESERVED),
-  (r"catch", RESERVED),
-  (r"finally", RESERVED),
-  (r"new", RESERVED),
-  (r"lambda", RESERVED),
-  (r"return", RESERVED),
-  (r"unit", RESERVED),
-  (r"i8", RESERVED),
-  (r"i16", RESERVED),
-  (r"i32", RESERVED),
-  (r"i64", RESERVED),
-  (r"f32", RESERVED),
-  (r"f64", RESERVED),
-  (r"boolean", RESERVED),
-  (r"forsome", RESERVED),
-  (r"true", RESERVED),
-  (r"false", RESERVED),
-  (r"this", RESERVED),
-  (r"super", RESERVED),
-  (r"null", RESERVED),
+  (r"var", VAR),
+  (r"let", LET),
+  (r"def", DEF),
+  (r"class", CLASS),
+  (r"trait", TRAIT),
+  (r"arrayelements", ARRAYELEMENTS),
+  (r"import", IMPORT),
+  (r"as", AS),
+  (r"if", IF),
+  (r"else", ELSE),
+  (r"while", WHILE),
+  (r"break", BREAK),
+  (r"continue", CONTINUE),
+  (r"case", CASE),
+  (r"match", MATCH),
+  (r"throw", THROW),
+  (r"try", TRY),
+  (r"catch", CATCH),
+  (r"finally", FINALLY),
+  (r"new", NEW),
+  (r"lambda", LAMBDA),
+  (r"return", RETURN),
+  (r"unit", UNIT),
+  (r"i8", I8),
+  (r"i16", I16),
+  (r"i32", I32),
+  (r"i64", I64),
+  (r"f32", F32),
+  (r"f64", F64),
+  (r"boolean", BOOLEAN),
+  (r"forsome", FORSOME),
+  (r"true", TRUE),
+  (r"false", FALSE),
+  (r"this", THIS),
+  (r"super", SUPER),
+  (r"null", NULL),
 
   (r"abstract", ATTRIB),
   (r"final", ATTRIB),
@@ -95,7 +93,7 @@ __expressions = [
   (r"[A-Za-z_][A-Za-z0-9_-]*", SYMBOL),
   (r"`(?:\\`|[^`])*`", SYMBOL),
 ]
-__expressions = [(re.compile(expr[0]), expr[1]) for expr in __expressions]
+_expressions = [(re.compile(expr[0]), expr[1]) for expr in _expressions]
 
 
 def lex(filename, source):
@@ -106,7 +104,7 @@ def lex(filename, source):
     column = 1
     while pos < end:
         token = None
-        for expr in __expressions:
+        for expr in _expressions:
             (rx, tag) = expr
             m = rx.match(source, pos)
             if m:
@@ -128,5 +126,3 @@ def lex(filename, source):
         pos += len(token.text)
 
     return tokens
-
-__all__ = ["lex"]

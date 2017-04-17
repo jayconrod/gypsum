@@ -117,8 +117,10 @@ class FunctionDefinition(Definition):
         return self.name
 
     def children(self):
-        return self.attribs + self.typeParameters + self.parameters + \
-               [self.returnType, self.body]
+        return (self.attribs +
+                utils.listOpt(self.typeParameters) +
+                utils.listOpt(self.parameters) +
+               [self.returnType, self.body])
 
     def isConstructor(self):
         return self.name == "this"
@@ -146,7 +148,9 @@ class ClassDefinition(Definition):
         return self.name
 
     def children(self):
-        children = self.attribs + self.typeParameters
+        children = list(self.attribs)
+        if self.typeParameters is not None:
+            children.extend(self.typeParameters)
         if self.constructor is not None:
             children.append(self.constructor)
         if self.superclass is not None:
@@ -155,13 +159,14 @@ class ClassDefinition(Definition):
             children.extend(self.superArgs)
         if self.supertraits is not None:
             children.extend(self.supertraits)
-        children.extend(self.members)
+        if self.members is not None:
+            children.extend(self.members)
         return children
 
     def hasConstructors(self):
         return self.constructor is not None or \
                any(isinstance(member, FunctionDefinition) and member.isConstructor()
-                   for member in self.members)
+                   for member in utils.iterOpt(self.members))
 
 
 class PrimaryConstructorDefinition(Definition):
@@ -222,10 +227,9 @@ class TraitDefinition(Definition):
     def children(self):
         children = []
         children.extend(self.attribs)
-        children.extend(self.typeParameters)
-        if self.supertypes is not None:
-            children.extend(self.supertypes)
-        children.extend(self.members)
+        children.extend(utils.iterOpt(self.typeParameters))
+        children.extend(utils.iterOpt(self.supertypes))
+        children.extend(utils.iterOpt(self.members))
         return children
 
 
@@ -424,6 +428,18 @@ class BinaryPattern(Pattern):
 
     def children(self):
         return [self.left, self.right]
+
+
+class GroupPattern(Node):
+    def __init__(self, pattern, location):
+        super(GroupPattern, self).__init__(location)
+        self.pattern = pattern
+
+    def __repr__(self):
+        return "GroupPattern(%s)" % self.pattern
+
+    def children(self):
+        return [self.pattern]
 
 
 class Type(Node):
@@ -689,18 +705,6 @@ class BinaryExpression(Expression):
         return [self.left, self.right]
 
 
-class FunctionValueExpression(Expression):
-    def __init__(self, expr, location):
-        super(FunctionValueExpression, self).__init__(location)
-        self.expr = expr
-
-    def __repr__(self):
-        return "FunctionValueExpression(%s)" % repr(self.expr)
-
-    def children(self):
-        return [self.expr]
-
-
 class TupleExpression(Expression):
     def __init__(self, expressions, location):
         super(TupleExpression, self).__init__(location)
@@ -831,7 +835,7 @@ class LambdaExpression(Expression):
             (repr(self.parameters), repr(self.body))
 
     def children(self):
-        return self.parameters + [self.body]
+        return utils.listOpt(self.parameters) + [self.body]
 
 
 class ReturnExpression(Expression):

@@ -20,6 +20,7 @@ from utils import (
     flatMap,
     hashList,
     indexSame,
+    listOpt,
     oneOrNone,
     reprFormat,
 )
@@ -1180,7 +1181,7 @@ def getExplicitTypeParameterCount(irDefn):
                 # to count the explicit type parameters, which is kind of a hack. Works as long
                 # as we can't import local functions from other packages, since we wouldn't
                 # have an AST.
-                return len(irDefn.astDefn.typeParameters)
+                return len(listOpt(irDefn.astDefn.typeParameters))
             else:
                 return 0
         else:
