@@ -1507,7 +1507,9 @@ class CompileVisitor(ast.NodeVisitor):
         self.drop()
 
     def buildLiteral(self, lit):
-        if isinstance(lit, ast.IntegerLiteral):
+        if isinstance(lit, ast.UnitLiteral):
+            self.unit()
+        elif isinstance(lit, ast.IntegerLiteral):
             value = lit.value
             if value >= 2 ** (lit.width - 1):
                 value -= 2 ** lit.width
@@ -1538,7 +1540,7 @@ class CompileVisitor(ast.NodeVisitor):
         elif isinstance(lit, ast.NullLiteral):
             self.null()
         else:
-            raise NotImplementedError
+            raise NotImplementedError()
 
     def buildUninitialized(self, ty):
         if ty is UnitType or ty is NoType:

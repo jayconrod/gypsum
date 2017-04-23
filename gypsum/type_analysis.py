@@ -426,6 +426,9 @@ class TypeVisitorBase(ast.NodeVisitor):
                                 "non-object type used as function return type")
         return ir_t.ClassType(trait, (returnType,) + parameterTypes)
 
+    def visitUnitLiteral(self, node):
+        return ir_t.UnitType
+
     def visitIntegerLiteral(self, node):
         typeMap = { 8: ir_t.I8Type, 16: ir_t.I16Type, 32: ir_t.I32Type, 64: ir_t.I64Type }
         if node.width not in typeMap:

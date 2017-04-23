@@ -866,6 +866,11 @@ class Literal(Node):
     pass
 
 
+class UnitLiteral(Literal):
+    def __repr__(self):
+        return "UnitLiteral"
+
+
 class IntegerLiteral(Literal):
     def __init__(self, text, value, width, location):
         super(IntegerLiteral, self).__init__(location)

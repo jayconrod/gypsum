@@ -7,7 +7,6 @@
 import unittest
 
 from errors import ParseException
-from layout import layout
 from lexer import lex
 from location import (Location, NoLoc)
 from parser import Parser
@@ -27,11 +26,10 @@ for k, v in ast.__dict__.iteritems():
 class TestParser(unittest.TestCase):
     def parseFromSource(self, parseMethod, text):
         fileName = "test"
-        rawTokens = lex(fileName, text)
-        layoutTokens = layout(rawTokens, skipAnalysis=True)
-        parser = Parser(fileName, layoutTokens)
+        tokens = lex(fileName, text)
+        parser = Parser(fileName, tokens)
         result = parseMethod(parser)
-        if not parser.atEnd():
+        if not parser.nearEnd():
             raise ParseException(parser.location, "did not parse entire source")
         return result
 
@@ -50,22 +48,22 @@ class TestParser(unittest.TestCase):
     def testVarDefnEmpty(self):
         self.checkParse(astVariableDefinition([], "var", astVariablePattern("x", None), None),
                         Parser.defn,
-                        "var x;")
+                        "var x")
 
     def testLetDefnEmpty(self):
         self.checkParse(astVariableDefinition([], "let", astVariablePattern("x", None), None),
                         Parser.defn,
-                        "let x;")
+                        "let x")
 
     def testVarDefn(self):
         self.checkParse(astVariableDefinition([], "var",
                                               astVariablePattern("x", None),
                                               astVariableExpression("y")),
                         Parser.defn,
-                        "var x = y;")
+                        "var x = y")
 
     def testLetDefnMultiple(self):
-        self.checkParseError(Parser.defn, "let x = 0, y = 0;")
+        self.checkParseError(Parser.defn, "let x = 0, y = 0")
 
     def testLetDefnTuplePattern(self):
         self.checkParse(astVariableDefinition([], "let",
@@ -74,7 +72,7 @@ class TestParser(unittest.TestCase):
                                                   astVariablePattern("y", None)]),
                                               astVariableExpression("z")),
                         Parser.defn,
-                        "let x, y = z;")
+                        "let x, y = z")
 
     def testLetDefnTupleExpr(self):
         self.checkParse(astVariableDefinition([], "let",
@@ -83,26 +81,26 @@ class TestParser(unittest.TestCase):
                                                   astVariableExpression("y"),
                                                   astVariableExpression("z")])),
                         Parser.defn,
-                        "let x = y, z;")
+                        "let x = y, z")
 
     def testLetDefn(self):
         self.checkParse(astVariableDefinition([], "let",
                                               astVariablePattern("x", None),
                                               astVariableExpression("y")),
                         Parser.defn,
-                        "let x = y;")
+                        "let x = y")
 
     def testVarDefnWithAttribs(self):
         self.checkParse(astVariableDefinition([astAttribute("public")], "var",
                                               astVariablePattern("x", None),
                                               None),
                         Parser.defn,
-                        "public var x;")
+                        "public var x")
 
     def testFunctionDefnSimple(self):
         self.checkParse(astFunctionDefinition([], "f", None, None, None, None),
                         Parser.defn,
-                        "def f;")
+                        "def f")
 
     def testFunctionDefn(self):
         self.checkParse(astFunctionDefinition([], "f",
@@ -113,60 +111,60 @@ class TestParser(unittest.TestCase):
                                               astClassType([], "A", [], set()),
                                               astVariableExpression("x")),
                         Parser.defn,
-                        "def f[S, T](x: S, y: T): A = x;")
+                        "def f[S, T](x: S, y: T): A = x")
 
     def testFunctionDefnWithVarParam(self):
         self.checkParse(astFunctionDefinition([], "f", None,
                                               [astParameter([], "var", astVariablePattern("x", astUnitType()))],
                                               None, None),
                         Parser.defn,
-                        "def f(var x: unit);")
+                        "def f(var x: unit)")
 
     def testFunctionDefnWithAttribs(self):
         self.checkParse(astFunctionDefinition([astAttribute("public")],
                                               "f", None, None, None, None),
                         Parser.defn,
-                        "public def f;")
+                        "public def f")
 
     def testOperatorFunctionDefn(self):
         self.checkParse(astFunctionDefinition([], "+", None, None, None, None),
                         Parser.defn,
-                        "def +;")
+                        "def +")
 
     def testClassDefnSimple(self):
         self.checkParse(astClassDefinition([], "C", None, None, None, None, None, None),
                         Parser.defn,
-                        "class C;")
+                        "class C")
 
     def testClassDefnSimpleWithBody(self):
         ctorast = astFunctionDefinition([], "this", None, None, None,
                                         astLiteralExpression(astIntegerLiteral("12", 12, 64)))
         ast = astClassDefinition([], "C", None, None, None, None, None, [ctorast])
-        self.checkParse(ast, Parser.defn, "class C { def this = 12; };")
+        self.checkParse(ast, Parser.defn, "class C\n  def this = 12")
 
     def testClassDefnWithAttribs(self):
         self.checkParse(astClassDefinition([astAttribute("public")], "C", None,
                                            None, None, None, None, None),
                         Parser.defn,
-                        "public class C;")
+                        "public class C")
 
     def testSubclass(self):
         ast = astClassDefinition([], "Sub", None, None, astClassType([], "Base", [], set()), None, None, None)
-        self.checkParse(ast, Parser.defn, "class Sub <: Base;")
+        self.checkParse(ast, Parser.defn, "class Sub <: Base")
 
     def testSubclassWithTypeArgs(self):
         ast = astClassDefinition([], "Sub", None, None,
                                  astClassType([], "Base", [astClassType([], "X", [], set()),
                                                            astClassType([], "Y", [], set())], set()),
                                  None, None, None)
-        self.checkParse(ast, Parser.defn, "class Sub <: Base[X, Y];")
+        self.checkParse(ast, Parser.defn, "class Sub <: Base[X, Y]")
 
     def testSubclassWithSuperArgs(self):
         ast = astClassDefinition([], "Sub", None, None,
                                  astClassType([], "Base", [], set()),
                                  [astVariableExpression("x"), astVariableExpression("y")],
                                  None, None)
-        self.checkParse(ast, Parser.defn, "class Sub <: Base(x, y);")
+        self.checkParse(ast, Parser.defn, "class Sub <: Base(x, y)")
 
     def testSubclassWithTrait(self):
         ast = astClassDefinition([], "Sub", None, None,
@@ -174,7 +172,7 @@ class TestParser(unittest.TestCase):
                                  [astVariableExpression("x"), astVariableExpression("y")],
                                  [astClassType([], "Tr", [], set())],
                                  None)
-        self.checkParse(ast, Parser.defn, "class Sub <: Base(x, y), Tr;")
+        self.checkParse(ast, Parser.defn, "class Sub <: Base(x, y), Tr")
 
     def testSubclassWithTraits(self):
         ast = astClassDefinition([], "Sub", None, None,
@@ -183,27 +181,27 @@ class TestParser(unittest.TestCase):
                                  [astClassType([], "Tr1", [], set()),
                                   astClassType([], "Tr2", [], set())],
                                  None)
-        self.checkParse(ast, Parser.defn, "class Sub <: Base(x, y), Tr1, Tr2;")
+        self.checkParse(ast, Parser.defn, "class Sub <: Base(x, y), Tr1, Tr2")
 
     def testClassWithNullaryCtor(self):
         ast = astClassDefinition([], "C", None,
                                  astPrimaryConstructorDefinition([], []),
                                  None, None, None, None)
-        self.checkParse(ast, Parser.defn, "class C();")
+        self.checkParse(ast, Parser.defn, "class C()")
 
     def testClassWithUnaryCtor(self):
         ast = astClassDefinition([], "C", None,
                                  astPrimaryConstructorDefinition([],
                                                                  [astParameter([], None, astVariablePattern("x", astI32Type()))]),
                                  None, None, None, None)
-        self.checkParse(ast, Parser.defn, "class C(x: i32);")
+        self.checkParse(ast, Parser.defn, "class C(x: i32)")
 
     def testClassWithUnaryCtorWithVarParam(self):
         ast = astClassDefinition([], "C", None,
                                  astPrimaryConstructorDefinition([],
                                                                  [astParameter([], "var", astVariablePattern("x", astI32Type()))]),
                                  None, None, None, None)
-        self.checkParse(ast, Parser.defn, "class C(var x: i32);")
+        self.checkParse(ast, Parser.defn, "class C(var x: i32)")
 
     def testClassWithBinaryCtor(self):
         ast = astClassDefinition([], "C", None,
@@ -211,29 +209,29 @@ class TestParser(unittest.TestCase):
                                                                  [astParameter([], None, astVariablePattern("x", astI32Type())),
                                                                   astParameter([], None, astVariablePattern("y", astI32Type()))]),
                                  None, None, None, None)
-        self.checkParse(ast, Parser.defn, "class C(x: i32, y: i32);")
+        self.checkParse(ast, Parser.defn, "class C(x: i32, y: i32)")
 
     def testClassWithCtorWithAttribs(self):
         self.checkParse(astClassDefinition([], "C", None,
                                            astPrimaryConstructorDefinition([astAttribute("public")], []),
                                            None, None, None, None),
                         Parser.defn,
-                        "class C public ();")
+                        "class C public ()")
 
     def testOperatorClassDefn(self):
         self.checkParse(astClassDefinition([], "::", None, None, None, None, None, None),
                         Parser.defn,
-                        "class ::;")
+                        "class ::")
 
     def testTraitDefnSimple(self):
         self.checkParse(astTraitDefinition([], "T", None, None, None),
                         Parser.defn,
-                        "trait T;")
+                        "trait T")
 
     def testTraitWithAttribs(self):
         self.checkParse(astTraitDefinition([astAttribute("public")], "T", None, None, None),
                         Parser.defn,
-                        "public trait T;")
+                        "public trait T")
 
     def testTraitWithTypeParameters(self):
         self.checkParse(astTraitDefinition([], "Tr",
@@ -241,7 +239,7 @@ class TestParser(unittest.TestCase):
                                             astTypeParameter([], None, "T", None, None)],
                                            None, None),
                         Parser.defn,
-                        "trait Tr[S, T];")
+                        "trait Tr[S, T]")
 
     def testTraitWithSubtypes(self):
         self.checkParse(astTraitDefinition([], "Tr", None,
@@ -249,14 +247,16 @@ class TestParser(unittest.TestCase):
                                             astClassType([], "Bar", [], set())],
                                            None),
                         Parser.defn,
-                        "trait Tr <: Foo, Bar;")
+                        "trait Tr <: Foo, Bar")
 
     def testTraitWithMembers(self):
         self.checkParse(astTraitDefinition([], "Tr", None, None,
                                            [astVariableDefinition([], "let", astVariablePattern("x", None), None),
                                             astVariableDefinition([], "let", astVariablePattern("y", None), None)]),
                         Parser.defn,
-                        "trait Tr { let x; let y; };")
+                        "trait Tr\n" +
+                        "  let x\n" +
+                        "  let y")
 
     def testFullTrait(self):
         self.checkParse(astTraitDefinition([astAttribute("public"),
@@ -269,7 +269,9 @@ class TestParser(unittest.TestCase):
                                            [astVariableDefinition([], "let", astVariablePattern("x", None), None),
                                             astVariableDefinition([], "let", astVariablePattern("y", None), None)]),
                         Parser.defn,
-                        "public native trait Tr[S, T] <: Foo, Bar { let x; let y; };")
+                        "public native trait Tr[S, T] <: Foo, Bar\n" +
+                        "  let x\n" +
+                        "  let y\n")
 
     def testTypeParametersEmpty(self):
         self.checkParse([], Parser.typeParameters, "[]")
@@ -330,7 +332,7 @@ class TestParser(unittest.TestCase):
                                                   astArrayAccessorDefinition([], "set"),
                                                   astArrayAccessorDefinition([], "length")),
                         Parser.defn,
-                        "arrayelements unit, get, set, length;")
+                        "arrayelements unit, get, set, length")
 
     def testArrayElementsAttribs(self):
         self.checkParse(astArrayElementsStatement([astAttribute("final")],
@@ -339,7 +341,7 @@ class TestParser(unittest.TestCase):
                                                   astArrayAccessorDefinition([], "set"),
                                                   astArrayAccessorDefinition([], "length")),
                         Parser.defn,
-                        "final arrayelements unit, get, set, length;")
+                        "final arrayelements unit, get, set, length")
 
     def testArrayElementsOperators(self):
         self.checkParse(astArrayElementsStatement([],
@@ -348,7 +350,7 @@ class TestParser(unittest.TestCase):
                                                   astArrayAccessorDefinition([], "!!"),
                                                   astArrayAccessorDefinition([], "!!!")),
                         Parser.defn,
-                        "arrayelements unit, !, !!, !!!;")
+                        "arrayelements unit, !, !!, !!!")
 
     def testArrayElementsAttribs(self):
         self.checkParse(astArrayElementsStatement([],
@@ -357,7 +359,7 @@ class TestParser(unittest.TestCase):
                                                   astArrayAccessorDefinition([astAttribute("protected")], "set"),
                                                   astArrayAccessorDefinition([astAttribute("private")], "length")),
                         Parser.defn,
-                        "arrayelements unit, public get, protected set, private length;")
+                        "arrayelements unit, public get, protected set, private length")
 
     def testClassWithArrayElements(self):
         self.checkParse(astClassDefinition([], "Foo", None, None, None, None, None,
@@ -367,65 +369,71 @@ class TestParser(unittest.TestCase):
                                                                       astArrayAccessorDefinition([], "set"),
                                                                       astArrayAccessorDefinition([], "length"))]),
                         Parser.defn,
-                        "class Foo { arrayelements unit, get, set, length; };")
+                        "class Foo\n" +
+                        "  arrayelements unit, get, set, length")
 
     def testImportBlank(self):
         self.checkParse(astImportStatement([astScopePrefixComponent("foo", None),
                                             astScopePrefixComponent("bar", [astBlankType()])],
                                            None),
                         Parser.importStmt,
-                        "import foo.bar[_]._;")
+                        "import foo.bar[_]._")
 
     def testImportSingle(self):
         self.checkParse(astImportStatement([astScopePrefixComponent("foo", None)],
                                            [astImportBinding("x", None)]),
                         Parser.importStmt,
-                        "import foo.x;")
+                        "import foo.x")
 
     def testImportSingleAs(self):
         self.checkParse(astImportStatement([astScopePrefixComponent("foo", None)],
                                            [astImportBinding("x", "y")]),
                         Parser.importStmt,
-                        "import foo.x as y;")
+                        "import foo.x as y")
 
     def testImportMultiple(self):
         self.checkParse(astImportStatement([astScopePrefixComponent("foo", None)],
                                            [astImportBinding("x", None),
                                             astImportBinding("y", None)]),
                         Parser.importStmt,
-                        "import foo.x, y;")
+                        "import foo.x, y")
 
     def testImportMultipleAs(self):
         self.checkParse(astImportStatement([astScopePrefixComponent("foo", None)],
                                            [astImportBinding("a", "b"),
                                             astImportBinding("c", "d")]),
                         Parser.importStmt,
-                        "import foo.a as b, c as d;")
+                        "import foo.a as b, c as d")
 
     def testImportNoPrefix(self):
-        self.checkParseError(Parser.importStmt, "import foo;")
+        self.checkParseError(Parser.importStmt, "import foo")
 
     def testImportWithTypeArgs(self):
-        self.checkParseError(Parser.importStmt, "import foo.bar[_];")
+        self.checkParseError(Parser.importStmt, "import foo.bar[_]")
 
     def testImportInClass(self):
         self.checkParse(astClassDefinition([], "C", None, None, None, None, None,
                                            [astImportStatement([astScopePrefixComponent("foo", None)],
                                                                None)]),
                         Parser.defn,
-                        "class C { import foo._; };")
+                        "class C\n" +
+                        "  import foo._")
 
     def testImportInBlockExpr(self):
-        self.checkParse(astBlockExpression([astImportStatement([astScopePrefixComponent("foo", None)],
-                                                               None)]),
-                        Parser.expr,
-                        "{ import foo._; }")
+        self.checkParse(
+            astWhileExpression(
+                astLiteralExpression(astBooleanLiteral(True)),
+                astBlockExpression([
+                    astImportStatement([astScopePrefixComponent("foo", None)], None)])),
+            Parser.expr,
+            "while (true)\n" +
+            "  import foo._")
 
     def testImportInModule(self):
         self.checkParse(astModule([astImportStatement([astScopePrefixComponent("foo", None)],
                                                       None)]),
                         Parser.module,
-                        "import foo._;")
+                        "import foo._")
 
     # Patterns
     def testVarPatternNoType(self):
@@ -729,17 +737,28 @@ class TestParser(unittest.TestCase):
         self.checkParse(astSuperExpression(), Parser.expr, "super")
 
     def testBlockExpr(self):
-        self.checkParse(astBlockExpression([astVariableExpression("x"),
-                                            astVariableExpression("y")]),
-                        Parser.expr, "{x;y;}")
+        self.checkParse(
+            astWhileExpression(
+                astLiteralExpression(astBooleanLiteral(True)),
+                astBlockExpression([
+                    astVariableExpression("x"),
+                    astVariableExpression("y")])),
+            Parser.expr,
+            "while (true)\n" +
+            "  x\n" +
+            "  y")
 
     def testBlockWithUnitExpr(self):
         self.checkParse(
-            astBlockExpression([
-                astAssignExpression(astVariableExpression("x"), astVariableExpression("y")),
-                astBlockExpression([])]),
+            astWhileExpression(
+                astLiteralExpression(astBooleanLiteral(True)),
+                astBlockExpression([
+                    astAssignExpression(astVariableExpression("x"), astVariableExpression("y")),
+                    astLiteralExpression(astUnitLiteral())])),
             Parser.expr,
-            "{x = y; {};}")
+            "while (true)\n" +
+            "  x = y\n" +
+            "  {}")
 
     def testProp(self):
         self.checkParse(astPropertyExpression(astVariableExpression("o"), "x"),
@@ -981,6 +1000,18 @@ class TestParser(unittest.TestCase):
                                         astVariableExpression("z")),
                         Parser.expr, "if (x) y else z")
 
+    def testIfHangingElse(self):
+        self.checkParse(
+            astIfExpression(
+                astVariableExpression("x"),
+                astBlockExpression([
+                    astVariableExpression("y")]),
+                astVariableExpression("z")),
+            Parser.expr,
+            "if (x)\n" +
+            "  y\n" +
+            "else z")
+
     def testIfExprNoElse(self):
         self.checkParse(astIfExpression(astVariableExpression("x"),
                                         astVariableExpression("y"),
@@ -1000,21 +1031,23 @@ class TestParser(unittest.TestCase):
                                            astVariableExpression("y")),
                         Parser.expr, "while (x) y")
 
-    def testWhileBlockEmptyExpr(self):
-        self.checkParse(astWhileExpression(astVariableExpression("c"),
-                                           astBlockExpression([])),
-                        Parser.expr, "while (c) {}")
-
     def testWhileBlockExpr(self):
-        self.checkParse(astWhileExpression(astBinaryExpression(">",
-                                                               astVariableExpression("n"),
-                                                               astLiteralExpression(astIntegerLiteral("0", 0, 64))),
-                                           astAssignExpression(astVariableExpression("n"),
-                                                               astBinaryExpression("-",
-                                                                                   astVariableExpression("n"),
-                                                                                   astLiteralExpression(astIntegerLiteral("1", 1, 64))))),
-                        Parser.expr, "while (n > 0)\n" + \
-                                      "  n = n - 1")
+        self.checkParse(
+            astWhileExpression(
+                astBinaryExpression(
+                    ">",
+                    astVariableExpression("n"),
+                    astLiteralExpression(astIntegerLiteral("0", 0, 64))),
+                astBlockExpression([
+                    astAssignExpression(
+                        astVariableExpression("n"),
+                        astBinaryExpression(
+                            "-",
+                            astVariableExpression("n"),
+                            astLiteralExpression(astIntegerLiteral("1", 1, 64))))])),
+            Parser.expr,
+            "while (n > 0)\n" +
+            "  n = n - 1")
 
     def testBreakExpr(self):
         self.checkParse(astBreakExpression(),
@@ -1025,14 +1058,22 @@ class TestParser(unittest.TestCase):
                         Parser.expr, "continue")
 
     def testPartialFunctionExpr(self):
-        self.checkParse(astPartialFunctionExpression([astPartialFunctionCase(astVariablePattern("x", None),
-                                                                             astVariableExpression("b"),
-                                                                             astVariableExpression("x")),
-                                                      astPartialFunctionCase(astVariablePattern("y", None),
-                                                                             None,
-                                                                             astVariableExpression("y"))]),
-                        Parser.partialFnExpr,
-                        "{ case x if b => x; case y => y; }")
+        self.checkParse(
+            astMatchExpression(
+                astVariableExpression("a"),
+                astPartialFunctionExpression([
+                    astPartialFunctionCase(
+                        astVariablePattern("x", None),
+                        astVariableExpression("b"),
+                        astVariableExpression("x")),
+                    astPartialFunctionCase(
+                        astVariablePattern("y", None),
+                        None,
+                        astVariableExpression("y"))])),
+            Parser.expr,
+            "match (a)\n" +
+            "  case x if b => x\n" +
+            "  case y => y")
 
     def testMatchExpr(self):
         self.checkParse(astMatchExpression(astVariableExpression("x"),
@@ -1040,7 +1081,8 @@ class TestParser(unittest.TestCase):
                                                                                                 None,
                                                                                                 astVariableExpression("x"))])),
                         Parser.expr,
-                        "match (x) { case x => x; }")
+                        "match (x)\n" +
+                        "  case x => x")
 
     def testThrowExpr(self):
         self.checkParse(astThrowExpression(astVariableExpression("x")),
@@ -1053,7 +1095,8 @@ class TestParser(unittest.TestCase):
                                                                                                    astVariableExpression("x"))]),
                                               None),
                         Parser.expr,
-                        "try x catch { case x => x; }")
+                        "try x catch\n"
+                        "  case x => x")
 
     def testTryCatchFinallyExpr(self):
         self.checkParse(astTryCatchExpression(astVariableExpression("x"),
@@ -1062,7 +1105,9 @@ class TestParser(unittest.TestCase):
                                                                                                    astVariableExpression("x"))]),
                                               astVariableExpression("x")),
                         Parser.expr,
-                        "try x catch { case x => x; } finally x")
+                        "try x catch\n" +
+                        "  case x => x\n" +
+                        "finally x")
 
     def testTryFinallyExpr(self):
         self.checkParse(astTryCatchExpression(astVariableExpression("x"),

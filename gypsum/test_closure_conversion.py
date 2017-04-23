@@ -14,7 +14,6 @@ from ids import *
 from inheritance_analysis import analyzeInheritance
 from ir import *
 from ir_types import *
-from layout import layout
 from lexer import *
 from parser import *
 from scope_analysis import *
@@ -35,9 +34,8 @@ from name import (
 class TestClosureConversion(TestCaseWithDefinitions):
     def analyzeFromSource(self, source, name=None):
         filename = "(test)"
-        rawTokens = lex(filename, source)
-        layoutTokens = layout(rawTokens)
-        ast = parse(filename, layoutTokens)
+        tokens = lex(filename, source)
+        ast = parse(filename, tokens)
         if name is None:
             name = Name(["test"])
         package = Package(TARGET_PACKAGE_ID, name=name)

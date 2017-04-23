@@ -20,7 +20,6 @@ from inheritance_analysis import analyzeInheritance
 from ir import *
 from ir_instructions import *
 from ir_types import *
-from layout import layout
 from lexer import *
 from parser import *
 from scope_analysis import *
@@ -55,9 +54,8 @@ class TestCompiler(TestCaseWithDefinitions):
     def compileFromSource(self, source, name=None, packageNames=None, packageLoader=None):
         assert packageNames is None or packageLoader is None
         filename = "(test)"
-        rawTokens = lex(filename, source)
-        layoutTokens = layout(rawTokens)
-        ast = parse(filename, layoutTokens)
+        tokens = lex(filename, source)
+        ast = parse(filename, tokens)
         if name is None:
             name = Name(["test"])
         if packageNames is None:

@@ -38,10 +38,6 @@ class LexException(CompileException):
     kind = "lexical"
 
 
-class LayoutException(CompileException):
-    kind = "layout"
-
-
 class ParseException(CompileException):
     kind = "syntax"
 

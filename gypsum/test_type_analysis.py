@@ -12,7 +12,6 @@ from ids import *
 from inheritance_analysis import *
 from ir import *
 from ir_types import *
-from layout import layout
 from lexer import *
 from location import NoLoc
 from parser import *
@@ -45,9 +44,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                           isUsingStd=False):
         assert packageNames is None or packageLoader is None
         filename = "(test)"
-        rawTokens = lex(filename, source)
-        layoutTokens = layout(rawTokens)
-        ast = parse(filename, layoutTokens)
+        tokens = lex(filename, source)
+        ast = parse(filename, tokens)
         if name is None:
             name = Name(["test"])
         if packageNames is None:
@@ -1375,14 +1373,15 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(NoType, info.getType(info.ast.modules[0].definitions[0].body.condition))
 
     def testTryExpr(self):
-        info = self.analyzeFromSource("class Base\n" +
-                                      "class A <: Base\n" +
-                                      "  def this = {}\n" +
-                                      "class B <: Base\n" +
-                                      "  def this = {}\n" +
-                                      "def f = try A() catch\n" +
-                                      "    case exn => B()\n" +
-                                      "  finally 12")
+        source = "class Base\n" + \
+                 "class A <: Base\n" + \
+                 "  def this = {}\n" + \
+                 "class B <: Base\n" + \
+                 "  def this = {}\n" + \
+                 "def f = try A() catch\n" + \
+                 "  case exn => B()\n" + \
+                 "finally 12"
+        info = self.analyzeFromSource(source)
         baseTy = ClassType(info.package.findClass(name="Base"), ())
         astBody = info.ast.modules[0].definitions[3].body
         self.assertEquals(baseTy, info.getType(astBody))
@@ -2489,7 +2488,9 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(ty, info.getType(info.ast.modules[0].definitions[0].body))
 
     def testRedefinedSymbol(self):
-        self.assertRaises(ScopeException, self.analyzeFromSource, "var x = 12; var x = 34;")
+        source = "var x = 12\n" + \
+                 "var x = 34"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
     def testUseGlobalVarInGlobal(self):
         source = "var x = 12\n" + \

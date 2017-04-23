@@ -13,7 +13,6 @@ from ir import Package, PackageDependency
 from ir_types import ClassType, getRootClassType, getExceptionClassType
 from errors import InheritanceException
 from flags import *
-from layout import layout
 from lexer import lex
 from parser import parse
 from scope_analysis import analyzeDeclarations
@@ -26,9 +25,8 @@ from name import CONSTRUCTOR_SUFFIX, Name
 class TestInheritanceAnalysis(unittest.TestCase):
     def parseFromSource(self, source):
         filename = "(test)"
-        rawTokens = lex(filename, source)
-        layoutTokens = layout(rawTokens)
-        ast = parse(filename, layoutTokens)
+        tokens = lex(filename, source)
+        ast = parse(filename, tokens)
         return ast
 
     def analyzeFromSource(self, source, packageLoader=None):

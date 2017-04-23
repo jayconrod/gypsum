@@ -8,7 +8,6 @@ import unittest
 
 import ast
 from lexer import *
-from layout import layout
 from parser import *
 from compile_info import *
 from scope_analysis import *
@@ -32,9 +31,8 @@ from name import (
 class TestDeclarationAnalysis(TestCaseWithDefinitions):
     def parseFromSource(self, source):
         filename = "(test)"
-        rawTokens = lex(filename, source)
-        layoutTokens = layout(rawTokens)
-        ast = parse(filename, layoutTokens)
+        tokens = lex(filename, source)
+        ast = parse(filename, tokens)
         return ast
 
     def analyzeFromSource(self, source, packageLoader=None):
@@ -319,16 +317,16 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.assertIn(ABSTRACT, f.flags)
 
     def testVarDefinedInBlock(self):
-        info = self.analyzeFromSource("def f = {\n" +
-                                      "  {\n" +
-                                      "    var x = 12;\n" +
-                                      "  };\n" +
-                                      "};")
-        ast = info.ast
-        defnInfo = info.getDefnInfo(ast.modules[0].definitions[0].body.statements[0].statements[0].pattern)
+        source = "def f =\n" + \
+                 "  while (true)\n" + \
+                 "    var x = 12"
+        info = self.analyzeFromSource(source)
+        bodyAst = info.ast.modules[0].definitions[0].body
+        blockAst = bodyAst.statements[0].body
+        defnInfo = info.getDefnInfo(blockAst.statements[0].pattern)
         self.assertEquals(self.makeVariable(Name(["f", LOCAL_SUFFIX, "x"]), kind=LOCAL),
                           defnInfo.irDefn)
-        self.assertIs(info.getScope(ast.modules[0].definitions[0].body.statements[0].id),
+        self.assertIs(info.getScope(blockAst.statements[0].id),
                       info.getScope(defnInfo.scopeId))
 
     def testVarDefinedInCatch(self):
@@ -366,13 +364,19 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.assertTrue(localScope.isBound("y"))
 
     def testOverloadedFunctions(self):
-        self.analyzeFromSource("def f = 12; def f(x: i32) = x")
+        source = "def f = 12\n" + \
+                 "def f(x: i32) = x"
+        self.analyzeFromSource(source)
 
     def testFunctionAndGlobalOverload(self):
-        self.assertRaises(ScopeException, self.analyzeFromSource, "var f = 12; def f = 34;")
+        source = "var f = 12\n" + \
+                 "def f = 34"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
     def testRedefinedVar(self):
-        self.assertRaises(ScopeException, self.analyzeFromSource, "var x = 12; var x = 34;")
+        source = "var x = 12\n" + \
+                 "var x = 34"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
     def testDuplicateAttribute(self):
         self.assertRaises(ScopeException, self.analyzeFromSource,

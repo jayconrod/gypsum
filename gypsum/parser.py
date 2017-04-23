@@ -38,10 +38,8 @@ from tok import (
     I64,
     I8,
     IF,
-    IMPLICIT_LBRACE,
-    IMPLICIT_RBRACE,
-    IMPLICIT_SEMI,
     IMPORT,
+    INDENT,
     INTEGER,
     LAMBDA,
     LBRACE,
@@ -53,13 +51,12 @@ from tok import (
     NEWLINE,
     NULL,
     OPERATOR,
+    OUTDENT,
     RBRACE,
     RBRACK,
     RETURN,
     RPAREN,
-    SEMI,
     SMALL_ARROW,
-    SPACE,
     STRING,
     SUBTYPE,
     SUPER,
@@ -93,9 +90,6 @@ class Parser(object):
         self.tokens = tokens
         self.pos = 0
         self.location = None
-
-        eofLoc = self.tokens[-1].location if len(self.tokens) > 0 else NoLoc
-        self.tokens.append(Token(EOF, EOF, eofLoc))
 
     BINOP_LEVELS = [
         "",  # other
@@ -147,7 +141,7 @@ class Parser(object):
     # Top level
     def module(self):
         l = self._peek().location
-        defns = self._parseList(self.defnOrImport, "definition")
+        defns = self._parseList(self.defnOrImport, "definition or import", None, NEWLINE, EOF)
         return ast.Module(defns, self._location(l))
 
     def defnOrImport(self):
@@ -162,7 +156,6 @@ class Parser(object):
         if self._peekTag() is DOT:
             self._next()
             self._nextTag(UNDERSCORE)
-            self.semi()
             return ast.ImportStatement(prefix, None, self._location(l))
 
         if len(prefix) == 1:
@@ -193,7 +186,6 @@ class Parser(object):
             else:
                 asName = None
             bindings.append(ast.ImportBinding(name, asName, self._location(bl)))
-        self.semi()
 
         return ast.ImportStatement(prefix, bindings, self._location(l))
 
@@ -227,7 +219,6 @@ class Parser(object):
             e = self.maybeTupleExpr()
         else:
             e = None
-        self.semi()
         return ast.VariableDefinition(ats, var, pat, e, self._location(l))
 
     def functionDefn(self, l, ats):
@@ -247,7 +238,6 @@ class Parser(object):
             body = self.expr()
         else:
             body = None
-        self.semi()
         return ast.FunctionDefinition(ats, name, tps, ps, rty, body, self._location(l))
 
     def classDefn(self, l, ats):
@@ -269,7 +259,6 @@ class Parser(object):
             sargs = None
             strs = None
         ms = self._classBody("class body")
-        self.semi()
         loc = self._location(l)
         return ast.ClassDefinition(ats, name, tps, ctor, scl, sargs, strs, ms, loc)
 
@@ -286,7 +275,6 @@ class Parser(object):
         else:
             sts = None
         ms = self._classBody("trait body")
-        self.semi()
         loc = self._location(l)
         return ast.TraitDefinition(ats, name, tps, sts, ms, loc)
 
@@ -299,7 +287,6 @@ class Parser(object):
         setDefn = self.arrayAccessorDefn()
         self._nextTag(COMMA)
         lengthDefn = self.arrayAccessorDefn()
-        self.semi()
         loc = self._location(l)
         return ast.ArrayElementsStatement(ats, ety, getDefn, setDefn, lengthDefn, loc)
 
@@ -318,7 +305,7 @@ class Parser(object):
         return ast.PrimaryConstructorDefinition(ats, params, self._location(l))
 
     def _classBody(self, label):
-        if self._peekTag() in (LBRACE, IMPLICIT_LBRACE):
+        if self._peekTag() is NEWLINE and self._peekTag(1) is INDENT:
             return self._parseBlock(self.defnOrImport, label)
         else:
             return None
@@ -578,7 +565,7 @@ class Parser(object):
         tag = self._peek().tag
         if tag is OPERATOR:
             return self.unaryExpr()
-        elif tag in (INTEGER, FLOAT, STRING, TRUE, FALSE, NULL):
+        elif tag in (INTEGER, FLOAT, STRING, TRUE, FALSE, NULL, LBRACE):
             return self.literalExpr()
         elif tag is SYMBOL:
             return self.varExpr()
@@ -604,7 +591,7 @@ class Parser(object):
             return self.throwExpr()
         elif tag is TRY:
             return self.tryExpr()
-        elif tag in (LBRACE, IMPLICIT_LBRACE):
+        elif tag is NEWLINE:
             return self.blockExpr()
         elif tag is LAMBDA:
             return self.lambdaExpr()
@@ -655,7 +642,11 @@ class Parser(object):
         condExpr = self.expr()
         self._nextTag(RPAREN)
         trueExpr = self.expr()
-        if self._peekTag() is ELSE:
+        if self._peekHang() is ELSE:
+            self._next()  # newline
+            self._next()  # else
+            falseExpr = self.expr()
+        elif self._peekTag() is ELSE:
             self._next()
             falseExpr = self.expr()
         else:
@@ -701,7 +692,6 @@ class Parser(object):
             c = None
         self._nextTag(BIG_ARROW)
         e = self.expr()
-        self.semi()
         return ast.PartialFunctionCase(p, c, e, self._location(l.location))
 
     def throwExpr(self):
@@ -712,8 +702,20 @@ class Parser(object):
     def tryExpr(self):
         l = self._nextTag(TRY)
         e = self.expr()
-        catchOpt = self._parseOption(CATCH, self.catchHandler)
-        finallyOpt = self._parseOption(FINALLY, self.finallyHandler)
+        if self._peekHang() is CATCH:
+            self._next()  # newline
+            catchOpt = self.catchHandler()
+        elif self._peekTag() is CATCH:
+            catchOpt = self.catchHandler()
+        else:
+            catchOpt = None
+        if self._peekHang() is FINALLY:
+            self._next()  # newline
+            finallyOpt = self.finallyHandler()
+        elif self._peekTag() is FINALLY:
+            finallyOpt = self.finallyHandler()
+        else:
+            finallyOpt = None
         if catchOpt is None and finallyOpt is None:
             self._error("catch or finally")
         return ast.TryCatchExpression(e, catchOpt, finallyOpt, self._location(l.location))
@@ -750,7 +752,6 @@ class Parser(object):
             return self.importStmt()
         else:
             e = self.expr()
-            self.semi()
             return e
 
     def lambdaExpr(self):
@@ -770,7 +771,9 @@ class Parser(object):
     # Literals
     def literal(self):
         tok = self._peek()
-        if tok.tag is INTEGER:
+        if tok.tag is LBRACE:
+            return self.unitLiteral()
+        elif tok.tag is INTEGER:
             return self.intLiteral()
         elif tok.tag is FLOAT:
             return self.floatLiteral()
@@ -786,6 +789,11 @@ class Parser(object):
             self._error("literal")
         self._next()
         return lit
+
+    def unitLiteral(self):
+        l = self._nextTag(LBRACE).location
+        self._nextTag(RBRACE)
+        return ast.UnitLiteral(self._location(l))
 
     def intLiteral(self):
         tok = self._nextTag(INTEGER)
@@ -907,14 +915,12 @@ class Parser(object):
                 raise ParseException(self.location, "invalid symbol")
         return sym
 
-    def semi(self):
-        if self._peekTag() not in (SEMI, IMPLICIT_SEMI):
-            self._error(";")
-        self._next()
-
     # Utility methods
     def atEnd(self):
         return self.pos >= len(self.tokens) - 1
+
+    def nearEnd(self):
+        return all(t.tag in (OUTDENT, NEWLINE, EOF) for t in self.tokens[self.pos:])
 
     def _parseBinop(self, simpleParser, astCtor, level):
         if level == 0:
@@ -961,18 +967,8 @@ class Parser(object):
             return None
 
     def _parseBlock(self, parser, label):
-        if self._peekTag() is LBRACE:
-            end = RBRACE
-        elif self._peekTag() is IMPLICIT_LBRACE:
-            end = IMPLICIT_RBRACE
-        else:
-            self._error(label)
-        self._next()
-        elems = []
-        while self._peekTag() is not end:
-            elems.append(parser())
-        self._nextTag(end)
-        return elems
+        self._nextTag(NEWLINE)
+        return self._parseList(parser, label, INDENT, NEWLINE, OUTDENT)
 
     def _parseList(self, parser, label, left=None, sep=None, right=EOF):
         if left:
@@ -1005,11 +1001,15 @@ class Parser(object):
             elems.append(parser())
         return elems
 
-    def _peekTag(self):
-        return self._peek().tag
+    def _peekHang(self):
+        if self._peekTag(-1) is OUTDENT and self._peekTag(0) is NEWLINE:
+            return self._peekTag(1)
 
-    def _peekOpLevel(self):
-        pass
+    def _peekTag(self, n=0):
+        i = self.pos + n
+        if i < 0 or i >= len(self.tokens):
+            return None
+        return self.tokens[i].tag
 
     def _peek(self):
         return self.tokens[self.pos]

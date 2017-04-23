@@ -13,7 +13,6 @@ from ids import *
 from inheritance_analysis import analyzeInheritance
 from ir import *
 from ir_types import *
-from layout import layout
 from lexer import *
 from location import NoLoc
 from name import CLASS_INIT_SUFFIX, Name, RECEIVER_SUFFIX
@@ -26,9 +25,8 @@ from utils_test import FakePackageLoader, TestCaseWithDefinitions
 class TestUseAnalysis(TestCaseWithDefinitions):
     def parseFromSource(self, source):
         filename = "(test)"
-        rawTokens = lex(filename, source)
-        layoutTokens = layout(rawTokens)
-        ast = parse(filename, layoutTokens)
+        tokens = lex(filename, source)
+        ast = parse(filename, tokens)
         return ast
 
     def analyzeFromSource(self, source):

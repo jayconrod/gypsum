@@ -17,14 +17,12 @@ from externalization import externalize
 from ids import AstId, TARGET_PACKAGE_ID
 from inheritance_analysis import analyzeInheritance
 from ir import Package, PackageVersion, PackageDependency, Name
-from layout import layout
 from lexer import *
 from location import NoLoc
 from package_loader import PackageLoader
 from parser import *
 from scope_analysis import *
 from serialize import serialize
-from tok import NEWLINE, SPACE, COMMENT
 from type_analysis import analyzeTypeDeclarations, analyzeTypes
 
 
@@ -51,11 +49,7 @@ def main():
                          default="out.csp",
                          help="Name of the output file")
     cmdline.add_argument("--print-tokens", action="store_true",
-                         help="Print raw tokens after lexical analysis")
-    cmdline.add_argument("--no-layout", action="store_true",
-                         help="Disable layout analysis")
-    cmdline.add_argument("--print-layout", action="store_true",
-                         help="Print layout tokens after layout analysis")
+                         help="Print tokens after lexical analysis")
     cmdline.add_argument("--print-ast", action="store_true",
                          help="Print abstract syntax tree after syntax analysis")
     cmdline.add_argument("--print-scope", action="store_true",
@@ -73,18 +67,11 @@ def main():
         for sourceFileName in args.sources:
             with open(sourceFileName) as inFile:
                 source = inFile.read()
-            rawTokens = lex(sourceFileName, source)
+            tokens = lex(sourceFileName, source)
             if args.print_tokens:
-                for tok in rawTokens:
+                for tok in tokens:
                     sys.stdout.write(str(tok) + "\n")
-            if args.no_layout:
-                layoutTokens = filter(lambda tok: tok.tag not in [NEWLINE, SPACE, COMMENT], rawTokens)
-            else:
-                layoutTokens = layout(rawTokens)
-            if args.print_layout:
-                for tok in layoutTokens:
-                    sys.stdout.write(str(tok) + "\n")
-            astModule = parse(sourceFileName, layoutTokens)
+            astModule = parse(sourceFileName, tokens)
             if args.print_ast:
                 printer = ast.Printer(sys.stdout)
                 printer.visit(astModule)

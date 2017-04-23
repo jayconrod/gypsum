@@ -4,7 +4,8 @@
 # the GPL license that can be found in the LICENSE.txt file.
 
 NEWLINE = "newline"
-SPACE = "space"
+INDENT = "indent"
+OUTDENT = "outdent"
 COMMENT = "comment"
 EOF = "end of file"
 
@@ -68,10 +69,6 @@ OPERATOR = "operator"
 INTEGER = "integer"
 FLOAT = "float"
 STRING = "string"
-
-IMPLICIT_LBRACE = "implicit {"
-IMPLICIT_RBRACE = "implicit }"
-IMPLICIT_SEMI = "implicit ;"
 
 class Token(object):
     def __init__(self, text, tag, location):

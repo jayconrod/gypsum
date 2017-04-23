@@ -35,11 +35,11 @@ def main =
   let err: Result[I32, String] = Err[String](message)
   assert-false(err.is-ok)
   assert-false(err.to-opt.is-defined)
-  assert-true(try
+  let e = try
     err.get
     false
-  catch (_: Exception) true)
-  {}
+  catch (_: Exception) true
+  assert-true(e)
   match (err)
     case Err[String](s) if s === message => {}
     case _ => throw AssertionException()

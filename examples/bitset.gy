@@ -67,10 +67,7 @@ final class BitSet
   // returns an array element. The set method takes an index and a value and stores that value
   // at the index. The length method returns the number of array elements (set with `new`).
   // These methods are declared `private` to avoid exposing implementation details to clients.
-  arrayelements i8,
-      private get-byte,
-      private set-byte,
-      private capacity
+  arrayelements i8, private get-byte, private set-byte, private capacity
 
 
 def main =

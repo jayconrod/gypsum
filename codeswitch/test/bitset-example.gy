@@ -39,10 +39,7 @@ final class BitSet
   private def bit-index(n: i32) = (n % 8i32).to-i8
   private def bit-mask(ix: i8) = 1i8 << ix
 
-  arrayelements i8,
-      private get-byte,
-      private set-byte,
-      private capacity
+  arrayelements i8, private get-byte, private set-byte, private capacity
 
 
 def check(condition: boolean) =
