@@ -867,8 +867,9 @@ class Literal(Node):
 
 
 class IntegerLiteral(Literal):
-    def __init__(self, value, width, location):
+    def __init__(self, text, value, width, location):
         super(IntegerLiteral, self).__init__(location)
+        self.text = text
         self.value = value
         self.width = width
 
@@ -880,8 +881,9 @@ class IntegerLiteral(Literal):
 
 
 class FloatLiteral(Literal):
-    def __init__(self, value, width, location):
+    def __init__(self, text, value, width, location):
         super(FloatLiteral, self).__init__(location)
+        self.text = text
         self.value = value
         self.width = width
 

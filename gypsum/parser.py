@@ -808,14 +808,14 @@ class Parser(object):
             width = 64
         else:
             width = int(m.group(4))
-        return ast.IntegerLiteral(value, width, tok.location)
+        return ast.IntegerLiteral(tok.text, value, width, tok.location)
 
     def floatLiteral(self):
         tok = self._nextTag(FLOAT)
         m = re.match("([^f]*)(?:f([0-9]+))?", tok.text)
         value = float(m.group(1))
         width = int(m.group(2)) if m.group(2) is not None else 64
-        return ast.FloatLiteral(value, width, tok.location)
+        return ast.FloatLiteral(tok.text, value, width, tok.location)
 
     def stringLiteral(self):
         tok = self._nextTag(STRING)

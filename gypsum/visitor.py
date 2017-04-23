@@ -23,7 +23,7 @@ class Visitor(object):
         return "visit" + className
 
     def visitDefault(self, obj, *args, **kwargs):
-        raise NotImplementedError
+        raise NotImplementedError(obj.__class__.__name__)
 
     def preVisit(self, obj, *args, **kwargs):
         pass

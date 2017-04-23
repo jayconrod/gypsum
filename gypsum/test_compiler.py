@@ -108,7 +108,8 @@ class TestCompiler(TestCaseWithDefinitions):
         self.assertEquals(expected, function)
 
     def testEmptyGlobalInit(self):
-        self.checkFunction("",
+        source = ""
+        self.checkFunction(source,
                            self.makeSimpleFunction(PACKAGE_INIT_NAME, UnitType, [[
                                unit(),
                                ret()]]))
@@ -122,7 +123,8 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret()]]))
 
     def testInitGlobal(self):
-        package = self.compileFromSource("let x = 42")
+        source = "let x = 42"
+        package = self.compileFromSource(source)
         x = package.findGlobal(name="x")
         self.checkFunction(package,
                            self.makeSimpleFunction(PACKAGE_INIT_NAME, UnitType, [[
@@ -132,43 +134,43 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret()]]))
 
     def testBasicFunction(self):
-        self.checkFunction("def f = 12",
+        source = "def f = 12"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                i64(12),
                                ret()]]))
 
     def testUnsignedIntLiteral(self):
-        self.checkFunction("def f = 0x80i8",
+        source = "def f = 0x80i8"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I8Type, [[
                                i8(-128),
                                ret()]]))
 
     def testFloatLiterals(self):
-        self.checkFunction("def f = 1f32",
+        source = "def f = 1f32"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", F32Type, [[
                                f32(1.),
                                ret()]]))
-        self.checkFunction("def f = 1f64",
+        source = "def f = 1f64"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", F64Type, [[
                                f64(1.),
                                ret()]]))
 
     def testEmptyBlock(self):
-        self.checkFunction("def f = {}",
+        source = "def f = {}"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                unit(),
                                ret()]]))
 
     def testSimpleBlock(self):
-        self.checkFunction("def f = { 12; 34; }",
-                           self.makeSimpleFunction("f", I64Type, [[
-                               i64(12),
-                               drop(),
-                               i64(34),
-                               ret()]]))
-
-    def testBlockWithinBlock(self):
-        self.checkFunction("def f = { { 12; }; 34; };",
+        source = "def f =\n" + \
+                 "  12\n" + \
+                 "  34"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                i64(12),
                                drop(),
@@ -176,7 +178,9 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret()]]))
 
     def testBlockEndingWithStmt(self):
-        self.checkFunction("def f = { var x = 12; };",
+        source = "def f =\n" + \
+                 "  var x = 12"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                i64(12),
                                stlocal(-1),
@@ -185,7 +189,10 @@ class TestCompiler(TestCaseWithDefinitions):
                              variables=[self.makeVariable("f.x", type=I64Type)]))
 
     def testSimpleVar(self):
-        self.checkFunction("def f = { var x = 12; x; }",
+        source = "def f =\n" + \
+                 "  var x = 12\n" + \
+                 "  x"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                i64(12),
                                stlocal(-1),
@@ -194,7 +201,10 @@ class TestCompiler(TestCaseWithDefinitions):
                              variables=[self.makeVariable("f.x", type=I64Type)]))
 
     def testVarWithSimpleCast(self):
-        package = self.compileFromSource("def f = { var x: Object = \"foo\"; x; }")
+        source = "def f =\n" + \
+                 "  var x: Object = \"foo\"\n" + \
+                 "  x"
+        package = self.compileFromSource(source)
         fooIndex = package.findString("foo")
         self.checkFunction(package, self.makeSimpleFunction(
             "f", getRootClassType(), [[
@@ -232,7 +242,10 @@ class TestCompiler(TestCaseWithDefinitions):
             instTypes=[ClassType(Foo, (getRootClassType(),))]))
 
     def testBlankVar(self):
-        self.checkFunction("def f = { var _ = 12; {}; }",
+        source = "def f =\n" + \
+                 "  var _ = 12\n" + \
+                 "  {}"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                i64(12),
                                drop(),
@@ -329,7 +342,8 @@ class TestCompiler(TestCaseWithDefinitions):
         self.assertRaises(SemanticException, self.compileFromSource, source)
 
     def testSimpleParameter(self):
-        self.checkFunction("def f(x: i64) = x",
+        source = "def f(x: i64) = x"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                ldlocal(0),
                                ret()]],
@@ -337,7 +351,8 @@ class TestCompiler(TestCaseWithDefinitions):
                                                           kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testBlankParameter(self):
-        self.checkFunction("def f(_: i64) = 0",
+        source = "def f(_: i64) = 0"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                i64(0),
                                ret()]],
@@ -346,7 +361,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testTupleParameter(self):
         source = "public class Tuple2[static +T1, static +T2](public _1: T1, public _2: T2)\n" + \
-                 "def f((x: String, _: String)) = x"
+                 "def f(((x: String, _: String))) = x"
         package = self.compileFromSource(source, name=STD_NAME)
         tupleClass = package.findClass(name="Tuple2")
         tupleFieldNameIndex = package.findName(tupleClass.fields[0].name)
@@ -365,11 +380,12 @@ class TestCompiler(TestCaseWithDefinitions):
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testSeveralParameters(self):
-        self.checkFunction("def f(var a: i32, var b: boolean, var c: boolean, var d: i32) =\n" + \
-                           "  a = 1i32\n" + \
-                           "  b = true\n" + \
-                           "  c = false\n" + \
-                           "  d\n",
+        source = "def f(var a: i32, var b: boolean, var c: boolean, var d: i32) =\n" + \
+                 "  a = 1i32\n" + \
+                 "  b = true\n" + \
+                 "  c = false\n" + \
+                 "  d"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I32Type, [[
                                i32(1),
                                stlocal(0),
@@ -386,9 +402,10 @@ class TestCompiler(TestCaseWithDefinitions):
                                self.makeVariable("f.d", type=I32Type, kind=PARAMETER)]))
 
     def testAssign(self):
-        self.checkFunction("def f =\n" + \
-                           "  var x = 12\n" + \
-                           "  x = 34",
+        source = "def f =\n" + \
+                 "  var x = 12\n" + \
+                 "  x = 34"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                i64(12),
                                stlocal(-1),
@@ -416,7 +433,10 @@ class TestCompiler(TestCaseWithDefinitions):
         self.assertRaises(SemanticException, self.compileFromSource, source)
 
     def testAssignVarParam(self):
-        self.checkFunction("def f(var x: i64) = {x = 12; {};}",
+        source = "def f(var x: i64) =\n" + \
+                 "  x = 12\n" + \
+                 "  {}"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                i64(12),
                                stlocal(0),
@@ -427,7 +447,10 @@ class TestCompiler(TestCaseWithDefinitions):
                                                           type=I64Type, kind=PARAMETER)]))
 
     def testAssignVarWithSimpleCast(self):
-        package = self.compileFromSource("def f(s: String, var o: Object) = { o = s; {}; }")
+        source = "def f(s: String, var o: Object) =\n" + \
+                 "  o = s\n" + \
+                 "  {}"
+        package = self.compileFromSource(source)
         expected = self.makeSimpleFunction(
             "f", UnitType, [[
                 ldlocal(0),
@@ -469,12 +492,13 @@ class TestCompiler(TestCaseWithDefinitions):
             instTypes=[ClassType(Foo, (getRootClassType(),))]))
 
     def testAssignShortProps(self):
-        package = self.compileFromSource("class Foo\n" +
-                                         "  var x: boolean\n" +
-                                         "  var y: i64\n" +
-                                         "def f(foo: Foo) =\n" +
-                                         "  foo.x = false\n" +
-                                         "  foo.y = 12\n")
+        source = "class Foo\n" + \
+                 "  var x: boolean\n" + \
+                 "  var y: i64\n" + \
+                 "def f(foo: Foo) =\n" + \
+                 "  foo.x = false\n" + \
+                 "  foo.y = 12"
+        package = self.compileFromSource(source)
         clas = package.findClass(name="Foo")
         clasTy = ClassType.forReceiver(clas)
         xNameIndex = package.findName(clas.fields[0].name)
@@ -496,10 +520,11 @@ class TestCompiler(TestCaseWithDefinitions):
         self.assertEquals(expected, package.findFunction(name="f"))
 
     def testAssignPtrField(self):
-        package = self.compileFromSource("class Foo\n" +
-                                         "  var self: Foo\n" +
-                                         "  def this =\n" +
-                                         "    this.self = this")
+        source = "class Foo\n" + \
+                 "  var self: Foo\n" + \
+                 "  def this =\n" + \
+                 "    this.self = this"
+        package = self.compileFromSource(source)
         clas = package.findClass(name="Foo")
         clasTy = ClassType(clas)
         selfNameIndex = package.findName(clas.fields[0].name)
@@ -542,10 +567,11 @@ class TestCompiler(TestCaseWithDefinitions):
         self.assertRaises(SemanticException, self.compileFromSource, source)
 
     def testLoadPtrField(self):
-        package = self.compileFromSource("class Foo\n" +
-                                         "  var self: Foo\n" +
-                                         "def f(foo: Foo) =\n" +
-                                         "  foo.self\n")
+        source = "class Foo\n" + \
+                 "  var self: Foo\n" + \
+                 "def f(foo: Foo) =\n" + \
+                 "  foo.self"
+        package = self.compileFromSource(source)
         Foo = package.findClass(name="Foo")
         clasTy = ClassType.forReceiver(Foo)
         selfNameIndex = package.findName(Foo.fields[0].name)
@@ -634,11 +660,12 @@ class TestCompiler(TestCaseWithDefinitions):
                                         kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testAccumShortPropForEffect(self):
-        package = self.compileFromSource("class Foo\n" +
-                                         "  var x: i64\n" +
-                                         "def f(foo: Foo) =\n" +
-                                         "  foo.x += 12\n" +
-                                         "  34")
+        source = "class Foo\n" + \
+                 "  var x: i64\n" + \
+                 "def f(foo: Foo) =\n" + \
+                 "  foo.x += 12\n" + \
+                 "  34"
+        package = self.compileFromSource(source)
         Foo = package.findClass(name="Foo")
         FooType = ClassType.forReceiver(Foo)
         xNameIndex = package.findName(Foo.fields[0].name)
@@ -658,10 +685,11 @@ class TestCompiler(TestCaseWithDefinitions):
         self.assertEquals(expected, package.findFunction(name="f"))
 
     def testAccumShortPropForValue(self):
-        package = self.compileFromSource("class Foo\n" +
-                                         "  var x: i64\n" +
-                                         "def f(foo: Foo) =\n" +
-                                         "  foo.x += 12\n")
+        source = "class Foo\n" + \
+                 "  var x: i64\n" + \
+                 "def f(foo: Foo) =\n" + \
+                 "  foo.x += 12"
+        package = self.compileFromSource(source)
         Foo = package.findClass(name="Foo")
         FooType = ClassType.forReceiver(Foo)
         xNameIndex = package.findName(Foo.fields[0].name)
@@ -719,7 +747,8 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testNullableEq(self):
         ty = ClassType(getRootClass(), (), NULLABLE_TYPE_FLAG)
-        self.checkFunction("def f(foo: Object?, bar: Object?) = foo === bar",
+        source = "def f(foo: Object?, bar: Object?) = foo === bar"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", BooleanType, [[
                                ldlocal(0),
                                ldlocal(1),
@@ -732,7 +761,8 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testNullableNe(self):
         ty = ClassType(getRootClass(), (), NULLABLE_TYPE_FLAG)
-        self.checkFunction("def f(foo: Object?, bar: Object?) = foo !== bar",
+        source = "def f(foo: Object?, bar: Object?) = foo !== bar"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", BooleanType, [[
                                ldlocal(0),
                                ldlocal(1),
@@ -744,7 +774,8 @@ class TestCompiler(TestCaseWithDefinitions):
                                                           kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testTruncI32(self):
-        self.checkFunction("def f(n: i64) = n.to-i32",
+        source = "def f(n: i64) = n.to-i32"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I32Type, [[
                                ldlocal(0),
                                trunci32(),
@@ -753,7 +784,8 @@ class TestCompiler(TestCaseWithDefinitions):
                                                           kind=PARAMETER, flags=frozenset([LET]))]))
 
     def testSext16(self):
-        self.checkFunction("def f(n: i8) = n.to-i16",
+        source = "def f(n: i8) = n.to-i16"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I16Type, [[
                                ldlocal(0),
                                sexti16_8(),
@@ -763,7 +795,8 @@ class TestCompiler(TestCaseWithDefinitions):
                                                           flags=frozenset([LET]))]))
 
     def testF32ToI64(self):
-        self.checkFunction("def f(n: f32) = n.to-i64",
+        source = "def f(n: f32) = n.to-i64"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                ldlocal(0),
                                fcvti32(),
@@ -774,14 +807,16 @@ class TestCompiler(TestCaseWithDefinitions):
                                                           flags=frozenset([LET]))]))
 
     def testNeg(self):
-        self.checkFunction("def f = - 12",
+        source = "def f = -(12)"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                              i64(12),
                              negi64(),
                              ret()]]))
 
     def testAdd(self):
-        self.checkFunction("def f = 12 + 34",
+        source = "def f = 12 + 34"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                              i64(12),
                              i64(34),
@@ -790,10 +825,10 @@ class TestCompiler(TestCaseWithDefinitions):
                            ]]))
 
     def testAddAssign(self):
-        self.checkFunction("def f = {\n" + \
-                           "  var x = 12;\n" + \
-                           "  x += 34;\n" + \
-                           "};",
+        source = "def f =\n" + \
+                 "  var x = 12\n" + \
+                 "  x += 34"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                i64(12),
                                stlocal(-1),
@@ -806,7 +841,8 @@ class TestCompiler(TestCaseWithDefinitions):
                              variables=[self.makeVariable("f.x", type=I64Type)]))
 
     def testAddFloat(self):
-        self.checkFunction("def f = 1.2 + 3.4",
+        source = "def f = 1.2 + 3.4"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", F64Type, [[
                                f64(1.2),
                                f64(3.4),
@@ -814,7 +850,8 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret()]]))
 
     def testConcatStrings(self):
-        package = self.compileFromSource("def f = \"foo\" + \"bar\"")
+        source = "def f = \"foo\" + \"bar\""
+        package = self.compileFromSource(source)
         stringClass = getStringClass()
         concatMethod = stringClass.findMethodBySourceName("+")
         fooIndex = package.findString("foo")
@@ -827,7 +864,8 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret()]]))
 
     def testCompareStrings(self):
-        package = self.compileFromSource("def f = \"foo\" == \"bar\"")
+        source = "def f = \"foo\" == \"bar\""
+        package = self.compileFromSource(source)
         stringClass = getStringClass()
         eqMethod = stringClass.findMethodBySourceName("==")
         fooIndex = package.findString("foo")
@@ -840,7 +878,8 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret()]]))
 
     def testLessThan(self):
-        self.checkFunction("def f = 12 < 34",
+        source = "def f = 12 < 34"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", BooleanType, [[
                                i64(12),
                                i64(34),
@@ -848,7 +887,8 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret()]]))
 
     def testAndExpr(self):
-        self.checkFunction("def f = true && false",
+        source = "def f = true && false"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", BooleanType, [[
                                true(),
                                dup(),
@@ -862,7 +902,8 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]]))
 
     def testOrExpr(self):
-        self.checkFunction("def f = true || false",
+        source = "def f = true || false"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", BooleanType, [[
                                true(),
                                dup(),
@@ -962,7 +1003,8 @@ class TestCompiler(TestCaseWithDefinitions):
             instTypes=[getStringType()]))
 
     def testIfExpr(self):
-        self.checkFunction("def f = if (true) 12 else 34",
+        source = "def f = if (true) 12 else 34"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                              true(),
                              branchif(1, 2),
@@ -977,7 +1019,10 @@ class TestCompiler(TestCaseWithDefinitions):
                            ]]))
 
     def testIfStmt(self):
-        self.checkFunction("def f = { if (true) 12 else 34; 56; }",
+        source = "def f =\n" + \
+                 "  if (true) 12 else 34\n" + \
+                 "  56"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                true(),
                                branchif(1, 2),
@@ -995,7 +1040,8 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]]))
 
     def testIfExprWithoutElse(self):
-        self.checkFunction("def f = if (true) 12",
+        source = "def f = if (true) 12"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                true(),
                                branchif(1, 2),
@@ -1009,7 +1055,10 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]]))
 
     def testIfStmtWithoutElse(self):
-        self.checkFunction("def f = { if (true) 12; 34; };",
+        source = "def f =\n" + \
+                 "  if (true) 12\n" + \
+                 "  34"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                true(),
                                branchif(1, 2),
@@ -1023,7 +1072,8 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]]))
 
     def testWhileExpr(self):
-        self.checkFunction("def f = while (true) 1",
+        source = "def f = while (true) 1"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                              branch(1),
                            ], [
@@ -1039,7 +1089,9 @@ class TestCompiler(TestCaseWithDefinitions):
                            ]]))
 
     def testWhileBlock(self):
-        self.checkFunction("def f = while (true) { 1; };",
+        source = "def f = while (true)\n" + \
+                 "  1"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                              branch(1),
                            ], [
@@ -1055,7 +1107,9 @@ class TestCompiler(TestCaseWithDefinitions):
                            ]]))
 
     def testMatchExprWithIntVar(self):
-        self.checkFunction("def f = match (12) { case y => y; }",
+        source = "def f = match (12)\n" + \
+                 "  case y => y"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                              i64(12),
                              stlocal(-1),
@@ -1308,7 +1362,9 @@ class TestCompiler(TestCaseWithDefinitions):
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testMatchExprWithBlankPattern(self):
-        self.checkFunction("def f = match (12) { case _ => 34; }",
+        source = "def f = match (12)\n" + \
+                 "  case _ => 34"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                i64(12),
                                drop(),
@@ -1361,7 +1417,10 @@ class TestCompiler(TestCaseWithDefinitions):
                                                           kind=PARAMETER,
                                                           flags=frozenset([LET]))]))
     def testMatchExprWithIntLiteral(self):
-        self.checkFunction("def f = match (12) { case 34 => 56; case _ => 78; }",
+        source = "def f = match (12)\n" + \
+                 "  case 34 => 56\n" + \
+                 "  case _ => 78"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                i64(12),
                                dup(),
@@ -1408,7 +1467,10 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testMatchExprWithNullLiteral(self):
         xType = ClassType(getRootClass(), (), NULLABLE_TYPE_FLAG)
-        self.checkFunction("def f(x: Object?) = match (x) { case null => 0; case _ => 1; }",
+        source = "def f(x: Object?) = match (x)\n" + \
+                 "  case null => 0\n" + \
+                 "  case _ => 1"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                ldlocal(0),
                                dup(),
@@ -1870,8 +1932,8 @@ class TestCompiler(TestCaseWithDefinitions):
     def testTryValueMustCatch(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
-        self.checkFunction("def f = try 12 catch\n" +
-                           "    case exn => 34",
+        source = "def f = try 12 catch (exn) 34"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                pushtry(1, 2),
                              ], [
@@ -1890,7 +1952,9 @@ class TestCompiler(TestCaseWithDefinitions):
     def testTryValueMayCatch(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
-        self.checkFunction("def f = try 12 catch { case exn if false => 34; }",
+        source = "def f = try 12 catch\n" + \
+                 "  case exn if false => 34"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                # block 0
                                pushtry(1, 2),
@@ -1922,7 +1986,10 @@ class TestCompiler(TestCaseWithDefinitions):
     def testTryEffectMustCatch(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
-        self.checkFunction("def f = { try 12 catch { case exn => 34; }; {}; }",
+        source = "def f =\n" + \
+                 "  try 12 catch (exn) 34\n" + \
+                 "  {}"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                # block 0
                                pushtry(1, 2),
@@ -1948,7 +2015,11 @@ class TestCompiler(TestCaseWithDefinitions):
     def testTryEffectMayCatch(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
-        self.checkFunction("def f = { try 12 catch { case exn if false => 34; }; {}; }",
+        source = "def f =\n" + \
+                 "  try 12 catch\n" + \
+                 "    case exn if false => 34\n" + \
+                 "  {}"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                # block 0
                                pushtry(1, 2),
@@ -1983,7 +2054,8 @@ class TestCompiler(TestCaseWithDefinitions):
     def testTryValueFinally(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
-        self.checkFunction("def f = try 12 finally 34",
+        source = "def f = try 12 finally 34"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                # block 0 [...]
                                pushtry(1, 3),
@@ -2019,7 +2091,10 @@ class TestCompiler(TestCaseWithDefinitions):
     def testTryEffectFinally(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
-        self.checkFunction("def f = { try 12 finally 34; {}; }",
+        source = "def f =\n" + \
+                 "  try 12 finally 34\n" + \
+                 "  {}"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                # block 0
                                pushtry(1, 3),
@@ -2055,9 +2130,8 @@ class TestCompiler(TestCaseWithDefinitions):
     def testTryValueMustMatchFinally(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
-        self.checkFunction("def f = try 12 catch\n" +
-                           "    case exn => 34\n" +
-                           "  finally 56",
+        source = "def f = try 12 catch (exn) 34 finally 56"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                # block 0 [...]
                                pushtry(1, 3),
@@ -2116,7 +2190,10 @@ class TestCompiler(TestCaseWithDefinitions):
     def testTryValueMayCatchFinally(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
-        self.checkFunction("def f = try 12 catch { case exn if false => 34; } finally 56",
+        source = "def f = try 12 catch\n" + \
+                 "  case exn if false => 34\n" + \
+                 "finally 56"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                # block 0 [...]
                                pushtry(1, 3),
@@ -2184,7 +2261,10 @@ class TestCompiler(TestCaseWithDefinitions):
     def testTryEffectMustCatchFinally(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
-        self.checkFunction("def f = { try 12 catch { case exn => 34; } finally 56; {}; }",
+        source = "def f =\n" + \
+                 "  try 12 catch (exn) 34 finally 56\n" + \
+                 "  {}"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                # block 0 [...]
                                pushtry(1, 3),
@@ -2243,7 +2323,12 @@ class TestCompiler(TestCaseWithDefinitions):
     def testTryEffectMayCatchFinally(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
-        self.checkFunction("def f = { try 12 catch { case exn if false => 34; } finally 56; {}; }",
+        source = "def f =\n" + \
+                 "  try 12 catch\n" + \
+                 "    case exn if false => 34\n" + \
+                 "  finally 56\n" + \
+                 "  {}"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                # block 0 [...]
                                pushtry(1, 3),
@@ -2319,7 +2404,8 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testThrow(self):
         exnTy = ClassType(getExceptionClass())
-        self.checkFunction("def f(exn: Exception) = throw exn",
+        source = "def f(exn: Exception) = throw exn"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", getNothingClassType(), [[
                                ldlocal(0),
                                throw(),
@@ -2329,7 +2415,8 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testThrowInIfBody(self):
         exnTy = ClassType(getExceptionClass())
-        self.checkFunction("def f(exn: Exception) = if (true) throw exn else 12",
+        source = "def f(exn: Exception) = if (true) throw exn else 12"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                true(),
                                branchif(1, 2),
@@ -2347,7 +2434,8 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testThrowInIfCondition(self):
         exnTy = ClassType(getExceptionClass())
-        self.checkFunction("def f(exn: Exception) = if (throw exn) 12 else 34",
+        source = "def f(exn: Exception) = if (throw exn) 12 else 34"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                ldlocal(0),
                                throw(),
@@ -2357,7 +2445,8 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testThrowInWhileBody(self):
         exnTy = ClassType(getExceptionClass())
-        self.checkFunction("def f(exn: Exception) = while (false) throw exn",
+        source = "def f(exn: Exception) = while (false) throw exn"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                branch(1),
                              ], [
@@ -2376,8 +2465,8 @@ class TestCompiler(TestCaseWithDefinitions):
     def testThrowInTry(self):
         exnClass = getExceptionClass()
         exnTy = ClassType(exnClass)
-        self.checkFunction("def f = try throw Exception() catch\n" +
-                           "  case exn => 1",
+        source = "def f = try throw Exception() catch (exn) 1"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                pushtry(1, 2),
                              ], [
@@ -2397,7 +2486,8 @@ class TestCompiler(TestCaseWithDefinitions):
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testTryFinallyExpr(self):
-        self.checkFunction("def f = try 12 finally 34",
+        source = "def f = try 12 finally 34"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                # block 0 [...]
                                pushtry(1, 3),
@@ -2481,7 +2571,8 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testTryReturn(self):
         exnTy = ClassType(getExceptionClass())
-        self.checkFunction("def f = try return 12 catch { case exn => 34; }",
+        source = "def f = try return 12 catch (exn) 34"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                # block 0 [...]
                                pushtry(1, 2),
@@ -2502,7 +2593,8 @@ class TestCompiler(TestCaseWithDefinitions):
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testTryFinallyReturnTwice(self):
-        self.checkFunction("def f = try if (true) return 1 else return 2 finally 3",
+        source = "def f = try if (true) return 1 else return 2 finally 3"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                # block 0 [...]
                                pushtry(1, 5),
@@ -2548,7 +2640,8 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]]))
 
     def testTryCatchFinallyReturns(self):
-        self.checkFunction("def f = try return 1 catch { case _ => return 2; } finally 3",
+        source = "def f = try return 1 catch (_) return 2 finally 3"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                # block 0 [...]
                                pushtry(1, 3),
@@ -2607,7 +2700,8 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]]))
 
     def testReturnFromFinally(self):
-        self.checkFunction("def f = try 12 finally return 34",
+        source = "def f = try 12 finally return 34"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                # block 0 [...]
                                pushtry(1, 3),
@@ -3034,21 +3128,24 @@ class TestCompiler(TestCaseWithDefinitions):
 
 
     def testReturn(self):
-        self.checkFunction("def f = return 12",
+        source = "def f = return 12"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                i64(12),
                                ret(),
                              ]]))
 
     def testReturnEmpty(self):
-        self.checkFunction("def f = return",
+        source = "def f = return"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                unit(),
                                ret(),
                              ]]))
 
     def testReturnInWhileBody(self):
-        self.checkFunction("def f = while (false) return {}",
+        source = "def f = while (false) return {}"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                branch(1),
                              ], [
@@ -3063,7 +3160,8 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]]))
 
     def testReturnBeforeJoin(self):
-        self.checkFunction("def f = if (true) return 1 else return 2",
+        source = "def f = if (true) return 1 else return 2"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                true(),
                                branchif(1, 2),
@@ -3277,10 +3375,10 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testUnreachableTry(self):
         exnTy = ClassType(getExceptionClass())
-        self.checkFunction("def f =\n" +
-                           "  return 1\n" +
-                           "  try throw Exception() catch\n" +
-                           "    case exn => 2\n",
+        source = "def f =\n" + \
+                 "  return 1\n" + \
+                 "  try throw Exception() catch (exn) 2"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                i64(1),
                                ret(),
@@ -3289,14 +3387,13 @@ class TestCompiler(TestCaseWithDefinitions):
                                                           kind=LOCAL, flags=frozenset([LET]))]))
 
     def testFactorial(self):
-        self.checkFunction("def f(var n: i64): i64 = {\n" +
-                           "  var p = 1;\n" +
-                           "  while (n > 1) {\n" +
-                           "    p = p * n;\n" +
-                           "    n = n - 1;\n" +
-                           "  };\n" +
-                           "  p;\n" +
-                           "};",
+        source = "def f(var n: i64): i64 =\n" + \
+                 "  var p = 1\n" + \
+                 "  while (n > 1)\n" + \
+                 "    p = p * n\n" + \
+                 "    n = n - 1\n" + \
+                 "  p"
+        self.checkFunction(source,
                            self.makeSimpleFunction("f", I64Type, [[
                                i64(1),
                                stlocal(-1),
@@ -4019,7 +4116,8 @@ class TestCompiler(TestCaseWithDefinitions):
         # TODO: I feel like there was supposed to be an assertion here.
 
     def testCallBuiltinFunction(self):
-        package = self.compileFromSource("def f = print(\"foo\")")
+        source = "def f = print(\"foo\")"
+        package = self.compileFromSource(source)
         fooIndex = package.findString("foo")
         self.checkFunction(package,
                            self.makeSimpleFunction("f", UnitType, [[

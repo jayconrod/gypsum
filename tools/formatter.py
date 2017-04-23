@@ -172,7 +172,7 @@ class Formatter(ast.NodeVisitor):
         self.visit(node.literal)
 
     def visitTuplePattern(self, node):
-        self._writeList(node.patterns, "(", ", ", ")")
+        self._writeList(node.patterns, "", ", ", "")
 
     def visitValuePattern(self, node):
         self._writePrefix(node.prefix)
@@ -192,6 +192,11 @@ class Formatter(ast.NodeVisitor):
         self._write(node.operator)
         self._write(" ")
         self.visit(node.right)
+
+    def visitGroupPattern(self, node):
+        self._write("(")
+        self.visit(node.pattern)
+        self._write(")")
 
     def visitUnitType(self, node):
         self._write("unit")
@@ -392,14 +397,10 @@ class Formatter(ast.NodeVisitor):
         self._write(")")
 
     def visitIntegerLiteral(self, node):
-        self._write("%d" % node.value)
-        if node.width != 64:
-            self._write("i%d" % node.width)
+        self._write(node.text)
 
     def visitFloatLiteral(self, node):
-        self._write("%f" % node.value)
-        if node.width != 64:
-            self._write("f%d" % node.width)
+        self._write(node.text)
 
     def visitBooleanLiteral(self, node):
         self._write("true" if node.value else "false")
@@ -473,7 +474,7 @@ class Formatter(ast.NodeVisitor):
             self.visit(stmt)
 
     def _writeBlock(self, nodes):
-        if len(nodes) == 0:
+        if nodes is None or len(nodes) == 0:
             return
         self._endl()
         self._indent()

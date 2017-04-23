@@ -140,7 +140,7 @@ class TestParser(unittest.TestCase):
 
     def testClassDefnSimpleWithBody(self):
         ctorast = astFunctionDefinition([], "this", None, None, None,
-                                        astLiteralExpression(astIntegerLiteral(12, 64)))
+                                        astLiteralExpression(astIntegerLiteral("12", 12, 64)))
         ast = astClassDefinition([], "C", None, None, None, None, None, [ctorast])
         self.checkParse(ast, Parser.defn, "class C { def this = 12; };")
 
@@ -442,7 +442,7 @@ class TestParser(unittest.TestCase):
         self.checkParse(astBlankPattern(astClassType([], "T", [], set())), Parser.pattern, "_: T")
 
     def testLiteralPatterns(self):
-        self.checkParse(astLiteralPattern(astIntegerLiteral(12, 64)), Parser.pattern, "12")
+        self.checkParse(astLiteralPattern(astIntegerLiteral("12", 12, 64)), Parser.pattern, "12")
         self.checkParse(astLiteralPattern(astBooleanLiteral(True)), Parser.pattern, "true")
         self.checkParse(astLiteralPattern(astNullLiteral()), Parser.pattern, "null")
 
@@ -694,7 +694,7 @@ class TestParser(unittest.TestCase):
                   ("0b1i32", 0b1, 32),
                   ("-0b1i16", -0b1, 16)]
         for source, value, width in values:
-            self.checkParse(astLiteralExpression(astIntegerLiteral(value, width)),
+            self.checkParse(astLiteralExpression(astIntegerLiteral(source, value, width)),
                             Parser.expr, source)
 
     def testFloatExpr(self):
@@ -711,7 +711,7 @@ class TestParser(unittest.TestCase):
                   ("1.2f32", 1.2, 32),
                   ("-1.2f64", -1.2, 64)]
         for source, value, width in values:
-            self.checkParse(astLiteralExpression(astFloatLiteral(value, width)),
+            self.checkParse(astLiteralExpression(astFloatLiteral(source, value, width)),
                             Parser.expr, source)
 
     def testStringExpr(self):
@@ -901,8 +901,8 @@ class TestParser(unittest.TestCase):
         self.checkParse(astBinaryExpression("==",
                                             astBinaryExpression("%",
                                                                 astVariableExpression("x"),
-                                                                astLiteralExpression(astIntegerLiteral(3, 64))),
-                                            astLiteralExpression(astIntegerLiteral(0, 64))),
+                                                                astLiteralExpression(astIntegerLiteral("3", 3, 64))),
+                                            astLiteralExpression(astIntegerLiteral("0", 0, 64))),
                         Parser.expr, "x % 3 == 0")
 
     def testLeftAssociativeBinaryExpr(self):
@@ -1008,11 +1008,11 @@ class TestParser(unittest.TestCase):
     def testWhileBlockExpr(self):
         self.checkParse(astWhileExpression(astBinaryExpression(">",
                                                                astVariableExpression("n"),
-                                                               astLiteralExpression(astIntegerLiteral(0, 64))),
+                                                               astLiteralExpression(astIntegerLiteral("0", 0, 64))),
                                            astAssignExpression(astVariableExpression("n"),
                                                                astBinaryExpression("-",
                                                                                    astVariableExpression("n"),
-                                                                                   astLiteralExpression(astIntegerLiteral(1, 64))))),
+                                                                                   astLiteralExpression(astIntegerLiteral("1", 1, 64))))),
                         Parser.expr, "while (n > 0)\n" + \
                                       "  n = n - 1")
 
@@ -1119,26 +1119,26 @@ class TestParser(unittest.TestCase):
             "(x + y) * z")
 
     def testNewArrayExpr(self):
-        self.checkParse(astNewArrayExpression(astLiteralExpression(astIntegerLiteral(123, 64)),
+        self.checkParse(astNewArrayExpression(astLiteralExpression(astIntegerLiteral("123", 123, 64)),
                                               astClassType([], "Foo", [], set()),
                                               None),
                         Parser.expr, "new(123) Foo")
 
     def testNewArrayExprWithTypeArgs(self):
-        self.checkParse(astNewArrayExpression(astLiteralExpression(astIntegerLiteral(123, 64)),
+        self.checkParse(astNewArrayExpression(astLiteralExpression(astIntegerLiteral("123", 123, 64)),
                                               astClassType([], "Foo", [astClassType([], "Bar", [], set())], set()),
                                               None),
                         Parser.expr, "new(123) Foo[Bar]")
 
     def testNewArrayExprWithPrefix(self):
-        self.checkParse(astNewArrayExpression(astLiteralExpression(astIntegerLiteral(123, 64)),
+        self.checkParse(astNewArrayExpression(astLiteralExpression(astIntegerLiteral("123", 123, 64)),
                                               astClassType([astScopePrefixComponent("Foo", [astClassType([], "Bar", [], set())])],
                                                            "Baz", [], set()),
                                               None),
                         Parser.expr, "new(123) Foo[Bar].Baz")
 
     def testNewArrayExprWithArgs(self):
-        self.checkParse(astNewArrayExpression(astLiteralExpression(astIntegerLiteral(123, 64)),
+        self.checkParse(astNewArrayExpression(astLiteralExpression(astIntegerLiteral("123", 123, 64)),
                                               astClassType([], "Foo", [], set()),
                                               [astVariableExpression("x"),
                                                astVariableExpression("y")]),
@@ -1150,12 +1150,12 @@ class TestParser(unittest.TestCase):
         self.checkParse(astBooleanLiteral(False), Parser.literal, "false")
 
     def testIntLits(self):
-        self.checkParse(astIntegerLiteral(123, 64), Parser.literal, "123")
-        self.checkParse(astIntegerLiteral(-123, 32), Parser.literal, "-123i32")
+        self.checkParse(astIntegerLiteral("123", 123, 64), Parser.literal, "123")
+        self.checkParse(astIntegerLiteral("-123i32", -123, 32), Parser.literal, "-123i32")
 
     def testFloatLits(self):
-        self.checkParse(astFloatLiteral(1.5, 64), Parser.literal, "1.5")
-        self.checkParse(astFloatLiteral(-1.5, 32), Parser.literal, "-1.5f32")
+        self.checkParse(astFloatLiteral("1.5", 1.5, 64), Parser.literal, "1.5")
+        self.checkParse(astFloatLiteral("-1.5f32", -1.5, 32), Parser.literal, "-1.5f32")
 
     def testNullLit(self):
         self.checkParse(astNullLiteral(), Parser.literal, "null")
