@@ -1,0 +1,29 @@
+// Copyright Jay Conrod. All rights reserved.
+//
+// This file is part of the Gypsum standard library. Use of this
+// source code is governed by the 3-clause BSD license that can be
+// found in the LICENSE.txt file.
+
+
+import std.Boolean, I64, List
+
+def filter[static T](pred: T -> Boolean, list: List[T]): List[T] =
+  let filtered = List[T]()
+  var i = 0i32
+  while (i < list.length)
+    let e = list.get(i)
+    if (pred(e).value)
+      filtered.push(e)
+    i += 1i32
+  filtered
+
+def main =
+  let list = List[I64]()
+  var i = 0
+  while (i < 10)
+    list.push(I64.of(i))
+    i += 1
+
+  let evens = filter[I64]((lambda (x: I64) Boolean.of(x.value % 2 == 0)), list)
+  if (evens.to-string != "[0, 2, 4, 6, 8]")
+    throw Exception()

@@ -660,7 +660,7 @@ class VariableType(ObjectType):
     def substitute(self, parameters, replacements):
         assert len(parameters) == len(replacements)
         for param, repl in zip(parameters, replacements):
-            if param is self.typeParameter:
+            if param == self.typeParameter:
                 return repl
         return self
 
