@@ -26,8 +26,10 @@ class Node(object):
         return self.__class__.__name__
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and \
-            all(v == other.__dict__[k] for k, v in self.__dict__.iteritems() if k != "location")
+        return (isinstance(other, self.__class__) and
+                all(v == other.__dict__[k]
+                    for k, v in self.__dict__.iteritems()
+                    if k not in ("location", "comments")))
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -63,6 +65,39 @@ class Module(Node):
         return self.definitions
 
 
+class Comment(Node):
+    def __init__(self, text, location):
+        super(Comment, self).__init__(location)
+        self.text = text
+
+    def __repr__(self):
+        return "Comment(%s)" % self.text
+
+    def data(self):
+        return self.text
+
+
+class CommentGroup(Node):
+    def __init__(self, before, inline, after, location):
+        super(CommentGroup, self).__init__(location)
+        self.before = before
+        self.inline = inline
+        self.after = after
+
+    def __repr__(self):
+        return ("CommentGroup(%s, %s, %s)" %
+                (repr(self.before), repr(self.inline), repr(self.after)))
+
+    def children(self):
+        return self.before + self.inline + self.after
+
+
+class CommentedNode(Node):
+    def __init__(self, comments, location):
+        super(CommentedNode, self).__init__(location)
+        self.comments = comments
+
+
 class Attribute(Node):
     def __init__(self, name, location):
         super(Attribute, self).__init__(location)
@@ -75,15 +110,15 @@ class Attribute(Node):
         return self.name
 
 
-class Definition(Node):
-    def __init__(self, attribs, location):
-        super(Definition, self).__init__(location)
+class Definition(CommentedNode):
+    def __init__(self, attribs, comments, location):
+        super(Definition, self).__init__(comments, location)
         self.attribs = attribs
 
 
 class VariableDefinition(Definition):
-    def __init__(self, attribs, keyword, pattern, expression, location):
-        super(VariableDefinition, self).__init__(attribs, location)
+    def __init__(self, attribs, keyword, pattern, expression, comments, location):
+        super(VariableDefinition, self).__init__(attribs, comments, location)
         self.keyword = keyword
         self.pattern = pattern
         self.expression = expression
@@ -100,8 +135,9 @@ class VariableDefinition(Definition):
 
 
 class FunctionDefinition(Definition):
-    def __init__(self, attribs, name, typeParameters, parameters, returnType, body, location):
-        super(FunctionDefinition, self).__init__(attribs, location)
+    def __init__(self, attribs, name, typeParameters, parameters,
+                 returnType, body, comments, location):
+        super(FunctionDefinition, self).__init__(attribs, comments, location)
         self.name = name
         self.typeParameters = typeParameters
         self.parameters = parameters
@@ -128,8 +164,8 @@ class FunctionDefinition(Definition):
 
 class ClassDefinition(Definition):
     def __init__(self, attribs, name, typeParameters, constructor,
-                 superclass, superArgs, supertraits, members, location):
-        super(ClassDefinition, self).__init__(attribs, location)
+                 superclass, superArgs, supertraits, members, comments, location):
+        super(ClassDefinition, self).__init__(attribs, comments, location)
         self.name = name
         self.typeParameters = typeParameters
         self.constructor = constructor
@@ -170,8 +206,8 @@ class ClassDefinition(Definition):
 
 
 class PrimaryConstructorDefinition(Definition):
-    def __init__(self, attribs, parameters, location):
-        super(PrimaryConstructorDefinition, self).__init__(attribs, location)
+    def __init__(self, attribs, parameters, comments, location):
+        super(PrimaryConstructorDefinition, self).__init__(attribs, comments, location)
         self.parameters = parameters
 
     def __repr__(self):
@@ -182,8 +218,8 @@ class PrimaryConstructorDefinition(Definition):
 
 
 class ArrayElementsStatement(Definition):
-    def __init__(self, attribs, elementType, getDefn, setDefn, lengthDefn, location):
-        super(ArrayElementsStatement, self).__init__(attribs, location)
+    def __init__(self, attribs, elementType, getDefn, setDefn, lengthDefn, comments, location):
+        super(ArrayElementsStatement, self).__init__(attribs, comments, location)
         self.elementType = elementType
         self.getDefn = getDefn
         self.setDefn = setDefn
@@ -199,8 +235,8 @@ class ArrayElementsStatement(Definition):
 
 
 class ArrayAccessorDefinition(Definition):
-    def __init__(self, attribs, name, location):
-        super(ArrayAccessorDefinition, self).__init__(attribs, location)
+    def __init__(self, attribs, name, comments, location):
+        super(ArrayAccessorDefinition, self).__init__(attribs, comments, location)
         self.name = name
 
     def __repr__(self):
@@ -208,8 +244,8 @@ class ArrayAccessorDefinition(Definition):
 
 
 class TraitDefinition(Definition):
-    def __init__(self, attribs, name, typeParameters, supertypes, members, location):
-        super(TraitDefinition, self).__init__(attribs, location)
+    def __init__(self, attribs, name, typeParameters, supertypes, members, comments, location):
+        super(TraitDefinition, self).__init__(attribs, comments, location)
         self.name = name
         self.typeParameters = typeParameters
         self.supertypes = supertypes
@@ -233,9 +269,9 @@ class TraitDefinition(Definition):
         return children
 
 
-class ImportStatement(Node):
-    def __init__(self, prefix, bindings, location):
-        super(ImportStatement, self).__init__(location)
+class ImportStatement(CommentedNode):
+    def __init__(self, prefix, bindings, comments, location):
+        super(ImportStatement, self).__init__(comments, location)
         self.prefix = prefix
         self.bindings = bindings
 
@@ -246,9 +282,9 @@ class ImportStatement(Node):
         return self.prefix + ([] if self.bindings is None else self.bindings)
 
 
-class ImportBinding(Node):
-    def __init__(self, name, asName, location):
-        super(ImportBinding, self).__init__(location)
+class ImportBinding(CommentedNode):
+    def __init__(self, name, asName, comments, location):
+        super(ImportBinding, self).__init__(comments, location)
         self.name = name
         self.asName = asName
 
@@ -276,8 +312,8 @@ class ScopePrefixComponent(Node):
 
 
 class TypeParameter(Definition):
-    def __init__(self, attribs, variance, name, upperBound, lowerBound, location):
-        super(TypeParameter, self).__init__(attribs, location)
+    def __init__(self, attribs, variance, name, upperBound, lowerBound, comments, location):
+        super(TypeParameter, self).__init__(attribs, comments, location)
         self.name = name
         self.variance = variance
         self.upperBound = upperBound
@@ -296,8 +332,8 @@ class TypeParameter(Definition):
 
 
 class Parameter(Definition):
-    def __init__(self, attribs, var, pattern, location):
-        super(Parameter, self).__init__(attribs, location)
+    def __init__(self, attribs, var, pattern, comments, location):
+        super(Parameter, self).__init__(attribs, comments, location)
         self.var = var
         self.pattern = pattern
 
@@ -311,13 +347,13 @@ class Parameter(Definition):
         return self.attribs + [self.pattern]
 
 
-class Pattern(Node):
+class Pattern(CommentedNode):
     pass
 
 
-class VariablePattern(Node):
-    def __init__(self, name, ty, location):
-        super(VariablePattern, self).__init__(location)
+class VariablePattern(Pattern):
+    def __init__(self, name, ty, comments, location):
+        super(VariablePattern, self).__init__(comments, location)
         self.name = name
         self.ty = ty
 
@@ -331,9 +367,9 @@ class VariablePattern(Node):
         return [self.ty] if self.ty else []
 
 
-class BlankPattern(Node):
-    def __init__(self, ty, location):
-        super(BlankPattern, self).__init__(location)
+class BlankPattern(Pattern):
+    def __init__(self, ty, comments, location):
+        super(BlankPattern, self).__init__(comments, location)
         self.ty = ty
 
     def __repr__(self):
@@ -343,9 +379,9 @@ class BlankPattern(Node):
         return [self.ty] if self.ty else []
 
 
-class LiteralPattern(Node):
-    def __init__(self, literal, location):
-        super(LiteralPattern, self).__init__(location)
+class LiteralPattern(Pattern):
+    def __init__(self, literal, comments, location):
+        super(LiteralPattern, self).__init__(comments, location)
         self.literal = literal
 
     def __repr__(self):
@@ -355,9 +391,9 @@ class LiteralPattern(Node):
         return [self.literal]
 
 
-class TuplePattern(Node):
-    def __init__(self, patterns, location):
-        super(TuplePattern, self).__init__(location)
+class TuplePattern(Pattern):
+    def __init__(self, patterns, comments, location):
+        super(TuplePattern, self).__init__(comments, location)
         self.patterns = patterns
 
     def __repr__(self):
@@ -367,9 +403,9 @@ class TuplePattern(Node):
         return self.patterns
 
 
-class ValuePattern(Node):
-    def __init__(self, prefix, name, location):
-        super(ValuePattern, self).__init__(location)
+class ValuePattern(Pattern):
+    def __init__(self, prefix, name, comments, location):
+        super(ValuePattern, self).__init__(comments, location)
         self.prefix = prefix
         self.name = name
 
@@ -381,8 +417,8 @@ class ValuePattern(Node):
 
 
 class DestructurePattern(Pattern):
-    def __init__(self, prefix, patterns, location):
-        super(DestructurePattern, self).__init__(location)
+    def __init__(self, prefix, patterns, comments, location):
+        super(DestructurePattern, self).__init__(comments, location)
         self.prefix = prefix
         self.patterns = patterns
 
@@ -395,8 +431,8 @@ class DestructurePattern(Pattern):
 
 
 class UnaryPattern(Pattern):
-    def __init__(self, operator, pattern, location):
-        super(UnaryPattern, self).__init__(location)
+    def __init__(self, operator, pattern, comments, location):
+        super(UnaryPattern, self).__init__(comments, location)
         self.operator = operator
         self.pattern = pattern
         self.matcherId = None
@@ -412,8 +448,8 @@ class UnaryPattern(Pattern):
 
 
 class BinaryPattern(Pattern):
-    def __init__(self, operator, left, right, location):
-        super(BinaryPattern, self).__init__(location)
+    def __init__(self, operator, left, right, comments, location):
+        super(BinaryPattern, self).__init__(comments, location)
         self.operator = operator
         self.left = left
         self.right = right
@@ -430,9 +466,9 @@ class BinaryPattern(Pattern):
         return [self.left, self.right]
 
 
-class GroupPattern(Node):
-    def __init__(self, pattern, location):
-        super(GroupPattern, self).__init__(location)
+class GroupPattern(Pattern):
+    def __init__(self, pattern, comments, location):
+        super(GroupPattern, self).__init__(comments, location)
         self.pattern = pattern
 
     def __repr__(self):
@@ -555,13 +591,13 @@ class FunctionType(Type):
         return self.parameterTypes + [self.returnType]
 
 
-class Expression(Node):
+class Expression(CommentedNode):
     pass
 
 
 class LiteralExpression(Expression):
-    def __init__(self, literal, location):
-        super(LiteralExpression, self).__init__(location)
+    def __init__(self, literal, comments, location):
+        super(LiteralExpression, self).__init__(comments, location)
         self.literal = literal
 
     def __repr__(self):
@@ -572,8 +608,8 @@ class LiteralExpression(Expression):
 
 
 class VariableExpression(Expression):
-    def __init__(self, name, location):
-        super(VariableExpression, self).__init__(location)
+    def __init__(self, name, comments, location):
+        super(VariableExpression, self).__init__(comments, location)
         self.name = name
 
     def __repr__(self):
@@ -594,8 +630,8 @@ class SuperExpression(Expression):
 
 
 class BlockExpression(Expression):
-    def __init__(self, statements, location):
-        super(BlockExpression, self).__init__(location)
+    def __init__(self, statements, comments, location):
+        super(BlockExpression, self).__init__(comments, location)
         self.statements = statements
 
     def __repr__(self):
@@ -606,8 +642,8 @@ class BlockExpression(Expression):
 
 
 class AssignExpression(Expression):
-    def __init__(self, left, right, location):
-        super(AssignExpression, self).__init__(location)
+    def __init__(self, left, right, comments, location):
+        super(AssignExpression, self).__init__(comments, location)
         self.left = left
         self.right = right
 
@@ -619,8 +655,8 @@ class AssignExpression(Expression):
 
 
 class PropertyExpression(Expression):
-    def __init__(self, receiver, propertyName, location):
-        super(PropertyExpression, self).__init__(location)
+    def __init__(self, receiver, propertyName, comments, location):
+        super(PropertyExpression, self).__init__(comments, location)
         self.receiver = receiver
         self.propertyName = propertyName
 
@@ -635,8 +671,8 @@ class PropertyExpression(Expression):
 
 
 class CallExpression(Expression):
-    def __init__(self, callee, typeArguments, arguments, location):
-        super(CallExpression, self).__init__(location)
+    def __init__(self, callee, typeArguments, arguments, comments, location):
+        super(CallExpression, self).__init__(comments, location)
         self.callee = callee
         self.typeArguments = typeArguments
         self.arguments = arguments
@@ -655,8 +691,8 @@ class CallExpression(Expression):
 
 
 class NewArrayExpression(Expression):
-    def __init__(self, length, ty, arguments, location):
-        super(NewArrayExpression, self).__init__(location)
+    def __init__(self, length, ty, arguments, comments, location):
+        super(NewArrayExpression, self).__init__(comments, location)
         self.length = length
         self.ty = ty
         self.arguments = arguments
@@ -673,8 +709,8 @@ class NewArrayExpression(Expression):
 
 
 class UnaryExpression(Expression):
-    def __init__(self, operator, expr, location):
-        super(UnaryExpression, self).__init__(location)
+    def __init__(self, operator, expr, comments, location):
+        super(UnaryExpression, self).__init__(comments, location)
         self.operator = operator
         self.expr = expr
 
@@ -689,14 +725,15 @@ class UnaryExpression(Expression):
 
 
 class BinaryExpression(Expression):
-    def __init__(self, operator, left, right, location):
-        super(BinaryExpression, self).__init__(location)
+    def __init__(self, operator, left, right, comments, location):
+        super(BinaryExpression, self).__init__(comments, location)
         self.operator = operator
         self.left = left
         self.right = right
 
     def __repr__(self):
-        return "BinaryExpression(%s, %s, %s)" % (self.operator, self.left, self.right)
+        return ("BinaryExpression(%s, %s, %s)" %
+                (self.operator, repr(self.left), repr(self.right)))
 
     def data(self):
         return self.operator
@@ -706,8 +743,8 @@ class BinaryExpression(Expression):
 
 
 class TupleExpression(Expression):
-    def __init__(self, expressions, location):
-        super(TupleExpression, self).__init__(location)
+    def __init__(self, expressions, comments, location):
+        super(TupleExpression, self).__init__(comments, location)
         self.expressions = expressions
 
     def __repr__(self):
@@ -718,8 +755,8 @@ class TupleExpression(Expression):
 
 
 class IfExpression(Expression):
-    def __init__(self, condition, trueExpr, falseExpr, location):
-        super(IfExpression, self).__init__(location)
+    def __init__(self, condition, trueExpr, falseExpr, comments, location):
+        super(IfExpression, self).__init__(comments, location)
         self.condition = condition
         self.trueExpr = trueExpr
         self.falseExpr = falseExpr
@@ -733,8 +770,8 @@ class IfExpression(Expression):
 
 
 class WhileExpression(Expression):
-    def __init__(self, condition, body, location):
-        super(WhileExpression, self).__init__(location)
+    def __init__(self, condition, body, comments, location):
+        super(WhileExpression, self).__init__(comments, location)
         self.condition = condition
         self.body = body
 
@@ -757,8 +794,8 @@ class ContinueExpression(Expression):
 
 
 class PartialFunctionExpression(Expression):
-    def __init__(self, cases, location):
-        super(PartialFunctionExpression, self).__init__(location)
+    def __init__(self, cases, comments, location):
+        super(PartialFunctionExpression, self).__init__(comments, location)
         self.cases = cases
 
     def __repr__(self):
@@ -768,9 +805,9 @@ class PartialFunctionExpression(Expression):
         return self.cases
 
 
-class PartialFunctionCase(Node):
-    def __init__(self, pattern, condition, expression, location):
-        super(PartialFunctionCase, self).__init__(location)
+class PartialFunctionCase(CommentedNode):
+    def __init__(self, pattern, condition, expression, comments, location):
+        super(PartialFunctionCase, self).__init__(comments, location)
         self.pattern = pattern
         self.condition = condition
         self.expression = expression
@@ -784,8 +821,8 @@ class PartialFunctionCase(Node):
 
 
 class MatchExpression(Expression):
-    def __init__(self, expression, matcher, location):
-        super(MatchExpression, self).__init__(location)
+    def __init__(self, expression, matcher, comments, location):
+        super(MatchExpression, self).__init__(comments, location)
         self.expression = expression
         self.matcher = matcher
 
@@ -798,8 +835,8 @@ class MatchExpression(Expression):
 
 
 class ThrowExpression(Expression):
-    def __init__(self, exception, location):
-        super(ThrowExpression, self).__init__(location)
+    def __init__(self, exception, comments, location):
+        super(ThrowExpression, self).__init__(comments, location)
         self.exception = exception
 
     def __repr__(self):
@@ -810,8 +847,8 @@ class ThrowExpression(Expression):
 
 
 class TryCatchExpression(Expression):
-    def __init__(self, expression, catchHandler, finallyHandler, location):
-        super(TryCatchExpression, self).__init__(location)
+    def __init__(self, expression, catchHandler, finallyHandler, comments, location):
+        super(TryCatchExpression, self).__init__(comments, location)
         self.expression = expression
         self.catchHandler = catchHandler
         self.finallyHandler = finallyHandler
@@ -825,8 +862,8 @@ class TryCatchExpression(Expression):
 
 
 class LambdaExpression(Expression):
-    def __init__(self, parameters, body, location):
-        super(LambdaExpression, self).__init__(location)
+    def __init__(self, parameters, body, comments, location):
+        super(LambdaExpression, self).__init__(comments, location)
         self.parameters = parameters
         self.body = body
 
@@ -839,8 +876,8 @@ class LambdaExpression(Expression):
 
 
 class ReturnExpression(Expression):
-    def __init__(self, expression, location):
-        super(ReturnExpression, self).__init__(location)
+    def __init__(self, expression, comments, location):
+        super(ReturnExpression, self).__init__(comments, location)
         self.expression = expression
 
     def __repr__(self):
@@ -851,8 +888,8 @@ class ReturnExpression(Expression):
 
 
 class GroupExpression(Expression):
-    def __init__(self, expression, location):
-        super(GroupExpression, self).__init__(location)
+    def __init__(self, expression, comments, location):
+        super(GroupExpression, self).__init__(comments, location)
         self.expression = expression
 
     def __repr__(self):

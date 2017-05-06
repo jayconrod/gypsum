@@ -13,13 +13,17 @@ from parser import Parser
 import ast
 
 
-# This code defines functions which call AST constructors with a dummy location. This is a hack
-# to avoid specifying locations for all AST classes. Locations aren't part of the equality test,
-# so we don't really care about them here.
+# This code defines functions which call AST constructors with a dummy location and no
+# comments. This is a hack to avoid specifying locations and comments for all AST
+# classes. Locations and comments aren't part of the equality test, so we don't really care
+# about them here.
 for k, v in ast.__dict__.iteritems():
     if type(v) is type and issubclass(v, ast.Node):
         altName = "ast" + k
-        altCtor = (lambda ctor: (lambda *args: ctor(*(args + (NoLoc,)))))(v)
+        if issubclass(v, ast.CommentedNode):
+            altCtor = (lambda ctor: (lambda *args: ctor(*(args + (None, NoLoc)))))(v)
+        else:
+            altCtor = (lambda ctor: (lambda *args: ctor(*(args + (NoLoc,)))))(v)
         globals()[altName] = altCtor
 
 

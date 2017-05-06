@@ -156,7 +156,7 @@ class Parser(object):
         if self._peekTag() is DOT:
             self._next()
             self._nextTag(UNDERSCORE)
-            return ast.ImportStatement(prefix, None, self._location(l))
+            return ast.ImportStatement(prefix, None, None, self._location(l))
 
         if len(prefix) == 1:
             raise ParseException(
@@ -173,9 +173,10 @@ class Parser(object):
             self._next()
             asName = self.ident()
             bindings.append(ast.ImportBinding(
-                lastComponent.name, asName, self._location(lastComponent.location)))
+                lastComponent.name, asName, None, self._location(lastComponent.location)))
         else:
-            bindings.append(ast.ImportBinding(lastComponent.name, None, lastComponent.location))
+            bindings.append(
+                ast.ImportBinding(lastComponent.name, None, None, lastComponent.location))
         while self._peekTag() is COMMA:
             self._next()
             name = self.ident()
@@ -185,9 +186,9 @@ class Parser(object):
                 asName = self.ident()
             else:
                 asName = None
-            bindings.append(ast.ImportBinding(name, asName, self._location(bl)))
+            bindings.append(ast.ImportBinding(name, asName, None, self._location(bl)))
 
-        return ast.ImportStatement(prefix, bindings, self._location(l))
+        return ast.ImportStatement(prefix, bindings, None, self._location(l))
 
     # Definitions
     def defn(self):
@@ -219,7 +220,7 @@ class Parser(object):
             e = self.maybeTupleExpr()
         else:
             e = None
-        return ast.VariableDefinition(ats, var, pat, e, self._location(l))
+        return ast.VariableDefinition(ats, var, pat, e, None, self._location(l))
 
     def functionDefn(self, l, ats):
         self._nextTag(DEF)
@@ -238,7 +239,7 @@ class Parser(object):
             body = self.expr()
         else:
             body = None
-        return ast.FunctionDefinition(ats, name, tps, ps, rty, body, self._location(l))
+        return ast.FunctionDefinition(ats, name, tps, ps, rty, body, None, self._location(l))
 
     def classDefn(self, l, ats):
         self._nextTag(CLASS)
@@ -260,7 +261,7 @@ class Parser(object):
             strs = None
         ms = self._classBody("class body")
         loc = self._location(l)
-        return ast.ClassDefinition(ats, name, tps, ctor, scl, sargs, strs, ms, loc)
+        return ast.ClassDefinition(ats, name, tps, ctor, scl, sargs, strs, ms, None, loc)
 
     def traitDefn(self, l, ats):
         self._nextTag(TRAIT)
@@ -276,7 +277,7 @@ class Parser(object):
             sts = None
         ms = self._classBody("trait body")
         loc = self._location(l)
-        return ast.TraitDefinition(ats, name, tps, sts, ms, loc)
+        return ast.TraitDefinition(ats, name, tps, sts, ms, None, loc)
 
     def arrayElementsStmt(self, l, ats):
         l = self._nextTag(ARRAYELEMENTS).location
@@ -288,13 +289,13 @@ class Parser(object):
         self._nextTag(COMMA)
         lengthDefn = self.arrayAccessorDefn()
         loc = self._location(l)
-        return ast.ArrayElementsStatement(ats, ety, getDefn, setDefn, lengthDefn, loc)
+        return ast.ArrayElementsStatement(ats, ety, getDefn, setDefn, lengthDefn, None, loc)
 
     def arrayAccessorDefn(self):
         l = self._peek().location
         ats = self.attribs()
         name = self.ident()
-        return ast.ArrayAccessorDefinition(ats, name, self._location(l))
+        return ast.ArrayAccessorDefinition(ats, name, None, self._location(l))
 
     def constructor(self):
         if self._peekTag() not in (ATTRIB, LPAREN):
@@ -302,7 +303,7 @@ class Parser(object):
         l = self._peek().location
         ats = self.attribs()
         params = self.parameters()
-        return ast.PrimaryConstructorDefinition(ats, params, self._location(l))
+        return ast.PrimaryConstructorDefinition(ats, params, None, self._location(l))
 
     def _classBody(self, label):
         if self._peekTag() is NEWLINE and self._peekTag(1) is INDENT:
@@ -317,7 +318,7 @@ class Parser(object):
     def maybeTuplePattern(self):
         l = self._peek().location
         elems = self._parseRepSep(self.maybeBinopPattern, COMMA)
-        return elems[0] if len(elems) == 1 else ast.TuplePattern(elems, self._location(l))
+        return elems[0] if len(elems) == 1 else ast.TuplePattern(elems, None, self._location(l))
 
     def maybeBinopPattern(self):
         return self._parseBinop(self.simplePattern, ast.BinaryPattern, self.LAST_BINOP_LEVEL)
@@ -355,13 +356,13 @@ class Parser(object):
         loc = self._location(l)
         if len(prefix) == 1 and args is None:
             mayHaveTypeArgs = False
-            result = ast.VariablePattern(prefix[0].name, ty, loc)
+            result = ast.VariablePattern(prefix[0].name, ty, None, loc)
         elif args is None and ty is None:
             mayHaveTypeArgs = False
-            result = ast.ValuePattern(prefix[:-1], prefix[-1].name, loc)
+            result = ast.ValuePattern(prefix[:-1], prefix[-1].name, None, loc)
         elif args is not None:
             mayHaveTypeArgs = True
-            result = ast.DestructurePattern(prefix, args, loc)
+            result = ast.DestructurePattern(prefix, args, None, loc)
         else:
             raise ParseException(loc, "invalid variable, value, or destructure pattern")
         if not mayHaveTypeArgs and prefix[-1].typeArguments is not None:
@@ -376,22 +377,22 @@ class Parser(object):
             ty = self.ty()
         else:
             ty = None
-        return ast.BlankPattern(ty, self._location(l))
+        return ast.BlankPattern(ty, None, self._location(l))
 
     def unopPattern(self):
         tok = self._nextTag(OPERATOR)
         pat = self.simplePattern()
-        return ast.UnaryPattern(tok.text, pat, self._location(tok.location))
+        return ast.UnaryPattern(tok.text, pat, None, self._location(tok.location))
 
     def literalPattern(self):
         lit = self.literal()
-        return ast.LiteralPattern(lit, lit.location)
+        return ast.LiteralPattern(lit, None, lit.location)
 
     def groupPattern(self):
         l = self._nextTag(LPAREN)
         pat = self.pattern()
         self._nextTag(RPAREN)
-        return ast.GroupPattern(pat, self._location(l.location))
+        return ast.GroupPattern(pat, None, self._location(l.location))
 
     # Types
     def ty(self):
@@ -490,13 +491,15 @@ class Parser(object):
         e = es.pop()
         while len(es) > 0:
             l = es.pop()
-            e = ast.AssignExpression(l, e, l.location.combine(e.location))
+            e = ast.AssignExpression(l, e, None, l.location.combine(e.location))
         return e
 
     def maybeTupleExpr(self):
         l = self._peek().location
         elems = self._parseRepSep(self.maybeBinopExpr, COMMA)
-        return elems[0] if len(elems) == 1 else ast.TupleExpression(elems, self._location(l))
+        return (elems[0]
+                if len(elems) == 1
+                else ast.TupleExpression(elems, None, self._location(l)))
 
     def maybeBinopExpr(self):
         return self._parseBinop(self.maybeCallExpr, ast.BinaryExpression, self.LAST_BINOP_LEVEL)
@@ -549,13 +552,14 @@ class Parser(object):
             if tag is DOT:
                 self._next()
                 name = self.symbol()
-                callee = ast.PropertyExpression(e, name, e.location.combine(self.location))
+                callee = ast.PropertyExpression(
+                    e, name, None, e.location.combine(self.location))
             else:
                 callee = e
             typeArgs = self._parseOption(LBRACK, self.typeArguments)
             args = self._parseOption(LPAREN, self.arguments)
             if typeArgs is not None or args is not None:
-                e = ast.CallExpression(callee, typeArgs, args, self._location(e.location))
+                e = ast.CallExpression(callee, typeArgs, args, None, self._location(e.location))
             else:
                 e = callee
             tag = self._peek().tag
@@ -603,29 +607,29 @@ class Parser(object):
     def unaryExpr(self):
         op = self._nextTag(OPERATOR, "expression")
         e = self.maybeCallExpr()
-        return ast.UnaryExpression(op.text, e, op.location.combine(e.location))
+        return ast.UnaryExpression(op.text, e, None, op.location.combine(e.location))
 
     def literalExpr(self):
         lit = self.literal()
-        return ast.LiteralExpression(lit, lit.location)
+        return ast.LiteralExpression(lit, None, lit.location)
 
     def varExpr(self):
         sym = self.symbol()
-        return ast.VariableExpression(sym, self.location)
+        return ast.VariableExpression(sym, None, self.location)
 
     def thisExpr(self):
         self._nextTag(THIS)
-        return ast.ThisExpression(self.location)
+        return ast.ThisExpression(None, self.location)
 
     def superExpr(self):
         self._nextTag(SUPER)
-        return ast.SuperExpression(self.location)
+        return ast.SuperExpression(None, self.location)
 
     def groupExpr(self):
         l = self._nextTag(LPAREN)
         e = self.expr()
         r = self._nextTag(RPAREN)
-        return ast.GroupExpression(e, l.location.combine(r.location))
+        return ast.GroupExpression(e, None, l.location.combine(r.location))
 
     def newArrayExpr(self):
         l = self._nextTag(NEW)
@@ -634,7 +638,7 @@ class Parser(object):
         self._nextTag(RPAREN)
         ty = self.ty()
         args = self._parseOption(LPAREN, self.arguments)
-        return ast.NewArrayExpression(length, ty, args, self._location(l.location))
+        return ast.NewArrayExpression(length, ty, args, None, self._location(l.location))
 
     def ifExpr(self):
         l = self._nextTag(IF)
@@ -651,7 +655,7 @@ class Parser(object):
             falseExpr = self.expr()
         else:
             falseExpr = None
-        return ast.IfExpression(condExpr, trueExpr, falseExpr, self._location(l.location))
+        return ast.IfExpression(condExpr, trueExpr, falseExpr, None, self._location(l.location))
 
     def whileExpr(self):
         l = self._nextTag(WHILE)
@@ -659,15 +663,15 @@ class Parser(object):
         condExpr = self.expr()
         self._nextTag(RPAREN)
         bodyExpr = self.expr()
-        return ast.WhileExpression(condExpr, bodyExpr, self._location(l.location))
+        return ast.WhileExpression(condExpr, bodyExpr, None, self._location(l.location))
 
     def breakExpr(self):
         self._nextTag(BREAK)
-        return ast.BreakExpression(self.location)
+        return ast.BreakExpression(None, self.location)
 
     def continueExpr(self):
         self._nextTag(CONTINUE)
-        return ast.ContinueExpression(self.location)
+        return ast.ContinueExpression(None, self.location)
 
     def matchExpr(self):
         l = self._nextTag(MATCH)
@@ -675,12 +679,12 @@ class Parser(object):
         e = self.expr()
         self._nextTag(RPAREN)
         m = self.partialFnExpr()
-        return ast.MatchExpression(e, m, self._location(l.location))
+        return ast.MatchExpression(e, m, None, self._location(l.location))
 
     def partialFnExpr(self):
         l = self._peek().location
         cases = self._parseBlock(self.partialFnCase, "partial function expression")
-        return ast.PartialFunctionExpression(cases, self._location(l))
+        return ast.PartialFunctionExpression(cases, None, self._location(l))
 
     def partialFnCase(self):
         l = self._nextTag(CASE)
@@ -692,12 +696,12 @@ class Parser(object):
             c = None
         self._nextTag(BIG_ARROW)
         e = self.expr()
-        return ast.PartialFunctionCase(p, c, e, self._location(l.location))
+        return ast.PartialFunctionCase(p, c, e, None, self._location(l.location))
 
     def throwExpr(self):
         l = self._nextTag(THROW)
         e = self.expr()
-        return ast.ThrowExpression(e, self._location(l.location))
+        return ast.ThrowExpression(e, None, self._location(l.location))
 
     def tryExpr(self):
         l = self._nextTag(TRY)
@@ -718,7 +722,7 @@ class Parser(object):
             finallyOpt = None
         if catchOpt is None and finallyOpt is None:
             self._error("catch or finally")
-        return ast.TryCatchExpression(e, catchOpt, finallyOpt, self._location(l.location))
+        return ast.TryCatchExpression(e, catchOpt, finallyOpt, None, self._location(l.location))
 
     def catchHandler(self):
         l = self._nextTag(CATCH)
@@ -728,8 +732,8 @@ class Parser(object):
             self._nextTag(RPAREN)
             e = self.expr()
             loc = self._location(l.location)
-            case = ast.PartialFunctionCase(p, None, e, loc)
-            return ast.PartialFunctionExpression([case], loc)
+            case = ast.PartialFunctionCase(p, None, e, None, loc)
+            return ast.PartialFunctionExpression([case], None, loc)
         else:
             handler = self.partialFnExpr()
             handler.location = self._location(l.location)
@@ -742,7 +746,7 @@ class Parser(object):
     def blockExpr(self):
         l = self._peek().location
         stmts = self._parseBlock(self.blockStmt, "block expression")
-        return ast.BlockExpression(stmts, self._location(l))
+        return ast.BlockExpression(stmts, None, self._location(l))
 
     def blockStmt(self):
         tag = self._peekTag()
@@ -758,7 +762,7 @@ class Parser(object):
         l = self._nextTag(LAMBDA)
         params = self._parseOption(LPAREN, self.parameters)
         e = self.expr()
-        return ast.LambdaExpression(params, e, self._location(l.location))
+        return ast.LambdaExpression(params, e, None, self._location(l.location))
 
     def returnExpr(self):
         l = self._nextTag(RETURN)
@@ -766,7 +770,7 @@ class Parser(object):
             e = self.expr()
         else:
             e = None
-        return ast.ReturnExpression(e, self._location(l.location))
+        return ast.ReturnExpression(e, None, self._location(l.location))
 
     # Literals
     def literal(self):
@@ -871,7 +875,7 @@ class Parser(object):
             self._next()
             lowerBound = self.ty()
         loc = self._location(l)
-        return ast.TypeParameter(ats, variance, name, upperBound, lowerBound, loc)
+        return ast.TypeParameter(ats, variance, name, upperBound, lowerBound, None, loc)
 
     def parameters(self):
         return self._parseList(self.parameter, "parameter", LPAREN, COMMA, RPAREN)
@@ -883,7 +887,7 @@ class Parser(object):
         if self._peekTag() is VAR:
             var = self._next().text
         pat = self.simplePattern()
-        return ast.Parameter(ats, var, pat, self._location(l))
+        return ast.Parameter(ats, var, pat, None, self._location(l))
 
     def typeArguments(self):
         return self._parseList(self.ty, "type arguments", LBRACK, COMMA, RBRACK)
@@ -947,7 +951,7 @@ class Parser(object):
                     raise ParseException(
                         op.location, "left and right associative operators are mixed together")
                 loc = e.location.combine(term.location)
-                e = astCtor(op.text, e, term, loc)
+                e = astCtor(op.text, e, term, None, loc)
         else:
             e = terms[-1]
             for i in xrange(len(ops) - 1, -1, -1):
@@ -957,7 +961,7 @@ class Parser(object):
                     raise ParseException(
                         op.location, "left and right associative operators are mixed together")
                 loc = term.location.combine(e.location)
-                e = astCtor(op.text, term, e, loc)
+                e = astCtor(op.text, term, e, None, loc)
         return e
 
     def _parseOption(self, hintTag, parser):
