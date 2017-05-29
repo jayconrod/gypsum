@@ -101,7 +101,7 @@ class TestLexer(unittest.TestCase):
 
     def testComment(self):
         text = "a//this is a comment\nb"
-        self.checkTags([SYMBOL, NEWLINE, SYMBOL, EOF], text)
+        self.checkTags([SYMBOL, COMMENT, NEWLINE, SYMBOL, EOF], text)
 
     def testLocation(self):
         text = "a\n b"
@@ -113,9 +113,8 @@ class TestLexer(unittest.TestCase):
         with self.assertRaises(LexException):
             lex("test", "`")
 
-    def testNoNewlineForEmptyLine(self):
-        self.checkTags([SYMBOL, NEWLINE, SYMBOL, EOF], "a\n\nb")
-        self.checkTags([SYMBOL, EOF], "//comment\na")
+    def testNewlineForEmptyLine(self):
+        self.checkTags([SYMBOL, NEWLINE, NEWLINE, SYMBOL, EOF], "a\n\nb")
 
     def testEscapeNewline(self):
         self.checkTags([SYMBOL, SYMBOL, EOF], "a\\\nb")
@@ -126,18 +125,18 @@ class TestLexer(unittest.TestCase):
         self.checkTags([LBRACE, RBRACE, EOF], "{\n}")
 
     def testNoIndentBlankLine(self):
-        self.checkTags([SYMBOL, NEWLINE, SYMBOL, EOF], "a\n    \nb")
+        self.checkTags([SYMBOL, NEWLINE, NEWLINE, SYMBOL, EOF], "a\n    \nb")
 
     def testNoOutdentBlankLine(self):
-        self.checkTags([INDENT, SYMBOL, NEWLINE, SYMBOL, NEWLINE, OUTDENT, EOF],
+        self.checkTags([INDENT, SYMBOL, NEWLINE, NEWLINE, SYMBOL, NEWLINE, OUTDENT, EOF],
                        "  a\n\n  b\n")
 
     def testIndentCommentLine(self):
-        self.checkTags([SYMBOL, NEWLINE, INDENT, OUTDENT, SYMBOL, EOF],
+        self.checkTags([SYMBOL, NEWLINE, INDENT, COMMENT, OUTDENT, NEWLINE, SYMBOL, EOF],
                        "a\n  // com\nb")
 
     def testOutdentCommentLine(self):
-        self.checkTags([INDENT, SYMBOL, OUTDENT, NEWLINE, INDENT, SYMBOL, OUTDENT, EOF],
+        self.checkTags([INDENT, SYMBOL, OUTDENT, NEWLINE, COMMENT, NEWLINE, INDENT, SYMBOL, OUTDENT, EOF],
                        "  a\n//c\n  b")
 
     def testIndentRegularLine(self):
@@ -165,7 +164,7 @@ class TestLexer(unittest.TestCase):
         self.assertRaises(LexException, lex, "test", " \ta\n\tb")
 
     def testCommentEof(self):
-        self.checkTags([SYMBOL, NEWLINE, EOF], "a\n//com")
+        self.checkTags([SYMBOL, NEWLINE, COMMENT, EOF], "a\n//com")
 
     def testMultipleOutdentEof(self):
         self.checkTags([INDENT, SYMBOL, NEWLINE, INDENT, SYMBOL, OUTDENT, OUTDENT, EOF],

@@ -145,18 +145,44 @@ class Parser(object):
         return ast.Module(defns, self._location(l))
 
     def defnOrImport(self):
-        if self._peekTag() is IMPORT:
-            return self.importStmt()
-        else:
-            return self.defn()
+        while True:  # repeat
+            lead = self.leadComments()
+            tag = self._peekTag()
+            if tag is NEWLINE:
+                # Blank line, possibly preceeded by comment block.
+                if len(lead) > 0:
+                    cg = ast.CommentGroup(lead, [])
+                    cg.setLocationFromChildren()
+                    return cg
+                else:
+                    self._next()
+                    continue
+            elif tag is EOF:
+                # Comments at end of file
+                assert len(lead) > 0
+                cg = ast.CommentGroup(lead, [])
+                cg.setLocationFromChildren()
+                return cg
+            else:
+                if tag is IMPORT:
+                    stmt = self.importStmt()
+                else:
+                    stmt = self.defn()
+                stmt.comments.before = lead + stmt.comments.before
+                stmt.comments.setLocationFromChildren()
+                return stmt
 
     def importStmt(self):
+        lead = self.leadComments()
+        cg = ast.CommentGroup(lead, [])
         l = self._nextTag(IMPORT).location
         prefix = self.scopePrefix()
         if self._peekTag() is DOT:
             self._next()
             self._nextTag(UNDERSCORE)
-            return ast.ImportStatement(prefix, None, None, self._location(l))
+            imp = ast.ImportStatement(prefix, None, cg, self._location(l))
+            self._tailComment(imp)
+            return imp
 
         if len(prefix) == 1:
             raise ParseException(
@@ -173,10 +199,10 @@ class Parser(object):
             self._next()
             asName = self.ident()
             bindings.append(ast.ImportBinding(
-                lastComponent.name, asName, None, self._location(lastComponent.location)))
+                lastComponent.name, asName, self._location(lastComponent.location)))
         else:
             bindings.append(
-                ast.ImportBinding(lastComponent.name, None, None, lastComponent.location))
+                ast.ImportBinding(lastComponent.name, None, lastComponent.location))
         while self._peekTag() is COMMA:
             self._next()
             name = self.ident()
@@ -186,27 +212,33 @@ class Parser(object):
                 asName = self.ident()
             else:
                 asName = None
-            bindings.append(ast.ImportBinding(name, asName, None, self._location(bl)))
+            bindings.append(ast.ImportBinding(name, asName, self._location(bl)))
 
-        return ast.ImportStatement(prefix, bindings, None, self._location(l))
+        imp = ast.ImportStatement(prefix, bindings, cg, self._location(l))
+        self._tailComment(imp)
+        return imp
 
     # Definitions
     def defn(self):
+        lead = self.leadComments()
         l = self._peek().location
         ats = self.attribs()
         tag = self._peek().tag
         if tag in (LET, VAR):
-            return self.varDefn(l, ats)
+            d = self.varDefn(l, ats)
         elif tag is DEF:
-            return self.functionDefn(l, ats)
+            d = self.functionDefn(l, ats)
         elif tag is CLASS:
-            return self.classDefn(l, ats)
+            d = self.classDefn(l, ats)
         elif tag is TRAIT:
-            return self.traitDefn(l, ats)
+            d = self.traitDefn(l, ats)
         elif tag is ARRAYELEMENTS:
-            return self.arrayElementsStmt(l, ats)
+            d = self.arrayElementsStmt(l, ats)
         else:
-            self._error("definition")
+            raise self._error("definition")
+        d.comments.before = lead + d.comments.before
+        d.comments.setLocationFromChildren()
+        return d
 
     def varDefn(self, l, ats):
         tok = self._next()
@@ -220,7 +252,12 @@ class Parser(object):
             e = self.maybeTupleExpr()
         else:
             e = None
-        return ast.VariableDefinition(ats, var, pat, e, None, self._location(l))
+        d = ast.VariableDefinition(ats, var, pat, e, None, self._location(l))
+        if e is not None:
+            self._liftComments(d, None, e)
+        else:
+            self._liftComments(d, None, pat)
+        return d
 
     def functionDefn(self, l, ats):
         self._nextTag(DEF)
@@ -239,7 +276,15 @@ class Parser(object):
             body = self.expr()
         else:
             body = None
-        return ast.FunctionDefinition(ats, name, tps, ps, rty, body, None, self._location(l))
+        loc = self._location(l)
+        d = ast.FunctionDefinition(ats, name, tps, ps, rty, body, None, loc)
+        if body is not None:
+            self._liftComments(d, None, body)
+        elif rty is not None:
+            self._liftComments(d, None, rty)
+        else:
+            self._tailComment(d)
+        return d
 
     def classDefn(self, l, ats):
         self._nextTag(CLASS)
@@ -259,9 +304,16 @@ class Parser(object):
             scl = None
             sargs = None
             strs = None
-        ms = self._classBody("class body")
+        ms = self._parseBlock(self.defnOrImport)
         loc = self._location(l)
-        return ast.ClassDefinition(ats, name, tps, ctor, scl, sargs, strs, ms, None, loc)
+        d = ast.ClassDefinition(ats, name, tps, ctor, scl, sargs, strs, ms, None, loc)
+        if ms is not None:
+            d.comments = ast.CommentGroup()
+        elif strs is not None:
+            self._liftComments(d, None, strs[-1])
+        else:
+            self._tailComment(d)
+        return d
 
     def traitDefn(self, l, ats):
         self._nextTag(TRAIT)
@@ -275,9 +327,16 @@ class Parser(object):
                 sts.append(self.ty())
         else:
             sts = None
-        ms = self._classBody("trait body")
+        ms = self._parseBlock(self.defnOrImport)
         loc = self._location(l)
-        return ast.TraitDefinition(ats, name, tps, sts, ms, None, loc)
+        d = ast.TraitDefinition(ats, name, tps, sts, ms, None, loc)
+        if ms is not None:
+            d.comments = ast.CommentGroup()
+        elif sts is not None:
+            self._liftComments(d, None, sts[-1])
+        else:
+            self._tailComment(d)
+        return d
 
     def arrayElementsStmt(self, l, ats):
         l = self._nextTag(ARRAYELEMENTS).location
@@ -288,14 +347,20 @@ class Parser(object):
         setDefn = self.arrayAccessorDefn()
         self._nextTag(COMMA)
         lengthDefn = self.arrayAccessorDefn()
+        cg = ast.CommentGroup()
         loc = self._location(l)
-        return ast.ArrayElementsStatement(ats, ety, getDefn, setDefn, lengthDefn, None, loc)
+        return ast.ArrayElementsStatement(ats, ety, getDefn, setDefn, lengthDefn, cg, loc)
 
     def arrayAccessorDefn(self):
+        lead = self.leadComments()
         l = self._peek().location
         ats = self.attribs()
         name = self.ident()
-        return ast.ArrayAccessorDefinition(ats, name, None, self._location(l))
+        loc = self._location(l)
+        tail = self.tailComment()
+        cg = ast.CommentGroup(lead, tail)
+        cg.setLocationFromChildren()
+        return ast.ArrayAccessorDefinition(ats, name, cg, loc)
 
     def constructor(self):
         if self._peekTag() not in (ATTRIB, LPAREN):
@@ -303,13 +368,9 @@ class Parser(object):
         l = self._peek().location
         ats = self.attribs()
         params = self.parameters()
-        return ast.PrimaryConstructorDefinition(ats, params, None, self._location(l))
-
-    def _classBody(self, label):
-        if self._peekTag() is NEWLINE and self._peekTag(1) is INDENT:
-            return self._parseBlock(self.defnOrImport, label)
-        else:
-            return None
+        cg = ast.CommentGroup()
+        loc = self._location(l)
+        return ast.PrimaryConstructorDefinition(ats, params, cg, loc)
 
     # Patterns
     def pattern(self):
@@ -318,25 +379,34 @@ class Parser(object):
     def maybeTuplePattern(self):
         l = self._peek().location
         elems = self._parseRepSep(self.maybeBinopPattern, COMMA)
-        return elems[0] if len(elems) == 1 else ast.TuplePattern(elems, None, self._location(l))
+        if len(elems) == 1:
+            return elems[0]
+        else:
+            p = ast.TuplePattern(elems, None, self._location(l))
+            self._liftComments(p, elems[0], elems[-1])
+            return p
 
     def maybeBinopPattern(self):
         return self._parseBinop(self.simplePattern, ast.BinaryPattern, self.LAST_BINOP_LEVEL)
 
     def simplePattern(self):
+        lead = self.leadComments()
         tag = self._peekTag()
         if tag is SYMBOL:
-            return self.prefixedPattern()
+            p = self.prefixedPattern()
         elif tag is UNDERSCORE:
-            return self.blankPattern()
+            p = self.blankPattern()
         elif tag in (TRUE, FALSE, NULL, INTEGER, FLOAT, STRING):
-            return self.literalPattern()
+            p = self.literalPattern()
         elif tag is OPERATOR:
-            return self.unopPattern()
+            p = self.unopPattern()
         elif tag is LPAREN:
-            return self.groupPattern()
+            p = self.groupPattern()
         else:
             self._error("pattern")
+        p.comments.before = lead + p.comments.before
+        p.comments.setLocationFromChildren()
+        return p
 
     def prefixedPattern(self):
         l = self._peek().location
@@ -357,12 +427,18 @@ class Parser(object):
         if len(prefix) == 1 and args is None:
             mayHaveTypeArgs = False
             result = ast.VariablePattern(prefix[0].name, ty, None, loc)
+            if ty is None:
+                self._tailComment(result)
+            else:
+                self._liftComments(result, None, ty)
         elif args is None and ty is None:
             mayHaveTypeArgs = False
             result = ast.ValuePattern(prefix[:-1], prefix[-1].name, None, loc)
+            self._tailComment(result)
         elif args is not None:
             mayHaveTypeArgs = True
             result = ast.DestructurePattern(prefix, args, None, loc)
+            self._tailComment(result)
         else:
             raise ParseException(loc, "invalid variable, value, or destructure pattern")
         if not mayHaveTypeArgs and prefix[-1].typeArguments is not None:
@@ -375,24 +451,33 @@ class Parser(object):
         if self._peekTag() is COLON:
             self._next()
             ty = self.ty()
+            p = ast.BlankPattern(ty, None, self._location(l))
+            self._liftComments(p, None, ty)
         else:
-            ty = None
-        return ast.BlankPattern(ty, None, self._location(l))
+            p = ast.BlankPattern(None, None, self._location(l))
+            self._tailComment(p)
+        return p
 
     def unopPattern(self):
         tok = self._nextTag(OPERATOR)
-        pat = self.simplePattern()
-        return ast.UnaryPattern(tok.text, pat, None, self._location(tok.location))
+        p = self.simplePattern()
+        u = ast.UnaryPattern(tok.text, p, None, self._location(tok.location))
+        self._liftComments(u, None, p)
+        return u
 
     def literalPattern(self):
         lit = self.literal()
-        return ast.LiteralPattern(lit, None, lit.location)
+        p = ast.LiteralPattern(lit, None, lit.location)
+        self._tailComment(p)
+        return p
 
     def groupPattern(self):
         l = self._nextTag(LPAREN)
-        pat = self.pattern()
+        p = self.pattern()
         self._nextTag(RPAREN)
-        return ast.GroupPattern(pat, None, self._location(l.location))
+        g = ast.GroupPattern(p, None, self._location(l.location))
+        self._tailComment(g)
+        return g
 
     # Types
     def ty(self):
@@ -416,38 +501,45 @@ class Parser(object):
             else:
                 ptys = [pty]
             loc = pty.location.combine(ty.location)
-            ty = ast.FunctionType(ptys, ty, loc)
+            fty = ast.FunctionType(ptys, ty, None, loc)
+            self._liftComments(fty, pty, ty)
+            ty = fty
         return ty
 
     def simpleType(self):
+        lead = self.leadComments()
         tok = self._peek()
-        if tok.tag is UNIT:
-            t = ast.UnitType(tok.location)
-        elif tok.tag is I8:
-            t = ast.I8Type(tok.location)
-        elif tok.tag is I16:
-            t = ast.I16Type(tok.location)
-        elif tok.tag is I32:
-            t = ast.I32Type(tok.location)
-        elif tok.tag is I64:
-            t = ast.I64Type(tok.location)
-        elif tok.tag is F32:
-            t = ast.F32Type(tok.location)
-        elif tok.tag is F64:
-            t = ast.F64Type(tok.location)
-        elif tok.tag is BOOLEAN:
-            t = ast.BooleanType(tok.location)
-        elif tok.tag is UNDERSCORE:
-            t = ast.BlankType(tok.location)
-        elif tok.tag is LPAREN:
-            return self.tupleType()
+        if tok.tag is LPAREN:
+            t = self.tupleType()
         elif tok.tag is SYMBOL:
-            return self.classType()
+            t = self.classType()
         elif tok.tag is FORSOME:
-            return self.existentialType()
+            t = self.existentialType()
         else:
-            self._error("type")
-        self._next()
+            if tok.tag is UNIT:
+                t = ast.UnitType(None, tok.location)
+            elif tok.tag is I8:
+                t = ast.I8Type(None, tok.location)
+            elif tok.tag is I16:
+                t = ast.I16Type(None, tok.location)
+            elif tok.tag is I32:
+                t = ast.I32Type(None, tok.location)
+            elif tok.tag is I64:
+                t = ast.I64Type(None, tok.location)
+            elif tok.tag is F32:
+                t = ast.F32Type(None, tok.location)
+            elif tok.tag is F64:
+                t = ast.F64Type(None, tok.location)
+            elif tok.tag is BOOLEAN:
+                t = ast.BooleanType(None, tok.location)
+            elif tok.tag is UNDERSCORE:
+                t = ast.BlankType(None, tok.location)
+            else:
+                self._error("type")
+            self._next()
+            self._tailComment(t)
+        t.comments.before = lead + t.comments.before
+        t.comments.setLocationFromChildren()
         return t
 
     def tupleType(self):
@@ -459,7 +551,9 @@ class Parser(object):
         if len(tys) == 1:
             return tys[0]
         flags = self.typeFlags()
-        return ast.TupleType(tys, flags, loc)
+        t = ast.TupleType(tys, flags, None, loc)
+        self._tailComment(t)
+        return t
 
     def classType(self):
         l = self._peek().location
@@ -469,13 +563,17 @@ class Parser(object):
         name = last.name
         typeArgs = last.typeArguments if last.typeArguments is not None else []
         flags = self.typeFlags()
-        return ast.ClassType(prefix, name, typeArgs, flags, self._location(l))
+        t = ast.ClassType(prefix, name, typeArgs, flags, None, self._location(l))
+        self._tailComment(t)
+        return t
 
     def existentialType(self):
         l = self._nextTag(FORSOME)
         tps = self.typeParameters()
         t = self.ty()
-        return ast.ExistentialType(tps, t, self._location(l.location))
+        e = ast.ExistentialType(tps, t, None, self._location(l.location))
+        self._liftComments(e, None, t)
+        return e
 
     def typeFlags(self):
         tok = self._peek()
@@ -487,19 +585,27 @@ class Parser(object):
 
     # Expressions
     def expr(self):
+        return self.maybeAssignExpr()
+
+    def maybeAssignExpr(self):
         es = self._parseRepSep(self.maybeTupleExpr, EQ)
         e = es.pop()
         while len(es) > 0:
             l = es.pop()
-            e = ast.AssignExpression(l, e, None, l.location.combine(e.location))
+            a = ast.AssignExpression(l, e, None, l.location.combine(e.location))
+            self._liftComments(a, l, e)
+            e = a
         return e
 
     def maybeTupleExpr(self):
         l = self._peek().location
         elems = self._parseRepSep(self.maybeBinopExpr, COMMA)
-        return (elems[0]
-                if len(elems) == 1
-                else ast.TupleExpression(elems, None, self._location(l)))
+        if len(elems) == 1:
+            return elems[0]
+        else:
+            e = ast.TupleExpression(elems, None, self._location(l))
+            self._liftComments(e, elems[0], elems[-1])
+            return e
 
     def maybeBinopExpr(self):
         return self._parseBinop(self.maybeCallExpr, ast.BinaryExpression, self.LAST_BINOP_LEVEL)
@@ -554,82 +660,103 @@ class Parser(object):
                 name = self.symbol()
                 callee = ast.PropertyExpression(
                     e, name, None, e.location.combine(self.location))
+                self._liftComments(callee, e, None)
+                self._tailComment(callee)
             else:
                 callee = e
             typeArgs = self._parseOption(LBRACK, self.typeArguments)
             args = self._parseOption(LPAREN, self.arguments)
             if typeArgs is not None or args is not None:
-                e = ast.CallExpression(callee, typeArgs, args, None, self._location(e.location))
+                c = ast.CallExpression(callee, typeArgs, args, None, self._location(e.location))
+                self._liftComments(c, callee, None)
+                self._tailComment(c)
+                e = c
             else:
                 e = callee
             tag = self._peek().tag
         return e
 
     def receiverExpr(self):
+        lead = self.leadComments()
         tag = self._peek().tag
         if tag is OPERATOR:
-            return self.unaryExpr()
+            e = self.unaryExpr()
         elif tag in (INTEGER, FLOAT, STRING, TRUE, FALSE, NULL, LBRACE):
-            return self.literalExpr()
+            e = self.literalExpr()
         elif tag is SYMBOL:
-            return self.varExpr()
+            e = self.varExpr()
         elif tag is THIS:
-            return self.thisExpr()
+            e = self.thisExpr()
         elif tag is SUPER:
-            return self.superExpr()
+            e = self.superExpr()
         elif tag is LPAREN:
-            return self.groupExpr()
+            e = self.groupExpr()
         elif tag is NEW:
-            return self.newArrayExpr()
+            e = self.newArrayExpr()
         elif tag is IF:
-            return self.ifExpr()
+            e = self.ifExpr()
         elif tag is WHILE:
-            return self.whileExpr()
+            e = self.whileExpr()
         elif tag is BREAK:
-            return self.breakExpr()
+            e = self.breakExpr()
         elif tag is CONTINUE:
-            return self.continueExpr()
+            e = self.continueExpr()
         elif tag is MATCH:
-            return self.matchExpr()
+            e = self.matchExpr()
         elif tag is THROW:
-            return self.throwExpr()
+            e = self.throwExpr()
         elif tag is TRY:
-            return self.tryExpr()
+            e = self.tryExpr()
         elif tag is NEWLINE:
-            return self.blockExpr()
+            e = self.blockExpr()
         elif tag is LAMBDA:
-            return self.lambdaExpr()
+            e = self.lambdaExpr()
         elif tag is RETURN:
-            return self.returnExpr()
+            e = self.returnExpr()
         else:
             self._error("expression")
+        e.comments.before = lead + e.comments.before
+        e.comments.setLocationFromChildren()
+        return e
 
     def unaryExpr(self):
         op = self._nextTag(OPERATOR, "expression")
         e = self.maybeCallExpr()
-        return ast.UnaryExpression(op.text, e, None, op.location.combine(e.location))
+        u = ast.UnaryExpression(op.text, e, None, op.location.combine(e.location))
+        self._liftComments(u, None, e)
+        return u
 
     def literalExpr(self):
         lit = self.literal()
-        return ast.LiteralExpression(lit, None, lit.location)
+        e = ast.LiteralExpression(lit, None, lit.location)
+        self._tailComment(e)
+        return e
 
     def varExpr(self):
         sym = self.symbol()
-        return ast.VariableExpression(sym, None, self.location)
+        e = ast.VariableExpression(sym, ast.CommentGroup(), self.location)
+        self._tailComment(e)
+        return e
 
     def thisExpr(self):
         self._nextTag(THIS)
-        return ast.ThisExpression(None, self.location)
+        e = ast.ThisExpression(None, self.location)
+        self._tailComment(e)
+        return e
 
     def superExpr(self):
         self._nextTag(SUPER)
-        return ast.SuperExpression(None, self.location)
+        e = ast.SuperExpression(None, self.location)
+        self._tailComment(e)
+        return e
 
     def groupExpr(self):
         l = self._nextTag(LPAREN)
         e = self.expr()
         r = self._nextTag(RPAREN)
-        return ast.GroupExpression(e, None, l.location.combine(r.location))
+        g = ast.GroupExpression(e, None, l.location.combine(r.location))
+        self._tailComment(g)
+        return g
 
     def newArrayExpr(self):
         l = self._nextTag(NEW)
@@ -638,7 +765,9 @@ class Parser(object):
         self._nextTag(RPAREN)
         ty = self.ty()
         args = self._parseOption(LPAREN, self.arguments)
-        return ast.NewArrayExpression(length, ty, args, None, self._location(l.location))
+        e = ast.NewArrayExpression(length, ty, args, None, self._location(l.location))
+        self._tailComment(e)
+        return e
 
     def ifExpr(self):
         l = self._nextTag(IF)
@@ -655,7 +784,9 @@ class Parser(object):
             falseExpr = self.expr()
         else:
             falseExpr = None
-        return ast.IfExpression(condExpr, trueExpr, falseExpr, None, self._location(l.location))
+        e = ast.IfExpression(condExpr, trueExpr, falseExpr, None, self._location(l.location))
+        self._liftComments(e, None, falseExpr if falseExpr is not None else trueExpr)
+        return e
 
     def whileExpr(self):
         l = self._nextTag(WHILE)
@@ -663,15 +794,21 @@ class Parser(object):
         condExpr = self.expr()
         self._nextTag(RPAREN)
         bodyExpr = self.expr()
-        return ast.WhileExpression(condExpr, bodyExpr, None, self._location(l.location))
+        e = ast.WhileExpression(condExpr, bodyExpr, None, self._location(l.location))
+        self._liftComments(e, None, bodyExpr)
+        return e
 
     def breakExpr(self):
         self._nextTag(BREAK)
-        return ast.BreakExpression(None, self.location)
+        e = ast.BreakExpression(None, self.location)
+        self._tailComment(e)
+        return e
 
     def continueExpr(self):
         self._nextTag(CONTINUE)
-        return ast.ContinueExpression(None, self.location)
+        e = ast.ContinueExpression(None, self.location)
+        self._tailComment(e)
+        return e
 
     def matchExpr(self):
         l = self._nextTag(MATCH)
@@ -679,14 +816,17 @@ class Parser(object):
         e = self.expr()
         self._nextTag(RPAREN)
         m = self.partialFnExpr()
-        return ast.MatchExpression(e, m, None, self._location(l.location))
+        return ast.MatchExpression(e, m, ast.CommentGroup(), self._location(l.location))
 
     def partialFnExpr(self):
         l = self._peek().location
-        cases = self._parseBlock(self.partialFnCase, "partial function expression")
-        return ast.PartialFunctionExpression(cases, None, self._location(l))
+        cases = self._parseBlock(self.partialFnCase)
+        if cases is None:
+            raise self._error("partial function expression")
+        return ast.PartialFunctionExpression(cases, ast.CommentGroup(), self._location(l))
 
     def partialFnCase(self):
+        lead = self.leadComments()
         l = self._nextTag(CASE)
         p = self.pattern()
         if self._peekTag() is IF:
@@ -696,12 +836,17 @@ class Parser(object):
             c = None
         self._nextTag(BIG_ARROW)
         e = self.expr()
-        return ast.PartialFunctionCase(p, c, e, None, self._location(l.location))
+        case = ast.PartialFunctionCase(p, c, e, None, self._location(l.location))
+        self._liftComments(case, None, e)
+        case.comments.before = lead + case.comments.before
+        return case
 
     def throwExpr(self):
         l = self._nextTag(THROW)
         e = self.expr()
-        return ast.ThrowExpression(e, None, self._location(l.location))
+        t = ast.ThrowExpression(e, None, self._location(l.location))
+        self._liftComments(t, None, e)
+        return t
 
     def tryExpr(self):
         l = self._nextTag(TRY)
@@ -722,7 +867,9 @@ class Parser(object):
             finallyOpt = None
         if catchOpt is None and finallyOpt is None:
             self._error("catch or finally")
-        return ast.TryCatchExpression(e, catchOpt, finallyOpt, None, self._location(l.location))
+        t = ast.TryCatchExpression(e, catchOpt, finallyOpt, None, self._location(l.location))
+        self._liftComments(t, None, finallyOpt)
+        return t
 
     def catchHandler(self):
         l = self._nextTag(CATCH)
@@ -732,8 +879,8 @@ class Parser(object):
             self._nextTag(RPAREN)
             e = self.expr()
             loc = self._location(l.location)
-            case = ast.PartialFunctionCase(p, None, e, None, loc)
-            return ast.PartialFunctionExpression([case], None, loc)
+            case = ast.PartialFunctionCase(p, None, e, ast.CommentGroup(), loc)
+            return ast.PartialFunctionExpression([case], ast.CommentGroup(), loc)
         else:
             handler = self.partialFnExpr()
             handler.location = self._location(l.location)
@@ -745,32 +892,53 @@ class Parser(object):
 
     def blockExpr(self):
         l = self._peek().location
-        stmts = self._parseBlock(self.blockStmt, "block expression")
-        return ast.BlockExpression(stmts, None, self._location(l))
+        stmts = self._parseBlock(self.blockStmt)
+        if stmts is None:
+            self._error("block expression")
+        return ast.BlockExpression(stmts, ast.CommentGroup(), self._location(l))
 
     def blockStmt(self):
-        tag = self._peekTag()
-        if tag in (ATTRIB, VAR, LET, DEF, CLASS, TRAIT, ARRAYELEMENTS):
-            return self.defn()
-        elif tag is IMPORT:
-            return self.importStmt()
-        else:
-            e = self.expr()
-            return e
+        while True:  # repeat
+            lead = self.leadComments()
+            tag = self._peekTag()
+            if tag in (NEWLINE, OUTDENT):
+                # Blank line, possibly preceeded by comment block.
+                if len(lead) > 0:
+                    cg = ast.CommentGroup(lead, [])
+                    cg.setLocationFromChildren()
+                    return cg
+                else:
+                    self._next()
+                    continue
+            else:
+                if tag is IMPORT:
+                    stmt = self.importStmt()
+                elif tag in (ATTRIB, VAR, LET, DEF, CLASS, TRAIT, ARRAYELEMENTS):
+                    stmt = self.defn()
+                else:
+                    stmt = self.expr()
+                stmt.comments.before = lead + stmt.comments.before
+                stmt.comments.setLocationFromChildren()
+                return stmt
 
     def lambdaExpr(self):
         l = self._nextTag(LAMBDA)
         params = self._parseOption(LPAREN, self.parameters)
         e = self.expr()
-        return ast.LambdaExpression(params, e, None, self._location(l.location))
+        lam = ast.LambdaExpression(params, e, None, self._location(l.location))
+        self._liftComments(lam, None, e)
+        return lam
 
     def returnExpr(self):
         l = self._nextTag(RETURN)
         if self._peekTag() in self.EXPR_START_TOKENS:
             e = self.expr()
+            r = ast.ReturnExpression(e, None, self._location(l.location))
+            self._liftComments(r, None, e)
         else:
-            e = None
-        return ast.ReturnExpression(e, None, self._location(l.location))
+            r = ast.ReturnExpression(None, None, self._location(l.location))
+            self._tailComment(r)
+        return r
 
     # Literals
     def literal(self):
@@ -857,6 +1025,7 @@ class Parser(object):
         return self._parseList(self.typeParameter, "type parameter", LBRACK, COMMA, RBRACK)
 
     def typeParameter(self):
+        lead = self.leadComments()
         l = self._peek().location
         ats = self.attribs()
         variance = None
@@ -874,20 +1043,27 @@ class Parser(object):
         if self._peekTag() is SUPERTYPE:
             self._next()
             lowerBound = self.ty()
+        cg = ast.CommentGroup(lead, [])
         loc = self._location(l)
-        return ast.TypeParameter(ats, variance, name, upperBound, lowerBound, None, loc)
+        tp = ast.TypeParameter(ats, variance, name, upperBound, lowerBound, cg, loc)
+        self._tailComment(tp)
+        return tp
 
     def parameters(self):
         return self._parseList(self.parameter, "parameter", LPAREN, COMMA, RPAREN)
 
     def parameter(self):
+        lead = self.leadComments()
         l = self._peek().location
         ats = self.attribs()
         var = None
         if self._peekTag() is VAR:
             var = self._next().text
         pat = self.simplePattern()
-        return ast.Parameter(ats, var, pat, None, self._location(l))
+        p = ast.Parameter(ats, var, pat, None, self._location(l))
+        self._liftComments(p, None, pat)
+        p.comments.before = lead + p.comments.before
+        return p
 
     def typeArguments(self):
         return self._parseList(self.ty, "type arguments", LBRACK, COMMA, RBRACK)
@@ -901,6 +1077,24 @@ class Parser(object):
             tok = self._next()
             ats.append(ast.Attribute(tok.text, tok.location))
         return ats
+
+    def leadComments(self):
+        lead = []
+        while self._peekTag() is COMMENT:
+            lead.append(self.comment())
+            if self._peekTag() is NEWLINE:
+                self._next()
+        return lead
+
+    def tailComment(self):
+        tail = []
+        if self._peekTag() is COMMENT:
+            tail.append(self.comment())
+        return tail
+
+    def comment(self):
+        tok = self._nextTag(COMMENT)
+        return ast.Comment(tok.text, tok.location)
 
     def ident(self):
         tag = self._peekTag()
@@ -951,7 +1145,9 @@ class Parser(object):
                     raise ParseException(
                         op.location, "left and right associative operators are mixed together")
                 loc = e.location.combine(term.location)
-                e = astCtor(op.text, e, term, None, loc)
+                b = astCtor(op.text, e, term, None, loc)
+                self._liftComments(b, e, term)
+                e = b
         else:
             e = terms[-1]
             for i in xrange(len(ops) - 1, -1, -1):
@@ -961,7 +1157,9 @@ class Parser(object):
                     raise ParseException(
                         op.location, "left and right associative operators are mixed together")
                 loc = term.location.combine(e.location)
-                e = astCtor(op.text, term, e, None, loc)
+                b = astCtor(op.text, term, e, None, loc)
+                self._liftComments(b, term, e)
+                e = b
         return e
 
     def _parseOption(self, hintTag, parser):
@@ -970,9 +1168,27 @@ class Parser(object):
         else:
             return None
 
-    def _parseBlock(self, parser, label):
-        self._nextTag(NEWLINE)
-        return self._parseList(parser, label, INDENT, NEWLINE, OUTDENT)
+    def _parseBlock(self, parser):
+        # Search forward for an INDENT. There may be any number of NEWLINEs first.
+        i = 0
+        while self._peekTag(i) is NEWLINE:
+            i += 1
+        if i == 0 or self._peekTag(i) is not INDENT:
+            return None
+        for _ in xrange(i):
+            self._next()
+        self._nextTag(INDENT)
+
+        # Parse statements in the block.
+        stmts = []
+        while True:
+            while self._peekTag() is NEWLINE:
+                self._next()
+            if self._peekTag() is OUTDENT:
+                self._next()
+                break
+            stmts.append(parser())
+        return stmts
 
     def _parseList(self, parser, label, left=None, sep=None, right=EOF):
         if left:
@@ -1005,6 +1221,34 @@ class Parser(object):
             elems.append(parser())
         return elems
 
+    def _commented(self, parser):
+        lead = []
+        while self._peekTag() is COMMENT:
+            lead.append(self.comment())
+            if self._peekTag() is NEWLINE:
+                self._next()
+
+        x = parser()
+
+        tail = []
+        if self._peekTag() is COMMENT:
+            tail.append(self.comment())
+
+        if x.comments is None:
+            x.comments = ast.CommentGroup(lead, tail, NoLoc)
+        else:
+            x.comments.before = lead + x.comments.before
+            x.comments.after.extend(tail)
+        x.comments.setLocationFromChildren()
+        return x
+
+    def _tailComment(self, e):
+        if e.comments is None:
+            e.comments = ast.CommentGroup()
+        if self._peekTag() is COMMENT:
+            e.comments.after.append(self.comment())
+            e.comments.setLocationFromChildren()
+
     def _peekHang(self):
         if self._peekTag(-1) is OUTDENT and self._peekTag(0) is NEWLINE:
             return self._peekTag(1)
@@ -1034,6 +1278,19 @@ class Parser(object):
     def _error(self, expected):
         tok = self._peek()
         raise ParseException(tok.location, "expected %s but found %s" % (expected, tok.text))
+
+    def _liftComments(self, parent, left, right):
+        assert parent.comments is None
+        parent.comments = ast.CommentGroup([], [])
+        if left is not None:
+            parent.comments.before = left.comments.before
+            left.comments.before = []
+            left.comments.setLocationFromChildren()
+        if right is not None:
+            parent.comments.after = right.comments.after
+            right.comments.after = []
+            right.comments.setLocationFromChildren()
+        parent.comments.setLocationFromChildren()
 
     def _location(self, begin):
         return begin.combine(self.location)

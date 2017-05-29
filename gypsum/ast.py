@@ -7,6 +7,7 @@
 import StringIO
 
 from ids import AstId
+from location import NoLoc
 import utils
 import visitor
 
@@ -29,7 +30,7 @@ class Node(object):
         return (isinstance(other, self.__class__) and
                 all(v == other.__dict__[k]
                     for k, v in self.__dict__.iteritems()
-                    if k not in ("location", "comments")))
+                    if k != "location"))
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -39,6 +40,15 @@ class Node(object):
 
     def children(self):
         return []
+
+    def setLocationFromChildren(self):
+        children = self.children()
+        if len(children) == 0:
+            self.location = NoLoc
+        elif len(children) == 1:
+            self.location = children[0].location
+        else:
+            self.location = children[0].location.combine(children[-1].location)
 
 
 class Package(Node):
@@ -78,24 +88,31 @@ class Comment(Node):
 
 
 class CommentGroup(Node):
-    def __init__(self, before, inline, after, location):
+    def __init__(self, before=None, after=None, location=NoLoc):
+        if before is None:
+            before = []
+        if after is None:
+            after = []
         super(CommentGroup, self).__init__(location)
         self.before = before
-        self.inline = inline
         self.after = after
 
     def __repr__(self):
-        return ("CommentGroup(%s, %s, %s)" %
-                (repr(self.before), repr(self.inline), repr(self.after)))
+        return ("CommentGroup(%s, %s)" % (repr(self.before), repr(self.after)))
 
     def children(self):
-        return self.before + self.inline + self.after
+        return self.before + self.after
+
+    def isEmpty(self):
+        return len(self.before) + len(self.after) == 0
 
 
 class CommentedNode(Node):
     def __init__(self, comments, location):
         super(CommentedNode, self).__init__(location)
         self.comments = comments
+
+    # TODO: comments should be children
 
 
 class Attribute(Node):
@@ -282,9 +299,9 @@ class ImportStatement(CommentedNode):
         return self.prefix + ([] if self.bindings is None else self.bindings)
 
 
-class ImportBinding(CommentedNode):
-    def __init__(self, name, asName, comments, location):
-        super(ImportBinding, self).__init__(comments, location)
+class ImportBinding(Node):
+    def __init__(self, name, asName, location):
+        super(ImportBinding, self).__init__(location)
         self.name = name
         self.asName = asName
 
@@ -478,7 +495,7 @@ class GroupPattern(Pattern):
         return [self.pattern]
 
 
-class Type(Node):
+class Type(CommentedNode):
     pass
 
 
@@ -523,8 +540,8 @@ class BooleanType(Type):
 
 
 class ClassType(Type):
-    def __init__(self, prefix, name, typeArguments, flags, location):
-        super(ClassType, self).__init__(location)
+    def __init__(self, prefix, name, typeArguments, flags, comments, location):
+        super(ClassType, self).__init__(comments, location)
         self.prefix = prefix
         self.name = name
         self.typeArguments = typeArguments
@@ -548,8 +565,8 @@ class ClassType(Type):
 
 
 class TupleType(Type):
-    def __init__(self, types, flags, location):
-        super(TupleType, self).__init__(location)
+    def __init__(self, types, flags, comments, location):
+        super(TupleType, self).__init__(comments, location)
         self.types = types
         self.flags = flags
 
@@ -566,8 +583,8 @@ class BlankType(Type):
 
 
 class ExistentialType(Type):
-    def __init__(self, typeParameters, type, location):
-        super(ExistentialType, self).__init__(location)
+    def __init__(self, typeParameters, type, comments, location):
+        super(ExistentialType, self).__init__(comments, location)
         self.typeParameters = typeParameters
         self.type = type
 
@@ -579,8 +596,8 @@ class ExistentialType(Type):
 
 
 class FunctionType(Type):
-    def __init__(self, parameterTypes, returnType, location):
-        super(FunctionType, self).__init__(location)
+    def __init__(self, parameterTypes, returnType, comments, location):
+        super(FunctionType, self).__init__(comments, location)
         self.parameterTypes = parameterTypes
         self.returnType = returnType
 
@@ -715,7 +732,7 @@ class UnaryExpression(Expression):
         self.expr = expr
 
     def __repr__(self):
-        return "UnaryExpression(%s, %s)" % (repr(self.operator), self.expr)
+        return "UnaryExpression(%s, %s)" % (repr(self.operator), repr(self.expr))
 
     def data(self):
         return self.operator

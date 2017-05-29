@@ -457,6 +457,9 @@ class TypeVisitorBase(ast.NodeVisitor):
     def visitNullLiteral(self, node):
         return ir_t.getNullType()
 
+    def visitCommentGroup(self, node):
+        pass
+
     def visitLvalue(self, node):
         if isinstance(node, ast.PropertyExpression):
             return self.visit(node, isLvalue=True)
@@ -1167,8 +1170,10 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         lastTy = ir_t.UnitType
         for stmt in node.statements:
             stmtTy = self.visit(stmt)
-            assert stmtTy is not None or isinstance(stmt, ast.Definition)
-            lastTy = stmtTy if stmtTy else ir_t.UnitType
+            if isinstance(stmt, ast.Expression):
+                lastTy = stmtTy
+            elif isinstance(stmt, ast.Definition):
+                lastTy = ir_t.UnitType
         return lastTy
 
     def visitAssignExpression(self, node):

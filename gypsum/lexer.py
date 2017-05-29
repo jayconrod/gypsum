@@ -100,7 +100,6 @@ _expressions = [
 _expressions = [(re.compile(expr[0]), expr[1]) for expr in _expressions]
 _spaceRx = _expressions[0][0]
 _newlineRx = _expressions[1][0]
-_commentRx = _expressions[3][0]
 
 
 def lex(filename, source):
@@ -138,9 +137,13 @@ def lex(filename, source):
         column += len(space)
         pos += len(space)
 
-        # If the next token is a newline, this is a blank line. Just advance to the next.
+        # If the next token is a newline, this is a blank line. If we're not inside brackets,
+        # emit a newline token without checking indentation.
         m = _newlineRx.match(source, pos)
         if m:
+            if nesting == 0:
+                loc = Location(filename, line, column, line + 1, 1)
+                tokens.append(Token(NEWLINE, NEWLINE, loc))
             line += 1
             column = 1
             pos += len(m.group(0))
@@ -177,18 +180,6 @@ def lex(filename, source):
                 indents.append(space)
                 tokens.append(Token(INDENT, INDENT, loc))
 
-        # If a line only contains a comment, skip it and don't emit a newline token.
-        m = _commentRx.match(source, pos)
-        if m:
-            column += len(m.group(0))
-            pos += len(m.group(0))
-            m = _newlineRx.match(source, pos)
-            if m:
-                line += 1
-                column = 1
-                pos += len(m.group(0))
-                continue
-
         # Inner loop: read all the tokens on the logical line. A logical line is different
         # than a physical line. We ignore newlines inside nested parentheses, brackets, and
         # braces. Newlines may also be escaped.
@@ -211,8 +202,8 @@ def lex(filename, source):
             column += len(bestText)
             pos += len(bestText)
 
-            # Ignore whitespace and comments.
-            if bestTag in (_SPACE, COMMENT):
+            # Ignore whitespace.
+            if bestTag is _SPACE:
                 continue
 
             # Advance position for escaped or nested newline.

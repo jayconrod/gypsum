@@ -17,17 +17,22 @@ import ast
 # comments. This is a hack to avoid specifying locations and comments for all AST
 # classes. Locations and comments aren't part of the equality test, so we don't really care
 # about them here.
+def _astCtor(cls):
+    def _ctor(*args):
+        if (issubclass(cls, ast.CommentedNode) and
+            (len(args) == 0 or not isinstance(args[-1], ast.CommentGroup))):
+            args += (ast.CommentGroup([], [], NoLoc),)
+        args += (NoLoc,)
+        return cls(*args)
+    return _ctor
+
+
 for k, v in ast.__dict__.iteritems():
     if type(v) is type and issubclass(v, ast.Node):
-        altName = "ast" + k
-        if issubclass(v, ast.CommentedNode):
-            altCtor = (lambda ctor: (lambda *args: ctor(*(args + (None, NoLoc)))))(v)
-        else:
-            altCtor = (lambda ctor: (lambda *args: ctor(*(args + (NoLoc,)))))(v)
-        globals()[altName] = altCtor
+        globals()["ast" + k] = _astCtor(v)
 
 
-class TestParser(unittest.TestCase):
+class TestParserBase(unittest.TestCase):
     def parseFromSource(self, parseMethod, text):
         fileName = "test"
         tokens = lex(fileName, text)
@@ -39,11 +44,17 @@ class TestParser(unittest.TestCase):
 
     def checkParse(self, expected, parseMethod, text):
         value = self.parseFromSource(parseMethod, text)
-        self.assertEqual(expected, value)
+        if expected != value:
+            if hasattr(expected, "comments") and expected.comments != value.comments:
+                self.assertEquals(expected.comments, value.comments)
+            else:
+                self.assertEquals(expected, value)
 
     def checkParseError(self, parseMethod, text):
         self.assertRaises(ParseException, self.parseFromSource, parseMethod, text)
 
+
+class TestParser(TestParserBase):
     # Module
     def testModuleEmpty(self):
         self.checkParse(astModule([]), Parser.module, "")
@@ -145,6 +156,23 @@ class TestParser(unittest.TestCase):
                                         astLiteralExpression(astIntegerLiteral("12", 12, 64)))
         ast = astClassDefinition([], "C", None, None, None, None, None, [ctorast])
         self.checkParse(ast, Parser.defn, "class C\n  def this = 12")
+
+    def testClassDefnWithNewlineBeforeBody(self):
+        source = "class C\n" + \
+                 "\n" + \
+                 "  def f"
+        self.checkParse(
+            astClassDefinition(
+                [],
+                "C",
+                None,
+                None,
+                None,
+                None,
+                None,
+                [astFunctionDefinition([], "f", None, None, None, None)]),
+            Parser.defn,
+            source)
 
     def testClassDefnWithAttribs(self):
         self.checkParse(astClassDefinition([astAttribute("public")], "C", None,
@@ -752,6 +780,22 @@ class TestParser(unittest.TestCase):
             "  x\n" +
             "  y")
 
+    def testBlockExprWithBlankLines(self):
+        source = "while (true)\n" + \
+                 "\n" + \
+                 "  x\n" + \
+                 "\n" + \
+                 "  y\n" + \
+                 "\n"
+        self.checkParse(
+            astWhileExpression(
+                astLiteralExpression(astBooleanLiteral(True)),
+                astBlockExpression([
+                    astVariableExpression("x"),
+                    astVariableExpression("y")])),
+            Parser.expr,
+            source)
+
     def testBlockWithUnitExpr(self):
         self.checkParse(
             astWhileExpression(
@@ -1211,6 +1255,638 @@ class TestParser(unittest.TestCase):
 
     def testStringLit(self):
         self.checkParse(astStringLiteral("foo\nbar"), Parser.literal, r'"foo\nbar"')
+
+
+class TestComments(TestParserBase):
+    def commentGroup(self, before=None, after=None):
+        if before is None:
+            before = []
+        if after is None:
+            after = []
+        beforeComments = [astComment("//"+c) for c in before]
+        afterComments = [astComment("//"+c) for c in after]
+        return astCommentGroup(beforeComments, afterComments)
+
+    # Definitions
+    def testVarDefn(self):
+        source = "//a\n" + \
+                 "//b\n" + \
+                 "var x //c"
+        self.checkParse(
+            astVariableDefinition(
+                [],
+                "var",
+                astVariablePattern("x", None),
+                None,
+                self.commentGroup(["a", "b"], ["c"])),
+            Parser.defn,
+            source)
+
+    def testVarDefnWithType(self):
+        source = "var x: unit //a"
+        self.checkParse(
+            astVariableDefinition(
+                [],
+                "var",
+                astVariablePattern("x", astUnitType()),
+                None,
+                self.commentGroup([], ["a"])),
+            Parser.defn,
+            source)
+
+    def testVarDefnWithExpr(self):
+        source = "var x = y //a"
+        self.checkParse(
+            astVariableDefinition(
+                [],
+                "var",
+                astVariablePattern("x", None),
+                astVariableExpression("y"),
+                self.commentGroup([], ["a"])),
+            Parser.defn,
+            source)
+
+    def testFunctionDefn(self):
+        source = "def f //a"
+        self.checkParse(
+            astFunctionDefinition(
+                [],
+                "f",
+                None,
+                None,
+                None,
+                None,
+                self.commentGroup([], ["a"])),
+            Parser.defn,
+            source)
+
+    def testFunctionDefnWithType(self):
+        source = "def f: unit //a"
+        self.checkParse(
+            astFunctionDefinition(
+                [],
+                "f",
+                None,
+                None,
+                astUnitType(),
+                None,
+                self.commentGroup([], ["a"])),
+            Parser.defn,
+            source)
+
+    def testFunctionDefnWithBody(self):
+        source = "def f = x //a"
+        self.checkParse(
+            astFunctionDefinition(
+                [],
+                "f",
+                None,
+                None,
+                None,
+                astVariableExpression("x"),
+                self.commentGroup([], ["a"])),
+            Parser.defn,
+            source)
+
+    def testClassDefn(self):
+        source = "class C //a"
+        self.checkParse(
+            astClassDefinition(
+                [],
+                "C",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                self.commentGroup([], ["a"])),
+            Parser.defn,
+            source)
+
+    def testClassDefnWithTraits(self):
+        source = "class C <: A, B //a"
+        self.checkParse(
+            astClassDefinition(
+                [],
+                "C",
+                None,
+                None,
+                astClassType([], "A", [], set()),
+                None,
+                [astClassType([], "B", [], set())],
+                None,
+                self.commentGroup([], ["a"])),
+            Parser.defn,
+            source)
+
+    def testArrayElementsStmt(self):
+        source = "//a\n" + \
+                 "arrayelements unit, get, set, length //b"
+        self.checkParse(
+            astArrayElementsStatement(
+                [],
+                astUnitType(),
+                astArrayAccessorDefinition([], "get"),
+                astArrayAccessorDefinition([], "set"),
+                astArrayAccessorDefinition([], "length", self.commentGroup([], ["b"])),
+                self.commentGroup(["a"], [])),
+            Parser.defn,
+            source)
+
+    def testParameter(self):
+        source = "def f(//a\n" + \
+                 "x: unit //b\n" + \
+                 ")"
+        self.checkParse(
+            astFunctionDefinition(
+                [],
+                "f",
+                None,
+                [astParameter(
+                    [],
+                    None,
+                    astVariablePattern("x", astUnitType()),
+                    self.commentGroup(["a"], ["b"]))],
+                None,
+                None),
+            Parser.defn,
+            source)
+
+    def testTypeParameter(self):
+        source = "def f[//a\n" + \
+                 "//b\n" + \
+                 "T //c\n" + \
+                 "]"
+        self.checkParse(
+            astFunctionDefinition(
+                [],
+                "f",
+                [astTypeParameter(
+                    [],
+                    None,
+                    "T",
+                    None,
+                    None,
+                    self.commentGroup(["a", "b"], ["c"]))],
+                None,
+                None,
+                None),
+            Parser.defn,
+            source)
+
+    # Expressions
+    def testVarExpr(self):
+        self.checkParse(
+            astVariableExpression("x", self.commentGroup(["foo", "bar"], ["baz"])),
+            Parser.expr,
+            "//foo\n//bar\nx//baz")
+
+    def testAssignExpr(self):
+        source = "(//bx\n" + \
+                 "x = //by\n" + \
+                 "y //ay\n" + \
+                 "= //bz\n" + \
+                 "z //az\n" + \
+                 ")"
+        self.checkParse(
+            astGroupExpression(
+                astAssignExpression(
+                    astVariableExpression("x"),
+                    astAssignExpression(
+                        astVariableExpression("y", self.commentGroup([], ["ay"])),
+                        astVariableExpression("z", self.commentGroup(["bz"], [])),
+                        self.commentGroup(["by"], [])),
+                    self.commentGroup(["bx"], ["az"]))),
+            Parser.expr,
+            source)
+
+    def testTupleExpr(self):
+        source = "(//bx\n" + \
+                 "x, //by\n" + \
+                 "y //ay\n" + \
+                 ", //bz\n" + \
+                 "z //az\n" + \
+                 ")"
+        self.checkParse(
+            astGroupExpression(
+                astTupleExpression(
+                    [
+                        astVariableExpression("x"),
+                        astVariableExpression("y", self.commentGroup(["by"], ["ay"])),
+                        astVariableExpression("z", self.commentGroup(["bz"], [])),
+                    ],
+                    self.commentGroup(["bx"], ["az"]))),
+            Parser.expr,
+            source)
+
+    def testBinaryExprLeft(self):
+        source = "(//bx\n" + \
+                 "x + //by\n" + \
+                 "y //ay\n" + \
+                 "+ //bz\n" + \
+                 "z //az\n" + \
+                 ")"
+        self.checkParse(
+            astGroupExpression(
+                astBinaryExpression(
+                    "+",
+                    astBinaryExpression(
+                        "+",
+                        astVariableExpression("x"),
+                        astVariableExpression("y", self.commentGroup(["by"], [])),
+                        self.commentGroup([], ["ay"])),
+                    astVariableExpression("z", self.commentGroup(["bz"], [])),
+                    self.commentGroup(["bx"], ["az"]))),
+            Parser.expr,
+            source)
+
+    def testBinaryExprRight(self):
+        source = "(//bx\n" + \
+                 "x +: //by\n" + \
+                 "y //ay\n" + \
+                 "+: //bz\n" + \
+                 "z //az\n" + \
+                 ")"
+        self.checkParse(
+            astGroupExpression(
+                astBinaryExpression(
+                    "+:",
+                    astVariableExpression("x"),
+                    astBinaryExpression(
+                        "+:",
+                        astVariableExpression("y", self.commentGroup([], ["ay"])),
+                        astVariableExpression("z", self.commentGroup(["bz"], [])),
+                        self.commentGroup(["by"], [])),
+                    self.commentGroup(["bx"], ["az"]))),
+            Parser.expr,
+            source)
+
+    def testCallFunctionExpr(self):
+        source = "(//a\n" + \
+                 "f //b\n" + \
+                 "() //c\n" + \
+                 ")"
+        self.checkParse(
+            astGroupExpression(
+                astCallExpression(
+                    astVariableExpression("f", self.commentGroup([], ["b"])),
+                    None,
+                    [],
+                    self.commentGroup(["a"], ["c"]))),
+            Parser.expr,
+            source)
+
+    def testCallMethodExpr(self):
+        source = "(//a\n" + \
+                 "x.y //b\n" + \
+                 "() //c\n" + \
+                 ")"
+        self.checkParse(
+            astGroupExpression(
+                astCallExpression(
+                    astPropertyExpression(
+                        astVariableExpression("x"),
+                        "y",
+                        self.commentGroup([], ["b"])),
+                    None,
+                    [],
+                    self.commentGroup(["a"], ["c"]))),
+            Parser.expr,
+            source)
+
+    def testUnaryExpr(self):
+        source = "(//a\n" + \
+                 "- //b\n" + \
+                 "x //c\n" + \
+                 ")"
+        self.checkParse(
+            astGroupExpression(
+                astUnaryExpression(
+                    "-",
+                    astVariableExpression("x", self.commentGroup(["b"], [])),
+                    self.commentGroup(["a"], ["c"]))),
+            Parser.expr,
+            source)
+
+    def testIfExpr(self):
+        source = "(if (x) //a\n" + \
+                 "y //b\n" + \
+                 ")"
+        self.checkParse(
+            astGroupExpression(
+                astIfExpression(
+                    astVariableExpression("x"),
+                    astVariableExpression("y", self.commentGroup(["a"], [])),
+                    None,
+                    self.commentGroup([], ["b"]))),
+            Parser.expr,
+            source)
+
+    def testIfElseExpr(self):
+        source = "(if (x) y else //a\n" + \
+                 "z //b\n" + \
+                 ")"
+        self.checkParse(
+            astGroupExpression(
+                astIfExpression(
+                    astVariableExpression("x"),
+                    astVariableExpression("y"),
+                    astVariableExpression("z", self.commentGroup(["a"], [])),
+                    self.commentGroup([], ["b"]))),
+            Parser.expr,
+            source)
+
+    def testNestedIfExpr(self):
+        source = "if (v) w else if (x) y else z //a"
+        self.checkParse(
+            astIfExpression(
+                astVariableExpression("v"),
+                astVariableExpression("w"),
+                astIfExpression(
+                    astVariableExpression("x"),
+                    astVariableExpression("y"),
+                    astVariableExpression("z")),
+                self.commentGroup([], ["a"])),
+            Parser.expr,
+            source)
+
+    def testNestedWhileExpr(self):
+        source = "while (x) while (y) z //a"
+        self.checkParse(
+            astWhileExpression(
+                astVariableExpression("x"),
+                astWhileExpression(
+                    astVariableExpression("y"),
+                    astVariableExpression("z")),
+                self.commentGroup([], ["a"])),
+            Parser.expr,
+            source)
+
+    def testTryCatchSimpleExpr(self):
+        source = "try x catch (y) z //a"
+        self.checkParse(
+            astTryCatchExpression(
+                astVariableExpression("x"),
+                astPartialFunctionExpression([
+                    astPartialFunctionCase(
+                        astVariablePattern("y", None),
+                        None,
+                        astVariableExpression("z", self.commentGroup([], ["a"])))]),
+                None),
+            Parser.expr,
+            source)
+
+    def testTryCatchComplexExpr(self):
+        source = "try x catch\n" + \
+                 "  case y => z //a"
+        self.checkParse(
+            astTryCatchExpression(
+                astVariableExpression("x"),
+                astPartialFunctionExpression([
+                    astPartialFunctionCase(
+                        astVariablePattern("y", None),
+                        None,
+                        astVariableExpression("z"),
+                        self.commentGroup([], ["a"]))]),
+                None),
+            Parser.expr,
+            source)
+
+    def testTryFinallyExpr(self):
+        source = "try try x finally y finally z //a"
+        self.checkParse(
+            astTryCatchExpression(
+                astTryCatchExpression(
+                    astVariableExpression("x"),
+                    None,
+                    astVariableExpression("y")),
+                None,
+                astVariableExpression("z"),
+                self.commentGroup([], ["a"])),
+            Parser.expr,
+            source)
+
+    def testThrowExpr(self):
+        source = "throw throw x //a"
+        self.checkParse(
+            astThrowExpression(
+                astThrowExpression(astVariableExpression("x")),
+                self.commentGroup([], ["a"])),
+            Parser.expr,
+            source)
+
+    def testReturnExpr(self):
+        source = "return return x //a"
+        self.checkParse(
+            astReturnExpression(
+                astReturnExpression(astVariableExpression("x")),
+                self.commentGroup([], ["a"])),
+            Parser.expr,
+            source)
+
+    def testLambdaExpr(self):
+        source = "lambda () lambda () x //a"
+        self.checkParse(
+            astLambdaExpression(
+                [],
+                astLambdaExpression([], astVariableExpression("x")),
+                self.commentGroup([], ["a"])),
+            Parser.expr,
+            source)
+
+    # Patterns
+    def testVarPattern(self):
+        source = "//a\n//b\nx//c"
+        self.checkParse(
+            astVariablePattern("x", None, self.commentGroup(["a", "b"], ["c"])),
+            Parser.pattern,
+            source)
+
+    def testVarPatternWithType(self):
+        source = "//a\n//b\nx: unit//c"
+        self.checkParse(
+            astVariablePattern(
+                "x",
+                astUnitType(),
+                self.commentGroup(["a", "b"], ["c"])),
+            Parser.pattern,
+            source)
+
+    def testTuplePattern(self):
+        source = "(//a\n" + \
+                 "x //b\n" + \
+                 ", //c\n" + \
+                 "y //d\n" + \
+                 ", //e\n" + \
+                 "z //f\n" + \
+                 ")"
+        self.checkParse(
+            astGroupPattern(
+                astTuplePattern(
+                    [
+                        astVariablePattern("x", None, self.commentGroup([], ["b"])),
+                        astVariablePattern("y", None, self.commentGroup(["c"], ["d"])),
+                        astVariablePattern("z", None, self.commentGroup(["e"], [])),
+                    ],
+                    self.commentGroup(["a"], ["f"]))),
+            Parser.pattern,
+            source)
+
+    def testBinaryPatternLeft(self):
+        source = "(//a\n" + \
+                 "x //b\n" + \
+                 "+ //c\n" + \
+                 "y //d\n" + \
+                 "+ //e\n" + \
+                 "z //f\n" + \
+                 ")"
+        self.checkParse(
+            astGroupPattern(
+                astBinaryPattern(
+                    "+",
+                    astBinaryPattern(
+                        "+",
+                        astVariablePattern("x", None, self.commentGroup([], ["b"])),
+                        astVariablePattern("y", None, self.commentGroup(["c"], [])),
+                        self.commentGroup([], ["d"])),
+                    astVariablePattern("z", None, self.commentGroup(["e"], [])),
+                    self.commentGroup(["a"], ["f"]))),
+            Parser.pattern,
+            source)
+
+    def testBinaryPatternRight(self):
+        source = "(//a\n" + \
+                 "x //b\n" + \
+                 "+: //c\n" + \
+                 "y //d\n" + \
+                 "+: //e\n" + \
+                 "z //f\n" + \
+                 ")"
+        self.checkParse(
+            astGroupPattern(
+                astBinaryPattern(
+                    "+:",
+                    astVariablePattern("x", None, self.commentGroup([], ["b"])),
+                    astBinaryPattern(
+                        "+:",
+                        astVariablePattern("y", None, self.commentGroup([], ["d"])),
+                        astVariablePattern("z", None, self.commentGroup(["e"], [])),
+                        self.commentGroup(["c"], [])),
+                    self.commentGroup(["a"], ["f"]))),
+            Parser.pattern,
+            source)
+
+    # Types
+    def testUnitType(self):
+        source = self.checkParse(
+            astUnitType(self.commentGroup(["foo", "bar"], ["baz"])),
+            Parser.ty,
+            "//foo\n//bar\nunit//baz")
+
+    def testArrowType(self):
+        source = "(unit,\n" + \
+                 "//a\n" + \
+                 "i8 //b\n" + \
+                 "-> //c\n" + \
+                 "i16 //d\n" + \
+                 "-> //e\n" + \
+                 "i32//f\n" + \
+                 ", unit)"
+        self.checkParse(
+            astTupleType(
+                [
+                    astUnitType(),
+                    astFunctionType(
+                        [astI8Type(self.commentGroup([], ["b"]))],
+                        astFunctionType(
+                            [astI16Type(self.commentGroup([], ["d"]))],
+                            astI32Type(self.commentGroup(["e"], [])),
+                            self.commentGroup(["c"], [])),
+                        self.commentGroup(["a"], ["f"])),
+                    astUnitType()
+                ],
+                set([])),
+            Parser.ty,
+            source)
+
+    def testExistentialType(self):
+        source = "forsome [X] X //a"
+        self.checkParse(
+            astExistentialType(
+                [astTypeParameter([], None, "X", None, None)],
+                astClassType([], "X", [], set([])),
+                self.commentGroup([], ["a"])),
+            Parser.ty,
+            source)
+
+    # Misc
+    def testImport(self):
+        source = "//a\n" + \
+                 "import foo.bar as baz //b"
+        self.checkParse(
+            astImportStatement(
+                [astScopePrefixComponent("foo", None)],
+                [astImportBinding("bar", "baz")],
+                self.commentGroup(["a"], ["b"])),
+            Parser.importStmt,
+            source)
+
+    def testPartialFunctionCase(self):
+        source = "match (x)\n" + \
+                 "  //a\n" + \
+                 "  case _ => x //b"
+        self.checkParse(
+            astMatchExpression(
+                astVariableExpression("x"),
+                astPartialFunctionExpression([
+                    astPartialFunctionCase(
+                        astBlankPattern(None),
+                        None,
+                        astVariableExpression("x"),
+                        self.commentGroup(["a"], ["b"]))])),
+            Parser.expr,
+            source)
+
+    def testCommentBlockAtTop(self):
+        source = "//a\n" + \
+                 "//b\n" + \
+                 "\n" + \
+                 "var x\n" + \
+                 "\n" + \
+                 "//c\n" + \
+                 "//d\n"
+        self.checkParse(
+            astModule([
+                self.commentGroup(["a", "b"]),
+                astVariableDefinition([], "var", astVariablePattern("x", None), None),
+                self.commentGroup(["c", "d"])]),
+            Parser.module,
+            source)
+
+    def testCommentBlockInFunction(self):
+        source = "def f =\n" + \
+                 "  //a\n" + \
+                 "  //b\n" + \
+                 "\n" + \
+                 "  var x\n" + \
+                 "\n" + \
+                 "  //c\n" + \
+                 "  //d\n"
+        self.checkParse(
+            astFunctionDefinition(
+                [],
+                "f",
+                None,
+                None,
+                None,
+                astBlockExpression([
+                    self.commentGroup(["a", "b"], []),
+                    astVariableDefinition([], "var", astVariablePattern("x", None), None),
+                    self.commentGroup(["c", "d"], [])])),
+                Parser.defn,
+                source)
+
 
 if __name__ == "__main__":
     unittest.main()

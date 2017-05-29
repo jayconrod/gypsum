@@ -1087,6 +1087,8 @@ class CompileVisitor(ast.NodeVisitor):
 
         with UnreachableScope(self):
             for case in expr.cases[:-1]:
+                if not isinstance(case, ast.PartialFunctionCase):
+                    continue  # comments
                 nextBlock = self.newBlock()
                 doneIsReachable |= handleCase(case, nextBlock)
 
@@ -1284,6 +1286,10 @@ class CompileVisitor(ast.NodeVisitor):
             self.visit(param.pattern, COMPILE_FOR_EFFECT, paramType)
 
     def compileStatements(self, scopeId, parameters, statements, mode):
+        # Ignore comments.
+        statements = [s for s in statements
+                      if isinstance(s, ast.Expression) or isinstance(s, ast.Definition)]
+
         # Create a context if needed.
         if self.isContextNeeded(scopeId):
             contextInfo = self.info.getContextInfo(scopeId)
