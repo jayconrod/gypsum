@@ -5,6 +5,7 @@ import StringIO
 from gypsum import ast
 from gypsum.compile_info import CompileInfo, STD_NAME
 from gypsum.errors import CompileException
+from gypsum.format import (Format, Formatter)
 from gypsum.ids import (AstId, TARGET_PACKAGE_ID)
 from gypsum.ir import (Package, PackageVersion)
 from gypsum.layout import layout
@@ -13,11 +14,6 @@ from gypsum.location import NoLoc
 from gypsum.package_loader import PackageLoader
 from gypsum.parser import parse
 from gypsum.utils import (decodeString, encodeString)
-
-from formatter import (
-    Format,
-    Formatter,
-)
 
 
 def rewriteFile(fileName, packageName, packagePaths):

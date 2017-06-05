@@ -1,6 +1,11 @@
-from gypsum import ast
-from gypsum import errors
-from gypsum import utils
+# Copyright Jay Conrod. All rights reserved.
+#
+# This file is part of Gypsum. Use of this source code is governed by
+# the GPL license that can be found in the LICENSE.txt file.
+
+import ast
+import errors
+import utils
 
 class FormatException(errors.CompileException):
     kind = "format"
@@ -15,6 +20,7 @@ class Format(object):
                  linesBetweenVars = 0,
                  linesBetweenShortFuncs = 0,
                  linesBetweenStatements = 0,
+                 spacesBeforeTailCommented = 2,
                  newlineAtEnd = True):
         self.indentWidth = indentWidth
         self.linesBetweenImports = linesBetweenImports
@@ -23,6 +29,7 @@ class Format(object):
         self.linesBetweenVars = linesBetweenVars
         self.linesBetweenShortFuncs = linesBetweenShortFuncs
         self.linesBetweenStatements = linesBetweenStatements
+        self.spacesBeforeTailComment = spacesBeforeTailComment
         self.newlineAtEnd = newlineAtEnd
 
 
@@ -410,6 +417,25 @@ class Formatter(ast.NodeVisitor):
 
     def visitStringLiteral(self, node):
         self._write(utils.encodeString(node.value))
+
+    def visitCommentGroup(self, node):
+        # We should only visit standalone comment groups, not comments attached to a node.
+        utils.each(self.visitComment, node.before)
+
+    def visitComment(self, node):
+        self._write("//")
+        self._write(node.text)
+        self._endl()
+
+    def preVisit(self, node):
+        if isinstance(node, ast.CommentedNode):
+            utils.each(self.visitComment, node.comments.before)
+
+    def postVisit(self, node):
+        if isinstance(node, ast.CommentedNode) and len(node.comments.tail) > 0:
+            assert len(node.comments.tail) == 1
+            self._write(' ' * self._fmt.spacesBeforeTailComment)
+            self.visitComment(node.comments.tail[0])
 
     def _writeAttributes(self, attribs):
         self._writeList(attribs, "", " ", " ")
