@@ -1,9 +1,9 @@
 py_binary(
-    name = "format_everything",
+    name = "format",
     srcs = [
-        "format_everything.py",
+        "format.py",
         "rewriter.py",
     ],
-    main = "format_everything.py",
+    main = "format.py",
     deps = ["//gypsum"],
 )
