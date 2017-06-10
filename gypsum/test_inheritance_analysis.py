@@ -300,7 +300,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
                                     methods=[], flags=frozenset([PUBLIC]))
         loader = FakePackageLoader([package])
         source = "class Baz <: foo.Bar\n" + \
-                 "def f[static T <: Baz >: foo.Bar] = {}"
+                 "def f[static T <: Baz >: foo.Bar] = ()"
         self.assertRaises(InheritanceException, self.analyzeFromSource, source, packageLoader=loader)
 
     def testTypeParameterCycleExistential(self):
@@ -368,8 +368,8 @@ class TestInheritanceAnalysis(unittest.TestCase):
                  "abstract class Foo\n" + \
                  "  abstract def f(b: B): unit\n" + \
                  "class Bar <: Foo\n" + \
-                 "  override def f(a: A) = {}\n" + \
-                 "  override def f(o: Object) = {}"
+                 "  override def f(a: A) = ()\n" + \
+                 "  override def f(o: Object) = ()"
         self.assertRaises(InheritanceException, self.analyzeFromSource, source)
 
     def testSameMethodOverridesMultipleMethodsInSameClass(self):
@@ -379,7 +379,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
                  "  abstract def f(a: A): unit\n" + \
                  "  abstract def f(b: B): unit\n" + \
                  "class Bar <: Foo\n" + \
-                 "  override def f(o: Object) = {}"
+                 "  override def f(o: Object) = ()"
         info = self.analyzeFromSource(source)
         FoofA = info.package.findFunction(name="Foo.f",
                                           pred=lambda f: f.variables[-1].sourceName == "a")
@@ -399,7 +399,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
                  "abstract class Bar <: Foo\n" + \
                  "  abstract def f(b: B): unit\n" + \
                  "class Baz <: Bar\n" + \
-                 "  override def f(o: Object) = {}"
+                 "  override def f(o: Object) = ()"
         info = self.analyzeFromSource(source)
         Foof = info.package.findFunction(name="Foo.f")
         Barf = info.package.findFunction(name="Bar.f")
@@ -415,7 +415,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
                  "trait Tr2\n" + \
                  "  def f: unit\n" + \
                  "class Foo <: Tr1, Tr2\n" + \
-                 "  override def f = {}"
+                 "  override def f = ()"
         info = self.analyzeFromSource(source)
         Tr1f = info.package.findFunction(name="Tr1.f")
         Tr2f = info.package.findFunction(name="Tr2.f")
@@ -427,25 +427,25 @@ class TestInheritanceAnalysis(unittest.TestCase):
 
     def testMethodsCannotOverrideStaticMethodsWithOverride(self):
         source = "class Foo\n" + \
-                 "  static def f = {}\n" + \
+                 "  static def f = ()\n" + \
                  "class Bar <: Foo\n" + \
-                 "  override def f = {}"
+                 "  override def f = ()"
         self.assertRaises(InheritanceException, self.analyzeFromSource, source)
 
     def testMethodsCannotOverrideStaticMethodsWithoutOverride(self):
         source = "class Foo\n" + \
-                 "  static def f = {}\n" + \
+                 "  static def f = ()\n" + \
                  "class Bar <: Foo\n" + \
-                 "  def f = {}"
+                 "  def f = ()"
         info = self.analyzeFromSource(source)
         Barf = info.package.findFunction(name="Bar.f")
         self.assertIsNone(Barf.overrides)
 
     def testMethodCannotOverrideFinalMethod(self):
         source = "class Foo\n" + \
-                 "  final def f = {}\n" + \
+                 "  final def f = ()\n" + \
                  "class Bar <: Foo\n" + \
-                 "  override def f = {}"
+                 "  override def f = ()"
         self.assertRaises(InheritanceException, self.analyzeFromSource, source)
 
     def testOverrideGrandParent(self):
@@ -453,7 +453,7 @@ class TestInheritanceAnalysis(unittest.TestCase):
                  "  abstract def f: unit\n" + \
                  "abstract class Bar <: Foo\n" + \
                  "class Baz <: Bar\n" + \
-                 "  override def f = {}"
+                 "  override def f = ()"
         info = self.analyzeFromSource(source)
         Foof = info.package.findFunction(name="Foo.f")
         Bazf = info.package.findFunction(name="Baz.f")
@@ -463,28 +463,28 @@ class TestInheritanceAnalysis(unittest.TestCase):
 
     def testMethodOverridesNothing(self):
         source = "class Foo\n" + \
-                 "  override def f = {}"
+                 "  override def f = ()"
         self.assertRaises(InheritanceException, self.analyzeFromSource, source)
 
     def testMethodOverridesIncompatible(self):
         source = "class Foo\n" + \
-                 "  def f = {}\n" + \
+                 "  def f = ()\n" + \
                  "class Bar <: Foo\n" + \
                  "  override def f(o: Object) = o"
         self.assertRaises(InheritanceException, self.analyzeFromSource, source)
 
     def testMethodOverridesInSameClass(self):
         source = "class Foo\n" + \
-                 "  def f(s: String) = {}\n" + \
-                 "  override def f(o: Object) = {}"
+                 "  def f(s: String) = ()\n" + \
+                 "  override def f(o: Object) = ()"
         self.assertRaises(InheritanceException, self.analyzeFromSource, source)
 
     def testOverrideMethodWithOverloadInBaseClass(self):
         source = "class Foo\n" + \
-                 "  def f = {}\n" + \
-                 "  def f(o: Object) = {}\n" + \
+                 "  def f = ()\n" + \
+                 "  def f(o: Object) = ()\n" + \
                  "class Bar <: Foo\n" + \
-                 "  override def f = {}"
+                 "  override def f = ()"
         info = self.analyzeFromSource(source)
         Foof = info.package.findFunction(name="Foo.f",
                                          pred=lambda f: len(f.parameterTypes) == 1)

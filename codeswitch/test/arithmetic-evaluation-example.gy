@@ -137,5 +137,5 @@ def main =
     MulExpr(AddExpr(ConstExpr(Integer(1)), ConstExpr(Integer(2))), AddExpr(ConstExpr(Integer(3)), ConstExpr(Integer(0))))
   let opt-expr = optimize(unopt-expr)
   match (opt-expr)
-    case MulExpr(ConstExpr(a), ConstExpr(b)) if a.value == 3 && b.value == 3 => {}
+    case MulExpr(ConstExpr(a), ConstExpr(b)) if a.value == 3 && b.value == 3 => ()
     case _ => throw Exception()

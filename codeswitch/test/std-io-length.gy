@@ -14,10 +14,10 @@ def read-all(reader: Reader): i64 =
     let length = reader.read(buffer, 0i32, buffer.length)
     if (length == 0i32)
       done = true
-      {}
+      ()
     else
       total-length += length.to-i64
-      {}
+      ()
   total-length
 
 def main =

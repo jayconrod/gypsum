@@ -6,7 +6,7 @@
 import std.IllegalArgumentException
 
 final class BitSet
-  private def this = {}
+  private def this = ()
 
   static def create(max: i32) =
     let bytes-needed = (max + 7i32) / 8i32

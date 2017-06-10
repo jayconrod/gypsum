@@ -33,7 +33,7 @@ public final class Set[static E <: Hash[E]] <: Iter[E]
     let new-table = new(new-capacity) HashTable[E, Nothing]
     new-table.rehash(table)
     table = new-table
-    {}
+    ()
 
 final class LiveSetEntry[static +E <: Hash[E]] <: LiveEntry[E, Nothing]
   def this(elem: E) = super(elem)

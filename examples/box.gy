@@ -18,7 +18,7 @@ class Box[static T <: Object >: Nothing](private var value: T)
 
   def set(new-value: T) =
     value = new-value
-    {}
+    ()
 
   // Of course methods may have their own type parameters.
   def contains-same-value[static S](other: Box[S]) = value === other.value

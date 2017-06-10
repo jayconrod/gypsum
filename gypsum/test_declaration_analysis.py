@@ -97,7 +97,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
 
     def testDefineClassWithPrimaryAndSecondaryCtors(self):
         source = "class C()\n" + \
-                 "  def this = {}"
+                 "  def this = ()"
         info = self.analyzeFromSource(source)
         clas = info.package.findClass(name="C")
         self.assertEquals(2, len(clas.constructors))
@@ -379,21 +379,23 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
     def testDuplicateAttribute(self):
-        self.assertRaises(ScopeException, self.analyzeFromSource,
-                          "class C\n" +
-                          "  private private def f = {}")
+        source = "class C\n" + \
+                 "  private private def f = ()"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
     def testConflictingAttributes(self):
-        self.assertRaises(ScopeException, self.analyzeFromSource,
-                          "class C\n" +
-                          "  private protected def f = {}")
+        source = "class C\n" + \
+                 "  private protected def f = ()"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
     def testPrivateGlobalFunction(self):
-        self.assertRaises(ScopeException, self.analyzeFromSource, "private def f = {}")
+        source = "private def f = ()"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
     def testPrivateClassFunction(self):
-        info = self.analyzeFromSource("class C\n" +
-                                      "  private def f = {}")
+        source = "class C\n" + \
+                 "  private def f = ()"
+        info = self.analyzeFromSource(source)
         f = info.package.findFunction(name="C.f")
         self.assertEquals(frozenset([METHOD, PRIVATE]), f.flags)
 
@@ -474,14 +476,14 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
                           "  abstract def f: i64")
 
     def testConstructorMustNotBeAbstract(self):
-        self.assertRaises(ScopeException, self.analyzeFromSource,
-                          "abstract class C\n" +
-                          "  abstract def this = {}")
-        self.assertRaises(ScopeException, self.analyzeFromSource,
-                          "abstract class C abstract ()")
+        source = "abstract class C\n" + \
+                 "  abstract def this = ()"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+        source = "abstract class C abstract ()"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
     def testFunctionTypeParameterStatic(self):
-        source = "def f[static T] = {}"
+        source = "def f[static T] = ()"
         info = self.analyzeFromSource(source)
         T = info.package.findTypeParameter(name="f.T")
         self.assertEquals(Name.fromString("f.T"), T.name)
@@ -499,15 +501,17 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
         self.assertEquals([T], g.typeParameters)
 
     def testFunctionVariantTypeParameter(self):
-        self.assertRaises(ScopeException, self.analyzeFromSource, "def f[static +T] = {}")
-        self.assertRaises(ScopeException, self.analyzeFromSource, "def f[static -T] = {}")
+        source = "def f[static +T] = ()"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
+        source = "def f[static -T] = ()"
+        self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
     def testClassTypeParameter(self):
         source = "class Box[static T](x: T)\n" + \
                  "  def get = x\n" + \
                  "  def set(y: T) =\n" + \
                  "    x = y\n" + \
-                 "    {}"
+                 "    ()"
         info = self.analyzeFromSource(source)
         Box = info.package.findClass(name="Box")
         T = info.package.findTypeParameter(name="Box.T")
@@ -692,7 +696,7 @@ class TestDeclarationAnalysis(TestCaseWithDefinitions):
 
     def testTypeParameterIndices(self):
         source = "class Foo[static A]\n" + \
-                 "  def m[static B](x: forsome [C] forsome [D] D) = {}"
+                 "  def m[static B](x: forsome [C] forsome [D] D) = ()"
         info = self.analyzeFromSource(source)
         A = info.package.findTypeParameter(name="Foo.A")
         B = info.package.findTypeParameter(name="Foo.m.B")

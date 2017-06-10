@@ -111,20 +111,20 @@ class TestUseAnalysis(TestCaseWithDefinitions):
 
     def testUsePrivateOuter(self):
         source = "class C\n" + \
-                 "  private def f = {}\n" + \
+                 "  private def f = ()\n" + \
                  "def g(o: C) = o.f"
         self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
 
     def testUsePrivateSubclass(self):
         source = "class A\n" + \
-                 "  private def f = {}\n" + \
+                 "  private def f = ()\n" + \
                  "class B <: A\n" + \
                  "  def g = f"
         self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
 
     def testUsePrivateSibling(self):
         source = "class C\n" + \
-                 "  private def f = {}\n" + \
+                 "  private def f = ()\n" + \
                  "  def g = f"
         info = self.analyzeFromSourceWithTypes(source)
         use = info.getUseInfo(info.ast.modules[0].definitions[0].members[1].body)
@@ -134,7 +134,7 @@ class TestUseAnalysis(TestCaseWithDefinitions):
 
     def testUsePrivateChild(self):
         source = "class C\n" + \
-                 "  private def f = {}\n" + \
+                 "  private def f = ()\n" + \
                  "  def g =\n" + \
                  "    def h = f"
         info = self.analyzeFromSourceWithTypes(source)
@@ -155,13 +155,13 @@ class TestUseAnalysis(TestCaseWithDefinitions):
 
     def testUseProtectedOuter(self):
         source = "class C\n" + \
-                 "  protected def f = {}\n" + \
+                 "  protected def f = ()\n" + \
                  "def g(o: C) = o.f"
         self.assertRaises(ScopeException, self.analyzeFromSourceWithTypes, source)
 
     def testUseProtectedSibling(self):
         source = "class C\n" + \
-                 "  protected def f = {}\n" + \
+                 "  protected def f = ()\n" + \
                  "  def g = f"
         info = self.analyzeFromSourceWithTypes(source)
         useScopeAst = info.ast.modules[0].definitions[0].members[1]
@@ -171,7 +171,7 @@ class TestUseAnalysis(TestCaseWithDefinitions):
 
     def testUseProtectedInherited(self):
         source = "class A\n" + \
-                 "  protected def f = {}\n" + \
+                 "  protected def f = ()\n" + \
                  "class B <: A\n" + \
                  "  def g = f"
         info = self.analyzeFromSourceWithTypes(source)
@@ -350,7 +350,7 @@ class TestUseAnalysis(TestCaseWithDefinitions):
 
     def testUseTypeParameterInBound(self):
         source = "class A[static T]\n" + \
-                 "def f[static S <: A[S]] = {}"
+                 "def f[static S <: A[S]] = ()"
         info = self.analyzeFromSourceWithTypes(source)
         S = info.package.findTypeParameter(name="f.S")
         use = info.getUseInfo(info.ast.modules[0].definitions[1].typeParameters[0].upperBound.typeArguments[0])

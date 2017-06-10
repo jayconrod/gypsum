@@ -14,7 +14,7 @@ def main =
   try
     inner-fn(outer-exn)
   catch
-    case exn if exn === outer-exn && finally-executed => {}
+    case exn if exn === outer-exn && finally-executed => ()
 
 def inner-fn(outer-exn: Exception): unit =
   let inner-exn = Exception()

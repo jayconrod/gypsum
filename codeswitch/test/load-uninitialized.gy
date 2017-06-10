@@ -16,7 +16,7 @@ def load-uninitialized-field =
     foo.bar
     throw Exception()
   catch (e: UninitializedException)
-    {}
+    ()
 
 def load-uninitialized-element =
   let foo = new(1i32) Foo
@@ -24,14 +24,14 @@ def load-uninitialized-element =
     foo.get(0i32)
     throw Exception()
   catch (e: UninitializedException)
-    {}
+    ()
 
 def load-uninitialized-global =
   try
     global
     throw Exception()
   catch (e: UninitializedException)
-    {}
+    ()
 
 def load-uninitialized-capture =
   var x: String
@@ -42,7 +42,7 @@ def load-uninitialized-capture =
     f
     throw Exception()
   catch (e: UninitializedException)
-    {}
+    ()
 
 def main =
   load-uninitialized-field

@@ -468,6 +468,20 @@ class TestParser(TestParserBase):
                         "import foo._")
 
     # Patterns
+    def testUnitLiteralPattern(self):
+        source = "()"
+        self.checkParse(
+            astLiteralPattern(astUnitLiteral()),
+            Parser.pattern,
+            source)
+
+    def testIntegerLiteralPattern(self):
+        source = "12"
+        self.checkParse(
+            astLiteralPattern(astIntegerLiteral("12", 12, 64)),
+            Parser.pattern,
+            source)
+
     def testVarPatternNoType(self):
         self.checkParse(astVariablePattern("x", None), Parser.pattern, "x")
 
@@ -712,6 +726,13 @@ class TestParser(TestParserBase):
             "(i8, i16) -> (i32, i64) -> (boolean, unit)")
 
     # Expressions
+    def testUnitExpr(self):
+        source = "()"
+        self.checkParse(
+            astLiteralExpression(astUnitLiteral()),
+            Parser.expr,
+            source)
+
     def testIntExpr(self):
         values = [("-42", -42, 64),
                   ("42", 42, 64),
@@ -798,6 +819,9 @@ class TestParser(TestParserBase):
             source)
 
     def testBlockWithUnitExpr(self):
+        source = "while (true)\n" + \
+                 "  x = y\n" + \
+                 "  ()"
         self.checkParse(
             astWhileExpression(
                 astLiteralExpression(astBooleanLiteral(True)),
@@ -805,9 +829,7 @@ class TestParser(TestParserBase):
                     astAssignExpression(astVariableExpression("x"), astVariableExpression("y")),
                     astLiteralExpression(astUnitLiteral())])),
             Parser.expr,
-            "while (true)\n" +
-            "  x = y\n" +
-            "  {}")
+            source)
 
     def testProp(self):
         self.checkParse(astPropertyExpression(astVariableExpression("o"), "x"),
@@ -1239,6 +1261,9 @@ class TestParser(TestParserBase):
                         Parser.expr, "new(123) Foo(x, y)")
 
     # Literals
+    def testUnitLit(self):
+        self.checkParse(astUnitLiteral(), Parser.literal, "()")
+
     def testBooleanLits(self):
         self.checkParse(astBooleanLiteral(True), Parser.literal, "true")
         self.checkParse(astBooleanLiteral(False), Parser.literal, "false")
@@ -1256,6 +1281,60 @@ class TestParser(TestParserBase):
 
     def testStringLit(self):
         self.checkParse(astStringLiteral("foo\nbar"), Parser.literal, r'"foo\nbar"')
+
+    # Regressions
+    def testCallLastStmtInInnerFunctionBlock(self):
+        source = "def f(x: i64) =\n" + \
+                 "  def g =\n" + \
+                 "    x\n" + \
+                 "    Object()"
+        self.checkParse(
+            astModule([
+                astFunctionDefinition(
+                    [],
+                    "f",
+                    None,
+                    [astParameter([], None, astVariablePattern("x", astI64Type()))],
+                    None,
+                    astBlockExpression([
+                        astFunctionDefinition(
+                            [],
+                            "g",
+                            None,
+                            None,
+                            None,
+                            astBlockExpression([
+                                astVariableExpression("x"),
+                                astCallExpression(
+                                    astVariableExpression("Object"), None, [])]))]))]),
+            Parser.module,
+            source)
+
+    def testUnitAfterTry(self):
+        source = "def f =\n" + \
+                 "  try 12 catch\n" + \
+                 "    case exn if false => 34\n" + \
+                 "  ()"
+        self.checkParse(
+            astModule([
+                astFunctionDefinition(
+                    [],
+                    "f",
+                    None,
+                    None,
+                    None,
+                    astBlockExpression([
+                        astTryCatchExpression(
+                            astLiteralExpression(astIntegerLiteral("12", 12, 64)),
+                            astPartialFunctionExpression([
+                                astPartialFunctionCase(
+                                    astVariablePattern("exn", None),
+                                    astLiteralExpression(astBooleanLiteral(False)),
+                                    astLiteralExpression(astIntegerLiteral("34", 34, 64)))]),
+                            None),
+                        astLiteralExpression(astUnitLiteral())]))]),
+            Parser.module,
+            source)
 
 
 class TestComments(TestParserBase):
@@ -1911,7 +1990,7 @@ class TestComments(TestParserBase):
 
     def testNoBlankLinesBetweenFunctions(self):
         source = "def f =\n" + \
-                 "  {}\n" + \
+                 "  ()\n" + \
                  "def g\n"
         self.checkParse(
             astModule([
@@ -1925,7 +2004,7 @@ class TestComments(TestParserBase):
     def testBlankLinesBetweenFunctions(self):
         source = "\n" + \
                  "def f =\n" + \
-                 "  {}\n" + \
+                 "  ()\n" + \
                  "\n" + \
                  "def g\n" + \
                  "\n"

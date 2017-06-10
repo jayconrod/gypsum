@@ -36,5 +36,5 @@ def main =
   catch (_: Exception) true
   assert-true(e)
   match (err)
-    case Err[String](s) if s === message => {}
+    case Err[String](s) if s === message => ()
     case _ => throw AssertionException()

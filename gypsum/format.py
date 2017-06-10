@@ -414,7 +414,7 @@ class Formatter(ast.NodeVisitor):
         self._write(")")
 
     def visitUnitLiteral(self, node):
-        self._write("{}")
+        self._write("()")
 
     def visitIntegerLiteral(self, node):
         self._write(node.text)

@@ -31,7 +31,7 @@ def test-empty-set =
   try
     it.next
     throw AssertionException()
-  catch (e: NoSuchElementException) {}
+  catch (e: NoSuchElementException) ()
 
   assert-false(set.contains(I32.of(1i32)))
   assert-false(set.remove(I32.of(1i32)))
@@ -80,4 +80,4 @@ def main =
   test-empty-set
   test-insert-remove
   test-iter
-  {}
+  ()

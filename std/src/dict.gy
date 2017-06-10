@@ -46,7 +46,7 @@ public final class Dict[static K <: Hash[K], static V] <: Iter[(K, V)]
     let new-table = new(new-capacity) HashTable[K, V]
     new-table.rehash(table)
     table = new-table
-    {}
+    ()
 
 final class LiveDictEntry[static +K <: Hash[K], static V] <: LiveEntry[K, V]
   var value: V

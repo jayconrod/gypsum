@@ -11,4 +11,4 @@ def main =
   try
     g
     throw Exception()
-  catch (_: UninitializedException) {}
+  catch (_: UninitializedException) ()

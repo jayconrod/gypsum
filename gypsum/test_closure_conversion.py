@@ -137,7 +137,7 @@ class TestClosureConversion(TestCaseWithDefinitions):
                  "  def g =\n" + \
                  "    x\n" + \
                  "    Object()\n" + \
-                 "  {}"
+                 "  ()"
         info = self.analyzeFromSource(source)
         gClosureClass = info.package.findClass(name=Name(["f", "g", CLOSURE_SUFFIX]))
         self.assertEquals([getRootClassType()], gClosureClass.supertypes)
@@ -148,7 +148,7 @@ class TestClosureConversion(TestCaseWithDefinitions):
                  "  def g(a: Object, b: Object) =\n" + \
                  "    x\n" + \
                  "    Object()\n" + \
-                 "  {}"
+                 "  ()"
         info = self.analyzeFromSource(source, name=STD_NAME)
         gClosureClass = info.package.findClass(name=Name(["f", "g", CLOSURE_SUFFIX]))
         functionTrait = info.package.findTrait(name="Function2")
@@ -162,7 +162,7 @@ class TestClosureConversion(TestCaseWithDefinitions):
                  "  def g(a: i64) =\n" + \
                  "    x\n" + \
                  "    Object()\n" + \
-                 "  {}"
+                 "  ()"
         info = self.analyzeFromSource(source, name=STD_NAME)
         gClosureClass = info.package.findClass(name=Name(["f", "g", CLOSURE_SUFFIX]))
         self.assertEquals([getRootClassType()], gClosureClass.supertypes)
@@ -171,7 +171,7 @@ class TestClosureConversion(TestCaseWithDefinitions):
         source = FUNCTION_SOURCE + \
                  "def f(x: i64) =\n" + \
                  "  def g = x\n" + \
-                 "  {}"
+                 "  ()"
         info = self.analyzeFromSource(source, name=STD_NAME)
         gClosureClass = info.package.findClass(name=Name(["f", "g", CLOSURE_SUFFIX]))
         self.assertEquals([getRootClassType()], gClosureClass.supertypes)
@@ -182,7 +182,7 @@ class TestClosureConversion(TestCaseWithDefinitions):
                  "  def g(a: Object, b: Object, c: Object) =\n" + \
                  "    x\n" + \
                  "    Object()\n" + \
-                 "  {}"
+                 "  ()"
         info = self.analyzeFromSource(source, name=STD_NAME)
         gClosureClass = info.package.findClass(name=Name(["f", "g", CLOSURE_SUFFIX]))
         self.assertEquals([getRootClassType()], gClosureClass.supertypes)
@@ -190,7 +190,7 @@ class TestClosureConversion(TestCaseWithDefinitions):
     def testClosureMethodFlagsPrimitive(self):
         source = "def f(x: i64) =\n" + \
                  "  def g = x\n" + \
-                 "  {}"
+                 "  ()"
         info = self.analyzeFromSource(source)
         g = info.package.findFunction(name="f.g")
         self.assertEquals(frozenset([PUBLIC, METHOD, FINAL]), g.flags)
@@ -199,7 +199,7 @@ class TestClosureConversion(TestCaseWithDefinitions):
         source = FUNCTION_SOURCE + \
                  "def f(s: String) =\n" + \
                  "  def g = s\n" + \
-                 "  {}"
+                 "  ()"
         info = self.analyzeFromSource(source, name=STD_NAME)
         g = info.package.findFunction(name="f.g")
         call = info.package.findFunction(name="Function0.call")
@@ -211,7 +211,7 @@ class TestClosureConversion(TestCaseWithDefinitions):
         source = FUNCTION_SOURCE + \
                  "def f(s: String) =\n" + \
                  "  def g[static T] = s\n" + \
-                 "  {}"
+                 "  ()"
         info = self.analyzeFromSource(source, name=STD_NAME)
         gClosureClass = info.package.findClass(name=Name(["f", "g", CLOSURE_SUFFIX]))
         self.assertEquals([getRootClassType()], gClosureClass.supertypes)

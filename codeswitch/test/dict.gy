@@ -30,12 +30,12 @@ def test-empty-dict =
   try
     it.next
     throw AssertionException()
-  catch (e: NoSuchElementException) {}
+  catch (e: NoSuchElementException) ()
 
   assert-false(dict.get(I32.of(42i32)).is-defined)
   assert-eq[I32](I32.of(12i32), dict.get-or-else(I32.of(42i32), I32.of(12i32)))
   assert-false(dict.remove(I32.of(42i32)).is-defined)
-  {}
+  ()
 
 def test-insert-retrieve-remove =
   let dict = Dict[I32, I32]()
@@ -82,4 +82,4 @@ def main =
   test-empty-dict
   test-insert-retrieve-remove
   test-iter
-  {}
+  ()

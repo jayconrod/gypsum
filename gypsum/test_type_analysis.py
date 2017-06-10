@@ -353,7 +353,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(ClassType(foo), info.getType(expr))
 
     def testBlockEmpty(self):
-        source = "def f = {}"
+        source = "def f = ()"
         info = self.analyzeFromSource(source)
         self.assertEquals(UnitType, info.package.findFunction(name="f").returnType)
         self.assertEquals(UnitType, info.getType(info.ast.modules[0].definitions[0].body))
@@ -605,7 +605,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testProjectClassFromTypeParameter(self):
         source = "class Foo\n" + \
                  "  class Bar\n" + \
-                 "def f[static T <: Foo](x: T.Bar) = {}"
+                 "def f[static T <: Foo](x: T.Bar) = ()"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testProjectTypeParameterFromClass(self):
@@ -615,7 +615,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testCallMethodWithNullableReceiver(self):
         source = "class Foo\n" + \
-                 "  def m = {}\n" + \
+                 "  def m = ()\n" + \
                  "def f(o: Foo?) = o.m"
         info = self.analyzeFromSource(source)
         self.assertEquals(UnitType, info.package.findFunction(name="f").returnType)
@@ -780,7 +780,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testCtorWrongNumberOfArgs(self):
         source = "class Foo\n" + \
-                 "  def this(x: i32, y: i32) = {}\n" + \
+                 "  def this(x: i32, y: i32) = ()\n" + \
                  "def f = Foo(12)"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
@@ -796,13 +796,13 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testCallTypeArgOutOfBounds(self):
-        source = "def f[static T <: String] = {}\n" + \
+        source = "def f[static T <: String] = ()\n" + \
                  "var g = f[Object]"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testCallNullaryCtor(self):
         info = self.analyzeFromSource("class Foo\n" +
-                                      "  def this = {}\n" +
+                                      "  def this = ()\n" +
                                       "def f = Foo()")
         clas = info.package.findClass(name="Foo")
         function = info.package.findFunction(name="f")
@@ -811,7 +811,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testCallCtorWithArgs(self):
         info = self.analyzeFromSource("class Foo\n" +
-                                      "  def this(x: i64, y: i64) = {}\n" +
+                                      "  def this(x: i64, y: i64) = ()\n" +
                                       "def f = Foo(1, 2)\n")
         clas = info.package.findClass(name="Foo")
         function = info.package.findFunction(name="f")
@@ -1192,7 +1192,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "def @ (obj: Object) = Some[(Foo, Bar)]((Foo(), Bar()))\n" + \
                  "def f(obj: Object) =\n" + \
                  "  match (obj)\n" + \
-                 "    case a @ b => {}"
+                 "    case a @ b => ()"
         info = self.analyzeFromSource(source, name=STD_NAME)
         Foo = info.package.findClass(name="Foo")
         Bar = info.package.findClass(name="Bar")
@@ -1209,7 +1209,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "def :: (obj: Object) = Some[(Foo, Bar)]((Foo(), Bar()))\n" + \
                  "def f(obj: Object) =\n" + \
                  "  match (obj)\n" + \
-                 "    case a :: b => {}"
+                 "    case a :: b => ()"
         info = self.analyzeFromSource(source, name=STD_NAME)
         Foo = info.package.findClass(name="Foo")
         Bar = info.package.findClass(name="Bar")
@@ -1223,7 +1223,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "class Bar\n" + \
                  "def f(foo: Foo) =\n" + \
                  "  match (foo)\n" + \
-                 "    case _: Bar => {}"
+                 "    case _: Bar => ()"
         info = self.analyzeFromSource(source)
         # pass if no error
 
@@ -1324,7 +1324,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "class FooBox[static +T <: Foo] <: Box[T]\n" + \
                  "def f(box: Box[Object]) =\n" + \
                  "  match (box)\n" + \
-                 "    case foo-box: FooBox[Foo] => {}"
+                 "    case foo-box: FooBox[Foo] => ()"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testMatchExprTestStaticAndDynamicOption(self):
@@ -1368,16 +1368,16 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(NoType, info.getType(info.ast.modules[0].definitions[0].body.condition))
 
     def testThrowInWhileCondition(self):
-        source = "def f(exn: Exception) = while (throw exn) {}"
+        source = "def f(exn: Exception) = while (throw exn) ()"
         info = self.analyzeFromSource(source)
         self.assertEquals(NoType, info.getType(info.ast.modules[0].definitions[0].body.condition))
 
     def testTryExpr(self):
         source = "class Base\n" + \
                  "class A <: Base\n" + \
-                 "  def this = {}\n" + \
+                 "  def this = ()\n" + \
                  "class B <: Base\n" + \
-                 "  def this = {}\n" + \
+                 "  def this = ()\n" + \
                  "def f = try A() catch (exn) B() finally 12"
         info = self.analyzeFromSource(source)
         baseTy = ClassType(info.package.findClass(name="Base"), ())
@@ -1569,7 +1569,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "class Box[static T](value: T)\n" + \
                  "def f(box: forsome [X] Box[X]) =\n" + \
                  "  box.value = Object()\n" + \
-                 "  {}"
+                 "  ()"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testExistentialStorePlain(self):
@@ -1577,7 +1577,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  var value: i64\n" + \
                  "def f(box: forsome [X] Box[X]) =\n" + \
                  "  box.value = 12\n" + \
-                 "  {}"
+                 "  ()"
         self.analyzeFromSource(source)
         # pass if no error
 
@@ -1867,7 +1867,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testCallWithExistentialSubtype(self):
         source = "class Box[static T]\n" + \
-                 "def f(box: forsome [X] Box[X]) = {}\n" + \
+                 "def f(box: forsome [X] Box[X]) = ()\n" + \
                  "def g = f(Box[Object]())"
         info = self.analyzeFromSource(source)
         Box = info.package.findClass(name="Box")
@@ -1997,9 +1997,9 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testOverrideContravariantReturn(self):
         source = "class A\n" + \
-                 "  def this = {}\n" + \
+                 "  def this = ()\n" + \
                  "class B <: A\n" + \
-                 "  def this = {}\n" + \
+                 "  def this = ()\n" + \
                  "class Foo\n" + \
                  "  def m = A()\n" + \
                  "class Bar <: Foo\n" + \
@@ -2065,8 +2065,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(I64Type, g.returnType)
 
     def testOverloadWithTypeParameter(self):
-        source = "def f[static T] = {}\n" + \
-                 "def f = {}\n" + \
+        source = "def f[static T] = ()\n" + \
+                 "def f = ()\n" + \
                  "def g = f[Object]"
         info = self.analyzeFromSource(source)
         use = info.getUseInfo(info.ast.modules[0].definitions[2].body)
@@ -2075,8 +2075,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testOverloadOnTypeParameterBounds(self):
         source = "class A\n" + \
-                 "def f[static T] = {}\n" + \
-                 "def f[static T <: A] = {}\n" + \
+                 "def f[static T] = ()\n" + \
+                 "def f[static T <: A] = ()\n" + \
                  "def g = f[Object]"
         info = self.analyzeFromSource(source)
         use = info.getUseInfo(info.ast.modules[0].definitions[3].body)
@@ -2104,10 +2104,10 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(getStringType(), f.returnType)
 
     def testTypeParametersDependInOrder(self):
-        source = "def f[static S, static T <: S, static U <: T] = {}"
+        source = "def f[static S, static T <: S, static U <: T] = ()"
         info = self.analyzeFromSource(source)
         # pass if no exception
-        source = "def f[static U <: T, static T <: S, static S] = {}"
+        source = "def f[static U <: T, static T <: S, static S] = ()"
         self.assertRaises(ScopeException, self.analyzeFromSource, source)
 
     def testTypeParameterLookup(self):
@@ -2155,7 +2155,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  def get = x\n" + \
                  "  def set(y: T) =\n" + \
                  "    x = y\n" + \
-                 "    {}"
+                 "    ()"
         info = self.analyzeFromSource(source)
         Box = info.package.findClass(name="Box")
         T = info.package.findTypeParameter(name="Box.T")
@@ -2249,7 +2249,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testCovariantTypeParameterInMethodParam(self):
         source = "class Foo[static +T]\n" + \
-                 "  def m(x: T) = {}"
+                 "  def m(x: T) = ()"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testCovariantTypeParameterInMethodReturn(self):
@@ -2260,7 +2260,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testCovariantTypeParameterInCtor(self):
         source = "class Foo[static +T]\n" + \
-                 "  def this(x: T) = {}"
+                 "  def this(x: T) = ()"
         self.analyzeFromSource(source)
         # pass if no error
 
@@ -2270,7 +2270,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testContravariantTypeParameterInMethodParam(self):
         source = "class Foo[static -T]\n" + \
-                 "  def m(x: T) = {}"
+                 "  def m(x: T) = ()"
         self.analyzeFromSource(source)
         # pass if no error
 
@@ -2287,13 +2287,13 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testCovariantParamInCovariantClass(self):
         source = "class Source[static +S]\n" + \
                  "class Foo[static +T]\n" + \
-                 "  def m(x: Source[T]) = {}"
+                 "  def m(x: Source[T]) = ()"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testCovariantParamInContravariantClass(self):
         source = "class Source[static +S]\n" + \
                  "class Foo[static -T]\n" + \
-                 "  def m(x: Source[T]) = {}"
+                 "  def m(x: Source[T]) = ()"
         self.analyzeFromSource(source)
         # pass if no error
 
@@ -2313,14 +2313,14 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testContravariantParamInCovariantClass(self):
         source = "class Sink[static -S]\n" + \
                  "class Foo[static +T]\n" + \
-                 "  def m(x: Sink[T]) = {}"
+                 "  def m(x: Sink[T]) = ()"
         self.analyzeFromSource(source)
         # pass if no error
 
     def testContravariantParamInContravariantClass(self):
         source = "class Sink[static -S]\n" + \
                  "class Foo[static -T]\n" + \
-                 "  def m(x: Sink[T]) = {}"
+                 "  def m(x: Sink[T]) = ()"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testContravariantReturnInCovariantClass(self):
@@ -2354,8 +2354,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testOverloadedDefaultSuperCtor(self):
         source = "class Foo\n" + \
-                 "  def this(x: i64) = {}\n" + \
-                 "  def this(x: boolean) = {}\n" + \
+                 "  def this(x: i64) = ()\n" + \
+                 "  def this(x: boolean) = ()\n" + \
                  "class Bar <: Foo(true)"
         info = self.analyzeFromSource(source)
         Foo = info.package.findClass(name="Foo")
@@ -2364,8 +2364,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testOverloadedPrimarySuperCtor(self):
         source = "class Foo\n" + \
-                 "  def this(x: i64) = {}\n" + \
-                 "  def this(x: boolean) = {}\n" + \
+                 "  def this(x: i64) = ()\n" + \
+                 "  def this(x: boolean) = ()\n" + \
                  "class Bar(x: boolean) <: Foo(x)"
         info = self.analyzeFromSource(source)
         Foo = info.package.findClass(name="Foo")
@@ -2375,8 +2375,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testOverloadedAlternateCtor(self):
         source = "class Foo\n" + \
                  "  def this = this(true)\n" + \
-                 "  def this(x: i64) = {}\n" + \
-                 "  def this(x: boolean) = {}"
+                 "  def this(x: i64) = ()\n" + \
+                 "  def this(x: boolean) = ()"
         info = self.analyzeFromSource(source)
         Foo = info.package.findClass(name="Foo")
         call = info.ast.modules[0].definitions[0].members[0].body
@@ -2458,7 +2458,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testNewArrayBadLength(self):
         source = "final class Array[static T]\n" + \
                  "  arrayelements T, get, set, length\n" + \
-                 "def f = new({}) Array[String]"
+                 "def f = new(()) Array[String]"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testNewArrayPrimitive(self):
@@ -2480,7 +2480,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testUseClassBeforeDefinition(self):
         source = "def f = C()\n" + \
                  "class C\n" + \
-                 "  def this = {}"
+                 "  def this = ()"
         info = self.analyzeFromSource(source)
         ty = ClassType(info.package.findClass(name="C"))
         self.assertEquals(ty, info.getType(info.ast.modules[0].definitions[0].body))
@@ -2537,7 +2537,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testUseGlobalClassInGlobal(self):
         source = "class C\n" + \
-                 "  def this = {}\n" + \
+                 "  def this = ()\n" + \
                  "var x = C()"
         info = self.analyzeFromSource(source)
         self.assertIs(info.getDefnInfo(info.ast.modules[0].definitions[0].members[0]),
@@ -2545,7 +2545,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testUseGlobalClassInFunction(self):
         source = "class C\n" + \
-                 "  def this = {}\n" + \
+                 "  def this = ()\n" + \
                  "def f = C()"
         info = self.analyzeFromSource(source)
         self.assertIs(info.getDefnInfo(info.ast.modules[0].definitions[0].members[0]),
@@ -2553,7 +2553,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testUseGlobalClassInClass(self):
         source = "class C\n" + \
-                 "  def this = {}\n" + \
+                 "  def this = ()\n" + \
                  "class D\n" + \
                  "  var x = C()"
         info = self.analyzeFromSource(source)
@@ -2608,7 +2608,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
     def testSubstituteBoundsWhenCalling(self):
         source = "class Ordered[static T]\n" + \
                  "class Integer <: Ordered[Integer]\n" + \
-                 "def sort[static S <: Ordered[S]] = {}\n" + \
+                 "def sort[static S <: Ordered[S]] = ()\n" + \
                  "def f = sort[Integer]"
         self.analyzeFromSource(source)
         # pass if no error
@@ -2626,12 +2626,12 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testPublicFunctionPrivateTypeParam(self):
         source = "class Foo\n" + \
-                 "public def f[static T <: Foo] = {}"
+                 "public def f[static T <: Foo] = ()"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testPublicFunctionPrivateParam(self):
         source = "class Foo\n" + \
-                 "public def f(foo: Foo) = {}"
+                 "public def f(foo: Foo) = ()"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testPublicFunctionPrivateReturn(self):

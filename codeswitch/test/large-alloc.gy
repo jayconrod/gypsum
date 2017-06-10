@@ -11,7 +11,7 @@ def test-bad-alloc(length: i32) =
     new(length) Foo
     throw Exception()
   catch (e: OutOfMemoryException)
-    {}
+    ()
 
 def main =
   test-bad-alloc(0x20000000i32)

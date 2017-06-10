@@ -3,7 +3,7 @@ def check-eq(expected: String, actual: String) =
     throw Exception()
 
 def main =
-  check-eq("unit", {}.to-string)
+  check-eq("unit", ().to-string)
 
   // check-eq("true", true.to-string)
   // check-eq("false", false.to-string)

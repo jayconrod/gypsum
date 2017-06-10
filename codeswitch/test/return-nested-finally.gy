@@ -20,7 +20,7 @@ def f =
         inner-finally-executed = true
     catch (_)
       catch-executed = true
-      {}
+      ()
   finally
     outer-finally-executed = true
 

@@ -17,10 +17,10 @@ def main =
     s.get(-1i32)
     throw Exception()
   catch (e: ArrayIndexOutOfBoundsException)
-    {}
+    ()
 
   try
     s.get(5i32)
     throw Exception()
   catch (e: ArrayIndexOutOfBoundsException)
-    {}
+    ()

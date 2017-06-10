@@ -19,7 +19,7 @@ def test-load-store-field =
   o.y = "baz"
   assert-eq(56i64, o.x)
   assert-eq("baz", o.y)
-  {}
+  ()
 
 def test-load-store-inherited-field =
   let o = DerivedFieldClass()
@@ -29,25 +29,25 @@ def test-load-store-inherited-field =
   o.y = "baz"
   assert-eq(56i64, o.x)
   assert-eq("baz", o.y)
-  {}
+  ()
 
 def test-call-class-method =
   let o = MethodClass()
   assert-eq(34i64, o.f)
   assert-eq("bar", o.g)
-  {}
+  ()
 
 def test-call-inherited-class-method =
   let o = DerivedMethodClass()
   assert-eq(34i64, o.f)
   assert-eq("bar", o.g)
-  {}
+  ()
 
 def test-call-inherited-trait-method =
   let o = DerivedClassFromTrait()
   assert-eq(34i64, o.f)
   assert-eq("bar", o.g)
-  {}
+  ()
 
 def main =
   test-load-store-field
@@ -55,7 +55,7 @@ def main =
   test-call-class-method
   test-call-inherited-class-method
   test-call-inherited-trait-method
-  {}
+  ()
 
 def assert-eq(expected: String, actual: String) =
   if (expected != actual)

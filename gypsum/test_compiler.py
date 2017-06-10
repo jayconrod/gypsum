@@ -158,7 +158,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret()]]))
 
     def testEmptyBlock(self):
-        source = "def f = {}"
+        source = "def f = ()"
         self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                unit(),
@@ -242,7 +242,7 @@ class TestCompiler(TestCaseWithDefinitions):
     def testBlankVar(self):
         source = "def f =\n" + \
                  "  var _ = 12\n" + \
-                 "  {}"
+                 "  ()"
         self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                i64(12),
@@ -285,7 +285,7 @@ class TestCompiler(TestCaseWithDefinitions):
         source = "var x: i64\n" + \
                  "def f =\n" + \
                  "  x = 12\n" + \
-                 "  {}"
+                 "  ()"
         package = self.compileFromSource(source)
         x = package.findGlobal(name="x")
         f = package.findFunction(name="f")
@@ -325,7 +325,7 @@ class TestCompiler(TestCaseWithDefinitions):
         loader = FakePackageLoader([foo])
         source = "def f =\n" + \
                  "  foo.x = 12\n" + \
-                 "  {}"
+                 "  ()"
         package = self.compileFromSource(source, packageLoader=loader)
         self.checkFunction(package,
                            self.makeSimpleFunction("f", UnitType, [[
@@ -427,13 +427,13 @@ class TestCompiler(TestCaseWithDefinitions):
     def testAssignParam(self):
         source = "def f(x: i64) =\n" + \
                  "  x = 12\n" + \
-                 "  {}"
+                 "  ()"
         self.assertRaises(SemanticException, self.compileFromSource, source)
 
     def testAssignVarParam(self):
         source = "def f(var x: i64) =\n" + \
                  "  x = 12\n" + \
-                 "  {}"
+                 "  ()"
         self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                i64(12),
@@ -447,7 +447,7 @@ class TestCompiler(TestCaseWithDefinitions):
     def testAssignVarWithSimpleCast(self):
         source = "def f(s: String, var o: Object) =\n" + \
                  "  o = s\n" + \
-                 "  {}"
+                 "  ()"
         package = self.compileFromSource(source)
         expected = self.makeSimpleFunction(
             "f", UnitType, [[
@@ -469,7 +469,7 @@ class TestCompiler(TestCaseWithDefinitions):
         source = "class Foo[static +T]\n" + \
                  "def f(x: Foo[String], var y: Foo[Object]) =\n" + \
                  "  y = x\n" + \
-                 "  {}"
+                 "  ()"
         package = self.compileFromSource(source)
         Foo = package.findClass(name="Foo")
         xType = ClassType(Foo, (getStringType(),))
@@ -727,7 +727,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testLoadNullableObject(self):
         source = "class Foo\n" + \
-                 "  def this = {}\n" + \
+                 "  def this = ()\n" + \
                  "  var x: Object?\n" + \
                  "def f = Foo().x"
         package = self.compileFromSource(source)
@@ -1986,7 +1986,7 @@ class TestCompiler(TestCaseWithDefinitions):
         exnTy = ClassType(exnClass)
         source = "def f =\n" + \
                  "  try 12 catch (exn) 34\n" + \
-                 "  {}"
+                 "  ()"
         self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                # block 0
@@ -2016,7 +2016,7 @@ class TestCompiler(TestCaseWithDefinitions):
         source = "def f =\n" + \
                  "  try 12 catch\n" + \
                  "    case exn if false => 34\n" + \
-                 "  {}"
+                 "  ()"
         self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                # block 0
@@ -2091,7 +2091,7 @@ class TestCompiler(TestCaseWithDefinitions):
         exnTy = ClassType(exnClass)
         source = "def f =\n" + \
                  "  try 12 finally 34\n" + \
-                 "  {}"
+                 "  ()"
         self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                # block 0
@@ -2261,7 +2261,7 @@ class TestCompiler(TestCaseWithDefinitions):
         exnTy = ClassType(exnClass)
         source = "def f =\n" + \
                  "  try 12 catch (exn) 34 finally 56\n" + \
-                 "  {}"
+                 "  ()"
         self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                # block 0 [...]
@@ -2325,7 +2325,7 @@ class TestCompiler(TestCaseWithDefinitions):
                  "  try 12 catch\n" + \
                  "    case exn if false => 34\n" + \
                  "  finally 56\n" + \
-                 "  {}"
+                 "  ()"
         self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                # block 0 [...]
@@ -2394,10 +2394,10 @@ class TestCompiler(TestCaseWithDefinitions):
     def testAssignVarDefinedInCatch(self):
         source = "def f =\n" + \
                  "  try\n" + \
-                 "    {}\n" + \
+                 "    ()\n" + \
                  "  catch (x)\n" + \
                  "    x = Exception()\n" + \
-                 "    {}"
+                 "    ()"
         self.assertRaises(SemanticException, self.compileFromSource, source)
 
     def testThrow(self):
@@ -2729,7 +2729,7 @@ class TestCompiler(TestCaseWithDefinitions):
                  "  try\n" + \
                  "    try\n" + \
                  "      return 12\n" + \
-                 "      {}\n" + \
+                 "      ()\n" + \
                  "    finally 34\n" + \
                  "    56\n" + \
                  "  catch (_) 78"
@@ -3142,7 +3142,7 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]]))
 
     def testReturnInWhileBody(self):
-        source = "def f = while (false) return {}"
+        source = "def f = while (false) return ()"
         self.checkFunction(source,
                            self.makeSimpleFunction("f", UnitType, [[
                                branch(1),
@@ -3529,7 +3529,7 @@ class TestCompiler(TestCaseWithDefinitions):
         loader = FakePackageLoader([fooPackage])
 
         source = "def f =\n" + \
-                 "  try {} catch (x: foo.Bar) {}"
+                 "  try () catch (x: foo.Bar) ()"
         package = self.compileFromSource(source, packageLoader=loader)
 
         barType = ClassType(clas)
@@ -3669,7 +3669,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testNullaryCtor(self):
         source = "class Foo\n" + \
-                 "  def this = {}\n" + \
+                 "  def this = ()\n" + \
                  "def f = Foo()"
         package = self.makePackage(source)
         clas = package.findClass(name="Foo")
@@ -3685,7 +3685,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testNullaryCtorForEffect(self):
         source = "class Foo\n" + \
-                 "  def this = {}\n" + \
+                 "  def this = ()\n" + \
                  "def f =\n" + \
                  "  Foo()\n" + \
                  "  12"
@@ -3731,7 +3731,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testCtorWithArgs(self):
         source = "class Foo\n" + \
-                 "  def this(x: i64, y: i64) = {}\n" + \
+                 "  def this(x: i64, y: i64) = ()\n" + \
                  "def f = Foo(1, 2)"
         package = self.compileFromSource(source)
         clas = package.classes[0]
@@ -4124,7 +4124,7 @@ class TestCompiler(TestCaseWithDefinitions):
                                ret()]]))
 
     def testCallBuiltinPrimitiveMethod(self):
-        source = "def f = {}.to-string"
+        source = "def f = ().to-string"
         self.checkFunction(source,
                            self.makeSimpleFunction("f", getStringType(), [[
                                unit(),
@@ -4284,7 +4284,7 @@ class TestCompiler(TestCaseWithDefinitions):
         source = "class Foo[static T]\n" + \
                  "def f(foo: Foo[Object]) =\n" + \
                  "  foo.to-string\n" + \
-                 "  {}"
+                 "  ()"
         package = self.compileFromSource(source)
         f = package.findFunction(name="f")
         Foo = package.findClass(name="Foo")
@@ -4306,7 +4306,7 @@ class TestCompiler(TestCaseWithDefinitions):
                  "  override def to-string = \"Foo\"\n" + \
                  "def f(foo: Foo[Object]) =\n" + \
                  "  foo.to-string\n" + \
-                 "  {}"
+                 "  ()"
         package = self.compileFromSource(source)
         f = package.findFunction(name="f")
         Foo = package.findClass(name="Foo")
@@ -4359,7 +4359,7 @@ class TestCompiler(TestCaseWithDefinitions):
                  "  def get = val\n" + \
                  "  def set(val: T) =\n" + \
                  "    this.val = val\n" + \
-                 "    {}\n" + \
+                 "    ()\n" + \
                  "def f(box: Box[C]) = box.set(box.get)"
         package = self.compileFromSource(source)
         C = package.findClass(name="C")
@@ -4456,7 +4456,7 @@ class TestCompiler(TestCaseWithDefinitions):
                  "  arrayelements T, get, set, length\n" + \
                  "def f =\n" + \
                  "  new(3i32) Foo[String](12)\n" + \
-                 "  {}"
+                 "  ()"
         package = self.compileFromSource(source)
         Foo = package.findClass(name="Foo")
         ctor = Foo.constructors[0]
@@ -4548,7 +4548,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testCallTraitMethodOnSameTrait(self):
         source = "trait Tr\n" + \
-                 "  def m = {}\n" + \
+                 "  def m = ()\n" + \
                  "def f(tr: Tr) = tr.m"
         package = self.compileFromSource(source)
         Tr = package.findTrait(name="Tr")
@@ -4590,7 +4590,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testCallTraitMethodInheritedFromTrait(self):
         source = "trait Tr1\n" + \
-                 "  def m = {}\n" + \
+                 "  def m = ()\n" + \
                  "trait Tr2 <: Tr1\n" + \
                  "def f(tr: Tr2) = tr.m"
         package = self.compileFromSource(source)
@@ -4610,7 +4610,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testCallClassMethodInheritedFromTrait(self):
         source = "trait Tr\n" + \
-                 "  def m = {}\n" + \
+                 "  def m = ()\n" + \
                  "class C <: Tr\n" + \
                  "def f(c: C) = c.m"
         package = self.compileFromSource(source)

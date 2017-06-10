@@ -15,7 +15,7 @@ import std.IllegalArgumentException
 final class BitSet
   // We declare a private constructor so clients are forced to use the `create` method to
   // build new instances. `BitSet` has no normal fields, so this method does nothing.
-  private def this = {}
+  private def this = ()
 
   // This method creates new `BitSet` objects. We give it a maximum integer that can be stored
   // in the set, and it calculates the number of bytes needed, then allocates a new `BitSet`.

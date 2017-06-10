@@ -50,7 +50,7 @@ public class List[static T] <: Iter[T]
       i -= 1i32
     elements.set(i, value)
     length_ += 1i32
-    {}
+    ()
 
   public def remove(index: i32): T =
     if (index < 0i32 || index >= length)

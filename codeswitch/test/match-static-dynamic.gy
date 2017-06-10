@@ -16,5 +16,5 @@ class FullBox[static T](value: T) <: Box[T]
 def main =
   let box = FullBox[String]("foo")
   match (box)
-    case FullBox[String](s) if s == "foo" => {}
+    case FullBox[String](s) if s == "foo" => ()
     case _ => throw Exception()

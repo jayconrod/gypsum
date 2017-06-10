@@ -42,7 +42,6 @@ from tok import (
     INDENT,
     INTEGER,
     LAMBDA,
-    LBRACE,
     LBRACK,
     LET,
     LPAREN,
@@ -114,7 +113,6 @@ class Parser(object):
     EXPR_START_TOKENS = (
         LBRACK,
         LPAREN,
-        LBRACE,
         IF,
         ELSE,
         WHILE,
@@ -248,8 +246,12 @@ class Parser(object):
         pat = self.pattern()
         if self._peekTag() is EQ:
             self._next()
-            # Use maybeTupleExpr instead of expr to avoid assignments.
-            e = self.maybeTupleExpr()
+            # TODO: this hack is here to avoid assignment. Remove when assignment is
+            # no longer an expression.
+            if self._peekTag() is NEWLINE:
+                e = self.blockExpr()
+            else:
+                e = self.maybeTupleExpr()
         else:
             e = None
         d = ast.VariableDefinition(ats, var, pat, e, None, self._location(l))
@@ -472,12 +474,18 @@ class Parser(object):
         return p
 
     def groupPattern(self):
-        l = self._nextTag(LPAREN)
-        p = self.pattern()
-        self._nextTag(RPAREN)
-        g = ast.GroupPattern(p, None, self._location(l.location))
-        self._tailComment(g)
-        return g
+        l = self._nextTag(LPAREN).location
+        if self._peekTag() is RPAREN:
+            self._next()
+            loc = self._location(l)
+            lit = ast.UnitLiteral(loc)
+            p = ast.LiteralPattern(lit, None, loc)
+        else:
+            i = self.pattern()
+            self._nextTag(RPAREN)
+            p = ast.GroupPattern(i, None, self._location(l))
+        self._tailComment(p)
+        return p
 
     # Types
     def ty(self):
@@ -585,7 +593,10 @@ class Parser(object):
 
     # Expressions
     def expr(self):
-        return self.maybeAssignExpr()
+        if self._peekTag() is NEWLINE:
+            return self.blockExpr()
+        else:
+            return self.maybeAssignExpr()
 
     def maybeAssignExpr(self):
         es = self._parseRepSep(self.maybeTupleExpr, EQ)
@@ -653,7 +664,9 @@ class Parser(object):
 
     def maybeCallExpr(self):
         e = self.receiverExpr()
-        tag = self._peek().tag
+        if self._peekTag(-1) is OUTDENT:
+            return e
+        tag = self._peekTag()
         while tag in (DOT, LBRACK, LPAREN):
             if tag is DOT:
                 self._next()
@@ -681,7 +694,7 @@ class Parser(object):
         tag = self._peek().tag
         if tag is OPERATOR:
             e = self.unaryExpr()
-        elif tag in (INTEGER, FLOAT, STRING, TRUE, FALSE, NULL, LBRACE):
+        elif tag in (INTEGER, FLOAT, STRING, TRUE, FALSE, NULL):
             e = self.literalExpr()
         elif tag is SYMBOL:
             e = self.varExpr()
@@ -707,8 +720,6 @@ class Parser(object):
             e = self.throwExpr()
         elif tag is TRY:
             e = self.tryExpr()
-        elif tag is NEWLINE:
-            e = self.blockExpr()
         elif tag is LAMBDA:
             e = self.lambdaExpr()
         elif tag is RETURN:
@@ -751,12 +762,18 @@ class Parser(object):
         return e
 
     def groupExpr(self):
-        l = self._nextTag(LPAREN)
-        e = self.expr()
-        r = self._nextTag(RPAREN)
-        g = ast.GroupExpression(e, None, l.location.combine(r.location))
-        self._tailComment(g)
-        return g
+        l = self._nextTag(LPAREN).location
+        if self._peekTag() is RPAREN:
+            self._next()
+            loc = self._location(l)
+            lit = ast.UnitLiteral(loc)
+            e = ast.LiteralExpression(lit, None, loc)
+        else:
+            i = self.expr()
+            self._nextTag(RPAREN)
+            e = ast.GroupExpression(i, None, self._location(l))
+        self._tailComment(e)
+        return e
 
     def newArrayExpr(self):
         l = self._nextTag(NEW)
@@ -943,7 +960,7 @@ class Parser(object):
     # Literals
     def literal(self):
         tok = self._peek()
-        if tok.tag is LBRACE:
+        if tok.tag is LPAREN:
             return self.unitLiteral()
         elif tok.tag is INTEGER:
             return self.intLiteral()
@@ -963,8 +980,8 @@ class Parser(object):
         return lit
 
     def unitLiteral(self):
-        l = self._nextTag(LBRACE).location
-        self._nextTag(RBRACE)
+        l = self._nextTag(LPAREN).location
+        self._nextTag(RPAREN)
         return ast.UnitLiteral(self._location(l))
 
     def intLiteral(self):

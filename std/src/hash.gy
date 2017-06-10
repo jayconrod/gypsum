@@ -11,7 +11,7 @@ public trait Hash[static -T] <: Eq[T]
 // https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
 // The original code was written by Austin Appleby and placed in the public domain.
 public class HashBuilder(seed: i32)
-  public def this = {}
+  public def this = ()
 
   private var h = seed
   private var len = 0i32

@@ -51,7 +51,7 @@ final class HashTable[static K <: Hash[K], static V] <: Iter[LiveEntry[K, V]]
     let index = lookup-index-for-insert(entry.key)
     set-entry(index, entry)
     live-element-count += 1i32
-    {}
+    ()
 
   def remove(key: K): Option[LiveEntry[K, V]] =
     let index = lookup-index(key)
@@ -122,6 +122,6 @@ final class HashTableIterator[static K <: Hash[K], static V](table: HashTable[K,
     while (index < table.capacity)
       match (table.get-entry(index))
         case _: LiveEntry[K, V] => return index
-        case _ => {}
+        case _ => ()
       index += 1i32
     index
