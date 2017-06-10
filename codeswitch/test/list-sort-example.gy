@@ -6,21 +6,15 @@
 abstract class Ordered[static T]
   abstract def compare(other: T): i64
 
-
 class Integer(value: i64) <: Ordered[Integer]
   override def compare(other: Integer) = value - other.value
   override def to-string = value.to-string
 
-
 abstract class List[static +T]
   abstract def head: T
-
   abstract def tail: List[T]
-
   abstract def length: i64
-
   abstract def take(n: i64): List[T]
-
   abstract def drop(n: i64): List[T]
 
   def reverse: List[T] =
@@ -32,7 +26,6 @@ abstract class List[static +T]
     reversed
 
   abstract override def to-string: String
-
 
 class Nil-class <: List[Nothing]
   override def head = throw Exception()
@@ -54,7 +47,6 @@ class Nil-class <: List[Nothing]
   override def to-string = "Nil"
 
 let Nil = Nil-class()
-
 
 class Cons[static +T](value: T, next: List[T]) <: List[T]
   override def head = value
@@ -80,7 +72,6 @@ class Cons[static +T](value: T, next: List[T]) <: List[T]
     else
       value-str + ", " + tail.to-string
 
-
 def sort[static T <: Ordered[T]](list: List[T]): List[T] =
   if (list.length <= 1)
     list
@@ -94,9 +85,7 @@ def sort[static T <: Ordered[T]](list: List[T]): List[T] =
 
     var reverse-merged: List[T] = Nil
     while (first-sorted !== Nil || second-sorted !== Nil)
-      if (first-sorted !== Nil &&
-          (second-sorted === Nil ||
-           first-sorted.head.compare(second-sorted.head) <= 0))
+      if (first-sorted !== Nil && (second-sorted === Nil || first-sorted.head.compare(second-sorted.head) <= 0))
         reverse-merged = Cons[T](first-sorted.head, reverse-merged)
         first-sorted = first-sorted.tail
       else
@@ -104,7 +93,6 @@ def sort[static T <: Ordered[T]](list: List[T]): List[T] =
         second-sorted = second-sorted.tail
 
     reverse-merged.reverse
-
 
 def equals[static T <: Ordered[T]](var left: List[T], var right: List[T]): boolean =
   while (left !== Nil && right !== Nil)
@@ -114,16 +102,9 @@ def equals[static T <: Ordered[T]](var left: List[T], var right: List[T]): boole
     right = right.tail
   return left === Nil && right === Nil
 
-
 def main =
-  let list = Cons[Integer](Integer(3),
-                 Cons[Integer](Integer(4),
-                     Cons[Integer](Integer(1),
-                         Cons[Integer](Integer(2), Nil))))
+  let list = Cons[Integer](Integer(3), Cons[Integer](Integer(4), Cons[Integer](Integer(1), Cons[Integer](Integer(2), Nil))))
   let sorted-list = sort[Integer](list)
-  let expected-list = Cons[Integer](Integer(1),
-                          Cons[Integer](Integer(2),
-                              Cons[Integer](Integer(3),
-                                  Cons[Integer](Integer(4), Nil))))
+  let expected-list = Cons[Integer](Integer(1), Cons[Integer](Integer(2), Cons[Integer](Integer(3), Cons[Integer](Integer(4), Nil))))
   if (!equals[Integer](expected-list, sorted-list))
     throw Exception()

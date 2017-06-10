@@ -12,7 +12,6 @@ public final class Boolean private (public value: boolean) <: Hash[Boolean]
   public override def == (that: Boolean) = value == that.value
   public override def hash = if (value) 1i32 else 0i32
 
-
 public final class I8 private (public value: i8) <: Hash[I8]
   // TODO: cache values
   public static def of(value: i8) = I8(value)
@@ -20,7 +19,6 @@ public final class I8 private (public value: i8) <: Hash[I8]
   public override def to-string = value.to-string
   public override def == (that: I8) = value == that.value
   public override def hash = HashBuilder().hash(value).finish
-
 
 public final class I16 private (public value: i16) <: Hash[I16]
   // TODO: cache values
@@ -30,13 +28,12 @@ public final class I16 private (public value: i16) <: Hash[I16]
   public override def == (that: I16) = value == that.value
   public override def hash = HashBuilder().hash(value).finish
 
-
 public final class I32 private (public value: i32) <: Hash[I32]
   // TODO: cache values
   public static def of(value: i32) = I32(value)
+
   public override def == (that: I32) = value == that.value
   public override def hash = HashBuilder().hash(value).finish
-
 
 public final class I64 private (public value: i64) <: Hash[I64]
   // TODO: cache values
@@ -46,7 +43,6 @@ public final class I64 private (public value: i64) <: Hash[I64]
   public override def == (that: I64) = value == that.value
   public override def hash = HashBuilder().hash(value).finish
 
-
 public final class F32 private (public value: f32) <: Hash[F32]
   // TODO: cache values
   public static def of(value: f32) = F32(value)
@@ -54,7 +50,6 @@ public final class F32 private (public value: f32) <: Hash[F32]
   public override def to-string = value.to-string
   public override def == (that: F32) = value == that.value
   public override def hash = HashBuilder().hash(value).finish
-
 
 public final class F64 private (public value: f64) <: Hash[F64]
   // TODO: cache values

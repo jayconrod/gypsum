@@ -3,29 +3,23 @@
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
-
 import std.AssertionException, Dict, Eq, I32, NoSuchElementException
-
 
 def assert-true(b: boolean) =
   if (!b)
     throw AssertionException()
 
-
 def assert-false(b: boolean) =
   if (b)
     throw AssertionException()
-
 
 def assert-eq(expected: i32, actual: i32) =
   if (expected != actual)
     throw AssertionException()
 
-
 def assert-eq[static T <: Eq[T]](expected: T, actual: T) =
   if (expected != actual)
     throw AssertionException()
-
 
 def test-empty-dict =
   let dict = Dict[I32, I32]()
@@ -42,7 +36,6 @@ def test-empty-dict =
   assert-eq[I32](I32.of(12i32), dict.get-or-else(I32.of(42i32), I32.of(12i32)))
   assert-false(dict.remove(I32.of(42i32)).is-defined)
   {}
-
 
 def test-insert-retrieve-remove =
   let dict = Dict[I32, I32]()
@@ -68,7 +61,6 @@ def test-insert-retrieve-remove =
     i += 1i32
   assert-eq(0i32, dict.length)
 
-
 def test-iter =
   let dict = Dict[I32, I32]()
   var i = 0i32
@@ -85,7 +77,6 @@ def test-iter =
     assert-false((bitmap & bit) != 0i32)
     bitmap |= bit
   assert-eq(0xffffffffi32, bitmap)
-
 
 def main =
   test-empty-dict

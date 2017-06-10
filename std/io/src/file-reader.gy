@@ -30,11 +30,8 @@ public final class FileReader <: Reader, Closeable
     read-fd(fd, buffer, offset, count)
 
   private static native def open-fd(path: String): i32
-
   private static native def close-fd(fd: i32): unit
-
   private static native def read-fd(fd: i32, buffer: I8Array, offset: i32, count: i32): i32
-
 
 class Chunk(buffer: I8Array, length: i32)
 

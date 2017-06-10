@@ -4,14 +4,10 @@
 // source code is governed by the 3-clause BSD license that can be
 // found in the LICENSE.txt file.
 
-
 public abstract class Result[static +V, static +E]
   public abstract def is-ok: boolean
-
   public abstract def to-opt: Option[V]
-
   public def get = to-opt.get
-
 
 public final class Ok[static +V](public value: V) <: Result[V, Nothing]
   public static def try-match(result: Result[V, _]): Option[V] =
@@ -20,9 +16,7 @@ public final class Ok[static +V](public value: V) <: Result[V, Nothing]
       case _ => None
 
   public override def is-ok = true
-
   public override def to-opt = Some[V](value)
-
 
 public final class Err[static +E](public error: E) <: Result[Nothing, E]
   public static def try-match(result: Result[_, E]): Option[E] =
@@ -31,5 +25,4 @@ public final class Err[static +E](public error: E) <: Result[Nothing, E]
       case _ => None
 
   public override def is-ok = false
-
   public override def to-opt = None

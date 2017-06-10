@@ -4,26 +4,22 @@
 // source code is governed by the 3-clause BSD license that can be
 // found in the LICENSE.txt file.
 
-
 let MIN-CAPACITY = 16i32
 let MIN-EMPTY-RATIO = 0.25f32
 let MIN-LIVE-RATIO = 0.1f32
 let NOT-FOUND-INDEX = -1i32
 
-
 abstract class Entry[static +K <: Hash[K], static +V]
 
-
 final class EmptyEntryClass <: Entry[Nothing, Nothing]
+
 let EMPTY-ENTRY = EmptyEntryClass()
 
-
 final class DeletedEntryClass <: Entry[Nothing, Nothing]
+
 let DELETED-ENTRY = DeletedEntryClass()
 
-
 abstract class LiveEntry[static +K <: Hash[K], static V](key: K) <: Entry[K, V]
-
 
 final class HashTable[static K <: Hash[K], static V] <: Iter[LiveEntry[K, V]]
   var live-element-count = 0i32
@@ -109,14 +105,7 @@ final class HashTable[static K <: Hash[K], static V] <: Iter[LiveEntry[K, V]]
 
   private def capacity-mask = capacity - 1i32
 
-
-final class HashTableIterator[
-    static K <: Hash[K],
-    static V
-  ](
-    table: HashTable[K, V]
-  ) <: Iterator[LiveEntry[K, V]]
-
+final class HashTableIterator[static K <: Hash[K], static V](table: HashTable[K, V]) <: Iterator[LiveEntry[K, V]]
   private var index = advance-index(NOT-FOUND-INDEX)
 
   public override def has-next = index < table.capacity

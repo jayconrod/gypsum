@@ -7,7 +7,6 @@
 public trait Iter[static +T]
   public abstract def iter: Iterator[T]
 
-
 public trait Iterator[static +T]
   public abstract def has-next: boolean
   public abstract def next: T

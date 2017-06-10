@@ -3,26 +3,13 @@
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
-
 native def f: i64
-
 def g = f
-
-
 native def integerParams(a: i64, b: i64): i64
 native def floatParams(a: f64, b: f64): f64
 native def stringParams(a: String, b: String): String
 native def nullObject: Object?
-native def manyParameters(
-    a: i64, b: f64, c: String,
-    d: i64, e: f64, f: String,
-    g: i64, h: f64, i: String,
-    j: i64, k: f64, l: String,
-    m: i64, n: f64, o: String,
-    p: i64, q: f64, r: String,
-    s: i64, t: f64, u: String,
-    v: i64, w: f64, x: String): String
-
+native def manyParameters(a: i64, b: f64, c: String, d: i64, e: f64, f: String, g: i64, h: f64, i: String, j: i64, k: f64, l: String, m: i64, n: f64, o: String, p: i64, q: f64, r: String, s: i64, t: f64, u: String, v: i64, w: f64, x: String): String
 native def recursiveNative(n: i64, a: String, b: String, result: String): String
 
 def recursiveGypsum(n: i64, a: String, b: String, result: String) =
@@ -32,7 +19,6 @@ def recursiveGypsum(n: i64, a: String, b: String, result: String) =
     recursiveNative(n - 1, "baz", "quux", result + "," + a + b)
 
 def throwFunction = throw Exception()
-
 native def throwNativeFunction(obj: Exception): unit
 
 def catchFunction =

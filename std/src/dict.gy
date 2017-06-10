@@ -4,12 +4,10 @@
 // source code is governed by the 3-clause BSD license that can be
 // found in the LICENSE.txt file.
 
-
 public final class Dict[static K <: Hash[K], static V] <: Iter[(K, V)]
   private var table = new(MIN-CAPACITY) HashTable[K, V]
 
   public def length = table.live-element-count
-
   public def contains(key: K): boolean = table.get(key).is-defined
 
   public def get(key: K): Option[V] =
@@ -29,8 +27,7 @@ public final class Dict[static K <: Hash[K], static V] <: Iter[(K, V)]
         entry.value = value
         Some[V](old-value)
       case _ =>
-        if (table.live-element-count == table.capacity ||
-            table.empty-ratio < MIN-EMPTY-RATIO)
+        if (table.live-element-count == table.capacity || table.empty-ratio < MIN-EMPTY-RATIO)
           resize(table.capacity * 2i32)
         table.insert(LiveDictEntry[K, V](key, value))
         None
@@ -51,7 +48,6 @@ public final class Dict[static K <: Hash[K], static V] <: Iter[(K, V)]
     table = new-table
     {}
 
-
 final class LiveDictEntry[static +K <: Hash[K], static V] <: LiveEntry[K, V]
   var value: V
 
@@ -59,14 +55,7 @@ final class LiveDictEntry[static +K <: Hash[K], static V] <: LiveEntry[K, V]
     super(key)
     this.value = value
 
-
-final class DictIterator[
-    static K <: Hash[K],
-    static V
-  ](
-    table-it: HashTableIterator[K, V]
-  ) <: Iterator[(K, V)]
-
+final class DictIterator[static K <: Hash[K], static V](table-it: HashTableIterator[K, V]) <: Iterator[(K, V)]
   public override def has-next = table-it.has-next
 
   public override def next =

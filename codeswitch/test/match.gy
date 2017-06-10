@@ -3,7 +3,6 @@
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
-
 class PtrMember(value: String)
 
 class IntMember(value: i64)
@@ -14,8 +13,8 @@ def get-value(obj: Object) =
     case int-obj: IntMember => int-obj.value.to-string
 
 trait Boxy[static T]
-class Box[static T](value: T) <: Boxy[T]
 
+class Box[static T](value: T) <: Boxy[T]
 
 def test-match-members =
   let ptr-obj = PtrMember("foo")
@@ -26,7 +25,6 @@ def test-match-members =
   if (get-value(int-obj) != "12")
     throw Exception()
 
-
 def test-match-class-type-with-erased-arg =
   let obj: Object = Box[String]("foo")
   let result = match (obj)
@@ -34,7 +32,6 @@ def test-match-class-type-with-erased-arg =
     case _ => false
   if (!result)
     throw Exception()
-
 
 def test-match-trait-type-with-erased-arg =
   let obj: Object = Box[String]("foo")
@@ -44,7 +41,6 @@ def test-match-trait-type-with-erased-arg =
   if (!result)
     throw Exception()
 
-
 def test-match-class-type-with-erased-foreign-arg =
   let obj: Object = std.Tuple2[String, String]("foo", "bar")
   let result = match (obj)
@@ -52,7 +48,6 @@ def test-match-class-type-with-erased-foreign-arg =
     case _ => false
   if (!result)
     throw Exception()
-
 
 def main =
   test-match-members

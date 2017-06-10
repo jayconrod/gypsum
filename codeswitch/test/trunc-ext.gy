@@ -3,13 +3,11 @@
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
-
 def test-trunc =
   var n = (1 << 32) | (2 << 16) | (3 << 8) | 4
   check-i32((2i32 << 16i32) | (3i32 << 8i32) | 4i32, n.to-i32)
   check-i16((3i16 << 8i16) | 4i16, n.to-i16)
   check-i8(4i8, n.to-i8)
-
 
 def test-sext =
   var positive = 127i8
@@ -24,20 +22,17 @@ def test-sext =
 
   check-i64(1, negative.to-i64 >>> 63)
 
-
 def test-zext =
   var n = -1i8
   check-i16(255i16, n.to-u16)
   check-i32(255i32, n.to-u32)
   check-i64(255, n.to-u64)
 
-
 def main =
   test-trunc
   test-sext
   test-zext
   0
-
 
 def check-i8(expected: i8, actual: i8) =
   if (expected != actual)

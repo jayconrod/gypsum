@@ -3,7 +3,6 @@
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
-
 class Vector(x: f64, y: f64, z: f64)
   override def to-string = "<" + x.to-string + ", " + y.to-string + ", " + z.to-string + ">"
   def + (v: Vector) = Vector(x + v.x, y + v.y, z + v.z)
@@ -11,17 +10,13 @@ class Vector(x: f64, y: f64, z: f64)
   def - = Vector(-x, -y, -z)
   def * (s: f64) = Vector(x * s, y * s, z * s)
   def * (v: Vector) = x * v.x + y * v.y + z * v.z
-  def ** (v: Vector) = Vector(y * v.z - z * v.y,
-                              z * v.x - x * v.z,
-                              x * v.y - y * v.x)
+  def ** (v: Vector) = Vector(y * v.z - z * v.y, z * v.x - x * v.z, x * v.y - y * v.x)
 
 def * (s: f64, v: Vector) = Vector(s * v.x, s * v.y, s * v.z)
-
 
 def check(expected: String, actual: String) =
   if (expected != actual)
     throw Exception()
-
 
 def main =
   let a = Vector(1., 0., 0.)

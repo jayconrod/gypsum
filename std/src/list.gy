@@ -4,7 +4,6 @@
 // source code is governed by the 3-clause BSD license that can be
 // found in the LICENSE.txt file.
 
-
 public class List[static T] <: Iter[T]
   private var length_: i32
   private var capacity: i32
@@ -65,7 +64,6 @@ public class List[static T] <: Iter[T]
     value
 
   public def push(value: T) = insert(length, value)
-
   public def pop = remove(length - 1i32)
 
   override public def to-string =
@@ -79,7 +77,6 @@ public class List[static T] <: Iter[T]
     s + "]"
 
   override public def iter: Iterator[T] = ListIterator[T](this)
-
 
 class ListIterator[static T](list: List[T]) <: Iterator[T]
   private var index = 0i32

@@ -3,7 +3,6 @@
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
-
 abstract class List[static +T]
   abstract def head: T
   abstract def tail: List[T]
@@ -18,14 +17,12 @@ class Cons[static +T](value: T, next: List[T]) <: List[T]
   override def head = value
   override def tail = next
 
-
 def length(var list: List[Object]) =
   var n = 0
   while (list !== Nil)
     n += 1
     list = list.tail
   n
-
 
 def main =
   let list = Cons[String]("foo", Cons[String]("bar", Cons[String]("baz", Nil)))

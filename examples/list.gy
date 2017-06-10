@@ -32,7 +32,6 @@ class List(n: i64, next: List?)
 
     sum
 
-
 // This function constructs a list of the given length.
 def make-list(var n: i64) =
   var list: List? = null
@@ -42,7 +41,6 @@ def make-list(var n: i64) =
     list = List(n, list)
     n -= 1
   list
-
 
 def main =
   let list = make-list(7)

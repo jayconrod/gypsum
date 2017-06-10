@@ -29,7 +29,6 @@
 // Associativity of a binary operator is determined by the last character. If the operator
 // ends with ':', the operator is right-associative. Otherwise, it is left-associative.
 
-
 // This class defines a 3-dimensional vector. It overloads operators for common
 // vector operations.
 class Vector(x: f64, y: f64, z: f64)
@@ -47,6 +46,7 @@ class Vector(x: f64, y: f64, z: f64)
   // Operators may be overloaded. Here, we define the `*` operator for scalar multiplication
   // and the dot product.
   def * (s: f64) = Vector(x * s, y * s, z * s)
+
   def * (v: Vector) = x * v.x + y * v.y + z * v.z
 
   // We aren't limited to the standard set of numeric operators. Here, we define a new
@@ -58,7 +58,6 @@ class Vector(x: f64, y: f64, z: f64)
 // We can define operators outside of classes. Our scalar multiplication operator above
 // can only handle a scalar on the right side. This operator expects it on the left.
 def * (s: f64, v: Vector) = Vector(s * v.x, s * v.y, s * v.z)
-
 
 def main =
   let a = Vector(1., 0., 0.)
