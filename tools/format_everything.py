@@ -48,6 +48,10 @@ def main():
     if args.std_sources is not None:
         stdSources = readStdSources(args.std_sources)
 
+    if len(fileNames) == 0:
+        sys.stderr.write("error: no files to rewrite\n")
+        sys.exit(1)
+
     for fileName in fileNames:
         sys.stderr.write("processing %s...\n" % fileName)
         baseName = os.path.basename(fileName)

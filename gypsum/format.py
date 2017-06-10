@@ -19,7 +19,7 @@ class Format(object):
                  linesBetweenInnerDefns = 1,
                  linesBetweenVars = 0,
                  linesBetweenShortFuncs = 0,
-                 linesBetweenStatements = 0,
+                 linesBetweenMisc = 1,
                  spacesBeforeTailComment = 2,
                  newlineAtEnd = True):
         self.indentWidth = indentWidth
@@ -28,7 +28,7 @@ class Format(object):
         self.linesBetweenInnerDefns = linesBetweenInnerDefns
         self.linesBetweenVars = linesBetweenVars
         self.linesBetweenShortFuncs = linesBetweenShortFuncs
-        self.linesBetweenStatements = linesBetweenStatements
+        self.linesBetweenMisc = linesBetweenMisc
         self.spacesBeforeTailComment = spacesBeforeTailComment
         self.newlineAtEnd = newlineAtEnd
 
@@ -44,6 +44,7 @@ class Formatter(ast.NodeVisitor):
         self._line = []
         self._begin = True
         self._hanging = False
+        self._preserveBlanks = False
 
     def format(self):
         self.visit(self._info.ast.modules[0])
@@ -71,8 +72,11 @@ class Formatter(ast.NodeVisitor):
         self._write("def ")
         self._write(node.name)
         c = node.name[0]
-        isSymbol = 'A' <= c <= 'Z' or 'a' <= c <= 'z' or c == '_'
-        if not isSymbol:  # operator
+        isOperator = not ('A' <= c <= 'Z' or 'a' <= c <= 'z' or c == '_')
+        if isOperator and (
+            node.typeParameters is not None or
+            node.parameters is not None or
+            node.returnType is not None):
             self._write(" ")
         self._writeTypeParameters(node.typeParameters)
         self._writeParameters(node.parameters)
@@ -285,7 +289,8 @@ class Formatter(ast.NodeVisitor):
         if len(node.statements) == 0:
             self._write("{}")
         else:
-            self._writeBlock(node.statements)
+            with _PreserveBlanksScope(self):
+                self._writeBlock(node.statements)
 
     def visitAssignExpression(self, node):
         self.visit(node.left)
@@ -443,11 +448,10 @@ class Formatter(ast.NodeVisitor):
         self._write(node.text)
 
     def preVisit(self, node):
-        if isinstance(node, ast.CommentedNode) and len(node.comments.before) > 0:
-            for comment in node.comments.before[:-1]:
+        if isinstance(node, ast.CommentedNode):
+            for comment in node.comments.before:
                 self.visitComment(comment)
                 self._endl()
-            self.visitComment(node.comments.before[-1])
 
     def postVisit(self, node):
         if isinstance(node, ast.CommentedNode) and len(node.comments.after) > 0:
@@ -485,40 +489,53 @@ class Formatter(ast.NodeVisitor):
         prevWasImport = False
         prevWasVar = False
         prevWasShortFunc = False
-        prevWasStatement = False
+        prevWasDefn = False
+        prevWasStmt = False
+        prevWasCase = False
         for stmt in stmts:
-            if not first:
-                self._endl()
             if isinstance(stmt, ast.BlankLine):
-                self.visit(stmt)
+                if self._preserveBlanks:
+                    self._endl()
                 continue
 
             isImport = isinstance(stmt, ast.ImportStatement)
             isVar = isinstance(stmt, ast.VariableDefinition)
             isShortFunc = (isinstance(stmt, ast.FunctionDefinition) and
+                           len(stmt.comments.before) == 0 and
                            (stmt.body is None or
                             not isinstance(stmt.body, ast.BlockExpression)))
-            isStatement = isVar or not isinstance(stmt, ast.Definition)
+            isDefn = isinstance(stmt, ast.Definition)
+            isStmt = (isinstance(stmt, ast.VariableDefinition) or
+                      isinstance(stmt, ast.Expression))
+            isCase = isinstance(stmt, ast.PartialFunctionCase)
+
             if not first:
+                self._endl()
                 if prevWasImport and isImport:
                     linesBetween = self._fmt.linesBetweenImports
                 elif prevWasVar and isVar:
                     linesBetween = self._fmt.linesBetweenVars
                 elif prevWasShortFunc and isShortFunc:
                     linesBetween = self._fmt.linesBetweenShortFuncs
-                elif prevWasStatement and isStatement:
-                    linesBetween = self._fmt.linesBetweenStatements
-                elif self._currentIndent > 0:
-                    linesBetween = self._fmt.linesBetweenInnerDefns
+                elif isDefn and prevWasDefn:
+                    if self._currentIndent > 0:
+                        linesBetween = self._fmt.linesBetweenInnerDefns
+                    else:
+                        linesBetween = self._fmt.linesBetweenTopDefns
+                elif ((isStmt and prevWasStmt) or
+                      (isCase and prevWasCase)):
+                    linesBetween = 0
                 else:
-                    linesBetween = self._fmt.linesBetweenTopDefns
+                    linesBetween = self._fmt.linesBetweenMisc
                 for _ in xrange(linesBetween - self._blank):
                     self._endl()
             first = False
             prevWasImport = isImport
             prevWasVar = isVar
             prevWasShortFunc = isShortFunc
-            prevWasStatement = isStatement
+            prevWasDefn = isDefn
+            prevWasStmt = isStmt
+            prevWasCase = isCase
 
             self.visit(stmt)
 
@@ -580,3 +597,15 @@ class Formatter(ast.NodeVisitor):
         for s in self._line:
             self._out.write(s)
         del self._line[:]
+
+
+class _PreserveBlanksScope(object):
+    def __init__(self, visitor):
+        self._visitor = visitor
+        self._oldPreserveBlanks = visitor._preserveBlanks
+
+    def __enter__(self):
+        self._visitor._preserveBlanks = True
+
+    def __exit__(self, *unused):
+        self._visitor._preserveBlanks = self._oldPreserveBlanks

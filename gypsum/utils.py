@@ -179,9 +179,9 @@ def encodeString(inStr):
         elif ord(ch) <= 0xff:
             outBuf.write(r'\x%02x' % ord(ch))
         elif ord(ch) <= 0xffff:
-            outBuf.write(r'\x%04x' % ord(ch))
+            outBuf.write(r'\u%04x' % ord(ch))
         else:
-            outBuf.write(r'\x%08x' % ord(ch))
+            outBuf.write(r'\U%08x' % ord(ch))
     outBuf.write('"')
     return outBuf.getvalue()
 

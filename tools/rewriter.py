@@ -30,6 +30,7 @@ def rewriteTests(fileName, stdSources):
     fmt = Format(
         linesBetweenTopDefns = 0,
         linesBetweenInnerDefns = 0,
+        linesBetweenMisc = 0,
         newlineAtEnd = False)
     with open(outFileName, "w") as outFile:
         stdSourcesUsed = []
