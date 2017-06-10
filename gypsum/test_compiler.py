@@ -915,7 +915,7 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]]))
 
     def testOverloadedUnaryOperatorFunction(self):
-        source = "def ~(x: String) = \"foo\"\n" + \
+        source = "def ~ (x: String) = \"foo\"\n" + \
                  "def f = ~\"bar\""
         package = self.compileFromSource(source)
         Tilde = package.findFunction(name="~")
@@ -944,7 +944,7 @@ class TestCompiler(TestCaseWithDefinitions):
                              ]]))
 
     def testOverloadedBinaryOperatorFunction(self):
-        source = "def @(x: i64, y: String) = x.to-string + \"@\" + y\n" + \
+        source = "def @ (x: i64, y: String) = x.to-string + \"@\" + y\n" + \
                  "def f = 12 @ \"foo\""
         package = self.compileFromSource(source)
         At = package.findFunction(name="@")
@@ -1726,7 +1726,7 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testMatchExprUnaryWithFunction(self):
         source = OPTION_SOURCE + \
-                 "def ~(obj: Object) = Some[String](\"foo\")\n" + \
+                 "def ~ (obj: Object) = Some[String](\"foo\")\n" + \
                  "def f(obj: Object) =\n" + \
                  "  match (obj)\n" + \
                  "    case ~s => 12\n" + \

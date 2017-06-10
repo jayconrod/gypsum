@@ -7,7 +7,6 @@
 public trait Hash[static -T] <: Eq[T]
   public abstract def hash: i32
 
-
 // This class is based on the implementation of MurmurHash3, retrieved from
 // https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
 // The original code was written by Austin Appleby and placed in the public domain.

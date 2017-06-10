@@ -29,6 +29,5 @@ def test-counter(var n: i64, var inc: i64) =
 // we returned `counter`. That would demonstrate how context objects can outlive the scope
 // that created them. Could also demonstrate different contexts with different values.
 
-
 def main =
   test-counter(0, 1)

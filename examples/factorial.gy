@@ -23,7 +23,6 @@ def factorial-iterative(var n: i64) =
   // So we return p just by naming it. `return` expressions are also allowed anywhere.
   p
 
-
 // This function uses a recursive method. Recursive functions must have an explicit return
 // type. The compiler will complain if you don't write one. Note that we don't need to use
 // the `var` keyword when declaring the parameter `n`. Parameters are constant by default.
@@ -33,7 +32,6 @@ def factorial-recursive(n: i64): i64 =
   else
     // Gypsum doesn't support tail recursion yet, but will eventually.
     n * factorial-recursive(n - 1)
-
 
 def main =
   // Here, we define local constants using `let` instead of `var`. `let` does not allows these

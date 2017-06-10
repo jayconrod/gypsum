@@ -3,14 +3,11 @@
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
-
 // This test checks whether we can properly handle exceptions thrown in
 // catch handlers. The newly thrown exception should replace the original
 // exception, and the finally handler should still be executed.
 
-
 var finally-executed = false
-
 
 def main =
   let outer-exn = Exception()
@@ -18,7 +15,6 @@ def main =
     inner-fn(outer-exn)
   catch
     case exn if exn === outer-exn && finally-executed => {}
-
 
 def inner-fn(outer-exn: Exception): unit =
   let inner-exn = Exception()

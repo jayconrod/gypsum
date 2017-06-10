@@ -3,10 +3,8 @@
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
-
 final class Foo
   arrayelements i64, get, set, length
-
 
 def test-bad-alloc(length: i32) =
   try
@@ -14,7 +12,6 @@ def test-bad-alloc(length: i32) =
     throw Exception()
   catch (e: OutOfMemoryException)
     {}
-
 
 def main =
   test-bad-alloc(0x20000000i32)

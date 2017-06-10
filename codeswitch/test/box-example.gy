@@ -3,7 +3,6 @@
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
-
 class Box[static T <: Object >: Nothing](private var value: T)
   def get = value
 
@@ -13,11 +12,8 @@ class Box[static T <: Object >: Nothing](private var value: T)
 
   def contains-same-value[static S](other: Box[S]) = value === other.value
 
-
 def get-box-value[static T](box: Box[T]) = box.get
-
 def set-box-value[static T](box: Box[T], new-value: T) = box.set(new-value)
-
 
 def main =
   var original-string = "original string"

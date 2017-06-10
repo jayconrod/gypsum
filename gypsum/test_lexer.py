@@ -132,24 +132,28 @@ class TestLexer(unittest.TestCase):
                        "  a\n\n  b\n")
 
     def testIndentCommentLine(self):
-        self.checkTags([SYMBOL, NEWLINE, INDENT, COMMENT, OUTDENT, NEWLINE, SYMBOL, EOF],
+        self.checkTags([SYMBOL, NEWLINE, INDENT, COMMENT, NEWLINE, OUTDENT, SYMBOL, EOF],
                        "a\n  // com\nb")
 
     def testOutdentCommentLine(self):
-        self.checkTags([INDENT, SYMBOL, OUTDENT, NEWLINE, COMMENT, NEWLINE, INDENT, SYMBOL, OUTDENT, EOF],
+        self.checkTags([INDENT, SYMBOL, NEWLINE, OUTDENT, COMMENT, NEWLINE, INDENT, SYMBOL, OUTDENT, EOF],
                        "  a\n//c\n  b")
 
     def testIndentRegularLine(self):
-        self.checkTags([SYMBOL, NEWLINE, INDENT, SYMBOL, OUTDENT, NEWLINE, SYMBOL, EOF],
+        self.checkTags([SYMBOL, NEWLINE, INDENT, SYMBOL, NEWLINE, OUTDENT, SYMBOL, EOF],
                        "a\n  b\nc")
 
     def testOutdentRegularLine(self):
-        self.checkTags([INDENT, SYMBOL, OUTDENT, NEWLINE, SYMBOL, NEWLINE, INDENT, SYMBOL, OUTDENT, EOF],
+        self.checkTags([INDENT, SYMBOL, NEWLINE, OUTDENT, SYMBOL, NEWLINE, INDENT, SYMBOL, OUTDENT, EOF],
                        "  a\nb\n  c")
 
     def testMultipleOutdent(self):
-        self.checkTags([INDENT, SYMBOL, NEWLINE, INDENT, SYMBOL, OUTDENT, OUTDENT, NEWLINE, SYMBOL, EOF],
+        self.checkTags([INDENT, SYMBOL, NEWLINE, INDENT, SYMBOL, NEWLINE, OUTDENT, OUTDENT, SYMBOL, EOF],
                        "  a\n    b\nc")
+
+    def testNewlinesBetweenOutdentIndent(self):
+        self.checkTags([INDENT, SYMBOL, NEWLINE, OUTDENT, NEWLINE, SYMBOL, NEWLINE, NEWLINE, INDENT, SYMBOL, OUTDENT, EOF],
+                       "  a\n\nb\n\n  c")
 
     def testNestedIndent(self):
         self.checkTags([SYMBOL, LPAREN, SYMBOL, RPAREN, EOF], "a(\n  b)")

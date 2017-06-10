@@ -17,13 +17,8 @@ public final class File
     this.path = parent.path + separator + name
 
   public static def separator = "/"
-
   public override def to-string = path
-
   public native def exists: boolean
-
   public native def is-file: boolean
-
   public native def is-directory: boolean
-
   public native def size: i64

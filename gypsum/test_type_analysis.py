@@ -852,14 +852,14 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(BooleanType, info.getType(info.ast.modules[0].definitions[0].body))
 
     def testOperatorFunctionExpr(self):
-        source = "def @(x: i64, y: i64) = x + y + 2\n" + \
+        source = "def @ (x: i64, y: i64) = x + y + 2\n" + \
                  "def f = 12 @ 34"
         info = self.analyzeFromSource(source)
         self.assertEquals(I64Type, info.getType(info.ast.modules[0].definitions[1].body))
 
     def testBinaryOperatorStaticMethodExpr(self):
         source = "class Foo\n" + \
-                 "  static def @(x: i64, y: i64) = x + y + 2\n" + \
+                 "  static def @ (x: i64, y: i64) = x + y + 2\n" + \
                  "  def f = 12 @ 34"
         info = self.analyzeFromSource(source)
         f = info.package.findFunction(name="Foo.f")
@@ -867,7 +867,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testBinaryOperatorNonStaticMethodExpr(self):
         source = "class Foo\n" + \
-                 "  def @(x: i64, y: i64) = x + y + 2\n" + \
+                 "  def @ (x: i64, y: i64) = x + y + 2\n" + \
                  "  def f = 12 @ 34"
         info = self.analyzeFromSource(source)
         f = info.package.findFunction(name="Foo.f")
@@ -882,14 +882,14 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(ClassType(At), f.returnType)
 
     def testBinaryOperatorRightExpr(self):
-        source = "def ::(x: i64, y: String) = 0\n" + \
+        source = "def :: (x: i64, y: String) = 0\n" + \
                  "def f = 12 :: \"34\""
         info = self.analyzeFromSource(source)
         f = info.package.findFunction(name="f")
         self.assertEquals(I64Type, f.returnType)
 
     def testOperatorSubtypeAssignment(self):
-        source = "def @(x: Object, y: String): String = \"foo\"\n" + \
+        source = "def @ (x: Object, y: String): String = \"foo\"\n" + \
                  "def f =\n" + \
                  "  var x = Object()\n" + \
                  "  x @= \"bar\""
@@ -900,7 +900,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertEquals(getStringType(), info.getType(f.astDefn.body.statements[1]))
 
     def testOperatorOtherTypeAssignment(self):
-        source = "def @(x: i64, y: i64): String = \"foo\"\n" + \
+        source = "def @ (x: i64, y: i64): String = \"foo\"\n" + \
                  "def f =\n" + \
                  "  var x = 12\n" + \
                  "  x @= 34"
@@ -1175,7 +1175,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testMatchExprUnaryDestructure(self):
         source = OPTION_SOURCE + \
-                 "def ~(obj: Object) = Some[String](\"foo\")\n" + \
+                 "def ~ (obj: Object) = Some[String](\"foo\")\n" + \
                  "def f(obj: Object) =\n" + \
                  "  match (obj)\n" + \
                  "    case ~s => s"
@@ -1189,7 +1189,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  TUPLE_SOURCE + \
                  "class Foo\n" + \
                  "class Bar\n" + \
-                 "def @(obj: Object) = Some[(Foo, Bar)]((Foo(), Bar()))\n" + \
+                 "def @ (obj: Object) = Some[(Foo, Bar)]((Foo(), Bar()))\n" + \
                  "def f(obj: Object) =\n" + \
                  "  match (obj)\n" + \
                  "    case a @ b => {}"
@@ -1206,7 +1206,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  TUPLE_SOURCE + \
                  "class Foo\n" + \
                  "class Bar\n" + \
-                 "def ::(obj: Object) = Some[(Foo, Bar)]((Foo(), Bar()))\n" + \
+                 "def :: (obj: Object) = Some[(Foo, Bar)]((Foo(), Bar()))\n" + \
                  "def f(obj: Object) =\n" + \
                  "  match (obj)\n" + \
                  "    case a :: b => {}"
@@ -1378,9 +1378,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                  "  def this = {}\n" + \
                  "class B <: Base\n" + \
                  "  def this = {}\n" + \
-                 "def f = try A() catch\n" + \
-                 "  case exn => B()\n" + \
-                 "finally 12"
+                 "def f = try A() catch (exn) B() finally 12"
         info = self.analyzeFromSource(source)
         baseTy = ClassType(info.package.findClass(name="Base"), ())
         astBody = info.ast.modules[0].definitions[3].body

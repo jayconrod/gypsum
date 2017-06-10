@@ -4,34 +4,26 @@
 // source code is governed by the 3-clause BSD license that can be
 // found in the LICENSE.txt file.
 
-
 public final class Array[static T]
   arrayelements T, public get, public set, public length
-
 
 public final class BooleanArray
   arrayelements boolean, public get, public set, public length
 
-
 public final class I8Array
   arrayelements i8, public get, public set, public length
-
 
 public final class I16Array
   arrayelements i16, public get, public set, public length
 
-
 public final class I32Array
   arrayelements i32, public get, public set, public length
-
 
 public final class I64Array
   arrayelements i64, public get, public set, public length
 
-
 public final class F32Array
   arrayelements f32, public get, public set, public length
-
 
 public final class F64Array
   arrayelements f64, public get, public set, public length

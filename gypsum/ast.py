@@ -115,6 +115,11 @@ class CommentedNode(Node):
     # TODO: comments should be children
 
 
+class BlankLine(Node):
+    def __repr__(self):
+        return "BlankLine"
+
+
 class Attribute(Node):
     def __init__(self, name, location):
         super(Attribute, self).__init__(location)
@@ -820,6 +825,10 @@ class PartialFunctionExpression(Expression):
 
     def children(self):
         return self.cases
+
+    def realCases(self):
+        return [c for c in self.cases
+                if not (isinstance(c, BlankLine) or isinstance(c, CommentGroup))]
 
 
 class PartialFunctionCase(CommentedNode):

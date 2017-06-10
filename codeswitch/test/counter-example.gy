@@ -3,24 +3,22 @@
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
-
 def check-eq(a: i64, b: i64) =
   if (a != b)
     throw Exception()
-
 
 def test-counter(var n: i64, var inc: i64) =
   def counter =
     var value = n
     n += inc
     value
+
   var orig-n = n
   check-eq(orig-n, counter)
   check-eq(orig-n + inc, n)
   check-eq(orig-n + inc, counter)
   check-eq(orig-n + 2 * inc, n)
   check-eq(orig-n + 2 * inc, counter)
-
 
 def main =
   test-counter(0, 1)

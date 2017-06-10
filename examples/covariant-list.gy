@@ -28,7 +28,6 @@ class Cons[static +T](value: T, next: List[T]) <: List[T]
   override def head = value
   override def tail = next
 
-
 // Here is a function which takes a List[Object]. Since List's type parameter is covariant,
 // we can actually call it with any kind of list.
 def length(var list: List[Object]) =
@@ -37,7 +36,6 @@ def length(var list: List[Object]) =
     n += 1
     list = list.tail
   n
-
 
 def main =
   // Here we build a List and call length with it. Note that the type of list is Cons[String].

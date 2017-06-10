@@ -3,11 +3,9 @@
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
-
 // This program demonstrates destructuring pattern matching by defining a set of classes
 // that represent simple arithmetic expressions, then defining functions to evaluate and
 // optimize them.
-
 
 // The `Option` class represents a value that may or may not present. `Some` is a subclass
 // for values that ARE present. `None` is a singleton object that indicates no value is present.
@@ -20,14 +18,13 @@ import std.Option, Some, None
 // integers from expressions, we need them to be wrapped in objects.
 class Integer(value: i64)
   // We override common operators for convenience.
+
   def - = Integer(-value)
   def + (right: Integer) = Integer(value + right.value)
   def - (right: Integer) = Integer(value - right.value)
   def * (right: Integer) = Integer(value * right.value)
   def / (right: Integer) = Integer(value / right.value)
-
   override def to-string = value.to-string
-
 
 // The classes below represent various arithmetic expressions. Each class has a `try-match`
 // method, which is called automatically in pattern matching.
@@ -45,7 +42,6 @@ final class ConstExpr(value: Integer) <: Expr
 
   override def to-string = value.to-string
 
-
 // This expression is for unary negation.
 final class NegExpr(expr: Expr) <: Expr
   static def try-match(obj: Object): Option[Expr] =
@@ -54,7 +50,6 @@ final class NegExpr(expr: Expr) <: Expr
       case _ => None
 
   override def to-string = "-(" + expr.to-string + ")"
-
 
 // The rest of the expressions are for binary expressions.
 final class AddExpr(left: Expr, right: Expr) <: Expr
@@ -65,7 +60,6 @@ final class AddExpr(left: Expr, right: Expr) <: Expr
 
   override def to-string = "(" + left.to-string + " + " + right.to-string + ")"
 
-
 final class SubExpr(left: Expr, right: Expr) <: Expr
   static def try-match(obj: Object): Option[(Expr, Expr)] =
     match (obj)
@@ -73,7 +67,6 @@ final class SubExpr(left: Expr, right: Expr) <: Expr
       case _ => None
 
   override def to-string = "(" + left.to-string + " - " + right.to-string + ")"
-
 
 final class MulExpr(left: Expr, right: Expr) <: Expr
   static def try-match(obj: Object): Option[(Expr, Expr)] =
@@ -83,7 +76,6 @@ final class MulExpr(left: Expr, right: Expr) <: Expr
 
   override def to-string = "(" + left.to-string + " * " + right.to-string + ")"
 
-
 final class DivExpr(left: Expr, right: Expr) <: Expr
   static def try-match(obj: Object): Option[(Expr, Expr)] =
     match (obj)
@@ -91,7 +83,6 @@ final class DivExpr(left: Expr, right: Expr) <: Expr
       case _ => None
 
   override def to-string = "(" + left.to-string + " / " + right.to-string + ")"
-
 
 // This function recursively evaluates an arithmetic expression tree. For each node in the
 // tree, it performs a destructuring pattern match to find the type and contents of the node.
@@ -115,7 +106,6 @@ def evaluate(expr: Expr): Integer =
 // from the tuple and uses them to match the sub-patterns. In this case, the values are simply
 // bound to the variables `left` and `right`.
 
-
 // This function provides a more complicated example. It applies a few simplifications to
 // an arithmetic expression.
 def optimize(expr: Expr): Expr =
@@ -134,31 +124,17 @@ def optimize(expr: Expr): Expr =
     case MulExpr(left, right) => MulExpr(optimize(left), optimize(right))
     case DivExpr(left, right) => DivExpr(optimize(left), optimize(right))
 
-
 def main =
   // 3 * 4 / 2 + -5
   let expr =
-      AddExpr(
-          DivExpr(
-              MulExpr(
-                  ConstExpr(Integer(3)),
-                  ConstExpr(Integer(4))),
-              ConstExpr(Integer(2))),
-          NegExpr(
-              ConstExpr(Integer(5))))
+    AddExpr(DivExpr(MulExpr(ConstExpr(Integer(3)), ConstExpr(Integer(4))), ConstExpr(Integer(2))), NegExpr(ConstExpr(Integer(5))))
   let value = evaluate(expr)
   if (1 != value.value)
     throw Exception()
 
   // (1 + 2) * (3 + 0)
   let unopt-expr =
-      MulExpr(
-          AddExpr(
-              ConstExpr(Integer(1)),
-              ConstExpr(Integer(2))),
-          AddExpr(
-              ConstExpr(Integer(3)),
-              ConstExpr(Integer(0))))
+    MulExpr(AddExpr(ConstExpr(Integer(1)), ConstExpr(Integer(2))), AddExpr(ConstExpr(Integer(3)), ConstExpr(Integer(0))))
   let opt-expr = optimize(unopt-expr)
   match (opt-expr)
     case MulExpr(ConstExpr(a), ConstExpr(b)) if a.value == 3 && b.value == 3 => {}

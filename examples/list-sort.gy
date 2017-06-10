@@ -13,14 +13,12 @@ abstract class Ordered[static T]
   // if greater than.
   abstract def compare(other: T): i64
 
-
 // We'll be sorting a list of integers. Type arguments have to be object types,
 // so we need a wrapper class. It's a subclass of `Ordered[Integer]`, so we can
 // compare integers against other integers.
 class Integer(value: i64) <: Ordered[Integer]
   override def compare(other: Integer) = value - other.value
   override def to-string = value.to-string
-
 
 // Here's our generic, immutable, linked list class. We have two concrete
 // subclasses below for empty and non-empty lists. Note that the type
@@ -62,7 +60,6 @@ abstract class List[static +T]
 
   abstract override def to-string: String
 
-
 // This is a singleton class which represents the empty list. This is a subtype
 // of `List[Nothing]`. `Nothing` is a builtin type which is a subtype of all
 // class types. Therefore, `List[Nothing]` is a subtype of any other `List`
@@ -89,7 +86,6 @@ class Nil-class <: List[Nothing]
 
 // `Nil` is the sole instance of `Nil-class`.
 let Nil = Nil-class()
-
 
 // `Cons` represents non-empty lists. It contains an element of the list
 // (value) and a pointer to the rest of the list (next). Like `List`, `Cons`'s
@@ -118,7 +114,6 @@ class Cons[static +T](value: T, next: List[T]) <: List[T]
     else
       value-str + ", " + tail.to-string
 
-
 // Here is our merge sort algorithm. It can sort any list, as long as its
 // elements can be compared to each other. In order to enforce this constraint,
 // we set an upper bound on `T` to be `Ordered[T]`.
@@ -142,9 +137,7 @@ def sort[static T <: Ordered[T]](list: List[T]): List[T] =
     // `compare` method.
     var reverse-merged: List[T] = Nil
     while (first-sorted !== Nil || second-sorted !== Nil)
-      if (first-sorted !== Nil &&
-          (second-sorted === Nil ||
-           first-sorted.head.compare(second-sorted.head) <= 0))
+      if (first-sorted !== Nil && (second-sorted === Nil || first-sorted.head.compare(second-sorted.head) <= 0))
         reverse-merged = Cons[T](first-sorted.head, reverse-merged)
         first-sorted = first-sorted.tail
       else
@@ -153,12 +146,8 @@ def sort[static T <: Ordered[T]](list: List[T]): List[T] =
 
     reverse-merged.reverse
 
-
 // The main function sorts the list (3, 4, 1, 2).
 def main =
-  let list = Cons[Integer](Integer(3),
-                 Cons[Integer](Integer(4),
-                     Cons[Integer](Integer(1),
-                         Cons[Integer](Integer(2), Nil))))
+  let list = Cons[Integer](Integer(3), Cons[Integer](Integer(4), Cons[Integer](Integer(1), Cons[Integer](Integer(2), Nil))))
   let sorted-list = sort[Integer](list)
   print(sorted-list.to-string + "\n")

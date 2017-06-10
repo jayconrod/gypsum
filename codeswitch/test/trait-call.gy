@@ -3,14 +3,12 @@
 // This file is part of CodeSwitch. Use of this source code is governed by
 // the 3-clause BSD license that can be found in the LICENSE.txt file.
 
-
 trait Foo
   def m = 12
 
 class Bar <: Foo
 
 def f(foo: Foo) = foo.m
-
 def g(bar: Bar) = bar.m
 
 def main =

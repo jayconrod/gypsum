@@ -109,6 +109,7 @@ def lex(filename, source):
     line = 1
     column = 1
     indents = [""]
+    blanks = []
 
     def nextToken():
         bestText = None
@@ -129,7 +130,7 @@ def lex(filename, source):
         pos += len(bestText)
         return Token(bestText, bestTag, loc)
 
-    # Outer loop: lex each line in file
+    # Outer loop: lex each logical line in file
     while pos < end:
         # Read space at beginning of line.
         m = _spaceRx.match(source, pos)
@@ -137,13 +138,12 @@ def lex(filename, source):
         column += len(space)
         pos += len(space)
 
-        # If the next token is a newline, this is a blank line. If we're not inside brackets,
-        # emit a newline token without checking indentation.
+        # If the next token is a newline, this is a blank line. Add it to a blank list instead
+        # emitting it immediately, since later indentation may affect ordering.
         m = _newlineRx.match(source, pos)
         if m:
-            if nesting == 0:
-                loc = Location(filename, line, column, line + 1, 1)
-                tokens.append(Token(NEWLINE, NEWLINE, loc))
+            loc = Location(filename, line, column, line + 1, 1)
+            blanks.append(Token(NEWLINE, NEWLINE, loc))
             line += 1
             column = 1
             pos += len(m.group(0))
@@ -155,27 +155,23 @@ def lex(filename, source):
         # If space is a prefix of the current indentation level, remove indentation levels
         # until they match.
         # We always match prefixes here. '\t ' is NOT the same as ' \t'.
-        # Outdents are inserted before the last newline, indents are inserted after.
+        # Outdents are inserted before blanks; indents are inserted after.
         loc = Location(filename, line, column, line, column)
         indent = indents[-1]
         if len(space) < len(indent):
-            outdents = 0
             while len(space) < len(indent):
-                outdents += 1
+                tokens.append(Token(OUTDENT, OUTDENT, loc))
                 indents.pop()
                 indent = indents[-1]
             if space != indent:
                 raise LexException(loc, "indentation does not match any outer indentation level")
-            tok = Token(OUTDENT, OUTDENT, loc)
-            if len(tokens) > 0 and tokens[-1].tag is NEWLINE:
-                for _ in xrange(outdents):
-                    tokens.insert(-1, tok)
-            else:
-                for _ in xrange(outdents):
-                    tokens.append(tok)
+            tokens.extend(blanks)
+            del blanks[:]
         else:
             if not space.startswith(indent):
                 raise LexException(loc, "indentation does not match indentation above")
+            tokens.extend(blanks)
+            del blanks[:]
             if len(space) > len(indent):
                 indents.append(space)
                 tokens.append(Token(INDENT, INDENT, loc))
@@ -236,6 +232,7 @@ def lex(filename, source):
     loc = Location(filename, line, column, line, column)
     for _ in xrange(1, len(indents)):
         tokens.append(Token(OUTDENT, OUTDENT, loc))
+    tokens.extend(blanks)
     tokens.append(Token(EOF, EOF, loc))
 
     return tokens

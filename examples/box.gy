@@ -23,13 +23,11 @@ class Box[static T <: Object >: Nothing](private var value: T)
   // Of course methods may have their own type parameters.
   def contains-same-value[static S](other: Box[S]) = value === other.value
 
-
 // Function type parameters are declared the same way as classes. Note that when we write a
 // class type for `Box`, we must include type arguments.
 def get-box-value[static T](box: Box[T]) = box.get
 
 def set-box-value[static T](box: Box[T], new-value: T) = box.set(new-value)
-
 
 def main =
   var original-string = "original string"

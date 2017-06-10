@@ -4,6 +4,7 @@ def check-eq(expected: String, actual: String) =
 
 def main =
   check-eq("unit", {}.to-string)
+
   // check-eq("true", true.to-string)
   // check-eq("false", false.to-string)
   // check-eq("-12", -12i8.to-string)

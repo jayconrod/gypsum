@@ -38,13 +38,19 @@ def main():
             for dirPath, _, baseNames in os.walk(dirName):
                 for baseName in baseNames:
                     if (baseName.endswith(".gy") or
-                        (baseName.startswith("test_") and baseName.endswith(".py"))):
+                        (baseName.startswith("test_") and
+                         baseName.endswith(".py") and
+                         baseName not in ("test_lexer.py", "test_parser.py"))):
                         fileNames.append(os.path.join(dirPath, baseName))
 
     stdName = Name.fromString("std", isPackageName=True)
     stdSources = {}
     if args.std_sources is not None:
         stdSources = readStdSources(args.std_sources)
+
+    if len(fileNames) == 0:
+        sys.stderr.write("error: no files to rewrite\n")
+        sys.exit(1)
 
     for fileName in fileNames:
         sys.stderr.write("processing %s...\n" % fileName)

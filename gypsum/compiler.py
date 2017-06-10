@@ -1085,15 +1085,16 @@ class CompileVisitor(ast.NodeVisitor):
                 self.setUnreachable()
             return doneIsReachable
 
+        cases = expr.realCases()
         with UnreachableScope(self):
-            for case in expr.cases[:-1]:
+            for case in cases[:-1]:
                 if not isinstance(case, ast.PartialFunctionCase):
                     continue  # comments
                 nextBlock = self.newBlock()
                 doneIsReachable |= handleCase(case, nextBlock)
 
                 self.setCurrentBlock(nextBlock)
-            doneIsReachable |= handleCase(expr.cases[-1], failBlock)
+            doneIsReachable |= handleCase(cases[-1], failBlock)
         if not doneIsReachable:
             self.setUnreachable()
         assert self.isDetached()

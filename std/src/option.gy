@@ -9,7 +9,6 @@ public abstract class Option[static +T] <: Iter[T]
   public abstract def get: T
   public final override def iter: Iterator[T] = OptionIterator[T](this)
 
-
 public class Some[static +T](value: T) <: Option[T]
   public override def is-defined = true
   public override def get = value
@@ -22,15 +21,12 @@ public class Some[static +T](value: T) <: Option[T]
 
   public static def try-match(opt: Option[T]) = opt
 
-
 class None-class <: Option[Nothing]
   public override def is-defined = false
   public override def get = throw Exception()
   public override def to-string = "None"
 
-
 public let None: Option[Nothing] = None-class()
-
 
 class OptionIterator[static T](private opt: Option[T]) <: Iterator[T]
   private var has-next- = opt.is-defined

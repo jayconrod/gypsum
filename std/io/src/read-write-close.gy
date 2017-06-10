@@ -6,20 +6,15 @@
 
 import std.I8Array
 
-
 public let EOF = -1i32
 
 public trait Reader
   public def read(buffer: I8Array): i32 = read(buffer, 0i32, buffer.length)
-
   public def read(buffer: I8Array, offset: i32, count: i32): i32
-
 
 public trait Writer
   public def write(buffer: I8Array): unit = write(buffer, 0i32, buffer.length)
-
   public def write(buffer: I8Array, offset: i32, count: i32): unit
-
 
 public trait Closeable
   public def close: unit

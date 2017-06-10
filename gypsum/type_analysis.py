@@ -122,7 +122,7 @@ def partialFunctionMustMatch(expr, ty, info):
     this just returns True if there is any individual case which must match, but in the future
     it may account for disjoint cases matching everything."""
     assert isinstance(expr, ast.PartialFunctionExpression)
-    return any(partialFunctionCaseMustMatch(case, ty, info) for case in expr.cases)
+    return any(partialFunctionCaseMustMatch(case, ty, info) for case in expr.realCases())
 
 
 def checkAmbiguousOverloads(package):
@@ -458,6 +458,9 @@ class TypeVisitorBase(ast.NodeVisitor):
         return ir_t.getNullType()
 
     def visitCommentGroup(self, node):
+        pass
+
+    def visitBlankLine(self, node):
         pass
 
     def visitLvalue(self, node):
@@ -1343,7 +1346,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def visitPartialFunctionExpression(self, node, valueTy):
         ty = ir_t.NoType
-        for case in node.cases:
+        for case in node.realCases():
             caseTy = self.visit(case, valueTy)
             ty = ty.combine(caseTy, node.location)
         return ty
