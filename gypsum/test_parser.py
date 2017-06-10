@@ -792,6 +792,7 @@ class TestParser(TestParserBase):
                 astLiteralExpression(astBooleanLiteral(True)),
                 astBlockExpression([
                     astVariableExpression("x"),
+                    astBlankLine(),
                     astVariableExpression("y")])),
             Parser.expr,
             source)
@@ -1859,7 +1860,9 @@ class TestComments(TestParserBase):
         self.checkParse(
             astModule([
                 self.commentGroup(["a", "b"]),
+                astBlankLine(),
                 astVariableDefinition([], "var", astVariablePattern("x", None), None),
+                astBlankLine(),
                 self.commentGroup(["c", "d"])]),
             Parser.module,
             source)
@@ -1882,10 +1885,61 @@ class TestComments(TestParserBase):
                 None,
                 astBlockExpression([
                     self.commentGroup(["a", "b"], []),
+                    astBlankLine(),
                     astVariableDefinition([], "var", astVariablePattern("x", None), None),
+                    astBlankLine(),
                     self.commentGroup(["c", "d"], [])])),
                 Parser.defn,
                 source)
+
+    # Blank lines
+    def testBlankLinesBetweenVars(self):
+        source = "\n" + \
+                 "var x\n" + \
+                 "\n" + \
+                 "var y\n" + \
+                 "\n"
+        self.checkParse(
+            astModule([
+                astBlankLine(),
+                astVariableDefinition([], "var", astVariablePattern("x", None), None),
+                astBlankLine(),
+                astVariableDefinition([], "var", astVariablePattern("y", None), None),
+                astBlankLine()]),
+            Parser.module,
+            source)
+
+    def testNoBlankLinesBetweenFunctions(self):
+        source = "def f =\n" + \
+                 "  {}\n" + \
+                 "def g\n"
+        self.checkParse(
+            astModule([
+                astFunctionDefinition(
+                    [], "f", None, None, None,
+                    astBlockExpression([astLiteralExpression(astUnitLiteral())])),
+                astFunctionDefinition([], "g", None, None, None, None)]),
+            Parser.module,
+            source)
+
+    def testBlankLinesBetweenFunctions(self):
+        source = "\n" + \
+                 "def f =\n" + \
+                 "  {}\n" + \
+                 "\n" + \
+                 "def g\n" + \
+                 "\n"
+        self.checkParse(
+            astModule([
+                astBlankLine(),
+                astFunctionDefinition(
+                    [], "f", None, None, None,
+                    astBlockExpression([astLiteralExpression(astUnitLiteral())])),
+                astBlankLine(),
+                astFunctionDefinition([], "g", None, None, None, None),
+                astBlankLine()]),
+            Parser.module,
+            source)
 
 
 if __name__ == "__main__":

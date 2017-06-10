@@ -7,7 +7,7 @@ import re
 
 import ast
 from errors import ParseException
-from location import NoLoc
+from location import (Location, NoLoc)
 from tok import (
     ARRAYELEMENTS,
     AS,
@@ -89,7 +89,7 @@ class Parser(object):
         self.fileName = fileName
         self.tokens = tokens
         self.pos = 0
-        self.location = None
+        self.location = Location(self.fileName, 1, 1, 1, 1)
 
     BINOP_LEVELS = [
         "",  # other
@@ -141,7 +141,7 @@ class Parser(object):
     # Top level
     def module(self):
         l = self._peek().location
-        defns = self._parseList(self.defnOrImport, "definition or import", None, NEWLINE, EOF)
+        defns = self._parseStatements(self.defnOrImport, EOF)
         return ast.Module(defns, self._location(l))
 
     def defnOrImport(self):
@@ -1180,14 +1180,31 @@ class Parser(object):
         self._nextTag(INDENT)
 
         # Parse statements in the block.
+        stmts = self._parseStatements(parser, OUTDENT)
+        self._nextTag(OUTDENT)
+        return stmts
+
+    def _parseStatements(self, parser, end):
         stmts = []
         while True:
-            while self._peekTag() is NEWLINE:
-                self._next()
-            if self._peekTag() is OUTDENT:
-                self._next()
+            lead = self.leadComments()
+            tag = self._peekTag()
+            if tag in (NEWLINE, end) and len(lead) > 0:
+                cg = ast.CommentGroup(lead, [])
+                cg.setLocationFromChildren()
+                stmts.append(cg)
+            if tag is end:
                 break
-            stmts.append(parser())
+            elif tag is NEWLINE:
+                stmts.append(ast.BlankLine(self.location))
+                self._next()
+            else:
+                stmt = parser()
+                stmt.comments.before = lead + stmt.comments.before
+                stmt.comments.setLocationFromChildren()
+                stmts.append(stmt)
+                if self._peekTag(-1) is not OUTDENT and self._peekTag() is not end:
+                    self._nextTag(NEWLINE)
         return stmts
 
     def _parseList(self, parser, label, left=None, sep=None, right=EOF):

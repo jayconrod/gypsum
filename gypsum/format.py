@@ -15,12 +15,12 @@ class Format(object):
     def __init__(self,
                  indentWidth = 2,
                  linesBetweenImports = 0,
-                 linesBetweenTopDefns = 2,
+                 linesBetweenTopDefns = 1,
                  linesBetweenInnerDefns = 1,
                  linesBetweenVars = 0,
                  linesBetweenShortFuncs = 0,
                  linesBetweenStatements = 0,
-                 spacesBeforeTailCommented = 2,
+                 spacesBeforeTailComment = 2,
                  newlineAtEnd = True):
         self.indentWidth = indentWidth
         self.linesBetweenImports = linesBetweenImports
@@ -40,6 +40,7 @@ class Formatter(ast.NodeVisitor):
         self._info = info
         self._out = out
         self._currentIndent = 0
+        self._blank = 0
         self._line = []
         self._begin = True
         self._hanging = False
@@ -69,6 +70,10 @@ class Formatter(ast.NodeVisitor):
         self._writeAttributes(node.attribs)
         self._write("def ")
         self._write(node.name)
+        c = node.name[0]
+        isSymbol = 'A' <= c <= 'Z' or 'a' <= c <= 'z' or c == '_'
+        if not isSymbol:  # operator
+            self._write(" ")
         self._writeTypeParameters(node.typeParameters)
         self._writeParameters(node.parameters)
         if node.returnType:
@@ -403,6 +408,9 @@ class Formatter(ast.NodeVisitor):
         self.visit(node.expression)
         self._write(")")
 
+    def visitUnitLiteral(self, node):
+        self._write("{}")
+
     def visitIntegerLiteral(self, node):
         self._write(node.text)
 
@@ -420,22 +428,32 @@ class Formatter(ast.NodeVisitor):
 
     def visitCommentGroup(self, node):
         # We should only visit standalone comment groups, not comments attached to a node.
-        utils.each(self.visitComment, node.before)
+        if len(node.before) > 0:
+            for comment in node.before[:-1]:
+                self.visit(comment)
+                self._endl()
+            self.visit(node.before[-1])
+
+    def visitBlankLine(self, node):
+        # BlankLine should only occur in a list of statements, and _writeStatements adds
+        # newlines between elements, so we don't need to do anything here.
+        pass
 
     def visitComment(self, node):
-        self._write("//")
         self._write(node.text)
-        self._endl()
 
     def preVisit(self, node):
-        if isinstance(node, ast.CommentedNode):
-            utils.each(self.visitComment, node.comments.before)
+        if isinstance(node, ast.CommentedNode) and len(node.comments.before) > 0:
+            for comment in node.comments.before[:-1]:
+                self.visitComment(comment)
+                self._endl()
+            self.visitComment(node.comments.before[-1])
 
     def postVisit(self, node):
-        if isinstance(node, ast.CommentedNode) and len(node.comments.tail) > 0:
-            assert len(node.comments.tail) == 1
+        if isinstance(node, ast.CommentedNode) and len(node.comments.after) > 0:
+            assert len(node.comments.after) == 1
             self._write(' ' * self._fmt.spacesBeforeTailComment)
-            self.visitComment(node.comments.tail[0])
+            self.visitComment(node.comments.after[0])
 
     def _writeAttributes(self, attribs):
         self._writeList(attribs, "", " ", " ")
@@ -469,6 +487,12 @@ class Formatter(ast.NodeVisitor):
         prevWasShortFunc = False
         prevWasStatement = False
         for stmt in stmts:
+            if not first:
+                self._endl()
+            if isinstance(stmt, ast.BlankLine):
+                self.visit(stmt)
+                continue
+
             isImport = isinstance(stmt, ast.ImportStatement)
             isVar = isinstance(stmt, ast.VariableDefinition)
             isShortFunc = (isinstance(stmt, ast.FunctionDefinition) and
@@ -476,7 +500,6 @@ class Formatter(ast.NodeVisitor):
                             not isinstance(stmt.body, ast.BlockExpression)))
             isStatement = isVar or not isinstance(stmt, ast.Definition)
             if not first:
-                self._endl()
                 if prevWasImport and isImport:
                     linesBetween = self._fmt.linesBetweenImports
                 elif prevWasVar and isVar:
@@ -489,7 +512,7 @@ class Formatter(ast.NodeVisitor):
                     linesBetween = self._fmt.linesBetweenInnerDefns
                 else:
                     linesBetween = self._fmt.linesBetweenTopDefns
-                for _ in xrange(linesBetween):
+                for _ in xrange(linesBetween - self._blank):
                     self._endl()
             first = False
             prevWasImport = isImport
@@ -545,7 +568,11 @@ class Formatter(ast.NodeVisitor):
     def _endl(self):
         self._flush()
         self._out.write("\n")
-        self._begin = True
+        if self._begin:
+            self._blank += 1
+        else:
+            self._blank = 0
+            self._begin = True
 
     def _flush(self):
         if len(self._line) > 0:

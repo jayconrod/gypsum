@@ -8,7 +8,6 @@ from gypsum.errors import CompileException
 from gypsum.format import (Format, Formatter)
 from gypsum.ids import (AstId, TARGET_PACKAGE_ID)
 from gypsum.ir import (Package, PackageVersion)
-from gypsum.layout import layout
 from gypsum.lexer import lex
 from gypsum.location import NoLoc
 from gypsum.package_loader import PackageLoader
@@ -133,12 +132,9 @@ def readStdSources(fileName):
 
 
 def _rewriteSource(fileName, lineOffset, source, packageName, packagePaths, fmt, out):
-    comments, source = _readComments(source)
-    lineOffset += comments.count('\n')
     try:
-        rawTokens = lex(fileName, source)
-        layoutTokens = layout(rawTokens)
-        astModule = parse(fileName, layoutTokens)
+        tokens = lex(fileName, source)
+        astModule = parse(fileName, tokens)
         astPackage = ast.Package([astModule], NoLoc)
         astPackage.id = AstId(-1)
 
@@ -149,7 +145,6 @@ def _rewriteSource(fileName, lineOffset, source, packageName, packagePaths, fmt,
         loader.ensurePackageInfo()
         info = CompileInfo(astPackage, package, loader, isUsingStd=True)
 
-        out.write(comments)
         formatter = Formatter(fmt, info, out)
         formatter.format()
     except CompileException as e:
@@ -157,20 +152,3 @@ def _rewriteSource(fileName, lineOffset, source, packageName, packagePaths, fmt,
         e.location.beginRow += lineOffset
         e.location.endRow += lineOffset
         raise e
-
-
-def _readComments(source):
-    i = 0
-    while i < len(source):
-        if (i < len(source) - 3 and
-            source[i] == '/' and
-            source[i + 1] == '/'):
-            while i < len(source) and source[i] != '\n':
-                i += 1
-            i += 1
-            continue
-        if source[i] == '\n':
-            i += 1
-            continue
-        break
-    return source[:i], source[i:]
