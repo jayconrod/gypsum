@@ -256,11 +256,12 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
 
     def testUseBeforeCapturedVar(self):
         source = "def f =\n" + \
-                 "  def g = i = 1\n" + \
+                 "  def g =\n" + \
+                 "    i = 1\n" + \
                  "  var i = 0"
         info = self.analyzeFromSource(source)
         statements = info.ast.modules[0].definitions[0].body.statements
-        self.assertEquals(I64Type, info.getType(statements[0].body.left))
+        self.assertEquals(I64Type, info.getType(statements[0].body.statements[0].left))
         self.assertEquals(I64Type, info.getType(statements[1].pattern))
 
     # Expressions
@@ -375,13 +376,15 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         self.assertFalse(info.hasType(info.ast.modules[0].definitions[0].body.statements[1]))
 
     def testAssign(self):
-        source = "def f(x: i64) = x = 12"
+        source = "def f(x: i64) =\n" + \
+                 "  x = 12"
         info = self.analyzeFromSource(source)
-        self.assertEquals(I64Type, info.package.findFunction(name="f").returnType)
-        self.assertEquals(I64Type, info.getType(info.ast.modules[0].definitions[0].body))
+        self.assertEquals(UnitType, info.package.findFunction(name="f").returnType)
+        self.assertEquals(UnitType, info.getType(info.ast.modules[0].definitions[0].body))
 
     def testAssignWrongType(self):
-        source = "def f(x: i32) = x = true"
+        source = "def f(x: i32) =\n" + \
+                 "  x = true"
         self.assertRaises(TypeException, self.analyzeFromSource, source)
 
     def testPropertyNonExistant(self):
@@ -529,10 +532,11 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
                             type=I64Type, flags=frozenset([PUBLIC]))
         loader = FakePackageLoader([fooPackage])
 
-        source = "def f(o: foo.Bar) = o.x = 12"
+        source = "def f(o: foo.Bar) =\n" + \
+                 "  o.x = 12"
         info = self.analyzeFromSource(source, packageLoader=loader)
         f = info.package.findFunction(name="f")
-        self.assertEquals(I64Type, f.returnType)
+        self.assertEquals(UnitType, f.returnType)
 
     def testCallForeignMethod(self):
         fooPackage = Package(name=Name(["foo"]))
@@ -838,8 +842,8 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         info = self.analyzeFromSource("def f =\n" +
                                       "  var x = 12\n" +
                                       "  x += 34\n")
-        self.assertEquals(I64Type, info.package.findFunction(name="f").returnType)
-        self.assertEquals(I64Type, info.getType(info.ast.modules[0].definitions[0].body.statements[1]))
+        self.assertEquals(UnitType, info.package.findFunction(name="f").returnType)
+        self.assertEquals(UnitType, info.getType(info.ast.modules[0].definitions[0].body.statements[1]))
 
     def testAndExpr(self):
         source = "def f = true && false"
@@ -897,7 +901,7 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         f = info.package.findFunction(name="f")
         x = f.variables[0]
         self.assertEquals(getRootClassType(), x.type)
-        self.assertEquals(getStringType(), info.getType(f.astDefn.body.statements[1]))
+        self.assertEquals(UnitType, info.getType(f.astDefn.body.statements[1]))
 
     def testOperatorOtherTypeAssignment(self):
         source = "def @ (x: i64, y: i64): String = \"foo\"\n" + \
@@ -2201,10 +2205,10 @@ class TestTypeAnalysis(TestCaseWithDefinitions):
         source = "class A\n" + \
                  "class B <: A\n" + \
                  "class Box[static T](value: T)\n" + \
-                 "def f(box: Box[A], b: B) = box.value = b"
+                 "def f(box: Box[A], b: B) =\n" + \
+                 "  box.value = b"
         info = self.analyzeFromSource(source)
-        A = info.package.findClass(name="A")
-        self.assertEquals(ClassType(A), info.getType(info.ast.modules[0].definitions[3].body))
+        self.assertEquals(UnitType, info.getType(info.ast.modules[0].definitions[3].body))
 
     def testCallInheritedMethodWithTypeParameter(self):
         source = "class A[static T](val: T)\n" + \

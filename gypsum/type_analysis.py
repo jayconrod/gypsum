@@ -1179,14 +1179,18 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 lastTy = ir_t.UnitType
         return lastTy
 
-    def visitAssignExpression(self, node):
-        rightTy = self.visit(node.right)
-        leftTy = self.visitLvalue(node.left)
-        if not rightTy.isSubtypeOf(leftTy):
-            raise TypeException(node.location,
-                                "for assignment, expected %s but was %s" %
-                                (str(leftTy), str(rightTy)))
-        return leftTy
+    def visitAssignStatement(self, node):
+        rightType = self.visit(node.right)
+        leftType = self.visitLvalue(node.left)
+        if node.operator == "=":
+            if not rightType.isSubtypeOf(leftType):
+                raise TypeException(node.location,
+                                    "for assignment, expected %s but was %s" %
+                                    (str(leftType), str(rightType)))
+        else:
+            self.handleOperatorCall(node.operator, leftType, rightType,
+                                    True, node.id, node.location)
+        return ir_t.UnitType
 
     def visitPropertyExpression(self, node, mayBePrefix=False, isLvalue=False):
         receiverType = self.visitPossiblePrefix(node.receiver)
@@ -1270,7 +1274,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
 
     def visitUnaryExpression(self, node):
         receiverType = self.visit(node.expr)
-        ty = self.handleOperatorCall(node.operator, receiverType, None, node.id, node.location)
+        ty = self.handleOperatorCall(
+            node.operator, receiverType, None, False, node.id, node.location)
         return ty
 
     def visitBinaryExpression(self, node):
@@ -1284,7 +1289,8 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                                     "expected condition types for logic operands")
             ty = ir_t.BooleanType
         else:
-            ty = self.handleOperatorCall(node.operator, leftTy, rightTy, node.id, node.location)
+            ty = self.handleOperatorCall(
+                node.operator, leftTy, rightTy, False, node.id, node.location)
         return ty
 
     def visitTupleExpression(self, node):
@@ -1826,7 +1832,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
         self.scope().use(defnInfo, callAstId, useKind, loc)
         return self.getDefnType(receiverType, irDefn, allTypeArgs)
 
-    def handleOperatorCall(self, name, firstType, secondType, useAstId, loc):
+    def handleOperatorCall(self, name, firstType, secondType, mayBeAssignment, useAstId, loc):
         """Handles a call to an operator.
 
         This can be used to call operators in the current scope or in the scope of the first
@@ -1841,6 +1847,7 @@ class DefinitionTypeVisitor(TypeVisitorBase):
                 operand. For binary operators, this is the operand on the left unless the
                 name ends with ':', in which case, this is the operand on the right.
             secondType (Type?): type of the second operand or `None` for unary operators.
+            mayBeAssignment (bool): whether this could be a compound assignment.
             useAstId (AstId): id where the operator is referenced. Used to save info.
             loc (Location): the location of the operator in source code. Used in errors.
 
@@ -1851,8 +1858,6 @@ class DefinitionTypeVisitor(TypeVisitorBase):
             ScopeException: if a definition with this name can't be found or used.
             TypeException: if the definition can't be used because of a type mismatch.
         """
-        mayBeAssignment = secondType is not None and name.endswith("=") and name != "=="
-
         # Try to find a compatible operator in the current scope.
         selfDefnInfo, selfAllTypeArgs, selfReceiverType, selfUseKind = None, None, None, None
         try:

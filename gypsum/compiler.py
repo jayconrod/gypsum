@@ -549,11 +549,26 @@ class CompileVisitor(ast.NodeVisitor):
         scopeId = self.info.getScope(expr).scopeId
         self.compileStatements(scopeId, None, expr.statements, mode)
 
-    def visitAssignExpression(self, expr, mode):
-        ty = self.info.getType(expr.right)
-        lvalue = self.compileLValue(expr.left, ty)
-        self.visit(expr.right, COMPILE_FOR_VALUE)
-        self.buildAssignment(lvalue, mode)
+    def visitAssignStatement(self, expr, mode):
+        rightType = self.info.getType(expr.right)
+        if expr.operator == "=":
+            # Simple assignment
+            lvalue = self.compileLValue(expr.left, rightType)
+            self.visit(expr.right, COMPILE_FOR_VALUE)
+            self.buildAssignment(lvalue, mode)
+        else:
+            useInfo = self.info.getUseInfo(expr)
+            callInfo = self.info.getCallInfo(expr)
+            isCompoundAssignment = expr.operator == useInfo.defnInfo.irDefn.name.short() + "="
+            if isCompoundAssignment:
+                # Method call and assignment
+                receiver = self.compileLValue(expr.left, rightType)
+            else:
+                # Method call only.
+                receiver = expr.left
+            self.buildCall(useInfo, callInfo, receiver, [expr.right], COMPILE_FOR_EFFECT)
+        if mode is COMPILE_FOR_VALUE:
+            self.unit()
 
     def visitPropertyExpression(self, expr, mode):
         if not self.info.hasScopePrefixInfo(expr.receiver):
@@ -636,13 +651,7 @@ class CompileVisitor(ast.NodeVisitor):
             # regular operators
             useInfo = self.info.getUseInfo(expr)
             callInfo = self.info.getCallInfo(expr)
-            isCompoundAssignment = opName == useInfo.defnInfo.irDefn.name.short() + "="
-            if isCompoundAssignment:
-                ty = self.info.getType(expr.right)
-                receiver = self.compileLValue(expr.left, ty)
-            else:
-                receiver = expr.left
-            self.buildCall(useInfo, callInfo, receiver, [expr.right], mode)
+            self.buildCall(useInfo, callInfo, expr.left, [expr.right], mode)
 
     def visitTupleExpression(self, expr, mode):
         ty = self.info.getType(expr)
@@ -1289,7 +1298,7 @@ class CompileVisitor(ast.NodeVisitor):
     def compileStatements(self, scopeId, parameters, statements, mode):
         # Ignore comments.
         statements = [s for s in statements
-                      if isinstance(s, ast.Expression) or isinstance(s, ast.Definition)]
+                      if not (isinstance(s, ast.BlankLine) or isinstance(s, ast.CommentGroup))]
 
         # Create a context if needed.
         if self.isContextNeeded(scopeId):
@@ -1799,14 +1808,11 @@ class CompileVisitor(ast.NodeVisitor):
         self.drop()
 
     def buildAssignment(self, lvalue, mode):
-        if mode is COMPILE_FOR_VALUE:
-            self.dup()
-            if lvalue.onStack():
-                self.swap2()
-        else:
-            if lvalue.onStack():
-                self.swap()
+        if lvalue.onStack():
+            self.swap()
         lvalue.assign()
+        if mode is COMPILE_FOR_VALUE:
+            self.unit()
 
     def buildEquals(self, ty):
         """Compares the two values on top of the stack for equality. For objects, reference

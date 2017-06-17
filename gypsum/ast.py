@@ -333,6 +333,24 @@ class ScopePrefixComponent(Node):
         return self.typeArguments if self.typeArguments is not None else []
 
 
+class AssignStatement(CommentedNode):
+    def __init__(self, operator, left, right, comments, location):
+        super(AssignStatement, self).__init__(comments, location)
+        self.operator = operator
+        self.left = left
+        self.right = right
+
+    def __repr__(self):
+        return "AssignStatement(%s, %s, %s)" % \
+            (repr(self.operator), repr(self.left), repr(self.right))
+
+    def data(self):
+        return self.operator
+
+    def children(self):
+        return [self.left, self.right]
+
+
 class TypeParameter(Definition):
     def __init__(self, attribs, variance, name, upperBound, lowerBound, comments, location):
         super(TypeParameter, self).__init__(attribs, comments, location)
@@ -661,19 +679,6 @@ class BlockExpression(Expression):
 
     def children(self):
         return self.statements
-
-
-class AssignExpression(Expression):
-    def __init__(self, left, right, comments, location):
-        super(AssignExpression, self).__init__(comments, location)
-        self.left = left
-        self.right = right
-
-    def __repr__(self):
-        return "AssignExpression(%s, %s)" % (repr(self.left), repr(self.right))
-
-    def children(self):
-        return [self.left, self.right]
 
 
 class PropertyExpression(Expression):

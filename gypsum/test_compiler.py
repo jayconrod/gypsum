@@ -404,12 +404,12 @@ class TestCompiler(TestCaseWithDefinitions):
                  "  var x = 12\n" + \
                  "  x = 34"
         self.checkFunction(source,
-                           self.makeSimpleFunction("f", I64Type, [[
+                           self.makeSimpleFunction("f", UnitType, [[
                                i64(12),
                                stlocal(-1),
                                i64(34),
-                               dup(),
                                stlocal(-1),
+                               unit(),
                                ret()]],
                              variables=[self.makeVariable("f.x", type=I64Type)]))
 
@@ -421,7 +421,8 @@ class TestCompiler(TestCaseWithDefinitions):
 
     def testAssignCapturedConst(self):
         source = "def f(x: i64) =\n" + \
-                 "  def g = x = 12"
+                 "  def g =\n" + \
+                 "    x = 12"
         self.assertRaises(SemanticException, self.compileFromSource, source)
 
     def testAssignParam(self):
@@ -501,16 +502,16 @@ class TestCompiler(TestCaseWithDefinitions):
         clasTy = ClassType.forReceiver(clas)
         xNameIndex = package.findName(clas.fields[0].name)
         yNameIndex = package.findName(clas.fields[1].name)
-        expected = self.makeSimpleFunction("f", I64Type, [[
+        expected = self.makeSimpleFunction("f", UnitType, [[
                        ldlocal(0),
                        false(),
                        swap(),
                        stf(clas, xNameIndex),
                        ldlocal(0),
                        i64(12),
-                       dup(),
-                       swap2(),
+                       swap(),
                        stf(clas, yNameIndex),
+                       unit(),
                        ret()]],
                      parameterTypes=[clasTy],
                      variables=[self.makeVariable("f.foo", type=clasTy,
@@ -550,13 +551,15 @@ class TestCompiler(TestCaseWithDefinitions):
     def testAssignConstField(self):
         source = "class Foo\n" + \
                  "  let x = 12\n" + \
-                 "def f(obj: Foo) = obj.x = 34"
+                 "def f(obj: Foo) =\n" + \
+                 "  obj.x = 34"
         self.assertRaises(SemanticException, self.compileFromSource, source)
 
     def testAssignLocalConstField(self):
         source = "class Foo\n" + \
                  "  let x = 12\n" + \
-                 "  def set = x = 34"
+                 "  def set =\n" + \
+                 "    x = 34"
         self.assertRaises(SemanticException, self.compileFromSource, source)
 
     def testConstFieldMustBeAssigned(self):
@@ -691,15 +694,15 @@ class TestCompiler(TestCaseWithDefinitions):
         Foo = package.findClass(name="Foo")
         FooType = ClassType.forReceiver(Foo)
         xNameIndex = package.findName(Foo.fields[0].name)
-        expected = self.makeSimpleFunction("f", I64Type, [[
+        expected = self.makeSimpleFunction("f", UnitType, [[
                        ldlocal(0),
                        dup(),
                        ldf(Foo, xNameIndex),
                        i64(12),
                        addi64(),
-                       dup(),
-                       swap2(),
+                       swap(),
                        stf(Foo, xNameIndex),
+                       unit(),
                        ret()]],
                      parameterTypes=[FooType],
                      variables=[self.makeVariable("f.foo", type=FooType,
@@ -827,14 +830,14 @@ class TestCompiler(TestCaseWithDefinitions):
                  "  var x = 12\n" + \
                  "  x += 34"
         self.checkFunction(source,
-                           self.makeSimpleFunction("f", I64Type, [[
+                           self.makeSimpleFunction("f", UnitType, [[
                                i64(12),
                                stlocal(-1),
                                ldlocal(-1),
                                i64(34),
                                addi64(),
-                               dup(),
                                stlocal(-1),
+                               unit(),
                                ret()]],
                              variables=[self.makeVariable("f.x", type=I64Type)]))
 

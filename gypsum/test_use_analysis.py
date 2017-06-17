@@ -68,7 +68,8 @@ class TestUseAnalysis(TestCaseWithDefinitions):
 
     def testUseCapturedVarBeforeDefinition(self):
         info = self.analyzeFromSource("def f =\n" + \
-                                      "  def g = i = 1\n" + \
+                                      "  def g =\n" + \
+                                      "    i = 1\n" + \
                                       "  var i: i64 = 0\n")
         statements = info.ast.modules[0].definitions[0].body.statements
         iDefnInfo = info.getDefnInfo(statements[1].pattern)

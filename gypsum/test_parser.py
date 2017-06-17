@@ -826,7 +826,8 @@ class TestParser(TestParserBase):
             astWhileExpression(
                 astLiteralExpression(astBooleanLiteral(True)),
                 astBlockExpression([
-                    astAssignExpression(astVariableExpression("x"), astVariableExpression("y")),
+                    astAssignStatement(
+                        "=", astVariableExpression("x"), astVariableExpression("y")),
                     astLiteralExpression(astUnitLiteral())])),
             Parser.expr,
             source)
@@ -1029,31 +1030,65 @@ class TestParser(TestParserBase):
             Parser.expr,
             "x @ y + z")
 
-    def testAssignExpr(self):
-        self.checkParse(astAssignExpression(astVariableExpression("x"),
-                                            astBinaryExpression("+",
-                                                                astVariableExpression("y"),
-                                                                astVariableExpression("z"))),
-                        Parser.expr, "x = y + z")
+    def testAssign(self):
+        self.checkParse(
+            astAssignStatement(
+                "=",
+                astVariableExpression("x"),
+                astBinaryExpression(
+                    "+",
+                    astVariableExpression("y"),
+                    astVariableExpression("z"))),
+            Parser.blockStmt, "x = y + z")
 
     def testAssignLowPrecedence(self):
-        self.checkParse(astAssignExpression(astVariableExpression("x"),
-                                            astBinaryExpression("|",
-                                                                astVariableExpression("y"),
-                                                                astVariableExpression("z"))),
-                        Parser.expr, "x = y | z")
+        self.checkParse(
+            astAssignStatement(
+                "=",
+                astVariableExpression("x"),
+                astBinaryExpression(
+                    "|",
+                    astVariableExpression("y"),
+                    astVariableExpression("z"))),
+            Parser.blockStmt, "x = y | z")
 
-    def testAssignRightAssociative(self):
-        self.checkParse(astAssignExpression(astVariableExpression("x"),
-                                            astAssignExpression(astVariableExpression("y"),
-                                                                astVariableExpression("z"))),
-                        Parser.expr, "x = y = z")
+    def testMultipleAssignError(self):
+        self.checkParseError(Parser.blockStmt, "x = y = z")
 
     def testAssignBinop(self):
-        self.checkParse(astBinaryExpression("+=",
-                                            astVariableExpression("x"),
-                                            astVariableExpression("y")),
-                        Parser.expr, "x += y")
+        self.checkParse(
+            astAssignStatement(
+                "+=",
+                astVariableExpression("x"),
+                astVariableExpression("y")),
+            Parser.blockStmt, "x += y")
+
+    def testAssignBinopExpr(self):
+        self.checkParse(
+            astBinaryExpression(
+                "+=",
+                astBinaryExpression(
+                    "+",
+                    astVariableExpression("x"),
+                    astVariableExpression("y")),
+                astVariableExpression("z")),
+            Parser.expr,
+            "x + y += z")
+
+    def testAssignBinopPrecedence(self):
+        self.checkParse(
+            astAssignStatement(
+                "=",
+                astBinaryExpression(
+                    "+=",
+                    astVariableExpression("w"),
+                    astVariableExpression("x")),
+                astBinaryExpression(
+                    "+=",
+                    astVariableExpression("y"),
+                    astVariableExpression("z"))),
+            Parser.blockStmt,
+            "w += x = y += z")
 
     def testEqLogicBinopPrecedence(self):
         self.checkParse(astBinaryExpression("&&",
@@ -1110,7 +1145,8 @@ class TestParser(TestParserBase):
                     astVariableExpression("n"),
                     astLiteralExpression(astIntegerLiteral("0", 0, 64))),
                 astBlockExpression([
-                    astAssignExpression(
+                    astAssignStatement(
+                        "=",
                         astVariableExpression("n"),
                         astBinaryExpression(
                             "-",
@@ -1522,25 +1558,6 @@ class TestComments(TestParserBase):
             Parser.expr,
             "//foo\n//bar\nx//baz")
 
-    def testAssignExpr(self):
-        source = "(//bx\n" + \
-                 "x = //by\n" + \
-                 "y //ay\n" + \
-                 "= //bz\n" + \
-                 "z //az\n" + \
-                 ")"
-        self.checkParse(
-            astGroupExpression(
-                astAssignExpression(
-                    astVariableExpression("x"),
-                    astAssignExpression(
-                        astVariableExpression("y", self.commentGroup([], ["ay"])),
-                        astVariableExpression("z", self.commentGroup(["bz"], [])),
-                        self.commentGroup(["by"], [])),
-                    self.commentGroup(["bx"], ["az"]))),
-            Parser.expr,
-            source)
-
     def testTupleExpr(self):
         source = "(//bx\n" + \
                  "x, //by\n" + \
@@ -1901,6 +1918,19 @@ class TestComments(TestParserBase):
             source)
 
     # Misc
+    def testAssignStmt(self):
+        source = "//a\n" + \
+                 "x = //c\n" + \
+                 "y //d"
+        self.checkParse(
+            astAssignStatement(
+                "=",
+                astVariableExpression("x"),
+                astVariableExpression("y", self.commentGroup(["c"], [])),
+                self.commentGroup(["a"], ["d"])),
+            Parser.blockStmt,
+            source)
+
     def testImport(self):
         source = "//a\n" + \
                  "import foo.bar as baz //b"

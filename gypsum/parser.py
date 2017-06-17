@@ -139,10 +139,10 @@ class Parser(object):
     # Top level
     def module(self):
         l = self._peek().location
-        defns = self._parseStatements(self.defnOrImport, EOF)
+        defns = self._parseStatements(self.moduleStmt, EOF)
         return ast.Module(defns, self._location(l))
 
-    def defnOrImport(self):
+    def moduleStmt(self):
         while True:  # repeat
             lead = self.leadComments()
             tag = self._peekTag()
@@ -306,7 +306,7 @@ class Parser(object):
             scl = None
             sargs = None
             strs = None
-        ms = self._parseBlock(self.defnOrImport)
+        ms = self._parseBlock(self.moduleStmt)
         loc = self._location(l)
         d = ast.ClassDefinition(ats, name, tps, ctor, scl, sargs, strs, ms, None, loc)
         if ms is not None:
@@ -329,7 +329,7 @@ class Parser(object):
                 sts.append(self.ty())
         else:
             sts = None
-        ms = self._parseBlock(self.defnOrImport)
+        ms = self._parseBlock(self.moduleStmt)
         loc = self._location(l)
         d = ast.TraitDefinition(ats, name, tps, sts, ms, None, loc)
         if ms is not None:
@@ -596,17 +596,7 @@ class Parser(object):
         if self._peekTag() is NEWLINE:
             return self.blockExpr()
         else:
-            return self.maybeAssignExpr()
-
-    def maybeAssignExpr(self):
-        es = self._parseRepSep(self.maybeTupleExpr, EQ)
-        e = es.pop()
-        while len(es) > 0:
-            l = es.pop()
-            a = ast.AssignExpression(l, e, None, l.location.combine(e.location))
-            self._liftComments(a, l, e)
-            e = a
-        return e
+            return self.maybeTupleExpr()
 
     def maybeTupleExpr(self):
         l = self._peek().location
@@ -637,9 +627,7 @@ class Parser(object):
             An integer indicating the precedence of the operator. Lower numbers indicate higher
             precedence.
         """
-        if (op[-1] == "=" and
-            not (len(op) > 1 and op[0] == "=") and
-            op not in ("<=", ">=", "!=", "!==")):
+        if self._isAssignOp(op):
             return self.BINOP_ASSIGN_LEVEL
         elif op == "&&":
             return self.BINOP_LOGIC_AND_LEVEL
@@ -650,6 +638,11 @@ class Parser(object):
                 if op[0] in level:
                     return prec
             return self.BINOP_OTHER_LEVEL
+
+    def _isAssignOp(self, op):
+        return (op[-1] == "=" and
+                not (len(op) > 1 and op[0] == "=") and
+                op not in ("<=", ">=", "!=", "!=="))
 
     def _associativity(self, op):
         """Returns the associativity of an operator.
@@ -933,10 +926,23 @@ class Parser(object):
                 elif tag in (ATTRIB, VAR, LET, DEF, CLASS, TRAIT, ARRAYELEMENTS):
                     stmt = self.defn()
                 else:
-                    stmt = self.expr()
+                    stmt = self.maybeAssignStmt()
                 stmt.comments.before = lead + stmt.comments.before
                 stmt.comments.setLocationFromChildren()
                 return stmt
+
+    def maybeAssignStmt(self):
+        l = self.maybeTupleExpr()
+        if self._peekTag() is EQ:
+            self._next()
+            r = self.maybeTupleExpr()
+            a = ast.AssignStatement("=", l, r, None, self._location(l.location))
+            self._liftComments(a, l, r)
+            return a
+        elif isinstance(l, ast.BinaryExpression) and self._isAssignOp(l.operator):
+            return ast.AssignStatement(l.operator, l.left, l.right, l.comments, l.location)
+        else:
+            return l
 
     def lambdaExpr(self):
         l = self._nextTag(LAMBDA)
